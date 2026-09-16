@@ -317,6 +317,25 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                         string gsName = _renderer.Resources.AddExtGState(pattern.AlphaExtGState);
                         _renderer.AppendFormatString("{0} gs\n", gsName);
                     }
+                    else if (!isForPen)
+                    {
+                        // A fill-side pattern with no semi-transparent stops of its own is fully opaque,
+                        // but nothing above emits a /ca for it - so the ambient fill alpha left by the
+                        // LAST solid-color fill (RealizeFillColor, e.g. a `color: transparent` text draw
+                        // immediately before this pattern fill - background-clip: text pairs the two
+                        // routinely) silently carries over and can make this fill invisible too. The
+                        // stroke side already guards against the identical leak (see RealizePen's
+                        // `strokeAlpha = pen.Brush != null ? 1.0 : color.A` and its own remarks) - mirror
+                        // it here for fills via the same reset Realize(XImage,...) uses. Call
+                        // RealizeFillColor directly (rather than RealizeNonStrokeTransparency) with an
+                        // explicit overPrint:false - the pattern has no overprint of its own, and
+                        // RealizeNonStrokeTransparency would otherwise carry over
+                        // _realizedNonStrokeOverPrint, the ambient overprint flag left by that same last
+                        // solid-color fill.
+                        XColor resetColor = _realizedFillColor;
+                        resetColor.A = 1;
+                        RealizeFillColor(resetColor, false, colorMode);
+                    }
 
                     if (isForPen)
                     {

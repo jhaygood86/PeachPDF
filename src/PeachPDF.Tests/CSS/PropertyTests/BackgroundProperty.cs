@@ -131,6 +131,49 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         }
 
         [Fact]
+        public void BackgroundClipTextLegal()
+        {
+            // issue #1117 - background-clip: text clips a background layer to the union of the box's
+            // own laid-out glyph outlines, rather than falling back to border-box like any other
+            // unrecognized keyword.
+            var snippet = "background-clip : Text ";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("background-clip", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<BackgroundClipProperty>(property);
+            var concrete = (BackgroundClipProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("text", concrete.Value);
+        }
+
+        [Fact]
+        public void BackgroundClipTextBorderBoxMultiLayerLegal()
+        {
+            var snippet = "background-clip : text, border-box";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("background-clip", property.Name);
+            Assert.IsType<BackgroundClipProperty>(property);
+            var concrete = (BackgroundClipProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("text, border-box", concrete.Value);
+        }
+
+        [Fact]
+        public void BackgroundOriginTextIllegal()
+        {
+            // "text" is background-clip's own keyword (Map.BackgroundClips), deliberately not added to
+            // the shared BoxModel/Map.BoxModels background-origin and box-sizing also use - confirms it
+            // didn't leak into that shared grammar.
+            var snippet = "background-origin: text";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("background-origin", property.Name);
+            Assert.IsType<BackgroundOriginProperty>(property);
+            var concrete = (BackgroundOriginProperty)property;
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
         public void BackgroundColorTealLegal()
         {
             var snippet = "background-color : teal";
@@ -969,6 +1012,18 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.Equal("url(\"a.png\"), url(\"b.png\")", style.BackgroundImage);
             Assert.Equal("padding-box, border-box", style.BackgroundOrigin);
             Assert.Equal("content-box, padding-box", style.BackgroundClip);
+        }
+
+        [Fact]
+        public void BackgroundShorthand_Text_SetsBackgroundClipOnly()
+        {
+            // The shorthand's clip slot accepts "text" (BackgroundClipConverter) while its origin slot
+            // still only accepts the three shared box-model keywords (BoxModelConverter) - confirms the
+            // two per-layer converters were split correctly rather than "text" leaking into origin too.
+            var style = ParseDeclarations("background: linear-gradient(to right, red, blue) text");
+            Assert.Contains("linear-gradient", style.BackgroundImage);
+            Assert.Equal("text", style.BackgroundClip);
+            Assert.Equal("initial", style.BackgroundOrigin);
         }
 
         [Fact]

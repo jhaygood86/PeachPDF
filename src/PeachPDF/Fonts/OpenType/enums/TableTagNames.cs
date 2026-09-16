@@ -110,7 +110,7 @@ namespace PeachPDF.Fonts.OpenType
         /// <summary>
         /// PostScript font program (compact font format).
         /// </summary>
-        public const string Cff = "CFF";
+        public const string Cff = "CFF ";
 
         /// <summary>
         /// Vertical Origin.

@@ -1027,6 +1027,47 @@ await SaveShowcaseAsync("background_origin_clip", "Backgrounds & Borders", "Back
     "background-origin and background-clip controlling where a background paints relative to the border, padding, and content boxes.",
     originHtml, pdfConfig);
 
+// --- background-clip: text showcase ---
+
+const string backgroundClipTextHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page { size: a4; margin: 20mm }
+    body { margin: 0; font-family: Arial, sans-serif; color: #222 }
+    h1 { font-size: 52pt; font-weight: 800; margin: 0 0 0.2em; letter-spacing: -1px;
+         background: linear-gradient(to right, #e11d48, #7c3aed, #2563eb);
+         background-clip: text; -webkit-background-clip: text; color: transparent }
+    h2 { font-size: 22pt; margin: 0.6em 0 0.2em;
+         background: linear-gradient(135deg, #f59e0b, #ef4444);
+         background-clip: text; -webkit-background-clip: text; color: transparent }
+    p { font-size: 10.5pt; line-height: 1.5; max-width: 32em; color: #444 }
+    p.note { font-size: 9pt; color: #777; font-style: italic }
+    </style>
+    </head>
+    <body>
+    <h1>Revenue Growth</h1>
+    <h2>Q4 Highlights</h2>
+    <p>
+      The gradient above is clipped to the exact shape of the glyphs themselves
+      (<code>background-clip: text</code>) instead of painting across the whole heading&#8217;s box - the
+      standard technique for gradient-filled headings, paired here with <code>color: transparent</code>
+      so only the background shows through the letterforms.
+    </p>
+    <p class="note">
+      Unlike PeachPDF&#8217;s SVG gradient-text support, this paragraph and the headings above it all stay
+      ordinary, selectable, extractable PDF text - try selecting this text in a PDF viewer. Only the
+      background paint is clipped to glyph shape; the text itself is never converted to vector art.
+    </p>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("background_clip_text", "Backgrounds & Borders", "background-clip: text (Gradient Text)",
+    "Clips a background gradient to the shape of the text itself, with the glyphs still selectable and extractable in the PDF.",
+    backgroundClipTextHtml, pdfConfig);
+
 // --- background-position + background-size showcase ---
 
 const string PositionCss = """

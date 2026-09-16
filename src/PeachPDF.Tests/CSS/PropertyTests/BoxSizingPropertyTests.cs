@@ -31,6 +31,19 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(concrete.HasValue);
             Assert.Equal("border-box", concrete.Value);
         }
+
+        [Fact]
+        public void BoxSizingTextIllegal()
+        {
+            // "text" is background-clip's own keyword (issue #1117), deliberately not added to the
+            // shared BoxModel/Map.BoxModels box-sizing (and background-origin) also use.
+            var snippet = "box-sizing: text";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("box-sizing", property.Name);
+            Assert.IsType<BoxSizingProperty>(property);
+            var concrete = (BoxSizingProperty)property;
+            Assert.False(concrete.HasValue);
+        }
     }
 }
 

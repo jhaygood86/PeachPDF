@@ -14,9 +14,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 {
     /// <summary>
     /// Coverage for <see cref="GraphicsAdapter.GetTextOutline"/>: decoding a text run into a
-    /// fillable/strokeable vector path (the enabling seam for gradient/pattern fill, stroke, and
-    /// <c>&lt;textPath&gt;</c> on SVG text). Uses the bundled Source Sans 3 (TrueType/glyf) and
-    /// Source Code Pro (CFF, no glyf) fonts.
+    /// fillable/strokeable vector path (the enabling seam for gradient/pattern fill, stroke,
+    /// <c>&lt;textPath&gt;</c> on SVG text, and <c>background-clip: text</c>). Uses the bundled Source
+    /// Sans 3 (TrueType/glyf, via <see cref="Fonts.OpenType.GlyphOutlineDecoder"/>) and Source Code Pro
+    /// (CFF/OTTO, no glyf - via <see cref="Fonts.OpenType.Type2CharstringInterpreter"/>) fonts.
     /// </summary>
     public class GetTextOutlineTests
     {
@@ -108,13 +109,66 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         }
 
         [Fact]
-        public async Task CffFont_ReturnsNull_AsFallbackCue()
+        public async Task CffFont_ProducesFilledOutline_WithOneSubpathPerContour()
         {
-            // Source Code Pro is CFF/OTTO: no `glyf` table, so no outline can be decoded and the
-            // adapter signals the caller to fall back to DrawString.
+            // Source Code Pro is CFF/OTTO (no `glyf` table at all) - its outline comes entirely from
+            // Type2CharstringInterpreter (issue #1117). 'l' is a single stroke (one contour), 'o' is a
+            // ring plus its counter (two contours) - so the run's outline has exactly three disjoint
+            // subpaths, same shape of assertion as the glyf-backed run above.
             var (g, font) = await Setup(BundledFonts.Otf, 100);
 
-            Assert.Null(g.GetTextOutline("lo", font, new RPoint(0, 100)));
+            var outline = g.GetTextOutline("lo", font, new RPoint(0, 100));
+
+            Assert.NotNull(outline);
+            Assert.Equal(RFillMode.Nonzero, outline!.FillMode);
+            Assert.Equal(3, SubpathCount(outline));
+            outline.Dispose();
+        }
+
+        [Fact]
+        public async Task CffFont_FlipsYAndScales_GlyphSitsAboveBaseline()
+        {
+            var (g, font) = await Setup(BundledFonts.Otf, 100);
+
+            var outline = g.GetTextOutline("l", font, new RPoint(0, 100))!;
+            var ys = Points(outline).Select(p => p.Y).ToArray();
+
+            Assert.True(ys.Min() < 40, $"expected a tall ascender well above the baseline, top y={ys.Min()}");
+            Assert.True(ys.Max() < 103, $"'l' has no descender, so nothing should sit well below the baseline; got bottom y={ys.Max()}");
+            outline.Dispose();
+        }
+
+        [Fact]
+        public async Task CffFont_AdvancesPenPerGlyph_AndHonorsLetterSpacing()
+        {
+            var (g, font) = await Setup(BundledFonts.Otf, 100);
+
+            double RightEdge(string text, double letterSpacing = 0)
+            {
+                var outline = g.GetTextOutline(text, font, new RPoint(0, 100), letterSpacing)!;
+                var maxX = Points(outline).Max(p => p.X);
+                outline.Dispose();
+                return maxX;
+            }
+
+            double one = RightEdge("l");
+            double two = RightEdge("ll");
+            double twoSpaced = RightEdge("ll", letterSpacing: 40);
+
+            // A second glyph advances the pen (proof that callsubr/callgsubr's shared pen state and
+            // the width-operand disambiguation on the *first* glyph's own charstring didn't desync the
+            // interpreter's (x, y) for the glyphs after it) ...
+            Assert.True(two > one + 10, $"two-glyph run ({two}) should extend past one glyph ({one})");
+            // ...and extra letter-spacing pushes the second glyph further right still.
+            Assert.True(twoSpaced > two + 30, $"letter-spacing should widen the run (got {twoSpaced} vs {two})");
+        }
+
+        [Fact]
+        public async Task CffFont_SpaceOnlyRun_ReturnsNull()
+        {
+            var (g, font) = await Setup(BundledFonts.Otf, 100);
+
+            Assert.Null(g.GetTextOutline("   ", font, new RPoint(0, 100)));
         }
 
         [Fact]

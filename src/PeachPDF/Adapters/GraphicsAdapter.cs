@@ -250,8 +250,9 @@ namespace PeachPDF.Adapters
             {
                 int glyphId = glyph.GlyphIndex;
 
-                // TryGetGlyphOutline returns false for an empty glyph (e.g. space) or a CFF/bitmap font
-                // with no `glyf` table - either way there's nothing to add for this glyph.
+                // TryGetGlyphOutline returns false for an empty glyph (e.g. space) or a font with no
+                // usable outline source at all (a CID-keyed CFF or bitmap font) - either way there's
+                // nothing to add for this glyph.
                 if (descriptor.TryGetGlyphOutline(glyphId, out GlyphOutline outline))
                 {
                     // GPOS positioning (kerning's XOffset, mark attachment's XOffset/YOffset) shifts
@@ -288,8 +289,8 @@ namespace PeachPDF.Adapters
                 penX += (descriptor.GlyphIndexToWidth(glyphId) + glyph.XAdvanceDelta) * scale + letterSpacing;
             }
 
-            // No geometry at all means the font produced no `glyf` outlines (CFF/bitmap) - signal the
-            // caller to fall back to DrawString.
+            // No geometry at all means the font produced no outlines (a CID-keyed CFF or bitmap font) -
+            // signal the caller to fall back to DrawString.
             if (!anyGeometry)
             {
                 path.Dispose();
