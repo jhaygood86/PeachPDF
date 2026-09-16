@@ -270,5 +270,156 @@ namespace PeachPDF.Tests.TestSupport
 
             return result;
         }
+
+        /// <summary>
+        /// Returns a copy of a simple-format <paramref name="webpBytes"/> (a bare <c>RIFF...WEBP VP8 </c>
+        /// or <c>VP8L</c> chunk, as PeachImage's own encoder produces - see <c>WebpEncoderOptions</c>)
+        /// upgraded to the extended (<c>VP8X</c>) container format with <paramref name="iccProfile"/>
+        /// embedded as an <c>ICCP</c> chunk - the real-world shape a WebP with a color profile actually
+        /// takes (RIFF WEBP VP8X [ICCP] VP8/VP8L, per the WebP container spec's chunk ordering).
+        /// </summary>
+        internal static byte[] InsertIccProfileIntoWebp(byte[] webpBytes, byte[] iccProfile)
+        {
+            if (webpBytes.Length < 12 ||
+                webpBytes[0] != (byte)'R' || webpBytes[1] != (byte)'I' || webpBytes[2] != (byte)'F' || webpBytes[3] != (byte)'F' ||
+                webpBytes[8] != (byte)'W' || webpBytes[9] != (byte)'E' || webpBytes[10] != (byte)'B' || webpBytes[11] != (byte)'P')
+            {
+                throw new ArgumentException("Expected a simple-format WebP byte stream (RIFF....WEBP...).", nameof(webpBytes));
+            }
+
+            var info = PeachImage.Image.Identify(new System.IO.MemoryStream(webpBytes));
+            string fourCc = System.Text.Encoding.ASCII.GetString(webpBytes, 12, 4);
+            uint chunkSize = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(webpBytes.AsSpan(16, 4));
+            int chunkTotal = 8 + (int)chunkSize + (int)(chunkSize % 2); // header + data + even padding
+            var originalChunk = webpBytes.AsSpan(12, chunkTotal).ToArray();
+
+            var vp8xData = new byte[10];
+            vp8xData[0] = 0x20; // ICC flag bit
+            WriteUInt24LittleEndian(vp8xData.AsSpan(4), info.Width - 1);
+            WriteUInt24LittleEndian(vp8xData.AsSpan(7), info.Height - 1);
+
+            using var result = new System.IO.MemoryStream();
+            result.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
+            result.Write(new byte[4]); // size placeholder, patched below
+            result.Write(System.Text.Encoding.ASCII.GetBytes("WEBP"));
+            WriteRiffChunk(result, "VP8X", vp8xData);
+            WriteRiffChunk(result, "ICCP", iccProfile);
+            result.Write(originalChunk);
+
+            var bytes = result.ToArray();
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(4), (uint)(bytes.Length - 8));
+            return bytes;
+
+            static void WriteUInt24LittleEndian(Span<byte> destination, int value)
+            {
+                destination[0] = (byte)value;
+                destination[1] = (byte)(value >> 8);
+                destination[2] = (byte)(value >> 16);
+            }
+        }
+
+        private static void WriteRiffChunk(System.IO.Stream stream, string fourCc, byte[] data)
+        {
+            stream.Write(System.Text.Encoding.ASCII.GetBytes(fourCc));
+            Span<byte> sizeBytes = stackalloc byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(sizeBytes, (uint)data.Length);
+            stream.Write(sizeBytes);
+            stream.Write(data);
+            if (data.Length % 2 != 0)
+            {
+                stream.WriteByte(0); // RIFF chunks are padded to an even length
+            }
+        }
+
+        /// <summary>
+        /// Returns a copy of <paramref name="pngBytes"/> (produced by a real encoder - see
+        /// <c>RasterPngFixture</c>'s own reasoning for why) with <paramref name="iccProfile"/> inserted as
+        /// an <c>iCCP</c> chunk (profile name "icc\0", compression method 0, zlib-deflated profile data)
+        /// immediately after the IHDR chunk - the position PNG's own chunk-ordering rules require (before
+        /// PLTE/IDAT). PeachImage's <c>PngPassthrough</c>/full-decode paths both accept <c>iCCP</c>
+        /// anywhere before <c>IDAT</c>, but this is also the canonical position real encoders use.
+        /// </summary>
+        internal static byte[] InsertIccProfileIntoPng(byte[] pngBytes, byte[] iccProfile)
+        {
+            const int SignatureLength = 8;
+            if (pngBytes.Length < SignatureLength + 8 || pngBytes[0] != 0x89 || pngBytes[1] != (byte)'P')
+            {
+                throw new ArgumentException("Expected a PNG byte stream starting with the 8-byte PNG signature.", nameof(pngBytes));
+            }
+
+            uint ihdrLength = (uint)((pngBytes[8] << 24) | (pngBytes[9] << 16) | (pngBytes[10] << 8) | pngBytes[11]);
+            int ihdrChunkEnd = SignatureLength + 4 + 4 + (int)ihdrLength + 4; // length + type + data + CRC
+
+            using var compressed = new System.IO.MemoryStream();
+            using (var zlib = new System.IO.Compression.ZLibStream(compressed, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
+            {
+                zlib.Write(iccProfile);
+            }
+
+            var profileName = System.Text.Encoding.ASCII.GetBytes("icc");
+            var chunkData = new byte[profileName.Length + 1 + 1 + compressed.Length];
+            int pos = 0;
+            Array.Copy(profileName, 0, chunkData, pos, profileName.Length);
+            pos += profileName.Length;
+            chunkData[pos++] = 0; // null terminator after the profile name
+            chunkData[pos++] = 0; // compression method: zlib/deflate
+            Array.Copy(compressed.ToArray(), 0, chunkData, pos, compressed.Length);
+
+            using var result = new System.IO.MemoryStream();
+            result.Write(pngBytes, 0, ihdrChunkEnd);
+            WriteChunk(result, "iCCP", chunkData);
+            result.Write(pngBytes, ihdrChunkEnd, pngBytes.Length - ihdrChunkEnd);
+
+            return result.ToArray();
+        }
+
+        private static void WriteChunk(System.IO.Stream stream, string type, byte[] data)
+        {
+            Span<byte> lengthBytes = stackalloc byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(lengthBytes, (uint)data.Length);
+            stream.Write(lengthBytes);
+
+            var typeBytes = System.Text.Encoding.ASCII.GetBytes(type);
+            stream.Write(typeBytes);
+            stream.Write(data);
+
+            var crcInput = new byte[typeBytes.Length + data.Length];
+            typeBytes.CopyTo(crcInput, 0);
+            data.CopyTo(crcInput, typeBytes.Length);
+
+            Span<byte> crcBytes = stackalloc byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(crcBytes, Crc32(crcInput));
+            stream.Write(crcBytes);
+        }
+
+        // Standard PNG/zlib CRC-32 (polynomial 0xEDB88320, reflected) - same table-driven implementation
+        // as RasterPngFixture's own (kept separate rather than shared, since both are small, self-contained
+        // test-fixture helpers with no other coupling between the two files).
+        private static readonly uint[] Crc32Table = BuildCrc32Table();
+
+        private static uint[] BuildCrc32Table()
+        {
+            var table = new uint[256];
+            for (uint n = 0; n < 256; n++)
+            {
+                uint c = n;
+                for (int k = 0; k < 8; k++)
+                {
+                    c = (c & 1) != 0 ? 0xEDB88320 ^ (c >> 1) : c >> 1;
+                }
+                table[n] = c;
+            }
+            return table;
+        }
+
+        private static uint Crc32(byte[] data)
+        {
+            uint crc = 0xFFFFFFFF;
+            foreach (var b in data)
+            {
+                crc = Crc32Table[(crc ^ b) & 0xFF] ^ (crc >> 8);
+            }
+            return crc ^ 0xFFFFFFFF;
+        }
     }
 }

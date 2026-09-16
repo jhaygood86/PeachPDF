@@ -34,7 +34,6 @@ described above):
   PNG/BMP/GIF as JPEG, even one that would otherwise be pass-through-eligible, for anyone who wants the
   smallest files even for diagram/line-art content and accepts the fidelity loss.
 
-Not part of this change: an eligible PNG's embedded ICC profile (`iCCP` chunk) still isn't preserved -
-see `.claude/accepted-gaps/png-webp-avif-icc-not-preserved.md` (tracking issue #1106). WebP/AVIF/TIFF are
-unaffected by `ImageCompression` in every mode - see
-`.claude/accepted-gaps/webp-avif-tiff-lossy-detection-unavailable.md` (tracking issue #1107).
+Not part of this change: an eligible PNG's embedded ICC profile (`iCCP` chunk) preservation (issue
+#1106) and WebP/AVIF/TIFF lossless-encoding detection (issue #1107) - see their own, later migration
+notes for what each of those added on top of this one.
