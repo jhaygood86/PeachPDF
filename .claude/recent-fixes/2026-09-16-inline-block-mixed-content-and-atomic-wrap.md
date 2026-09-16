@@ -27,13 +27,19 @@ box for block-content inline-blocks. Correcting the cards from 150px to the brow
 off the page.
 
 The method is now split so the inline-block's used width is available before its contents are laid
-out. That preflight compares the whole margin box with the active line/floats; if it does not fit and
-the line already has content, it applies `line-clamp` if needed and otherwise opens a new line through
-the same `OpenNextLine` bookkeeping ordinary word wrapping uses. The content is then laid out once at
-its final position. The atomic box's bottom margin edge also extends the parent line before that next
-line is opened; previously the second card row touched the tallest card above it instead of preserving
-the showcase's `margin-bottom: 12px`. Five showcase cards now form the expected three-plus-two rows
-with the browser-equivalent inter-row gap.
+out. The width preflight is side-effect-free: it compares the whole margin box with the active
+line/floats without assigning box geometry or hosting lines. If the box does not fit and the line
+already has content, the path applies `line-clamp` if needed and otherwise opens a new line through the
+same `OpenNextLine` bookkeeping ordinary word wrapping uses. Only an accepted box commits its geometry
+and hosting line; a box rejected by `line-clamp` records a current-layout fragment-suppression marker,
+so fragment emission does not mistake its measured subtree and default border/padding dimensions for
+placed content. This prevents a clamped-away box from painting a sliver even though none of its text
+was laid out. The content is then laid out once at its final position.
+
+The atomic box's bottom margin edge also extends the parent line before the next line is opened;
+previously the second card row touched the tallest card above it instead of preserving the showcase's
+`margin-bottom: 12px`. Five showcase cards now form the expected three-plus-two rows with the
+browser-equivalent inter-row gap.
 
 ## Evidence
 
@@ -42,7 +48,8 @@ with the browser-equivalent inter-row gap.
 - A fixed-width three-card fixture asserts content-box sizing (80pt + 20pt padding), two cards on the
   first 220pt line, the third whole card at the first line's x-position on line two, and the previous
   row's 12pt bottom margin preserved between them.
-- A `line-clamp: 1` fixture asserts an atomic wrap is stopped before the hidden card is laid out or
-  painted.
+- A `line-clamp: 1` fixture uses a tall nested block with unique border/background colors and asserts
+  an atomic wrap is stopped before the hidden card's text, border, or background is painted; the
+  ordinary visible-card fixture also asserts its border still paints.
 - The real `cascade_layers` source was rendered and rasterized: every description paints and the five
   correctly-sized cards occupy three cards on row one and two on row two.

@@ -2148,6 +2148,12 @@ namespace PeachPDF.Html.Core.Fragmentation
             // A display:none subtree paints nothing at all, so it produces no fragments either.
             if (box.DerivedStyle.ActualDisplay == Keywords.None) return null;
 
+            // A line-clamp that rejects an atomic inline-block before placement suppresses the whole
+            // subtree for this layout generation. Width/intrinsic measurement can still touch the box
+            // tree, and an unplaced decorated box has non-zero default border/padding bounds at (0, 0),
+            // so ordinary geometric membership alone would manufacture a decoration-only fragment.
+            if (box.FragmentEmissionSuppressedForCurrentLayout) return null;
+
             // Fixed-position content ignores the page origin and repeats identically on every page, so
             // its fragments carry raw document coordinates (CSS Position 3: a fixed box's containing
             // block is the page box itself).

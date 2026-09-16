@@ -2800,13 +2800,49 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Positions an inline-table/inline-grid, or an inline-block whose content needs an independent
-        /// formatting context, at the current parent-line cursor. For an inline-block it also resolves the
-        /// used width before child layout, so the caller can decide whether the whole atomic box fits on
-        /// this line. The actual child layout and parent-line registration remain in
-        /// <see cref="FlowAtomicBlockContentChild"/>.
+        /// Resolves an inline-block's used border-box width without committing placement geometry. This
+        /// lets the caller test the whole atomic box against the remaining line measure before
+        /// <c>line-clamp</c> decides whether the box exists in this layout at all.
         /// </summary>
-        private static async ValueTask PrepareAtomicBlockContentChild(RGraphics g, CssBox b, CssLineBoxCoordinates coordinates)
+        private static async ValueTask<double> ResolveAtomicInlineBlockWidth(
+            RGraphics g, CssBox b, double blockTop)
+        {
+            var stretchWidth = await GetBoxWidth(g, b, blockTop);
+
+            if (!CssValueParser.IsValidLength(b.Width))
+            {
+                var fitContentWidth = await GetFitContentWidth(g, b, stretchWidth);
+                fitContentWidth = Math.Max(fitContentWidth, await GetMinContentWidth(g, b));
+
+                if (b.MinWidth != "0" && CssValueParser.IsValidLength(b.MinWidth))
+                {
+                    var minWidth = CssValueParser.ParseLength(b.MinWidth, b.ContainingBlock.Size.Width, b)
+                        + b.ActualBoxSizeIncludedWidth;
+                    fitContentWidth = Math.Max(fitContentWidth, minWidth);
+                }
+
+                return fitContentWidth;
+            }
+
+            // GetBoxWidth returns a declared `width` exactly as declared, so under
+            // `box-sizing: content-box` it names the CONTENT box while Location.X will name the border
+            // box's own left edge. ActualBoxSizeIncludedWidth is the conversion between the two
+            // (zero under `border-box`, where the declared length already is the border box), and it is
+            // what keeps a box that reaches this path because its own inline content wraps
+            // (LaysOutAsAnAtomicBox) the same painted width as the identical box whose content happens
+            // to fit on one line - that one is sized by ResolveAtomicInlineDeclaredWidth, which reads
+            // the declared length the same way.
+            return stretchWidth + b.ActualBoxSizeIncludedWidth;
+        }
+
+        /// <summary>
+        /// Positions an inline-table/inline-grid, or an inline-block whose content needs an independent
+        /// formatting context, at the current parent-line cursor. For an inline-block it also commits the
+        /// already-resolved used width before child layout. The actual child layout and parent-line
+        /// registration remain in <see cref="FlowAtomicBlockContentChild"/>.
+        /// </summary>
+        private static async ValueTask PrepareAtomicBlockContentChild(RGraphics g, CssBox b,
+            CssLineBoxCoordinates coordinates, double? resolvedInlineBlockWidth = null)
         {
             // coordinates.CurrentX is already past the left margin+border+padding (leftSpacing was added
             // by the caller), so Location.X sits at the border-left edge (after margin).
@@ -2814,8 +2850,6 @@ namespace PeachPDF.Html.Core.Dom
                 coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth,
                 coordinates.CurrentY);
             b.ActualBottom = b.Location.Y;
-            b.FirstHostingLineBox = coordinates.Line;
-            b.LastHostingLineBox = coordinates.Line;
 
             // An inline-table/inline-grid resolves its own width internally via its own column/track
             // algorithm and needs no pre-step. A plain inline-block never gets ActualRight resolved by
@@ -2829,41 +2863,19 @@ namespace PeachPDF.Html.Core.Dom
             // run against an unresolved (zero) ClientRight.
             if (b.DerivedStyle.ActualDisplay == Keywords.InlineBlock)
             {
-                var stretchWidth = await GetBoxWidth(g, b);
-
-                if (!CssValueParser.IsValidLength(b.Width))
-                {
-                    var fitContentWidth = await GetFitContentWidth(g, b, stretchWidth);
-                    fitContentWidth = Math.Max(fitContentWidth, await GetMinContentWidth(g, b));
-
-                    if (b.MinWidth != "0" && CssValueParser.IsValidLength(b.MinWidth))
-                    {
-                        var minWidth = CssValueParser.ParseLength(b.MinWidth, b.ContainingBlock.Size.Width, b)
-                            + b.ActualBoxSizeIncludedWidth;
-                        fitContentWidth = Math.Max(fitContentWidth, minWidth);
-                    }
-
-                    b.ActualRight = b.Location.X + fitContentWidth;
-                }
-                else
-                {
-                    // GetBoxWidth returns a declared `width` exactly as declared, so under
-                    // `box-sizing: content-box` it names the CONTENT box while Location.X is the border
-                    // box's own left edge. ActualBoxSizeIncludedWidth is the conversion between the two
-                    // (zero under `border-box`, where the declared length already is the border box),
-                    // and it is what keeps a box that reaches this path because its own inline content
-                    // wraps (LaysOutAsAnAtomicBox) the same painted width as the identical box whose
-                    // content happens to fit on one line - that one is sized by
-                    // ResolveAtomicInlineDeclaredWidth, which reads the declared length the same way.
-                    //
-                    b.ActualRight = b.Location.X + stretchWidth + b.ActualBoxSizeIncludedWidth;
-                }
+                var usedWidth = resolvedInlineBlockWidth
+                    ?? await ResolveAtomicInlineBlockWidth(g, b, coordinates.CurrentY);
+                b.ActualRight = b.Location.X + usedWidth;
             }
         }
 
-        private static async ValueTask FlowAtomicBlockContentChild(RGraphics g, CssBox b, CssLineBoxCoordinates coordinates)
+        private static async ValueTask FlowAtomicBlockContentChild(RGraphics g, CssBox b,
+            CssLineBoxCoordinates coordinates, double? resolvedInlineBlockWidth = null)
         {
-            await PrepareAtomicBlockContentChild(g, b, coordinates);
+            // A speculative wrap may have rejected this box earlier in the same layout generation.
+            // Reaching real placement is the authoritative point at which it becomes fragment-visible.
+            b.AllowFragmentEmissionForCurrentLayout();
+            await PrepareAtomicBlockContentChild(g, b, coordinates, resolvedInlineBlockWidth);
             b.ActualBottom = b.Location.Y;
             b.FirstHostingLineBox = coordinates.Line;
             b.LastHostingLineBox = coordinates.Line;
@@ -3941,9 +3953,11 @@ namespace PeachPDF.Html.Core.Dom
                     // does not fit the remaining measure, CSS 2.1 §9.4.2 closes the current line and puts
                     // the whole box on the next one. Doing this before child layout is significant:
                     // line-clamp can stop here without first emitting content that must then be undone.
+                    double? resolvedInlineBlockWidth = null;
                     if (b.DerivedStyle.ActualDisplay == Keywords.InlineBlock)
                     {
-                        await PrepareAtomicBlockContentChild(g, b, coordinates);
+                        resolvedInlineBlockWidth = await ResolveAtomicInlineBlockWidth(
+                            g, b, coordinates.CurrentY);
 
                         var actualLimitRight = coordinates.Line.ContentRight;
                         var rightFloat = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates);
@@ -3958,12 +3972,15 @@ namespace PeachPDF.Html.Core.Dom
                                 coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak);
                         }
 
-                        var outerRight = b.Location.X + b.ActualBoxSizingWidth + b.ActualMarginRight + clonedTrailing;
+                        var borderLeft = coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth;
+                        var outerRight = borderLeft + resolvedInlineBlockWidth.Value
+                            + b.ActualMarginRight + clonedTrailing;
                         var blockPermitsWrap = blockBox.WhiteSpace.Value is not (Whitespace.NoWrap or Whitespace.Pre);
                         if (blockPermitsWrap && !IsAtLineStart(coordinates) && outerRight > actualLimitRight + 0.01)
                         {
                             if (TryApplyLineClamp(g, blockBox, coordinates, actualLimitRight, 0, clonedTrailing))
                             {
+                                b.SuppressFragmentEmissionForCurrentLayout();
                                 coordinates.ClampedStop = true;
                                 return;
                             }
@@ -3981,10 +3998,15 @@ namespace PeachPDF.Html.Core.Dom
                                 ? DomUtils.ClonedInlineStart(b.ParentBox, blockBox)
                                 : 0);
                             childContentStartX = coordinates.CurrentX;
+
+                            // The next line can belong to a fragmentainer with a different inline measure;
+                            // percentages and auto shrink-to-fit widths must resolve at that final Y.
+                            resolvedInlineBlockWidth = await ResolveAtomicInlineBlockWidth(
+                                g, b, coordinates.CurrentY);
                         }
                     }
 
-                    await FlowAtomicBlockContentChild(g, b, coordinates);
+                    await FlowAtomicBlockContentChild(g, b, coordinates, resolvedInlineBlockWidth);
                 }
                 else if (b.DerivedStyle.ActualDisplay == Keywords.InlineFlex)
                 {
