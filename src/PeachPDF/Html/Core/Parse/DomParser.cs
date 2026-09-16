@@ -2526,7 +2526,10 @@ namespace PeachPDF.Html.Core.Parse
         /// Need to rearrange the tree so block box will be only the child of other block box.
         /// </summary>
         /// <param name="box">the current box to correct its sub-tree</param>
-        private static void CorrectBlockInsideInline(CssBox box)
+        /// <param name="inspectInlineBlockFormattingContext">whether <paramref name="box"/> is itself an
+        /// inline-block whose independent formatting context must be inspected rather than treated as
+        /// opaque to an ancestor's inline flow</param>
+        private static void CorrectBlockInsideInline(CssBox box, bool inspectInlineBlockFormattingContext = false)
         {
             // Inline <svg>/<math> are foreign content: their descendants are read directly by
             // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree
@@ -2534,7 +2537,7 @@ namespace PeachPDF.Html.Core.Parse
             if (box is CssBoxSvg or CssBoxMath) return;
             try
             {
-                if (DomUtils.ContainsInlinesOnly(box) && !ContainsInlinesOnlyDeep(box))
+                if (DomUtils.ContainsInlinesOnly(box) && !ContainsInlinesOnlyDeep(box, inspectInlineBlockFormattingContext))
                 {
                     var tempRightBox = CorrectBlockInsideInlineImp(box);
                     while (tempRightBox != null)
@@ -2550,17 +2553,49 @@ namespace PeachPDF.Html.Core.Parse
                     }
                 }
 
-                if (DomUtils.ContainsInlinesOnly(box)) return;
+                if (DomUtils.ContainsInlinesOnly(box))
+                {
+                    CorrectBlockInsideInlineBlockFormattingContexts(box);
+                    return;
+                }
 
                 foreach (var childBox in box.Boxes)
                 {
-                    CorrectBlockInsideInline(childBox);
+                    CorrectBlockInsideInline(childBox,
+                        childBox.DerivedStyle.ActualDisplay == Keywords.InlineBlock);
                 }
             }
             catch (Exception ex)
             {
                 if (box.HtmlContainer is { } container)
                     throw container.RenderError(HtmlRenderErrorType.HtmlParsing, "Failed in block inside inline box correction", ex);
+            }
+        }
+
+        /// <summary>
+        /// Continues block-in-inline normalization inside inline-block descendants without treating
+        /// their contents as part of the surrounding inline formatting context. Atomic inlines are opaque
+        /// to <see cref="ContainsInlinesOnlyDeep(CssBox, bool)"/> for their ancestors, but an inline-block
+        /// is itself a block container whose independent contents still need this normalization. The other
+        /// atomic displays keep their own flex/grid/table item-generation rules in charge.
+        /// </summary>
+        private static void CorrectBlockInsideInlineBlockFormattingContexts(CssBox box)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (child is CssBoxImage or CssBoxSvg or CssBoxMath) continue;
+
+                if (IsAtomicInlineLevel(child))
+                {
+                    if (child.DerivedStyle.ActualDisplay == Keywords.InlineBlock)
+                    {
+                        CorrectBlockInsideInline(child, inspectInlineBlockFormattingContext: true);
+                    }
+                }
+                else if (child.IsInline)
+                {
+                    CorrectBlockInsideInlineBlockFormattingContexts(child);
+                }
             }
         }
 
@@ -2721,6 +2756,40 @@ namespace PeachPDF.Html.Core.Parse
                 foreach (var childBox in box.Boxes)
                 {
                     CorrectInlineBoxesParent(childBox);
+                }
+            }
+            else
+            {
+                CorrectInlineParentsInsideInlineBlockFormattingContexts(box);
+            }
+        }
+
+        /// <summary>
+        /// Finds inline-block descendants hidden behind an otherwise all-inline ancestor chain and
+        /// normalizes their contents as separate formatting contexts. Without this continuation,
+        /// an inline-block that is itself one item in an inline run is never visited: mixed children such
+        /// as <c>&lt;b style="display:block"&gt;title&lt;/b&gt;trailing text</c> retain the trailing text as a
+        /// bare inline child, and block-child layout gives that text zero width and no line boxes.
+        /// </summary>
+        private static void CorrectInlineParentsInsideInlineBlockFormattingContexts(CssBox box)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (child is CssBoxImage or CssBoxSvg or CssBoxMath) continue;
+
+                if (IsAtomicInlineLevel(child))
+                {
+                    // Flex/grid item generation and anonymous-table generation own the contents of
+                    // their respective formatting contexts. Only inline-block is a block container whose
+                    // mixed children need CSS 2.1 §9.2.1.1 anonymous block wrappers here.
+                    if (child.DerivedStyle.ActualDisplay == Keywords.InlineBlock)
+                    {
+                        CorrectInlineBoxesParent(child);
+                    }
+                }
+                else if (child.IsInline)
+                {
+                    CorrectInlineParentsInsideInlineBlockFormattingContexts(child);
                 }
             }
         }
@@ -3041,8 +3110,10 @@ namespace PeachPDF.Html.Core.Parse
         /// Check if the given box contains only inline child boxes in all subtree.
         /// </summary>
         /// <param name="box">the box to check</param>
+        /// <param name="inspectInlineBlockFormattingContext">whether to inspect <paramref name="box"/>'s
+        /// own inline-block formatting context; nested atomic inline descendants remain opaque</param>
         /// <returns>true - only inline child boxes, false - otherwise</returns>
-        private static bool ContainsInlinesOnlyDeep(CssBox box)
+        private static bool ContainsInlinesOnlyDeep(CssBox box, bool inspectInlineBlockFormattingContext = false)
         {
             // An atomic inline-level box is a single opaque item in its parent's inline formatting context:
             // its own contents live in an independent formatting context of their own (CSS Display 3 §2.3),
@@ -3054,7 +3125,7 @@ namespace PeachPDF.Html.Core.Parse
             // own. Descending into one of those hoisted its first block-level child out of the box
             // altogether: an `inline-flex` holding two <div> items kept only the second, drew the first
             // above its own top edge and reported the height of what was left (issue #462).
-            if (box is CssBoxImage or CssBoxSvg || IsAtomicInlineLevel(box))
+            if (box is CssBoxImage or CssBoxSvg || IsAtomicInlineLevel(box) && !inspectInlineBlockFormattingContext)
             {
                 return true;
             }

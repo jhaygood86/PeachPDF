@@ -2766,9 +2766,6 @@ namespace PeachPDF.Html.Core.Dom
             b.Location = new RPoint(
                 coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth,
                 coordinates.CurrentY);
-            b.ActualBottom = b.Location.Y;
-            b.FirstHostingLineBox = coordinates.Line;
-            b.LastHostingLineBox = coordinates.Line;
 
             // Unlike a plain inline box, b.Location is already final here, so string-set can be applied
             // and finalized in one step rather than split across entry/exit like plain inlines. `page`
@@ -2803,17 +2800,49 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Treats an inline-table/inline-grid, or an inline-block whose own content is not inlines-only, as
-        /// an atomic inline element (issue #473): positions it, lays out its own content through the same
-        /// dispatch an ordinary block-level box of that display type would get, applies its own
-        /// string-set/named-page-name, then advances the cursor by its outer size and registers it in the
-        /// line so its border/background paints. Mirrors <see cref="FlowInlineFlexChild"/>, but delegates
-        /// content layout to <see cref="CssBox.LayoutContentAtItsAssignedPosition"/> instead of calling a
-        /// specific engine directly - that reuses <see cref="CssBox.LayoutContents"/>'s own already-correct
-        /// per-display dispatch (table/grid engines, or ordinary block children) rather than duplicating it
-        /// here for each of the three display values.
+        /// Resolves an inline-block's used border-box width without committing placement geometry. This
+        /// lets the caller test the whole atomic box against the remaining line measure before
+        /// <c>line-clamp</c> decides whether the box exists in this layout at all.
         /// </summary>
-        private static async ValueTask FlowAtomicBlockContentChild(RGraphics g, CssBox b, CssLineBoxCoordinates coordinates)
+        private static async ValueTask<double> ResolveAtomicInlineBlockWidth(
+            RGraphics g, CssBox b, double blockTop)
+        {
+            var stretchWidth = await GetBoxWidth(g, b, blockTop);
+
+            if (!CssValueParser.IsValidLength(b.Width))
+            {
+                var fitContentWidth = await GetFitContentWidth(g, b, stretchWidth);
+                fitContentWidth = Math.Max(fitContentWidth, await GetMinContentWidth(g, b));
+
+                if (b.MinWidth != "0" && CssValueParser.IsValidLength(b.MinWidth))
+                {
+                    var minWidth = CssValueParser.ParseLength(b.MinWidth, b.ContainingBlock.Size.Width, b)
+                        + b.ActualBoxSizeIncludedWidth;
+                    fitContentWidth = Math.Max(fitContentWidth, minWidth);
+                }
+
+                return fitContentWidth;
+            }
+
+            // GetBoxWidth returns a declared `width` exactly as declared, so under
+            // `box-sizing: content-box` it names the CONTENT box while Location.X will name the border
+            // box's own left edge. ActualBoxSizeIncludedWidth is the conversion between the two
+            // (zero under `border-box`, where the declared length already is the border box), and it is
+            // what keeps a box that reaches this path because its own inline content wraps
+            // (LaysOutAsAnAtomicBox) the same painted width as the identical box whose content happens
+            // to fit on one line - that one is sized by ResolveAtomicInlineDeclaredWidth, which reads
+            // the declared length the same way.
+            return stretchWidth + b.ActualBoxSizeIncludedWidth;
+        }
+
+        /// <summary>
+        /// Positions an inline-table/inline-grid, or an inline-block whose content needs an independent
+        /// formatting context, at the current parent-line cursor. For an inline-block it also commits the
+        /// already-resolved used width before child layout. The actual child layout and parent-line
+        /// registration remain in <see cref="FlowAtomicBlockContentChild"/>.
+        /// </summary>
+        private static async ValueTask PrepareAtomicBlockContentChild(RGraphics g, CssBox b,
+            CssLineBoxCoordinates coordinates, double? resolvedInlineBlockWidth = null)
         {
             // coordinates.CurrentX is already past the left margin+border+padding (leftSpacing was added
             // by the caller), so Location.X sits at the border-left edge (after margin).
@@ -2821,8 +2850,6 @@ namespace PeachPDF.Html.Core.Dom
                 coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth,
                 coordinates.CurrentY);
             b.ActualBottom = b.Location.Y;
-            b.FirstHostingLineBox = coordinates.Line;
-            b.LastHostingLineBox = coordinates.Line;
 
             // An inline-table/inline-grid resolves its own width internally via its own column/track
             // algorithm and needs no pre-step. A plain inline-block never gets ActualRight resolved by
@@ -2836,44 +2863,22 @@ namespace PeachPDF.Html.Core.Dom
             // run against an unresolved (zero) ClientRight.
             if (b.DerivedStyle.ActualDisplay == Keywords.InlineBlock)
             {
-                var stretchWidth = await GetBoxWidth(g, b);
-
-                if (!CssValueParser.IsValidLength(b.Width))
-                {
-                    var fitContentWidth = await GetFitContentWidth(g, b, stretchWidth);
-                    fitContentWidth = Math.Max(fitContentWidth, await GetMinContentWidth(g, b));
-
-                    if (b.MinWidth != "0" && CssValueParser.IsValidLength(b.MinWidth))
-                    {
-                        var minWidth = CssValueParser.ParseLength(b.MinWidth, b.ContainingBlock.Size.Width, b)
-                            + b.ActualBoxSizeIncludedWidth;
-                        fitContentWidth = Math.Max(fitContentWidth, minWidth);
-                    }
-
-                    b.ActualRight = b.Location.X + fitContentWidth;
-                }
-                else
-                {
-                    // GetBoxWidth returns a declared `width` exactly as declared, so under
-                    // `box-sizing: content-box` it names the CONTENT box while Location.X is the border
-                    // box's own left edge. ActualBoxSizeIncludedWidth is the conversion between the two
-                    // (zero under `border-box`, where the declared length already is the border box),
-                    // and it is what keeps a box that reaches this path because its own inline content
-                    // wraps (LaysOutAsAnAtomicBox) the same painted width as the identical box whose
-                    // content happens to fit on one line - that one is sized by
-                    // ResolveAtomicInlineDeclaredWidth, which reads the declared length the same way.
-                    //
-                    // A box holding block-level content deliberately keeps the older, short measurement.
-                    // It is wrong by the same rule - Chrome paints such a box its declared width plus its
-                    // padding and border - but this path cannot yet move a box that does not fit onto a
-                    // line of its own, so widening these boxes makes the last one in a row overhang the
-                    // page instead of wrapping (the cascade_layers showcase's fourth card). The two
-                    // belong in one change; see
-                    // .claude/accepted-gaps/an-atomic-inline-does-not-wrap-onto-a-line-of-its-own.md.
-                    b.ActualRight = b.Location.X + stretchWidth
-                        + (HasBlockLevelDescendant(b) ? 0 : b.ActualBoxSizeIncludedWidth);
-                }
+                var usedWidth = resolvedInlineBlockWidth
+                    ?? await ResolveAtomicInlineBlockWidth(g, b, coordinates.CurrentY);
+                b.ActualRight = b.Location.X + usedWidth;
             }
+        }
+
+        private static async ValueTask FlowAtomicBlockContentChild(RGraphics g, CssBox b,
+            CssLineBoxCoordinates coordinates, double? resolvedInlineBlockWidth = null)
+        {
+            // A speculative wrap may have rejected this box earlier in the same layout generation.
+            // Reaching real placement is the authoritative point at which it becomes fragment-visible.
+            b.AllowFragmentEmissionForCurrentLayout();
+            await PrepareAtomicBlockContentChild(g, b, coordinates, resolvedInlineBlockWidth);
+            b.ActualBottom = b.Location.Y;
+            b.FirstHostingLineBox = coordinates.Line;
+            b.LastHostingLineBox = coordinates.Line;
 
             // Same as FlowInlineFlexChild: b.Location is already final here, so string-set can be applied
             // and finalized in one step. `page` is deliberately not registered here either (issue #149) -
@@ -2916,11 +2921,48 @@ namespace PeachPDF.Html.Core.Dom
             // Advance to content-right so that the outer rightSpacing addition lands correctly.
             coordinates.CurrentX = b.ClientRight;
             coordinates.MaxRight = Math.Max(coordinates.MaxRight, b.Location.X + b.ActualBoxSizingWidth);
-            coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, b.Location.Y + b.ActualBoxSizingHeight);
+            // An atomic inline contributes its margin box to the surrounding line's height (CSS 2.1
+            // §10.8.1). The wrap path opens the next line from MaxBottom, so omitting the bottom
+            // margin made consecutive rows of inline-block cards touch even though their horizontal
+            // margins were honored.
+            coordinates.MaxBottom = Math.Max(coordinates.MaxBottom,
+                b.Location.Y + b.ActualBoxSizingHeight + b.ActualMarginBottom);
 
             // Register the box in the parent line so its border/background is painted.
             coordinates.Line.Rectangles[b] = new RRect(
                 b.Location.X, b.Location.Y, b.ActualBoxSizingWidth, b.ActualBoxSizingHeight);
+        }
+
+        /// <summary>
+        /// Closes the current inline-formatting line and opens its successor. The caller owns the
+        /// content-specific work on either side of that boundary (speculative extent rollback,
+        /// line-clamp, first-line remeasurement, float intersection, and leading decorations).
+        /// </summary>
+        private static void OpenNextLine(CssBox blockBox, CssLineBoxCoordinates coordinates,
+            double lineSpacing, double lineStartX, int startOrdinal, bool followsForcedBreak, bool isRtl)
+        {
+            coordinates.ConsecutiveHyphenatedLines =
+                coordinates.CurrentLineHyphenated ? coordinates.ConsecutiveHyphenatedLines + 1 : 0;
+            coordinates.CurrentLineHyphenated = false;
+            coordinates.Line.PrecedesForcedBreak = followsForcedBreak;
+            coordinates.CurrentX = lineStartX;
+            coordinates.CurrentY = coordinates.MaxBottom + lineSpacing;
+            coordinates.Line = new CssLineBox(blockBox)
+            {
+                FollowsForcedBreak = followsForcedBreak,
+                ContentRight = LineContentRightOf(blockBox, coordinates.CurrentY),
+                ContentLeft = lineStartX,
+                StartOrdinal = startOrdinal
+            };
+            coordinates.LineStartOrdinal = startOrdinal;
+            coordinates.TrailingRegionalIndicatorCount = 0;
+            coordinates.TrailingGraphemeContext = string.Empty;
+
+            if (!isRtl)
+            {
+                coordinates.CurrentX += GetLineTextIndent(blockBox, isFirstLine: false,
+                    coordinates.Line.FollowsForcedBreak);
+            }
         }
 
         /// <summary>
@@ -3552,22 +3594,6 @@ namespace PeachPDF.Html.Core.Dom
                                 return;
                             }
 
-                            // The line about to close is being abandoned for a new one - fold whether it
-                            // ended in a hyphen into the running consecutive-hyphenated-lines count before
-                            // that state resets for the line that's about to start.
-                            coordinates.ConsecutiveHyphenatedLines =
-                                coordinates.CurrentLineHyphenated ? coordinates.ConsecutiveHyphenatedLines + 1 : 0;
-                            coordinates.CurrentLineHyphenated = false;
-
-                            // The mirror of the new line's FollowsForcedBreak just below, recorded on the
-                            // line being closed while the reason it is closing is still in hand. css-text-3
-                            // §6.1 ends a paragraph at a forced break, so this line aligns per
-                            // text-align-last - and stating it here rather than looking ahead is what makes
-                            // it survive a fragmentation break that discards the line the <br> opened.
-                            // Assigned, not or-ed: a line is closed exactly once, and a re-run layout pass
-                            // over the same box tree must re-derive this rather than compound it.
-                            coordinates.Line.PrecedesForcedBreak = word.IsLineBreak;
-
                             // b's content straddles the line-1/2 boundary: its words were measured
                             // using blockBox's first-line style (above), but word (and everything after
                             // it in b) is wrapping off line 1 right now, so it/they are no longer
@@ -3580,39 +3606,14 @@ namespace PeachPDF.Html.Core.Dom
                             }
 
                             wrapNoWrapBox = false;
-                            coordinates.CurrentX = lineStartX;
-                            coordinates.CurrentY = coordinates.MaxBottom + lineSpacing;
+                            OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, wordOrdinal,
+                                word.IsLineBreak, isRtl);
 
                             lastLeftIntersectingFloatBox = DomUtils.GetLastLeftIntersectingFloatBox(b, coordinates);
 
                             if (lastLeftIntersectingFloatBox is not null)
                             {
                                 coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + leftSpacing;
-                            }
-
-                            coordinates.Line = new CssLineBox(blockBox)
-                            {
-                                FollowsForcedBreak = word.IsLineBreak,
-                                // Re-derived at the Y this wrap landed on (css-break-3 §5.1), mirroring the
-                                // seed line's own LineContentRightOf call in CreateLineBoxes - a straddling
-                                // block's later lines wrap against whatever page they actually reached, not
-                                // the page the block started on.
-                                ContentRight = LineContentRightOf(blockBox, coordinates.CurrentY),
-                                ContentLeft = lineStartX
-                            };
-                            coordinates.LineStartOrdinal = wordOrdinal;
-                            coordinates.Line.StartOrdinal = wordOrdinal;
-                            coordinates.TrailingRegionalIndicatorCount = 0;
-                            coordinates.TrailingGraphemeContext = string.Empty;
-
-                            // Never the block's first formatted line (that's the seed line CreateLineBoxes
-                            // creates) - only `each-line`/`hanging` (CSS Text 3 §3) can select this line.
-                            // RTL reserves the same space on the opposite (wrap-boundary) side instead -
-                            // see the seed line's own comment on `isRtl`.
-                            if (!isRtl)
-                            {
-                                coordinates.CurrentX += GetLineTextIndent(blockBox, isFirstLine: false,
-                                    coordinates.Line.FollowsForcedBreak);
                             }
 
                             if (word.IsImage || word.Equals(b.FirstWord))
@@ -3947,7 +3948,65 @@ namespace PeachPDF.Html.Core.Dom
                     // on an earlier fragmentainer) places nothing again.
                     if (!childOpensHere) continue;
 
-                    await FlowAtomicBlockContentChild(g, b, coordinates);
+                    // Resolve an inline-block's used outer width before laying out its independent
+                    // formatting context. An atomic inline is one unbreakable item in this line; when it
+                    // does not fit the remaining measure, CSS 2.1 §9.4.2 closes the current line and puts
+                    // the whole box on the next one. Doing this before child layout is significant:
+                    // line-clamp can stop here without first emitting content that must then be undone.
+                    double? resolvedInlineBlockWidth = null;
+                    if (b.DerivedStyle.ActualDisplay == Keywords.InlineBlock)
+                    {
+                        resolvedInlineBlockWidth = await ResolveAtomicInlineBlockWidth(
+                            g, b, coordinates.CurrentY);
+
+                        var actualLimitRight = coordinates.Line.ContentRight;
+                        var rightFloat = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates);
+                        if (rightFloat is not null)
+                        {
+                            actualLimitRight = rightFloat.Location.X - rightFloat.ActualMarginLeft;
+                        }
+
+                        if (isRtl)
+                        {
+                            actualLimitRight -= GetLineTextIndent(blockBox,
+                                coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak);
+                        }
+
+                        var borderLeft = coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth;
+                        var outerRight = borderLeft + resolvedInlineBlockWidth.Value
+                            + b.ActualMarginRight + clonedTrailing;
+                        var blockPermitsWrap = blockBox.WhiteSpace.Value is not (Whitespace.NoWrap or Whitespace.Pre);
+                        if (blockPermitsWrap && !IsAtLineStart(coordinates) && outerRight > actualLimitRight + 0.01)
+                        {
+                            if (TryApplyLineClamp(g, blockBox, coordinates, actualLimitRight, 0, clonedTrailing))
+                            {
+                                b.SuppressFragmentEmissionForCurrentLayout();
+                                coordinates.ClampedStop = true;
+                                return;
+                            }
+
+                            OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX,
+                                coordinates.WordOrdinal, followsForcedBreak: false, isRtl);
+
+                            var leftFloat = DomUtils.GetLastLeftIntersectingFloatBox(box, coordinates);
+                            if (leftFloat is not null)
+                            {
+                                coordinates.CurrentX = leftFloat.ActualRight + leftFloat.ActualMarginRight;
+                            }
+
+                            coordinates.CurrentX += leftSpacing + (clonesDecorations
+                                ? DomUtils.ClonedInlineStart(b.ParentBox, blockBox)
+                                : 0);
+                            childContentStartX = coordinates.CurrentX;
+
+                            // The next line can belong to a fragmentainer with a different inline measure;
+                            // percentages and auto shrink-to-fit widths must resolve at that final Y.
+                            resolvedInlineBlockWidth = await ResolveAtomicInlineBlockWidth(
+                                g, b, coordinates.CurrentY);
+                        }
+                    }
+
+                    await FlowAtomicBlockContentChild(g, b, coordinates, resolvedInlineBlockWidth);
                 }
                 else if (b.DerivedStyle.ActualDisplay == Keywords.InlineFlex)
                 {

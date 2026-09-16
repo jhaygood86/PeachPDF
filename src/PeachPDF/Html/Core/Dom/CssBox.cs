@@ -2937,6 +2937,24 @@ namespace PeachPDF.Html.Core.Dom
         private int _touchedGeneration = -1;
 
         /// <summary>
+        /// The layout generation in which this box's whole subtree was explicitly rejected before
+        /// placement and therefore must not be considered by fragment emission. Currently written by
+        /// atomic inline-block wrapping when <c>line-clamp</c> stops before the box: intrinsic measurement
+        /// has already touched the subtree, and border/padding alone give the unplaced box non-zero bounds
+        /// at the origin, so neither touched-state nor geometry can distinguish it from placed content.
+        /// </summary>
+        private int _fragmentEmissionSuppressedGeneration = -1;
+
+        internal bool FragmentEmissionSuppressedForCurrentLayout =>
+            _fragmentEmissionSuppressedGeneration == (HtmlContainer?.LayoutGeneration ?? 0);
+
+        internal void SuppressFragmentEmissionForCurrentLayout() =>
+            _fragmentEmissionSuppressedGeneration = HtmlContainer?.LayoutGeneration ?? 0;
+
+        internal void AllowFragmentEmissionForCurrentLayout() =>
+            _fragmentEmissionSuppressedGeneration = -1;
+
+        /// <summary>
         /// Whether layout has not yet reached this box at all in the current generation, so it holds no
         /// positioned content and cannot appear in <i>any</i> fragmentainer yet.
         /// </summary>
