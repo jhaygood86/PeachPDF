@@ -10834,6 +10834,68 @@ await SaveShowcaseAsync("svg_filter_graph", "Graphics & Effects", "SVG Filter: M
     "A real SVG <filter> primitive graph (feFlood, feComposite, feOffset, feMerge) building a drop shadow from named, non-adjacently-referenced results - the general filter graph evaluator, not a simple linear chain.",
     svgFilterGraphHtml, pdfConfig);
 
+// ── Lossless WebP/AVIF/TIFF embedding (issue #1107) ───────────────────────────────────
+static byte[] BuildLosslessCheckerPatternBytes(int size, string format, object encoderOptions)
+{
+    using var image = PeachImage.Image.Create(size, size, PeachImage.PixelFormat.Rgb24);
+    var pixels = image.GetPixelSpan();
+    for (int y = 0; y < size; y++)
+    {
+        for (int x = 0; x < size; x++)
+        {
+            bool dark = ((x / 8) + (y / 8)) % 2 == 0;
+            var (r, g, b) = dark ? ((byte)0x0F, (byte)0x17, (byte)0x2A) : ((byte)0xF8, (byte)0xFA, (byte)0xFC);
+            int i = (y * size + x) * 3;
+            pixels[i] = r; pixels[i + 1] = g; pixels[i + 2] = b;
+        }
+    }
+
+    using var ms = new MemoryStream();
+    switch (encoderOptions)
+    {
+        case PeachImage.Formats.Webp.WebpEncoderOptions webpOptions:
+            image.Save(ms, format, webpOptions);
+            break;
+        case PeachImage.Formats.Avif.AvifEncoderOptions avifOptions:
+            image.Save(ms, format, avifOptions);
+            break;
+    }
+    return ms.ToArray();
+}
+
+var losslessWebpBase64 = Convert.ToBase64String(
+    BuildLosslessCheckerPatternBytes(96, "webp", new PeachImage.Formats.Webp.WebpEncoderOptions { Lossless = true }));
+var losslessAvifBase64 = Convert.ToBase64String(
+    BuildLosslessCheckerPatternBytes(96, "avif", new PeachImage.Formats.Avif.AvifEncoderOptions { Lossless = true }));
+
+var losslessRasterHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 16px; max-width: 640px; }" +
+    ".row { display: flex; gap: 24px; align-items: flex-start; }" +
+    ".row img { image-rendering: pixelated; border: 1px solid #cbd5e1; }" +
+    ".label { font-size: 11px; color: #555; margin-top: 4px; }" +
+    "</style></head><body>" +
+    "<h2>Lossless WebP &amp; AVIF embedding</h2>" +
+    "<p class=\"note\">A WebP or AVIF source encoded with its own format's lossless mode (VP8L, or AV1's " +
+    "lossless coding path) embeds via a raw /FlateDecode stream instead of being silently re-encoded as " +
+    "lossy JPEG - the hard checkerboard edges below stay pixel-exact, with no JPEG block artifacts.</p>" +
+    "<div class=\"row\">" +
+    $"<div><img src=\"data:image/webp;base64,{losslessWebpBase64}\" width=\"96\" height=\"96\">" +
+    "<div class=\"label\">Lossless WebP (VP8L)</div></div>" +
+    $"<div><img src=\"data:image/avif;base64,{losslessAvifBase64}\" width=\"96\" height=\"96\">" +
+    "<div class=\"label\">Lossless AVIF</div></div>" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("lossless_webp_avif", "Images & Replaced Content", "Lossless WebP &amp; AVIF Embedding",
+    "A WebP or AVIF source that was itself encoded losslessly (VP8L, or AV1's lossless coding path) is " +
+    "detected via PeachImage's ImageInfo.IsLosslessEncoding and embedded as a raw /FlateDecode stream " +
+    "under ImageCompression.Auto/Lossless, instead of always being re-encoded as lossy JPEG the way every " +
+    "earlier PeachPDF version did regardless of the source's own encoding.",
+    losslessRasterHtml, pdfConfig);
+
 const string declarativeApiSource =
     """"
     var generator = new PdfGenerator();

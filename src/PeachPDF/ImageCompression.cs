@@ -3,12 +3,12 @@
 namespace PeachPDF
 {
     /// <summary>
-    /// How an opaque, unconditionally-lossless raster source (PNG, BMP, or GIF - none of the three has a
-    /// lossy encoding mode) is embedded, set via <see cref="PdfGenerateConfig.ImageCompression"/>. WebP,
-    /// AVIF, and TIFF sources are unaffected by this setting in every mode - PeachImage doesn't currently
-    /// expose whether a decoded source of those formats was itself lossy- or lossless-encoded, so they
-    /// stay on whatever path they were already on before this option existed. See
-    /// <c>.claude/accepted-gaps/webp-avif-tiff-lossy-detection-unavailable.md</c>.
+    /// How an opaque, lossless raster source is embedded, set via
+    /// <see cref="PdfGenerateConfig.ImageCompression"/>. PNG, BMP, and GIF always qualify (none of the
+    /// three has a lossy encoding mode at all). WebP, AVIF, and TIFF each support both a lossy and a
+    /// lossless encoding mode, so a source in one of those formats only qualifies when it was actually
+    /// encoded losslessly - a lossy-encoded WebP/AVIF/TIFF is unaffected by this setting in every mode
+    /// and stays on the same JPEG-re-encode path it always used.
     /// </summary>
     public enum ImageCompression
     {
@@ -18,10 +18,11 @@ namespace PeachPDF
         /// color-key <c>/Mask</c> mechanism can represent (a real per-pixel alpha channel still needs the
         /// existing decode+<c>/SMask</c> path) - is always embedded that way, regardless of
         /// <see cref="PdfGenerateConfig.DownscaleImages"/> - pass-through can't be resized, the same as a
-        /// CMYK JPEG is always embedded at natural size. A PNG/BMP/GIF source that isn't pass-through-
-        /// eligible at its own natural size (an interlaced PNG, or a format with no pass-through mechanism
-        /// at all) still never gets re-encoded as lossy JPEG - it falls back to the existing decode-and-
-        /// <c>/FlateDecode</c> path instead. One being downscaled (its on-page display size is smaller
+        /// CMYK JPEG is always embedded at natural size. A lossless source (PNG/BMP/GIF always, or a
+        /// losslessly-encoded WebP/AVIF/TIFF) that isn't pass-through-eligible at its own natural size (an
+        /// interlaced PNG, or a format with no pass-through mechanism at all) still never gets re-encoded
+        /// as lossy JPEG - it falls back to the existing decode-and-<c>/FlateDecode</c> path instead. One
+        /// being downscaled (its on-page display size is smaller
         /// than its natural size) keeps the existing downscale-to-JPEG-at-<see cref="PdfGenerateConfig.DownscaleQuality"/>
         /// behavior unchanged, since that's an intentional, separate size/quality trade-off - except a
         /// <c>tRNS</c>-transparent source, which stays pass-through-embedded (and so natural-size)
@@ -30,7 +31,7 @@ namespace PeachPDF
         Auto,
 
         /// <summary>
-        /// Same as <see cref="Auto"/>, but a downscaled opaque PNG/BMP/GIF also never gets re-encoded as
+        /// Same as <see cref="Auto"/>, but a downscaled opaque lossless source also never gets re-encoded as
         /// lossy JPEG - it's decoded, resampled, and re-<c>/FlateDecode</c>-encoded instead of
         /// JPEG-compressed at <see cref="PdfGenerateConfig.DownscaleQuality"/>. Larger downscaled output,
         /// always pixel-exact regardless of size. A <c>tRNS</c>-transparent PNG being downscaled is

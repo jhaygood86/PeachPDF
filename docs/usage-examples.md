@@ -573,7 +573,9 @@ var config = new PdfGenerateConfig { ImageCompression = ImageCompression.Lossles
 | `Lossless` | Same as `Auto`, but a *downscaled* PNG/BMP/GIF also never gets JPEG'd — it's decoded, resampled, and re-`FlateDecode`-encoded instead, at any size. Larger downscaled files, always pixel-exact. |
 | `Lossy` | Always re-encode an opaque PNG/BMP/GIF as JPEG — the behavior every PeachPDF version before this option used. An explicit opt-in for the smallest files when fidelity doesn't matter, even for diagram/line-art content. |
 
-An interlaced PNG, an alpha-bearing PNG, and every other raster format (WebP, AVIF, TIFF) are unaffected by `ImageCompression` in every mode — WebP/AVIF/TIFF each support both a lossy and a lossless internal encoding and PeachPDF currently has no way to tell which a given source used, so extending this protection to them isn't safe yet.
+An interlaced PNG and an alpha-bearing PNG are unaffected by `ImageCompression` in every mode — both still fall back to the existing decode-and-`FlateDecode` path regardless of the setting, same as before.
+
+A losslessly-encoded WebP, AVIF, or TIFF source gets the same protection as an opaque PNG/BMP/GIF: PeachPDF can tell whether a given source actually used its format's lossless mode (WebP's VP8L, AVIF's lossless AV1 tool, or TIFF's uncompressed/LZW/PackBits compression), and only re-encodes it as lossy JPEG under `ImageCompression.Lossy`. A *lossy*-encoded WebP/AVIF/TIFF source is unaffected by `ImageCompression` in every mode — re-encoding an already-lossy source as JPEG loses nothing a lossless re-embed would have recovered, so it stays on the JPEG-re-encode path regardless of the setting.
 
 ## Authoring colors in CMYK
 

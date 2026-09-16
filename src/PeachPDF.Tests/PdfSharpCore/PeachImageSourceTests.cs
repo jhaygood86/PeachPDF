@@ -1,5 +1,6 @@
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using PeachImage;
+using PeachImage.Formats.Avif;
 using PeachImage.Formats.Bmp;
 using PeachImage.Formats.Jpeg;
 using PeachImage.Formats.Png;
@@ -13,11 +14,13 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
     /// <summary>
     /// Covers <see cref="PeachImageSource"/> - the PeachImage-backed <c>ImageSource</c> implementation
     /// used on both target frameworks - across every format PeachImage can decode (JPEG, PNG, BMP, GIF,
-    /// WebP, AVIF; see <c>PeachImage.Image.Codecs</c>). JPEG/BMP/PNG/GIF fixtures are built with
+    /// WebP, AVIF; see <c>PeachImage.Image.Codecs</c>). JPEG/BMP/PNG/GIF/WebP fixtures are built with
     /// PeachImage's own encoders (a hand-picked minimal file isn't reliably decodable by any real codec
-    /// - see <c>RasterPngFixture</c>); WebP/AVIF have no such encoder available (AVIF has none in
-    /// PeachImage at all) so those fixtures are small real files instead (see
-    /// <see cref="WebpTestImageBase64"/>/<see cref="AvifTestImageBase64"/>). Beyond header/magic-byte
+    /// - see <c>RasterPngFixture</c>); the decode/round-trip tests below still use the small real
+    /// <see cref="AvifTestImageBase64"/> fixture file for AVIF rather than PeachImage's own AVIF
+    /// encoder (added in PeachImage 0.4.6, alongside <see cref="AvifEncoderOptions"/>, and used only by
+    /// the <c>IsLosslessSourceFormat</c> tests below, which need to control lossless-vs-lossy encoding
+    /// directly). Beyond header/magic-byte
     /// checks, every format's test decodes the encoded/fixture output back through
     /// <see cref="Image.Load(System.IO.Stream, DecoderOptions?)"/> and asserts on actual pixel colors -
     /// per this repo's testing convention, a passing header check alone isn't proof a raster pipeline
@@ -930,18 +933,71 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         }
 
         [Fact]
-        public void IsLosslessSourceFormat_Webp_IsFalse()
+        public void IsLosslessSourceFormat_LosslessWebp_IsTrue()
         {
-            // WebP can itself be lossy or lossless depending on how the source file was encoded, and
-            // PeachImage doesn't currently expose which - see
-            // .claude/accepted-gaps/webp-avif-tiff-lossy-detection-unavailable.md.
+            // WebpEncoderOptions defaults to Lossless = true (VP8L) - issue #1107's
+            // ImageInfo.IsLosslessEncoding now lets PeachPDF tell a lossless WebP source apart from a
+            // lossy one, so it gets the same ImageCompression.Auto/Lossless protection an opaque
+            // PNG/BMP/GIF already does.
             using var image = MakeSolidImage(4, 4, 10, 20, 30, a: 255);
             using var ms = new MemoryStream();
             image.Save(ms, "webp", new WebpEncoderOptions());
 
             var img = ImageSource.FromBinary("test.webp", () => ms.ToArray());
 
+            Assert.True(img.IsLosslessSourceFormat);
+        }
+
+        [Fact]
+        public void IsLosslessSourceFormat_LossyWebp_IsFalse()
+        {
+            using var image = MakeSolidImage(4, 4, 10, 20, 30, a: 255);
+            using var ms = new MemoryStream();
+            image.Save(ms, "webp", new WebpEncoderOptions { Lossless = false });
+
+            var img = ImageSource.FromBinary("test.webp", () => ms.ToArray());
+
             Assert.False(img.IsLosslessSourceFormat);
+        }
+
+        [Fact]
+        public void IsLosslessSourceFormat_LosslessAvif_IsTrue()
+        {
+            using var image = MakeSolidImage(4, 4, 10, 20, 30, a: 255);
+            using var ms = new MemoryStream();
+            image.Save(ms, "avif", new AvifEncoderOptions { Lossless = true });
+
+            var img = ImageSource.FromBinary("test.avif", () => ms.ToArray());
+
+            Assert.True(img.IsLosslessSourceFormat);
+        }
+
+        [Fact]
+        public void IsLosslessSourceFormat_LossyAvif_IsFalse()
+        {
+            // AvifEncoderOptions defaults to Lossless = false.
+            using var image = MakeSolidImage(4, 4, 10, 20, 30, a: 255);
+            using var ms = new MemoryStream();
+            image.Save(ms, "avif", new AvifEncoderOptions());
+
+            var img = ImageSource.FromBinary("test.avif", () => ms.ToArray());
+
+            Assert.False(img.IsLosslessSourceFormat);
+        }
+
+        [Fact]
+        public void IsLosslessSourceFormat_Tiff_IsTrue()
+        {
+            // PeachImage's TIFF decoder only ever supports lossless compression tags (none/LZW/PackBits)
+            // - IsLosslessEncoding is always true for any TIFF that decodes successfully today (see
+            // ImageInfo.IsLosslessEncoding's own remarks), so there's no "lossy TIFF" counterpart to
+            // test here yet. A non-CMYK TIFF (unlike CmykTiffFixture's fixtures) reaches this generic
+            // fallback rather than DecodeCmykRaster.
+            var bytes = RgbTiffFixture.Build(4, 4, 10, 20, 30);
+
+            var img = ImageSource.FromBinary("test.tiff", () => bytes);
+
+            Assert.True(img.IsLosslessSourceFormat);
         }
 
         // A minimal, hand-built 2x2 uncompressed CMYK TIFF (PhotometricInterpretation=5/Separated,
