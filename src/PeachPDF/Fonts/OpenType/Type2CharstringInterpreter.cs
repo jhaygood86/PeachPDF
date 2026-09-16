@@ -49,7 +49,7 @@ namespace PeachPDF.Fonts.OpenType
 
             try
             {
-                var interpreter = new Interpreter(cff);
+                var interpreter = new Interpreter(cff, cff.LocalSubrsFor(glyphIndex));
                 interpreter.Run(cff.CharStrings[glyphIndex], 0);
                 interpreter.CloseCurrentContour();
 
@@ -70,7 +70,7 @@ namespace PeachPDF.Fonts.OpenType
         /// whole call tree (a subroutine operates on its caller's stack, not a fresh one), so this is
         /// one mutable instance for the whole (possibly recursive) decode rather than a static method.
         /// </summary>
-        private sealed class Interpreter(CffTable cff)
+        private sealed class Interpreter(CffTable cff, CffIndex localSubrs)
         {
             private readonly List<double> _stack = [];
             private readonly List<GlyphContour> _contours = [];
@@ -242,10 +242,10 @@ namespace PeachPDF.Fonts.OpenType
                         case 10: // callsubr
                         {
                             if (_stack.Count == 0) { Failed = true; return; }
-                            var index = (int)_stack[^1] + Bias(cff.LocalSubrs.Count);
+                            var index = (int)_stack[^1] + Bias(localSubrs.Count);
                             _stack.RemoveAt(_stack.Count - 1);
-                            if (index < 0 || index >= cff.LocalSubrs.Count) { Failed = true; return; }
-                            Run(cff.LocalSubrs[index], depth + 1);
+                            if (index < 0 || index >= localSubrs.Count) { Failed = true; return; }
+                            Run(localSubrs[index], depth + 1);
                             break;
                         }
 

@@ -18,6 +18,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
+using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Text;
@@ -3058,7 +3059,11 @@ namespace PeachPDF.Html.Core.Dom
         /// against; <see cref="FlowBox"/> keeps the two sides apart instead, because it does.
         /// </summary>
         private static double LineBoxExtentOf(CssRect word, CssBox blockBox) =>
-            LineBoxContributionOf(word, blockBox).Height;
+            // No double-overline reservation here: vertical-writing-mode decoration geometry is still
+            // horizontal-only (issue #1075's own remaining scope), so reserving ascent-side headroom for
+            // a decoration that direction doesn't even apply to yet would only inflate the column for no
+            // current benefit.
+            LineBoxContributionOf(word, blockBox, pixelsPerPoint: 0, reserveDoubleOverlineReach: false).Height;
 
         /// <summary>
         /// One inline box's share of a line box, split at the baseline, per
@@ -3074,6 +3079,21 @@ namespace PeachPDF.Html.Core.Dom
             var halfLeading = (lineHeight - font.Height) / 2;
 
             return new LineBoxExtent(font.Ascent + halfLeading, font.Height - font.Ascent + halfLeading);
+        }
+
+        /// <summary>
+        /// <see cref="HalfLeadingExtentOf"/> for <paramref name="box"/>, extended on the ascent side by
+        /// <see cref="FragmentPainter.DoubleOverlineExtraReachAbove"/> when <paramref name="box"/> itself
+        /// carries a <c>double</c> overline (issue #1124) - so a line box reserves the headroom that
+        /// decoration's outer stroke needs above the box's own top edge, rather than leaving it to
+        /// whatever margin/pagination happens to already be there. Zero extra reach is the overwhelming
+        /// common case and this is then identical to <see cref="HalfLeadingExtentOf"/>.
+        /// </summary>
+        private static LineBoxExtent HalfLeadingExtentWithDecoration(CssBox box, double pixelsPerPoint)
+        {
+            var extent = HalfLeadingExtentOf(box.ActualFont, box.ActualLineHeight);
+            var reach = FragmentPainter.DoubleOverlineExtraReachAbove(box, pixelsPerPoint);
+            return reach > 0 ? extent with { AboveBaseline = extent.AboveBaseline + reach } : extent;
         }
 
         /// <summary>
@@ -3115,7 +3135,8 @@ namespace PeachPDF.Html.Core.Dom
         /// per element (issue #1127).
         /// </para>
         /// </remarks>
-        private static LineBoxExtent LineBoxContributionOf(CssRect word, CssBox blockBox)
+        private static LineBoxExtent LineBoxContributionOf(CssRect word, CssBox blockBox, double pixelsPerPoint,
+            bool reserveDoubleOverlineReach)
         {
             // The first-line pseudo wraps the root inline box, so its inherited font and line-height
             // replace the block's ordinary strut on that line and can reduce as well as increase the
@@ -3124,15 +3145,17 @@ namespace PeachPDF.Html.Core.Dom
             var ownerBox = word.OwnerBox;
             var strutStyle = word.FirstLineStyle ?? blockBox;
 
-            var extent = blockBox.IsReplacedBlockWrapper
-                ? default
-                : HalfLeadingExtentOf(strutStyle.ActualFont, strutStyle.ActualLineHeight);
+            LineBoxExtent ExtentOf(CssBox box) => reserveDoubleOverlineReach
+                ? HalfLeadingExtentWithDecoration(box, pixelsPerPoint)
+                : HalfLeadingExtentOf(box.ActualFont, box.ActualLineHeight);
+
+            var extent = blockBox.IsReplacedBlockWrapper ? default : ExtentOf(strutStyle);
 
             // A replaced element's own line-height does not contribute; its margin box is added by
             // GrowLineToItsExtent instead. A non-replaced inline ancestor around it still owns an
             // ordinary inline box, so the loop below deliberately continues to include those.
             if (word.FirstLineStyle is null && !word.IsImage)
-                extent = extent.Union(HalfLeadingExtentOf(ownerBox.ActualFont, ownerBox.ActualLineHeight));
+                extent = extent.Union(ExtentOf(ownerBox));
 
             // A word owned by the block itself has no inline ancestors. Starting at its parent in
             // that case would walk *outside* the line's formatting context and let an outer element's
@@ -3141,7 +3164,7 @@ namespace PeachPDF.Html.Core.Dom
                  inlineAncestor is not null && !ReferenceEquals(inlineAncestor, blockBox);
                  inlineAncestor = inlineAncestor.ParentBox)
             {
-                extent = extent.Union(HalfLeadingExtentOf(inlineAncestor.ActualFont, inlineAncestor.ActualLineHeight));
+                extent = extent.Union(ExtentOf(inlineAncestor));
             }
 
             return extent;
@@ -3199,7 +3222,7 @@ namespace PeachPDF.Html.Core.Dom
             void GrowLineToItsExtent(CssRect word)
             {
                 var line = coordinates.Line;
-                var baselineExtent = LineBoxContributionOf(word, blockBox);
+                var baselineExtent = LineBoxContributionOf(word, blockBox, g.PixelsPerPoint, reserveDoubleOverlineReach: true);
 
                 // An outside marker is not in this flow (IsOutsideMarker), but it does sit on this
                 // line's baseline, so the line has to be tall enough to hold it - otherwise a marker

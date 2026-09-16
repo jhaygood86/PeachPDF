@@ -12,13 +12,15 @@
 // which PeachPDF's shaping pipeline (cmap/GSUB) already does upstream of
 // this table, exactly as it does for a glyf font's `loca`-indexed lookup.
 //
-// Deliberately NOT supported: CID-keyed CFF (the `ROS` operator present in
-// the Top DICT) - a CID font needs `FDArray`/`FDSelect` to pick the right
-// Private DICT/local subrs per glyph, which this reader does not parse; see
-// .claude/accepted-gaps/cid-keyed-cff-font-outlines-unsupported.md. A
-// CID-keyed table reports IsSupported = false so a caller falls back to
-// whatever it did before this file existed, rather than guessing at (likely
-// wrong) top-level local subrs.
+// CID-keyed CFF (the `ROS` operator present in the Top DICT - common in CJK
+// "Pro"/Source Han Sans/Noto Sans CJK OpenType-CFF builds, issue #1122) is
+// also supported: FDArray (12 36, an INDEX of per-glyph Font DICTs, each
+// with its own Private DICT/local Subrs, resolved exactly like the
+// top-level Private DICT one level deeper) and FDSelect (12 37, a per-GID
+// selector, format 0 or 3) pick the right local Subrs per glyph via
+// LocalSubrsFor(gid). A CID font missing either operator, or one that fails
+// to parse, still reports IsSupported = false rather than guessing at the
+// wrong (top-level, likely absent) local subrs.
 //
 // https://adobe-type-tools.github.io/font-tech-notes/pdfs/5176.CFF.pdf
 //
@@ -85,7 +87,8 @@ namespace PeachPDF.Fonts.OpenType
             return new CffIndex(data, absoluteOffsets);
         }
 
-        private static int ReadU16(byte[] data, ref int pos)
+        /// <summary>A big-endian 16-bit read, advancing <paramref name="pos"/> past it - shared with <see cref="CffTable.ReadFdSelect"/>, which needs the same read for FDSelect's own 16-bit fields.</summary>
+        internal static int ReadU16(byte[] data, ref int pos)
         {
             int v = (data[pos] << 8) | data[pos + 1];
             pos += 2;
@@ -224,8 +227,10 @@ namespace PeachPDF.Fonts.OpenType
 
     /// <summary>
     /// A font's `CFF ` table, parsed only as far as <see cref="Type2CharstringInterpreter"/> needs:
-    /// the CharStrings INDEX (one entry per glyph, by GID), the Global Subr INDEX, and - when the font
-    /// is not CID-keyed - the top-level Private DICT's Local Subr INDEX.
+    /// the CharStrings INDEX (one entry per glyph, by GID), the Global Subr INDEX, and either the
+    /// top-level Private DICT's Local Subr INDEX (an ordinary font) or, for a CID-keyed font, each
+    /// FDArray Font DICT's own Local Subr INDEX plus the FDSelect per-GID map - see
+    /// <see cref="LocalSubrsFor"/>.
     /// </summary>
     internal sealed class CffTable
     {
@@ -233,16 +238,31 @@ namespace PeachPDF.Fonts.OpenType
         public CffIndex GlobalSubrs { get; private set; } = CffIndex.Empty;
         public CffIndex LocalSubrs { get; private set; } = CffIndex.Empty;
 
+        private CffIndex[]? _fdLocalSubrs;
+        private byte[]? _fdSelect;
+
         /// <summary>Whether the Top DICT carries a <c>ROS</c> operator - a CID-keyed font.</summary>
         public bool IsCidKeyed { get; private set; }
 
         /// <summary>
         /// False when this table could not be parsed at all, uses legacy Type 1 charstrings
-        /// (<c>CharstringType</c> other than 2), or is CID-keyed (see the file header remarks) - the
-        /// caller's cue to treat this font as having no usable glyph outlines, same as an absent
-        /// `glyf` table.
+        /// (<c>CharstringType</c> other than 2), or is CID-keyed but missing/malformed
+        /// <c>FDArray</c>/<c>FDSelect</c> - the caller's cue to treat this font as having no usable
+        /// glyph outlines, same as an absent `glyf` table.
         /// </summary>
         public bool IsSupported { get; private set; }
+
+        /// <summary>
+        /// The Local Subrs INDEX that applies to <paramref name="gid"/>: the top-level
+        /// <see cref="LocalSubrs"/> for an ordinary font, or the FDSelect-chosen FDArray entry's own
+        /// Local Subrs for a CID-keyed one. A charstring's subroutine calls never cross which
+        /// glyph/FD they belong to, so this is resolved once per glyph decode rather than per
+        /// <c>callsubr</c>.
+        /// </summary>
+        public CffIndex LocalSubrsFor(int gid) =>
+            IsCidKeyed && _fdSelect is { } fdSelect && gid >= 0 && gid < fdSelect.Length
+                ? _fdLocalSubrs![fdSelect[gid]]
+                : LocalSubrs;
 
         public CffTable(OpenTypeFontface face)
             : this(face.FontSource.Bytes, face.TableDictionary[TableTagNames.Cff].Offset)
@@ -298,19 +318,103 @@ namespace PeachPDF.Fonts.OpenType
             CharStrings = CffIndex.Read(data, ref charStringsPos);
 
             if (topDict.TryGet(18, out var privateOp) && privateOp.Length >= 2)
-            {
-                var privSize = (int)privateOp[0];
-                int privOffset = tableStart + (int)privateOp[1];
-                var privateDict = CffDict.Parse(data, privOffset, privOffset + privSize);
+                LocalSubrs = ReadLocalSubrs(data, tableStart + (int)privateOp[1], (int)privateOp[0]);
 
-                if (privateDict.TryGet(19, out var subrsOp) && subrsOp.Length > 0)
-                {
-                    int localSubrsPos = privOffset + (int)subrsOp[0];
-                    LocalSubrs = CffIndex.Read(data, ref localSubrsPos);
-                }
+            if (!IsCidKeyed)
+            {
+                IsSupported = true;
+                return;
             }
 
-            IsSupported = !IsCidKeyed;
+            // FDArray (12 36) and FDSelect (12 37) are both required to resolve a CID-keyed glyph's
+            // local Subrs - without either, IsSupported stays false rather than guessing.
+            if (!topDict.TryGet(1236, out var fdArrayOp) || fdArrayOp.Length == 0 ||
+                !topDict.TryGet(1237, out var fdSelectOp) || fdSelectOp.Length == 0)
+                return;
+
+            int fdArrayPos = tableStart + (int)fdArrayOp[0];
+            var fdArray = CffIndex.Read(data, ref fdArrayPos);
+
+            // Every slot is seeded with CffIndex.Empty (never the default(CffIndex) an unassigned array
+            // element would otherwise hold) - a Font DICT with no Private operator is legal CFF (that FD
+            // simply needs no private-scoped data), and CffIndex.Count on a default-initialized instance
+            // (null backing fields) throws, which Type2CharstringInterpreter's callsubr would hit the
+            // moment that FD's own glyph called a local subroutine.
+            var fdLocalSubrs = new CffIndex[fdArray.Count];
+            Array.Fill(fdLocalSubrs, CffIndex.Empty);
+            for (var i = 0; i < fdArray.Count; i++)
+            {
+                var fontDict = CffDict.Parse(data, fdArray.StartOffset(i), fdArray.EndOffset(i));
+                if (fontDict.TryGet(18, out var fdPrivateOp) && fdPrivateOp.Length >= 2)
+                    fdLocalSubrs[i] = ReadLocalSubrs(data, tableStart + (int)fdPrivateOp[1], (int)fdPrivateOp[0]);
+            }
+
+            _fdLocalSubrs = fdLocalSubrs;
+            _fdSelect = ReadFdSelect(data, tableStart + (int)fdSelectOp[0], CharStrings.Count);
+            IsSupported = true;
+        }
+
+        /// <summary>Resolves a Private DICT's own Local Subrs INDEX - shared by the top-level Private DICT and each FDArray entry's own.</summary>
+        private static CffIndex ReadLocalSubrs(byte[] data, int privOffset, int privSize)
+        {
+            var privateDict = CffDict.Parse(data, privOffset, privOffset + privSize);
+            if (!privateDict.TryGet(19, out var subrsOp) || subrsOp.Length == 0)
+                return CffIndex.Empty;
+
+            int localSubrsPos = privOffset + (int)subrsOp[0];
+            return CffIndex.Read(data, ref localSubrsPos);
+        }
+
+        /// <summary>
+        /// Reads an FDSelect table (format 0: a flat one-byte-per-GID array; format 3: a sorted list of
+        /// (first GID, FD index) ranges terminated by a sentinel GID) into one flat per-GID array -
+        /// simpler for <see cref="LocalSubrsFor"/> to index than re-deriving the range each lookup, and
+        /// cheap even for a large CJK glyph set.
+        /// </summary>
+        private static byte[] ReadFdSelect(byte[] data, int pos, int glyphCount)
+        {
+            var fdSelect = new byte[glyphCount];
+            int format = data[pos++];
+
+            switch (format)
+            {
+                case 0:
+                    for (var gid = 0; gid < glyphCount; gid++)
+                        fdSelect[gid] = data[pos + gid];
+                    break;
+
+                case 3:
+                {
+                    int nRanges = CffIndex.ReadU16(data, ref pos);
+
+                    int rangeStart = -1;
+                    byte rangeFd = 0;
+                    for (var r = 0; r < nRanges; r++)
+                    {
+                        int first = CffIndex.ReadU16(data, ref pos);
+                        byte fd = data[pos];
+                        pos += 1;
+
+                        if (rangeStart >= 0)
+                            for (var gid = rangeStart; gid < first && gid < glyphCount; gid++)
+                                fdSelect[gid] = rangeFd;
+
+                        rangeStart = first;
+                        rangeFd = fd;
+                    }
+
+                    int sentinel = CffIndex.ReadU16(data, ref pos);
+                    if (rangeStart >= 0)
+                        for (var gid = rangeStart; gid < sentinel && gid < glyphCount; gid++)
+                            fdSelect[gid] = rangeFd;
+                    break;
+                }
+
+                default:
+                    throw new FormatException("Unsupported FDSelect format.");
+            }
+
+            return fdSelect;
         }
     }
 }

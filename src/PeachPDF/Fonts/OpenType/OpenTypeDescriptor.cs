@@ -567,8 +567,10 @@ namespace PeachPDF.Fonts.OpenType
         /// <summary>
         /// Decodes a glyph's outline into drawable vector segments - `glyf` contours when the font
         /// has them, else a CFF font's own Type 2 charstring (see <see cref="Type2CharstringInterpreter"/>)
-        /// when it has one <see cref="CffTable.IsSupported">this reader supports</see> (not CID-keyed).
-        /// False for a font with neither (a CID-keyed CFF font, or one this reader could not parse at all).
+        /// when it has one <see cref="CffTable.IsSupported">this reader supports</see> - an ordinary or
+        /// CID-keyed CFF font alike, resolving each glyph's local Subrs via
+        /// <see cref="CffTable.LocalSubrsFor"/>. False for a font with neither (one this reader could
+        /// not parse at all, or a CID-keyed CFF font missing/malformed <c>FDArray</c>/<c>FDSelect</c>).
         /// </summary>
         public bool TryGetGlyphOutline(int glyphIndex, out GlyphOutline outline)
         {

@@ -813,13 +813,48 @@ namespace PeachPDF.Html.Core.Paint
 
             var textDecorationActualColor = string.IsNullOrEmpty(textDecorationColor) ? styleSource.ActualColor : box.HtmlContainer!.CssParser.ParseColor(textDecorationColor);
 
-            double x1 = rectangle.X;
-            if (ownDecorationArea && hasLeftEdge)
-                x1 += box.ActualPaddingLeft + box.ActualBorderLeftWidth;
+            // A true vertical writing mode (vertical-rl/-lr) lays its lines out along the physical Y
+            // axis - rectangle.Width is the column's thickness, rectangle.Height its extent along the
+            // line - the inverse of horizontal-tb. A sideways-rl/-lr box is deliberately excluded here
+            // (matching WritingModeFrame.ForContentBox's own IsVertical check): its own line boxes are
+            // still laid out horizontally, only the glyphs are rotated for painting (see
+            // FragmentPainter.Text.cs's SidewaysRotation), so its decoration geometry is horizontal too.
+            var isVertical = IsVerticalDecorationGeometry(box);
 
-            double x2 = rectangle.Right;
-            if (ownDecorationArea && hasRightEdge)
-                x2 -= box.ActualPaddingRight + box.ActualBorderRightWidth;
+            // The canonical block-start resolver (also what WritingModeFrame.BlockStartIsRight and
+            // every logical box-model longhand call) rather than a second, inline VerticalRl comparison
+            // - see CLAUDE.md's "don't write two independent parsers for the same CSS value grammar
+            // across layers" convention. Reading it this way also means this stays correct for free if
+            // IsVerticalDecorationGeometry is ever widened to include sideways-rl/-lr (issue #766):
+            // LogicalPropertyResolver.BlockStart already maps those to the same physical sides as
+            // vertical-rl/vertical-lr respectively.
+            var blockStartIsRight = LogicalPropertyResolver.BlockStart(box.WritingMode.Value) == PhysicalSide.Right;
+
+            // The inline-axis span - physical X normally, physical Y under a true vertical mode.
+            // Leading/trailing edge trims follow inline-start/inline-end, which is physical top for
+            // BOTH vertical-rl and vertical-lr (css-writing-modes-4 §6.4 - only the block axis differs
+            // between them), so this needs only a two-way branch rather than a three-way one.
+            double spanStart, spanEnd;
+            if (isVertical)
+            {
+                spanStart = rectangle.Y;
+                if (ownDecorationArea && hasLeftEdge)
+                    spanStart += box.ActualPaddingTop + box.ActualBorderTopWidth;
+
+                spanEnd = rectangle.Bottom;
+                if (ownDecorationArea && hasRightEdge)
+                    spanEnd -= box.ActualPaddingBottom + box.ActualBorderBottomWidth;
+            }
+            else
+            {
+                spanStart = rectangle.X;
+                if (ownDecorationArea && hasLeftEdge)
+                    spanStart += box.ActualPaddingLeft + box.ActualBorderLeftWidth;
+
+                spanEnd = rectangle.Right;
+                if (ownDecorationArea && hasRightEdge)
+                    spanEnd -= box.ActualPaddingRight + box.ActualBorderRightWidth;
+            }
 
             // Captured once, rather than read back from pen.Width for the rest of this method: pen is a
             // cached instance keyed only by color (RAdapter.GetPen), and WavyDecorationRenderer.
@@ -832,14 +867,15 @@ namespace PeachPDF.Html.Core.Paint
             pen.Width = thickness;
             pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(textDecorationStyle);
 
-            var span = new DecorationInterval(x1, x2);
+            var span = new DecorationInterval(spanStart, spanEnd);
 
-            // Both subtractions are x-axis reasoning - an atomic inline's margin box measured left to
-            // right, a band swept horizontally across glyph ink - so both are confined to a horizontal
-            // writing mode. Under vertical-rl/-lr a box's physical x-range is the column's thickness
-            // rather than its extent along the line, and subtracting it would delete the decoration
-            // instead of breaking it. Vertical decoration geometry is out of scope as a whole; this keeps
-            // that true for the new rules rather than for only one of them.
+            // Both subtractions are inline-axis-band reasoning that only understands a horizontal band
+            // today (an atomic inline's margin box measured left to right, a band swept horizontally
+            // across glyph ink), so both stay confined to a horizontal writing mode - extending either
+            // to a vertical inline axis is its own, separate piece of work (see
+            // .claude/accepted-gaps/). This uses the same horizontal-only test as before #1075 (sideways-*
+            // included), since neither subtraction is about geometry orientation - it's about whether the
+            // ink/exclusion band math itself understands the axis it would need to.
             var horizontal = IsHorizontalWritingMode(box);
 
             // The atomic inlines to break around are the same for every keyword: they are a fact about
@@ -865,27 +901,92 @@ namespace PeachPDF.Html.Core.Paint
             //
             // For a line set entirely in the decorating box's font the two steps cancel back to
             // `rectangle.Top + TextBaselineOffset`, which is what this expression used to be and what it
-            // still paints.
+            // still paints. Meaningless under a true vertical mode (no alphabetic baseline runs along a
+            // column), so only consulted in the horizontal branch below.
             var font = styleSource.ActualFont;
             var baseline = content?.AlphabeticBaselineOn(lineBox, box) is { } lineBaseline
                 ? lineBaseline - (font.Ascent - font.TextBaselineOffset)
                 : rectangle.Top + font.TextBaselineOffset;
 
+            // +1 when the cross-axis coordinate increases moving from the "over" side toward "under"
+            // (horizontal-tb and vertical-lr); -1 when it decreases (vertical-rl). css-writing-modes-4
+            // §6.3 defines over/under as the ascender-/descender-relative sides - block-start/block-end
+            // respectively - regardless of writing mode.
+            var underSign = blockStartIsRight ? -1 : 1;
+
+            double overPos, underPos, throughPos;
+            if (isVertical)
+            {
+                overPos = blockStartIsRight ? rectangle.Right : rectangle.Left;
+                underPos = blockStartIsRight ? rectangle.Left : rectangle.Right;
+                throughPos = rectangle.X + rectangle.Width / 2;
+            }
+            else
+            {
+                overPos = rectangle.Top;
+                underPos = rectangle.Bottom;
+                throughPos = rectangle.Top + rectangle.Height / 2f;
+            }
+
+            var offset = ResolveDecorationOffset(styleSource.TextUnderlineOffset, styleSource, g.PixelsPerPoint);
+
+            double ResolveUnderlineCross()
+            {
+                var clearance = ResolveAutomaticUnderlineClearance(thickness, g.PixelsPerPoint);
+
+                // No real vertical baseline runs along a column (a true vertical mode's glyphs are
+                // either upright and individually placed, or a rotated horizontal run - neither has one
+                // alphabetic line the way horizontal text does), so `from-font`'s real-metric offset
+                // and `auto`'s baseline-relative clearance both fall back to the same rectangle-relative
+                // approximation there: inset from the "under" edge by the ordinary clearance amount,
+                // which keeps the line close to (but inside) that edge - visually verified by
+                // rasterizing rather than assumed exact against real vertical font metrics (a larger,
+                // separate undertaking - see .claude/accepted-gaps/no-vertical-writing-mode-layout.md).
+                if (isVertical)
+                    return underPos - underSign * clearance + underSign * offset;
+
+                var basePos = styleSource.TextUnderlinePosition.Value switch
+                {
+                    // OpenType's underlinePosition is itself negative-from-baseline by convention, so
+                    // subtracting it moves the line down (away from the baseline) exactly as expected.
+                    TextUnderlinePosition.FromFont => baseline - font.UnderlinePosition,
+                    // "Under" edge: below the line's own lowest descender, per css-text-decor-3 §2.5 -
+                    // rectangle already spans the full line content (ascent through descent), so its own
+                    // bottom edge is that basis.
+                    TextUnderlinePosition.Under => underPos,
+                    _ => baseline + clearance
+                };
+
+                return basePos + offset;
+            }
+
             // text-decoration-line may list several keywords (e.g. "underline overline"); draw each.
-            var bottomInset = ownDecorationArea ? box.ActualPaddingBottom - box.ActualBorderBottomWidth : 0;
+            // The block-end physical padding/border - bottom in horizontal-tb, and whichever physical
+            // side is block-end for the vertical mode in play (left for vertical-rl, right for
+            // vertical-lr, per css-writing-modes-4 §6.4) - insets the same way across every writing mode.
+            double blockEndInset = 0;
+            if (ownDecorationArea)
+            {
+                blockEndInset = isVertical
+                    ? blockStartIsRight
+                        ? box.ActualPaddingLeft - box.ActualBorderLeftWidth
+                        : box.ActualPaddingRight - box.ActualBorderRightWidth
+                    : box.ActualPaddingBottom - box.ActualBorderBottomWidth;
+            }
+
             foreach (var line in textDecorationLine.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
-                double y = line switch
+                double cross = line switch
                 {
-                    Keywords.Underline => baseline + ResolveAutomaticUnderlineClearance(thickness, g.PixelsPerPoint),
-                    Keywords.LineThrough => rectangle.Top + rectangle.Height / 2f,
-                    Keywords.Overline => rectangle.Top,
+                    Keywords.Underline => ResolveUnderlineCross(),
+                    Keywords.LineThrough => throughPos,
+                    Keywords.Overline => overPos,
                     _ => double.NaN
                 };
 
-                if (double.IsNaN(y)) continue;
+                if (double.IsNaN(cross)) continue;
 
-                y -= bottomInset;
+                cross -= underSign * blockEndInset;
 
                 var exclusions = boxExclusions;
 
@@ -894,13 +995,14 @@ namespace PeachPDF.Html.Core.Paint
                 if (inkWords is not null && line is Keywords.Underline or Keywords.Overline)
                 {
                     List<DecorationInterval> combined = boxExclusions is null ? [] : [.. boxExclusions];
-                    AddInkExclusions(g, styleSource, inkWords, y, thickness, combined);
+                    AddInkExclusions(g, styleSource, inkWords, cross, thickness, combined);
                     exclusions = combined;
                 }
 
                 foreach (var segment in DecorationSegments.Subtract(span, exclusions ?? []))
                 {
-                    StrokeDecorationSegment(g, pen, thickness, textDecorationActualColor, textDecorationStyle, line, segment.Start, segment.End, y);
+                    StrokeDecorationSegment(g, pen, thickness, textDecorationActualColor, textDecorationStyle, line,
+                        segment.Start, segment.End, cross, isVertical, underSign);
                 }
             }
         }
@@ -923,47 +1025,147 @@ namespace PeachPDF.Html.Core.Paint
         /// the border-style properties", which for
         /// <see href="https://www.w3.org/TR/css-backgrounds-3/#border-style">css-backgrounds-3</see>'s
         /// <c>double</c> means "two lines ... the sum of the two lines and the space between them equals
-        /// the value of border-width". <b>This deliberately deviates from that cross-reference</b>: a
-        /// decoration's <c>text-decoration-thickness</c> describes the stroke, not a total, so dividing it
-        /// three ways would render the initial 1px double underline as two one-third-pixel hairlines.
-        /// Instead each stroke is the resolved thickness and the gap between them matches, so the pair
-        /// spans three times a single line. See
-        /// <c>.claude/accepted-gaps/double-decoration-thickness-is-per-stroke-not-a-total.md</c>.
-        /// <c>wavy</c>, by contrast, is defined in its own words ("Draw a wavy line") rather than by that
-        /// cross-reference - the one style css-text-decor-3 §2.2 does not leave to <c>border-style</c> at
-        /// all, and so the one whose straight-line rendering was an unambiguous spec deviation rather
-        /// than a discretionary choice (issue #1114).
+        /// the value of border-width". Each stroke here is <c>Max(thickness / 3, one CSS pixel)</c> and
+        /// the gap between them matches - so the resolved <c>text-decoration-thickness</c> is honoured as
+        /// a literal total (three equal thirds) once it is wide enough for each third to still read as a
+        /// visible line, and only exceeded below that floor (the initial 1px <c>auto</c> thickness would
+        /// otherwise divide into three one-third-pixel hairlines fainter than the solid underline
+        /// <c>double</c> is meant to be a heavier version of). <c>wavy</c>, by contrast, is defined in
+        /// its own words ("Draw a wavy line") rather than by that cross-reference - the one style
+        /// css-text-decor-3 §2.2 does not leave to <c>border-style</c> at all.
         /// </para>
         /// <para>
         /// Which way <c>double</c>'s second stroke - and <c>wavy</c>'s centerline, via
         /// <see cref="WavyDecorationRenderer.GrowthDirection"/> - grows is measured against Chrome 141
         /// rather than reasoned about: at 300dpi it keeps a single stroke exactly where <c>solid</c> puts
-        /// it and adds the second <i>above</i> for an overline and <i>below</i> for both an underline and
-        /// a line-through. That also suits an underline's own anchor, whose top edge is kept below the
-        /// alphabetic baseline (see <see cref="ResolveAutomaticUnderlineClearance"/>) and would be pushed
-        /// back through the glyphs by growing upward.
+        /// it and adds the second toward the "over" side for an overline and toward "under" for both an
+        /// underline and a line-through (css-writing-modes-4 §6.3's ascender-/descender-relative sides -
+        /// physical up/down under horizontal-tb, <paramref name="underSign"/> giving the correct physical
+        /// direction under a true vertical mode). That also suits an underline's own anchor, whose near
+        /// edge is kept on the "under" side of the baseline (see
+        /// <see cref="ResolveAutomaticUnderlineClearance"/>) and would be pushed back through the glyphs
+        /// by growing toward "over" instead. <c>wavy</c> is not yet extended to a true vertical writing
+        /// mode - <see cref="WavyDecorationRenderer"/> always reasons in physical X/Y, so it falls back
+        /// to a plain solid line there instead of a mispositioned wave.
         /// </para>
         /// </remarks>
+        /// <param name="g">the device to draw into</param>
+        /// <param name="pen">the pen to stroke with - <c>double</c> temporarily narrows its width, then restores <paramref name="thickness"/></param>
+        /// <param name="thickness">the resolved total <c>text-decoration-thickness</c>, captured once by the caller rather than read back from <paramref name="pen"/>.Width (see <see cref="PaintDecoration"/>'s own remarks on why)</param>
+        /// <param name="color">the decoration's resolved color - only <c>wavy</c> needs it directly, to fetch its own cached pen for its stroked path</param>
+        /// <param name="style">the resolved <c>text-decoration-style</c></param>
+        /// <param name="line">which decoration keyword this segment belongs to (<c>underline</c>/<c>overline</c>/<c>line-through</c>)</param>
+        /// <param name="x1">the inline-axis span start - physical X normally, physical Y under a true vertical mode</param>
+        /// <param name="x2">the inline-axis span end</param>
+        /// <param name="cross">the cross-axis position - physical Y normally, physical X under a true vertical mode</param>
+        /// <param name="isVertical">whether the cross axis is physical X (a true vertical writing mode) rather than physical Y</param>
+        /// <param name="underSign">+1 when increasing <paramref name="cross"/> moves toward "under" (horizontal-tb, vertical-lr); -1 when it moves toward "over" instead (vertical-rl)</param>
         private static void StrokeDecorationSegment(RGraphics g, RPen pen, double thickness, RColor color, string? style, string line,
-            double x1, double x2, double y)
+            double x1, double x2, double cross, bool isVertical, int underSign)
         {
+            void Draw(double at)
+            {
+                if (isVertical) g.DrawLine(pen, at, x1, at, x2);
+                else g.DrawLine(pen, x1, at, x2, at);
+            }
+
             switch (style)
             {
                 case Keywords.Double:
-                    var separation = 2 * thickness;
-                    var away = y + WavyDecorationRenderer.GrowthDirection(line) * separation;
-                    g.DrawLine(pen, x1, y, x2, y);
-                    g.DrawLine(pen, x1, away, x2, away);
-                    return;
+                {
+                    var strokeWidth = DoubleStrokeWidth(thickness, g.PixelsPerPoint);
+                    var separation = 2 * strokeWidth;
 
-                case Keywords.Wavy:
-                    WavyDecorationRenderer.StrokeWavyLine(g, color, line, x1, x2, y, thickness);
+                    // Overline grows toward "over"; underline and line-through (and anything else that
+                    // reached here with a position of its own) grow toward "under".
+                    var growSign = line == Keywords.Overline ? -underSign : underSign;
+
+                    // pen is a shared, per-color-cached RPen (RAdapter.GetPen) - the try/finally
+                    // guarantees the temporary narrower width is undone even if a Draw call throws, so a
+                    // paint-time failure here can never leave a later, unrelated stroke of the same
+                    // color (including a subsequent wavy segment, which fetches this same cached pen for
+                    // its own Width assignment) rendered at this segment's width instead of its own.
+                    pen.Width = strokeWidth;
+                    try
+                    {
+                        Draw(cross);
+                        Draw(cross + growSign * separation);
+                    }
+                    finally
+                    {
+                        pen.Width = thickness;
+                    }
+                    return;
+                }
+
+                case Keywords.Wavy when !isVertical:
+                    WavyDecorationRenderer.StrokeWavyLine(g, color, line, x1, x2, cross, thickness);
                     return;
 
                 default:
-                    g.DrawLine(pen, x1, y, x2, y);
+                    Draw(cross);
                     return;
             }
+        }
+
+        /// <summary>
+        /// The narrowest a single <c>double</c> stroke is allowed to render, regardless of how thin
+        /// <c>text-decoration-thickness / 3</c> would otherwise be - one CSS pixel, the same hairline
+        /// floor <see cref="ResolveAutomaticUnderlineClearance"/> already uses elsewhere in this file.
+        /// </summary>
+        private static double MinimumVisibleDoubleStrokeWidth(double pixelsPerPoint) =>
+            Length.PointsPerPx * pixelsPerPoint;
+
+        /// <summary>
+        /// One <c>double</c> decoration's per-stroke width, given the resolved total
+        /// <c>text-decoration-thickness</c> - shared by <see cref="StrokeDecorationSegment"/> (paint)
+        /// and <see cref="DoubleOverlineExtraReachAbove"/> (layout, issue #1124's reserved headroom) so
+        /// the two always agree on what the painter will actually draw.
+        /// </summary>
+        private static double DoubleStrokeWidth(double totalThickness, double pixelsPerPoint) =>
+            Math.Max(totalThickness / 3, MinimumVisibleDoubleStrokeWidth(pixelsPerPoint));
+
+        /// <summary>
+        /// How far above its own single-line position (<c>rectangle.Top</c>) a <c>double</c> overline's
+        /// outer stroke reaches - the extra ascent-side headroom <c>CssLayoutEngine.LineBoxContributionOf</c>
+        /// reserves (issue #1124) so ordinary pagination leaves room for it rather than the page clip
+        /// silently discarding the stroke. Zero for anything other than an overline drawn <c>double</c>.
+        /// </summary>
+        internal static double DoubleOverlineExtraReachAbove(CssBox box, double pixelsPerPoint)
+        {
+            if (box.TextDecorationStyle != Keywords.Double) return 0;
+
+            var line = box.TextDecorationLine;
+            if (string.IsNullOrEmpty(line) || line == Keywords.None) return 0;
+            if (!ContainsDecorationLineKeyword(line, Keywords.Overline)) return 0;
+
+            var totalThickness = ResolveDecorationThickness(box.TextDecorationThickness, box, pixelsPerPoint);
+            var strokeWidth = DoubleStrokeWidth(totalThickness, pixelsPerPoint);
+            return 2 * strokeWidth + strokeWidth / 2; // separation (2x) + the outer stroke's own half-width
+        }
+
+        /// <summary>
+        /// Whether <paramref name="textDecorationLine"/>'s space-separated keyword list contains
+        /// <paramref name="keyword"/> as a whole token, without <see cref="string.Split(char[])"/>'s
+        /// array allocation - <see cref="DoubleOverlineExtraReachAbove"/> calls this once per word (and
+        /// per inline ancestor) during layout (<c>CssLayoutEngine.LineBoxContributionOf</c>), a hot path
+        /// where <c>PaintDecoration</c>'s own per-line-box <c>Split</c> (which needs the tokens
+        /// themselves, not just a membership test) would be wasteful to repeat.
+        /// </summary>
+        private static bool ContainsDecorationLineKeyword(string textDecorationLine, string keyword)
+        {
+            var span = textDecorationLine.AsSpan();
+            int start = 0;
+            while (start < span.Length)
+            {
+                var spaceOffset = span[start..].IndexOf(' ');
+                var end = spaceOffset < 0 ? span.Length : start + spaceOffset;
+                if (span[start..end].SequenceEqual(keyword)) return true;
+                if (spaceOffset < 0) break;
+                start = end + 1;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -1006,10 +1208,26 @@ namespace PeachPDF.Html.Core.Paint
 
         /// <summary>
         /// Whether <paramref name="box"/>'s lines run left to right, which is what both decoration
-        /// subtractions assume. See <see cref="PaintDecoration"/> for why neither applies otherwise.
+        /// subtractions assume. See <see cref="PaintDecoration"/> for why neither applies otherwise -
+        /// this is deliberately not the same test as <see cref="IsVerticalDecorationGeometry"/> (a
+        /// sideways-rl/-lr box answers false to both, since its own inline-axis band math is still
+        /// horizontal even though its glyphs are rotated).
         /// </summary>
         private static bool IsHorizontalWritingMode(CssBox box) =>
             box.WritingMode.Value is WritingMode.HorizontalTb;
+
+        /// <summary>
+        /// Whether <paramref name="box"/>'s own line boxes are laid out along the physical Y axis
+        /// (<c>vertical-rl</c>/<c>vertical-lr</c>) rather than physical X - the geometry
+        /// <see cref="PaintDecoration"/>'s span/over/under math branches on (issue #1075). Deliberately
+        /// excludes <c>sideways-rl</c>/<c>sideways-lr</c>, matching
+        /// <see cref="Utils.WritingModeFrame.ForContentBox"/>'s own <c>IsVertical</c> check: a sideways
+        /// box's own line boxes are still laid out horizontally (rectangle.Width is the line's inline
+        /// extent, not a column's thickness) - only the glyphs painted on them are rotated 90° (see
+        /// <see cref="SidewaysRotation"/>) - so its decoration geometry is horizontal too.
+        /// </summary>
+        private static bool IsVerticalDecorationGeometry(CssBox box) =>
+            box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr;
 
         /// <summary>
         /// Appends the ink crossings of <paramref name="words"/> against a decoration line at
@@ -1036,11 +1254,20 @@ namespace PeachPDF.Html.Core.Paint
             var maximumClearance = MaximumInkSkipClearanceCssPixels * Length.PointsPerPx * g.PixelsPerPoint;
             var clearance = Math.Min(thickness, maximumClearance);
 
+            var isAuto = styleSource.TextDecorationSkipInk.Value == TextDecorationSkipInk.Auto;
+
             foreach (var placed in words)
             {
                 var word = placed.Word;
                 var text = word.FirstLineText ?? word.Text;
                 if (string.IsNullOrEmpty(text)) continue;
+
+                // css-text-decor-4 §2.10.5: under 'auto' (UA discretion - "may interrupt"), a UA
+                // "should consider the script of the text" and specifically "should refrain" from
+                // ink-skipping CJK-script text. 'all' has no such carve-out ("must interrupt"
+                // unconditionally), so this only ever short-circuits the auto case.
+                if (isAuto && word is CssRectWord { ScriptTag: "hani" or "kana" or "hang" })
+                    continue;
 
                 // Exactly the resolution DrawWordGlyphs uses to paint this word: a per-codepoint fallback
                 // face or a synthesized small-caps run has its own font and its own baseline shift, and
@@ -1080,9 +1307,40 @@ namespace PeachPDF.Html.Core.Paint
         /// </summary>
         private static double ResolveDecorationThickness(
             CssProperty<CssKeywordOrValue<TextDecorationThicknessKeyword, LengthOrCalc>> thickness,
-            CssBox styleSource, double pixelsPerPoint)
+            CssBox styleSource, double pixelsPerPoint) =>
+            ResolveKeywordOrLength(thickness, styleSource, pixelsPerPoint, keyword => keyword switch
+            {
+                TextDecorationThicknessKeyword.FromFont => styleSource.ActualFont.UnderlineThickness,
+                // Auto (the initial value), and any unresolved/global-keyword state - this engine's
+                // pre-existing fixed thickness, unchanged.
+                _ => 1
+            });
+
+        /// <summary>
+        /// Resolves css-text-decor-4 §2.8 <c>text-underline-offset</c> to a concrete distance, in the
+        /// same internal pixel space every other geometry value in <see cref="PaintDecoration"/> already
+        /// uses - the same shape as <see cref="ResolveDecorationThickness"/>. <c>auto</c> (the initial
+        /// value) is zero: the offset only ever <i>adds to</i> whatever <c>text-underline-position</c>
+        /// already establishes, it never has an independent zero position of its own. A percentage
+        /// resolves against the element's own font size ("1em"), per §2.8.
+        /// </summary>
+        private static double ResolveDecorationOffset(
+            CssProperty<CssKeywordOrValue<TextUnderlineOffsetKeyword, LengthOrCalc>> offset,
+            CssBox styleSource, double pixelsPerPoint) =>
+            ResolveKeywordOrLength(offset, styleSource, pixelsPerPoint, _ => 0); // Auto is zero.
+
+        /// <summary>
+        /// The <c>&lt;value&gt; | keyword</c> grammar shape <see cref="ResolveDecorationThickness"/> and
+        /// <see cref="ResolveDecorationOffset"/> share: a length/percentage (resolved against the
+        /// element's own font size) when a value was authored, otherwise <paramref name="resolveKeyword"/>
+        /// decides what each of the property's own keywords means.
+        /// </summary>
+        private static double ResolveKeywordOrLength<TKeyword>(
+            CssProperty<CssKeywordOrValue<TKeyword, LengthOrCalc>> property,
+            CssBox styleSource, double pixelsPerPoint, Func<TKeyword, double> resolveKeyword)
+            where TKeyword : struct, Enum
         {
-            var value = thickness.Value;
+            var value = property.Value;
 
             if (value is { IsValue: true, Value: { } lengthOrCalc })
             {
@@ -1090,13 +1348,7 @@ namespace PeachPDF.Html.Core.Paint
                 return CssValueParser.ParseLength(lengthOrCalc, fontSizePx, styleSource);
             }
 
-            return value.Keyword switch
-            {
-                TextDecorationThicknessKeyword.FromFont => styleSource.ActualFont.UnderlineThickness,
-                // Auto (the initial value), and any unresolved/global-keyword state - this engine's
-                // pre-existing fixed thickness, unchanged.
-                _ => 1
-            };
+            return resolveKeyword(value.Keyword.GetValueOrDefault());
         }
 
         /// <summary>

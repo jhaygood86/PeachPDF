@@ -133,14 +133,74 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         }
 
         [Fact]
-        public void CffTable_CidKeyedFont_ReportsCidKeyedButNotSupported()
+        public void CffTable_CidKeyedFontMissingFdArrayAndFdSelect_ReportsCidKeyedButNotSupported()
         {
             // A CID-keyed CFF needs FDArray/FDSelect to pick the right Private DICT/local subrs per
-            // glyph - deliberately not parsed here (see the accepted-gap note this file's header
-            // links). CffTable must still recognize IsCidKeyed (so a caller could report *why* this
-            // font falls back) while reporting IsSupported = false rather than guessing at the wrong
-            // (top-level, likely absent) local subrs.
+            // glyph - this fixture's Top DICT carries only ROS (no CharStrings, no FDArray/FDSelect
+            // at all), so CffTable must still recognize IsCidKeyed (so a caller could report *why*
+            // this font falls back) while reporting IsSupported = false rather than guessing at the
+            // wrong (top-level, likely absent) local subrs.
             byte[] font = SyntheticCff.CidKeyedFont();
+
+            var cff = new CffTable(font, tableStart: 0);
+
+            Assert.True(cff.IsCidKeyed);
+            Assert.False(cff.IsSupported);
+        }
+
+        [Theory]
+        [InlineData(0)] // FDSelect format 0: a flat one-byte-per-GID array
+        [InlineData(3)] // FDSelect format 3: (first GID, FD index) ranges terminated by a sentinel
+        public void CffTable_CidKeyedFontWithFdArrayAndFdSelect_IsSupportedAndResolvesPerGidLocalSubrs(int fdSelectFormat)
+        {
+            byte[] font = SyntheticCff.CidKeyedFontWithFdArrayAndFdSelect(fdSelectFormat);
+
+            var cff = new CffTable(font, tableStart: 0);
+
+            Assert.True(cff.IsCidKeyed);
+            Assert.True(cff.IsSupported);
+            Assert.Equal(2, cff.CharStrings.Count);
+
+            // GID 0 maps to FD 0, GID 1 to FD 1 - each FD's own (distinct) local Subrs INDEX, not the
+            // (nonexistent) top-level one.
+            Assert.Equal(1, cff.LocalSubrsFor(0).Count);
+            Assert.Equal(1, cff.LocalSubrsFor(1).Count);
+            Assert.NotEqual(
+                Encoding.Latin1.GetString(cff.LocalSubrsFor(0)[0]),
+                Encoding.Latin1.GetString(cff.LocalSubrsFor(1)[0]));
+        }
+
+        [Fact]
+        public void CffTable_CidKeyedFontWithFdArrayButNoFdSelect_ReportsUnsupported()
+        {
+            // FDArray alone cannot resolve which FD a glyph belongs to - FDSelect is required too.
+            byte[] font = SyntheticCff.CidKeyedFontWithFdArrayButNoFdSelect();
+
+            var cff = new CffTable(font, tableStart: 0);
+
+            Assert.True(cff.IsCidKeyed);
+            Assert.False(cff.IsSupported);
+        }
+
+        [Fact]
+        public void CffTable_FdArrayEntryWithNoPrivateDict_ResolvesToAnEmptyLocalSubrsIndexRatherThanThrowing()
+        {
+            // A Font DICT with no Private operator is legal CFF (that FD needs no private-scoped data);
+            // CffTable must resolve it to CffIndex.Empty rather than leaving an unassigned
+            // default(CffIndex), whose own Count throws.
+            byte[] font = SyntheticCff.CidKeyedFontWithFdArrayEntryMissingPrivateDict();
+
+            var cff = new CffTable(font, tableStart: 0);
+
+            Assert.True(cff.IsSupported);
+            Assert.Equal(1, cff.LocalSubrsFor(0).Count); // GID 0 -> FD 0, which does have local subrs
+            Assert.Equal(0, cff.LocalSubrsFor(1).Count); // GID 1 -> FD 1, which has none
+        }
+
+        [Fact]
+        public void CffTable_CidKeyedFontWithUnsupportedFdSelectFormat_FailsSoftRatherThanThrowing()
+        {
+            byte[] font = SyntheticCff.CidKeyedFontWithUnsupportedFdSelectFormat();
 
             var cff = new CffTable(font, tableStart: 0);
 
@@ -196,6 +256,110 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Build(cidKeyed: false, charstrings, globalSubrs ?? [], charstringType);
 
         public static byte[] CidKeyedFont() => Build(cidKeyed: true, charstrings: [[14]], globalSubrs: [], charstringType: 2);
+
+        /// <summary>
+        /// A well-formed CID-keyed CFF: two glyphs (GID 0, GID 1), two FDArray Font DICTs each with
+        /// its own one-entry local Subrs INDEX (distinct content per FD, so a test can tell which FD a
+        /// decode actually used), and an FDSelect table (format 0 or 3, per <paramref name="fdSelectFormat"/>)
+        /// mapping GID 0 -&gt; FD 0 and GID 1 -&gt; FD 1. Both glyphs' own charstrings are byte-identical
+        /// (push -107, callsubr 0) - the only way their decode can differ is if <c>CffTable</c>
+        /// actually resolves a different local Subrs INDEX per GID rather than a single top-level one.
+        /// </summary>
+        /// <remarks>
+        /// Every offset a DICT stores that points forward to data whose own position depends on this
+        /// DICT's encoded length (CharStrings/FDArray/FDSelect in the Top DICT, Private in each Font
+        /// DICT) is written with a fixed-width 3-byte encoding (<see cref="DictInt16"/>) instead of the
+        /// variable-width <see cref="DictInt"/> the rest of this class uses - that decouples the
+        /// containing DICT's own byte length from the offset's numeric value, so each offset can be
+        /// computed in one forward pass (build with a placeholder, measure fixed lengths, patch in the
+        /// real value) with no risk of the patch itself changing any length it was computed from.
+        /// </remarks>
+        public static byte[] CidKeyedFontWithFdArrayAndFdSelect(int fdSelectFormat) =>
+            BuildCidKeyedWithFdArray(fdSelectFormat, omitFdSelectOperator: false);
+
+        /// <summary>
+        /// A CID-keyed CFF with a well-formed FDArray but no FDSelect operator at all in the Top DICT -
+        /// FDArray alone is not enough to resolve a glyph's FD, so <c>CffTable</c> must still report
+        /// <c>IsSupported = false</c> rather than guessing.
+        /// </summary>
+        public static byte[] CidKeyedFontWithFdArrayButNoFdSelect() =>
+            BuildCidKeyedWithFdArray(fdSelectFormat: 0, omitFdSelectOperator: true);
+
+        /// <summary>
+        /// A CID-keyed CFF whose FDSelect table declares a format byte this codebase does not
+        /// implement (only 0 and 3 are, per the CFF spec's own defined formats) - <c>CffTable</c> must
+        /// fail soft (its constructor's try/catch around <c>Parse</c>) rather than throwing.
+        /// </summary>
+        public static byte[] CidKeyedFontWithUnsupportedFdSelectFormat() =>
+            BuildCidKeyedWithFdArray(fdSelectFormat: 99, omitFdSelectOperator: false);
+
+        /// <summary>
+        /// A well-formed CID-keyed CFF whose second FDArray entry (mapped to GID 1 via FDSelect) has no
+        /// <c>Private</c> operator at all - legal CFF for an FD that needs no private-scoped data.
+        /// <c>CffTable.LocalSubrsFor</c> must resolve that FD to <c>CffIndex.Empty</c> rather than an
+        /// unassigned <c>default(CffIndex)</c>, whose <c>Count</c> throws.
+        /// </summary>
+        public static byte[] CidKeyedFontWithFdArrayEntryMissingPrivateDict() =>
+            BuildCidKeyedWithFdArray(fdSelectFormat: 0, omitFdSelectOperator: false, fd1HasNoPrivateDict: true);
+
+        private static byte[] BuildCidKeyedWithFdArray(int fdSelectFormat, bool omitFdSelectOperator,
+            bool fd1HasNoPrivateDict = false)
+        {
+            byte[] header = [1, 0, 4, 4];
+            byte[] nameIndex = BuildIndex([Encoding.ASCII.GetBytes("Synthetic")]);
+            byte[] stringIndex = BuildIndex([]);
+            byte[] globalSubrIndex = BuildIndex([]);
+            byte[] charStringsIndex = BuildIndex([[32, 10], [32, 10]]); // GID0/GID1: push -107; callsubr
+
+            // Each FD's Private DICT is exactly DictInt(2) + DictOp(19) = 2 bytes ("Subrs" at offset 2,
+            // i.e. immediately following these two bytes) - fixed and known without any placeholder
+            // pass, since both DictInt(2) and DictOp(19) always encode as a single byte.
+            byte[] privateDictBytes = Concat(DictInt(2), DictOp(19));
+            byte[] localSubrsFd0 = BuildIndex([[149, 149, 21, 14]]); // rmoveto(10,10); endchar
+            byte[] localSubrsFd1 = BuildIndex([[159, 159, 21, 14]]); // rmoveto(20,20); endchar
+
+            // Font DICT: DictInt(privSize=2) [1 byte] + DictInt16(privOffset placeholder) [3 bytes] +
+            // DictOp(18) [1 byte] = 5 bytes, fixed regardless of the offset's real value. FD1 may
+            // instead be an empty DICT (no Private operator at all) - fd1HasNoPrivateDict is constant
+            // for the whole call, so this Font DICT's own byte length is still stable across the
+            // placeholder/patch passes below, just 0 bytes instead of 5.
+            byte[] FontDict(int privOffset) => Concat(DictInt(2), DictInt16(privOffset), DictOp(18));
+            byte[] FontDict1(int privOffset) => fd1HasNoPrivateDict ? [] : FontDict(privOffset);
+
+            byte[] fdArrayIndexPlaceholder = BuildIndex([FontDict(0), FontDict1(0)]);
+
+            byte[] TopDict(int charStringsOffset, int fdArrayOffset, int fdSelectOffset) => Concat(
+                DictInt(0), DictInt(0), DictInt(0), DictOp(1230), // ROS
+                DictInt16(charStringsOffset), DictOp(17),
+                DictInt16(fdArrayOffset), DictOp(1236),
+                omitFdSelectOperator ? [] : Concat(DictInt16(fdSelectOffset), DictOp(1237)));
+
+            byte[] topDictIndexPlaceholder = BuildIndex([TopDict(0, 0, 0)]);
+
+            int charStringsOffset = header.Length + nameIndex.Length + topDictIndexPlaceholder.Length
+                                     + stringIndex.Length + globalSubrIndex.Length;
+            int fdArrayOffset = charStringsOffset + charStringsIndex.Length;
+            int privFd0Offset = fdArrayOffset + fdArrayIndexPlaceholder.Length;
+            int privFd1Offset = privFd0Offset + privateDictBytes.Length + localSubrsFd0.Length;
+            int fdSelectOffset = fd1HasNoPrivateDict
+                ? privFd1Offset
+                : privFd1Offset + privateDictBytes.Length + localSubrsFd1.Length;
+
+            byte[] fdArrayIndex = BuildIndex([FontDict(privFd0Offset), FontDict1(privFd1Offset)]);
+            byte[] topDictIndex = BuildIndex([TopDict(charStringsOffset, fdArrayOffset, fdSelectOffset)]);
+
+            byte[] fdSelect = fdSelectFormat switch
+            {
+                0 => [0, /* GID0 -> FD */ 0, /* GID1 -> FD */ 1],
+                3 => [3, /* nRanges */ 0, 2, /* first=0,fd=0 */ 0, 0, 0, /* first=1,fd=1 */ 0, 1, 1, /* sentinel=2 */ 0, 2],
+                _ => [(byte)fdSelectFormat] // an unsupported format - CffTable must fail soft reading just this byte
+            };
+
+            var trailer = omitFdSelectOperator ? [] : fdSelect;
+            var fd1PrivateAndSubrs = fd1HasNoPrivateDict ? [] : Concat(privateDictBytes, localSubrsFd1);
+            return Concat(header, nameIndex, topDictIndex, stringIndex, globalSubrIndex, charStringsIndex,
+                fdArrayIndex, privateDictBytes, localSubrsFd0, fd1PrivateAndSubrs, trailer);
+        }
 
         private static byte[] Build(bool cidKeyed, byte[][] charstrings, byte[][] globalSubrs, int charstringType)
         {
@@ -274,6 +438,16 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         }
 
         private static byte[] DictOp(int op) => op < 1200 ? [(byte)op] : [12, (byte)(op - 1200)];
+
+        /// <summary>
+        /// Always a fixed 3-byte (lead byte 28 + int16) DICT integer encoding, regardless of
+        /// <paramref name="value"/>'s magnitude - unlike <see cref="DictInt"/>, whose encoded width
+        /// varies with the value. Used only for a forward-pointing offset a DICT stores about data
+        /// whose own position depends on that DICT's encoded length (see
+        /// <see cref="CidKeyedFontWithFdArrayAndFdSelect"/>'s remarks) - the fixed width means the
+        /// DICT's length is already known before the real offset value is.
+        /// </summary>
+        private static byte[] DictInt16(int value) => [28, (byte)(value >> 8), (byte)value];
 
         private static byte[] Concat(params byte[][] parts)
         {

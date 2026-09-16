@@ -460,5 +460,6 @@
         public const string Clip = "clip";
         public const string Ellipsis = "ellipsis";
         public const string FromFont = "from-font";
+        public const string Under = "under";
     }
 }

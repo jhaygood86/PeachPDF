@@ -278,11 +278,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task VerticalWritingMode_DrawsItsDecorationUncut()
         {
-            // Both decoration subtractions reason along the x-axis, so neither is applied under a vertical
-            // writing mode: there a box's physical x-range is the column's thickness rather than its
-            // extent along the line, and subtracting it would delete the decoration instead of breaking
-            // it. Vertical decoration geometry is out of scope as a whole, and this pins that the change
-            // does not make it worse.
+            // The atomic-inline exclusion subtraction reasons along the inline axis, which #1075 fixed
+            // to be physical Y (not X) under a true vertical writing mode - but the subtraction itself
+            // stays confined to a horizontal writing mode (IsHorizontalWritingMode), since it is still
+            // x-axis-shaped band math (an atomic inline's margin box measured left to right) that would
+            // need its own vertical-axis version to apply correctly here. So under vertical-rl the
+            // decoration is drawn with its full (now correctly Y-oriented, per #1075) extent, uncut.
             //
             // The guard in PaintDecoration is DEFENSIVE, not currently reachable: CssLayoutEngine's
             // vertical path records no per-line rectangle for an atomic inline at all, so the walk finds
@@ -299,7 +300,8 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, d, g);
 
             var line = Assert.Single(Lines(g));
-            Assert.True(line.X2 - line.X1 > 1, "the vertical block's decoration should still be drawn with real extent");
+            Assert.Equal(line.X1, line.X2, 3); // a true vertical stroke: constant X, extent along Y
+            Assert.True(line.Y2 - line.Y1 > 1, "the vertical block's decoration should still be drawn with real extent");
         }
 
         // ─── The subtraction itself ──────────────────────────────────────────────
