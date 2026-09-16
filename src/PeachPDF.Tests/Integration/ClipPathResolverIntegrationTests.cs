@@ -304,7 +304,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// Issue #812 (reopened): like <c>RenderUtils.GetRoundRect</c>/<c>BordersDrawHandler.GetRoundedBorderPath</c>,
+        /// Issue #812 (reopened): like <c>RenderUtils.GetRoundRect</c> and the rounded border contour builders,
         /// <c>TryBuildClipPath</c> is fed raw layout-space coordinates and pushes its path via
         /// <c>RGraphics.PushClip(RGraphicsPath)</c>, which never divides by <c>PixelsPerPoint</c> - so the
         /// resolver itself must divide every final coordinate before it reaches the path. Verified directly

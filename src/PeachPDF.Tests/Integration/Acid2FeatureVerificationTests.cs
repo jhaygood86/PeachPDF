@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+﻿using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
@@ -981,8 +981,8 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Contains(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
                 r => r.Color == RColor.FromArgb(37, 38, 39));
-            // Solid borders paint as a mitered quad (BordersDrawHandler), not DrawLine.
-            Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            // Solid borders paint as a filled shape (BordersDrawHandler), not DrawLine.
+            Assert.NotEmpty(g.FilledShapes);
         }
 
         [Fact]
@@ -1005,8 +1005,8 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Contains(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
                 r => r.Color == RColor.FromArgb(43, 44, 45));
-            // Solid borders paint as a mitered quad (BordersDrawHandler), not DrawLine.
-            Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            // Solid borders paint as a filled shape (BordersDrawHandler), not DrawLine.
+            Assert.NotEmpty(g.FilledShapes);
         }
 
         // ─── font shorthand's slash-separated <font-size>/<line-height> syntax ─────

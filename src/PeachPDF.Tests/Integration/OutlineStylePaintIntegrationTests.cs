@@ -1,7 +1,8 @@
-using PeachPDF.Adapters;
+﻿using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
@@ -173,9 +174,17 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            var polys = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
-            var lastBorderIndex = g.Log.FindLastIndex(e => e is TestRecordingGraphics.DrawPolygonCall p && p.Color == RColor.FromArgb(1, 1, 1));
-            var firstOutlineIndex = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawPolygonCall p && p.Color == RColor.FromArgb(2, 2, 2));
+            // The border is uniform, so it paints as one ring path; the outline's four sides differ in
+            // nothing but still paint as quads. Match on color rather than on which primitive was used.
+            static bool IsFill(object entry, RColor color) => entry switch
+            {
+                TestRecordingGraphics.DrawPolygonCall p => p.Color == color,
+                TestRecordingGraphics.DrawPathCall { Stroked: false } p => p.Color == color,
+                _ => false
+            };
+
+            var lastBorderIndex = g.Log.FindLastIndex(e => IsFill(e, RColor.FromArgb(1, 1, 1)));
+            var firstOutlineIndex = g.Log.FindIndex(e => IsFill(e, RColor.FromArgb(2, 2, 2)));
 
             Assert.True(lastBorderIndex >= 0);
             Assert.True(firstOutlineIndex >= 0);
@@ -211,18 +220,31 @@ namespace PeachPDF.Tests.Integration
         public async Task OutlineStyleDottedOrDashed_DrawsOneMidBandLinePerSide(string style)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
-                $"<div id='b' style='width:20pt; height:20pt; outline: 8pt {style} rgb(3,3,3); outline-offset: 2pt'>x</div>"));
+                $"<div id='b' style='width:120pt; height:120pt; outline: 8pt {style} rgb(3,3,3); outline-offset: 2pt'>x</div>"));
             var div = LayoutHarness.FindById(root, "b")!;
 
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            var expectedDashStyle = style == "dotted" ? RDashStyle.Dot : RDashStyle.Dash;
+            var dotted = style == "dotted";
             var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
             Assert.Equal(4, lines.Count);
-            Assert.All(lines, l => Assert.Equal(expectedDashStyle, l.DashStyle));
             Assert.All(lines, l => Assert.Equal(RColor.FromArgb(3, 3, 3), l.Color));
             Assert.All(lines, l => Assert.Equal(8, l.Width, 1));
+
+            // A dot is a zero-length dash under a round cap; a dash is a real segment under a butt cap.
+            // The pattern is fitted to each side, so its exact lengths depend on the side - but the cap
+            // and the zero-vs-nonzero dash are what tell the two styles apart at all.
+            Assert.All(lines, l => Assert.Equal(dotted ? RLineCap.Round : RLineCap.Butt, l.LineCap));
+            Assert.All(lines, l =>
+            {
+                Assert.NotNull(l.DashPattern);
+                Assert.Equal(2, l.DashPattern!.Count);
+                if (dotted)
+                    Assert.Equal(0, l.DashPattern[0]);
+                else
+                    Assert.Equal(16, l.DashPattern[0], 1); // dashed = 2x the outline width
+            });
         }
 
         [Theory]
@@ -250,13 +272,17 @@ namespace PeachPDF.Tests.Integration
             var top = lines.Single(l => l.Y1 == l.Y2 && l.Y1 < rect.Top);
             var left = lines.Single(l => l.X1 == l.X2 && l.X1 < rect.Left);
 
-            // Top's leading endpoint (X1,Y1) and Left's leading endpoint (X1,Y1) must land on the exact
-            // same corner point - (rect.Left - mid, rect.Top - mid) - for the two lines to actually meet
-            // with no hole between them.
-            Assert.Equal(rect.Left - mid, top.X1, 1);
+            // A dotted path runs dot-centre to dot-centre, so its endpoint sits half a dot inside the
+            // corner - and the round cap then paints that half back out to it. What has to reach the
+            // corner is the ink, not the path, so compare the inked reach for both styles.
+            var inset = style == "dotted" ? width / 2 : 0;
+
+            // Top's leading endpoint and Left's leading endpoint must resolve to the exact same corner
+            // point - (rect.Left - mid, rect.Top - mid) - for the two lines to meet with no hole.
+            Assert.Equal(rect.Left - mid, top.X1 - inset, 1);
             Assert.Equal(rect.Top - mid, top.Y1, 1);
-            Assert.Equal(top.X1, left.X1, 1);
-            Assert.Equal(top.Y1, left.Y1, 1);
+            Assert.Equal(top.X1 - inset, left.X1, 1);
+            Assert.Equal(top.Y1, left.Y1 - inset, 1);
         }
 
         [Fact]
@@ -270,29 +296,29 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            // Every horizontal line strictly above the box's own top edge belongs to the top side's pair
-            // of stripes - unambiguous, since the bottom side's stripes sit strictly below rect.Bottom.
-            // Draw order (not Y order) distinguishes them: the near-the-box stripe is always drawn
-            // first (OutlineDrawHandler.DrawDoubleOrGrooveRidge), mirroring BordersDrawHandler's own
-            // outer-then-inner order.
-            var topLines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>()
-                .Where(l => l.Y1 == l.Y2 && l.Y1 < rect.Top).ToList();
-            Assert.Equal(2, topLines.Count);
+            // Every band strictly above the box's own top edge belongs to the top side's pair of rings -
+            // unambiguous, since the bottom side's rings sit strictly below rect.Bottom. Draw order (not
+            // Y order) distinguishes them: the near-the-box ring is always drawn first
+            // (OutlineDrawHandler.DrawDoubleOrGrooveRidge).
+            var topBands = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
+                .Select(Band)
+                .Where(b => b.Bottom <= rect.Top + 0.01)
+                .ToList();
+            Assert.Equal(2, topBands.Count);
 
-            var nearBox = topLines[0];
-            var farFromBox = topLines[1];
+            var nearBox = topBands[0];
+            var farFromBox = topBands[1];
             Assert.Equal(RColor.FromArgb(51, 51, 51), nearBox.Color);
             Assert.Equal(RColor.FromArgb(51, 51, 51), farFromBox.Color);
-            Assert.Equal(4, nearBox.Width, 1);
-            Assert.Equal(4, farFromBox.Width, 1);
 
-            var nearBoxFarEdge = nearBox.Y1 - nearBox.Width / 2;
-            var farFromBoxNearEdge = farFromBox.Y1 + farFromBox.Width / 2;
-            Assert.True(farFromBoxNearEdge < nearBoxFarEdge, "expected a visible gap between the two double-outline stripes");
+            // CSS 2.1 §8.5.3's exact thirds: 4pt ring, 4pt gap, 4pt ring out of 12pt.
+            Assert.Equal(4, nearBox.Height, 2);
+            Assert.Equal(4, farFromBox.Height, 2);
+            Assert.Equal(4, nearBox.Top - farFromBox.Bottom, 2);
         }
 
         [Fact]
-        public async Task OutlineStyleGroove_OuterStripeIsDarker_InnerStripeIsBaseColor()
+        public async Task OutlineStyleGroove_ShadesEachHalfLikeAnInsetThenAnOutsetRing()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 "<div id='b' style='width:20pt; height:20pt; outline: 12pt groove rgb(51,51,51)'>x</div>"));
@@ -302,17 +328,22 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            // Draw order (not Y order): outer (near the box) is drawn first for groove/ridge too.
-            var topLines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>()
-                .Where(l => l.Y1 == l.Y2 && l.Y1 < rect.Top).ToList();
-            Assert.Equal(2, topLines.Count);
+            var topBands = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
+                .Select(Band)
+                .Where(b => b.Bottom <= rect.Top + 0.01)
+                .OrderBy(b => b.Top)
+                .ToList();
+            Assert.Equal(2, topBands.Count);
 
-            Assert.Equal(RColor.FromArgb(25, 25, 25), topLines[0].Color);
-            Assert.Equal(RColor.FromArgb(51, 51, 51), topLines[1].Color);
+            // groove's outer half (farthest from the box) paints as `inset`, its inner half as `outset`.
+            // On a top edge inset is the darkened face - the same rule border uses, so the two agree.
+            Assert.Equal(BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: true), topBands[0].Color);
+            Assert.Equal(BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: false), topBands[1].Color);
+            Assert.NotEqual(topBands[0].Color, topBands[1].Color);
         }
 
         [Fact]
-        public async Task OutlineStyleInset_DarkensTopAndLeft_NormalOnRightAndBottom()
+        public async Task OutlineStyleInset_DarkensTopAndLeft_LightensRightAndBottom()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 "<div id='b' style='width:20pt; height:20pt; outline: 6pt inset rgb(100,100,100)'>x</div>"));
@@ -329,14 +360,21 @@ namespace PeachPDF.Tests.Integration
             var right = polys.OrderByDescending(p => p.Points.Average(pt => pt.X)).First();
             var bottom = polys.OrderByDescending(p => p.Points.Average(pt => pt.Y)).First();
 
-            Assert.Equal(RColor.FromArgb(50, 50, 50), top.Color);
-            Assert.Equal(RColor.FromArgb(50, 50, 50), left.Color);
-            Assert.Equal(RColor.FromArgb(100, 100, 100), right.Color);
-            Assert.Equal(RColor.FromArgb(100, 100, 100), bottom.Color);
+            var baseColor = RColor.FromArgb(100, 100, 100);
+            var dark = BorderBevelColors.Shade(baseColor, darken: true);
+            var light = BorderBevelColors.Shade(baseColor, darken: false);
+
+            // The lit pair is genuinely lightened rather than left at the declared color, matching what
+            // a browser paints - and matching border, which shares the same shading.
+            Assert.NotEqual(baseColor, light);
+            Assert.Equal(dark, top.Color);
+            Assert.Equal(dark, left.Color);
+            Assert.Equal(light, right.Color);
+            Assert.Equal(light, bottom.Color);
         }
 
         [Fact]
-        public async Task OutlineStyleOutset_DarkensRightAndBottom_NormalOnTopAndLeft()
+        public async Task OutlineStyleOutset_DarkensRightAndBottom_LightensTopAndLeft()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 "<div id='b' style='width:20pt; height:20pt; outline: 6pt outset rgb(100,100,100)'>x</div>"));
@@ -353,10 +391,14 @@ namespace PeachPDF.Tests.Integration
             var right = polys.OrderByDescending(p => p.Points.Average(pt => pt.X)).First();
             var bottom = polys.OrderByDescending(p => p.Points.Average(pt => pt.Y)).First();
 
-            Assert.Equal(RColor.FromArgb(100, 100, 100), top.Color);
-            Assert.Equal(RColor.FromArgb(100, 100, 100), left.Color);
-            Assert.Equal(RColor.FromArgb(50, 50, 50), right.Color);
-            Assert.Equal(RColor.FromArgb(50, 50, 50), bottom.Color);
+            var baseColor = RColor.FromArgb(100, 100, 100);
+            var dark = BorderBevelColors.Shade(baseColor, darken: true);
+            var light = BorderBevelColors.Shade(baseColor, darken: false);
+
+            Assert.Equal(light, top.Color);
+            Assert.Equal(light, left.Color);
+            Assert.Equal(dark, right.Color);
+            Assert.Equal(dark, bottom.Color);
         }
 
         [Fact]
@@ -503,22 +545,43 @@ namespace PeachPDF.Tests.Integration
             var divDefault = LayoutHarness.FindById(rootDefault, "b")!;
             var gDefault = new TestRecordingGraphics { PixelsPerPointOverride = 1.0 };
             FragmentPaintHarness.PaintBox(containerDefault, divDefault, gDefault);
-            var widthsDefault = gDefault.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(l => l.Width).ToList();
+            var bandsDefault = gDefault.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().Select(Band).ToList();
 
             var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
             var divScaled = LayoutHarness.FindById(rootScaled, "b")!;
             var gScaled = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
             FragmentPaintHarness.PaintBox(containerScaled, divScaled, gScaled);
-            var widthsScaled = gScaled.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(l => l.Width).ToList();
+            var bandsScaled = gScaled.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().Select(Band).ToList();
 
-            // double contributes 2 stripes per side, 4 sides.
-            Assert.Equal(8, widthsDefault.Count);
-            Assert.Equal(widthsDefault.Count, widthsScaled.Count);
-            for (var i = 0; i < widthsDefault.Count; i++)
-                Assert.Equal(widthsDefault[i], widthsScaled[i], 3);
+            // double contributes 2 rings per side, 4 sides.
+            Assert.Equal(8, bandsDefault.Count);
+            Assert.Equal(bandsDefault.Count, bandsScaled.Count);
+
+            // A band is a polygon, so its coordinates stay in layout space and the adapter divides them
+            // on the way out - meaning the scaled run SHOULD be exactly PixelsPerPoint larger. What this
+            // guards is a thickness that skipped or double-applied that correction (issue #851).
+            for (var i = 0; i < bandsDefault.Count; i++)
+                Assert.Equal(bandsDefault[i].Thickness, bandsScaled[i].Thickness / 2.0, 3);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
+
+        /// <summary>A filled ring band's colour and axis-aligned bounds.</summary>
+        private readonly record struct BandInfo(RColor Color, double Left, double Top, double Width, double Height)
+        {
+            public double Bottom => Top + Height;
+
+            /// <summary>The band's minor axis - its thickness across the ring, independent of how long
+            /// the side it belongs to happens to be.</summary>
+            public double Thickness => System.Math.Min(Width, Height);
+        }
+
+        private static BandInfo Band(TestRecordingGraphics.DrawPolygonCall p)
+        {
+            var left = p.Points.Min(pt => pt.X);
+            var top = p.Points.Min(pt => pt.Y);
+            return new BandInfo(p.Color, left, top, p.Points.Max(pt => pt.X) - left, p.Points.Max(pt => pt.Y) - top);
+        }
 
         private static bool IsVerticalEdge(System.Collections.Generic.IReadOnlyList<RPoint> points)
         {

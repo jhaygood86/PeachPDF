@@ -253,6 +253,62 @@ static string BorderStyleSwatch(string desc, string style) =>
     $"<div class=\"css\">border-style: {style}</div>" +
     "</td>";
 
+static string BorderColorSwatch(string desc, string style, string color) =>
+    "<td>" +
+    $"<div class=\"bsbox\" style=\"border: 16px {style} {color}\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">border: 16px {style} {color}</div>" +
+    "</td>";
+
+static string BorderFitSwatch(string desc, string style, string width) =>
+    "<td>" +
+    $"<div class=\"bsbox\" style=\"border: 10px {style} #4a90d9; width: {width}; box-sizing: border-box\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">border: 10px {style}; width: {width}</div>" +
+    "</td>";
+
+/// <summary>One cell stacking the same style at each of <paramref name="widths"/>, so the styles can be
+/// read down a column and the widths across a row.</summary>
+static string WidthSwatch(string style, int[] widths) =>
+    "<td>" +
+    string.Join("", widths.Select(w =>
+        $"<div class=\"wbox\" style=\"border: {w}px {style} #4a90d9\"></div>" +
+        $"<div class=\"wlabel\">{w}px</div>")) +
+    $"<div class=\"desc\">{style}</div>" +
+    "</td>";
+
+static string SideSwatch(string desc, string inlineCss) =>
+    "<td>" +
+    $"<div class=\"bsbox\" style=\"{inlineCss}\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">{inlineCss}</div>" +
+    "</td>";
+
+static string RoundedPatternPhaseComparisonSwatch() =>
+    "<td>" +
+    "<div class=\"phasepair\">" +
+    "<div class=\"phasebox\" style=\"width:240px\"></div>" +
+    "<div class=\"phasebox second\" style=\"width:245px\"></div>" +
+    "</div>" +
+    "<div class=\"desc\">one dot / two dots</div>" +
+    "<div class=\"css\">same rounded border at width: 240px / 245px</div>" +
+    "</td>";
+
+/// <summary>A zero-content box whose four borders meet at its center - the classic "border triangle".</summary>
+static string TriangleSwatch(string desc, string colors) =>
+    "<td>" +
+    $"<div style=\"width: 0; height: 0; border: 34px solid; border-color: {colors}; margin: 0 auto 3px\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">width/height: 0; border-color: {colors}</div>" +
+    "</td>";
+
+static string RadiusBorderSwatch(string desc, string style, string width, string radius) =>
+    "<td>" +
+    $"<div class=\"bsbox\" style=\"border: {width} {style} #4a90d9; border-radius: {radius}\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">border: {width} {style}; border-radius: {radius}</div>" +
+    "</td>";
+
 static string OriginSwatch(string desc, string inlineCss, string cssLabel = "") =>
     "<td>" +
     $"<div class=\"obox\" style=\"{inlineCss}\"></div>" +
@@ -534,9 +590,9 @@ await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius
 // Renders the exact same document as the border_radius showcase above, but at a non-default
 // PixelsPerInch (issue #812, reopened) - every rounded border stroke, background fill, and
 // overflow-clip curve above is built from a PdfSharpAdapter.PixelsPerPoint-inflated layout-space
-// rect/radii; RenderUtils.GetRoundRect and BordersDrawHandler.GetRoundedBorderPath must divide by
-// PixelsPerPoint before building their paths, or the rounded geometry above renders too large and
-// mis-positioned relative to everything else on the page. ShrinkToFit is deliberately left off here
+// rect/radii; RenderUtils.GetRoundRect and BordersDrawHandler's rounded contour builders must divide
+// by PixelsPerPoint before building their paths, or the rounded geometry above renders too large
+// and mis-positioned relative to everything else on the page. ShrinkToFit is deliberately left off here
 // (unlike pdfConfig above) since it recomputes its own effective PixelsPerPoint from content
 // measurement and would make the two renders an apples-to-oranges comparison rather than isolating
 // the PixelsPerInch=96-vs-72 difference this showcase exists to demonstrate.
@@ -5685,6 +5741,11 @@ const string BorderStyleCss = """
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .bsbox { height: 48px; background: #eee; margin-bottom: 3px }
+    .phasepair { position: relative; height: 38px; margin-bottom: 3px }
+    .phasebox { position: absolute; left: 0; top: 0; height: 48px; border: 14px #d94a4a; border-style: double dotted inset outset; border-radius: 28px; background: #eee; transform: scale(.5); transform-origin: top left }
+    .phasebox.second { left: 140px }
+    .wbox { height: 16px; background: #eee; margin-bottom: 1px }
+    .wlabel { font-size: 6pt; color: #888; margin-bottom: 4px }
     .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
     .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
     </style>
@@ -5710,6 +5771,113 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
     Row(
         BorderStyleSwatch("inset", "inset"),
         BorderStyleSwatch("outset", "outset")
+    ) +
+
+    // The dot/dash period is fitted to each edge so the run starts and ends flush with the corner
+    // rather than being cut off part-way through - which means the spacing shifts as the box changes
+    // size, and an edge's horizontal and vertical runs can land on slightly different gaps. Showing
+    // the same style at several widths is the only way to see that actually happening.
+    "<h2>Dot/dash spacing adapts to each edge</h2>" +
+    Row(
+        BorderFitSwatch("dotted, 100%", "dotted", "100%"),
+        BorderFitSwatch("dotted, 85%", "dotted", "85%"),
+        BorderFitSwatch("dotted, 70%", "dotted", "70%"),
+        BorderFitSwatch("dotted, 55%", "dotted", "55%")
+    ) +
+    Row(
+        BorderFitSwatch("dashed, 100%", "dashed", "100%"),
+        BorderFitSwatch("dashed, 85%", "dashed", "85%"),
+        BorderFitSwatch("dashed, 70%", "dashed", "70%"),
+        BorderFitSwatch("dashed, 55%", "dashed", "55%")
+    ) +
+
+    // A beveled style shades one pair of sides darker and the other lighter, so the same keyword reads
+    // differently per edge - and a color too dark to darken visibly (black, the initial border-color
+    // via currentColor) lightens both faces instead rather than disappearing into itself.
+    "<h2>Bevel shading, including colors too dark to darken</h2>" +
+    Row(
+        BorderColorSwatch("inset, black", "inset", "#000"),
+        BorderColorSwatch("outset, black", "outset", "#000"),
+        BorderColorSwatch("groove, black", "groove", "#000"),
+        BorderColorSwatch("ridge, black", "ridge", "#000")
+    ) +
+
+    // Each style scales differently: double needs 3px before its three bands are a whole unit each,
+    // and a dot/dash pattern's period is a multiple of the width, so a thin edge carries many more of
+    // them. An edge too short to hold two dashes degenerates to solid.
+    "<h2>The same style at several border widths</h2>" +
+    Row(
+        WidthSwatch("dotted", [1, 2, 4, 8, 16]),
+        WidthSwatch("dashed", [1, 2, 4, 8, 16]),
+        WidthSwatch("double", [1, 2, 4, 8, 16]),
+        WidthSwatch("groove", [1, 2, 4, 8, 16])
+    ) +
+
+    // A corner's mitre runs from the border box's outer corner to its inner corner, so with unequal
+    // widths it is not a 45 degree cut - and each band of a double/groove/ridge edge has to follow that
+    // same diagonal. Mismatched colors are what make the seam visible at all.
+    "<h2>Different width, style and color per side</h2>" +
+    Row(
+        SideSwatch("mixed widths", "border: solid #4a90d9; border-width: 4px 24px 12px 8px"),
+        SideSwatch("mixed colors", "border: 16px solid; border-color: #d94a4a #4ad98a #4a90d9 #d9c74a"),
+        SideSwatch("mixed styles", "border: 14px #4a90d9; border-style: solid dashed double dotted"),
+        SideSwatch("mixed everything",
+            "border-color: #d94a4a #4ad98a #4a90d9 #d9c74a; border-style: double solid groove dashed; border-width: 18px 6px 14px 10px")
+    ) +
+
+    // The classic zero-content "border triangle": four mitred trapezoids meeting at the box's center.
+    // It only works if every corner really is cut on the diagonal, so it is the sharpest test there is
+    // for the mitre - and the same trick Acid2's nose relies on.
+    "<h2>Mitred corners, seen directly</h2>" +
+    Row(
+        TriangleSwatch("all four sides", "#d94a4a #4ad98a #4a90d9 #d9c74a"),
+        TriangleSwatch("one side visible", "transparent transparent #4a90d9 transparent"),
+        SideSwatch("thick vs thin", "border: solid #4a90d9; border-width: 30px 2px 30px 2px"),
+        SideSwatch("double, uneven", "border: double #4a90d9; border-width: 9px 24px 15px 30px")
+    ) +
+
+    // A border whose four sides agree is painted as one continuous outline, so its corners stay seamless
+    // and a dot/dash period can be fitted to the whole perimeter. double is two such outlines at the
+    // thirds; groove/ridge are two rounded half-width bands whose side colors meet midway through each
+    // corner.
+    "<h2>Rounded corners</h2>" +
+    Row(
+        RadiusBorderSwatch("solid", "solid", "16px", "24px"),
+        RadiusBorderSwatch("dotted", "dotted", "16px", "24px"),
+        RadiusBorderSwatch("dashed", "dashed", "16px", "24px"),
+        RadiusBorderSwatch("double", "double", "16px", "24px")
+    ) +
+    Row(
+        RadiusBorderSwatch("solid, pill", "solid", "10px", "999px"),
+        RadiusBorderSwatch("dotted, pill", "dotted", "10px", "999px"),
+        RadiusBorderSwatch("double, pill", "double", "12px", "999px"),
+        RadiusBorderSwatch("groove", "groove", "16px", "24px")
+    ) +
+    Row(
+        RadiusBorderSwatch("solid, elliptical", "solid", "12px", "40px / 20px"),
+        RadiusBorderSwatch("double, elliptical", "double", "15px", "40px / 20px"),
+        RadiusBorderSwatch("dashed, pill", "dashed", "10px", "999px"),
+        RadiusBorderSwatch("ridge", "ridge", "16px", "24px")
+    ) +
+
+    // The corner transition follows the ratio of the adjoining widths, so the wider edge owns more
+    // of the curve. Opening border_style.html in Chrome provides a direct comparison of the same
+    // non-uniform two-band bevel.
+    "<h2>Non-uniform rounded bevel</h2>" +
+    Row(
+        SideSwatch("groove, mixed width and color",
+            "border-style: groove; border-width: 18px 6px 14px 10px; border-color: #d94a4a #4ad98a #4a90d9 #d9c74a; border-radius: 24px")
+    ) +
+
+    // Every rounded side uses the same width-ratio corner split even when its style differs. This is
+    // especially visible where a two-band bevel meets a solid fill or a clipped patterned stroke.
+    "<h2>Mixed rounded styles</h2>" +
+    Row(
+        SideSwatch("groove / solid / ridge / dashed",
+            "border: 18px #4a90d9; border-style: groove solid ridge dashed; border-radius: 36px"),
+        // Chrome fits the dotted side against the complete rounded centerline. A two-pixel width
+        // change shifts that global phase across the top-right transition.
+        RoundedPatternPhaseComparisonSwatch()
     ) +
 
     "</body></html>";
