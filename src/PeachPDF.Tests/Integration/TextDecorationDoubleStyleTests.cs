@@ -105,14 +105,13 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// The contrast case: <c>dotted</c> and <c>dashed</c> are still one patterned stroke, not two.
         /// Without this, a change that simply doubled every decoration would pass everything above.
+        /// <c>wavy</c> is not part of this contrast - see <c>TextDecorationWavyStyleTests</c> - since it
+        /// is not a single <c>DrawLine</c> stroke at all (a stroked path instead), unlike every style here.
         /// </summary>
         [Theory]
         [InlineData("dotted", nameof(RDashStyle.Dot))]
         [InlineData("dashed", nameof(RDashStyle.Dash))]
         [InlineData("solid", nameof(RDashStyle.Solid))]
-        // wavy has no dash pattern that could express it and still paints solid - see
-        // TextDecorationStyleMapper. Pinned here so that gap is a stated expectation, not an accident.
-        [InlineData("wavy", nameof(RDashStyle.Solid))]
         public async Task OtherStyles_AreStillASingleStroke(string style, string expected)
         {
             var strokes = await StrokesOf($"<span id='s' style='text-decoration:underline {style}'>total</span>");
