@@ -323,6 +323,78 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(line.LineTop, aligned.Top, 3);
         }
 
+        [Theory]
+        [InlineData("top", 13, 18)]
+        [InlineData("bottom", 13, 18)]
+        [InlineData("top", 30, 35)]
+        [InlineData("bottom", 30, 35)]
+        public async Task TopOrBottomAlignedReplacedElement_GrowsLineByItsMarginBoxHeightOnce(
+            string verticalAlign, double imageHeight, double expectedHeight)
+        {
+            // A top/bottom-aligned replaced element is enclosed by the line through its margin box,
+            // but it does not first contribute that whole box above a baseline it never aligns to.
+            // Doing both made an 18pt image on an 18pt strut produce 18pt + the strut's descent.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='d' style='font:10pt Arial;line-height:18pt'>" +
+                $"<img id='a' src='{RasterPngFixture.OnePixelDataUri}' " +
+                $"style='width:10pt;height:{imageHeight}pt;margin:2pt 0 3pt;vertical-align:{verticalAlign}'></div>"));
+
+            var block = LayoutHarness.FindById(root, "d")!;
+            var image = LayoutHarness.FindById(root, "a")!;
+            var line = Assert.Single(block.LineBoxes);
+            var imageWord = Assert.Single(line.Words, w => ReferenceEquals(w.OwnerBox, image));
+
+            Assert.Equal(expectedHeight, line.BaselineExtent!.Value.Height, 3);
+            Assert.Equal(expectedHeight, block.ActualBottom - block.Location.Y, 3);
+
+            if (verticalAlign == "top")
+                Assert.Equal(line.LineTop + 2, imageWord.Top, 3);
+            else
+                Assert.Equal(line.LineTop + expectedHeight - 3, imageWord.Bottom, 3);
+        }
+
+        [Fact]
+        public async Task TopAlignedReplacedElement_LineHeightDoesNotDependOnContentOrder()
+        {
+            async Task<(double Height, double BaselineOffset)> LayoutLine(string content)
+            {
+                var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                    $"<div id='d' style='font:10pt Arial;line-height:18pt'>{content}</div>"));
+                var block = LayoutHarness.FindById(root, "d")!;
+                var line = Assert.Single(block.LineBoxes);
+                return (line.BaselineExtent!.Value.Height, line.BaselineY!.Value - line.LineTop);
+            }
+
+            var image = $"<img src='{RasterPngFixture.OnePixelDataUri}' " +
+                        "style='width:10pt;height:30pt;vertical-align:top'>";
+            const string TallText = "<span style='font:20pt Arial;line-height:24pt'>X</span>";
+
+            var imageFirst = await LayoutLine(image + TallText);
+            var imageLast = await LayoutLine(TallText + image);
+
+            Assert.Equal(30, imageFirst.Height, 3);
+            Assert.Equal(imageLast.Height, imageFirst.Height, 3);
+            Assert.Equal(imageLast.BaselineOffset, imageFirst.BaselineOffset, 3);
+        }
+
+        [Fact]
+        public async Task FirstLineTopAlignment_SizesReplacedElementAsTopAligned()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<style>#d::first-line {{ vertical-align:top }}</style>" +
+                $"<div id='d' style='font:10pt Arial;line-height:18pt'>" +
+                $"<img id='a' src='{RasterPngFixture.OnePixelDataUri}' " +
+                $"style='width:10pt;height:18pt'></div>"));
+
+            var block = LayoutHarness.FindById(root, "d")!;
+            var image = LayoutHarness.FindById(root, "a")!;
+            var line = Assert.Single(block.LineBoxes);
+            var imageWord = Assert.Single(line.Words, w => ReferenceEquals(w.OwnerBox, image));
+
+            Assert.Equal(18, line.BaselineExtent!.Value.Height, 3);
+            Assert.Equal(line.LineTop, imageWord.Top, 3);
+        }
+
         private static double LineHeightOfFirstLine(CssBox item) =>
             item.LineBoxes[0].BaselineExtent!.Value.Height;
 

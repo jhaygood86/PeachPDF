@@ -420,6 +420,40 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Eyes_BottomAlignedObject_CoversTheWholeCheckerboardRow()
+        {
+            // The two 2x2 PNG backgrounds only interlock into solid yellow when their painted rows
+            // coincide. #eyes-b supplies the lower layer; the resolved innermost <object> supplies the
+            // upper one and is `vertical-align: bottom`. Treating that replaced object as baseline-
+            // aligned while sizing the line, then bottom-aligning it afterward, added the font strut's
+            // descent twice and shifted the object/background down by 6.175pt. The exposed top strip
+            // showed #eyes-c's red background through #eyes-b's transparent checkerboard pixels.
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var eyesA = FindById(root, "eyes-a")!;
+            var eyesB = FindById(root, "eyes-b")!;
+
+            CssBox? resolvedObject = null;
+            void FindResolvedObject(CssBox box)
+            {
+                if (box.HtmlTag?.Name == "object" && box.Words.Any(w => w.IsImage))
+                    resolvedObject = box;
+                foreach (var child in box.Boxes) FindResolvedObject(child);
+            }
+            FindResolvedObject(eyesA);
+
+            Assert.NotNull(resolvedObject);
+            var objectFragment = FragmentPaintHarness.FirstFragmentOf(container, resolvedObject!);
+            var lowerLayerFragment = FragmentPaintHarness.FirstFragmentOf(container, eyesB);
+
+            Assert.InRange(objectFragment.PrimaryRect.Top,
+                lowerLayerFragment.PrimaryRect.Top - 0.01,
+                lowerLayerFragment.PrimaryRect.Top + 0.01);
+            Assert.InRange(objectFragment.PrimaryRect.Bottom,
+                lowerLayerFragment.PrimaryRect.Bottom - 0.01,
+                lowerLayerFragment.PrimaryRect.Bottom + 0.01);
+        }
+
+        [Fact]
         public async Task ZeroHeightContainer_OverflowingInlineReplacedContent_StillPaints()
         {
             // Regression: the two tests above only check that the eye-icon's image/background LOADED

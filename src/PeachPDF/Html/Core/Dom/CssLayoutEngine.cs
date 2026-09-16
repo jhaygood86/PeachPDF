@@ -3095,6 +3095,18 @@ namespace PeachPDF.Html.Core.Dom
             return extent;
         }
 
+        private static LineBoxExtent IncludeEdgeAlignedAtomicHeights(
+            LineBoxExtent extent, double topAlignedHeight, double bottomAlignedHeight)
+        {
+            if (topAlignedHeight > extent.Height)
+                extent = extent with { BelowBaseline = extent.BelowBaseline + topAlignedHeight - extent.Height };
+
+            if (bottomAlignedHeight > extent.Height)
+                extent = extent with { AboveBaseline = extent.AboveBaseline + bottomAlignedHeight - extent.Height };
+
+            return extent;
+        }
+
         /// <summary>
         /// Recursively flows the content of the box using the inline model
         /// </summary>
@@ -3135,20 +3147,7 @@ namespace PeachPDF.Html.Core.Dom
             void GrowLineToItsExtent(CssRect word)
             {
                 var line = coordinates.Line;
-                var extent = LineBoxContributionOf(word, blockBox);
-
-                if (word.IsImage)
-                {
-                    // A replaced inline's line-height does not size its line box. Its complete margin
-                    // box does, with the bottom margin edge as its baseline (CSS 2.1 §10.8.1). Record
-                    // that while the line is still open as well as in ApplyVerticalAlignment: wrapping,
-                    // fragmentation, the next line's Y, and the containing block's final bottom all read
-                    // MaxBottom before final alignment runs.
-                    var atomicExtent = new LineBoxExtent(
-                        word.OwnerBox.ActualMarginTop + word.Height + word.OwnerBox.ActualMarginBottom,
-                        0);
-                    extent = extent.Union(atomicExtent);
-                }
+                var baselineExtent = LineBoxContributionOf(word, blockBox);
 
                 // An outside marker is not in this flow (IsOutsideMarker), but it does sit on this
                 // line's baseline, so the line has to be tall enough to hold it - otherwise a marker
@@ -3163,14 +3162,48 @@ namespace PeachPDF.Html.Core.Dom
                 if (blockBox.LineBoxes.Count > 0 && ReferenceEquals(line, blockBox.LineBoxes[0])
                     && OutsideMarkerExtentOf(blockBox) is { } markerExtent)
                 {
-                    extent = extent with
+                    baselineExtent = baselineExtent with
                     {
-                        AboveBaseline = Math.Max(extent.AboveBaseline, markerExtent.AboveBaseline)
+                        AboveBaseline = Math.Max(baselineExtent.AboveBaseline, markerExtent.AboveBaseline)
                     };
                 }
 
-                line.BaselineExtent = line.BaselineExtent is { } held ? held.Union(extent) : extent;
-                extent = line.BaselineExtent.Value;
+                baselineExtent = line.BaselineAlignedExtent is { } held
+                    ? held.Union(baselineExtent)
+                    : baselineExtent;
+
+                if (word.IsImage)
+                {
+                    // A replaced inline's line-height does not size its line box; its complete margin
+                    // box does (CSS 2.1 §10.8.1). A baseline-aligned one reaches wholly above its
+                    // bottom-margin-edge baseline. `top`/`bottom` are different: their baseline is not
+                    // used for alignment, so first pretending that the whole image sits above it and
+                    // only later aligning its edge grows the line by the strut's opposite-side extent.
+                    // Acid2 exposes that exact double count: an 18pt bottom-aligned object plus the
+                    // strut's 6.175pt descent became a 24.175pt line and shifted the object down.
+                    //
+                    // Grow the already-accumulated line on the side opposite the aligned edge instead.
+                    // This also composes with earlier, taller baseline content: the margin box only asks
+                    // that the final total height can contain it, not that it owns either baseline side.
+                    var atomicHeight = word.OwnerBox.ActualMarginTop + word.Height + word.OwnerBox.ActualMarginBottom;
+                    switch (EffectiveVerticalAlignOf(word.OwnerBox, line, out _).Value.Keyword)
+                    {
+                        case VerticalAlignment.Top:
+                            line.TopAlignedAtomicHeight = Math.Max(line.TopAlignedAtomicHeight, atomicHeight);
+                            break;
+                        case VerticalAlignment.Bottom:
+                            line.BottomAlignedAtomicHeight = Math.Max(line.BottomAlignedAtomicHeight, atomicHeight);
+                            break;
+                        default:
+                            baselineExtent = baselineExtent.Union(new LineBoxExtent(atomicHeight, 0));
+                            break;
+                    }
+                }
+
+                line.BaselineAlignedExtent = baselineExtent;
+                var extent = IncludeEdgeAlignedAtomicHeights(
+                    baselineExtent, line.TopAlignedAtomicHeight, line.BottomAlignedAtomicHeight);
+                line.BaselineExtent = extent;
 
                 // The line box's own top, stated while the cursor still names it. Every question about
                 // which fragmentainer a line is in is asked of this, not of a word on it - the two part
@@ -3386,6 +3419,9 @@ namespace PeachPDF.Html.Core.Dom
                         // of height out of nothing.
                         var maxBottomBeforeIncomingWord = coordinates.MaxBottom;
                         var lineExtentBeforeIncomingWord = coordinates.Line.BaselineExtent;
+                        var baselineAlignedExtentBeforeIncomingWord = coordinates.Line.BaselineAlignedExtent;
+                        var topAlignedAtomicHeightBeforeIncomingWord = coordinates.Line.TopAlignedAtomicHeight;
+                        var bottomAlignedAtomicHeightBeforeIncomingWord = coordinates.Line.BottomAlignedAtomicHeight;
                         GrowLineToItsExtent(word);
 
                         var actualLimitRight = coordinates.Line.ContentRight;
@@ -3484,6 +3520,9 @@ namespace PeachPDF.Html.Core.Dom
                             {
                                 coordinates.MaxBottom = maxBottomBeforeIncomingWord;
                                 coordinates.Line.BaselineExtent = lineExtentBeforeIncomingWord;
+                                coordinates.Line.BaselineAlignedExtent = baselineAlignedExtentBeforeIncomingWord;
+                                coordinates.Line.TopAlignedAtomicHeight = topAlignedAtomicHeightBeforeIncomingWord;
+                                coordinates.Line.BottomAlignedAtomicHeight = bottomAlignedAtomicHeightBeforeIncomingWord;
                             }
 
                             // line-clamp (CSS Overflow 4 §block-ellipsis / §max-lines): once the block has
@@ -5499,6 +5538,26 @@ namespace PeachPDF.Html.Core.Dom
             CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>>.FromValue(
                 Keywords.Baseline, new CssKeywordOrValue<VerticalAlignment, LengthOrCalc>(VerticalAlignment.Baseline, null));
 
+        private static CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>> EffectiveVerticalAlignOf(
+            CssBox box, CssLineBox lineBox, out CssBox styledBox)
+        {
+            styledBox = box;
+            while (styledBox.HtmlTag is null && !styledBox.IsMarkerPseudoElement && styledBox.ParentBox is not null)
+                styledBox = styledBox.ParentBox;
+
+            var ownerBox = lineBox.OwnerBox;
+            if (ReferenceEquals(lineBox, ownerBox.LineBoxes.FirstOrDefault())
+                && ownerBox.ResolvedFirstLineStyle is { } firstLineStyle
+                && firstLineStyle.VerticalAlign != ownerBox.VerticalAlign)
+            {
+                return firstLineStyle.VerticalAlign;
+            }
+
+            return styledBox.DerivedStyle.ActualDisplay == Keywords.TableCell
+                ? BaselineVerticalAlign
+                : styledBox.VerticalAlign;
+        }
+
         /// <summary>
         /// Applies vertical alignment to the linebox
         /// </summary>
@@ -5527,12 +5586,12 @@ namespace PeachPDF.Html.Core.Dom
             // then pulled the inline-block upward by exactly border-top + padding-top, into the preceding
             // block. Fold the atomic margin-box distances into the shared extent before resolving that
             // baseline, so surrounding text moves down to the inline-block's internal baseline instead.
-            var baselineExtent = lineBox.BaselineExtent;
+            var baselineExtent = lineBox.BaselineAlignedExtent ?? lineBox.BaselineExtent;
             var baselineOrigin = lineBox.FlowTop ?? flowTop;
 
             foreach (var (box, rect) in lineBox.Rectangles)
             {
-                if (box.VerticalAlign.Value.Keyword != VerticalAlignment.Baseline)
+                if (EffectiveVerticalAlignOf(box, lineBox, out _).Value.Keyword != VerticalAlignment.Baseline)
                 {
                     continue;
                 }
@@ -5554,6 +5613,13 @@ namespace PeachPDF.Html.Core.Dom
                 // so retain the older margin-edge origin for those.
                 if (!box.IsImage)
                     baselineOrigin = Math.Min(baselineOrigin, marginTop);
+            }
+
+            if (baselineExtent is { } alignedExtent)
+            {
+                lineBox.BaselineAlignedExtent = alignedExtent;
+                baselineExtent = IncludeEdgeAlignedAtomicHeights(
+                    alignedExtent, lineBox.TopAlignedAtomicHeight, lineBox.BottomAlignedAtomicHeight);
             }
 
             lineBox.BaselineExtent = baselineExtent;
@@ -5632,22 +5698,6 @@ namespace PeachPDF.Html.Core.Dom
             // concept already (this method itself runs once per line), so the simplest, most direct
             // application is a single line-wide override rather than per-word plumbing.
             //
-            // ResolvedFirstLineStyle.VerticalAlign is NOT a reliable "did some ::first-line rule
-            // actually declare vertical-align" signal by itself: vertical-align is CSS-spec
-            // Inherited: no, so InheritStyle no longer carries it onto the shadow box - instead,
-            // DomParser.ResolveFirstLineStyle explicitly re-seeds shadowBox.VerticalAlign from the
-            // owner box's own resolved value right after InheritStyle runs, specifically so the shadow
-            // box starts out matching the block's own value even when no matched rule ever mentions
-            // vertical-align. Comparing against the block's own value is a cheap, good-enough proxy for
-            // "was this actually declared" (it only under-detects the harmless edge case of a rule
-            // re-declaring the same value the block already had).
-            var ownerBox = lineBox.OwnerBox;
-            var firstLineVerticalAlign = lineBox == ownerBox.LineBoxes.FirstOrDefault()
-                                         && ownerBox.ResolvedFirstLineStyle is { } firstLineStyle
-                                         && firstLineStyle.VerticalAlign != ownerBox.VerticalAlign
-                ? firstLineStyle.VerticalAlign
-                : null;
-
             var boxes = new List<CssBox>(lineBox.Rectangles.Keys);
 
             // Snapshot the line's own top/bottom extents up front, from the original (pre-alignment)
@@ -5744,28 +5794,14 @@ namespace PeachPDF.Html.Core.Dom
                 // wrapper, it IS the thing vertical-align should apply to (CssBoxMarker sets its own
                 // VerticalAlign for a list-style-position: inside shape marker, to center it in the
                 // line the way an outside marker's own hand-computed position already does).
-                var styledBoxForVerticalAlign = box;
-                while (styledBoxForVerticalAlign.HtmlTag is null && !styledBoxForVerticalAlign.IsMarkerPseudoElement
-                       && styledBoxForVerticalAlign.ParentBox is not null)
-                    styledBoxForVerticalAlign = styledBoxForVerticalAlign.ParentBox;
-                // A table cell's own `vertical-align` means something else entirely - CSS 2.1 §17.5.3
-                // aligns the cell's whole content within the cell, which ApplyCellVerticalAlignment does -
-                // so it must not also be read here as an inline alignment for the cell's own line content.
-                // The walk above stops at the first box carrying an HtmlTag, which for text directly inside
-                // a <td> is the cell itself, and applying the value twice moved that text by a half-leading
-                // more than the cell algorithm had accounted for. `vertical-align` is not inherited
-                // (§10.8.1), so a cell's value reaching this point can only be the cell's own.
-                var effectiveVerticalAlign =
-                    firstLineVerticalAlign
-                    ?? (styledBoxForVerticalAlign.DerivedStyle.ActualDisplay == Keywords.TableCell
-                        ? BaselineVerticalAlign
-                        : styledBoxForVerticalAlign.VerticalAlign);
+                var effectiveVerticalAlign = EffectiveVerticalAlignOf(box, lineBox, out var styledBoxForVerticalAlign);
 
                 // A length/percentage (CSS 2.1 §10.8.1, issue #603) raises (positive) or lowers
                 // (negative) the box by this distance from its own baseline - a percentage resolves
                 // against the styled box's own line-height, mirroring sub/super's own baseline-relative
                 // offset below rather than any of the line-extent-relative cases.
                 var baselineDelta = baselineDeltas[box];
+                var alignsMarginBox = styledBoxForVerticalAlign.IsImage;
 
                 if (effectiveVerticalAlign.Value is { IsValue: true, Value: { } lengthOrCalc })
                 {
@@ -5784,10 +5820,12 @@ namespace PeachPDF.Html.Core.Dom
                         OffsetBoxWithinLine(lineBox, box, baselineDelta - rect.Height * .2f);
                         break;
                     case VerticalAlignment.Top:
-                        OffsetBoxWithinLine(lineBox, box, lineTop - rect.Top);
+                        OffsetBoxWithinLine(lineBox, box,
+                            lineTop + (alignsMarginBox ? styledBoxForVerticalAlign.ActualMarginTop : 0) - rect.Top);
                         break;
                     case VerticalAlignment.Bottom:
-                        OffsetBoxWithinLine(lineBox, box, lineBottom - rect.Bottom);
+                        OffsetBoxWithinLine(lineBox, box,
+                            lineBottom - (alignsMarginBox ? styledBoxForVerticalAlign.ActualMarginBottom : 0) - rect.Bottom);
                         break;
                     case VerticalAlignment.Middle:
                         var lineMiddleTop = lineTop + (lineBottom - lineTop - rect.Height) / 2;

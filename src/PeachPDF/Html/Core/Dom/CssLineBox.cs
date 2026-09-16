@@ -110,6 +110,22 @@ namespace PeachPDF.Html.Core.Dom
         public LineBoxExtent? BaselineExtent { get; internal set; }
 
         /// <summary>
+        /// The baseline-aligned portion of <see cref="BaselineExtent"/>, before edge-aligned replaced
+        /// elements impose a minimum total height.
+        /// </summary>
+        internal LineBoxExtent? BaselineAlignedExtent { get; set; }
+
+        /// <summary>
+        /// The tallest replaced margin box aligned to the line box's top edge.
+        /// </summary>
+        internal double TopAlignedAtomicHeight { get; set; }
+
+        /// <summary>
+        /// The tallest replaced margin box aligned to the line box's bottom edge.
+        /// </summary>
+        internal double BottomAlignedAtomicHeight { get; set; }
+
+        /// <summary>
         /// This line's baseline, in the same document-Y space as its words — filled in by
         /// <c>CssLayoutEngine.ApplyVerticalAlignment</c> once the line closes, and null for a line that
         /// never got one (an empty line, or one from the vertical-writing-mode engine). Read by
