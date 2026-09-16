@@ -3205,6 +3205,53 @@ await SaveShowcaseAsync("paged_media_margin_box_sizing", "Paged Media", "Margin 
     "Explicit width and height sizing of @page margin boxes.",
     marginBoxSizingHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ── @page / margin-box background & border showcase (issue #1082, closes #943) ─────────────
+var pageAndMarginBoxBackgroundHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+        size: A4;
+        margin: 25mm 20mm;
+        background-color: #eef2f7;
+        @bottom-center {
+            content: "Page " counter(page) " of " counter(pages);
+            font: 8pt Arial;
+            color: #fff;
+            background-color: #2c3e50;
+            border-top: 2pt solid #1a252f;
+            padding: 4pt 0;
+        }
+    }
+    @page :first {
+        background-image: linear-gradient(to bottom, #1a2a6c, #2c3e91);
+        background-size: cover;
+        @bottom-center { content: none; background-color: transparent; border-top: none; }
+    }
+    body { font: 11pt Arial; margin: 0; }
+    h1 { color: #fff; font-size: 26pt; margin: 3in 0 0; text-align: center; }
+    h2 { color: #1a2a6c; break-before: page; }
+    </style>
+    </head>
+    <body>
+      <h1>Annual Report</h1>
+      <h2>Chapter One</h2>
+    """ +
+    string.Concat(Enumerable.Range(1, 30).Select(i =>
+        $"<p>Line {i}: Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>")) +
+    """
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("paged_media_page_and_margin_box_background", "Paged Media",
+    "Page & Margin Box Background/Border",
+    "css-page-3 §3.1's @page box background (a cover page tinted independently of the body pages via "
+    + "@page :first, painted below the CSS2.1 canvas fill and the document's own content) plus a footer "
+    + "margin box with its own background-color and border-top.",
+    pageAndMarginBoxBackgroundHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Flexbox showcase ──────────────────────────────────────────────────
 
 static string FItem(string label, string color, string extraCss = "") =>

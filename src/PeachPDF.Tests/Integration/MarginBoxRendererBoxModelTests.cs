@@ -204,6 +204,118 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(allocated.Height, applied.Height, 3);
         }
 
+        // ── Border (closes #943): space charging + the border-box/padding-box/content-box split ──
+
+        [Fact]
+        public void UnsetBorderStyle_ChargesNoSpace_EvenWithAnExplicitWidthDeclared()
+        {
+            // border-*-style's own initial value is `none` (CSS 2.1 §8.5.3) - an unset style must
+            // compute to none exactly like an explicit one, so a stray border-width with no border-style
+            // must not charge any space (regression: this was initially wired backwards, defaulting an
+            // unset style to "medium" and charging 1.5pt no author ever asked for).
+            var rect = Rect("@top-center { content: \"x\"; border-top-width: 10pt; }", "top-center");
+
+            Assert.Equal(0.0, rect.Y, 3);
+            Assert.Equal(40.0, rect.Height, 3);
+        }
+
+        [Fact]
+        public void NoneOrHiddenBorderStyle_ChargesNoSpace_EvenWithAnExplicitWidthDeclared()
+        {
+            var none = Rect("@top-center { content: \"x\"; border-top: 10pt solid red; border-top-style: none; }", "top-center");
+            var hidden = Rect("@top-center { content: \"x\"; border-top: 10pt hidden red; }", "top-center");
+
+            Assert.Equal(0.0, none.Y, 3);
+            Assert.Equal(0.0, hidden.Y, 3);
+        }
+
+        [Fact]
+        public void ExplicitBorderStyle_ChargesItsOwnDeclaredWidth()
+        {
+            var rect = Rect("@top-center { content: \"x\"; border: 10pt solid red; }", "top-center");
+
+            // Border sits between the box's own margin (none here) and padding (none here), so the
+            // content box moves in by exactly the border width on every edge.
+            Assert.Equal(0.0 + 10.0, rect.Y, 3);
+            Assert.Equal(40.0 - 20.0, rect.Height, 3);
+        }
+
+        [Theory]
+        [InlineData("thin", 0.75)]
+        [InlineData("medium", 2.25)]
+        [InlineData("thick", 3.75)]
+        public void KeywordBorderWidths_ResolveTheSameUaDefaultPxLengthsTheCssOmAlreadyResolvesThemTo(string keyword, double expectedPt)
+        {
+            // border-*-width's own CSS-OM property already resolves thin/medium/thick to their UA-default
+            // pixel lengths (1px/3px/5px) before this file ever sees the string - see
+            // ResolveBorderWidthPt's own remarks. This exercises the real, observed path (a pre-resolved
+            // "3px"-shaped value), not the keyword-literal fallback branch, which is effectively dead code
+            // for a value sourced from a real StyleDeclaration.
+            var margins = Margins($"@top-center {{ content: \"x\"; border-top-style: solid; border-top-width: {keyword}; }}");
+            var rule = margins.Single(m => m.Selector?.Text?.Trim().ToLowerInvariant() == "top-center");
+
+            var width = MarginBoxRenderer.ResolveBorderWidthPt(rule.Style.BorderTopWidth, rule.Style.BorderTopStyle, emPt: 16, remPt: RemPt);
+
+            Assert.Equal(expectedPt, width, 3);
+        }
+
+        [Theory]
+        [InlineData("thin", 0.75)]
+        [InlineData("medium", 2.25)]
+        [InlineData("thick", 3.75)]
+        public void ResolveBorderWidthPt_LiteralKeyword_FallsBackToTheDefensiveConvention(string keyword, double expectedPt)
+        {
+            // The CSS-OM already resolves thin/medium/thick before this file ever sees a real declaration
+            // (see KeywordBorderWidths_ResolveTheSameUaDefaultPxLengthsTheCssOmAlreadyResolvesThemTo above) -
+            // this exercises ResolveBorderWidthPt's own defensive fallback branch directly, for a caller
+            // that (unlike a real StyleDeclaration) genuinely hands it the bare keyword.
+            var width = MarginBoxRenderer.ResolveBorderWidthPt(keyword, "solid", emPt: 16, remPt: RemPt);
+
+            Assert.Equal(expectedPt, width, 3);
+        }
+
+        [Fact]
+        public void ApplyMarginOnly_ReturnsTheBorderBoxRect_ExcludingOnlyItsOwnMargin()
+        {
+            const string css = "@top-center { content: \"x\"; margin: 6pt 10pt; border: 4pt solid red; padding: 3pt; }";
+            var margins = Margins(css);
+            var rule = margins.Single(m => m.Selector?.Text?.Trim().ToLowerInvariant() == "top-center");
+            var outer = MarginBoxRenderer.GetMarginBoxRect("top-center", Page, ML, MT, MR, MB, margins, null, RemPt);
+
+            var borderBox = MarginBoxRenderer.ApplyMarginOnly(outer, rule, null, RemPt,
+                MarginBoxRenderer.MarginAreaWidth("top-center", Page, ML, MR),
+                MarginBoxRenderer.MarginAreaHeight("top-center", Page, MT, MB));
+
+            // Only margin (6pt/10pt) is excluded - border and padding are still inside the border box.
+            Assert.Equal(outer.X + 10.0, borderBox.X, 3);
+            Assert.Equal(outer.Y + 6.0, borderBox.Y, 3);
+            Assert.Equal(outer.Width - 20.0, borderBox.Width, 3);
+            Assert.Equal(outer.Height - 12.0, borderBox.Height, 3);
+        }
+
+        [Fact]
+        public void ApplyMarginAndBorder_ReturnsThePaddingBoxRect_ExcludingMarginAndBorderButNotPadding()
+        {
+            const string css = "@top-center { content: \"x\"; margin: 6pt 10pt; border: 4pt solid red; padding: 3pt; }";
+            var margins = Margins(css);
+            var rule = margins.Single(m => m.Selector?.Text?.Trim().ToLowerInvariant() == "top-center");
+            var outer = MarginBoxRenderer.GetMarginBoxRect("top-center", Page, ML, MT, MR, MB, margins, null, RemPt);
+
+            var paddingBox = MarginBoxRenderer.ApplyMarginAndBorder(outer, rule, null, RemPt,
+                MarginBoxRenderer.MarginAreaWidth("top-center", Page, ML, MR),
+                MarginBoxRenderer.MarginAreaHeight("top-center", Page, MT, MB));
+            var contentBox = MarginBoxRenderer.ApplyBoxModel(outer, rule, null, RemPt,
+                MarginBoxRenderer.MarginAreaWidth("top-center", Page, ML, MR),
+                MarginBoxRenderer.MarginAreaHeight("top-center", Page, MT, MB));
+
+            // Margin (6/10) and border (4) are excluded, padding (3) is not - the padding-box is
+            // genuinely between the border-box and the content-box, not equal to either.
+            Assert.Equal(outer.X + 10.0 + 4.0, paddingBox.X, 3);
+            Assert.Equal(outer.Y + 6.0 + 4.0, paddingBox.Y, 3);
+            Assert.Equal(paddingBox.X + 3.0, contentBox.X, 3);
+            Assert.Equal(paddingBox.Y + 3.0, contentBox.Y, 3);
+        }
+
         /// <summary>
         /// The two steps the render paths run back to back: allocate the slot, then reduce it to the
         /// content box.
