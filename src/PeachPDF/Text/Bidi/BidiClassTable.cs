@@ -11,7 +11,7 @@ namespace PeachPDF.Text.Bidi
     /// <summary>
     /// Per-codepoint <see cref="BidiClass"/> (Unicode's <c>Bidi_Class</c> property) lookup, backed by a
     /// Brotli-compressed, run-length-encoded table generated from the Unicode Character Database's
-    /// <c>DerivedBidiClass.txt</c> (Unicode 17.0.0 - see <c>assets/unicode/generate_bidi_tables.py</c> for
+    /// <c>DerivedBidiClass.txt</c> (Unicode 18.0.0 - see <c>assets/unicode/generate_bidi_tables.py</c> for
     /// provenance/regeneration), embedded as <c>Text/Resources/Bidi/DerivedBidiClass.txt.br</c>. This is the
     /// one codepoint-classification primitive both the UAX #9 resolver (<see cref="BidiResolver"/>) and the
     /// HTML <c>dir="auto"</c> first-strong-character detection consume.

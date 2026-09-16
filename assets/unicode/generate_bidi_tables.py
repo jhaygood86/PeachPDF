@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generates the compact, Brotli-compressed bidi data resources PeachPDF embeds from the
 Unicode Character Database source files in this directory (DerivedBidiClass.txt,
-BidiBrackets.txt, BidiMirroring.txt - Unicode 17.0.0, see PR #542).
+BidiBrackets.txt, BidiMirroring.txt - Unicode 18.0.0, see PR #542).
 
 Output goes to src/PeachPDF/Text/Resources/Bidi/*.txt.br, consumed by
 PeachPDF.Text.Bidi.BidiClassTable/BidiBrackets/BidiMirroring. Each output file is a plain-text

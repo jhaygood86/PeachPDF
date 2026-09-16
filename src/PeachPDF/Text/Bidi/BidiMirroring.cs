@@ -11,7 +11,7 @@ namespace PeachPDF.Text.Bidi
     /// <summary>
     /// Character-mirroring lookup for UAX #9's L4 rule (mirrored characters, e.g. <c>(</c>/<c>)</c>), backed
     /// by a Brotli-compressed table generated from the Unicode Character Database's
-    /// <c>BidiMirroring.txt</c> (Unicode 17.0.0 - see <c>assets/unicode/generate_bidi_tables.py</c>),
+    /// <c>BidiMirroring.txt</c> (Unicode 18.0.0 - see <c>assets/unicode/generate_bidi_tables.py</c>),
     /// embedded as <c>Text/Resources/Bidi/BidiMirroring.txt.br</c>.
     /// </summary>
     internal static class BidiMirroring

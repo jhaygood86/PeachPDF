@@ -11,7 +11,7 @@ namespace PeachPDF.Text
     /// <summary>
     /// Per-codepoint <see cref="IndicSyllabicCategory"/> lookup, backed by a Brotli-compressed,
     /// run-length-encoded table generated from the Unicode Character Database's
-    /// IndicSyllabicCategory.txt (Unicode 17.0.0 - see
+    /// IndicSyllabicCategory.txt (Unicode 18.0.0 - see
     /// <c>assets/unicode/generate_use_category_tables.py</c> for provenance/regeneration), embedded
     /// as <c>Text/Resources/Use/IndicSyllabicCategory.txt.br</c>. Mirrors
     /// <see cref="ArabicShapingTable"/>'s own shape - same run-array/binary-search/Brotli-resource

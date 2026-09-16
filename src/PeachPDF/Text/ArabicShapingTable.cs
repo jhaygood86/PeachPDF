@@ -11,7 +11,7 @@ namespace PeachPDF.Text
     /// <summary>
     /// Per-codepoint <see cref="ArabicJoiningType"/> (Unicode's <c>Joining_Type</c> property) lookup,
     /// backed by a Brotli-compressed, run-length-encoded table generated from the Unicode Character
-    /// Database's extracted/DerivedJoiningType.txt (Unicode 17.0.0 - see
+    /// Database's extracted/DerivedJoiningType.txt (Unicode 18.0.0 - see
     /// <c>assets/unicode/generate_arabic_joining_table.py</c> for provenance/regeneration), embedded as
     /// <c>Text/Resources/ArabicJoining/DerivedJoiningType.txt.br</c>. Mirrors
     /// <see cref="VerticalOrientationTable"/>'s own shape - same run-array/binary-search/Brotli-resource

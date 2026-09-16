@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generates the compact, Brotli-compressed Joining_Type data resource PeachPDF embeds from the
-Unicode Character Database's extracted/DerivedJoiningType.txt (Unicode 17.0.0, UAX #44 - see
+Unicode Character Database's extracted/DerivedJoiningType.txt (Unicode 18.0.0, UAX #44 - see
 https://www.unicode.org/reports/tr44/), matching the version already checked in for
 DerivedBidiClass.txt/VerticalOrientation.txt/Scripts.txt.
 
