@@ -5823,10 +5823,10 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
         SideSwatch("double, uneven", "border: double #4a90d9; border-width: 9px 24px 15px 30px")
     ) +
 
-    // A border whose four sides agree is stroked as one continuous outline, so its corners stay seamless
-    // and a dot/dash period can be fitted to the whole perimeter. double is two such outlines, at the
-    // thirds. groove/ridge still fall back to one solid stroke - they shade each side differently, and a
-    // single continuous stroke cannot change colour partway round.
+    // A border whose four sides agree is painted as one continuous outline, so its corners stay seamless
+    // and a dot/dash period can be fitted to the whole perimeter. double is two such outlines at the
+    // thirds; groove/ridge are two rounded half-width bands whose side colors meet midway through each
+    // corner.
     "<h2>Rounded corners</h2>" +
     Row(
         RadiusBorderSwatch("solid", "solid", "16px", "24px"),
@@ -5838,13 +5838,22 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
         RadiusBorderSwatch("solid, pill", "solid", "10px", "999px"),
         RadiusBorderSwatch("dotted, pill", "dotted", "10px", "999px"),
         RadiusBorderSwatch("double, pill", "double", "12px", "999px"),
-        RadiusBorderSwatch("groove (falls back)", "groove", "16px", "24px")
+        RadiusBorderSwatch("groove", "groove", "16px", "24px")
     ) +
     Row(
         RadiusBorderSwatch("solid, elliptical", "solid", "12px", "40px / 20px"),
         RadiusBorderSwatch("double, elliptical", "double", "15px", "40px / 20px"),
         RadiusBorderSwatch("dashed, pill", "dashed", "10px", "999px"),
-        RadiusBorderSwatch("ridge (falls back)", "ridge", "16px", "24px")
+        RadiusBorderSwatch("ridge", "ridge", "16px", "24px")
+    ) +
+
+    // The corner transition follows the ratio of the adjoining widths, so the wider edge owns more
+    // of the curve. Opening border_style.html in Chrome provides a direct comparison of the same
+    // non-uniform two-band bevel.
+    "<h2>Non-uniform rounded bevel</h2>" +
+    Row(
+        SideSwatch("groove, mixed width and color",
+            "border-style: groove; border-width: 18px 6px 14px 10px; border-color: #d94a4a #4ad98a #4a90d9 #d9c74a; border-radius: 24px")
     ) +
 
     "</body></html>";

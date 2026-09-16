@@ -9,7 +9,10 @@ same markup previews in a browser.
   number of dots spans the edge exactly. **`dashed`** used a dash three times the border width on the
   same fixed period; it now uses a dash twice the border width, fitted the same way. Because the fit
   depends on the edge, spacing shifts slightly as a box's width or height changes, and a box's
-  horizontal and vertical runs may use slightly different gaps.
+  horizontal and vertical runs may use slightly different gaps. At a square corner where a
+  dotted/dashed edge meets an edge with a different style, color, or width, its final mark is clipped
+  to the corner transition diagonal rather than showing through the adjoining border or ending on a
+  square cut.
 - **`double`**, **`groove`** and **`ridge`** drew each edge as two stripes running the full length of
   the box, so the top edge's inner stripe crossed the left and right borders' gaps and all four
   corners showed a ladder of crossing lines. Each line is now mitred into its neighbours, giving clean
@@ -39,10 +42,10 @@ same markup previews in a browser.
   two and three deep at the corners. The pattern is now fitted to the whole perimeter and runs evenly
   the whole way round.
 
-- A **rounded** `double` border previously rendered as a single solid line at the full border width.
-  When its four sides share a style, color and width it is now drawn as two concentric rounded lines
-  at the thirds, like a square `double` border. `groove` and `ridge` with `border-radius` still render
-  as a single solid line.
+- A **rounded** `double`, `groove`, or `ridge` border previously rendered as a single solid line at
+  the full border width. When its four sides share a style, color and width, `double` is now drawn as
+  two concentric rounded lines at the thirds, while `groove` and `ridge` retain their two curved,
+  shaded half-width bands.
 
 `outline-style` uses the same rendering throughout, so all of the above applies to outlines as well,
 and to the borders of a `border-collapse: collapse` table.

@@ -3,6 +3,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
@@ -285,6 +286,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
+            Assert.Empty(g.ClipPaths);
             var top = g.Log.OfType<TestRecordingGraphics.DrawLineCall>()
                 .First(l => Math.Abs(l.Y1 - l.Y2) < 0.01);
 
@@ -324,6 +326,78 @@ namespace PeachPDF.Tests.Integration
             // A dashed edge spans its full outer length, so two adjacent edges meet in a filled corner.
             Assert.Equal(LeftOf(div), top.X1, 2);
             Assert.Equal(LeftOf(div) + 160, top.X2, 2);
+        }
+
+        [Fact]
+        public async Task MixedBorderStyles_ClipsDottedAndDashedStrokesAtAdjacentStyleTransitions()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:128pt; height:40pt; border:14px rgb(74,144,217); border-style:solid dashed double dotted'></div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
+            Assert.Equal(2, lines.Count);
+            Assert.Equal(2, g.ClipPaths.Count);
+
+            foreach (var line in lines)
+            {
+                var lineIndex = g.Log.IndexOf(line);
+                Assert.IsType<TestRecordingGraphics.PushClipCall>(g.Log[lineIndex - 1]);
+                Assert.IsType<TestRecordingGraphics.PopClipCall>(g.Log[lineIndex + 1]);
+            }
+        }
+
+        [Theory]
+        [InlineData("border-top:10pt dashed #4a90d9; border-left:4pt solid #4a90d9")]
+        [InlineData("border-right:10pt dotted #4a90d9; border-bottom:4pt solid #4a90d9")]
+        [InlineData("border-bottom:10pt dashed #4a90d9; border-right:4pt solid #4a90d9")]
+        [InlineData("border-left:10pt dotted #4a90d9; border-top:4pt solid #4a90d9")]
+        public async Task PatternedEdge_WithOneDifferingAdjacentEdge_ClipsOnlyThatCorner(string css)
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                $"<div id='b' style='width:128pt; height:40pt; {css}'></div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            Assert.Single(g.ClipPaths);
+        }
+
+        [Fact]
+        public async Task MixedBorderWidths_LeftDashClipEndsOnBottomBordersDiagonal()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:128pt; height:40pt; border-color:#d94a4a #4ad98a #4a90d9 #d9c74a; " +
+                "border-style:double solid groove dashed; border-width:18px 6px 14px 10px'></div>"));
+            var div = FindById(root, "b")!;
+            var borderRect = FragmentPaintHarness.FragmentOf(container, div).Lines[0].Rect;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var leftLine = Assert.Single(
+                g.Log.OfType<TestRecordingGraphics.DrawLineCall>(),
+                line => Math.Abs(line.X1 - line.X2) < 0.01 && line.X1 < borderRect.Left + borderRect.Width / 2);
+            var lineIndex = g.Log.IndexOf(leftLine);
+            Assert.IsType<TestRecordingGraphics.PushClipCall>(g.Log[lineIndex - 1]);
+            Assert.IsType<TestRecordingGraphics.PopClipCall>(g.Log[lineIndex + 1]);
+
+            var leftClip = Assert.Single(g.ClipPaths);
+            var outerBottom = new RPoint(borderRect.Left, borderRect.Bottom);
+            var innerBottom = new RPoint(
+                borderRect.Left + div.ActualBorderLeftWidth,
+                borderRect.Bottom - div.ActualBorderBottomWidth);
+            Assert.Contains(leftClip.Points, point =>
+                Math.Abs(point.X - outerBottom.X) < 0.01 &&
+                Math.Abs(point.Y - outerBottom.Y) < 0.01);
+            Assert.Contains(leftClip.Points, point =>
+                Math.Abs(point.X - innerBottom.X) < 0.01 &&
+                Math.Abs(point.Y - innerBottom.Y) < 0.01);
         }
 
         [Fact]
@@ -575,21 +649,210 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task BorderStyleGrooveWithBorderRadius_FallsBackToSingleSolidStroke()
+        public async Task RoundedGroove_SingleVisibleEdge_KeepsBothBeveledBandsAndOwnsTheCornerArcs()
         {
-            // groove/ridge shade each side differently, and a curved border is one continuous stroke
-            // that cannot change color partway round - this locks in the documented narrowing: they
-            // degrade to a single solid-colored stroke rather than crashing.
             var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='b' style='border-top-style: groove; border-top-width: 12px; border-top-color: rgb(51,51,51); border-radius: 8px'>x</div>"));
             var div = FindById(root, "b")!;
 
             var g = new TestRecordingGraphics();
-            var exception = await Record.ExceptionAsync(async () => FragmentPaintHarness.PaintBox(container, div, g));
+            FragmentPaintHarness.PaintBox(container, div, g);
 
-            Assert.Null(exception);
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
-            Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawPathCall>());
+            var bands = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+            Assert.Equal(2, bands.Count);
+            Assert.DoesNotContain(bands, path => path.Stroked);
+            Assert.All(bands, path => Assert.True(path.Points.Count > 8));
+
+            var color = RColor.FromArgb(51, 51, 51);
+            Assert.Equal(BorderBevelColors.Shade(color, darken: true), bands[0].Color);
+            Assert.Equal(BorderBevelColors.Shade(color, darken: false), bands[1].Color);
+        }
+
+        [Theory]
+        [InlineData("groove", true)]
+        [InlineData("ridge", false)]
+        public async Task RoundedGrooveRidge_AllFourSidesAlike_FillsTwoCurvedBeveledBands(
+            string style, bool outerIsInset)
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                $"<div id='b' style='width:100pt; height:60pt; border: 12pt {style} rgb(51,51,51); border-radius: 20pt'>x</div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(), p => p.Stroked);
+
+            var bands = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+            Assert.Equal(4, bands.Count);
+            Assert.All(bands, band => Assert.True(band.Points.Count > 8));
+
+            var color = RColor.FromArgb(51, 51, 51);
+            var dark = BorderBevelColors.Shade(color, darken: true);
+            var light = BorderBevelColors.Shade(color, darken: false);
+            var outerTopLeft = outerIsInset ? dark : light;
+            var outerBottomRight = outerIsInset ? light : dark;
+
+            Assert.Equal([outerTopLeft, outerBottomRight, outerBottomRight, outerTopLeft],
+                bands.Select(b => b.Color));
+
+            // The first two paths form the outer half and reach the border box. The inner two begin
+            // halfway through the 12pt border, so neither can reach its corresponding outer edge.
+            var borderRect = FragmentPaintHarness.FragmentOf(container, div).Lines[0].Rect;
+            Assert.Equal(borderRect.Top, bands[0].Bounds.Top, 1);
+            Assert.Equal(borderRect.Left, bands[0].Bounds.Left, 1);
+            Assert.True(bands[2].Bounds.Top >= borderRect.Top + 6 - 0.1);
+            Assert.True(bands[2].Bounds.Left >= borderRect.Left + 6 - 0.1);
+        }
+
+        [Fact]
+        public async Task RoundedGroove_NonUniformWidthsAndColors_UsesPerEdgeCurvedBands()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:100pt; height:60pt; border-style:groove; " +
+                "border-width:18px 6px 14px 10px; border-color:#d94a4a #4ad98a #4a90d9 #d9c74a; " +
+                "border-radius:24px'>x</div>"));
+            var div = FindById(root, "b")!;
+            var borderRect = FragmentPaintHarness.FragmentOf(container, div).Lines[0].Rect;
+            var radii = div.ComputeRadii(borderRect);
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            var bands = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+            Assert.Equal(8, bands.Count);
+            Assert.DoesNotContain(bands, path => path.Stroked);
+
+            // CSS Backgrounds 3 leaves the exact continuous width-ratio mapping UA-defined. Chrome's
+            // historical mapping gives the left side 10/(18+10) of the top-left quadrant.
+            var split = Math.PI + Math.PI / 2 * 10 / (18 + 10d);
+            var expectedTransition = new RPoint(
+                borderRect.Left + radii.TLX + radii.TLX * Math.Cos(split),
+                borderRect.Top + radii.TLY + radii.TLY * Math.Sin(split));
+            Assert.Equal(expectedTransition.X, bands[0].Points[0].X, 2);
+            Assert.Equal(expectedTransition.Y, bands[0].Points[0].Y, 2);
+
+            var top = RColor.FromArgb(217, 74, 74);
+            var left = RColor.FromArgb(217, 199, 74);
+            var bottom = RColor.FromArgb(74, 144, 217);
+            var right = RColor.FromArgb(74, 217, 138);
+            Assert.Equal(
+                [
+                    BorderBevelColors.Shade(top, darken: true),
+                    BorderBevelColors.Shade(left, darken: true),
+                    BorderBevelColors.Shade(bottom, darken: false),
+                    BorderBevelColors.Shade(right, darken: false),
+                    BorderBevelColors.Shade(top, darken: false),
+                    BorderBevelColors.Shade(left, darken: false),
+                    BorderBevelColors.Shade(bottom, darken: true),
+                    BorderBevelColors.Shade(right, darken: true)
+                ],
+                bands.Select(band => band.Color));
+        }
+
+        [Fact]
+        public async Task RoundedGrooveRidge_MayDifferByStyleBetweenSides()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:100pt; height:60pt; border-width:12pt; " +
+                "border-style:groove ridge ridge groove; border-color:rgb(51,51,51); " +
+                "border-radius:20pt'>x</div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var bands = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+            Assert.Equal(2, bands.Count);
+            Assert.DoesNotContain(bands, path => path.Stroked);
+
+            // The chosen styles make every outer face dark and every inner face light. All four
+            // disjoint sides of each shade must therefore be filled in one operation, avoiding seams.
+            var color = RColor.FromArgb(51, 51, 51);
+            Assert.Equal(BorderBevelColors.Shade(color, darken: true), bands[0].Color);
+            Assert.Equal(BorderBevelColors.Shade(color, darken: false), bands[1].Color);
+            Assert.All(bands, path => Assert.True(path.Points.Count > 32));
+        }
+
+        [Fact]
+        public async Task RoundedGroove_SlicedFragmentWithoutLeftEdge_UsesOpenBeveledBands()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:100pt; height:60pt; border: 12pt groove rgb(51,51,51); border-radius: 20pt'>x</div>"));
+            var div = FindById(root, "b")!;
+            var borderRect = FragmentPaintHarness.FragmentOf(container, div).Lines[0].Rect;
+
+            var g = new TestRecordingGraphics();
+            BordersDrawHandler.DrawBoxBorders(
+                g, div, borderRect,
+                hasLeftEdge: false, hasRightEdge: true, hasTopEdge: true, hasBottomEdge: true);
+
+            var bands = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+            Assert.Equal(4, bands.Count);
+            Assert.DoesNotContain(bands, path => path.Stroked);
+
+            // A slice break is not a physical rounded corner: the top and bottom bands end square at
+            // the fragment's left edge instead of closing a ring or curving into an absent left border.
+            Assert.Contains(bands.SelectMany(path => path.Points), point =>
+                Math.Abs(point.X - borderRect.Left) < 0.01 &&
+                Math.Abs(point.Y - borderRect.Top) < 0.01);
+            Assert.Contains(bands.SelectMany(path => path.Points), point =>
+                Math.Abs(point.X - borderRect.Left) < 0.01 &&
+                Math.Abs(point.Y - borderRect.Bottom) < 0.01);
+        }
+
+        [Fact]
+        public async Task RoundedGroove_NonUniformBandsScalePathCoordinatesByPixelsPerPoint()
+        {
+            const string html =
+                "<div id='b' style='width:100pt; height:60pt; border-style:groove; " +
+                "border-width:18pt 6pt 14pt 10pt; border-radius:24pt'>x</div>";
+
+            var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
+            var divDefault = LayoutHarness.FindById(rootDefault, "b")!;
+            var gDefault = new TestRecordingGraphics { PixelsPerPointOverride = 1 };
+            FragmentPaintHarness.PaintBox(containerDefault, divDefault, gDefault);
+            var defaultBands = gDefault.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+
+            var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(html), pixelsPerPoint: 2);
+            var divScaled = LayoutHarness.FindById(rootScaled, "b")!;
+            var gScaled = new TestRecordingGraphics { PixelsPerPointOverride = 2 };
+            FragmentPaintHarness.PaintBox(containerScaled, divScaled, gScaled);
+            var scaledBands = gScaled.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+
+            Assert.Equal(defaultBands.Count, scaledBands.Count);
+            for (var i = 0; i < defaultBands.Count; i++)
+            {
+                Assert.Equal(defaultBands[i].Bounds.Left, scaledBands[i].Bounds.Left, 2);
+                Assert.Equal(defaultBands[i].Bounds.Top, scaledBands[i].Bounds.Top, 2);
+                Assert.Equal(defaultBands[i].Bounds.Width, scaledBands[i].Bounds.Width, 2);
+                Assert.Equal(defaultBands[i].Bounds.Height, scaledBands[i].Bounds.Height, 2);
+            }
+        }
+
+        [Fact]
+        public async Task RoundedGroove_InsetContoursRenormalizeAsymmetricRadii()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:60pt; height:60pt; border-style:groove; " +
+                "border-width:1pt 1pt 1pt 20pt; border-radius:1pt 80pt 1pt 80pt / 20pt'>x</div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var topOuterBand = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().First();
+            Assert.True(topOuterBand.Points.Count > 12);
+
+            // Points 11 and 12 are the inner top contour's right and left tangent respectively. The
+            // right tangent must not pass left of the left tangent after the contour shrinks.
+            Assert.True(topOuterBand.Points[11].X >= topOuterBand.Points[12].X - 0.01,
+                $"inner contour reversed from x={topOuterBand.Points[11].X} to x={topOuterBand.Points[12].X}");
         }
 
         [Fact]

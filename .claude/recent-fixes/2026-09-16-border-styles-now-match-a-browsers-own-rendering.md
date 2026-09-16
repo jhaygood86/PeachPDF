@@ -24,6 +24,16 @@ the corner's true mitre line, and stays correct for unequal per-side widths wher
 `[1/2, 1]`. The old `Math.Max(1, Math.Floor(width / 3))` was also wrong - a browser uses exact
 thirds, which was confirmed down to 1px borders.
 
+**Patterned strokes bled through mixed square corners.** A dotted/dashed edge deliberately spans the
+full outer length so matching adjacent patterned edges share one corner dot or L-shaped dash. That
+same unclipped stroke is wrong when the adjoining edge has a different style, color, or width: a
+corner dot remains visible through a `double` edge's transparent gap, and a dash ends square instead
+of on the transition diagonal. At square corners the stroke now keeps the shared corner only when
+both edges match; otherwise it is clipped to the same unequal-width-aware mitre that filled border
+bands use. The clip extends beyond the stroke at the outer and inner edges, so it constrains only the
+corner transition and cannot thin the border through clip antialiasing. Mixed patterned rounded
+corners remain on the older whole-arc path.
+
 **groove/ridge were flat.** The two stripes picked their colors without regard to which edge they
 were on, so all four sides shaded alike. A browser paints `groove`'s outer half as `inset` and its
 inner half as `outset` (`ridge` the reverse), and inset/outset shade *per side* - top/left one way,
