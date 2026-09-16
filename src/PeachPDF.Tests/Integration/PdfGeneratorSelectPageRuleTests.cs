@@ -474,6 +474,40 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(style);
         }
 
+        [Fact]
+        public void SelectApplicablePageStyle_BackgroundDeclaration_SurvivesTheSameMergeAsMarginSize()
+        {
+            // background-* isn't a special case in PageRuleResolver - it flows through the same generic
+            // per-declaration merge margin/size/font-family already do (issue #1082). A base rule's
+            // background-color must survive into a page also matched by a higher-precedence :first rule
+            // that only redeclares background-image, exactly like the font-family/margin merge above.
+            var rules = ParsePageRules("""
+                @page { background-color: #5588ff; }
+                @page :first { background-image: url("cover.jpg"); }
+                """);
+
+            var style = PdfGenerator.SelectApplicablePageStyle(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+
+            Assert.NotNull(style);
+            Assert.Equal("rgb(85, 136, 255)", style!.BackgroundColor);
+            Assert.Contains("cover.jpg", style.BackgroundImage);
+        }
+
+        [Fact]
+        public void SelectApplicablePageStyle_FirstRuleOverridesBackgroundColor_WhenBothDeclareIt()
+        {
+            var rules = ParsePageRules("""
+                @page { background-color: blue; }
+                @page :first { background-color: red; }
+                """);
+
+            var page1Style = PdfGenerator.SelectApplicablePageStyle(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var page2Style = PdfGenerator.SelectApplicablePageStyle(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800);
+
+            Assert.Equal("rgb(255, 0, 0)", page1Style!.BackgroundColor);
+            Assert.Equal("rgb(0, 0, 255)", page2Style!.BackgroundColor);
+        }
+
         // ─── ResolvePageMargins: zero-margin overrides (#125) ───────────────────
         // Regression for #125: the CSS-OM serializes every zero length unitless ("0"), and the
         // old hand-rolled length parser returned null for a missing unit, so ResolvePageMargins'

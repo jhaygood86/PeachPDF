@@ -46,7 +46,8 @@ namespace PeachPDF.Html.Core.Dom
             RAdapter adapter,
             StyleDeclaration? pageStyle,
             HtmlContainerInt htmlContainer,
-            Dictionary<string, CssImage?> imageCache)
+            Dictionary<string, CssImage?> imageCache,
+            Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
         {
             foreach (var marginRule in margins)
             {
@@ -55,23 +56,32 @@ namespace PeachPDF.Html.Core.Dom
                     continue;
 
                 var contentValue = marginRule.Style.Content;
+
+                // content: element() (css-gcpm-3) is handled entirely by HtmlContainerInt's own margin-box
+                // layout phase - a real CssBox subtree needs real layout, which this text/image-only
+                // pipeline cannot give it - and painted (background/border included) from
+                // PdfGenerator.PaintElementMarginBoxes instead.
+                if (!string.IsNullOrEmpty(contentValue) && TryParseElementFunction(contentValue, out _, out _))
+                    continue;
+
+                var remPt = htmlContainer.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
+                var outerRect = GetMarginBoxRect(boxName, pageSize, marginLeft, marginTop, marginRight, marginBottom, margins,
+                    pageStyle, remPt);
+                var cbWidth = MarginAreaWidth(boxName, pageSize, marginLeft, marginRight);
+                var cbHeight = MarginAreaHeight(boxName, pageSize, marginTop, marginBottom);
+
+                // Background/border paint unconditionally (a margin box can have a decorative background
+                // with no content at all) - gated on their own border-box rect rather than the content
+                // rect below, so a box whose content is empty/none still gets them.
+                await PaintBackgroundAndBorder(g, outerRect, pageSize, marginRule, pageStyle, remPt,
+                    cbWidth, cbHeight, adapter, htmlContainer, backgroundImageCache);
+
                 if (string.IsNullOrEmpty(contentValue) ||
                     contentValue.Equals("none", StringComparison.OrdinalIgnoreCase) ||
                     contentValue.Equals("normal", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                // content: element() (css-gcpm-3) is handled entirely by HtmlContainerInt's own margin-box
-                // layout phase - a real CssBox subtree needs real layout, which this text/image-only
-                // pipeline cannot give it - and painted from FragmentainerFragment.MarginBoxes instead.
-                if (TryParseElementFunction(contentValue, out _, out _))
-                    continue;
-
-                var rect = GetMarginBoxRect(boxName, pageSize, marginLeft, marginTop, marginRight, marginBottom, margins,
-                    pageStyle, htmlContainer.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize);
-                rect = ApplyBoxModel(rect, marginRule, pageStyle,
-                    htmlContainer.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize,
-                    MarginAreaWidth(boxName, pageSize, marginLeft, marginRight),
-                    MarginAreaHeight(boxName, pageSize, marginTop, marginBottom));
+                var rect = ApplyBoxModel(outerRect, marginRule, pageStyle, remPt, cbWidth, cbHeight);
                 if (rect.Width <= 0 || rect.Height <= 0)
                     continue;
 
@@ -130,29 +140,113 @@ namespace PeachPDF.Html.Core.Dom
         /// on a page margin shallower than the inset it wants grows back over the page the way a
         /// browser's print-footer overlay does.
         ///
-        /// Border is deliberately not included: a margin box does not paint one today, so charging
-        /// it space would move content for a decoration that never appears. Tracked as a gap rather
-        /// than silently omitted.
+        /// Composed from <see cref="MarginExtent"/>, <see cref="BorderExtent"/> and
+        /// <see cref="PaddingExtent"/> (closing #943 - border is now part of this, resolved and
+        /// charged exactly like margin/padding already were) so <see cref="ApplyBoxModel"/> and
+        /// <see cref="GetMarginBoxRect"/>'s own <c>Outer</c> pick it up with no further change.
         /// </summary>
         internal static (double Start, double End) BoxModelExtent(
+            MarginStyleRule rule, StyleDeclaration? pageStyle, double remPt, double basisPt, bool horizontal)
+        {
+            var (marginStart, marginEnd) = MarginExtent(rule, pageStyle, remPt, basisPt, horizontal);
+            var (borderStart, borderEnd) = BorderExtent(rule, pageStyle, remPt, horizontal);
+            var (paddingStart, paddingEnd) = PaddingExtent(rule, pageStyle, remPt, basisPt, horizontal);
+            return (marginStart + borderStart + paddingStart, marginEnd + borderEnd + paddingEnd);
+        }
+
+        /// <summary>
+        /// The margin half of <see cref="BoxModelExtent"/>, split out so a caller that needs only the
+        /// border-box rect (background/border painting - see <see cref="ApplyMarginOnly"/>) doesn't have
+        /// to resolve padding/border too. Unlike padding, a margin may be negative (CSS 2.1 §8.4) - see
+        /// <see cref="BoxModelExtent"/>'s own remarks on why.
+        /// </summary>
+        internal static (double Start, double End) MarginExtent(
             MarginStyleRule rule, StyleDeclaration? pageStyle, double remPt, double basisPt, bool horizontal)
         {
             var style = rule.Style;
             var emPt = ResolveFontSizePt(style, pageStyle);
 
-            double Len(string? value, bool clampToZero)
-            {
-                if (string.IsNullOrWhiteSpace(value))
-                    return 0;
-                var pt = DomParser.ParseLengthToPdfPoints(value, new PageLengthContext(emPt, remPt, basisPt)) ?? 0;
-                return clampToZero ? Math.Max(0, pt) : pt;
-            }
+            double Len(string? value) => string.IsNullOrWhiteSpace(value)
+                ? 0
+                : DomParser.ParseLengthToPdfPoints(value, new PageLengthContext(emPt, remPt, basisPt)) ?? 0;
 
             return horizontal
-                ? (Len(style.MarginLeft, false) + Len(style.PaddingLeft, true),
-                   Len(style.MarginRight, false) + Len(style.PaddingRight, true))
-                : (Len(style.MarginTop, false) + Len(style.PaddingTop, true),
-                   Len(style.MarginBottom, false) + Len(style.PaddingBottom, true));
+                ? (Len(style.MarginLeft), Len(style.MarginRight))
+                : (Len(style.MarginTop), Len(style.MarginBottom));
+        }
+
+        /// <summary>
+        /// The padding half of <see cref="BoxModelExtent"/>, split out so <see cref="ApplyMarginAndBorder"/>
+        /// (the padding-box rect - a <c>background-origin</c>/<c>-clip: padding-box</c> layer's own
+        /// positioning/clip area, and the default per CSS Backgrounds 3 §3.9/§3.10) can stop one step
+        /// short of it. Clamped to zero, unlike margin - CSS 2.1 §8.4 disallows a negative padding.
+        /// </summary>
+        internal static (double Start, double End) PaddingExtent(
+            MarginStyleRule rule, StyleDeclaration? pageStyle, double remPt, double basisPt, bool horizontal)
+        {
+            var style = rule.Style;
+            var emPt = ResolveFontSizePt(style, pageStyle);
+
+            double Len(string? value) => string.IsNullOrWhiteSpace(value)
+                ? 0
+                : Math.Max(0, DomParser.ParseLengthToPdfPoints(value, new PageLengthContext(emPt, remPt, basisPt)) ?? 0);
+
+            return horizontal
+                ? (Len(style.PaddingLeft), Len(style.PaddingRight))
+                : (Len(style.PaddingTop), Len(style.PaddingBottom));
+        }
+
+        /// <summary>
+        /// A margin box's own border width per axis (css-page-3 §5.1's whole box model - closes #943).
+        /// Unlike <see cref="MarginExtent"/>/<see cref="PaddingExtent"/>, <c>border-*-width</c> never
+        /// accepts a percentage, so this needs no containing-block basis, only the box's own em (for a
+        /// value like <c>0.1em</c>) via <see cref="ResolveBorderWidthPt"/>, which also treats
+        /// <c>border-*-style: none</c>/<c>hidden</c> as zero width regardless of any declared
+        /// <c>border-*-width</c> (CSS 2.1 §8.5.3).
+        /// </summary>
+        internal static (double Start, double End) BorderExtent(
+            MarginStyleRule rule, StyleDeclaration? pageStyle, double remPt, bool horizontal)
+        {
+            var style = rule.Style;
+            var emPt = ResolveFontSizePt(style, pageStyle);
+
+            double Width(string? widthValue, string? styleValue) => ResolveBorderWidthPt(widthValue, styleValue, emPt, remPt);
+
+            return horizontal
+                ? (Width(style.BorderLeftWidth, style.BorderLeftStyle), Width(style.BorderRightWidth, style.BorderRightStyle))
+                : (Width(style.BorderTopWidth, style.BorderTopStyle), Width(style.BorderBottomWidth, style.BorderBottomStyle));
+        }
+
+        /// <summary>
+        /// Resolves one margin-box border edge's width in points. In practice
+        /// <paramref name="widthValue"/> is never the bare <c>thin</c>/<c>medium</c>/<c>thick</c>
+        /// keyword by the time it reaches here - the <c>border-*-width</c> CSS-OM property already
+        /// resolves those to their UA-default pixel lengths (<see cref="Length.Thin"/>/
+        /// <see cref="Length.Medium"/>/<see cref="Length.Thick"/>: <c>1px</c>/<c>3px</c>/<c>5px</c>,
+        /// confirmed empirically) at declaration-set time, the same as it does for a normal element's
+        /// <c>border-*-width</c> (which is why <see cref="CssValueParser.GetActualBorderWidth"/>'s own
+        /// hardcoded thin/medium/thick branch is equally unreachable there) - so those three keyword
+        /// cases below are a defensive fallback, not the common path; the ordinary length parse handles
+        /// every real declaration.
+        /// <c>border-*-style</c>'s own initial value is <c>none</c> (CSS 2.1 §8.5.3), so an
+        /// <em>unset</em> style computes to <c>none</c> exactly like an explicit one - both force width
+        /// to zero regardless of any declared <c>border-*-width</c>, the same as <c>hidden</c>.
+        /// </summary>
+        internal static double ResolveBorderWidthPt(string? widthValue, string? styleValue, double emPt, double remPt)
+        {
+            if (string.IsNullOrWhiteSpace(styleValue) ||
+                string.Equals(styleValue, Keywords.None, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(styleValue, Keywords.Hidden, StringComparison.OrdinalIgnoreCase))
+                return 0;
+
+            var value = string.IsNullOrWhiteSpace(widthValue) ? Keywords.Medium : widthValue;
+            return value switch
+            {
+                Keywords.Thin => Length.Thin.Value * Length.PointsPerPx,
+                Keywords.Medium => Length.Medium.Value * Length.PointsPerPx,
+                Keywords.Thick => Length.Thick.Value * Length.PointsPerPx,
+                _ => Math.Max(0, DomParser.ParseLengthToPdfPoints(value, new PageLengthContext(emPt, remPt, 0)) ?? 0)
+            };
         }
 
         /// <summary>
@@ -193,12 +287,51 @@ namespace PeachPDF.Html.Core.Dom
         {
             var (left, right) = BoxModelExtent(rule, pageStyle, remPt, containingBlockWidthPt, horizontal: true);
             var (top, bottom) = BoxModelExtent(rule, pageStyle, remPt, containingBlockHeightPt, horizontal: false);
+            return Shrink(rect, left, top, right, bottom);
+        }
 
+        /// <summary>
+        /// Shrinks <paramref name="rect"/> to the margin box's own border-box - its outer slot
+        /// (<see cref="GetMarginBoxRect"/>) minus its own margin only, per <see cref="MarginExtent"/>.
+        /// The background/border paint rect: background's <c>background-origin</c>/<c>-clip:
+        /// border-box</c> layer positions/clips against exactly this, and border itself paints at this
+        /// rect's own four edges (see <see cref="PaintBorder"/>).
+        /// </summary>
+        internal static XRect ApplyMarginOnly(XRect rect, MarginStyleRule rule, StyleDeclaration? pageStyle,
+            double remPt, double containingBlockWidthPt, double containingBlockHeightPt)
+        {
+            var (left, right) = MarginExtent(rule, pageStyle, remPt, containingBlockWidthPt, horizontal: true);
+            var (top, bottom) = MarginExtent(rule, pageStyle, remPt, containingBlockHeightPt, horizontal: false);
+            return Shrink(rect, left, top, right, bottom);
+        }
+
+        /// <summary>
+        /// Shrinks <paramref name="rect"/> to the margin box's own padding-box - its border-box
+        /// (<see cref="ApplyMarginOnly"/>) minus its own border width. The default
+        /// <c>background-origin</c>/<c>-clip</c> positioning/clip area (CSS Backgrounds 3 §3.9/§3.10) -
+        /// distinct from the border-box now that a margin box's own border can be non-zero (#943).
+        /// </summary>
+        internal static XRect ApplyMarginAndBorder(XRect rect, MarginStyleRule rule, StyleDeclaration? pageStyle,
+            double remPt, double containingBlockWidthPt, double containingBlockHeightPt)
+        {
+            var (marginLeft, marginRight) = MarginExtent(rule, pageStyle, remPt, containingBlockWidthPt, horizontal: true);
+            var (marginTop, marginBottom) = MarginExtent(rule, pageStyle, remPt, containingBlockHeightPt, horizontal: false);
+            var (borderLeft, borderRight) = BorderExtent(rule, pageStyle, remPt, horizontal: true);
+            var (borderTop, borderBottom) = BorderExtent(rule, pageStyle, remPt, horizontal: false);
+            return Shrink(rect, marginLeft + borderLeft, marginTop + borderTop, marginRight + borderRight, marginBottom + borderBottom);
+        }
+
+        /// <summary>
+        /// Shared box-model rect shrink - <see cref="ApplyBoxModel"/>/<see cref="ApplyMarginOnly"/>/
+        /// <see cref="ApplyMarginAndBorder"/> differ only in which extents they resolve before calling
+        /// this. <c>XRect</c> refuses a negative extent; a caller's own positive-size guard then skips
+        /// the box, which is what an over-padded/over-bordered box should do anyway.
+        /// </summary>
+        private static XRect Shrink(XRect rect, double left, double top, double right, double bottom)
+        {
             if (left == 0 && right == 0 && top == 0 && bottom == 0)
                 return rect;
 
-            // XRect refuses a negative extent; the caller's own guard then skips the box, which is
-            // what an over-padded box should do anyway.
             return new XRect(rect.X + left, rect.Y + top,
                 Math.Max(0, rect.Width - left - right),
                 Math.Max(0, rect.Height - top - bottom));
@@ -277,6 +410,135 @@ namespace PeachPDF.Html.Core.Dom
 
             imageCache[contentValue] = image;
             return image;
+        }
+
+        /// <summary>
+        /// Paints one margin box's own <c>background</c> then <c>border</c>, in that order - matching
+        /// normal CSS box painting order and #943's own suggested placement ("between the background
+        /// fill and the content"). <paramref name="outerRect"/> is the box's slot as
+        /// <see cref="GetMarginBoxRect"/> allocated it (unconditionally, even for a box with no
+        /// <c>content</c> at all - a margin box can be a purely decorative band). Background layers pick
+        /// between the border-box (<see cref="ApplyMarginOnly"/>), padding-box
+        /// (<see cref="ApplyMarginAndBorder"/>) and content-box (<see cref="ApplyBoxModel"/>) rects per
+        /// their own <c>background-origin</c>/<c>-clip</c> value via
+        /// <see cref="LayeredBackgroundPainter.PaintAsync"/> - the same shared primitive the <c>@page</c>
+        /// box's own background uses (see that class's own remarks). Border paints as four independent
+        /// edge strokes rather than a mitred box (<see cref="PaintBorder"/>) - a margin box never
+        /// fragments across pages, so unlike a real <c>CssBox</c>'s border it has no shared corner with a
+        /// neighboring fragment to mitre into (#943's own flagged open question).
+        /// </summary>
+        internal static async Task PaintBackgroundAndBorder(
+            XGraphics g, XRect outerRect, XSize pageSize, MarginStyleRule rule, StyleDeclaration? pageStyle,
+            double remPt, double containingBlockWidthPt, double containingBlockHeightPt,
+            RAdapter adapter, HtmlContainerInt htmlContainer,
+            Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
+        {
+            // Root is only ever null before the document's initial layout, which has already run by the
+            // time page rendering (and so margin-box painting) begins - null here would mean there's no
+            // laid-out document at all to be generating a PDF page for (see PaintImage's own remarks,
+            // which this mirrors for consistency between the two).
+            if (htmlContainer.Root is not { } rootBox)
+                return;
+
+            var borderBoxRect = ApplyMarginOnly(outerRect, rule, pageStyle, remPt, containingBlockWidthPt, containingBlockHeightPt);
+            if (borderBoxRect.Width <= 0 || borderBoxRect.Height <= 0)
+                return;
+
+            // Built by shrinking borderBoxRect further (border, then padding) rather than independently
+            // re-deriving margin+border(+padding) from outerRect the way the public ApplyMarginAndBorder/
+            // ApplyBoxModel do - those stay as their own tested, single-purpose API for a caller that only
+            // needs one rect (e.g. Render's content-path ApplyBoxModel call below), but resolving all
+            // three margin-box rects here from the same outer slot would otherwise re-parse the same
+            // margin/border/padding declarations up to three times over.
+            var emPt = ResolveFontSizePt(rule.Style, pageStyle);
+            var (borderLeft, borderRight) = BorderExtent(rule, pageStyle, remPt, horizontal: true);
+            var (borderTop, borderBottom) = BorderExtent(rule, pageStyle, remPt, horizontal: false);
+            var paddingBoxRect = Shrink(borderBoxRect, borderLeft, borderTop, borderRight, borderBottom);
+
+            var (paddingLeft, paddingRight) = PaddingExtent(rule, pageStyle, remPt, containingBlockWidthPt, horizontal: true);
+            var (paddingTop, paddingBottom) = PaddingExtent(rule, pageStyle, remPt, containingBlockHeightPt, horizontal: false);
+            var contentBoxRect = Shrink(paddingBoxRect, paddingLeft, paddingTop, paddingRight, paddingBottom);
+
+            var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
+
+            RRect ToPixelRect(XRect r) => new(r.X * pixelsPerPoint, r.Y * pixelsPerPoint, r.Width * pixelsPerPoint, r.Height * pixelsPerPoint);
+
+            var borderBoxPx = ToPixelRect(borderBoxRect);
+            var paddingBoxPx = ToPixelRect(paddingBoxRect);
+            var contentBoxPx = ToPixelRect(contentBoxRect);
+            // background-attachment: fixed's positioning area is the page box, the same paginated-media
+            // convention the canvas (html/body) background already uses - not this one box's own rect.
+            var pageBoxPx = new RRect(0, 0, pageSize.Width * pixelsPerPoint, pageSize.Height * pixelsPerPoint);
+
+            RRect ResolvePositioningRect(string value) => value switch
+            {
+                Keywords.ContentBox => contentBoxPx,
+                Keywords.BorderBox => borderBoxPx,
+                // padding-box is the initial value (CSS Backgrounds 3 §3.9/§3.10) and what an
+                // unrecognized/empty value falls back to.
+                _ => paddingBoxPx,
+            };
+
+            await LayeredBackgroundPainter.PaintAsync(
+                graphicsAdapter, rule.Style, adapter, htmlContainer, rootBox, emPt,
+                ResolvePositioningRect, pageBoxPx, backgroundImageCache);
+
+            PaintBorder(graphicsAdapter, borderBoxPx, rule.Style, emPt, remPt, pixelsPerPoint, adapter);
+        }
+
+        /// <summary>
+        /// Paints a margin box's own border as four independent edge strokes at
+        /// <paramref name="borderBoxRect"/>'s own edges (full width/height each, so adjacent edges
+        /// overlap at the corners rather than mitre into each other - see
+        /// <see cref="PaintBackgroundAndBorder"/>'s own remarks on why that's the right call here), via
+        /// <see cref="BordersDrawHandler.DrawCollapsedSegment"/> - the same value-based, no-<c>CssBox</c>
+        /// primitive already used for collapsed table borders. <c>border-color</c>'s own initial value
+        /// is <c>currentcolor</c> (CSS Backgrounds 3 §4), so an edge with no explicit color (or an
+        /// explicit <c>currentcolor</c>) resolves against the box's own already-resolved text
+        /// <c>color</c>, defaulting to black exactly as <see cref="BuildBrush"/> already does for text
+        /// with no <c>color</c> of its own.
+        /// </summary>
+        private static void PaintBorder(RGraphics g, RRect borderBoxRect, StyleDeclaration style,
+            double emPt, double remPt, double pixelsPerPoint, RAdapter adapter)
+        {
+            // borderBoxRect is already known positive-size here - the sole caller, PaintBackgroundAndBorder,
+            // returns before this call otherwise. emPt is the same em-basis BorderExtent already used to
+            // charge this box's own space - a border-*-width of "0.1em" must paint at the identical width
+            // it was charged, or content would sit under (or float above) the stroke it made room for.
+            var colorParser = new CssValueParser(adapter);
+            var textColor = string.IsNullOrEmpty(style.Color) ? RColor.Black : colorParser.GetActualColor(style.Color);
+
+            RColor ResolveBorderColor(string? colorValue) =>
+                string.IsNullOrWhiteSpace(colorValue) ||
+                colorValue.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase)
+                    ? textColor
+                    : colorParser.GetActualColor(colorValue);
+
+            void PaintEdge(bool isHorizontal, RRect edgeRect, double widthPx, string? styleValue, string? colorValue)
+            {
+                if (!Map.LineStyles.TryGetValue(styleValue ?? string.Empty, out var lineStyle))
+                    lineStyle = LineStyle.None;
+
+                if (widthPx <= 0 || lineStyle is LineStyle.None or LineStyle.Hidden)
+                    return;
+
+                BordersDrawHandler.DrawCollapsedSegment(g, isHorizontal, edgeRect, lineStyle, ResolveBorderColor(colorValue), widthPx);
+            }
+
+            var topWidthPx = ResolveBorderWidthPt(style.BorderTopWidth, style.BorderTopStyle, emPt, remPt) * pixelsPerPoint;
+            var bottomWidthPx = ResolveBorderWidthPt(style.BorderBottomWidth, style.BorderBottomStyle, emPt, remPt) * pixelsPerPoint;
+            var leftWidthPx = ResolveBorderWidthPt(style.BorderLeftWidth, style.BorderLeftStyle, emPt, remPt) * pixelsPerPoint;
+            var rightWidthPx = ResolveBorderWidthPt(style.BorderRightWidth, style.BorderRightStyle, emPt, remPt) * pixelsPerPoint;
+
+            PaintEdge(true, new RRect(borderBoxRect.Left, borderBoxRect.Top, borderBoxRect.Width, topWidthPx),
+                topWidthPx, style.BorderTopStyle, style.BorderTopColor);
+            PaintEdge(true, new RRect(borderBoxRect.Left, borderBoxRect.Bottom - bottomWidthPx, borderBoxRect.Width, bottomWidthPx),
+                bottomWidthPx, style.BorderBottomStyle, style.BorderBottomColor);
+            PaintEdge(false, new RRect(borderBoxRect.Left, borderBoxRect.Top, leftWidthPx, borderBoxRect.Height),
+                leftWidthPx, style.BorderLeftStyle, style.BorderLeftColor);
+            PaintEdge(false, new RRect(borderBoxRect.Right - rightWidthPx, borderBoxRect.Top, rightWidthPx, borderBoxRect.Height),
+                rightWidthPx, style.BorderRightStyle, style.BorderRightColor);
         }
 
         /// <summary>
@@ -612,7 +874,7 @@ namespace PeachPDF.Html.Core.Dom
             };
         }
 
-        private static MarginStyleRule? FindMargin(IReadOnlyList<MarginStyleRule> margins, string name) =>
+        internal static MarginStyleRule? FindMargin(IReadOnlyList<MarginStyleRule> margins, string name) =>
             margins.FirstOrDefault(m =>
                 (m.Selector?.Text?.Trim().ToLowerInvariant() ?? "") == name);
 

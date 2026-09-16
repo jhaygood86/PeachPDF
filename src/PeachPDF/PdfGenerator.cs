@@ -844,6 +844,12 @@ namespace PeachPDF
             // document would re-decode (or re-fetch, for a network image) the same logo once per page.
             var marginBoxImageCache = new Dictionary<string, CssImage?>();
 
+            // @page box background image layers (LayeredBackgroundPainter) and margin-box background
+            // image layers share this same per-document cache shape/rationale - the same declaration
+            // (the same image) repeats identically on every page/every margin-box instance.
+            var pageBackgroundImageCache = new Dictionary<string, IReadOnlyList<CssImage>?>();
+            var marginBoxBackgroundImageCache = new Dictionary<string, IReadOnlyList<CssImage>?>();
+
             // One PDF page per fragmentainer. The fragment tree is layout's own output, so which
             // pages exist is a structural fact rather than a geometric rediscovery: a page-slot that
             // no printable fragment landed in was never built, per CSS Paged Media Level 3 §3.2
@@ -898,14 +904,44 @@ namespace PeachPDF
 
                 using var g = XGraphics.FromPdfPage(page);
 
+                var sheetRect = new RRect(0, 0,
+                    page.Width * _pdfSharpAdapter.PixelsPerPoint, page.Height * _pdfSharpAdapter.PixelsPerPoint);
+
+                // css-page-3 §3.1's page layer paint order is (bottommost first): page background,
+                // document canvas, page borders, document contents, page-margin boxes. This paints the
+                // @page box's own background - the new, bottommost layer - at the same full-sheet rect
+                // the canvas fill below already uses, one step earlier, so an opaque canvas background
+                // naturally occludes it (and a transparent/absent one lets it show through) with no
+                // extra precedence logic needed. The page box has no border/padding of its own
+                // (unimplemented), so background-origin/-clip are moot - always the full sheet.
+                if (container.HtmlContainerInt.Root is { } rootBoxForPageBackground && applicablePageStyle is not null)
+                {
+                    using var pageBackgroundGraphics = new GraphicsAdapter(_pdfSharpAdapter, g, _pdfSharpAdapter.PixelsPerPoint);
+                    // Same "no real inheritance chain" em-basis convention MarginBoxRenderer.ResolveFontSizePt's
+                    // own StyleDeclaration overload uses - falls back to DefaultFontResolver.FontSize, never
+                    // null, so a gradient with no @page font-size resolves against the same page-box-
+                    // appropriate basis a margin-box background gradient would, not the document root's own
+                    // (possibly quite different) actual font-size.
+                    var pageFontSizeStr = applicablePageStyle.FontSize;
+                    var pageGradientEmSizePt = string.IsNullOrEmpty(pageFontSizeStr)
+                        ? DefaultFontResolver.FontSize
+                        : MarginBoxRenderer.ResolveFontSizePt(pageFontSizeStr);
+
+                    await LayeredBackgroundPainter.PaintAsync(
+                        pageBackgroundGraphics, applicablePageStyle, _pdfSharpAdapter, container.HtmlContainerInt,
+                        rootBoxForPageBackground, pageGradientEmSizePt,
+                        resolvePositioningRect: _ => sheetRect,
+                        viewportRect: sheetRect,
+                        pageBackgroundImageCache);
+                }
+
                 if (canvasBackgroundBox != null)
                 {
                     // Must paint before the content clip below is applied (page.304's IntersectClip),
                     // so the fill reaches the true full page bleed (including the margin-box area), not
                     // just the content rect.
                     using var canvasGraphics = new GraphicsAdapter(_pdfSharpAdapter, g, _pdfSharpAdapter.PixelsPerPoint);
-                    FragmentPainter.PaintCanvasBackground(canvasGraphics, canvasBackgroundBox,
-                        new RRect(0, 0, page.Width * _pdfSharpAdapter.PixelsPerPoint, page.Height * _pdfSharpAdapter.PixelsPerPoint));
+                    FragmentPainter.PaintCanvasBackground(canvasGraphics, canvasBackgroundBox, sheetRect);
                 }
 
                 // Save state so the content transform can be undone for margin box rendering
@@ -976,13 +1012,34 @@ namespace PeachPDF
                         _pdfSharpAdapter,
                         applicablePageStyle,
                         container.HtmlContainerInt,
-                        marginBoxImageCache);
+                        marginBoxImageCache,
+                        marginBoxBackgroundImageCache);
                 }
 
-                if (fragmentainer.MarginBoxes.Count > 0)
+                // A rule can be content:element(...) with no matching position:running(...) anywhere (yet)
+                // - HtmlContainerInt.LayoutMarginBoxes then creates no MarginBoxFragment for it, but its
+                // own background/border must still paint (PaintElementMarginBoxes' own second loop), so
+                // this can't gate on fragmentainer.MarginBoxes alone.
+                var hasElementMarginBoxes = fragmentainer.MarginBoxes.Count > 0 || applicableMargins.Any(m =>
+                    !string.IsNullOrEmpty(m.Style.Content) && MarginBoxRenderer.TryParseElementFunction(m.Style.Content, out _, out _));
+                if (hasElementMarginBoxes)
                 {
-                    PaintElementMarginBoxes(g, _pdfSharpAdapter, container.HtmlContainerInt, fragmentainer.MarginBoxes);
+                    await PaintElementMarginBoxes(g, _pdfSharpAdapter, container.HtmlContainerInt, fragmentainer.MarginBoxes,
+                        new XSize(page.Width, page.Height), mL, mT, mR, mB, applicableMargins, applicablePageStyle,
+                        marginBoxBackgroundImageCache);
                 }
+            }
+
+            foreach (var cachedImage in pageBackgroundImageCache.Values)
+            {
+                if (cachedImage is null) continue;
+                foreach (var image in cachedImage) image.Dispose();
+            }
+
+            foreach (var cachedImage in marginBoxBackgroundImageCache.Values)
+            {
+                if (cachedImage is null) continue;
+                foreach (var image in cachedImage) image.Dispose();
             }
 
             foreach (var cachedImage in marginBoxImageCache.Values)
@@ -1156,16 +1213,71 @@ namespace PeachPDF
         /// point-space margin-box rect to a fresh, scoped <see cref="GraphicsAdapter"/> - <see cref="MarginBoxFragment.Content"/>'s
         /// coordinates are already in that same pixel space (<see cref="RunningElementLayout.LayoutRunningElementFor"/>
         /// laid it out directly against the pixel-converted rect), so no further conversion happens here.
+        /// <para>
+        /// The running element's own background/border (a real, laid-out <see cref="CssBox"/>) paints for
+        /// free through <c>PaintFragment</c> above - what doesn't is the margin-box RULE's own
+        /// background/border (e.g. <c>@top-center { content: element(chapter-title); background-color:
+        /// #ccc; }</c>), painted here via <see cref="MarginBoxRenderer.PaintBackgroundAndBorder"/> at the
+        /// same rect <see cref="HtmlContainerInt.LayoutMarginBoxes"/> derived for layout, recomputed
+        /// (<see cref="MarginBoxRenderer.FindMargin"/> by <see cref="MarginBoxFragment.BoxName"/>) since
+        /// it isn't retained on <see cref="MarginBoxFragment"/> itself - the same recomputation-not-
+        /// caching convention <see cref="MarginBoxRenderer.Render"/>'s own text path already follows.
+        /// </para>
+        /// <para>
+        /// A second pass then covers every <c>element(...)</c>-content rule that has NO
+        /// <see cref="MarginBoxFragment"/> at all - a page where the named running element hasn't been
+        /// reached yet (or never exists, e.g. a misspelled name) - since <c>LayoutMarginBoxes</c> only
+        /// creates a fragment once its running-element lookup actually resolves. That rule's own
+        /// background/border must still paint independent of content, the same as an ordinary
+        /// <c>content: none</c>/empty text-path box already does in <c>MarginBoxRenderer.Render</c> -
+        /// otherwise a margin box's background/border would silently depend on whether its content
+        /// happens to have resolved yet, which is not what "paints unconditionally" is supposed to mean.
+        /// </para>
         /// </remarks>
-        private static void PaintElementMarginBoxes(XGraphics g, RAdapter adapter, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes)
+        private static async Task PaintElementMarginBoxes(
+            XGraphics g, RAdapter adapter, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
+            XSize pageSize, double marginLeft, double marginTop, double marginRight, double marginBottom,
+            IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle,
+            Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
         {
             var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
             var painter = new FragmentPainter(htmlContainer);
+            var remPt = htmlContainer.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
+            var resolvedBoxNames = marginBoxes.Count > 0
+                ? new HashSet<string>(marginBoxes.Select(m => m.BoxName), StringComparer.OrdinalIgnoreCase)
+                : [];
+
+            async Task PaintRuleOwnBackgroundAndBorder(string boxName, MarginStyleRule rule)
+            {
+                var outerRect = MarginBoxRenderer.GetMarginBoxRect(boxName, pageSize,
+                    marginLeft, marginTop, marginRight, marginBottom, margins, pageStyle, remPt);
+                var cbWidth = MarginBoxRenderer.MarginAreaWidth(boxName, pageSize, marginLeft, marginRight);
+                var cbHeight = MarginBoxRenderer.MarginAreaHeight(boxName, pageSize, marginTop, marginBottom);
+
+                await MarginBoxRenderer.PaintBackgroundAndBorder(g, outerRect, pageSize, rule, pageStyle, remPt,
+                    cbWidth, cbHeight, adapter, htmlContainer, backgroundImageCache);
+            }
 
             foreach (var marginBox in marginBoxes)
             {
+                if (MarginBoxRenderer.FindMargin(margins, marginBox.BoxName) is { } rule)
+                    await PaintRuleOwnBackgroundAndBorder(marginBox.BoxName, rule);
+
                 painter.PaintFragment(graphicsAdapter, marginBox.Content);
+            }
+
+            foreach (var rule in margins)
+            {
+                var boxName = rule.Selector?.Text?.Trim().ToLowerInvariant();
+                if (string.IsNullOrEmpty(boxName) || resolvedBoxNames.Contains(boxName))
+                    continue;
+
+                var contentValue = rule.Style.Content;
+                if (string.IsNullOrEmpty(contentValue) || !MarginBoxRenderer.TryParseElementFunction(contentValue, out _, out _))
+                    continue;
+
+                await PaintRuleOwnBackgroundAndBorder(boxName, rule);
             }
         }
 
