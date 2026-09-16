@@ -6017,7 +6017,15 @@ var outlineHtml = "<!DOCTYPE html><html><head>" + OutlineCss + "</head><body>" +
         OutlineStyleSwatch("outset", "outset")
     ) +
     Row(
-        OutlineStyleSwatch("auto (renders as solid)", "auto")
+        "<td><div class=\"obox\" style=\"outline: 8px auto #4a90d9\"></div>" +
+        "<div class=\"desc\">auto (UA ring: solid, 2px, width ignored)</div>" +
+        "<div class=\"css\">outline: 8px auto #4a90d9</div></td>" +
+        "<td><div class=\"obox\" style=\"outline: 1px auto #4a90d9\"></div>" +
+        "<div class=\"desc\">auto, 1px declared - same ring</div>" +
+        "<div class=\"css\">outline: 1px auto #4a90d9</div></td>" +
+        "<td><div class=\"obox\" style=\"outline: 8px solid #4a90d9\"></div>" +
+        "<div class=\"desc\">8px solid, for comparison</div>" +
+        "<div class=\"css\">outline: 8px solid #4a90d9</div></td>"
     ) +
 
     "<h2>outline-offset</h2>" +
