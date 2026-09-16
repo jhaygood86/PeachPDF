@@ -786,6 +786,10 @@ namespace PeachPDF.Html.Core.Handlers
             path.CloseFigure();
         }
 
+        /// <summary>
+        /// Adds a patterned side from left to right or top to bottom. Unlike the clockwise fill-band
+        /// contours, this direction is observable because it determines which end receives dash phase 0.
+        /// </summary>
         private static void AddRoundedSideCenterline(
             RGraphicsPath path, Border side, RoundedContour center,
             RoundedBorderSides physical, RoundedBorderSides active, RoundedCornerAngles angles)
@@ -846,50 +850,50 @@ namespace PeachPDF.Html.Core.Handlers
                     break;
 
                 case Border.Bottom:
-                    if (physical.Right)
-                    {
-                        var startAngle = active.Right ? angles.BottomRight : 0;
-                        AddMove(path, center, RGraphicsPath.Corner.BottomRight, startAngle);
-                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomRight, startAngle, QuarterTurn);
-                    }
-                    else
-                    {
-                        path.AddMove(center.Rect.Right, center.Rect.Bottom);
-                    }
-
                     if (physical.Left)
                     {
-                        var endAngle = active.Left ? angles.BottomLeft : HalfTurn;
-                        LineTo(path, center, RGraphicsPath.Corner.BottomLeft, QuarterTurn);
-                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomLeft, QuarterTurn, endAngle);
-                    }
-                    else
-                    {
-                        path.LineTo(center.Rect.Left, center.Rect.Bottom);
-                    }
-                    break;
-
-                case Border.Left:
-                    if (physical.Bottom)
-                    {
-                        var startAngle = active.Bottom ? angles.BottomLeft : QuarterTurn;
+                        var startAngle = active.Left ? angles.BottomLeft : HalfTurn;
                         AddMove(path, center, RGraphicsPath.Corner.BottomLeft, startAngle);
-                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomLeft, startAngle, HalfTurn);
+                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomLeft, startAngle, QuarterTurn);
                     }
                     else
                     {
                         path.AddMove(center.Rect.Left, center.Rect.Bottom);
                     }
 
-                    if (physical.Top)
+                    if (physical.Right)
                     {
-                        var endAngle = active.Top ? angles.TopLeft : ThreeQuarterTurn;
-                        LineTo(path, center, RGraphicsPath.Corner.TopLeft, HalfTurn);
-                        AddCornerArc(path, center, RGraphicsPath.Corner.TopLeft, HalfTurn, endAngle);
+                        var endAngle = active.Right ? angles.BottomRight : 0;
+                        LineTo(path, center, RGraphicsPath.Corner.BottomRight, QuarterTurn);
+                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomRight, QuarterTurn, endAngle);
                     }
                     else
                     {
-                        path.LineTo(center.Rect.Left, center.Rect.Top);
+                        path.LineTo(center.Rect.Right, center.Rect.Bottom);
+                    }
+                    break;
+
+                case Border.Left:
+                    if (physical.Top)
+                    {
+                        var startAngle = active.Top ? angles.TopLeft : ThreeQuarterTurn;
+                        AddMove(path, center, RGraphicsPath.Corner.TopLeft, startAngle);
+                        AddCornerArc(path, center, RGraphicsPath.Corner.TopLeft, startAngle, HalfTurn);
+                    }
+                    else
+                    {
+                        path.AddMove(center.Rect.Left, center.Rect.Top);
+                    }
+
+                    if (physical.Bottom)
+                    {
+                        var endAngle = active.Bottom ? angles.BottomLeft : QuarterTurn;
+                        LineTo(path, center, RGraphicsPath.Corner.BottomLeft, HalfTurn);
+                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomLeft, HalfTurn, endAngle);
+                    }
+                    else
+                    {
+                        path.LineTo(center.Rect.Left, center.Rect.Bottom);
                     }
                     break;
 

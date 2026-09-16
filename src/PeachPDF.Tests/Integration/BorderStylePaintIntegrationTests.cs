@@ -882,11 +882,13 @@ namespace PeachPDF.Tests.Integration
             {
                 Assert.Equal(borderRect.Left, stroke.Points.Min(point => point.X), 3);
                 Assert.Equal(borderRect.Right, stroke.Points.Max(point => point.X), 3);
+                Assert.True(stroke.Points[0].X < stroke.Points[^1].X);
             }
             else
             {
                 Assert.Equal(borderRect.Top, stroke.Points.Min(point => point.Y), 3);
                 Assert.Equal(borderRect.Bottom, stroke.Points.Max(point => point.Y), 3);
+                Assert.True(stroke.Points[0].Y < stroke.Points[^1].Y);
             }
         }
 

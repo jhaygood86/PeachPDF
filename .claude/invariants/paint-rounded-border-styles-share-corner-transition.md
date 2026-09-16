@@ -9,7 +9,8 @@ The rounded contours and `RoundedCornerAngles` define that shared geometry. Fill
 bands with `AddRoundedBandSide`; dotted and dashed styles follow `AddRoundedSideCenterline` and clip
 the stroke to the corresponding full-width side band. The clip is load-bearing for round dots,
 because a dot cap extends beyond its centerline endpoint even when the path itself ends exactly at
-the transition.
+the transition. Keep centerlines left-to-right for horizontal sides and top-to-bottom for vertical
+sides: reversing otherwise-identical geometry reverses the visible dash phase.
 
 Uniform solid, dotted/dashed, and double borders are the intentional exception: they have no style,
 color, or width transition, so `TryDrawUniformBorder` may paint one continuous outline around the

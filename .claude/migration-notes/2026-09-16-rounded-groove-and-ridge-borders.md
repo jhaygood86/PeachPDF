@@ -5,4 +5,5 @@ stroke and lost its two-tone beveled appearance. The same fallback still occurre
 rounded-bevel implementation whenever another visible side used a different style. It now follows
 the rounded corners as two half-width bands, including when side widths/colors differ, any other
 border styles share the box, or a sliced fragment omits an edge. At a shared corner the wider
-adjoining edge owns proportionally more of the curve.
+adjoining edge owns proportionally more of the curve. Patterned sides in a mixed rounded border
+advance left-to-right or top-to-bottom, matching browser placement of the leftover gap.
