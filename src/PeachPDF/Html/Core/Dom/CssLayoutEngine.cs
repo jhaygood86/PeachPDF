@@ -3064,6 +3064,14 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>::first-line</c> font or line-height can differ from the owner's normal style, and per
         /// CSS Pseudo 4 it replaces the root inline box's own contribution rather than joining it.
         /// </para>
+        /// <para>
+        /// The strut itself is skipped entirely when <paramref name="blockBox"/>.<see
+        /// cref="CssBox.IsReplacedBlockWrapper"/>: that box is never a real inline formatting context an
+        /// author could see, only the single-child bookkeeping wrapper built around a <c>display: block</c>
+        /// replaced element so it has somewhere to be an atomic inline word. Reserving the strut there
+        /// re-added the exact gap <c>display: block</c> exists to remove, and the excess compounded once
+        /// per element (issue #1127).
+        /// </para>
         /// </remarks>
         private static LineBoxExtent LineBoxContributionOf(CssRect word, CssBox blockBox)
         {
@@ -3074,7 +3082,9 @@ namespace PeachPDF.Html.Core.Dom
             var ownerBox = word.OwnerBox;
             var strutStyle = word.FirstLineStyle ?? blockBox;
 
-            var extent = HalfLeadingExtentOf(strutStyle.ActualFont, strutStyle.ActualLineHeight);
+            var extent = blockBox.IsReplacedBlockWrapper
+                ? default
+                : HalfLeadingExtentOf(strutStyle.ActualFont, strutStyle.ActualLineHeight);
 
             // A replaced element's own line-height does not contribute; its margin box is added by
             // GrowLineToItsExtent instead. A non-replaced inline ancestor around it still owns an
