@@ -593,6 +593,124 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         }
 
         [Fact]
+        public void TextAlignAllMatchParentLegal()
+        {
+            var snippet = "text-align-all: match-parent";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-align-all", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAlignAllProperty>(property);
+            var concrete = (TextAlignAllProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("match-parent", concrete.Value);
+        }
+
+        [Fact]
+        public void TextAlignLastMatchParentLegal()
+        {
+            var snippet = "text-align-last: match-parent";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-align-last", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAlignLastProperty>(property);
+            var concrete = (TextAlignLastProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("match-parent", concrete.Value);
+        }
+
+        [Fact]
+        public void TextAlignShorthandJustifyAllLegal()
+        {
+            var snippet = "text-align: justify-all";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-align", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAlignProperty>(property);
+            var concrete = (TextAlignProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("justify-all", concrete.Value);
+        }
+
+        [Fact]
+        public void TextAlignShorthandMatchParentLegal()
+        {
+            var snippet = "text-align: match-parent";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-align", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAlignProperty>(property);
+            var concrete = (TextAlignProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("match-parent", concrete.Value);
+        }
+
+        [Fact]
+        public void TextAlignShorthandPlainValueSetsTextAlignAllOnly()
+        {
+            var style = ParseDeclarations("text-align: center");
+            Assert.Equal("center", style.TextAlignAll);
+            // "initial", not "auto": ShorthandProperty.Export resets an omitted longhand by re-parsing
+            // the literal CSS-wide "initial" keyword, which StyleDeclaration serializes back verbatim
+            // (Property.Value's own contract) rather than resolving to the property's real default text
+            // - the same behavior any other shorthand's omitted longhand has here. The render-layer
+            // CssBox property is what actually resolves to text-align-last's true default (Auto); see
+            // TextAlignLastTests.TextAlignShorthand_OwnPlainTextAlign_ResetsInheritedTextAlignLast for
+            // that end-to-end proof.
+            Assert.Equal("initial", style.TextAlignLast);
+        }
+
+        [Fact]
+        public void TextAlignShorthandJustifyAllSetsBothLonghands()
+        {
+            var style = ParseDeclarations("text-align: justify-all");
+            Assert.Equal("justify", style.TextAlignAll);
+            Assert.Equal("justify", style.TextAlignLast);
+        }
+
+        [Fact]
+        public void TextAlignShorthandMatchParentSetsBothLonghands()
+        {
+            var style = ParseDeclarations("text-align: match-parent");
+            Assert.Equal("match-parent", style.TextAlignAll);
+            Assert.Equal("match-parent", style.TextAlignLast);
+        }
+
+        /// <summary>
+        /// Reproduces #1027's own example: a plain <c>text-align</c> value on a later declaration must
+        /// reset an already-set <c>text-align-last</c>, per css-text-3 §6.1's shorthand semantics -
+        /// PeachPDF used to treat the two as independent longhands, so this never happened. See the
+        /// "initial" vs "auto" note on <see cref="TextAlignShorthandPlainValueSetsTextAlignAllOnly"/>.
+        /// </summary>
+        [Fact]
+        public void TextAlignShorthandPlainValueResetsAnExistingTextAlignLast()
+        {
+            var style = ParseDeclarations("text-align-last: justify; text-align: center");
+            Assert.Equal("center", style.TextAlignAll);
+            Assert.Equal("initial", style.TextAlignLast);
+        }
+
+        [Fact]
+        public void TextAlignStyleDeclarationRoundTripsToABareKeyword()
+        {
+            var style = ParseDeclarations("text-align: center");
+            Assert.Equal("center", style.TextAlign);
+        }
+
+        [Fact]
+        public void TextAlignStyleDeclarationRoundTripsJustifyAll()
+        {
+            var style = ParseDeclarations("text-align: justify-all");
+            Assert.Equal("justify-all", style.TextAlign);
+        }
+
+        [Fact]
+        public void TextAlignStyleDeclarationRoundTripsMatchParent()
+        {
+            var style = ParseDeclarations("text-align: match-parent");
+            Assert.Equal("match-parent", style.TextAlign);
+        }
+
+        [Fact]
         public void TextAnchorStartLegal()
         {
             var snippet = "text-anchor: start";

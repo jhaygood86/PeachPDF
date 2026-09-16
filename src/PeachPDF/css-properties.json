@@ -1957,7 +1957,8 @@
       }
     },
     {
-      "name": "text-align",
+      "name": "text-align-all",
+      "comment": "css-text-3 §6.2. The longhand text-align's shorthand actually resolves to (PeachPDF.CSS.TextAlignProperty) - a plain text-align value sets this and resets text-align-last to auto; justify-all/match-parent set both. See .claude/recent-fixes/ for the shorthand conversion.",
       "inherited": true,
       "initialValue": "start",
       "cssDataType": {
@@ -1967,15 +1968,16 @@
         "fallback": "HorizontalAlignment.Start"
       },
       "html": {
-        "propertyPath": "TextAlign",
+        "propertyPath": "TextAlignAll",
+        "invalidates": "InvalidateTextAlignAll",
         "csharpDataType": "CssProperty<HorizontalAlignment>",
         "area": "TextArea",
-        "getterExpression": "{box}.TextAlign.ToString()"
+        "getterExpression": "{box}.TextAlignAll.ToString()"
       }
     },
     {
       "name": "text-align-last",
-      "comment": "css-text-3 §6.3. Selects the alignment of a line that ends a paragraph - the block's last line, and the last line before a forced break (CssLineBox.PrecedesForcedBreak) - and, per §6.4.3, of any justified line with no justification opportunity to expand at. 'auto' means 'whatever text-align says, except that justify becomes start'. Treated as an independent inherited longhand rather than as half of a text-align shorthand, which is what every shipping browser does (none implements text-align-all); see .claude/accepted-gaps/text-align-is-not-a-shorthand-of-text-align-all-and-last.md.",
+      "comment": "css-text-3 §6.3. Selects the alignment of a line that ends a paragraph - the block's last line, and the last line before a forced break (CssLineBox.PrecedesForcedBreak) - and, per §6.4.3, of any justified line with no justification opportunity to expand at. 'auto' means 'whatever text-align-all says, except that justify becomes start'.",
       "inherited": true,
       "initialValue": "auto",
       "cssDataType": {
@@ -1986,6 +1988,7 @@
       },
       "html": {
         "propertyPath": "TextAlignLast",
+        "invalidates": "InvalidateTextAlignLast",
         "csharpDataType": "CssProperty<TextAlignLast>",
         "area": "TextArea",
         "getterExpression": "{box}.TextAlignLast.ToString()"

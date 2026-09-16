@@ -7,6 +7,7 @@ namespace PeachPDF.CSS
         Right,
         Justify,
         Start,
-        End
+        End,
+        MatchParent
     }
 }

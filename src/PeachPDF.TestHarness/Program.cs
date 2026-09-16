@@ -6470,6 +6470,9 @@ const string TextAlignLastCss = """
     .last-center { text-align-last: center }
     .last-right { text-align-last: right }
     .rtl { direction: rtl }
+    .justify-all { text-align: justify-all; width: 360px }
+    .match-parent-outer { direction: rtl; border: 1px solid #999; padding: 8px; width: 380px; font-family: Arial, sans-serif; font-size: 9pt }
+    .match-parent-outer p { width: auto; text-align: match-parent; background: #eef6fb; margin: 0 0 6px }
     </style>
     """;
 
@@ -6495,10 +6498,20 @@ var textAlignLastHtml = "<!DOCTYPE html><html><head>" + TextAlignLastCss + "</he
     "<h2>direction: rtl - the default text-align-last: auto is <i>start</i>, which is the right edge</h2>" +
     "<p class=\"rtl\">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.</p>" +
 
+    "<h2>text-align is a real shorthand over text-align-all/text-align-last (issue #1027)</h2>" +
+    "<p>Plain text-align: justify (default text-align-last: auto) - the closing line stays ragged.<br>Second sentence to give this paragraph a forced break.</p>" +
+    "<p class=\"justify-all\">text-align: justify-all sets text-align-all AND text-align-last to justify - even the closing line stretches to the full measure.<br>Second sentence, same treatment.</p>" +
+
+    "<h2>text-align: match-parent resolves against the *parent's* own direction (issue #1027)</h2>" +
+    "<div class=\"match-parent-outer\">" +
+    "<p>This RTL container's own child paragraphs declare <code>text-align: match-parent</code> with no direction of their own.</p>" +
+    "<p>Match-parent's <i>start</i> resolves against the container's RTL direction, so both paragraphs pack against the physical right edge - the same result an explicit <code>text-align: right</code> would give here, but automatically following whichever direction the container ends up with.</p>" +
+    "</div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("text_align_last", "Typography & Text", "Justification & text-align-last",
-    "text-align: justify leaves every line that ends a paragraph ragged - the block's last line and the last line before a <br> - and text-align-last (auto, justify, center, right) says how those lines are aligned instead.",
+    "text-align: justify leaves every line that ends a paragraph ragged - the block's last line and the last line before a <br> - and text-align-last (auto, justify, center, right) says how those lines are aligned instead. text-align is a real shorthand (CSS Text 3 §6.1) over text-align-all and text-align-last: justify-all forces both to justify, and match-parent resolves a logical start/end against the parent's own direction rather than the element's own.",
     textAlignLastHtml, pdfConfig);
 
 // --- writing-mode (vertical-rl/vertical-lr) showcase ---

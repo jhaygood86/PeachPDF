@@ -43,7 +43,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(Wrap("<div id='d' align='left'>x</div>"));
             var div = FindById(root, "d")!;
 
-            Assert.Equal(HorizontalAlignment.Left, div.TextAlign.Value);
+            Assert.Equal(HorizontalAlignment.Left, div.TextAlignAll.Value);
         }
 
         [Fact]
@@ -52,7 +52,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(Wrap("<div id='d' align='center'>x</div>"));
             var div = FindById(root, "d")!;
 
-            Assert.Equal(HorizontalAlignment.Center, div.TextAlign.Value);
+            Assert.Equal(HorizontalAlignment.Center, div.TextAlignAll.Value);
         }
 
         [Fact]
@@ -61,7 +61,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(Wrap("<div id='d' align='right'>x</div>"));
             var div = FindById(root, "d")!;
 
-            Assert.Equal(HorizontalAlignment.Right, div.TextAlign.Value);
+            Assert.Equal(HorizontalAlignment.Right, div.TextAlignAll.Value);
         }
 
         [Fact]
@@ -70,7 +70,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(Wrap("<div id='d' align='justify'>x</div>"));
             var div = FindById(root, "d")!;
 
-            Assert.Equal(HorizontalAlignment.Justify, div.TextAlign.Value);
+            Assert.Equal(HorizontalAlignment.Justify, div.TextAlignAll.Value);
         }
 
         [Fact]
@@ -177,7 +177,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(Wrap("<div id='d' align='LEFT'>x</div>"));
             var div = FindById(root, "d")!;
 
-            Assert.Equal(HorizontalAlignment.Left, div.TextAlign.Value);
+            Assert.Equal(HorizontalAlignment.Left, div.TextAlignAll.Value);
         }
 
         [Fact]
