@@ -94,6 +94,36 @@ namespace PeachPDF.Tests.Integration
             Assert.True(outer.X1 > near.X1, "vertical-rl's double overline should grow further right (toward 'over')");
         }
 
+        [Fact]
+        public async Task Wavy_FallsBackToAPlainVerticalStroke_RatherThanAMispositionedHorizontalWave()
+        {
+            // WavyDecorationRenderer always reasons in physical X/Y, so it would draw a horizontal wave
+            // in the wrong place under a true vertical writing mode - StrokeDecorationSegment falls back
+            // to a plain solid line there instead (see its own remarks).
+            var (_, rect, g) = await PaintAsync("vertical-rl", "underline wavy");
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPathCall>());
+            Assert.Equal(line.X1, line.X2, 3); // still a true vertical stroke: constant X
+            Assert.Equal(rect.Top, line.Y1, 3);
+            Assert.Equal(rect.Bottom, line.Y2, 3);
+        }
+
+        [Fact]
+        public async Task Wavy_DrawsARealWaveUnderHorizontalWritingMode()
+        {
+            // The contrast case: horizontal-tb is unaffected by the vertical fallback above.
+            var (root, container) = await LayoutHarness.LayoutAsync(Wrap(
+                "<span id='s' style='text-decoration:underline wavy'>total</span>"));
+            var s = LayoutHarness.FindById(root, "s")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, s, g);
+
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawPathCall>());
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static async Task<(PeachPDF.Html.Core.Dom.CssBox Span, PeachPDF.Html.Adapters.Entities.RRect Rect, TestRecordingGraphics Graphics)>
