@@ -284,6 +284,16 @@ static string SideSwatch(string desc, string inlineCss) =>
     $"<div class=\"css\">{inlineCss}</div>" +
     "</td>";
 
+static string RoundedPatternPhaseComparisonSwatch() =>
+    "<td>" +
+    "<div class=\"phasepair\">" +
+    "<div class=\"phasebox\" style=\"width:240px\"></div>" +
+    "<div class=\"phasebox second\" style=\"width:245px\"></div>" +
+    "</div>" +
+    "<div class=\"desc\">one dot / two dots</div>" +
+    "<div class=\"css\">same rounded border at width: 240px / 245px</div>" +
+    "</td>";
+
 /// <summary>A zero-content box whose four borders meet at its center - the classic "border triangle".</summary>
 static string TriangleSwatch(string desc, string colors) =>
     "<td>" +
@@ -5731,6 +5741,9 @@ const string BorderStyleCss = """
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .bsbox { height: 48px; background: #eee; margin-bottom: 3px }
+    .phasepair { position: relative; height: 38px; margin-bottom: 3px }
+    .phasebox { position: absolute; left: 0; top: 0; height: 48px; border: 14px #d94a4a; border-style: double dotted inset outset; border-radius: 28px; background: #eee; transform: scale(.5); transform-origin: top left }
+    .phasebox.second { left: 140px }
     .wbox { height: 16px; background: #eee; margin-bottom: 1px }
     .wlabel { font-size: 6pt; color: #888; margin-bottom: 4px }
     .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
@@ -5862,8 +5875,9 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
     Row(
         SideSwatch("groove / solid / ridge / dashed",
             "border: 18px #4a90d9; border-style: groove solid ridge dashed; border-radius: 36px"),
-        SideSwatch("double / dotted / inset / outset",
-            "border: 14px #d94a4a; border-style: double dotted inset outset; border-radius: 28px")
+        // Chrome fits the dotted side against the complete rounded centerline. A two-pixel width
+        // change shifts that global phase across the top-right transition.
+        RoundedPatternPhaseComparisonSwatch()
     ) +
 
     "</body></html>";
