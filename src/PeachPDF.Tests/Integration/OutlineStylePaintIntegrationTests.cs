@@ -6,6 +6,7 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.Tests.TestSupport;
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -80,29 +81,116 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(rect.Top - 3, ys.Min(), 1);
         }
 
-        [Fact]
-        public async Task OutlineStyleAuto_PaintsIdenticallyToSolid()
+        /// <summary>
+        /// The UA ring's thickness in points - 2 CSS px, the width Chrome draws an <c>auto</c> outline
+        /// at whatever the author declares. Layout space is 1pt here (the harness leaves
+        /// <c>PixelsPerInch</c> at its 72 default), so no <c>PixelsPerPoint</c> factor applies.
+        /// </summary>
+        private const double AutoRingWidthPt = 2 * 0.75;
+
+        [Theory]
+        [InlineData("outline-width: 5pt")]
+        [InlineData("outline-width: 1px")]
+        [InlineData("outline-width: 0")]
+        [InlineData("outline-width: 20px")]
+        [InlineData("outline-width: thick")]
+        [InlineData("")]
+        public async Task OutlineStyleAuto_IgnoresTheDeclaredOutlineWidth(string widthDecl)
         {
+            // CSS-UI-4 4: "The outline-width property is ignored when outline-style is auto." The
+            // sentence is normative and unconditional, so every declaration here - including a declared
+            // zero, and including no declaration at all - has to produce the very same ring. Measured
+            // against Chrome, which renders 0/1px/8px/20px auto at an identical 2 CSS px.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='b' style='width:40pt; height:40pt; outline-style: auto; {widthDecl}; " +
+                "outline-color: rgb(9,9,9)'>x</div>"));
+            var div = LayoutHarness.FindById(root, "b")!;
+            Assert.Equal(OutlineStyle.Auto, div.OutlineStyle.Value);
+            var rect = FragmentPaintHarness.FragmentOf(container, div).Lines[0].Rect;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var polys = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
+            Assert.Equal(4, polys.Count);
+            Assert.All(polys, p => Assert.Equal(RColor.FromArgb(9, 9, 9), p.Color));
+
+            // Chrome centres the auto ring on the rectangle outline-offset inflates the border box to,
+            // rather than seating it wholly outside that rectangle the way every other style sits - so
+            // at the default zero offset it straddles the border edge, half a ring either side.
+            var half = AutoRingWidthPt / 2;
+            var top = polys.OrderBy(p => p.Points.Average(pt => pt.Y)).First();
+            var ys = top.Points.Select(pt => pt.Y).ToList();
+            Assert.Equal(rect.Top + half, ys.Max(), 3);
+            Assert.Equal(rect.Top - half, ys.Min(), 3);
+
+            var right = polys.OrderByDescending(p => p.Points.Average(pt => pt.X)).First();
+            var rxs = right.Points.Select(pt => pt.X).ToList();
+            Assert.Equal(rect.Right - half, rxs.Min(), 3);
+            Assert.Equal(rect.Right + half, rxs.Max(), 3);
+        }
+
+        [Fact]
+        public async Task OutlineStyleAuto_PaintsAsSolid_AtTheUaWidthCentredOnTheOffsetEdge()
+        {
+            // "User agents may treat auto as solid" licenses the style, not the width - so auto is the
+            // same four mitred solid quads any solid outline paints, but at the UA's own width and
+            // centred on the offset edge. An equal-width solid outline pulled back half a width is
+            // exactly that ring, which makes solid the oracle for auto's geometry.
+            const string box = "width:40pt; height:40pt; outline-color: rgb(9,9,9)";
+
             var (autoRoot, autoContainer) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
-                "<div id='b' style='width:40pt; height:40pt; outline-style: auto; outline-width: 5pt; outline-color: rgb(9,9,9)'>x</div>"));
-            var autoDiv = LayoutHarness.FindById(autoRoot, "b")!;
-            Assert.Equal(OutlineStyle.Auto, autoDiv.OutlineStyle.Value);
-
+                $"<div id='b' style='{box}; outline-style: auto; outline-width: 5pt; outline-offset: 7pt'>x</div>"));
             var autoG = new TestRecordingGraphics();
-            FragmentPaintHarness.PaintBox(autoContainer, autoDiv, autoG);
+            FragmentPaintHarness.PaintBox(autoContainer, LayoutHarness.FindById(autoRoot, "b")!, autoG);
 
+            // Invariant culture, deliberately: a decimal comma reaches the parser as invalid CSS, and
+            // outline-width/-offset then silently fall back to medium/0 - a green test that compares
+            // auto against the wrong ring entirely.
+            var solidWidth = AutoRingWidthPt.ToString(CultureInfo.InvariantCulture);
+            var solidOffset = (7 - AutoRingWidthPt / 2).ToString(CultureInfo.InvariantCulture);
             var (solidRoot, solidContainer) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
-                "<div id='b' style='width:40pt; height:40pt; outline-style: solid; outline-width: 5pt; outline-color: rgb(9,9,9)'>x</div>"));
-            var solidDiv = LayoutHarness.FindById(solidRoot, "b")!;
-
+                $"<div id='b' style='{box}; outline-style: solid; outline-width: {solidWidth}pt; " +
+                $"outline-offset: {solidOffset}pt'>x</div>"));
             var solidG = new TestRecordingGraphics();
-            FragmentPaintHarness.PaintBox(solidContainer, solidDiv, solidG);
+            FragmentPaintHarness.PaintBox(solidContainer, LayoutHarness.FindById(solidRoot, "b")!, solidG);
 
             var autoPolys = autoG.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
             var solidPolys = solidG.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
             Assert.Equal(4, autoPolys.Count);
             Assert.Equal(solidPolys.Select(p => p.Color), autoPolys.Select(p => p.Color));
             Assert.Equal(solidPolys.Select(p => p.Points), autoPolys.Select(p => p.Points));
+        }
+
+        [Fact]
+        public async Task OutlineStyleAuto_RingWidth_IsInvariantUnderNonDefaultPixelsPerInch()
+        {
+            // Chrome's ring is 2 *CSS* px, not 2 device px - it measures 4 device px at a 2x device
+            // scale factor. The UA width is therefore a CSS length like any other and has to carry the
+            // same PixelsPerPoint inflation a declared width would have (issue #856's correction,
+            // applied to a constant this time rather than to a cascaded value).
+            const string html = "<div id='b' style='width:40pt; height:40pt; outline-style: auto; " +
+                                "outline-color: rgb(9,9,9)'>x</div>";
+
+            static double RingThickness(TestRecordingGraphics g, double pixelsPerPoint)
+            {
+                var top = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
+                    .OrderBy(p => p.Points.Average(pt => pt.Y)).First();
+                var ys = top.Points.Select(pt => pt.Y).ToList();
+                return (ys.Max() - ys.Min()) / pixelsPerPoint;
+            }
+
+            var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
+            var gDefault = new TestRecordingGraphics { PixelsPerPointOverride = 1.0 };
+            FragmentPaintHarness.PaintBox(containerDefault, LayoutHarness.FindById(rootDefault, "b")!, gDefault);
+
+            var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
+            var gScaled = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
+            FragmentPaintHarness.PaintBox(containerScaled, LayoutHarness.FindById(rootScaled, "b")!, gScaled);
+
+            Assert.Equal(AutoRingWidthPt, RingThickness(gDefault, 1.0), 3);
+            Assert.Equal(AutoRingWidthPt, RingThickness(gScaled, 2.0), 3);
         }
 
         [Fact]

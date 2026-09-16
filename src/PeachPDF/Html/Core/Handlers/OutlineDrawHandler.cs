@@ -15,7 +15,9 @@ namespace PeachPDF.Html.Core.Handlers
     /// so each side's ring quad is built directly from the box's own two nested "reach" rectangles
     /// (one at <c>outline-offset</c>, one at <c>outline-offset + outline-width</c>) rather than
     /// <see cref="BordersDrawHandler"/>'s per-side width bookkeeping. <c>outline-style: auto</c> is
-    /// rendered identically to <c>solid</c> (CSS-UI-4 leaves <c>auto</c>'s actual appearance UA-defined).
+    /// drawn as <c>solid</c> (CSS-UI-4 leaves <c>auto</c>'s actual appearance UA-defined) at the UA's
+    /// own width rather than the declared one, which the same section says is ignored - see
+    /// <see cref="AutoRingWidth"/>.
     /// Never follows <c>border-radius</c> - CSS-UI-4 only says a UA <i>may</i> do so.
     /// </summary>
     internal static class OutlineDrawHandler
@@ -45,13 +47,26 @@ namespace PeachPDF.Html.Core.Handlers
             var style = box.OutlineStyle.Value;
             if (style is OutlineStyle.None or OutlineStyle.Hidden) return;
 
-            var width = box.ActualOutlineWidth;
-            if (width <= 0) return;
-
             var isInvert = string.Equals(box.OutlineColor, Keywords.Invert, StringComparison.OrdinalIgnoreCase);
             var color = isInvert ? RColor.White : box.ActualOutlineColor;
             var offset = box.ActualOutlineOffset;
             var effectiveStyle = style == OutlineStyle.Auto ? OutlineStyle.Solid : style;
+
+            double width;
+            if (style == OutlineStyle.Auto)
+            {
+                // CSS-UI-4 §4: "The outline-width property is ignored when outline-style is auto."
+                // That sentence is normative and unconditional - the neighbouring "User agents may treat
+                // auto as solid" licenses the *style*, not the width - so the declared width never
+                // reaches the ring, not even a declared zero (Chrome paints `outline: 0 auto` too).
+                width = AutoRingWidth(g);
+                offset -= width / 2;
+            }
+            else
+            {
+                width = box.ActualOutlineWidth;
+                if (width <= 0) return;
+            }
 
             if (isInvert) g.PushBlendMode(RBlendMode.Difference);
 
@@ -64,6 +79,28 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         #region Private methods
+
+        /// <summary>
+        /// The width of the <c>auto</c> ring, in the caller's raw layout-space units. CSS-UI-4 leaves
+        /// <c>auto</c>'s appearance entirely to the UA once it has said the author's own
+        /// <c>outline-width</c> does not apply, so this is Chrome's focus ring measured off its
+        /// rasterization: 2 CSS px, unchanged by the declared width (<c>0</c>, <c>1px</c>, <c>8px</c>
+        /// and <c>20px</c> all render the same ring) and unchanged by device scale (4 device px at a
+        /// 2x device scale factor, i.e. still 2 CSS px).
+        /// </summary>
+        /// <remarks>
+        /// Chrome additionally centres this ring on the rectangle <c>outline-offset</c> inflates the
+        /// border box to, rather than seating it wholly outside that rectangle the way every other
+        /// style sits - so with the default zero offset the ring straddles the border edge, one CSS px
+        /// either side. <see cref="DrawOutline"/> reproduces that by pulling the offset back half a
+        /// width, which turns the ordinary outward-facing band into a centred one without any of the
+        /// ring geometry below needing to know about it.
+        /// </remarks>
+        private static double AutoRingWidth(RGraphics g) =>
+            AutoRingWidthInCssPixels * Length.PointsPerPx * g.PixelsPerPoint;
+
+        /// <summary>Chrome's own focus-ring thickness - see <see cref="AutoRingWidth"/>.</summary>
+        private const double AutoRingWidthInCssPixels = 2;
 
         private static void DrawSide(
             Border side, RGraphics g, RRect rect, OutlineStyle style, RColor color, double width, double offset,
