@@ -1,5 +1,10 @@
 # A double overline flush against the top of a page loses its upper stroke
 
+Tracked by [#1124](https://github.com/jhaygood86/PeachPDF/issues/1124). This is a page-geometry
+limitation rather than a spec deviation in the strict sense — nothing in css-text-decor-3 says where
+a decoration goes when there is no page left to draw it on — but it carries an issue for consistency
+with the gap files beside it.
+
 `text-decoration-style: double` grows an overline's pair **upward**, which is what browsers do. That
 makes it the one decoration that reaches above the box it belongs to, and with no headroom above the
 text the upper stroke lands outside the page and is not drawn.
