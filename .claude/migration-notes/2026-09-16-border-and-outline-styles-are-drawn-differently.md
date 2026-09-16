@@ -48,6 +48,9 @@ same markup previews in a browser.
   shaded half-width bands.
 
 `outline-style` uses the same rendering throughout, so all of the above applies to outlines as well,
-and to the borders of a `border-collapse: collapse` table.
+and to the borders of a `border-collapse: collapse` table. An outline is drawn exactly as a border of
+the same width would be on the rectangle that `outline-offset` + `outline-width` inflates the border
+box to — so a `dotted`/`dashed` outline fits its pattern to that outer rectangle's side lengths, and
+lands a dot or an L-shaped dash in each of its corners, just as the equivalent border does.
 
 `text-decoration-style: dotted`/`dashed` is unchanged.

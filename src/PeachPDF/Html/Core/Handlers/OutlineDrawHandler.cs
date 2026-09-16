@@ -87,11 +87,10 @@ namespace PeachPDF.Html.Core.Handlers
                     // Dotted/dashed draw as a single mid-band line - the corner join itself isn't
                     // mitred (representing dash/dot patterns as a mitred ring fill is far more involved
                     // than this repo's scope needs, the same simplification BordersDrawHandler's own
-                    // dotted/dashed branch already accepts), but each line's span still has to reach the
-                    // ring's outer corner point the way DrawRing's does - unlike border, whose bands
-                    // face inward and so always stay within [rect.Left, rect.Right]/[rect.Top,
-                    // rect.Bottom] regardless, outline's bands face outward, so a span left at the bare
-                    // rect edges leaves the whole outward-facing corner square uncovered by any line.
+                    // dotted/dashed branch already accepts), but each line's span still has to run the
+                    // full length of the ring's outer edge, corner squares included, exactly as
+                    // BordersDrawHandler spans its own outer edge from rect.Left to rect.Right - that
+                    // span is what the pattern is fitted to, so shortening it changes the dash count.
                     DrawDottedOrDashedLine(side, g, rect, style, color, width, offset, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
                     break;
             }
@@ -199,7 +198,15 @@ namespace PeachPDF.Html.Core.Handlers
             Border side, RGraphics g, RRect rect, OutlineStyle style, RColor color, double width, double offset,
             bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
         {
+            // The line runs down the middle of the band, but spans the band's *outer* edge end to end.
+            // Chrome paints an outline by handing its border painter an outer rectangle inflated by
+            // outline-offset + outline-width with uniform side widths, so a side's dash pattern is
+            // fitted to that outer rectangle's full side length - corner squares included, the same way
+            // a border's own dotted edge spans rect.Left..rect.Right. Fitting to the mid-band span
+            // instead would measure an edge one whole outline-width short, which both mis-sizes the
+            // gaps and pulls the first and last dot half a width in from each corner.
             var mid = offset + width / 2;
+            var reach = offset + width;
 
             var pen = g.GetPen(color);
             // width is the caller's raw, un-divided layout-space (PixelsPerInch-inflated) outline
@@ -219,26 +226,26 @@ namespace PeachPDF.Html.Core.Handlers
                 case Border.Top:
                     isHorizontal = true;
                     acrossAxis = rect.Top - mid;
-                    start = hasLeftEdge ? rect.Left - mid : rect.Left;
-                    end = hasRightEdge ? rect.Right + mid : rect.Right;
+                    start = hasLeftEdge ? rect.Left - reach : rect.Left;
+                    end = hasRightEdge ? rect.Right + reach : rect.Right;
                     break;
                 case Border.Bottom:
                     isHorizontal = true;
                     acrossAxis = rect.Bottom + mid;
-                    start = hasLeftEdge ? rect.Left - mid : rect.Left;
-                    end = hasRightEdge ? rect.Right + mid : rect.Right;
+                    start = hasLeftEdge ? rect.Left - reach : rect.Left;
+                    end = hasRightEdge ? rect.Right + reach : rect.Right;
                     break;
                 case Border.Left:
                     isHorizontal = false;
                     acrossAxis = rect.Left - mid;
-                    start = hasTopEdge ? rect.Top - mid : rect.Top;
-                    end = hasBottomEdge ? rect.Bottom + mid : rect.Bottom;
+                    start = hasTopEdge ? rect.Top - reach : rect.Top;
+                    end = hasBottomEdge ? rect.Bottom + reach : rect.Bottom;
                     break;
                 default:
                     isHorizontal = false;
                     acrossAxis = rect.Right + mid;
-                    start = hasTopEdge ? rect.Top - mid : rect.Top;
-                    end = hasBottomEdge ? rect.Bottom + mid : rect.Bottom;
+                    start = hasTopEdge ? rect.Top - reach : rect.Top;
+                    end = hasBottomEdge ? rect.Bottom + reach : rect.Bottom;
                     break;
             }
 
