@@ -6224,6 +6224,66 @@ await SaveShowcaseAsync("text_decoration_thickness", "Typography & Text", "text-
     "text-decoration-thickness (CSS Text Decoration 4): auto, from-font, and explicit length/percentage underline thickness.",
     decorationThicknessHtml, pdfConfig);
 
+// --- text-decoration-style showcase (css-text-decor-3 §2.2) ---
+
+var decorationStyleHtml = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 12pt sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.2em }
+    p.lede { font-size: 10pt; color: #444; margin: 0 0 1.2em }
+    h2 { font-size: 11pt; color: #444; margin: 1.3em 0 0.5em;
+         border-bottom: 1px solid #ddd; padding-bottom: 2px }
+    .row { margin-bottom: 1.5em; line-height: 1.6 }
+    .label { font-size: 9pt; color: #666; margin-bottom: 4px; line-height: 1.2 }
+    .solid { text-decoration: underline solid }
+    .dotted { text-decoration: underline dotted }
+    .dashed { text-decoration: underline dashed }
+    .doubled { text-decoration: underline double }
+    .over { text-decoration: overline double }
+    /* A double overline grows upward, so it needs headroom; flush against a page top the upper
+       stroke falls outside the page. See docs/html-css-support.md. */
+    .row.over-row { margin-top: 1.9em }
+    .through { text-decoration: line-through double }
+    .heavy { text-decoration: underline double; text-decoration-thickness: 2px;
+             text-decoration-color: #c0392b }
+    table { border-collapse: collapse; width: 62%; font-size: 11pt }
+    td { padding: 3px 6px }
+    td.n { text-align: right; font-variant-numeric: tabular-nums }
+    tr.total td { font-weight: bold }
+    tr.total td.n { text-decoration: underline double }
+    </style>
+
+    <h1>text-decoration-style</h1>
+    <p class="lede">Every style is one stroke with a dash pattern, except <b>double</b>, which is two
+    strokes of the resolved thickness separated by a gap of the same thickness. The first stroke stays
+    where a single one would sit and the second grows away from the text &mdash; downward for an
+    underline and a line-through, upward for an overline &mdash; which is what browsers do.</p>
+
+    <h2>The four styles, as underlines</h2>
+    <div class="row"><div class="label">solid</div><span class="solid">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">dotted</div><span class="dotted">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">dashed</div><span class="dashed">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">double</div><span class="doubled">Hamburgefonstiv</span></div>
+
+    <h2>double on each line, and at a heavier thickness</h2>
+    <div class="row"><div class="label">underline double &mdash; grows downward</div><span class="doubled">Hamburgefonstiv</span></div>
+    <div class="row over-row"><div class="label">overline double &mdash; grows upward</div><span class="over">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">line-through double &mdash; grows downward</div><span class="through">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">underline double, text-decoration-thickness: 2px</div><span class="heavy">Hamburgefonstiv</span></div>
+
+    <h2>What it is for</h2>
+    <table>
+      <tr><td>Subtotal</td><td class="n">1,000.00</td></tr>
+      <tr><td>Tax</td><td class="n">80.00</td></tr>
+      <tr class="total"><td>Total</td><td class="n">1,080.00</td></tr>
+    </table>
+    """;
+
+await SaveShowcaseAsync("text_decoration_style", "Typography & Text", "text-decoration-style",
+    "text-decoration-style (CSS Text Decoration 3 \u00a72.2): solid, dotted and dashed as pen patterns, and double as two strokes \u2014 the accounting rule under a grand total.",
+    decorationStyleHtml, pdfConfig);
+
 // --- text-decoration skipping showcase (css-text-decor-3 §2.4 + css-text-decor-4 §2.5) ---
 
 // Bundled (see assets/fonts/SourceSans3-Regular.LICENSE.txt) rather than a system family: what this
