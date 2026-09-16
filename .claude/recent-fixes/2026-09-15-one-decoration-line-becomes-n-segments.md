@@ -144,10 +144,10 @@ rectangles stop accumulating, exclusions and words keep being found. It moved to
 - **Vertical writing mode.** `SkipsInk` excludes it outright: its decoration wants a vertical band and
   every coordinate in `AddInkExclusions` is horizontal. Adjacent to the existing vertical-decoration
   gap, not part of this.
-- **CFF outlines and per-codepoint font fallback** contribute no ink, so nothing is skipped in either.
-  Recorded in
-  [skip-ink-finds-no-ink-under-cff-outlines-or-font-fallback.md](../accepted-gaps/skip-ink-finds-no-ink-under-cff-outlines-or-font-fallback.md),
-  tracked as [#1074](https://github.com/jhaygood86/PeachPDF/issues/1074).
+- **CFF outlines and per-codepoint font fallback contributed no ink at the time** — closed since by
+  issue #1122 (CID-keyed CFF `FDArray`/`FDSelect` support) and #1074's own reproduction test proving
+  the "font fallback" half was never actually broken (`CssBox.ResolveWordFont` already resolved the
+  correct fallback face here). No accepted-gap file remains for it.
 - **`GetInkCrossings` is virtual, not abstract**, returning null by default, so every existing
   `RGraphics` test mock needed no edit and degrades to "skip nothing". That is also what made the
   first green full-suite run meaningless as evidence — the mocks answer null, so nothing skipped.

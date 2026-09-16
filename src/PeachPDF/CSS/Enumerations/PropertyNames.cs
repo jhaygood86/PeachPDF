@@ -301,6 +301,7 @@
         public static readonly string TextOverflow = "text-overflow";
         public static readonly string TextShadow = "text-shadow";
         public static readonly string TextTransform = "text-transform";
+        public static readonly string TextUnderlineOffset = "text-underline-offset";
         public static readonly string TextUnderlinePosition = "text-underline-position";
         public static readonly string Transform = "transform";
         public static readonly string TransformOrigin = "transform-origin";

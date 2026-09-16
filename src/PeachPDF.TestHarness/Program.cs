@@ -11207,6 +11207,64 @@ await SaveShowcaseAsync("icc_profile_preservation", "Images & Replaced Content",
     "wide-gamut or non-sRGB-tagged images.",
     iccPreservationHtml, pdfConfig);
 
+// ── text-underline-offset / text-underline-position ─────────────────────────────────
+var textUnderlineOffsetPositionHtml =
+    "<html><head><style>" +
+    "body { font-family: serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; font-family: sans-serif; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 20px; max-width: 640px; font-family: sans-serif; }" +
+    "table { border-collapse: collapse; font-size: 22px; }" +
+    "td { padding: 10px 24px; border-bottom: 1px solid #ddd; }" +
+    "td.label { font-family: sans-serif; font-size: 12px; color: #555; white-space: nowrap; }" +
+    "</style></head><body>" +
+    "<h2>text-underline-offset &amp; text-underline-position</h2>" +
+    "<p class=\"note\">Both were previously unimplemented and silently dropped. text-underline-offset " +
+    "moves the line further from (or closer to) the text; text-underline-position chooses where it " +
+    "starts from before that offset is applied.</p>" +
+    "<table>" +
+    "<tr><td class=\"label\">auto (default)</td><td style=\"text-decoration:underline\">Hamburgefonstiv</td></tr>" +
+    "<tr><td class=\"label\">offset: 6px</td><td style=\"text-decoration:underline; text-underline-offset:6px\">Hamburgefonstiv</td></tr>" +
+    "<tr><td class=\"label\">offset: -2px</td><td style=\"text-decoration:underline; text-underline-offset:-2px\">Hamburgefonstiv</td></tr>" +
+    "<tr><td class=\"label\">offset: 25%</td><td style=\"text-decoration:underline; text-underline-offset:25%\">Hamburgefonstiv</td></tr>" +
+    "<tr><td class=\"label\">position: from-font</td><td style=\"text-decoration:underline; text-underline-position:from-font\">Hamburgefonstiv</td></tr>" +
+    "<tr><td class=\"label\">position: under</td><td style=\"text-decoration:underline; text-underline-position:under\">Hamburgefonstiv gjpqy</td></tr>" +
+    "</table>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("text_underline_offset_position", "Text &amp; Fonts", "text-underline-offset &amp; text-underline-position",
+    "text-underline-offset moves an underline further from (or closer to) the text it decorates; " +
+    "text-underline-position chooses auto/from-font/under as the position that offset is measured from. " +
+    "Both were previously unimplemented and silently dropped at parse time.",
+    textUnderlineOffsetPositionHtml, pdfConfig);
+
+// ── Vertical writing mode: text-decoration geometry ──────────────────────────────────
+var verticalDecorationHtml =
+    "<html><head><style>" +
+    "body { font-family: serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; font-family: sans-serif; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 20px; max-width: 640px; font-family: sans-serif; }" +
+    ".row { display: flex; gap: 40px; align-items: flex-start; }" +
+    ".column { writing-mode: vertical-rl; height: 220px; font-size: 22px; }" +
+    ".column.lr { writing-mode: vertical-lr; }" +
+    "</style></head><body>" +
+    "<h2>Vertical writing mode: text-decoration</h2>" +
+    "<p class=\"note\">An underline/overline/line-through on vertical text now runs down the column, on " +
+    "the correct physical side of the glyphs (css-writing-modes-4's over/under sides), instead of being " +
+    "drawn as a short horizontal stroke across the top.</p>" +
+    "<div class=\"row\">" +
+    "<div class=\"column\" style=\"text-decoration:underline\">Underline (vertical-rl)</div>" +
+    "<div class=\"column\" style=\"text-decoration:overline\">Overline (vertical-rl)</div>" +
+    "<div class=\"column\" style=\"text-decoration:overline double\">Double overline (vertical-rl)</div>" +
+    "<div class=\"column lr\" style=\"text-decoration:underline\">Underline (vertical-lr)</div>" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("vertical_writing_mode_decoration", "Text &amp; Fonts", "Vertical Writing Mode: text-decoration",
+    "Under a true vertical writing mode (vertical-rl/vertical-lr), a text-decoration line now runs " +
+    "along the column's own extent on the correct physical side of the glyphs, instead of being drawn " +
+    "as a short horizontal stroke across its top.",
+    verticalDecorationHtml, pdfConfig);
+
 const string declarativeApiSource =
     """"
     var generator = new PdfGenerator();

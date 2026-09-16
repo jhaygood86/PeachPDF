@@ -37,6 +37,12 @@ namespace PeachPDF.Adapters
         private readonly double _underlineThickness;
 
         /// <summary>
+        /// the font's own real preferred underline offset (OpenType <c>post.underlinePosition</c>,
+        /// scaled to this font's size) - see <see cref="UnderlinePosition"/>.
+        /// </summary>
+        private readonly double _underlinePosition;
+
+        /// <summary>
         /// Cached font height.
         /// </summary>
         private readonly double _height;
@@ -121,6 +127,10 @@ namespace PeachPDF.Adapters
             // under text-decoration-thickness: from-font; falling back to the engine's own pre-existing
             // fixed thickness (RFont.UnderlineThickness's own default) is safer than a literal 0.
             _underlineThickness = descriptor.UnderlineThickness > 0 ? ScaleUnits(descriptor.UnderlineThickness) : 1d / pixelsPerPoint;
+            // Unlike UnderlineThickness, 0 is a plausible authored value here (an underline sitting
+            // exactly on the baseline) rather than an obvious authoring mistake, so it is not special-
+            // cased - scaled and used as-is, negative sign (below baseline) and all.
+            _underlinePosition = ScaleUnits(descriptor.UnderlinePosition);
         }
 
         /// <summary>
@@ -135,6 +145,8 @@ namespace PeachPDF.Adapters
         public override double UnderlineOffset => Math.Round(_underlineOffset * PixelsPerPoint);
 
         public override double UnderlineThickness => Math.Round(_underlineThickness * PixelsPerPoint);
+
+        public override double UnderlinePosition => Math.Round(_underlinePosition * PixelsPerPoint);
 
         public override double Height => _height * PixelsPerPoint;
 

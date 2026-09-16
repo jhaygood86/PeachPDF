@@ -35,33 +35,31 @@ The underline direction also happens to be the only one its own anchor allows �
 the second stroke back through the glyphs — but that argument does not decide line-through, and inventing
 one for it produced a straddle no browser draws. Measure first.
 
-## Geometry, and why it is a deviation rather than a free choice
+## Geometry — since closed by issue #1121
 
-Two strokes of the resolved thickness with a gap of the same thickness, so the pair spans 3×.
+This originally drew two strokes at the full resolved thickness with a gap of the same thickness (a 3×
+total), a deliberate deviation from css-backgrounds-3's `border-style: double` ("the sum of the two
+lines and the space between them equals" the total) reasoned about at the time: dividing the initial
+1px thickness three ways would have rendered two ⅓px hairlines, fainter than the `solid` underline
+`double` is meant to be a heavier version of.
 
-§2.2 does **not** say "draw a double line" — that was a misquote from memory, and it matters. Its actual
-text is that the styles' "values have the same meaning as for the `border-style` properties", and
-css-backgrounds-3 defines `border-style: double` as "the sum of the two lines and the space between them
-equals the value of `border-width`". So the spec *points somewhere*, and this deviates from it rather
-than filling a silence.
+Issue #1121 closed this properly instead of leaving it as an accepted gap: each stroke is now
+`Max(thickness / 3, one CSS pixel)` (`FragmentPainter.DoubleStrokeWidth`) — spec-literal (an exact
+third, total sums back to the declared thickness) once a third is wide enough to stay visible, and only
+wider than that below the floor. No accepted-gap file remains for it.
 
-The deviation is deliberate: `border-width` is a total, `text-decoration-thickness` is a stroke
-(`from-font` reads the font's own `underlineThickness`), and dividing it three ways would render the
-initial 1px double underline as two ⅓px hairlines — fainter than the `solid` underline it is meant to be
-a heavier version of. Chrome agrees, per the table above. Tracked as issue #1121 with
-`.claude/accepted-gaps/double-decoration-thickness-is-per-stroke-not-a-total.md`.
+## The upward-growing overline used to leave the page — since closed by issue #1124
 
-## The upward-growing overline can leave the page, and no draw-call test can see it
+A double overline flush against the top of a page has no room above the text, so its upper stroke used
+to fall outside the page clip: on a Letter page with zero margins the clip was y 0..792 and the strokes
+were emitted at **794.0** and **792.0**. Moving the pair at paint time to force a fit was ruled out at
+the time, since it would put an overline somewhere it was not asked to be, silently, on the documents
+where an author can see it least.
 
-Found by review, by rendering it rather than reading it. A double overline flush against the top of a
-page has no room above the text, so its upper stroke falls outside the page clip: on a Letter page with
-zero margins the clip is y 0..792 and the strokes are emitted at **794.0** and **792.0**.
-
-Not worked around. Moving the pair down to fit would put an overline somewhere it was not asked to be,
-silently, on the documents where an author can see it least — and nothing is lost against a browser:
-Chrome 141 loses the overline *entirely* on the same markup, single stroke included, because it also
-positions it above the content and there is no page there. Disclosed in `docs/**` and
-`.claude/accepted-gaps/double-overline-flush-to-a-page-top-loses-its-upper-stroke.md`.
+Issue #1124 closed this from the other direction instead: layout now reserves the extra ascent-side
+headroom a `double` overline needs (`CssLayoutEngine.LineBoxContributionOf`, via
+`FragmentPainter.DoubleOverlineExtraReachAbove`), so ordinary pagination leaves room for both strokes
+without ever needing to reposition anything after the fact. No accepted-gap file remains for it.
 
 The transferable part: **`TestRecordingGraphics` never applies clipping**, so every draw-call test in
 this area is blind to a stroke that leaves the page. `TextDecorationDoublePdfClipTests` generates a real

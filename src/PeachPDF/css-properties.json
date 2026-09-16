@@ -2551,6 +2551,43 @@
       }
     },
     {
+      "name": "text-underline-offset",
+      "comment": "CSS Text Decoration 4 §2.8 (https://www.w3.org/TR/css-text-decor-4/#underline-offset). CssKeywordOrValue<TextUnderlineOffsetKeyword, LengthOrCalc>-backed, mirroring text-decoration-thickness's own shape exactly - same valueType \"length\" (covers <length>/<percentage>, the percentage resolving against 1em per §2.8), same not-inherited/TextDecorationArea placement. 'auto' (the initial value) is a 0 offset from whatever position text-underline-position establishes; a length/percentage moves the line further from the text in that position's own positive direction (toward 'under' for the auto/from-font/under positions this engine implements - see FragmentPainter.ResolveDecorationOffset). Only affects underline, never overline/line-through, per §2.8.",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "TextUnderlineOffsetKeyword",
+        "keywordMap": "Map.TextUnderlineOffsetKeywords",
+        "fallback": "TextUnderlineOffsetKeyword.Auto",
+        "valueType": "length"
+      },
+      "html": {
+        "propertyPath": "TextUnderlineOffset",
+        "csharpDataType": "CssProperty<CssKeywordOrValue<TextUnderlineOffsetKeyword, LengthOrCalc>>",
+        "area": "TextDecorationArea",
+        "getterExpression": "{box}.TextUnderlineOffset.ToString()"
+      }
+    },
+    {
+      "name": "text-underline-position",
+      "comment": "css-text-decor-3 §2.5 (https://www.w3.org/TR/css-text-decor-3/#text-underline-position-property), already a stable REC property rather than only a Level 4 draft one. Full grammar is 'auto | [ from-font | under ] || [ left | right ]', inherited; this implements the auto | from-font | under subset as a plain enum-keyword (TextUnderlinePosition). 'left'/'right' (meaningful only under a vertical writing-mode, where they can make an overline/underline switch sides per §2.1's note) are deliberately not implemented - see docs/html-css-support.md and the tracking issue for that narrower gap. 'auto' must resolve at or under the alphabetic baseline (this engine's existing FragmentPainter.ResolveAutomaticUnderlineClearance basis); 'from-font' reads the font's own underlinePosition metric (RFont.UnderlinePosition) and uses it as-is, even when it is exactly 0 (at the baseline) - 0 is a plausible authored metric, not a clear 'no data' signal, so it is not special-cased into falling back to auto's basis; 'under' sits below the line's descent so as not to cross descenders. Inherited, so - like text-decoration-skip-ink - this lives in TextArea rather than TextDecorationArea (CssBox.InheritStyle's area-copy split only whole-adopts TextArea from the parent).",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TextUnderlinePosition",
+        "keywordMap": "Map.TextUnderlinePositions",
+        "fallback": "TextUnderlinePosition.Auto"
+      },
+      "html": {
+        "propertyPath": "TextUnderlinePosition",
+        "csharpDataType": "CssProperty<TextUnderlinePosition>",
+        "area": "TextArea",
+        "getterExpression": "{box}.TextUnderlinePosition.ToString()"
+      }
+    },
+    {
       "name": "font-size",
       "comment": "CssKeywordOrValue<FontSizeKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. supportedValues (via FontSizeKeyword/Map.FontSizeKeywords) deliberately excludes CSS Fonts 4's xxx-large - FontSizeResolver.Resolve's switch has no case for it, so an accepted 'font-size: xxx-large' would fall through to the length/calc() value path (which can't parse the bare keyword), Math.Max(0, ...)-clamp to 0, and silently render invisible text rather than being rejected. RegistryEmitter.BuildHtmlAssignment runs CssBox.ResolveFontSizeValueComputation(value) (the html.valueComputation \"font-size\" case) against the raw authored text before FromCssText parses it - see that method's own doc comment for the eager em/ex/percent/smaller/larger-to-points resolution it performs (calc() and rem stay lazy, resolved later by FontSizeResolver.Resolve/DerivedStyle.ActualFont via LengthOrCalc's deferred-calc mechanism).",
       "inherited": true,

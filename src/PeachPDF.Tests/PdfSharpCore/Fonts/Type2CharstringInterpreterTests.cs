@@ -21,9 +21,33 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         [Fact]
         public void TryGetGlyphOutline_UnsupportedTable_ReturnsFalse()
         {
+            // Missing FDArray/FDSelect entirely (no CharStrings either) - still unsupported.
             var cff = new CffTable(SyntheticCff.CidKeyedFont(), tableStart: 0);
 
             Assert.False(Type2CharstringInterpreter.TryGetGlyphOutline(cff, 0, out _));
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(3)]
+        public void TryGetGlyphOutline_CidKeyedFontWithFdArrayAndFdSelect_ResolvesEachGidsOwnFdLocalSubrs(int fdSelectFormat)
+        {
+            // Both GIDs' own charstrings are byte-identical (push -107; callsubr 0) - see
+            // SyntheticCff.CidKeyedFontWithFdArrayAndFdSelect's remarks. FDSelect maps GID 0 to FD 0
+            // (whose local subr 0 does rmoveto(10,10)) and GID 1 to FD 1 (rmoveto(20,20)), so the two
+            // outlines can only differ if CffTable/Type2CharstringInterpreter actually resolve a
+            // different local Subrs INDEX per GID rather than always the (nonexistent) top-level one.
+            var cff = new CffTable(SyntheticCff.CidKeyedFontWithFdArrayAndFdSelect(fdSelectFormat), tableStart: 0);
+
+            Assert.True(Type2CharstringInterpreter.TryGetGlyphOutline(cff, 0, out var outline0));
+            Assert.True(Type2CharstringInterpreter.TryGetGlyphOutline(cff, 1, out var outline1));
+
+            var contour0 = Assert.Single(outline0.Contours);
+            var contour1 = Assert.Single(outline1.Contours);
+            Assert.Equal(10, contour0.Start.X);
+            Assert.Equal(10, contour0.Start.Y);
+            Assert.Equal(20, contour1.Start.X);
+            Assert.Equal(20, contour1.Start.Y);
         }
 
         [Theory]

@@ -10,10 +10,14 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// <c>text-decoration-style: double</c> grows an overline's pair upward, so unlike every other
-    /// decoration it can reach above the box it belongs to. These tests generate a real PDF and read the
-    /// stroke coordinates back out of the content stream, against the page's own clip rectangle -
-    /// <c>TestRecordingGraphics</c> records draw calls and never applies clipping, so a stroke that
-    /// leaves the page is invisible to every other test in this area.
+    /// decoration it can reach above the box it belongs to. Issue #1124: layout now reserves that
+    /// upward reach as extra ascent-side headroom on the line box that carries the decoration
+    /// (<c>CssLayoutEngine.LineBoxContributionOf</c>/<c>FragmentPainter.DoubleOverlineExtraReachAbove</c>),
+    /// so ordinary pagination leaves room for both strokes even flush against a page's own top edge -
+    /// these tests generate a real PDF and read the stroke coordinates back out of the content stream,
+    /// against the page's own clip rectangle, since <c>TestRecordingGraphics</c> records draw calls and
+    /// never applies clipping (so a stroke that left the page used to be invisible to every other test
+    /// in this area).
     /// </summary>
     public class TextDecorationDoublePdfClipTests
     {
@@ -31,22 +35,19 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// The contrast: the same document with no headroom at all. Both strokes are still emitted - the
-        /// painter does not move or drop either - but the upper one falls above the clip and so does not
-        /// appear on the page. This is disclosed rather than worked around; see
-        /// <c>docs/html-css-support.md</c>. Chrome 141 given the same markup loses the overline entirely,
-        /// both strokes and the single-stroke case alike, so nothing here is more lossy than a browser.
+        /// The case that used to lose the upper stroke: no margin above the text at all. Before #1124,
+        /// the upper stroke fell outside the page clip and was silently dropped (Chrome loses the whole
+        /// overline in the same situation, so PeachPDF was already the more forgiving of the two - but
+        /// still lossy). Layout now reserves the extra ascent the decoration needs, so both strokes fit
+        /// without the author ever being asked to add a margin.
         /// </summary>
         [Fact]
-        public async Task DoubleOverline_FlushAgainstTheTopOfThePage_EmitsBothButTheUpperFallsOutsideTheClip()
+        public async Task DoubleOverline_FlushAgainstTheTopOfThePage_ReservesHeadroomAndKeepsBothStrokesInsideTheClip()
         {
-            var (clipTop, _, strokes) = await StrokesAndClipAsync(marginTop: 0);
+            var (clipTop, clipBottom, strokes) = await StrokesAndClipAsync(marginTop: 0);
 
             Assert.Equal(2, strokes.Count);
-            Assert.True(strokes.Max() > clipTop,
-                "the upper stroke should be the one above the clip, which is what the docs disclose");
-            Assert.True(strokes.Min() <= clipTop,
-                "the lower stroke should still be on the page");
+            Assert.All(strokes, y => Assert.InRange(y, clipBottom, clipTop));
         }
 
         /// <summary>

@@ -6,9 +6,8 @@ Tracked as [#1123](https://github.com/jhaygood86/PeachPDF/issues/1123).
 glyph outlines, built by `FragmentPainter.Decorations.cs`'s `BuildTextClipPath` walking the box's
 fragment subtree and calling `RGraphics.GetTextOutline` per run. That walk only collects words from a
 box in `writing-mode: horizontal-tb` (`IsHorizontalWritingMode`); a `vertical-rl`/`vertical-lr` box
-falls back to a plain `border-box` clip instead - the same fallback an outline-less font (a CID-keyed
-CFF font, see [cid-keyed-cff-font-outlines-unsupported.md](cid-keyed-cff-font-outlines-unsupported.md))
-gets.
+falls back to a plain `border-box` clip instead - the same fallback a font with no decodable outline
+at all (a bitmap font, or one this reader could not parse) gets.
 
 **Why it's out of scope for now**: `RGraphics.GetTextOutline` has no rotation input, and the vertical
 glyph-paint paths (`FragmentPainter.Text.cs`'s `PaintUprightVerticalRun` for upright runs, and the

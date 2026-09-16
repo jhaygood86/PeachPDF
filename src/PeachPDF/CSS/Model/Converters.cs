@@ -338,6 +338,14 @@ namespace PeachPDF.CSS
                 .Or(Assign(Keywords.Auto, TextDecorationThicknessKeyword.Auto))
                 .Or(Assign(Keywords.FromFont, TextDecorationThicknessKeyword.FromFont));
 
+        /// <summary>
+        /// CSS Text Decoration 4 §2.8: <c>auto | &lt;length-percentage&gt;</c>. Same shape/rationale as
+        /// <see cref="TextDecorationThicknessConverter"/> immediately above - the real interpretation is
+        /// done independently by <c>CssPropertyRegistry.Set_TextUnderlineOffset</c>.
+        /// </summary>
+        public static readonly IValueConverter TextUnderlineOffsetConverter =
+            LengthOrPercentConverter.Or(Assign(Keywords.Auto, TextUnderlineOffsetKeyword.Auto));
+
         public static readonly IValueConverter TextDecorationLinesConverter =
             Map.TextDecorationLines.ToConverter().Many().OrNone();
 
@@ -367,6 +375,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter WhitespaceConverter = Map.WhitespaceModes.ToConverter();
         public static readonly IValueConverter TextOverflowConverter = Map.TextOverflowModes.ToConverter();
         public static readonly IValueConverter TextDecorationSkipInkConverter = Map.TextDecorationSkipInkModes.ToConverter();
+        public static readonly IValueConverter TextUnderlinePositionConverter = Map.TextUnderlinePositions.ToConverter();
         public static readonly IValueConverter TextTransformConverter = Map.TextTransforms.ToConverter();
         public static readonly IValueConverter TextAlignLastConverter = Map.TextAlignmentsLast.ToConverter();
         public static readonly IValueConverter TextAnchorConverter = Map.TextAnchors.ToConverter();

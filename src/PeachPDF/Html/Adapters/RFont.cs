@@ -48,6 +48,19 @@ namespace PeachPDF.Html.Adapters
         public virtual double UnderlineThickness => 1;
 
         /// <summary>
+        /// The font's own real preferred underline offset (OpenType <c>post.underlinePosition</c>,
+        /// scaled to this font's size the same way <see cref="UnderlineThickness"/> is), consulted only
+        /// when CSS <c>text-underline-position: from-font</c> is used
+        /// (<see href="https://www.w3.org/TR/css-text-decor-3/#text-underline-position-property">css-text-decor-3
+        /// §2.5</see>) - a negative value moves the line below the baseline, matching
+        /// <c>post.underlinePosition</c>'s own sign convention. Defaults to <c>0</c> (at the baseline)
+        /// for every <see cref="RFont"/> except the OpenType-descriptor-backed adapter, which overrides
+        /// it with the font's real metric - the same plain-default pattern <see cref="UnderlineThickness"/>
+        /// uses.
+        /// </summary>
+        public virtual double UnderlinePosition => 0;
+
+        /// <summary>
         /// Get the ascent, in pixels, of the font — the distance from the top of the font's
         /// line box down to its baseline.
         /// </summary>

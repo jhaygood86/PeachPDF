@@ -21,6 +21,8 @@ namespace PeachPDF.Tests.Integration
     public class TextDecorationSkipInkTests
     {
         private const string Family = "SkipInkTestFont";
+        private const string HebrewFallbackFamily = "SkipInkHebrewFallbackTestFont";
+        private const string CjkFamily = "SkipInkCjkTestFont";
 
         [Fact]
         public async Task Underline_Auto_BreaksAroundDescenders()
@@ -242,6 +244,75 @@ namespace PeachPDF.Tests.Integration
             Assert.True(lines.Count >= 3,
                 $"one gap for the atomic inline plus at least one for the descenders, got {lines.Count}");
             Assert.DoesNotContain(lines, l => l.X1 < atomicRight - 0.01 && l.X2 > atomicLeft + 0.01);
+        }
+
+        [Fact]
+        public async Task Underline_PerCodepointFontFallback_StillMeasuresInk()
+        {
+            // "SkipInkTestFont" (Source Sans 3) is Latin-only; the trailing Hebrew run has no coverage
+            // in it and is resolved per-codepoint to the fallback family instead (CssBox.
+            // EmitPerCodepointFragments/ActualFontForCodepoint, at layout time). AddInkExclusions
+            // already resolves each word's own font via CssBox.ResolveWordFont before calling
+            // GetInkCrossings - the same resolution DrawWordGlyphs paints with - so the fallback-
+            // painted run should already get its ink measured against its own (correctly resolved)
+            // font, not silently skipped. This is the reproduction #1074's "per-codepoint font
+            // fallback" half calls for: if it passes, that gap is closed by #1122's CFF fix alone and
+            // no separate adapter-boundary plumbing is needed.
+            const string hebrewFinalNun = "ן"; // Final Nun - descends below the baseline
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><head></head><body style='margin:0'>"
+                + $"<div style=\"width:400pt; font:20pt '{Family}', '{HebrewFallbackFamily}'\">"
+                + $"<span id='s' style='text-decoration:underline'>ab{hebrewFinalNun}</span></div>"
+                + "</body></html>",
+                configureAdapter: async adapter =>
+                {
+                    await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
+                    await BundledFonts.RegisterFont(adapter, BundledFonts.Hebrew, HebrewFallbackFamily);
+                });
+            var s = LayoutHarness.FindById(root, "s")!;
+
+            using var g = new InkAwareRecordingGraphics(Adapter(container));
+            FragmentPaintHarness.PaintBox(container, s, g);
+
+            Assert.True(g.InkQueryCount > 0, "the painter should have measured ink at all");
+            Assert.Contains(g.InkQueries, q => q.Text.Contains(hebrewFinalNun));
+        }
+
+        [Fact]
+        public async Task Underline_CjkScriptUnderAuto_NeverMeasuresInk()
+        {
+            // css-text-decor-4 §2.10.5: under 'auto' (UA discretion) a UA "should consider the script
+            // of the text" and "should refrain" from ink-skipping CJK-script text - unlike ordinary
+            // scripts, where 'auto' skips (see Underline_Auto_BreaksAroundDescenders above).
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><head></head><body style='margin:0'>"
+                + $"<div style=\"width:400pt; font:20pt '{CjkFamily}'\">"
+                + "<span id='s' style='text-decoration:underline'>你好</span></div></body></html>",
+                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Cjk, CjkFamily));
+            var s = LayoutHarness.FindById(root, "s")!;
+
+            using var g = new InkAwareRecordingGraphics(Adapter(container));
+            FragmentPaintHarness.PaintBox(container, s, g);
+
+            Assert.Equal(0, g.InkQueryCount);
+            Assert.Single(Lines(g));
+        }
+
+        [Fact]
+        public async Task Underline_CjkScriptUnderAll_StillMeasuresInk()
+        {
+            // 'all' ("must interrupt") has no script-based carve-out - only 'auto' does.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><head></head><body style='margin:0'>"
+                + $"<div style=\"width:400pt; font:20pt '{CjkFamily}'\">"
+                + "<span id='s' style='text-decoration:underline; text-decoration-skip-ink:all'>你好</span></div></body></html>",
+                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Cjk, CjkFamily));
+            var s = LayoutHarness.FindById(root, "s")!;
+
+            using var g = new InkAwareRecordingGraphics(Adapter(container));
+            FragmentPaintHarness.PaintBox(container, s, g);
+
+            Assert.True(g.InkQueryCount > 0, "'all' must interrupt regardless of script");
         }
 
         [Fact]
