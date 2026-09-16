@@ -10939,6 +10939,52 @@ await SaveShowcaseAsync("gif_passthrough", "Images & Replaced Content", "GIF Los
     "re-encoded.",
     gifPassthroughHtml, pdfConfig);
 
+// ── PNG alpha-channel /SMask split (issue #1109) ───────────────────────────────────────
+static byte[] BuildAlphaGradientPngBytes(int size)
+{
+    using var image = PeachImage.Image.Create(size, size, PeachImage.PixelFormat.Rgba32);
+    var pixels = image.GetPixelSpan();
+    for (int y = 0; y < size; y++)
+    {
+        for (int x = 0; x < size; x++)
+        {
+            int i = (y * size + x) * 4;
+            pixels[i] = 0x2E; pixels[i + 1] = 0x86; pixels[i + 2] = 0xDE; // a consistent blue
+            pixels[i + 3] = (byte)(x * 255 / (size - 1)); // alpha ramps left (transparent) to right (opaque)
+        }
+    }
+
+    using var ms = new MemoryStream();
+    image.Save(ms, "png", new PeachImage.Formats.Png.PngEncoderOptions { ColorMode = PeachImage.Formats.Png.PngColorMode.Truecolor });
+    return ms.ToArray();
+}
+
+var alphaGradientBase64 = Convert.ToBase64String(BuildAlphaGradientPngBytes(160));
+
+var pngAlphaSplitHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 16px; max-width: 640px; }" +
+    ".checker { background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 0 / 16px 16px; " +
+    "  display: inline-block; border-radius: 4px; }" +
+    "img { display: block; }" +
+    "</style></head><body>" +
+    "<h2>PNG alpha-channel /SMask split</h2>" +
+    "<p class=\"note\">A PNG with a real per-pixel alpha channel (color type 6, TruecolorAlpha) embeds " +
+    "as a color /FlateDecode XObject plus a child /SMask, both PNG-predictor-compressed - split out of " +
+    "the source's own interleaved color+alpha IDAT data, instead of a full pixel decode.</p>" +
+    "<div class=\"checker\">" +
+    $"<img src=\"data:image/png;base64,{alphaGradientBase64}\" width=\"160\" height=\"160\">" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("png_alpha_split", "Images & Replaced Content", "PNG Alpha-Channel /SMask Split",
+    "A PNG with a real per-pixel alpha channel (color type 4/6, or a palette source with a genuine " +
+    "partial-alpha tRNS entry) embeds as a color /FlateDecode XObject plus a child /SMask, both split " +
+    "out of the source's own interleaved IDAT data, instead of a full pixel decode and a raw alpha mask.",
+    pngAlphaSplitHtml, pdfConfig);
+
 const string declarativeApiSource =
     """"
     var generator = new PdfGenerator();

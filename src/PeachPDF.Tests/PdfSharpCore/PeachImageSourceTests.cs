@@ -138,28 +138,59 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         }
 
         [Fact]
-        public void FromBinary_OpaqueTruecolorPng_IsTransparent()
+        public void FromBinary_OpaqueTruecolorAlphaPng_IsAlphaSplitEligible_NotTransparent()
         {
-            // Unlike the indexed-color case above: a PNG explicitly encoded with a real alpha channel
-            // (color type 6) reports Transparent = true from Image.HasAlpha even though every pixel is
-            // fully opaque (a=255 everywhere) - HasAlpha reflects the source's declared alpha channel,
-            // not whether any pixel is actually translucent.
+            // A PNG explicitly encoded with a real alpha channel (color type 6) is alpha-split-eligible
+            // (issue #1109) regardless of whether any pixel is actually translucent - PngAlphaSplit
+            // doesn't inspect pixel values, only structural eligibility (color type/bit depth/interlace).
+            // Transparent is false for it, same as the existing opaque/chroma-key pass-through precedent
+            // (PeachPngPassthroughImageSourceImpl) - alpha is carried via PngPassthroughData.AlphaIdatData
+            // and embedded as a child /SMask directly, not via the Transparent-driven XImageFormat.Png
+            // route. See FromBinary_InterlacedAlphaPng_IsNotAlphaSplitEligible_StillTransparent below for
+            // the still-Transparent=true fallback case.
             using var image = MakeSolidImage(4, 4, 255, 0, 0, a: 255);
             using var ms = new MemoryStream();
             image.Save(ms, "png", new PngEncoderOptions { ColorMode = PngColorMode.Truecolor });
 
             var img = ImageSource.FromBinary("test.png", () => ms.ToArray());
 
+            Assert.False(img.Transparent);
+            Assert.NotNull(img.PngPassthrough);
+            Assert.NotNull(img.PngPassthrough!.Value.AlphaIdatData);
+        }
+
+        [Fact]
+        public void FromBinary_InterlacedAlphaPng_IsNotAlphaSplitEligible_StillTransparent()
+        {
+            // PngAlphaSplit excludes interlaced sources (Adam7 sub-image data can't be de-interleaved by
+            // its simple row loop) - falls back to the existing full decode+SMask path, where Transparent
+            // still correctly reflects Image.HasAlpha (the source's declared alpha channel, not a
+            // per-pixel scan - see this class's own remarks on that heuristic).
+            using var image = MakeSolidImage(4, 4, 255, 0, 0, a: 128);
+            using var ms = new MemoryStream();
+            image.Save(ms, "png", new PngEncoderOptions { ColorMode = PngColorMode.Truecolor, Interlace = true });
+            var bytes = ms.ToArray();
+
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+
+            Assert.Null(img.PngPassthrough);
             Assert.True(img.Transparent);
         }
 
         [Fact]
-        public void FromBinary_PngWithRealAlpha_IsTransparent()
+        public void FromBinary_PngWithRealAlpha_IsAlphaSplitEligible_NotTransparent()
         {
+            // Whichever shape PeachImage's encoder auto-picks for a uniform partial-alpha color (color
+            // type 6, or an indexed palette with a partial-alpha tRNS entry), it's alpha-split-eligible
+            // (issue #1109) either way - see PngPassthrough_RealAlphaPng_IsPopulatedWithAlphaSplit and
+            // PngPassthrough_PalettePartialAlphaTrns_IsPopulatedWithAlphaSplit for the two shapes split
+            // out explicitly.
             var bytes = MakePngBytes(4, 4, 255, 0, 0, a: 128);
             var img = ImageSource.FromBinary("test.png", () => bytes);
 
-            Assert.True(img.Transparent);
+            Assert.False(img.Transparent);
+            Assert.NotNull(img.PngPassthrough);
+            Assert.NotNull(img.PngPassthrough!.Value.AlphaIdatData);
         }
 
         [Fact]
@@ -768,12 +799,21 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         }
 
         [Fact]
-        public void PngPassthrough_RealAlphaPng_IsNull()
+        public void PngPassthrough_RealAlphaPng_IsPopulatedWithAlphaSplit()
         {
+            // Issue #1109: a real per-pixel alpha channel (color type 6, TruecolorAlpha) is now
+            // alpha-split-eligible instead of falling back to the full decode+SMask path - see
+            // PngAlphaSplitTests.cs for the split transform's own correctness coverage.
             var bytes = MakePngBytes(4, 4, 255, 0, 0, a: 128);
             var img = ImageSource.FromBinary("test.png", () => bytes);
 
-            Assert.Null(img.PngPassthrough);
+            var passthrough = img.PngPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(PngPassthroughColorSpace.Rgb, passthrough.Value.ColorSpace);
+            Assert.NotNull(passthrough.Value.AlphaIdatData);
+            Assert.Equal((byte)8, passthrough.Value.AlphaBitDepth);
+            Assert.Null(passthrough.Value.ColorKeyMask);
             Assert.True(img.IsLosslessSourceFormat);
         }
 
@@ -871,17 +911,24 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         }
 
         [Fact]
-        public void PngPassthrough_PalettePartialAlphaTrns_IsNull()
+        public void PngPassthrough_PalettePartialAlphaTrns_IsPopulatedWithAlphaSplit()
         {
             // A partial (neither 0 nor 255) palette alpha entry can't be expressed as a binary color-key
-            // mask - falls back to the existing decode+SMask path, same as a real per-pixel alpha channel.
+            // mask, but is alpha-split-eligible (issue #1109) - PngAlphaSplit's palette branch splits just
+            // the alpha plane out (ColorData stays null; the original indexed IdatData/PaletteData are
+            // reused unchanged for the color side - see BuildAlphaSplitPassthroughData's own remarks).
             (byte, byte, byte)[] palette = [(255, 0, 0), (0, 255, 0)];
             byte[] alphas = [255, 128];
             var bytes = RasterPngFixture.MakeIndexedPngBytesWithTrns(2, 2, palette, alphas, (x, y) => (byte)((x + y) % 2));
 
             var img = ImageSource.FromBinary("test.png", () => bytes);
+            var passthrough = img.PngPassthrough;
 
-            Assert.Null(img.PngPassthrough);
+            Assert.NotNull(passthrough);
+            Assert.Equal(PngPassthroughColorSpace.Indexed, passthrough.Value.ColorSpace);
+            Assert.NotNull(passthrough.Value.PaletteRgb);
+            Assert.NotNull(passthrough.Value.AlphaIdatData);
+            Assert.Null(passthrough.Value.ColorKeyMask);
             Assert.True(img.IsLosslessSourceFormat);
         }
 
