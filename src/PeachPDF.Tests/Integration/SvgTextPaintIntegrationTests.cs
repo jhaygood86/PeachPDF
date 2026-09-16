@@ -106,21 +106,25 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task CffFont_StrokedText_FallsBackToSolidTextShow()
+        public async Task CffFont_StrokedText_PaintsStrokeOperator_NoTextShow()
         {
-            // Source Code Pro is CFF (no glyf), so no outline can be built: a stroke can't be honored
-            // and the run falls back to a solid CID text show of its fill color.
+            // Source Code Pro is CFF (no glyf) - its outline now comes from
+            // Type2CharstringInterpreter (issue #1117), same as a glyf font's, so a stroke is honored
+            // exactly like StrokedText_PaintsStrokeOperator_NoTextShow's TrueType case rather than
+            // falling back to a solid text show.
             string pdf = await RenderSvgText(BundledFonts.Otf,
                 """fill="rgb(0,128,0)" stroke="rgb(0,0,255)" stroke-width="2" """);
 
-            Assert.True(Count(pdf, " Tj") > 0, "expected a fallback Tj text show for a CFF font");
+            Assert.Contains("\nf\n", pdf);
+            Assert.Contains("\nS\n", pdf);
+            Assert.Equal(0, Count(pdf, " Tj"));
         }
 
         [Fact]
-        public async Task CffFont_TextPath_StrokedGlyphs_FallBackToSolidTextShow()
+        public async Task CffFont_TextPath_StrokedGlyphs_PaintsStrokeOperator_NoTextShow()
         {
-            // A stroked <textPath> on a CFF font: each glyph has no outline, so it falls back to a solid
-            // text show of its fill color (the stroke can't be honored).
+            // A stroked <textPath> on a CFF font: each glyph now has a real decoded outline (issue
+            // #1117), so the stroke is honored per glyph instead of falling back to a solid text show.
             var family = TtfFontDescription.LoadDescription(BundledFonts.Otf).FontFamilyInvariantCulture;
             var generator = new PdfGenerator();
             await using (var stream = File.OpenRead(BundledFonts.Otf))
@@ -139,7 +143,9 @@ namespace PeachPDF.Tests.Integration
             doc.Save(ms);
             var pdf = Encoding.Latin1.GetString(ms.ToArray());
 
-            Assert.True(Count(pdf, " Tj") > 0, "expected a fallback Tj text show per glyph for a CFF textPath");
+            Assert.Contains("\nf\n", pdf);
+            Assert.Contains("\nS\n", pdf);
+            Assert.Equal(0, Count(pdf, " Tj"));
         }
     }
 }

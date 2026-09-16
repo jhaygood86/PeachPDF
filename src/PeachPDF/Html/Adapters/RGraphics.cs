@@ -481,8 +481,8 @@ namespace PeachPDF.Html.Adapters
         /// (a single-color PDF text show), the
         /// returned path can be filled with a gradient/pattern brush or stroked - used by the SVG
         /// renderer for gradient/pattern <c>fill</c>, <c>stroke</c>, and <c>&lt;textPath&gt;</c> on text.
-        /// Returns <c>null</c> when the font produces no glyph outlines (e.g. a CFF/bitmap font, which
-        /// has no <c>glyf</c> table) - the caller's cue to fall back to
+        /// Returns <c>null</c> when the font produces no glyph outlines (a CID-keyed CFF font, or a
+        /// bitmap font, neither of which this engine can decode outlines from) - the caller's cue to fall back to
         /// <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>.
         /// </summary>
         /// <param name="str">the run to outline</param>

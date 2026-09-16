@@ -49,7 +49,14 @@ namespace PeachPDF.Html.Core.Paint
         /// those, like border/padding/border-radius (genuine box-model properties CSS2.1 never allows
         /// on <c>::first-line</c> at all), always come from the box's own resolved style.
         /// </param>
-        internal static void PaintBackground(RGraphics g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle = null)
+        /// <param name="fragment">
+        /// this box's own fragment, when one is in scope - the source of the laid-out words a
+        /// <c>background-clip: text</c> layer clips to (issue #1117; see <see cref="BuildTextClipPath"/>).
+        /// Null for the three call sites with no word content of their own to clip to (the page-canvas
+        /// background, a replaced element's chrome, a form field's chrome) - <c>text</c> degrades to
+        /// <c>border-box</c> there, same as an unsupported font/writing-mode does below.
+        /// </param>
+        internal static void PaintBackground(RGraphics g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle = null, BoxFragment? fragment = null)
         {
             var rect = geometry.DecorationRect;
 
@@ -97,6 +104,48 @@ namespace PeachPDF.Html.Core.Paint
             // and reflects a `@page :first`/named/margin-overridden page's own area; issue #146.
             var viewportRect = box.HtmlContainer!.PageClipOverride ?? box.HtmlContainer!.PageBoxRect;
 
+            // A `text` clip layer's shape (issue #1117) is the union of every laid-out glyph outline
+            // reachable from `fragment`'s subtree - built lazily, at most once per call, and shared by
+            // every layer that resolves to `text` (the solid-color layer and/or any number of
+            // background-image layers), rather than once per layer like a rounded-rect clip is. Disposed
+            // once below, after every layer that might have used it has painted.
+            RGraphicsPath? textClipPath = null;
+            var textClipPathBuilt = false;
+            RGraphicsPath? TextClipPath()
+            {
+                if (!textClipPathBuilt)
+                {
+                    textClipPathBuilt = true;
+                    if (fragment is not null) textClipPath = BuildTextClipPath(g, fragment);
+                }
+                return textClipPath;
+            }
+
+            // Resolves one layer's clip value to its painting rectangle and (when the box needs a
+            // non-rectangular clip) the path to paint through. `text` reuses `TextClipPath()`'s shared
+            // path when one could be built; when it can't (no fragment in scope, no clippable words, an
+            // outline-less font run, or a vertical writing mode - BuildTextClipPath's own null cases),
+            // it falls back to exactly `border-box`'s own treatment, rounded corners included, matching
+            // this engine's pre-#1117 behavior for an unrecognized `background-clip` value instead of
+            // silently losing the rounding too.
+            (RRect ClipRect, RGraphicsPath? ClipShape, bool Shared) ResolveClip(string clipValue)
+            {
+                if (clipValue == Keywords.Text)
+                {
+                    if (TextClipPath() is { } textPath) return (rect, textPath, true);
+                    clipValue = Keywords.BorderBox;
+                }
+
+                var clipRect = BoxModelRect(clipValue);
+                if (!box.IsRounded) return (clipRect, null, false);
+
+                var radii = ClipRadii(clipValue, clipRect);
+                var roundedPath = RenderUtils.GetRoundRect(g, clipRect,
+                    radii.TLX, radii.TLY, radii.TRX, radii.TRY,
+                    radii.BRX, radii.BRY, radii.BLX, radii.BLY);
+                return (clipRect, roundedPath, false);
+            }
+
             var actualBackgroundColor = firstLineStyle?.ActualBackgroundColor ?? box.ActualBackgroundColor;
             RBrush? solidBrush = RenderUtils.IsColorVisible(actualBackgroundColor)
                 ? g.GetSolidBrush(actualBackgroundColor)
@@ -111,19 +160,10 @@ namespace PeachPDF.Html.Core.Paint
                 // multiple values, the solid fill uses the LAST (bottom-most) one, independent of
                 // how many background-image layers exist - including zero.
                 var colorClipValue = clipLayers[^1];
-                var colorClipRect = BoxModelRect(colorClipValue);
+                var (colorClipRect, colorClipShape, colorShapeShared) = ResolveClip(colorClipValue);
 
-                RGraphicsPath? colorRoundedClipPath = null;
-                if (box.IsRounded)
-                {
-                    var radii = ClipRadii(colorClipValue, colorClipRect);
-                    colorRoundedClipPath = RenderUtils.GetRoundRect(g, colorClipRect,
-                        radii.TLX, radii.TLY, radii.TRX, radii.TRY,
-                        radii.BRX, radii.BRY, radii.BLX, radii.BLY);
-                }
-
-                PaintClippedBrush(g, box, solidBrush, colorClipRect, colorRoundedClipPath);
-                colorRoundedClipPath?.Dispose();
+                PaintClippedBrush(g, box, solidBrush, colorClipRect, colorClipShape);
+                if (!colorShapeShared) colorClipShape?.Dispose();
             }
 
             // Then paint image/gradient layers back-to-front (last in the comma-list = bottom-most
@@ -137,37 +177,32 @@ namespace PeachPDF.Html.Core.Paint
             {
                 var originRect = BoxModelRect(BackgroundLayerResolver.LayerAt(originLayers, layerIndex));
                 var clipValue  = BackgroundLayerResolver.LayerAt(clipLayers, layerIndex);
-                var clipRect   = BoxModelRect(clipValue);
+                var (clipRect, clipShape, shapeShared) = ResolveClip(clipValue);
 
-                RGraphicsPath? roundedClipPath = null;
-                if (box.IsRounded)
-                {
-                    var radii = ClipRadii(clipValue, clipRect);
-                    roundedClipPath = RenderUtils.GetRoundRect(g, clipRect,
-                        radii.TLX, radii.TLY, radii.TRX, radii.TRY,
-                        radii.BRX, radii.BRY, radii.BLX, radii.BLY);
-                }
-
-                void DrawBrush(RBrush brush) => PaintClippedBrush(g, box, brush, clipRect, roundedClipPath);
+                void DrawBrush(RBrush brush) => PaintClippedBrush(g, box, brush, clipRect, clipShape);
 
                 CssImagePainter.Paint(g, box.BackgroundImages![layerIndex], layerIndex, originRect, clipRect,
-                    roundedClipPath, box.BackgroundPosition, box.BackgroundSize, box.BackgroundRepeat, box.BackgroundAttachment,
+                    clipShape, box.BackgroundPosition, box.BackgroundSize, box.BackgroundRepeat, box.BackgroundAttachment,
                     viewportRect, box, DrawBrush);
 
-                roundedClipPath?.Dispose();
+                if (!shapeShared) clipShape?.Dispose();
             }
+
+            textClipPath?.Dispose();
         }
 
         /// <summary>
-        /// Fills <paramref name="brush"/> clipped to <paramref name="roundedClipPath"/> (border-radius
-        /// case) or <paramref name="clipRect"/> (rectangular case), and disposes the brush afterward.
-        /// Shared by every per-layer background-image/gradient draw and the final solid-color fill.
+        /// Fills <paramref name="brush"/> clipped to <paramref name="roundedClipPath"/> (border-radius,
+        /// or a <c>background-clip: text</c> glyph-outline union - see
+        /// <c>PaintBackground</c>'s local <c>ResolveClip</c>/<see cref="BuildTextClipPath"/>) or <paramref name="clipRect"/>
+        /// (plain rectangular case), and disposes the brush afterward. Shared by every per-layer
+        /// background-image/gradient draw and the final solid-color fill.
         /// </summary>
         private static void PaintClippedBrush(RGraphics g, CssBox box, RBrush brush, RRect clipRect, RGraphicsPath? roundedClipPath)
         {
             // TODO:a handle it correctly (tables background)
             object? prevMode = null;
-            if (box.HtmlContainer is { AvoidGeometryAntialias: false } && box.IsRounded)
+            if (box.HtmlContainer is { AvoidGeometryAntialias: false } && roundedClipPath != null)
                 prevMode = g.SetAntiAliasSmoothingMode();
 
             if (roundedClipPath != null)
@@ -177,6 +212,116 @@ namespace PeachPDF.Html.Core.Paint
 
             g.ReturnPreviousSmoothingMode(prevMode);
             brush.Dispose();
+        }
+
+        /// <summary>
+        /// Builds the union of every laid-out word's glyph outline reachable from <paramref name="fragment"/>'s
+        /// own subtree - this box's own words plus descendants', stopping at an atomic inline - for a
+        /// <c>background-clip: text</c> layer (issue #1117). Membership mirrors
+        /// <see cref="DecorationContent"/>'s own walk (out-of-flow descendants and atomic inlines are
+        /// skipped, line breaks/images/leaders carry no ink), but this is a smaller, purpose-built walk
+        /// rather than a reuse of that class: <see cref="DecorationContent"/>'s own shape is keyed by
+        /// <see cref="CssLineBox"/> for decoration-line purposes irrelevant here, and it has no way to
+        /// hand back the flat rect/word/font triples a glyph-outline union needs.
+        /// </summary>
+        /// <returns>
+        /// An empty (non-null) path when the subtree has no clippable words at all - correctly clips
+        /// the layer to nothing. Null when any reached <i>word</i> - <see cref="RGraphics.GetTextOutline"/>'s
+        /// own granularity - produced no usable glyph outline at all (every glyph in it failed: a
+        /// CID-keyed CFF or otherwise outline-less font) or the word's own box is set to a vertical
+        /// writing mode (<see cref="IsHorizontalWritingMode"/>) - <c>PaintBackground</c>'s local
+        /// <c>ResolveClip</c>'s cue to fall back to the box's ordinary <c>border-box</c> clip instead of
+        /// a shape with glyphs missing from it. A word whose glyphs only *partially* decode (e.g. one
+        /// character using an escape/seac operator
+        /// <see cref="PeachPDF.Fonts.OpenType.Type2CharstringInterpreter"/> doesn't implement, amid
+        /// otherwise-decodable sibling glyphs) is accepted as-is rather than triggering
+        /// this fallback - <c>GetTextOutline</c> itself has no per-glyph granularity to report that
+        /// distinction, so the clip can end up missing just that one glyph's shape. Narrow in practice
+        /// (real-world non-CID CFF fonts essentially never use the legacy seac form on ordinary text
+        /// glyphs), not separately tracked as an accepted gap.
+        /// </returns>
+        private static RGraphicsPath? BuildTextClipPath(RGraphics g, BoxFragment fragment)
+        {
+            RGraphicsPath? union = null;
+            var anyUnsupportedRun = false;
+
+            void CollectWords(BoxFragment f)
+            {
+                if (!IsHorizontalWritingMode(f.Box))
+                {
+                    anyUnsupportedRun = true;
+                    return;
+                }
+
+                foreach (var wordFragment in f.Words)
+                {
+                    var word = wordFragment.Word;
+                    if (word.IsLineBreak || word.IsImage || word is CssRectLeader) continue;
+
+                    var text = word.FirstLineText ?? word.Text;
+                    if (string.IsNullOrEmpty(text)) continue;
+
+                    var styleSource = word.FirstLineStyle ?? f.Box;
+                    var font = CssBox.ResolveWordFont(word, styleSource);
+                    var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
+                    var wordPoint = new RPoint(wordFragment.Rect.X, wordFragment.Rect.Y + baselineAdjust);
+                    var features = styleSource.ResolveWordShapingFeatures(word);
+
+                    // GetTextOutline places the baseline directly, unlike DrawString/wordPoint above
+                    // (top-left of the word's own box) - shift down by the font's own ascent, the same
+                    // correction SvgRenderer.PaintTextGlyphs already makes for the identical mismatch.
+                    var baselineOrigin = new RPoint(wordPoint.X, wordPoint.Y + font.Ascent);
+                    var outline = g.GetTextOutline(text, font, baselineOrigin, styleSource.ActualLetterSpacing, features);
+                    if (outline is null)
+                    {
+                        anyUnsupportedRun = true;
+                        continue;
+                    }
+
+                    if (union is null)
+                    {
+                        union = g.GetGraphicsPath();
+                        // Matches GetTextOutline's own per-glyph path (GraphicsAdapter.GetTextOutline
+                        // sets this on each outline it builds) - required for a glyph with a nested
+                        // counter (the hole in "e"/"o"/"a"/...) to fill correctly regardless of its
+                        // contours' winding direction, rather than an even-odd default that happens to
+                        // agree only for the simplest single-nested-contour case.
+                        union.FillMode = RFillMode.Nonzero;
+                    }
+                    union.AddPath(outline);
+                    outline.Dispose();
+                }
+            }
+
+            // The out-of-flow/atomic-inline skip below is a fact about a *descendant*, per
+            // DecorationContent.Collect's own identical rule - it must not apply to `fragment` itself,
+            // or a box that IS an atomic inline or out-of-flow (an inline-block "badge", a float, an
+            // absolutely-positioned element) with its own background-clip: text would never reach its
+            // own words at all, leaving `union` null/`anyUnsupportedRun` false and returning an empty
+            // (not a null/fallback) path - silently clipping its own background to nothing rather than
+            // to its own text or to border-box. Mirrors DecorationContent.Of's own split: Collect only
+            // ever recurses into fragment.Children, while the root's own words are gathered separately
+            // and unconditionally.
+            void Collect(BoxFragment f)
+            {
+                if (f.Box.IsOutOfFlow) return;
+                if (DomUtils.IsAtomicInline(f.Box)) return;
+
+                CollectWords(f);
+
+                foreach (var child in f.Children) Collect(child);
+            }
+
+            CollectWords(fragment);
+            foreach (var child in fragment.Children) Collect(child);
+
+            if (anyUnsupportedRun)
+            {
+                union?.Dispose();
+                return null;
+            }
+
+            return union ?? g.GetGraphicsPath();
         }
 
         /// <summary>

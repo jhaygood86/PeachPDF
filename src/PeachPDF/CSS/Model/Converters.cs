@@ -322,6 +322,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter BackgroundAttachmentConverter = Map.BackgroundAttachments.ToConverter();
         public static readonly IValueConverter BackgroundRepeatConverter = Map.BackgroundRepeats.ToConverter();
         public static readonly IValueConverter BoxModelConverter = Map.BoxModels.ToConverter();
+        public static readonly IValueConverter BackgroundClipConverter = Map.BackgroundClips.ToConverter();
         public static readonly IValueConverter AnimationDirectionConverter = Map.AnimationDirections.ToConverter();
         public static readonly IValueConverter AnimationFillStyleConverter = Map.AnimationFillStyles.ToConverter();
         public static readonly IValueConverter TextDecorationStyleConverter = Map.TextDecorationStyles.ToConverter();

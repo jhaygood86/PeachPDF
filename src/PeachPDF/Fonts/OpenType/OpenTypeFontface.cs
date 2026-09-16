@@ -154,6 +154,7 @@ namespace PeachPDF.Fonts.OpenType
         internal PostScriptTable post = null!;
         internal GlyphDataTable glyf = null!;
         internal IndexToLocationTable loca = null!;
+        internal CffTable cff = null!; // optional - a TrueType-outline font has no CFF table at all
         internal GlyphSubstitutionTable gsub = null!;
         internal GlyphDefinitionTable gdef = null!; // optional - absent on many fonts
         internal GlyphPositioningTable gpos = null!; // optional - absent on many fonts
@@ -315,6 +316,10 @@ namespace PeachPDF.Fonts.OpenType
 
                 if (Seek(IndexToLocationTable.Tag) != -1)
                     loca = new IndexToLocationTable(this);
+
+                // Optional CFF outlines (an "OTTO" font has no glyf/loca at all - see Type2CharstringInterpreter).
+                if (TableDictionary.ContainsKey(TableTagNames.Cff))
+                    cff = new CffTable(this);
 
                 if (Seek(GlyphSubstitutionTable.Tag) != -1)
                     gsub = new GlyphSubstitutionTable(this);

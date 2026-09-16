@@ -205,6 +205,17 @@ namespace PeachPDF.CSS
                 {Keywords.PaddingBox, BoxModel.PaddingBox},
                 {Keywords.ContentBox, BoxModel.ContentBox}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        // background-clip's own grammar - BoxModels' three values plus "text" (issue #1117). Kept
+        // separate from BoxModels/BoxModel so background-origin/box-sizing (which share those) never
+        // accept "text".
+        public static readonly FrozenDictionary<string, BackgroundClipKeyword> BackgroundClips =
+            new Dictionary<string, BackgroundClipKeyword>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.BorderBox, BackgroundClipKeyword.BorderBox},
+                {Keywords.PaddingBox, BackgroundClipKeyword.PaddingBox},
+                {Keywords.ContentBox, BackgroundClipKeyword.ContentBox},
+                {Keywords.Text, BackgroundClipKeyword.Text}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, ITimingFunction> TimingFunctions =
             new Dictionary<string, ITimingFunction>(StringComparer.OrdinalIgnoreCase)
             {

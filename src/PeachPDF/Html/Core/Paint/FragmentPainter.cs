@@ -513,7 +513,7 @@ namespace PeachPDF.Html.Core.Paint
                     // keeps it out of the space beside this rectangle - which belongs to other content.
                     if (geometry.NeedsClip) g.PushClip(geometry.ClipRect);
 
-                    PaintBackground(g, box, geometry, GetFirstLineStyleForRect(lines[i].Line));
+                    PaintBackground(g, box, geometry, GetFirstLineStyleForRect(lines[i].Line), fragment);
 
                     if (geometry.NeedsClip) g.PopClip();
                 }

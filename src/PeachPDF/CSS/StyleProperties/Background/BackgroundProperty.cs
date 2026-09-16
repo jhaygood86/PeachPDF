@@ -19,7 +19,7 @@
             BackgroundRepeatsConverter.Option().For(PropertyNames.BackgroundRepeat),
             BackgroundAttachmentConverter.Option().For(PropertyNames.BackgroundAttachment),
             BoxModelConverter.Option().For(PropertyNames.BackgroundOrigin),
-            BoxModelConverter.Option().For(PropertyNames.BackgroundClip));
+            BackgroundClipConverter.Option().For(PropertyNames.BackgroundClip));
 
         private static readonly IValueConverter FinalLayerConverter = WithAny(
             OptionalImageSourceConverter.Option().For(PropertyNames.BackgroundImage),
@@ -29,7 +29,7 @@
             BackgroundRepeatsConverter.Option().For(PropertyNames.BackgroundRepeat),
             BackgroundAttachmentConverter.Option().For(PropertyNames.BackgroundAttachment),
             BoxModelConverter.Option().For(PropertyNames.BackgroundOrigin),
-            BoxModelConverter.Option().For(PropertyNames.BackgroundClip),
+            BackgroundClipConverter.Option().For(PropertyNames.BackgroundClip),
             CurrentColorConverter.Option().For(PropertyNames.BackgroundColor));
 
         private static readonly IValueConverter StyleConverter =

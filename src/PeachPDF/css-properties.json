@@ -1588,10 +1588,10 @@
     },
     {
       "name": "background-clip",
-      "comment": "<box># where <box> = padding-box | border-box | content-box, matching the real Converters.BoxModelConverter grammar. cssDataType 'keyword-list' validates span-based via CssValueParser.IsValidCommaKeywordList, reusing the same Map.BoxModels dictionary.",
+      "comment": "<box># where <box> = padding-box | border-box | content-box | text, matching the real Converters.BackgroundClipConverter grammar - a dedicated keyword map (Map.BackgroundClips), not the shared Map.BoxModels background-origin/box-sizing use, so 'text' can't leak into those. cssDataType 'keyword-list' validates span-based via CssValueParser.IsValidCommaKeywordList.",
       "inherited": false,
       "initialValue": "border-box",
-      "cssDataType": { "type": "keyword-list", "keywordMap": "Map.BoxModels" },
+      "cssDataType": { "type": "keyword-list", "keywordMap": "Map.BackgroundClips" },
       "html": {
         "propertyPath": "BackgroundClip",
         "csharpDataType": "string",

@@ -564,9 +564,22 @@ namespace PeachPDF.Fonts.OpenType
         /// <summary>The font's MATH table, or null if it has none.</summary>
         public MathTable? MathTable => FontFace.math?.Table;
 
-        /// <summary>Decodes a glyph's outline (glyf contours) into drawable vector segments.</summary>
+        /// <summary>
+        /// Decodes a glyph's outline into drawable vector segments - `glyf` contours when the font
+        /// has them, else a CFF font's own Type 2 charstring (see <see cref="Type2CharstringInterpreter"/>)
+        /// when it has one <see cref="CffTable.IsSupported">this reader supports</see> (not CID-keyed).
+        /// False for a font with neither (a CID-keyed CFF font, or one this reader could not parse at all).
+        /// </summary>
         public bool TryGetGlyphOutline(int glyphIndex, out GlyphOutline outline)
-            => GlyphOutlineDecoder.TryGetGlyphOutline(FontFace, glyphIndex, out outline);
+        {
+            if (GlyphOutlineDecoder.TryGetGlyphOutline(FontFace, glyphIndex, out outline))
+                return true;
+
+            if (FontFace.glyf is null && FontFace.cff is { IsSupported: true })
+                return Type2CharstringInterpreter.TryGetGlyphOutline(FontFace.cff, glyphIndex, out outline);
+
+            return false;
+        }
 
         private int CharCodeToGlyphIndexCore(int value)
         {

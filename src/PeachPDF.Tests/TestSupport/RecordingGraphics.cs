@@ -78,6 +78,22 @@ namespace PeachPDF.Tests.TestSupport
         /// <summary>Every word string passed to DrawString during this paint pass, with the Y it was drawn at.</summary>
         public List<(string Text, double Y)> DrawnStrings { get; } = [];
 
+        /// <summary>
+        /// Every call to <see cref="GetTextOutline"/> during this paint pass - e.g. so a
+        /// <c>background-clip: text</c> test can assert which words a glyph-outline-union walk
+        /// actually reached (including/excluding descendants, line breaks, images) without a real
+        /// font. Answered by <see cref="GetTextOutlineOverride"/> when set; null (this mock's original,
+        /// still-default behavior for every consumer that never sets the override) otherwise.
+        /// </summary>
+        public List<(string Text, RPoint BaselineOrigin)> GetTextOutlineCalls { get; } = [];
+
+        /// <summary>
+        /// When set, answers <see cref="GetTextOutline"/> instead of the default <c>null</c> - e.g.
+        /// returning a small stand-in <see cref="RecordingGraphicsPath"/> per call to simulate a font
+        /// with decodable outlines, or <c>null</c> to simulate a CID-keyed CFF/bitmap font's fallback.
+        /// </summary>
+        public Func<string, RFont, RPoint, double, TextShapingFeatures?, RGraphicsPath?>? GetTextOutlineOverride { get; set; }
+
         /// <summary>Every destination rect passed to <see cref="DrawImage(RImage, RRect, RRect)"/>/
         /// <see cref="DrawImage(RImage, RRect)"/>, in order - e.g. to confirm a
         /// <c>background-attachment: fixed</c> layer's positioning area actually reached the image draw.</summary>
@@ -225,7 +241,11 @@ namespace PeachPDF.Tests.TestSupport
         }
         public override RGraphicsPath GetGraphicsPath() => new RecordingGraphicsPath();
 
-        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null) => null;
+        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null)
+        {
+            GetTextOutlineCalls.Add((str, baselineOrigin));
+            return GetTextOutlineOverride?.Invoke(str, font, baselineOrigin, letterSpacing, features);
+        }
         public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
         public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
         public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal) { }
@@ -259,6 +279,11 @@ namespace PeachPDF.Tests.TestSupport
         /// #812), not just its radii.</summary>
         public List<(double X, double Y)> Points { get; } = [];
 
+        /// <summary>How many times <see cref="AddPath"/> unioned another path's geometry into this
+        /// one - e.g. so a <c>background-clip: text</c> test can assert a multi-run glyph-outline
+        /// union actually merged every run's outline, not just the first.</summary>
+        public int UnionedPathCount { get; private set; }
+
         public override void Start(double x, double y) => Points.Add((x, y));
         public override void LineTo(double x, double y) => Points.Add((x, y));
         public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner)
@@ -266,12 +291,26 @@ namespace PeachPDF.Tests.TestSupport
             Points.Add((x, y));
             Arcs.Add((corner, radiusX, radiusY));
         }
-        public override void AddMove(double x, double y) { }
-        public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3) { }
-        public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) { }
+        public override void AddMove(double x, double y) => Points.Add((x, y));
+        public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3)
+        {
+            Points.Add((x1, y1));
+            Points.Add((x2, y2));
+            Points.Add((x3, y3));
+        }
+        public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) => Points.Add((x, y));
         public override void CloseFigure() => Closed = true;
         public override void Transform(RMatrix matrix) { }
-        public override void AddPath(RGraphicsPath path) { }
+
+        /// <summary>Merges <paramref name="path"/>'s recorded points into this one, mirroring the real
+        /// <c>GraphicsPathAdapter.AddPath</c>'s union semantics (see its own remarks) closely enough
+        /// for a test to observe that a multi-shape clip (rounded corners, or a
+        /// <c>background-clip: text</c> glyph-outline union) actually combined every shape.</summary>
+        public override void AddPath(RGraphicsPath path)
+        {
+            UnionedPathCount++;
+            if (path is RecordingGraphicsPath other) Points.AddRange(other.Points);
+        }
         public override RFillMode FillMode { get; set; }
         public override void Dispose() { }
     }

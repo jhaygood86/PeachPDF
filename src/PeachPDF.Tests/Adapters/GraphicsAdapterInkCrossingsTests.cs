@@ -16,9 +16,9 @@ namespace PeachPDF.Tests.Adapters
     /// <remarks>
     /// Coordinates are the same user space <c>DrawString</c> paints in, with the baseline at the origin's
     /// y, so a band below the baseline means "under the text". Both bundled fonts are exercised: the
-    /// TrueType one has <c>glyf</c> outlines to decode, and the OpenType one has CFF outlines this
-    /// engine's decoder cannot read, which is the documented limitation this reports as "no ink known"
-    /// rather than as "no ink".
+    /// TrueType one has <c>glyf</c> outlines to decode, and the OpenType one has CFF outlines decoded via
+    /// <see cref="PeachPDF.Fonts.OpenType.Type2CharstringInterpreter"/> (issue #1117) - a CID-keyed CFF
+    /// or bitmap font remains the actual "no ink known" case, per the accepted-gap note this narrowed.
     /// </remarks>
     public class GraphicsAdapterInkCrossingsTests
     {
@@ -203,14 +203,19 @@ namespace PeachPDF.Tests.Adapters
         }
 
         [Fact]
-        public async Task ACffOutlineFont_ReportsNoInkKnown()
+        public async Task ACffOutlineFont_ReportsInk()
         {
-            // GlyphOutlineDecoder reads glyf/loca only, so an OpenType/CFF font yields no decodable ink
-            // and nothing is skipped under it. Conformant for `auto` (UA discretion) and a tracked gap
-            // for `all` - see docs/html-css-support.md.
+            // Source Code Pro is CFF/OTTO (no glyf table at all) - its ink now comes from
+            // Type2CharstringInterpreter (issue #1117), same as any other font's. Only a CID-keyed CFF
+            // or bitmap font still reports "no ink known" (see the class remarks and the narrowed
+            // accepted-gap note).
             using var fixture = await Fixture.CreateAsync(BundledFonts.Otf, "InkTestCff");
 
-            Assert.Null(fixture.Crossings("g", below: 2, height: 1));
+            var crossings = fixture.Crossings("g", below: 2, height: 1);
+
+            Assert.NotNull(crossings);
+            var only = Assert.Single(crossings);
+            Assert.True(only.End > only.Start, "the crossing should be a real interval");
         }
 
         // ─── Fixture ─────────────────────────────────────────────────────────────

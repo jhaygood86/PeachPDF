@@ -3,7 +3,7 @@
     internal sealed class BackgroundClipProperty : Property
     {
         private static readonly IValueConverter ListConverter =
-            Converters.BoxModelConverter.FromList().OrDefault(BoxModel.BorderBox);
+            Converters.BackgroundClipConverter.FromList().OrDefault(BackgroundClipKeyword.BorderBox);
 
         internal BackgroundClipProperty()
             : base(PropertyNames.BackgroundClip)
