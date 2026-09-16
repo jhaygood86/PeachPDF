@@ -10,14 +10,17 @@ namespace PeachPDF.Tests.Html.Core.Paint
 {
     /// <summary>
     /// <see cref="CssBox.CollapsedBorderSegments"/>' exact geometry at an interior grid line - distinct
-    /// from <see cref="CollapsedBorderPaintTests"/>, which only checks paint <i>order</i>. An interior
-    /// line's two neighbors deliberately overlap by the whole resolved border width (not just meet at a
-    /// point - see <see href="https://github.com/jhaygood86/PeachPDF/issues/735">issue #735</see>'s own
-    /// notes), so the border segment painted over that overlap must cover the <i>whole</i> band, not just
-    /// the half nearer one side - a segment centered on the wrong point still "draws a border" and still
-    /// passes a paint-order check, but leaves a sliver of the overlap uncovered where the later-painted
-    /// neighbor's background shows through past the border line
-    /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/744">issue #744</see>).
+    /// from <see cref="CollapsedBorderPaintTests"/>, which only checks paint <i>order</i>. Two neighbors
+    /// on either side of an interior line meet exactly flush (each already carries its own half of the
+    /// resolved border width as its own used border, per <see cref="CssLayoutEngineTable.ApplyCollapsedUsedBorderWidths"/> -
+    /// see <see href="https://github.com/jhaygood86/PeachPDF/issues/1138">issue #1138</see>, which fixed
+    /// an earlier version of this file's own doc comment that had it overlapping by the whole width
+    /// instead), so the border segment painted at that line must be centered exactly on the single point
+    /// they coincide at, reaching half its own width to each side - a segment centered on the wrong point
+    /// still "draws a border" and still passes a paint-order check, but leaves a sliver of the shared
+    /// border uncovered where the neighbor's background shows through past it
+    /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/744">issue #744</see>, which this file
+    /// was originally written for).
     /// </summary>
     public class CollapsedBorderGeometryTests
     {
@@ -25,7 +28,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
             LayoutHarness.Descendants(root).First(b => b.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable);
 
         [Fact]
-        public async Task Issue744Repro_InteriorHorizontalBorderCoversFullOverlapBand()
+        public async Task Issue744Repro_InteriorHorizontalBorderIsCenteredOnTheSharedBoundary()
         {
             var html = LayoutHarness.Wrap(@"
                 <table style='border-collapse:collapse;width:100%'>
@@ -52,15 +55,16 @@ namespace PeachPDF.Tests.Html.Core.Paint
                 .OrderBy(s => Math.Abs(s.Rect.Y + s.Rect.Height / 2 - midpoint))
                 .First();
 
-            // Ground truth, independent of the segment itself: the overlap band is exactly
-            // [rowBelow.Location.Y, rowAbove.ActualBottom] (row-below's top to row-above's bottom) - the
-            // segment must cover that whole band, not just the half nearer one row.
-            Assert.Equal(rowBelow.Location.Y, interior.Rect.Y, 3);
-            Assert.Equal(rowAbove.ActualBottom, interior.Rect.Y + interior.Rect.Height, 3);
+            // Ground truth, independent of the segment itself: rowAbove/rowBelow meet exactly flush
+            // (issue #1138), so the shared boundary is the single point they coincide at - the segment
+            // must be centered on it, reaching half its own thickness to each side.
+            Assert.Equal(rowAbove.ActualBottom, rowBelow.Location.Y, 3);
+            Assert.Equal(rowAbove.ActualBottom - interior.Rect.Height / 2, interior.Rect.Y, 3);
+            Assert.Equal(rowAbove.ActualBottom + interior.Rect.Height / 2, interior.Rect.Y + interior.Rect.Height, 3);
         }
 
         [Fact]
-        public async Task Issue744Repro_InteriorVerticalBorderCoversFullOverlapBand()
+        public async Task Issue744Repro_InteriorVerticalBorderIsCenteredOnTheSharedBoundary()
         {
             var html = LayoutHarness.Wrap(@"
                 <table style='border-collapse:collapse;width:100%'>
@@ -87,13 +91,15 @@ namespace PeachPDF.Tests.Html.Core.Paint
                 .OrderBy(s => Math.Abs(s.Rect.X + s.Rect.Width / 2 - midpoint))
                 .First();
 
-            // Ground truth: the overlap band is exactly [rightCell.Location.X, leftCell.ActualRight].
-            Assert.Equal(rightCell.Location.X, interior.Rect.X, 3);
-            Assert.Equal(leftCell.ActualRight, interior.Rect.X + interior.Rect.Width, 3);
+            // Ground truth: leftCell/rightCell meet exactly flush (issue #1138), so the shared boundary
+            // is the single point they coincide at.
+            Assert.Equal(leftCell.ActualRight, rightCell.Location.X, 3);
+            Assert.Equal(leftCell.ActualRight - interior.Rect.Width / 2, interior.Rect.X, 3);
+            Assert.Equal(leftCell.ActualRight + interior.Rect.Width / 2, interior.Rect.X + interior.Rect.Width, 3);
         }
 
         [Fact]
-        public async Task Issue744Repro_RepeatedTheadBoundaryCoversFullOverlapBand()
+        public async Task Issue744Repro_RepeatedTheadBoundaryIsCenteredOnTheSharedBoundary()
         {
             // A <thead> always goes through a CssProxyBox, even when it appears (and repeats) exactly
             // once - deliberately kept to a single page here (a handful of rows, default page size) so
@@ -121,18 +127,18 @@ namespace PeachPDF.Tests.Html.Core.Paint
             var boundary = segments!.Where(s => s.IsHorizontal).OrderByDescending(s => s.Rect.Y).First();
             var proxyBottom = headerProxy.ActualBottom;
 
-            Assert.Equal(proxyBottom - boundary.Width, boundary.Rect.Y, 3);
-            Assert.Equal(proxyBottom, boundary.Rect.Y + boundary.Rect.Height, 3);
+            Assert.Equal(proxyBottom - boundary.Width / 2, boundary.Rect.Y, 3);
+            Assert.Equal(proxyBottom + boundary.Width / 2, boundary.Rect.Y + boundary.Rect.Height, 3);
         }
 
         [Fact]
-        public async Task Issue744Repro_TheadImmediatelyMeetsTfootWithNoBodyRows_BoundaryCoversFullOverlapBand()
+        public async Task Issue744Repro_TheadImmediatelyMeetsTfootWithNoBodyRows_BoundaryIsCenteredOnTheSharedBoundary()
         {
             // No <tbody> row exists on either side of the thead/tfoot seam, so EmitHeaderFooterBorderSegments
-            // falls back to SnapshotLineY(boundaryLine) instead of ResolveRepeatedGroupBoundary - a distinct
+            // falls back to SnapshotLine(boundaryLine) instead of ResolveRepeatedGroupBoundary - a distinct
             // code path from the other two geometry tests above, which both go through an adjacent body row.
             // The seam is still genuinely interior to the whole table (a real row - the footer's - sits on
-            // its other side), so it still needs the overlap-band-to-center correction.
+            // its other side), so its reported position still has to agree exactly with the footer's own.
             var html = LayoutHarness.Wrap(@"
                 <table style='border-collapse:collapse;width:100%'>
                     <thead><tr><th style='border-bottom:solid #000 1pt'>Header</th></tr></thead>
@@ -153,12 +159,13 @@ namespace PeachPDF.Tests.Html.Core.Paint
             var boundary = segments!.Where(s => s.IsHorizontal).OrderByDescending(s => s.Rect.Y).First();
             var proxyBottom = headerProxy.ActualBottom;
 
-            // Ground truth, independent of the segment itself: header and footer overlap by the full
-            // resolved border width here too (the same border-collapse convention as two adjacent body
-            // rows - see GetGridLineY's remarks), so the footer's own top names the overlap band's other
-            // edge, not a point coincident with the header's own bottom.
-            Assert.Equal(footerProxy.Location.Y, boundary.Rect.Y, 3);
-            Assert.Equal(proxyBottom, boundary.Rect.Y + boundary.Rect.Height, 3);
+            // Ground truth, independent of the segment itself: header and footer meet exactly flush here
+            // too (the same border-collapse convention as two adjacent body rows - see GetGridLineY's
+            // remarks), so the footer's own top coincides with the header's own bottom, and the segment
+            // is centered on that single shared point.
+            Assert.Equal(footerProxy.Location.Y, proxyBottom, 3);
+            Assert.Equal(proxyBottom - boundary.Width / 2, boundary.Rect.Y, 3);
+            Assert.Equal(proxyBottom + boundary.Width / 2, boundary.Rect.Y + boundary.Rect.Height, 3);
         }
 
         [Fact]
@@ -166,9 +173,9 @@ namespace PeachPDF.Tests.Html.Core.Paint
         {
             // A column divider spanning the header's full row range ends at the same grid line the
             // horizontal boundary-to-body segment sits on - both must agree on that line's exact
-            // center, or the divider visibly overshoots/undershoots the horizontal border by half its
-            // width at the corner. Both read the boundary line through SnapshotLineY, which has to
-            // apply its correction consistently regardless of which loop calls it.
+            // position, or the divider visibly overshoots/undershoots the horizontal border at the
+            // corner. Both read the boundary line through SnapshotLine, which has to report it
+            // consistently regardless of which loop calls it.
             var html = LayoutHarness.Wrap(@"
                 <table style='border-collapse:collapse;width:100%'>
                     <thead><tr>
@@ -197,15 +204,16 @@ namespace PeachPDF.Tests.Html.Core.Paint
 
             var proxyBottom = headerProxy.ActualBottom;
 
-            // Ground truth, fully independent of any border-segment computation: the overlap band's
-            // bottom is the header proxy's own ActualBottom, and its top is the first body row's own
-            // Location.Y (set by the ordinary row cursor in LayoutBodyRows, which reaches this row via
-            // "cursor.CurrentY += headerRoom" - an entirely separate code path from
-            // EmitHeaderFooterBorderSegments). The true center is the midpoint of those two real,
-            // independently-computed layout values - comparing the vertical segment's endpoint to the
-            // horizontal boundary segment's own (Rect.Y + Rect.Height/2) instead would be circular, since
-            // both are built from the same correction and would still agree even if that correction were
-            // wrong.
+            // Ground truth, fully independent of any border-segment computation: the header and the
+            // first body row meet exactly flush (issue #1138), so the header proxy's own ActualBottom
+            // and the first body row's own Location.Y (set by the ordinary row cursor in
+            // LayoutBodyRows, which reaches this row via "cursor.CurrentY += headerRoom" - an entirely
+            // separate code path from EmitHeaderFooterBorderSegments) are the same point - taking their
+            // midpoint (rather than either one alone) keeps this ground truth independent of which of
+            // the two real, independently-computed values happens to be read; comparing the vertical
+            // segment's endpoint to the horizontal boundary segment's own (Rect.Y + Rect.Height/2)
+            // instead would be circular, since both are built from the same code and would still agree
+            // even if it were wrong.
             var firstBodyRow = LayoutHarness.Descendants(root)
                 .First(b => b.DerivedStyle.ActualDisplay == Keywords.TableRow);
             var trueBoundaryCenterY = (proxyBottom + firstBodyRow.Location.Y) / 2;

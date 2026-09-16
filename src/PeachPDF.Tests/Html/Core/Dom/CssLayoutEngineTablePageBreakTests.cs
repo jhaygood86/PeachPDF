@@ -409,11 +409,17 @@ namespace PeachPDF.Tests.Html.Core.Dom
                 // The key assertion: a row on page N should not extend into the next page's
                 // content area. Due to row-height estimation the row may slightly exceed the
                 // content bottom, so we allow a small tolerance equal to the margin itself.
-                // Allow tolerance of marginBottom + 1 to account for estimation inaccuracy
-                // and floating-point rounding (rows may extend slightly past the content area).
-                Assert.True(row.ActualBottom <= contentBottom + marginBottom + 1,
+                // Allow tolerance of marginBottom + 1 to account for estimation inaccuracy and
+                // floating-point rounding (rows may extend slightly past the content area), plus
+                // an upper bound on how much taller a page's own last row can legitimately sit now
+                // that collapsed-border rows meet flush instead of overlapping by a border width
+                // (issue #1138): at most rows.Count - 1 interior boundaries can precede any one
+                // row, each restoring one border width of height the old overlap used to erase.
+                var maxExtraDriftFromFlushBorders = (rows.Count - 1) * 1 * Length.PointsPerPx;
+                var tolerance = marginBottom + 1 + maxExtraDriftFromFlushBorders;
+                Assert.True(row.ActualBottom <= contentBottom + tolerance,
                     $"Row bottom={row.ActualBottom} extends {row.ActualBottom - contentBottom:F1}px past " +
-                    $"content bottom={contentBottom} on page {pageNum} (tolerance={marginBottom + 1})");
+                    $"content bottom={contentBottom} on page {pageNum} (tolerance={tolerance})");
             }
         }
 
