@@ -748,9 +748,64 @@ namespace PeachPDF.Html.Core.Paint
 
                 foreach (var segment in DecorationSegments.Subtract(span, exclusions ?? []))
                 {
-                    g.DrawLine(pen, segment.Start, y, segment.End, y);
+                    StrokeDecorationSegment(g, pen, textDecorationStyle, line, segment.Start, segment.End, y);
                 }
             }
+        }
+
+        /// <summary>
+        /// Strokes one segment of a decoration line, in the <c>text-decoration-style</c> it is drawn with.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Every style but <c>double</c> is one stroke, since <c>solid</c>/<c>dotted</c>/<c>dashed</c>
+        /// differ only in the pen's dash pattern, which
+        /// <see cref="TextDecorationStyleMapper.ToDashStyle"/> has already set. <c>double</c> is the one
+        /// that is not a pen at all: it is two strokes.
+        /// </para>
+        /// <para>
+        /// <see href="https://www.w3.org/TR/css-text-decor-3/#text-decoration-style-property">css-text-decor-3
+        /// §2.2</see> does not define the styles itself - it says their "values have the same meaning as for
+        /// the border-style properties", which for
+        /// <see href="https://www.w3.org/TR/css-backgrounds-3/#border-style">css-backgrounds-3</see>'s
+        /// <c>double</c> means "two lines ... the sum of the two lines and the space between them equals
+        /// the value of border-width". <b>This deliberately deviates from that cross-reference</b>: a
+        /// decoration's <c>text-decoration-thickness</c> describes the stroke, not a total, so dividing it
+        /// three ways would render the initial 1px double underline as two one-third-pixel hairlines.
+        /// Instead each stroke is the resolved thickness and the gap between them matches, so the pair
+        /// spans three times a single line. See
+        /// <c>.claude/accepted-gaps/double-decoration-thickness-is-per-stroke-not-a-total.md</c>.
+        /// </para>
+        /// <para>
+        /// Which way the second stroke grows is measured against Chrome 141 rather than reasoned about:
+        /// at 300dpi it keeps the first stroke exactly where the single stroke sits and adds the second
+        /// <i>above</i> for an overline and <i>below</i> for both an underline and a line-through. That
+        /// also suits an underline's own anchor, whose top edge is kept below the alphabetic baseline (see
+        /// <see cref="ResolveAutomaticUnderlineClearance"/>) and would be pushed back through the
+        /// glyphs by growing upward.
+        /// </para>
+        /// </remarks>
+        private static void StrokeDecorationSegment(RGraphics g, RPen pen, string? style, string line,
+            double x1, double x2, double y)
+        {
+            if (style != Keywords.Double)
+            {
+                g.DrawLine(pen, x1, y, x2, y);
+                return;
+            }
+
+            var separation = 2 * pen.Width;
+
+            var (first, second) = line switch
+            {
+                Keywords.Overline => (y - separation, y),
+                // Underline and line-through both grow downward, and anything else that reached here
+                // with a position of its own follows the same default.
+                _ => (y, y + separation)
+            };
+
+            g.DrawLine(pen, x1, first, x2, first);
+            g.DrawLine(pen, x1, second, x2, second);
         }
 
         /// <summary>
