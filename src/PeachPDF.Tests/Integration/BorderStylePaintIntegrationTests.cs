@@ -575,13 +575,13 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task BorderStyleDoubleWithBorderRadius_FallsBackToSingleSolidStroke()
+        public async Task BorderStyleGrooveWithBorderRadius_FallsBackToSingleSolidStroke()
         {
-            // GetRoundedBorderPath has no double/groove/ridge concept (border-radius is CSS2/3
-            // territory) - this locks in the documented narrowing: a rounded double/groove/ridge
-            // border degrades to a single solid-colored stroke rather than crashing.
+            // groove/ridge shade each side differently, and a curved border is one continuous stroke
+            // that cannot change color partway round - this locks in the documented narrowing: they
+            // degrade to a single solid-colored stroke rather than crashing.
             var (root, container) = await BuildAndLayout(Wrap(
-                "<div id='b' style='border-top-style: double; border-top-width: 12px; border-top-color: rgb(51,51,51); border-radius: 8px'>x</div>"));
+                "<div id='b' style='border-top-style: groove; border-top-width: 12px; border-top-color: rgb(51,51,51); border-radius: 8px'>x</div>"));
             var div = FindById(root, "b")!;
 
             var g = new TestRecordingGraphics();
@@ -591,6 +591,31 @@ namespace PeachPDF.Tests.Integration
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawPathCall>());
         }
+
+        [Fact]
+        public async Task RoundedDoubleBorder_AllFourSidesAlike_StrokesTwoConcentricOutlinesAtTheThirds()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:100pt; height:60pt; border: 12pt double rgb(51,51,51); border-radius: 20pt'>x</div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            // Two outlines rather than one: a pen draws a single band, so `double` needs one stroke per
+            // line. They have a gap between them, so unlike four abutting edges they cannot seam.
+            var stroked = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Where(p => p.Stroked).ToList();
+            Assert.Equal(2, stroked.Count);
+            Assert.All(stroked, p => Assert.Equal(RColor.FromArgb(51, 51, 51), p.Color));
+
+            // CSS 2.1 §8.5.3's equal thirds: each line is 4pt of the 12pt border, so the outer line is
+            // centred 2pt in and the inner one 10pt in - their paths are 8pt apart on every side.
+            var outer = stroked.OrderByDescending(p => p.Bounds.Width).First();
+            var inner = stroked.OrderBy(p => p.Bounds.Width).First();
+            Assert.Equal(16, outer.Bounds.Width - inner.Bounds.Width, 1);
+            Assert.Equal(16, outer.Bounds.Height - inner.Bounds.Height, 1);
+        }
+
 
         // ─── border-style 2-value shorthand + per-side suppression (Acid2's "[class~=one].first.one") ──
         // "border-style: none solid" must expand to top=bottom=none, left=right=solid (CSS2.1's 1/2/3/4-

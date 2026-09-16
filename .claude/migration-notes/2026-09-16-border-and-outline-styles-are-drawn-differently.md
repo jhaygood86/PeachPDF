@@ -39,6 +39,11 @@ same markup previews in a browser.
   two and three deep at the corners. The pattern is now fitted to the whole perimeter and runs evenly
   the whole way round.
 
+- A **rounded** `double` border previously rendered as a single solid line at the full border width.
+  When its four sides share a style, color and width it is now drawn as two concentric rounded lines
+  at the thirds, like a square `double` border. `groove` and `ridge` with `border-radius` still render
+  as a single solid line.
+
 `outline-style` uses the same rendering throughout, so all of the above applies to outlines as well,
 and to the borders of a `border-collapse: collapse` table.
 

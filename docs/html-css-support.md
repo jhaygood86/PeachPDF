@@ -316,12 +316,12 @@ corner, so it stays correct when the two sides differ in width and the cut is no
 makes the classic zero-size "border triangle" work. `outline-style` uses all the same rendering,
 banded outward from the border edge.
 
-With `border-radius`, `solid`/`dotted`/`dashed` follow the curve. A border whose four sides share a
-style, color and width is stroked as one continuous outline, which keeps the corners seamless and lets
-a `dotted`/`dashed` pattern be fitted to the whole perimeter so it runs evenly all the way round. If
-the sides differ, each is stroked separately and a pattern restarts at each one, which can leave marks
-bunched near a corner. See [Border Radius](#border-radius) for how `double`/`groove`/`ridge` behave
-there.
+With `border-radius`, every style except `groove` and `ridge` follows the curve. A border whose four
+sides share a style, color and width is stroked as one continuous outline, which keeps the corners
+seamless and lets a `dotted`/`dashed` pattern be fitted to the whole perimeter so it runs evenly all
+the way round; `double` is drawn as two such outlines, at its thirds. If the sides differ, each is
+stroked separately and a pattern restarts at each one, which can leave marks bunched near a corner.
+See [Border Radius](#border-radius) for `groove`/`ridge`.
 
 ### Border Radius
 
@@ -335,7 +335,7 @@ there.
 
 Percentages are relative to the border-box width (horizontal radius) and height (vertical radius). Overlapping adjacent radii are automatically reduced proportionally per the CSS spec.
 
-Known limitation: `double`/`groove`/`ridge` combined with `border-radius` on the same edge falls back to a single solid-colored stroke at the full border width — full rounded rendering of these three styles (two concentric arcs, or a two-tone beveled arc) is out of scope for CSS1 compliance.
+Known limitation: `groove`/`ridge` combined with `border-radius` on the same edge falls back to a single solid-colored stroke at the full border width. Both styles shade each side of the box differently (see [How each border style is drawn](#how-each-border-style-is-drawn)), and a curved border is drawn as one continuous stroke, which cannot change color partway around — rendering them as a two-tone beveled arc is out of scope. The same limitation applies when a `double` border's four sides do not share a style, color and width; a uniform one is drawn as two concentric rounded outlines.
 
 ### Border Image
 

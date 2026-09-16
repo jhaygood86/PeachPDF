@@ -5823,21 +5823,28 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
         SideSwatch("double, uneven", "border: double #4a90d9; border-width: 9px 24px 15px 30px")
     ) +
 
-    // border-radius replaces the mitred bands with a single stroked curve, so double/groove/ridge fall
-    // back to one solid stroke at the full width - a documented narrowing. dotted/dashed keep their
-    // round dots and butt-capped dashes, but their period runs unfitted along the arc.
+    // A border whose four sides agree is stroked as one continuous outline, so its corners stay seamless
+    // and a dot/dash period can be fitted to the whole perimeter. double is two such outlines, at the
+    // thirds. groove/ridge still fall back to one solid stroke - they shade each side differently, and a
+    // single continuous stroke cannot change colour partway round.
     "<h2>Rounded corners</h2>" +
     Row(
         RadiusBorderSwatch("solid", "solid", "16px", "24px"),
         RadiusBorderSwatch("dotted", "dotted", "16px", "24px"),
         RadiusBorderSwatch("dashed", "dashed", "16px", "24px"),
-        RadiusBorderSwatch("double (falls back)", "double", "16px", "24px")
+        RadiusBorderSwatch("double", "double", "16px", "24px")
     ) +
     Row(
         RadiusBorderSwatch("solid, pill", "solid", "10px", "999px"),
         RadiusBorderSwatch("dotted, pill", "dotted", "10px", "999px"),
-        RadiusBorderSwatch("solid, elliptical", "solid", "12px", "40px / 20px"),
+        RadiusBorderSwatch("double, pill", "double", "12px", "999px"),
         RadiusBorderSwatch("groove (falls back)", "groove", "16px", "24px")
+    ) +
+    Row(
+        RadiusBorderSwatch("solid, elliptical", "solid", "12px", "40px / 20px"),
+        RadiusBorderSwatch("double, elliptical", "double", "15px", "40px / 20px"),
+        RadiusBorderSwatch("dashed, pill", "dashed", "10px", "999px"),
+        RadiusBorderSwatch("ridge (falls back)", "ridge", "16px", "24px")
     ) +
 
     "</body></html>";

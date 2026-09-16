@@ -382,24 +382,51 @@ namespace PeachPDF.Html.Core.Handlers
         /// more visibly the rounder the corner. One closed path has one continuous stroke and one phase.
         ///
         /// This needs a single width and color to stroke with, so it only takes the case where all four
-        /// sides agree. Anything else falls back to the per-edge paths, as do <c>double</c>/
-        /// <c>groove</c>/<c>ridge</c>, which a single centered stroke cannot represent at all.
+        /// sides agree. <c>double</c> is two of these outlines, one per line, at the thirds CSS 2.1
+        /// §8.5.3 gives it. <c>groove</c>/<c>ridge</c> still fall back to the per-edge paths: they shade
+        /// each side differently, and one continuous stroke cannot change color partway round.
         /// </remarks>
         private static bool TryDrawUniformRoundedOutline(
             RGraphics g, CssBox box, RRect rect, BorderRadii radii, LineStyle style, RColor color)
         {
-            if (style is not (LineStyle.Solid or LineStyle.Dotted or LineStyle.Dashed)) return false;
+            if (style is not (LineStyle.Solid or LineStyle.Dotted or LineStyle.Dashed or LineStyle.Double)) return false;
 
             var width = box.ActualBorderTopWidth;
             if (Math.Abs(box.ActualBorderRightWidth - width) > Epsilon ||
                 Math.Abs(box.ActualBorderBottomWidth - width) > Epsilon ||
                 Math.Abs(box.ActualBorderLeftWidth - width) > Epsilon) return false;
 
-            // The stroke is centered, so its outline is the border box pulled in by half the width -
-            // and every corner radius shrinks by the same half, never past zero.
-            var inset = width / 2;
+            if (style != LineStyle.Double)
+                return TryStrokeRoundedOutline(g, rect, radii, style, color, width, width / 2);
+
+            // The two lines and the gap between them are equal thirds, so each line is centered a sixth
+            // of the way in from the edge it hugs. Two separate rings with a gap between them share no
+            // edge, so neither seams against the other.
+            //
+            // The outer line is drawn first for the sake of the failure path: it sits closest to the
+            // edge, so it is the last to run out of room. Bailing on it means nothing has been drawn yet
+            // and the caller can safely fall back to the per-edge paths; if only the inner one cannot
+            // fit, one line is better than painting the whole border again over what is already there.
+            var lineWidth = width / 3;
+            if (!TryStrokeRoundedOutline(g, rect, radii, LineStyle.Solid, color, lineWidth, lineWidth / 2))
+                return false;
+
+            TryStrokeRoundedOutline(g, rect, radii, LineStyle.Solid, color, lineWidth, width - lineWidth / 2);
+            return true;
+        }
+
+        /// <summary>
+        /// Strokes one closed rounded outline of <paramref name="strokeWidth"/>, centered
+        /// <paramref name="inset"/> in from the border box, and reports whether it fitted.
+        /// </summary>
+        private static bool TryStrokeRoundedOutline(
+            RGraphics g, RRect rect, BorderRadii radii, LineStyle style, RColor color,
+            double strokeWidth, double inset)
+        {
+            // A stroke is centered on its path, so the path is the border box pulled in by the inset -
+            // and every corner radius shrinks by that same inset, never past zero.
             var centerRect = RRect.FromLTRB(rect.Left + inset, rect.Top + inset, rect.Right - inset, rect.Bottom - inset);
-            if (centerRect is not { Width: > 0, Height: > 0 }) return false;
+            if (centerRect is not { Width: > 0, Height: > 0 } || strokeWidth <= 0) return false;
 
             var tlx = Math.Max(0, radii.TLX - inset); var tly = Math.Max(0, radii.TLY - inset);
             var trx = Math.Max(0, radii.TRX - inset); var try_ = Math.Max(0, radii.TRY - inset);
@@ -407,7 +434,7 @@ namespace PeachPDF.Html.Core.Handlers
             var blx = Math.Max(0, radii.BLX - inset); var bly = Math.Max(0, radii.BLY - inset);
 
             var pen = g.GetPen(color);
-            pen.Width = width / g.PixelsPerPoint;
+            pen.Width = strokeWidth / g.PixelsPerPoint;
             pen.LineJoin = RLineJoin.Miter;
 
             if (style == LineStyle.Solid)
@@ -424,7 +451,7 @@ namespace PeachPDF.Html.Core.Handlers
                      StyledStrokeFitting.EllipsePerimeter(brx, bry) + StyledStrokeFitting.EllipsePerimeter(blx, bly)) / 4;
 
                 var dotted = style == LineStyle.Dotted;
-                if (StyledStrokeFitting.FitClosed(dotted, width, perimeter) is not { } pattern) return false;
+                if (StyledStrokeFitting.FitClosed(dotted, strokeWidth, perimeter) is not { } pattern) return false;
 
                 pen.LineCap = dotted ? RLineCap.Round : RLineCap.Butt;
                 pen.SetDashPattern(

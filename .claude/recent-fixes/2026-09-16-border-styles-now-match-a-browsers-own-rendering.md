@@ -109,10 +109,23 @@ quads.
 the top edge's path carries both corner arcs while the sides are straight lines. A dash pattern
 restarts its phase at each, so dots landed two and three deep where an arc handed over to a straight
 run — barely visible with the old square dots, obvious once they became circles.
-`TryDrawUniformRoundedOutline` strokes a uniform rounded border - solid, dotted or dashed - as one
-closed outline, with the pattern fitted to its whole perimeter. Solid is in there for the seam rather
-than the phase: four strokes butting end-to-end leave the same pale join two abutting fills do, which
-showed on a plain rounded border where each arc met its straight run. A closed run has as many gaps as dashes (not n-1), so
+`TryDrawUniformRoundedOutline` strokes a uniform rounded border as one closed outline, with the
+pattern fitted to its whole perimeter. Solid is in there for the seam rather than the phase: four
+strokes butting end-to-end leave the same pale join two abutting fills do, which showed on a plain
+rounded border where each arc met its straight run.
+
+That also closed the long-standing `double` + `border-radius` fallback. The reason it existed was
+structural, not fundamental: a square border paints its bands as *fills*, so N bands is N fills, but a
+rounded one paints as a *stroke*, and a pen draws exactly one band - so `double` had nowhere to put
+its second line and `GetPen`'s catch-all arm silently degraded it to a single solid stroke. Once the
+outline builder took an arbitrary inset (with radii reduced to match), `double` became two calls to
+it, at the thirds. `groove`/`ridge` stay on the fallback for a real reason: they shade each side
+differently, and one continuous stroke cannot change color partway round.
+
+One ordering detail worth keeping: the outer line is stroked first. It sits closest to the edge and is
+therefore the last to run out of room, so bailing on it means nothing has been drawn and the caller can
+still fall back. Bailing *after* drawing it would send the caller down the per-edge path and paint the
+whole border a second time over what was already there. A closed run has as many gaps as dashes (not n-1), so
 `StyledStrokeFitting.FitClosed` is its own function; the perimeter needs an ellipse arc length, which
 has no closed form, so `EllipsePerimeter` uses Ramanujan's approximation — accurate to far better than
 a dot's width at any radius a border produces.
@@ -129,7 +142,7 @@ unfitted period, so its marks can still bunch near a corner. Only the uniform ca
 
 ## Evidence
 
-Full suite green (11859 passed, net8.0). 100% diff coverage on every changed/added file. Whole
+Full suite green (11860 passed, net8.0). 100% diff coverage on every changed/added file. Whole
 solution rebuilds with zero warnings. The showcase gained rows for per-width scaling, per-side
 differences, the border-triangle mitre and rounded corners — each compared against Chrome's render of
 the same HTML — and was checked through PDFium *and* MuPDF, which agree (mean channel difference
