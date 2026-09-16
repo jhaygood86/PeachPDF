@@ -39,7 +39,8 @@ namespace PeachPDF.CSS
                 {Keywords.Right, TextAlignLast.Right},
                 {Keywords.Left, TextAlignLast.Left},
                 {Keywords.Center, TextAlignLast.Center},
-                {Keywords.Justify, TextAlignLast.Justify}
+                {Keywords.Justify, TextAlignLast.Justify},
+                {Keywords.MatchParent, TextAlignLast.MatchParent}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, TextAnchor> TextAnchors =
             new Dictionary<string, TextAnchor>(StringComparer.OrdinalIgnoreCase)
@@ -85,7 +86,8 @@ namespace PeachPDF.CSS
                 {Keywords.Center, HorizontalAlignment.Center},
                 {Keywords.Justify, HorizontalAlignment.Justify},
                 {Keywords.Start, HorizontalAlignment.Start},
-                {Keywords.End, HorizontalAlignment.End}
+                {Keywords.End, HorizontalAlignment.End},
+                {Keywords.MatchParent, HorizontalAlignment.MatchParent}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, TextDecorationThicknessKeyword> TextDecorationThicknessKeywords =
             new Dictionary<string, TextDecorationThicknessKeyword>(StringComparer.OrdinalIgnoreCase)
