@@ -2,6 +2,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using PeachPDF.Fonts;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -162,6 +163,25 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.True(outline.IsEmpty);
         }
 
+        /// <summary>
+        /// Regression for #1119: outline decoding and shaping both move one shared cursor on the
+        /// process-wide font face. They must therefore use the exact same monitor. Holding the
+        /// outline decoder's monitor here must block both GSUB and GPOS reads; before the fix those
+        /// readers locked the face object instead and entered concurrently.
+        /// </summary>
+        [Fact]
+        public void ShapingTableReads_UseTheGlyphOutlineCursorMonitor()
+        {
+            var face = new OpenTypeFontface(XFontSource.CreateCompiledFont(File.ReadAllBytes(BundledFonts.Ttf)));
+            GsubTable gsub = Assert.IsType<GsubTable>(face.gsub.Table);
+            GposTable gpos = Assert.IsType<GposTable>(face.gpos.Table);
+
+            AssertReaderBlocksOnCursorMonitor(face,
+                () => gsub.GetActiveLookupIndices(["latn"], new HashSet<string> { "liga" }));
+            AssertReaderBlocksOnCursorMonitor(face,
+                () => gpos.GetActiveLookupIndices(["latn"], new HashSet<string> { "kern" }));
+        }
+
         [Fact]
         public void TryGetGlyphOutline_NonMonotonicEndPointsOfContours_DoesNotOverrunPointArrays()
         {
@@ -210,6 +230,40 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
                 }
             }
             return max;
+        }
+
+        private static void AssertReaderBlocksOnCursorMonitor(OpenTypeFontface face, Action read)
+        {
+            using var started = new ManualResetEventSlim();
+            Exception? error = null;
+            var thread = new Thread(() =>
+            {
+                started.Set();
+                try
+                {
+                    read();
+                }
+                catch (Exception ex)
+                {
+                    error = ex;
+                }
+            });
+
+            Monitor.Enter(face.SyncRoot);
+            try
+            {
+                thread.Start();
+                Assert.True(started.Wait(TimeSpan.FromSeconds(5)), "reader thread did not start");
+                Assert.False(thread.Join(TimeSpan.FromMilliseconds(250)),
+                    "reader entered while the shared font cursor monitor was held");
+            }
+            finally
+            {
+                Monitor.Exit(face.SyncRoot);
+            }
+
+            Assert.True(thread.Join(TimeSpan.FromSeconds(5)), "reader did not resume after the monitor was released");
+            Assert.Null(error);
         }
     }
 }

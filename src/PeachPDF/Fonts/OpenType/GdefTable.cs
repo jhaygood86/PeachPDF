@@ -27,7 +27,7 @@ namespace PeachPDF.Fonts.OpenType
             // GdefTable instances are cached and shared process-wide, exactly like GsubTable/
             // GposTable (see the #543 rationale in GsubTable.cs) - lock around every sequential
             // read against the shared, mutable-cursor OpenTypeFontface.
-            lock (face)
+            lock (face.SyncRoot)
             {
                 face.Position = tableStart;
                 face.ReadUShort(); // majorVersion

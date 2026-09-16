@@ -304,8 +304,10 @@ namespace PeachPDF.Fonts.OpenType
         // PdfGenerator instances (see OpenTypeFontface/FontFactory's caching), so this needs to be
         // safe for concurrent reads/writes rather than a plain Dictionary. The dictionary alone isn't
         // enough, though: computing a not-yet-cached entry still means sequential _face.Position reads
-        // (see GetActiveLookupIndices/ReadLigatureLookup's own locking on _face) against the same
-        // shared, mutable-cursor OpenTypeFontface.
+        // (see GetActiveLookupIndices/ReadLigatureLookup's own locking on _face.SyncRoot) against
+        // the same shared, mutable-cursor OpenTypeFontface. SyncRoot is also used by outline and
+        // color-glyph decoding; locking the face object instead creates a second lock domain and
+        // lets those readers corrupt each other's cursor (issue #1119).
         private readonly ConcurrentDictionary<int, GsubLigatureLookup?> _ligatureLookupCache = new();
 
         // Sibling caches for every other lookup-type reader and the generic type-dispatch helper,
@@ -354,9 +356,9 @@ namespace PeachPDF.Fonts.OpenType
             // same cached font would otherwise interleave their Position writes/reads against each
             // other. Unlike GetLigatureLookup below, this method's result isn't cached at all - it
             // re-reads the ScriptList/FeatureList tables on every single Shape() call - so it is by far
-            // the widest, most frequently hit critical section, and locking on the shared face closes
-            // that race. See the CI regression this fixed: issue #543.
-            lock (_face)
+            // the widest, most frequently hit critical section, and locking on the shared face's
+            // common cursor monitor closes that race. See the CI regression this fixed: issue #543.
+            lock (_face.SyncRoot)
             {
                 var lookupIndices = new SortedSet<int>();
 
@@ -578,9 +580,9 @@ namespace PeachPDF.Fonts.OpenType
         /// Reads the Lookup table at <paramref name="lookupListIndex"/>'s header and subtable offsets,
         /// returning null if the index is out of range or (after unwrapping any Type 7 Extension
         /// Substitution wrapper) its resolved type isn't <paramref name="expectedType"/>. Callers must
-        /// already hold `lock (_face)` - like every other sequential reader in this class, this performs
-        /// a sequence of dependent reads against the shared, mutable-cursor OpenTypeFontface (see the
-        /// #543 rationale on this class's cache fields).
+        /// already hold `lock (_face.SyncRoot)` - like every other sequential reader in this class,
+        /// this performs a sequence of dependent reads against the shared, mutable-cursor
+        /// OpenTypeFontface (see the #543 rationale on this class's cache fields).
         /// </summary>
         private LookupHeader? ReadLookupHeader(int lookupListIndex, int expectedType)
         {
@@ -638,7 +640,7 @@ namespace PeachPDF.Fonts.OpenType
             // serialized against GetActiveLookupIndices and any concurrent first resolution of a
             // different index, since _face is a single mutable cursor shared process-wide across
             // concurrently-rendering fonts. See issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 4) is not { } header)
                     return null;
@@ -660,7 +662,7 @@ namespace PeachPDF.Fonts.OpenType
         private GsubSingleSubstitutionLookup? ReadSingleSubstitutionLookup(int lookupListIndex)
         {
             // Same locking rationale as ReadLigatureLookup above - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 1) is not { } header)
                     return null;
@@ -707,7 +709,7 @@ namespace PeachPDF.Fonts.OpenType
         private GsubAlternateSubstitutionLookup? ReadAlternateSubstitutionLookup(int lookupListIndex)
         {
             // Same locking rationale as ReadLigatureLookup above - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 3) is not { } header)
                     return null;
@@ -756,7 +758,7 @@ namespace PeachPDF.Fonts.OpenType
         private GsubMultipleSubstitutionLookup? ReadMultipleSubstitutionLookup(int lookupListIndex)
         {
             // Same locking rationale as ReadLigatureLookup above - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 2) is not { } header)
                     return null;
@@ -812,7 +814,7 @@ namespace PeachPDF.Fonts.OpenType
         private GsubContextualLookup? ReadContextualLookup(int lookupListIndex)
         {
             // Same locking rationale as ReadLigatureLookup above - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 5) is not { } header)
                     return null;
@@ -834,7 +836,7 @@ namespace PeachPDF.Fonts.OpenType
         private GsubChainingContextLookup? ReadChainingContextLookup(int lookupListIndex)
         {
             // Same locking rationale as ReadLigatureLookup above - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 6) is not { } header)
                     return null;
@@ -856,7 +858,7 @@ namespace PeachPDF.Fonts.OpenType
         private GsubReverseChainSingleSubstLookup? ReadReverseChainSingleSubstLookup(int lookupListIndex)
         {
             // Same locking rationale as ReadLigatureLookup above - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 8) is not { } header)
                     return null;
@@ -1202,7 +1204,7 @@ namespace PeachPDF.Fonts.OpenType
         private int ReadResolvedLookupType(int lookupListIndex)
         {
             // Same locking rationale as ReadLigatureLookup above - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 _face.Position = _lookupListOffset;
                 int lookupCount = _face.ReadUShort();
