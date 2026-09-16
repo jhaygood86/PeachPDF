@@ -176,10 +176,260 @@ namespace PeachPDF.Html.Core.Parse
             return (root, cssData, metadata);
         }
 
+        /// <summary>
+        /// Matches and applies a document-level stylesheet's ordinary style rules (<see
+        /// cref="Layout.IDocumentBuilder.Stylesheet"/>) against an already-built, already-styled declarative
+        /// <see cref="CssBox"/> tree (<see cref="HtmlContainerInt.SetDeclarativeRoot"/>) - the declarative
+        /// counterpart of <see cref="CascadeApplyStyles"/>, but far narrower: it does no defaulting/reset, no
+        /// <see cref="CssBox.InheritStyle"/> re-run, no user-agent-rule matching, no presentational-attribute
+        /// translation, no inline-<c>style=""</c> phase (a declarative box never has one), no
+        /// display-normalization, and no placeholder/first-line/first-letter/footnote/<c>@page</c> handling -
+        /// every declaratively-built box already carries its own final, directly-assigned style, and this only
+        /// layers a caller's own class/id/compound/descendant selector rules on top of it.
+        /// <para>
+        /// Precedence models a declarative <see cref="Layout.ContainerBuilder"/> call as equivalent to an
+        /// inline <c>style=""</c> attribute: a matched non-<c>!important</c> declaration is skipped for any
+        /// property name already in <see cref="CssBox.BuilderSetProperties"/> (see <see cref="AssignCssBlock"/>'s
+        /// <c>skipPropertyNames</c>), but a matched <c>!important</c> declaration always applies - matching real
+        /// CSS, where <c>!important</c> beats inline.
+        /// </para>
+        /// <para>
+        /// A box flagged <see cref="CssBox.IsFragmentStyled"/> (the root, or any descendant, of an
+        /// <c>IContainer.Html(...)</c>-spliced fragment - see <see cref="GenerateFragmentCssTree"/>) is skipped
+        /// for matching, since it already went through a real, specificity-ordered HTML cascade of its own and
+        /// re-matching a low-specificity document rule against it risks silently overriding a high-specificity
+        /// fragment-internal one - but this still recurses into its children regardless of the flag, since a
+        /// &lt;slot&gt; filled with ordinary declarative content (never itself flagged) must still participate
+        /// normally.
+        /// </para>
+        /// </summary>
+        internal static void ApplyDeclarativeStylesheet(CssBox root, CssData cssData, MediaQueryContext media, RAdapter adapter)
+        {
+            var valueParser = new CssValueParser(adapter);
+            ApplyDeclarativeStylesheetToBox(valueParser, root, cssData, media);
+        }
+
+        private static void ApplyDeclarativeStylesheetToBox(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media)
+        {
+            if (!box.IsFragmentStyled)
+            {
+                var (authorNormal, authorImportant) = cssData.GetAuthorStyleRulesForCascade(media, box);
+
+                if (authorNormal.Count > 0 || authorImportant.Count > 0)
+                {
+                    var pendingVarProperties = new Dictionary<string, string>();
+
+                    var needsRevert = RulesUseRevertKeyword(authorNormal) || RulesUseRevertKeyword(authorImportant);
+                    var priorSnapshot = needsRevert ? CssUtils.SnapshotProperties(box) : null;
+                    var priorCustomSnapshot = needsRevert ? CssUtils.SnapshotCustomProperties(box) : null;
+                    var captureLayerBands = cssData.HasCascadeLayers && RulesUseRevertLayerKeyword(authorNormal);
+
+                    // Normal pass - skips any property name the declarative builder already set directly.
+                    ApplyAuthorRulesInLayerBands(valueParser, box, authorNormal, importantPass: false,
+                        priorSnapshot, priorCustomSnapshot, captureLayerBands, pendingVarProperties,
+                        skipPropertyNames: box.BuilderSetProperties);
+
+                    var afterNormalSnapshot = needsRevert ? CssUtils.SnapshotProperties(box) : priorSnapshot;
+                    var afterNormalCustomSnapshot = needsRevert ? CssUtils.SnapshotCustomProperties(box) : priorCustomSnapshot;
+
+                    // !important pass - never skips; always wins, even over a builder-set value.
+                    ApplyAuthorRulesInLayerBands(valueParser, box, authorImportant, importantPass: true,
+                        afterNormalSnapshot, afterNormalCustomSnapshot, captureLayerBands, pendingVarProperties,
+                        skipPropertyNames: null);
+
+                    ResolveDeferredVarProperties(valueParser, box, pendingVarProperties);
+                    box.ResolveLogicalProperties();
+                    CssUtils.ApplyCurrentColor(box, valueParser);
+                }
+            }
+
+            foreach (var child in box.Boxes)
+                ApplyDeclarativeStylesheetToBox(valueParser, child, cssData, media);
+        }
+
+        /// <summary>
+        /// Merges a declarative page's own synthesized <c>@page</c> rules (<see
+        /// cref="Layout.PageDescriptorBuilder.PageRules"/> - today, at most one base rule, built only by
+        /// <see cref="Layout.IPageDescriptor.Header"/>/<see cref="Layout.IPageDescriptor.Footer"/> for their
+        /// margin-box <c>content: element(...)</c> declarations) with a document-level stylesheet's own
+        /// parsed <c>@page</c> rules (<see cref="Layout.IDocumentBuilder.Stylesheet"/>), for assignment to
+        /// <see cref="HtmlContainerInt.PageRules"/>.
+        /// <para>
+        /// Naively concatenating the two lists is wrong: <see cref="Dom.PageRuleResolver"/> keeps only the
+        /// LAST base-selector rule it sees for margin/size resolution, so if the stylesheet's own base rule
+        /// sorted after the declarative one, the header/footer's margin-box content would be silently
+        /// dropped entirely, not merged. This merges the two base rules into one instead (margin boxes
+        /// merged per name, declarative wins a name both declare; page-level properties copied from the
+        /// stylesheet's base rule except whichever margin/size property the caller marks explicit, so
+        /// <see cref="PdfGenerator.AddDeclarativePage"/>'s own Track A geometry resolution is never
+        /// silently re-overridden per-page by <see cref="Html.Core.PageGeometryTable"/>'s separate
+        /// per-page <see cref="Dom.PageRuleResolver"/> lookup). Named/pseudo-class stylesheet rules append
+        /// as-is - there is no declarative equivalent to conflict with.
+        /// </para>
+        /// </summary>
+        internal static IReadOnlyList<PageRule> BuildDeclarativePageRules(
+            IReadOnlyList<PageRule> declarativeRules, CssData? stylesheetCssData,
+            bool marginLeftIsExplicit, bool marginTopIsExplicit,
+            bool marginRightIsExplicit, bool marginBottomIsExplicit, bool sizeIsExplicit)
+        {
+            if (stylesheetCssData is null)
+                return declarativeRules;
+
+            var stylesheetRules = stylesheetCssData.EnumerateRulesRecursive().OfType<PageRule>().ToList();
+            if (stylesheetRules.Count == 0)
+                return declarativeRules;
+
+            var declarativeBase = declarativeRules.FirstOrDefault(r => r.Selector is null);
+            var stylesheetBase = stylesheetRules.LastOrDefault(r => r.Selector is null);
+
+            var result = new List<PageRule>();
+
+            if (declarativeBase is null && stylesheetBase is not null)
+            {
+                var strippedBase = new PageRule(stylesheetBase.Parser);
+                foreach (var margin in stylesheetBase.Margins)
+                {
+                    var copy = new MarginStyleRule(margin.Parser) { Selector = margin.Selector };
+                    PageRuleResolver.MergeDeclarationsInto(copy.Style, margin.Style);
+                    strippedBase.AppendChild(copy);
+                }
+                CopyPageStyleExceptExplicitGeometry(strippedBase.Style, stylesheetBase.Style,
+                    marginLeftIsExplicit, marginTopIsExplicit, marginRightIsExplicit, marginBottomIsExplicit, sizeIsExplicit);
+                result.Add(strippedBase);
+            }
+            else if (declarativeBase is not null && stylesheetBase is null)
+            {
+                result.Add(declarativeBase);
+            }
+            else if (declarativeBase is not null && stylesheetBase is not null)
+            {
+                var merged = new PageRule(declarativeBase.Parser);
+
+                // Stylesheet's own margin boxes first (lower precedence), then the declarative
+                // (Header/Footer-synthesized) ones layered on top - a name both declare resolves with the
+                // declarative call winning, matching PageRuleResolver's own "later/more-specific wins"
+                // per-name merge.
+                var mergedMarginsByName = new Dictionary<string, MarginStyleRule>(StringComparer.OrdinalIgnoreCase);
+                foreach (var margin in stylesheetBase.Margins.Concat(declarativeBase.Margins))
+                {
+                    var name = margin.Selector?.Text?.Trim().ToLowerInvariant();
+                    if (string.IsNullOrEmpty(name)) continue;
+
+                    if (!mergedMarginsByName.TryGetValue(name, out var mergedMargin))
+                    {
+                        mergedMargin = new MarginStyleRule(margin.Parser) { Selector = margin.Selector };
+                        mergedMarginsByName[name] = mergedMargin;
+                    }
+
+                    PageRuleResolver.MergeDeclarationsInto(mergedMargin.Style, margin.Style);
+                }
+
+                foreach (var mergedMargin in mergedMarginsByName.Values)
+                    merged.AppendChild(mergedMargin);
+
+                CopyPageStyleExceptExplicitGeometry(merged.Style, stylesheetBase.Style,
+                    marginLeftIsExplicit, marginTopIsExplicit, marginRightIsExplicit, marginBottomIsExplicit, sizeIsExplicit);
+
+                result.Add(merged);
+            }
+
+            result.AddRange(stylesheetRules.Where(r => r.Selector is not null));
+            return result;
+        }
+
+        /// <summary>
+        /// Copies every declared page-level property from <paramref name="source"/> into
+        /// <paramref name="target"/>, except a margin/size property the caller marks explicit (an edge or
+        /// size the declarative page builder already set directly via <c>IPageDescriptor.Margin*</c>/
+        /// <c>Size</c> - see <see cref="BuildDeclarativePageRules"/>) - simply never copying it, rather than
+        /// copying then clearing, keeps a property the stylesheet never declared in the first place
+        /// indistinguishable from one explicitly excluded here.
+        /// </summary>
+        private static void CopyPageStyleExceptExplicitGeometry(StyleDeclaration target, StyleDeclaration source,
+            bool marginLeftIsExplicit, bool marginTopIsExplicit,
+            bool marginRightIsExplicit, bool marginBottomIsExplicit, bool sizeIsExplicit)
+        {
+            foreach (var property in source.Declarations)
+            {
+                if (marginLeftIsExplicit && property.Name.Isi(PropertyNames.MarginLeft)) continue;
+                if (marginTopIsExplicit && property.Name.Isi(PropertyNames.MarginTop)) continue;
+                if (marginRightIsExplicit && property.Name.Isi(PropertyNames.MarginRight)) continue;
+                if (marginBottomIsExplicit && property.Name.Isi(PropertyNames.MarginBottom)) continue;
+                if (sizeIsExplicit && property.Name.Isi(PropertyNames.Size)) continue;
+                target.SetProperty(property);
+            }
+        }
+
+        /// <summary>
+        /// Parses and cascades an HTML fragment for splicing into a declarative container
+        /// (<see cref="Layout.ContainerBuilder.Html(string, PeachPdfCssContent?, Action{Layout.SlotContext, Layout.IContainer}?)"/>)
+        /// - the fragment-scoped counterpart of <see cref="GenerateCssTree"/>, reusing its own cascade/
+        /// correction passes but skipping every whole-document-only concern: no <c>@page</c> handling (a
+        /// fragment has no page of its own), no bidi-level assignment (the whole-tree
+        /// <see cref="HtmlContainerInt.SetDeclarativeRoot"/> call already covers the fragment once it's
+        /// spliced in, since splicing happens during tree-building, before that call runs - running it here
+        /// too would be pure duplicated work with identical results), no table presentational-attribute/
+        /// list-marker/first-letter/footnote whole-document bookkeeping beyond what each pass already does
+        /// per-subtree, and no <c>&lt;link rel="stylesheet"&gt;</c> loading (see <see cref="CascadeParseStyles"/>'s
+        /// own remarks - no <see cref="HtmlContainerInt"/> exists yet at fragment-splice time to resolve a
+        /// network/relative URL through; a documented v1 limitation, not a bug to route around).
+        /// </summary>
+        /// <param name="html">the fragment markup to parse</param>
+        /// <param name="adapter">the platform adapter (for UA default styles, `&#64;font-face` registration, and value parsing)</param>
+        /// <param name="cssData">
+        /// The stylesheet to cascade the fragment against - typically the caller's own
+        /// <see cref="PeachPdfCssContent"/> merged with UA defaults, already cloned by the caller so this
+        /// method's own `&lt;style&gt;` tag collection (<see cref="CascadeParseStyles"/>) never mutates a
+        /// shared instance.
+        /// </param>
+        /// <returns>
+        /// The fragment's own synthetic root box (<see cref="HtmlParser.ParseDocument(string, CssBox?)"/>'s
+        /// default fresh <see cref="CssBox.CreateBlock()"/>) - never itself attached anywhere; the caller
+        /// grafts its children onto the real tree (<see cref="CssBox.SetAllBoxes"/>).
+        /// </returns>
+        internal async Task<CssBox> GenerateFragmentCssTree(string html, RAdapter adapter, CssData cssData)
+        {
+            var root = HtmlParser.ParseDocument(html);
+            var cssValueParser = new CssValueParser(adapter);
+
+            (cssData, _) = await CascadeParseStyles(root, htmlContainer: null, cssData, cssDataChanged: false);
+
+            await CascadeApplyStyleFonts(cssData, adapter);
+
+            // No page context exists at splice time, so there is no real viewport/page-box geometry to
+            // evaluate @media width/height/orientation features against - the same "no HtmlContainerInt"
+            // situation the standalone-SVG styling path is already in (MediaQueryContext.TypeOnly's own
+            // doc comment). "print" matches the rest of the declarative pipeline's implicit target.
+            var media = MediaQueryContext.TypeOnly("print");
+
+            ResolveAutoDirectionality(root);
+            CascadeApplyStyles(cssValueParser, root, cssData, media);
+
+            ApplyTablePresentationalAttributesToCells(root);
+            EnsureListItemMarkers(cssValueParser, root, cssData, media);
+            ApplyFirstLetterPseudoElements(cssValueParser, root, cssData, media);
+
+            CorrectTextBoxes(root);
+            CorrectReplacedElementBoxes(root);
+            CorrectLineBreaksBlocks(root);
+            CorrectInlineBoxesParent(root);
+            CorrectAbsolutelyPositionedInlineElements(root);
+            CorrectBlockInsideInline(root);
+            CorrectInlineBoxesParent(root);
+            CorrectAnonymousTables(root);
+
+            return root;
+        }
 
         #region Private methods
 
-        private static async Task CascadeApplyStyleFonts(CssData cssData, RAdapter adapter)
+        /// <summary>
+        /// Registers every <c>@font-face</c> rule in <paramref name="cssData"/> with <paramref name="adapter"/>.
+        /// Purely <c>(cssData, adapter)</c>-scoped - no document/container dependency - so it is also reused by
+        /// <see cref="HtmlContainerInt.SetDeclarativeRoot"/> to register fonts from a document-level stylesheet
+        /// attached to a declarative document (<see cref="Layout.IDocumentBuilder.Stylesheet"/>).
+        /// </summary>
+        internal static async Task CascadeApplyStyleFonts(CssData cssData, RAdapter adapter)
         {
             foreach (var stylesheet in cssData.Stylesheets)
             {
@@ -232,17 +482,24 @@ namespace PeachPDF.Html.Core.Parse
         /// If the html tag is "link" that point to style data parse it content and add to the css data for all future tags parsing.<br/>
         /// </summary>
         /// <param name="box">the box to parse style data in</param>
-        /// <param name="htmlContainer">the html container to use for reference resolve</param>
+        /// <param name="htmlContainer">
+        /// the html container to use for reference resolve, or <see langword="null"/> when parsing an
+        /// <c>IContainer.Html(...)</c>-spliced fragment (<see cref="GenerateFragmentCssTree"/>), which has no
+        /// container yet to resolve a <c>&lt;link&gt;</c>'s network/relative URL through - a
+        /// <c>&lt;link rel=stylesheet&gt;</c> is silently skipped in that case (documented v1 limitation); a
+        /// fragment's own <c>&lt;style&gt;</c> tag is unaffected, since it never needs <paramref name="htmlContainer"/>.
+        /// </param>
         /// <param name="cssData">the style data to fill with found styles</param>
         /// <param name="cssDataChanged">check if the css data has been modified by the handled html not to change the base css data</param>
-        private async Task<(CssData cssData, bool cssDataChanged)> CascadeParseStyles(CssBox box, HtmlContainerInt htmlContainer, CssData cssData, bool cssDataChanged)
+        private async Task<(CssData cssData, bool cssDataChanged)> CascadeParseStyles(CssBox box, HtmlContainerInt? htmlContainer, CssData cssData, bool cssDataChanged)
         {
             if (box.HtmlTag != null)
             {
                 // Check for the <link rel=stylesheet> tag. Per HTML4/5, `rel` is a space-separated set
                 // of link types (e.g. `rel="appendix stylesheet"` is still a stylesheet link), so this
                 // must check for the "stylesheet" token rather than requiring an exact match.
-                if (box.HtmlTag.Name.Equals("link", StringComparison.OrdinalIgnoreCase) &&
+                if (htmlContainer is not null &&
+                   box.HtmlTag.Name.Equals("link", StringComparison.OrdinalIgnoreCase) &&
                    box.GetAttribute("rel", string.Empty)
                        .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
                        .Any(token => token.Equals("stylesheet", StringComparison.OrdinalIgnoreCase)))
@@ -274,7 +531,25 @@ namespace PeachPDF.Html.Core.Parse
             return (cssData, cssDataChanged);
         }
 
-        private static void CascadeApplyPageStyles(HtmlContainerInt htmlContainer, CssBox root, CssData cssData)
+        /// <param name="htmlContainer">the container whose page geometry a base <c>@page</c> rule may adjust</param>
+        /// <param name="root">the document/declarative tree root, for em/rem font-size resolution</param>
+        /// <param name="cssData">the stylesheet to read base <c>@page</c> rules from</param>
+        /// <param name="allowMarginLeft">
+        /// Whether a base rule's <c>margin-left</c> may overwrite <paramref name="htmlContainer"/>'s current
+        /// value - false when the declarative document-building API's own <c>IPageDescriptor.MarginLeft</c>
+        /// call already set it explicitly (see <see cref="PdfGenerator.AddDeclarativePage"/>), so an
+        /// explicit builder call always outranks a document-level stylesheet's base <c>@page</c> rule, the
+        /// same precedence <see cref="ApplyDeclarativeStylesheet"/> gives an ordinary property. True (every
+        /// declared value applies) for the ordinary whole-document HTML path, which has no such override to
+        /// protect.
+        /// </param>
+        /// <param name="allowMarginTop">Same as <paramref name="allowMarginLeft"/>, for <c>margin-top</c>.</param>
+        /// <param name="allowMarginRight">Same as <paramref name="allowMarginLeft"/>, for <c>margin-right</c>.</param>
+        /// <param name="allowMarginBottom">Same as <paramref name="allowMarginLeft"/>, for <c>margin-bottom</c>.</param>
+        /// <param name="allowSize">Same as <paramref name="allowMarginLeft"/>, for <c>size</c>.</param>
+        internal static void CascadeApplyPageStyles(HtmlContainerInt htmlContainer, CssBox root, CssData cssData,
+            bool allowMarginLeft = true, bool allowMarginTop = true,
+            bool allowMarginRight = true, bool allowMarginBottom = true, bool allowSize = true)
         {
             // HtmlContainerInt.MarginTop/Bottom/Left/Right live in the same "internal pixel space" as
             // every other layout coordinate (PageSize, Location, box positions) - under ShrinkToFit/
@@ -297,7 +572,8 @@ namespace PeachPDF.Html.Core.Parse
             // PixelsPerPoint reconciliation for the identical, already-established pattern/precedent).
             var pixelsPerPoint = (htmlContainer.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
 
-            ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint);
+            ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint,
+                allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize);
 
             // Issue #582 / "Direction 1": this method runs before CascadeApplyStyles and every box-tree
             // correction pass in GenerateCssTree - none of that expensive work has started yet - so if
@@ -328,11 +604,14 @@ namespace PeachPDF.Html.Core.Parse
                 cssPageSize != PeachPDF.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint))
             {
                 htmlContainer.PageSize = PeachPDF.Utilities.Utils.Convert(cssPageSize, pixelsPerPoint);
-                ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint);
+                ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint,
+                    allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize);
             }
         }
 
-        private static void ApplyPageStylesOnce(HtmlContainerInt htmlContainer, CssBox root, CssData cssData, double pixelsPerPoint)
+        private static void ApplyPageStylesOnce(HtmlContainerInt htmlContainer, CssBox root, CssData cssData, double pixelsPerPoint,
+            bool allowMarginLeft = true, bool allowMarginTop = true,
+            bool allowMarginRight = true, bool allowMarginBottom = true, bool allowSize = true)
         {
             // ParseLength's absolute-unit branches (pt/mm/cm/in/pc, and px at the spec-correct
             // 1px = 0.75pt via Length.PointsPerPx) resolve straight to raw, unscaled points - for
@@ -395,27 +674,27 @@ namespace PeachPDF.Html.Core.Parse
                 if (pageRule.Selector != null)
                     continue;
 
-                if (pageRule.Style.MarginLeft.Length > 0 && ParseMarginLength(pageRule.Style.MarginLeft) is { } left)
+                if (allowMarginLeft && pageRule.Style.MarginLeft.Length > 0 && ParseMarginLength(pageRule.Style.MarginLeft) is { } left)
                 {
                     htmlContainer.MarginLeft = left;
                 }
 
-                if (pageRule.Style.MarginTop.Length > 0 && ParseMarginLength(pageRule.Style.MarginTop) is { } top)
+                if (allowMarginTop && pageRule.Style.MarginTop.Length > 0 && ParseMarginLength(pageRule.Style.MarginTop) is { } top)
                 {
                     htmlContainer.MarginTop = top;
                 }
 
-                if (pageRule.Style.MarginBottom.Length > 0 && ParseMarginLength(pageRule.Style.MarginBottom) is { } bottom)
+                if (allowMarginBottom && pageRule.Style.MarginBottom.Length > 0 && ParseMarginLength(pageRule.Style.MarginBottom) is { } bottom)
                 {
                     htmlContainer.MarginBottom = bottom;
                 }
 
-                if (pageRule.Style.MarginRight.Length > 0 && ParseMarginLength(pageRule.Style.MarginRight) is { } right)
+                if (allowMarginRight && pageRule.Style.MarginRight.Length > 0 && ParseMarginLength(pageRule.Style.MarginRight) is { } right)
                 {
                     htmlContainer.MarginRight = right;
                 }
 
-                if (pageRule.Style.Size.Length > 0)
+                if (allowSize && pageRule.Style.Size.Length > 0)
                 {
                     // CssPageSize is documented/consumed as true PDF points (PdfGenerator.AddPdfPages
                     // assigns it straight to orgPageSize), not internal pixel space - unlike the
@@ -1354,10 +1633,11 @@ namespace PeachPDF.Html.Core.Parse
             IReadOnlyDictionary<string, string?>? revertLayerTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertLayerTarget,
-            Dictionary<string, string> pendingVarProperties)
+            Dictionary<string, string> pendingVarProperties,
+            IReadOnlySet<string>? skipPropertyNames = null)
         {
             foreach (var rule in rules)
-                AssignCssBlock(valueParser, box, rule, importantPass, revertTarget, revertLayerTarget, customPropertyRevertTarget, customPropertyRevertLayerTarget, pendingVarProperties);
+                AssignCssBlock(valueParser, box, rule, importantPass, revertTarget, revertLayerTarget, customPropertyRevertTarget, customPropertyRevertLayerTarget, pendingVarProperties, skipPropertyNames);
         }
 
         /// <summary>
@@ -1379,7 +1659,8 @@ namespace PeachPDF.Html.Core.Parse
             IReadOnlyDictionary<string, string?>? revertTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
             bool captureLayerBands,
-            Dictionary<string, string> pendingVarProperties)
+            Dictionary<string, string> pendingVarProperties,
+            IReadOnlySet<string>? skipPropertyNames = null)
         {
             var revertLayerTarget = revertTarget;
             var customPropertyRevertLayerTarget = customPropertyRevertTarget;
@@ -1394,7 +1675,7 @@ namespace PeachPDF.Html.Core.Parse
                     customPropertyRevertLayerTarget = CssUtils.SnapshotCustomProperties(box);
                 }
 
-                AssignCssBlock(valueParser, box, layered.Rule, importantPass, revertTarget, revertLayerTarget, customPropertyRevertTarget, customPropertyRevertLayerTarget, pendingVarProperties);
+                AssignCssBlock(valueParser, box, layered.Rule, importantPass, revertTarget, revertLayerTarget, customPropertyRevertTarget, customPropertyRevertLayerTarget, pendingVarProperties, skipPropertyNames);
             }
         }
 
@@ -1460,6 +1741,14 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="customPropertyRevertTarget">Case-sensitive custom-property snapshot for <c>revert</c></param>
         /// <param name="customPropertyRevertLayerTarget">Case-sensitive custom-property snapshot for <c>revert-layer</c></param>
         /// <param name="pendingVarProperties">Accumulates regular declarations whose value contains var(...), keyed by property name</param>
+        /// <param name="skipPropertyNames">
+        /// Property names to leave untouched during a non-<c>!important</c> pass - used only by the
+        /// declarative document-building API's <see cref="ApplyDeclarativeStylesheet"/> to protect a value
+        /// <see cref="Utils.CssPropertyFactory.Set(CssBox, string, string)"/> already assigned directly, the
+        /// same precedence an inline <c>style=""</c> attribute would have over an author stylesheet. An <c>!important</c>
+        /// declaration always applies regardless (matches real CSS: <c>!important</c> beats inline). Null
+        /// for every ordinary HTML cascade call.
+        /// </param>
         private static void AssignCssBlock(
             CssValueParser valueParser,
             CssBox box,
@@ -1469,11 +1758,15 @@ namespace PeachPDF.Html.Core.Parse
             IReadOnlyDictionary<string, string?>? revertLayerTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertLayerTarget,
-            Dictionary<string, string> pendingVarProperties)
+            Dictionary<string, string> pendingVarProperties,
+            IReadOnlySet<string>? skipPropertyNames = null)
         {
             foreach (var prop in stylesheetRule.Style)
             {
                 if (prop.IsImportant != importantPass)
+                    continue;
+
+                if (!importantPass && skipPropertyNames is { Count: > 0 } && skipPropertyNames.Contains(prop.Name))
                     continue;
 
                 if (PropertyFactory.IsCustomPropertyName(prop.Name))

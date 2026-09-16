@@ -989,7 +989,40 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets the HTMLTag that hosts this box
         /// </summary>
-        public HtmlTag? HtmlTag { get; }
+        public HtmlTag? HtmlTag { get; private set; }
+
+        /// <summary>
+        /// Lazily attaches a synthetic tag the first time the declarative document-building API needs to
+        /// write an attribute onto an otherwise-tagless box (<see cref="Layout.ContainerBuilder"/>'s
+        /// <c>Class</c>/<c>Id</c>/<c>Tag</c>). Every declaratively-built box already has one
+        /// (<see cref="Utils.CssPropertyFactory.CreateAnonymousBox"/>) except a page's own content root
+        /// (<see cref="Layout.PageDescriptorBuilder"/>'s bare <see cref="CreateBlock()"/> call). No-op once a
+        /// tag already exists.
+        /// </summary>
+        internal void EnsureHtmlTag() => HtmlTag ??= new HtmlTag("div", false);
+
+        /// <summary>
+        /// The set of CSS property names <see cref="Utils.CssPropertyFactory.Set(CssBox, string, string)"/> has directly assigned on
+        /// this box (the declarative document-building API's own property-setting path) - populated only for
+        /// a declaratively-built box, never for one produced by HTML parsing. Consulted by
+        /// <see cref="Parse.DomParser.ApplyDeclarativeStylesheet"/> so a document-level stylesheet's
+        /// non-<c>!important</c> rule cannot silently override a value the caller explicitly set (the same
+        /// precedence an inline <c>style=""</c> attribute would have over an author stylesheet).
+        /// </summary>
+        internal HashSet<string>? BuilderSetProperties { get; set; }
+
+        /// <summary>
+        /// True on every box that was styled by a real, specificity-ordered HTML cascade at
+        /// <see cref="Layout.ContainerBuilder.Html(string, PeachPdfCssContent?, Action{Layout.SlotContext, Layout.IContainer}?)"/>
+        /// splice time (<see cref="Parse.DomParser.GenerateFragmentCssTree"/>), as opposed to being built and
+        /// styled directly by the declarative builder. <see cref="Parse.DomParser.ApplyDeclarativeStylesheet"/>
+        /// skips applying its own matched declarations to a flagged box (re-matching a document-level
+        /// stylesheet against an already-fully-cascaded fragment box risks a low-specificity document rule
+        /// silently beating a high-specificity fragment-internal one) - but still recurses into its children,
+        /// since a &lt;slot&gt; filled with ordinary declarative content is never flagged and must still
+        /// participate normally.
+        /// </summary>
+        internal bool IsFragmentStyled { get; set; }
 
         /// <summary>
         /// This element's resolved language: its own `lang` attribute if non-empty, else the nearest

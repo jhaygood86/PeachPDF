@@ -1,6 +1,8 @@
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
+using System;
+using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Utils
 {
@@ -28,9 +30,18 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         public RAdapter Adapter => adapter;
 
-        /// <summary>Sets <paramref name="box"/>'s <paramref name="propertyName"/> to the raw CSS text <paramref name="value"/>.</summary>
-        public void Set(CssBox box, string propertyName, string value) =>
+        /// <summary>
+        /// Sets <paramref name="box"/>'s <paramref name="propertyName"/> to the raw CSS text
+        /// <paramref name="value"/>, and records <paramref name="propertyName"/> in
+        /// <see cref="CssBox.BuilderSetProperties"/> so a later document-level stylesheet
+        /// (<see cref="Parse.DomParser.ApplyDeclarativeStylesheet"/>) cannot silently override it with a
+        /// non-<c>!important</c> rule.
+        /// </summary>
+        public void Set(CssBox box, string propertyName, string value)
+        {
+            (box.BuilderSetProperties ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(propertyName);
             CssUtils.SetPropertyValue(_parser, box, propertyName, value);
+        }
 
         /// <summary>Sets <paramref name="box"/>'s <paramref name="propertyName"/> to <paramref name="value"/>'s canonical CSS length token.</summary>
         public void Set(CssBox box, string propertyName, PdfLength value) =>

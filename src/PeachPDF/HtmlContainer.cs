@@ -167,9 +167,9 @@ namespace PeachPDF
         }
 
         /// <summary>Thin wrapper over <see cref="HtmlContainerInt.SetDeclarativeRoot"/> - see its own remarks.</summary>
-        internal async ValueTask SetDeclarativeRoot(CssBox root, string? documentLanguage)
+        internal async ValueTask SetDeclarativeRoot(CssBox root, string? documentLanguage, PeachPdfCssContent? stylesheet = null)
         {
-            await HtmlContainerInt.SetDeclarativeRoot(root, documentLanguage);
+            await HtmlContainerInt.SetDeclarativeRoot(root, documentLanguage, stylesheet);
         }
 
         /// <summary>
