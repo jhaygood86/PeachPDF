@@ -326,10 +326,12 @@ Non-uniform rounded borders share the same curved corner-transition geometry acr
 The transition follows the ratio of the adjoining widths, as allowed by [CSS Backgrounds and
 Borders §4.4](https://www.w3.org/TR/css-backgrounds-3/#corner-transitions): solid and shaded sides
 fill their part of the curve, each `double` line and `groove`/`ridge` half keeps its own band, and a
-`dotted`/`dashed` centerline is clipped to its side's part of the corner. A pattern restarts on each
-non-uniform patterned edge, so its spacing can differ slightly from the continuous uniform-outline
-case. Sliced fragments leave an open square end where a physical edge is omitted rather than closing
-a false rounded corner.
+`dotted`/`dashed` centerline is clipped to its side's part of the corner. On an unsliced box, every
+patterned side is phased against the complete rounded centerline before clipping, like a browser. This
+means a small size change can move a dot or dash across a corner transition: a dot may visually join
+the adjacent side at one size and sit wholly within its own side at another. Sliced fragments instead
+fit each remaining open side independently and leave a square end where a physical edge is omitted
+rather than closing a false rounded corner.
 
 ### Border Radius
 
@@ -342,8 +344,6 @@ a false rounded corner.
 | `border-bottom-left-radius` | [border-bottom-left-radius](https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-left-radius) | Same as above |
 
 Percentages are relative to the border-box width (horizontal radius) and height (vertical radius). Overlapping adjacent radii are automatically reduced proportionally per the CSS spec.
-
-Known limitation: if any visible side of a rounded box uses a style outside the `groove`/`ridge` family (for example, `solid` or `dashed`), every `groove`/`ridge` side on that box uses one full-width per-edge stroke, because all styles need a shared curved corner-transition model. A box whose visible sides are all `groove`/`ridge` keeps both beveled bands even when their widths, colors, or choice between those two styles differ. The non-uniform limitation also applies to `double`: all four matching sides are drawn as two concentric rounded outlines, while differing sides use one full-width per-edge stroke.
 
 ### Border Image
 

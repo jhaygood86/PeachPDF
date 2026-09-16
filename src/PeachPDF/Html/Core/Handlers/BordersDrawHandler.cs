@@ -545,7 +545,10 @@ namespace PeachPDF.Html.Core.Handlers
             var inner = CreateRoundedContour(rect, radii, widths, 1, g.PixelsPerPoint);
 
             using var path = g.GetGraphicsPath();
-            AddRoundedSideCenterline(path, side, center, physical, active, angles);
+            var closed = physical is { Top: true, Right: true, Bottom: true, Left: true };
+            var pathLength = closed
+                ? AddRoundedContourCenterline(path, center)
+                : AddRoundedSideCenterline(path, side, center, physical, active, angles);
 
             using var clip = g.GetGraphicsPath();
             AddRoundedBandSide(clip, side, outer, inner, physical, active, angles);
@@ -553,7 +556,8 @@ namespace PeachPDF.Html.Core.Handlers
             g.PushClip(clip);
             try
             {
-                var pen = GetPen(g, GetStyle(side, box), GetColor(side, box), GetWidth(side, box));
+                var pen = GetRoundedPatternPen(
+                    g, GetStyle(side, box), GetColor(side, box), GetWidth(side, box), pathLength, closed);
                 g.DrawPath(pen, path);
             }
             finally
@@ -790,7 +794,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// Adds a patterned side from left to right or top to bottom. Unlike the clockwise fill-band
         /// contours, this direction is observable because it determines which end receives dash phase 0.
         /// </summary>
-        private static void AddRoundedSideCenterline(
+        private static double AddRoundedSideCenterline(
             RGraphicsPath path, Border side, RoundedContour center,
             RoundedBorderSides physical, RoundedBorderSides active, RoundedCornerAngles angles)
         {
@@ -799,29 +803,61 @@ namespace PeachPDF.Html.Core.Handlers
             const double ThreeQuarterTurn = 3 * Math.PI / 2;
             const double FullTurn = 2 * Math.PI;
 
+            var current = default(RPoint);
+            var length = 0d;
+
+            void Move(RPoint point)
+            {
+                path.AddMove(point.X, point.Y);
+                current = point;
+            }
+
+            void MoveCorner(RGraphicsPath.Corner corner, double angle) =>
+                Move(PointOnCorner(center, corner, angle));
+
+            void Line(RPoint point)
+            {
+                var dx = point.X - current.X;
+                var dy = point.Y - current.Y;
+                length += Math.Sqrt(dx * dx + dy * dy);
+                path.LineTo(point.X, point.Y);
+                current = point;
+            }
+
+            void LineCorner(RGraphicsPath.Corner corner, double angle) =>
+                Line(PointOnCorner(center, corner, angle));
+
+            void Arc(RGraphicsPath.Corner corner, double startAngle, double endAngle)
+            {
+                AddCornerArc(path, center, corner, startAngle, endAngle);
+                var (_, _, radiusX, radiusY) = CornerGeometry(center, corner);
+                length += StyledStrokeFitting.EllipseArcLength(radiusX, radiusY, startAngle, endAngle);
+                current = PointOnCorner(center, corner, endAngle);
+            }
+
             switch (side)
             {
                 case Border.Top:
                     if (physical.Left)
                     {
                         var startAngle = active.Left ? angles.TopLeft : HalfTurn;
-                        AddMove(path, center, RGraphicsPath.Corner.TopLeft, startAngle);
-                        AddCornerArc(path, center, RGraphicsPath.Corner.TopLeft, startAngle, ThreeQuarterTurn);
+                        MoveCorner(RGraphicsPath.Corner.TopLeft, startAngle);
+                        Arc(RGraphicsPath.Corner.TopLeft, startAngle, ThreeQuarterTurn);
                     }
                     else
                     {
-                        path.AddMove(center.Rect.Left, center.Rect.Top);
+                        Move(new RPoint(center.Rect.Left, center.Rect.Top));
                     }
 
                     if (physical.Right)
                     {
                         var endAngle = active.Right ? angles.TopRight : FullTurn;
-                        LineTo(path, center, RGraphicsPath.Corner.TopRight, ThreeQuarterTurn);
-                        AddCornerArc(path, center, RGraphicsPath.Corner.TopRight, ThreeQuarterTurn, endAngle);
+                        LineCorner(RGraphicsPath.Corner.TopRight, ThreeQuarterTurn);
+                        Arc(RGraphicsPath.Corner.TopRight, ThreeQuarterTurn, endAngle);
                     }
                     else
                     {
-                        path.LineTo(center.Rect.Right, center.Rect.Top);
+                        Line(new RPoint(center.Rect.Right, center.Rect.Top));
                     }
                     break;
 
@@ -829,23 +865,23 @@ namespace PeachPDF.Html.Core.Handlers
                     if (physical.Top)
                     {
                         var startAngle = active.Top ? angles.TopRight : ThreeQuarterTurn;
-                        AddMove(path, center, RGraphicsPath.Corner.TopRight, startAngle);
-                        AddCornerArc(path, center, RGraphicsPath.Corner.TopRight, startAngle, FullTurn);
+                        MoveCorner(RGraphicsPath.Corner.TopRight, startAngle);
+                        Arc(RGraphicsPath.Corner.TopRight, startAngle, FullTurn);
                     }
                     else
                     {
-                        path.AddMove(center.Rect.Right, center.Rect.Top);
+                        Move(new RPoint(center.Rect.Right, center.Rect.Top));
                     }
 
                     if (physical.Bottom)
                     {
                         var endAngle = active.Bottom ? angles.BottomRight : QuarterTurn;
-                        LineTo(path, center, RGraphicsPath.Corner.BottomRight, 0);
-                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomRight, 0, endAngle);
+                        LineCorner(RGraphicsPath.Corner.BottomRight, 0);
+                        Arc(RGraphicsPath.Corner.BottomRight, 0, endAngle);
                     }
                     else
                     {
-                        path.LineTo(center.Rect.Right, center.Rect.Bottom);
+                        Line(new RPoint(center.Rect.Right, center.Rect.Bottom));
                     }
                     break;
 
@@ -853,23 +889,23 @@ namespace PeachPDF.Html.Core.Handlers
                     if (physical.Left)
                     {
                         var startAngle = active.Left ? angles.BottomLeft : HalfTurn;
-                        AddMove(path, center, RGraphicsPath.Corner.BottomLeft, startAngle);
-                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomLeft, startAngle, QuarterTurn);
+                        MoveCorner(RGraphicsPath.Corner.BottomLeft, startAngle);
+                        Arc(RGraphicsPath.Corner.BottomLeft, startAngle, QuarterTurn);
                     }
                     else
                     {
-                        path.AddMove(center.Rect.Left, center.Rect.Bottom);
+                        Move(new RPoint(center.Rect.Left, center.Rect.Bottom));
                     }
 
                     if (physical.Right)
                     {
                         var endAngle = active.Right ? angles.BottomRight : 0;
-                        LineTo(path, center, RGraphicsPath.Corner.BottomRight, QuarterTurn);
-                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomRight, QuarterTurn, endAngle);
+                        LineCorner(RGraphicsPath.Corner.BottomRight, QuarterTurn);
+                        Arc(RGraphicsPath.Corner.BottomRight, QuarterTurn, endAngle);
                     }
                     else
                     {
-                        path.LineTo(center.Rect.Right, center.Rect.Bottom);
+                        Line(new RPoint(center.Rect.Right, center.Rect.Bottom));
                     }
                     break;
 
@@ -877,29 +913,70 @@ namespace PeachPDF.Html.Core.Handlers
                     if (physical.Top)
                     {
                         var startAngle = active.Top ? angles.TopLeft : ThreeQuarterTurn;
-                        AddMove(path, center, RGraphicsPath.Corner.TopLeft, startAngle);
-                        AddCornerArc(path, center, RGraphicsPath.Corner.TopLeft, startAngle, HalfTurn);
+                        MoveCorner(RGraphicsPath.Corner.TopLeft, startAngle);
+                        Arc(RGraphicsPath.Corner.TopLeft, startAngle, HalfTurn);
                     }
                     else
                     {
-                        path.AddMove(center.Rect.Left, center.Rect.Top);
+                        Move(new RPoint(center.Rect.Left, center.Rect.Top));
                     }
 
                     if (physical.Bottom)
                     {
                         var endAngle = active.Bottom ? angles.BottomLeft : QuarterTurn;
-                        LineTo(path, center, RGraphicsPath.Corner.BottomLeft, HalfTurn);
-                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomLeft, HalfTurn, endAngle);
+                        LineCorner(RGraphicsPath.Corner.BottomLeft, HalfTurn);
+                        Arc(RGraphicsPath.Corner.BottomLeft, HalfTurn, endAngle);
                     }
                     else
                     {
-                        path.LineTo(center.Rect.Left, center.Rect.Bottom);
+                        Line(new RPoint(center.Rect.Left, center.Rect.Bottom));
                     }
                     break;
 
                 default:
                     throw new ArgumentOutOfRangeException(nameof(side));
             }
+
+            return length;
+        }
+
+        /// <summary>
+        /// Adds the complete clockwise border centerline, starting at the top-left corner's top tangent.
+        /// Browser border patterns are phased against this contour before each side is clipped out.
+        /// </summary>
+        private static double AddRoundedContourCenterline(RGraphicsPath path, RoundedContour center)
+        {
+            const double QuarterTurn = Math.PI / 2;
+            const double HalfTurn = Math.PI;
+            const double ThreeQuarterTurn = 3 * Math.PI / 2;
+            const double FullTurn = 2 * Math.PI;
+
+            AddMove(path, center, RGraphicsPath.Corner.TopLeft, ThreeQuarterTurn);
+            LineTo(path, center, RGraphicsPath.Corner.TopRight, ThreeQuarterTurn);
+            AddCornerArc(path, center, RGraphicsPath.Corner.TopRight, ThreeQuarterTurn, FullTurn);
+            LineTo(path, center, RGraphicsPath.Corner.BottomRight, 0);
+            AddCornerArc(path, center, RGraphicsPath.Corner.BottomRight, 0, QuarterTurn);
+            LineTo(path, center, RGraphicsPath.Corner.BottomLeft, QuarterTurn);
+            AddCornerArc(path, center, RGraphicsPath.Corner.BottomLeft, QuarterTurn, HalfTurn);
+            LineTo(path, center, RGraphicsPath.Corner.TopLeft, HalfTurn);
+            AddCornerArc(path, center, RGraphicsPath.Corner.TopLeft, HalfTurn, ThreeQuarterTurn);
+            path.CloseFigure();
+
+            var straightLength =
+                Math.Max(0, center.Rect.Width - center.TLX - center.TRX) +
+                Math.Max(0, center.Rect.Height - center.TRY - center.BRY) +
+                Math.Max(0, center.Rect.Width - center.BLX - center.BRX) +
+                Math.Max(0, center.Rect.Height - center.BLY - center.TLY);
+            var arcLength =
+                StyledStrokeFitting.EllipseArcLength(
+                    center.TRX, center.TRY, ThreeQuarterTurn, FullTurn) +
+                StyledStrokeFitting.EllipseArcLength(
+                    center.BRX, center.BRY, 0, QuarterTurn) +
+                StyledStrokeFitting.EllipseArcLength(
+                    center.BLX, center.BLY, QuarterTurn, HalfTurn) +
+                StyledStrokeFitting.EllipseArcLength(
+                    center.TLX, center.TLY, HalfTurn, ThreeQuarterTurn);
+            return straightLength + arcLength;
         }
 
         private static void AddMove(
@@ -1446,9 +1523,10 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// Get pen to be used for border draw respecting its style.
+        /// Gets a pen whose pattern is fitted to a complete rounded contour or one open fragment side.
         /// </summary>
-        private static RPen GetPen(RGraphics g, LineStyle style, RColor color, double width)
+        private static RPen GetRoundedPatternPen(
+            RGraphics g, LineStyle style, RColor color, double width, double pathLength, bool closed)
         {
             var p = g.GetPen(color);
             // Width is the caller's raw, un-divided layout-space (PixelsPerInch-inflated) value.
@@ -1457,24 +1535,26 @@ namespace PeachPDF.Html.Core.Handlers
             p.Width = width / g.PixelsPerPoint;
             p.LineJoin = RLineJoin.Miter;
 
-            // A mixed rounded border has one path per patterned edge, so there is no single outline to
-            // fit a pattern to. The period stays at its ideal and falls where it falls along that edge.
-            if (style is LineStyle.Dotted)
-            {
-                p.LineCap = RLineCap.Round;
-                p.SetDashPattern([0, 2 * width / g.PixelsPerPoint], 0);
-            }
-            else if (style is LineStyle.Dashed)
+            var dotted = style == LineStyle.Dotted;
+            var fitted = closed
+                ? StyledStrokeFitting.FitClosed(dotted, p.Width, pathLength)
+                : StyledStrokeFitting.Fit(dotted, p.Width, pathLength);
+            if (fitted is not { } pattern)
             {
                 p.LineCap = RLineCap.Butt;
-                p.SetDashPattern([2 * width / g.PixelsPerPoint, width / g.PixelsPerPoint], 0);
+                p.DashStyle = RDashStyle.Solid;
+            }
+            else if (dotted)
+            {
+                p.LineCap = RLineCap.Round;
+                p.SetDashPattern(
+                    [0, pattern.Period],
+                    closed ? 0 : pattern.Period - p.Width / 2);
             }
             else
             {
-                // Multi-band rounded styles are handled by TryDrawRoundedBorder and never reach here.
-                // Any other unexpected style degrades to solid rather than crashing.
                 p.LineCap = RLineCap.Butt;
-                p.DashStyle = RDashStyle.Solid;
+                p.SetDashPattern([pattern.DashLength, pattern.GapLength], 0);
             }
 
             return p;

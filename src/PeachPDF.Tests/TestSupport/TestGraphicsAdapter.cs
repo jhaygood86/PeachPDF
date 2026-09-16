@@ -235,6 +235,10 @@ namespace PeachPDF.Tests.TestSupport
 
             /// <summary>True when the path was stroked with a pen rather than filled with a brush.</summary>
             public bool Stroked { get; init; }
+            public double StrokeWidth { get; init; }
+            public RLineCap LineCap { get; init; }
+            public IReadOnlyList<double>? DashPattern { get; init; }
+            public double DashOffset { get; init; }
         }
         /// <param name="LineCap">
         /// The pen's cap AS OF this call. Load-bearing for dotted styles: the dot itself is a
@@ -334,7 +338,15 @@ namespace PeachPDF.Tests.TestSupport
 
         public override void DrawPath(RPen pen, RGraphicsPath path)
         {
-            Log.Add(new DrawPathCall(pen is TestPen tp ? tp.Color : RColor.Empty, PointsOf(path)) { Stroked = true });
+            var testPen = pen as TestPen;
+            Log.Add(new DrawPathCall(testPen?.Color ?? RColor.Empty, PointsOf(path))
+            {
+                Stroked = true,
+                StrokeWidth = testPen?.Width ?? 0,
+                LineCap = testPen?.RecordedLineCap ?? RLineCap.Butt,
+                DashPattern = testPen?.RecordedDashPattern,
+                DashOffset = testPen?.RecordedDashOffset ?? 0
+            });
         }
 
         private static IReadOnlyList<RPoint> PointsOf(RGraphicsPath path) =>

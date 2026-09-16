@@ -534,7 +534,8 @@ namespace PeachPDF.Tests.Integration
 
             var stroked = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Where(p => p.Stroked).ToList();
             Assert.Equal(4, stroked.Count);
-            Assert.All(stroked, path => Assert.True(path.Points.Count > 4));
+            Assert.All(stroked, path => Assert.True(path.Points.Count > 16));
+            Assert.All(stroked, path => Assert.Equal(path.Points[0], path.Points[^1]));
             Assert.Equal(4, g.ClipPaths.Count);
             Assert.All(g.ClipPaths, clip => Assert.True(clip.Points.Count > 8));
         }
@@ -615,6 +616,21 @@ namespace PeachPDF.Tests.Integration
 
             // A fully flattened "ellipse" degenerates to twice its long axis; Ramanujan lands close.
             Assert.Equal(40, StyledStrokeFitting.EllipsePerimeter(10, 0), 0);
+        }
+
+        [Fact]
+        public void EllipseArcLength_MatchesCircleAndEllipseQuarterTurns()
+        {
+            Assert.Equal(
+                Math.PI * 12 / 2,
+                StyledStrokeFitting.EllipseArcLength(12, 12, 0, Math.PI / 2),
+                6);
+
+            var forward = StyledStrokeFitting.EllipseArcLength(20, 10, 0, Math.PI / 2);
+            var reverse = StyledStrokeFitting.EllipseArcLength(20, 10, Math.PI / 2, 0);
+            Assert.Equal(StyledStrokeFitting.EllipsePerimeter(20, 10) / 4, forward, 4);
+            Assert.Equal(forward, reverse, 6);
+            Assert.Equal(0, StyledStrokeFitting.EllipseArcLength(20, 0, 0, Math.PI / 2));
         }
 
         [Fact]
@@ -805,6 +821,104 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task RoundedDottedSide_MixedWithFilledStyles_UsesTheClosedContourPatternPhase()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:100pt; height:48px; border:14px rgb(74,144,217); " +
+                "border-style:double dotted inset outset; border-radius:28px'></div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var dotted = Assert.Single(
+                g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                path => path.Stroked);
+            Assert.Equal(RLineCap.Round, dotted.LineCap);
+            Assert.Equal(10.5, dotted.StrokeWidth, 3);
+            Assert.NotNull(dotted.DashPattern);
+            Assert.Equal(0, dotted.DashPattern![0]);
+            Assert.Equal(0, dotted.DashOffset);
+            Assert.Equal(dotted.Points[0], dotted.Points[^1]);
+            Assert.True(dotted.Points.Count > 16);
+        }
+
+        [Fact]
+        public async Task RoundedDottedSide_BoxWidthChangesItsGlobalPatternFit()
+        {
+            async Task<TestRecordingGraphics.DrawPathCall> Paint(double width)
+            {
+                var (root, container) = await BuildAndLayout(Wrap(
+                    $"<div id='b' style='width:{width}px; height:48px; border:14px rgb(217,74,74); " +
+                    "border-style:double dotted inset outset; border-radius:28px'></div>"));
+                var div = FindById(root, "b")!;
+                var g = new TestRecordingGraphics();
+                FragmentPaintHarness.PaintBox(container, div, g);
+                return Assert.Single(
+                    g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                    path => path.Stroked);
+            }
+
+            var narrower = await Paint(240);
+            var wider = await Paint(245);
+
+            Assert.Equal(0, narrower.DashOffset);
+            Assert.Equal(0, wider.DashOffset);
+            Assert.NotEqual(narrower.DashPattern![1], wider.DashPattern![1]);
+            Assert.Equal(3.75, wider.Bounds.Width - narrower.Bounds.Width, 3);
+        }
+
+        [Fact]
+        public async Task RoundedPatternFitting_IsInvariantUnderPixelsPerPointScaling()
+        {
+            const string html =
+                "<div id='b' style='width:100pt; height:48pt; border:14pt rgb(74,144,217); " +
+                "border-style:double dotted inset outset; border-radius:28pt'></div>";
+
+            var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
+            var divDefault = LayoutHarness.FindById(rootDefault, "b")!;
+            var gDefault = new TestRecordingGraphics { PixelsPerPointOverride = 1 };
+            FragmentPaintHarness.PaintBox(containerDefault, divDefault, gDefault);
+            var defaultStroke = Assert.Single(
+                gDefault.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                path => path.Stroked);
+
+            var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(html), pixelsPerPoint: 2);
+            var divScaled = LayoutHarness.FindById(rootScaled, "b")!;
+            var gScaled = new TestRecordingGraphics { PixelsPerPointOverride = 2 };
+            FragmentPaintHarness.PaintBox(containerScaled, divScaled, gScaled);
+            var scaledStroke = Assert.Single(
+                gScaled.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                path => path.Stroked);
+
+            Assert.Equal(defaultStroke.StrokeWidth, scaledStroke.StrokeWidth, 6);
+            Assert.Equal(defaultStroke.DashPattern!, scaledStroke.DashPattern!);
+            Assert.Equal(defaultStroke.DashOffset, scaledStroke.DashOffset, 6);
+        }
+
+        [Fact]
+        public async Task RoundedDashedSide_MixedWithFilledStyles_UsesTheClosedContourFit()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:100pt; height:48px; border:18px rgb(74,144,217); " +
+                "border-style:groove solid ridge dashed; border-radius:36px'></div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var stroke = Assert.Single(
+                g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                path => path.Stroked);
+            Assert.NotNull(stroke.DashPattern);
+            Assert.Equal(RLineCap.Butt, stroke.LineCap);
+            Assert.Equal(2 * stroke.StrokeWidth, stroke.DashPattern![0], 6);
+            Assert.Equal(0, stroke.DashOffset);
+            Assert.Equal(stroke.Points[0], stroke.Points[^1]);
+        }
+
+        [Fact]
         public async Task RoundedDouble_MixedWithOtherFilledStyles_RetainsBothLines()
         {
             var (root, container) = await BuildAndLayout(Wrap(
@@ -890,6 +1004,55 @@ namespace PeachPDF.Tests.Integration
                 Assert.Equal(borderRect.Bottom, stroke.Points.Max(point => point.Y), 3);
                 Assert.True(stroke.Points[0].Y < stroke.Points[^1].Y);
             }
+        }
+
+        [Theory]
+        [InlineData(false, true, true, true)]
+        [InlineData(true, false, true, true)]
+        [InlineData(true, true, false, true)]
+        [InlineData(true, true, true, false)]
+        public async Task RoundedDashed_SlicedFragmentWithOneMissingEdge_KeepsCurvesOnPhysicalCorners(
+            bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:100pt; height:60pt; border:12pt dashed rgb(51,51,51); " +
+                "border-radius:20pt'></div>"));
+            var div = FindById(root, "b")!;
+            var borderRect = FragmentPaintHarness.FragmentOf(container, div).Lines[0].Rect;
+
+            var g = new TestRecordingGraphics();
+            BordersDrawHandler.DrawBoxBorders(
+                g, div, borderRect,
+                hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
+
+            var strokes = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(path => path.Stroked)
+                .ToList();
+            Assert.Equal(3, strokes.Count);
+            Assert.All(strokes, stroke => Assert.NotEqual(stroke.Points[0], stroke.Points[^1]));
+            Assert.Contains(strokes, stroke => stroke.Points.Count > 4);
+        }
+
+        [Theory]
+        [InlineData("dotted")]
+        [InlineData("dashed")]
+        public async Task RoundedPatternedOpenSide_TooShortToFit_FallsBackToSolid(string style)
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                $"<div id='b' style='width:0; height:0; border:20pt {style} rgb(51,51,51); " +
+                "border-radius:1pt'></div>"));
+            var div = FindById(root, "b")!;
+            var borderRect = FragmentPaintHarness.FragmentOf(container, div).Lines[0].Rect;
+
+            var g = new TestRecordingGraphics();
+            BordersDrawHandler.DrawBoxBorders(
+                g, div, borderRect,
+                hasLeftEdge: false, hasRightEdge: true, hasTopEdge: false, hasBottomEdge: false);
+
+            var stroke = Assert.Single(
+                g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                path => path.Stroked);
+            Assert.Null(stroke.DashPattern);
         }
 
         [Fact]

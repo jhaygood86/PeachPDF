@@ -5,7 +5,7 @@ using System;
 namespace PeachPDF.Html.Core.Utils
 {
     /// <summary>
-    /// Lays a <c>dotted</c>/<c>dashed</c> pattern along one straight border/outline edge so it starts
+    /// Lays a <c>dotted</c>/<c>dashed</c> pattern along one open border/outline edge so it starts
     /// and ends flush with the edge, the way a browser does, instead of running a fixed-period pattern
     /// off the end and leaving a ragged stub in the corner.
     /// </summary>
@@ -115,6 +115,41 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Length of an elliptical arc. Five-point Gauss-Legendre integration is effectively exact at
+        /// border-rendering precision for the at-most-quarter-turn arcs used by rounded borders.
+        /// </summary>
+        internal static double EllipseArcLength(
+            double radiusX, double radiusY, double startAngle, double endAngle)
+        {
+            if (radiusX <= 0 || radiusY <= 0 || Math.Abs(endAngle - startAngle) <= double.Epsilon)
+                return 0;
+
+            static double Speed(double angle, double x, double y)
+            {
+                var dx = x * Math.Sin(angle);
+                var dy = y * Math.Cos(angle);
+                return Math.Sqrt(dx * dx + dy * dy);
+            }
+
+            const double innerNode = 0.5384693101056831;
+            const double outerNode = 0.9061798459386640;
+            const double centerWeight = 0.5688888888888889;
+            const double innerWeight = 0.4786286704993665;
+            const double outerWeight = 0.2369268850561891;
+
+            var midpoint = (startAngle + endAngle) / 2;
+            var halfRange = Math.Abs(endAngle - startAngle) / 2;
+            return halfRange * (
+                centerWeight * Speed(midpoint, radiusX, radiusY) +
+                innerWeight * (
+                    Speed(midpoint - halfRange * innerNode, radiusX, radiusY) +
+                    Speed(midpoint + halfRange * innerNode, radiusX, radiusY)) +
+                outerWeight * (
+                    Speed(midpoint - halfRange * outerNode, radiusX, radiusY) +
+                    Speed(midpoint + halfRange * outerNode, radiusX, radiusY)));
+        }
+
+        /// <summary>
         /// Configures <paramref name="pen"/> for a dotted/dashed edge running from
         /// <paramref name="edgeStart"/> to <paramref name="edgeEnd"/> along its own axis, and returns
         /// the span to actually stroke. Returns null when the edge cannot carry a pattern, meaning the
@@ -128,7 +163,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="pixelsPerPoint">
         /// the graphics device's layout-units-per-point ratio. A dash array, like a pen's stroke width
         /// and unlike every coordinate handed to <c>DrawLine</c>, reaches the backend undivided, so it
-        /// has to be converted here - see <c>BordersDrawHandler.GetPen</c>'s own remark.
+        /// has to be converted here rather than being passed through as a layout-space value.
         /// </param>
         internal static (double Start, double End)? Apply(
             RPen pen, bool dotted, double strokeWidth, double edgeStart, double edgeEnd, double pixelsPerPoint)
