@@ -10,7 +10,7 @@
 // per-lookup parsing, the MATH table's total data volume is modest (no lookup-list tree to defer),
 // so there is nothing to gain from deferring any of it. MathTable instances are still cached and
 // shared process-wide exactly like GsubTable/GdefTable/GposTable (see GdefTable.cs), so the whole
-// eager parse is still wrapped in `lock (face)` against the shared, mutable-cursor OpenTypeFontface.
+// eager parse is still wrapped in `lock (face.SyncRoot)` against the shared, mutable-cursor OpenTypeFontface.
 //
 // Not read: each MathValueRecord's own deviceOffset (device-table pixel corrections for specific
 // PPEM sizes) - irrelevant for PDF output, which is resolution-independent vector content, not
@@ -418,7 +418,7 @@ namespace PeachPDF.Fonts.OpenType
             // MathTable instances are cached and shared process-wide, exactly like GsubTable/
             // GdefTable/GposTable (see GdefTable.cs) - lock around the whole eager parse against
             // the shared, mutable-cursor OpenTypeFontface.
-            lock (face)
+            lock (face.SyncRoot)
             {
                 face.Position = tableStart;
                 face.ReadUShort(); // majorVersion

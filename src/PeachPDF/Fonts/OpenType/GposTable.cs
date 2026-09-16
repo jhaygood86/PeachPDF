@@ -317,8 +317,8 @@ namespace PeachPDF.Fonts.OpenType
         // Same process-wide-shared-instance rationale as GsubTable's own cache fields (issue #543) -
         // a GposTable instance is cached and shared across concurrently-rendering PdfGenerator
         // instances, and every sequential _face.Position read below is locked on the same shared
-        // _face GsubTable already locks on, so GSUB- and GPOS-table reads against one cached font
-        // stay correctly serialized against each other too.
+        // _face.SyncRoot GsubTable, outline decoding, and color-glyph decoding already lock on, so
+        // all reads against one cached font stay correctly serialized (issue #1119).
         private readonly ConcurrentDictionary<int, GposSingleAdjustmentLookup?> _singleAdjustmentCache = new();
         private readonly ConcurrentDictionary<int, GposCursiveAttachmentLookup?> _cursiveAttachmentCache = new();
         private readonly ConcurrentDictionary<int, GposPairAdjustmentLookup?> _pairAdjustmentCache = new();
@@ -353,7 +353,7 @@ namespace PeachPDF.Fonts.OpenType
         /// </summary>
         public SortedSet<int> GetActiveLookupIndices(IReadOnlyList<string> scriptTagPreference, IReadOnlySet<string> featureTags)
         {
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 var lookupIndices = new SortedSet<int>();
 
@@ -486,7 +486,7 @@ namespace PeachPDF.Fonts.OpenType
         /// Reads the Lookup table at <paramref name="lookupListIndex"/>'s header and subtable offsets,
         /// returning null if the index is out of range or (after unwrapping any Type 9 Extension
         /// Positioning wrapper) its resolved type isn't <paramref name="expectedType"/>. Callers must
-        /// already hold `lock (_face)`.
+        /// already hold `lock (_face.SyncRoot)`.
         /// </summary>
         private LookupHeader? ReadLookupHeader(int lookupListIndex, int expectedType)
         {
@@ -566,7 +566,7 @@ namespace PeachPDF.Fonts.OpenType
         private GposSingleAdjustmentLookup? ReadSingleAdjustmentLookup(int lookupListIndex)
         {
             // Same locking rationale as GsubTable's own per-lookup readers - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 1) is not { } header)
                     return null;
@@ -615,7 +615,7 @@ namespace PeachPDF.Fonts.OpenType
         private GposCursiveAttachmentLookup? ReadCursiveAttachmentLookup(int lookupListIndex)
         {
             // Same locking rationale as GsubTable's own per-lookup readers - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 3) is not { } header)
                     return null;
@@ -667,7 +667,7 @@ namespace PeachPDF.Fonts.OpenType
         private GposPairAdjustmentLookup? ReadPairAdjustmentLookup(int lookupListIndex)
         {
             // Same locking rationale as GsubTable's own per-lookup readers - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 2) is not { } header)
                     return null;
@@ -754,7 +754,7 @@ namespace PeachPDF.Fonts.OpenType
         private GposMarkToBaseLookup? ReadMarkToBaseLookup(int lookupListIndex)
         {
             // Same locking rationale as GsubTable's own per-lookup readers - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 4) is not { } header)
                     return null;
@@ -776,7 +776,7 @@ namespace PeachPDF.Fonts.OpenType
         private GposMarkToMarkLookup? ReadMarkToMarkLookup(int lookupListIndex)
         {
             // Same locking rationale as GsubTable's own per-lookup readers - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 6) is not { } header)
                     return null;
@@ -870,7 +870,7 @@ namespace PeachPDF.Fonts.OpenType
         private GposMarkToLigatureLookup? ReadMarkToLigatureLookup(int lookupListIndex)
         {
             // Same locking rationale as GsubTable's own per-lookup readers - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 5) is not { } header)
                     return null;
@@ -962,7 +962,7 @@ namespace PeachPDF.Fonts.OpenType
         private GposContextualLookup? ReadContextualLookup(int lookupListIndex)
         {
             // Same locking rationale as GsubTable's own per-lookup readers - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 7) is not { } header)
                     return null;
@@ -984,7 +984,7 @@ namespace PeachPDF.Fonts.OpenType
         private GposChainingContextLookup? ReadChainingContextLookup(int lookupListIndex)
         {
             // Same locking rationale as GsubTable's own per-lookup readers - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 if (ReadLookupHeader(lookupListIndex, 8) is not { } header)
                     return null;
@@ -1286,7 +1286,7 @@ namespace PeachPDF.Fonts.OpenType
         private int ReadResolvedLookupType(int lookupListIndex)
         {
             // Same locking rationale as GsubTable's own per-lookup readers - see issue #543.
-            lock (_face)
+            lock (_face.SyncRoot)
             {
                 _face.Position = _lookupListOffset;
                 int lookupCount = _face.ReadUShort();
