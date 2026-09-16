@@ -31,8 +31,8 @@ corner dot remains visible through a `double` edge's transparent gap, and a dash
 of on the transition diagonal. At square corners the stroke now keeps the shared corner only when
 both edges match; otherwise it is clipped to the same unequal-width-aware mitre that filled border
 bands use. The clip extends beyond the stroke at the outer and inner edges, so it constrains only the
-corner transition and cannot thin the border through clip antialiasing. Mixed patterned rounded
-corners remain on the older whole-arc path.
+corner transition and cannot thin the border through clip antialiasing. Rounded mixed corners now
+use the same principle with a curved side band and a width-ratio corner split.
 
 **groove/ridge were flat.** The two stripes picked their colors without regard to which edge they
 were on, so all four sides shaded alike. A browser paints `groove`'s outer half as `inset` and its
@@ -100,7 +100,7 @@ files that were counting polygons as a proxy for "the border painted". They were
 prove each fragment closes itself, and a closed fragment is now *one ring*, which is a cleaner
 observable for the same property — hence `CountBlueRings`.
 
-**A pill's ends grew stubs.** `GetRoundedBorderPath` strokes down the middle of the border but was
+**A pill's ends grew stubs.** The former `GetRoundedBorderPath` stroked down the middle of the border but was
 using the border box's own corner radii, not the centreline's. The centreline radius is smaller by
 half the border width on each axis (X follows the left/right border, Y the top/bottom), so every
 straight run started half a width too far along. Harmless while the radius is large relative to the
@@ -115,7 +115,7 @@ the corner seams. So whether an edge gets a path is still decided by the box's *
 arcs themselves use the reduced ones, which degrades to a square centreline stroke rather than to four
 quads.
 
-**Dots piling up at a rounded corner.** `GetRoundedBorderPath` builds a separate path per edge, and
+**Dots piling up at a rounded corner.** The former `GetRoundedBorderPath` built a separate path per edge, and
 the top edge's path carries both corner arcs while the sides are straight lines. A dash pattern
 restarts its phase at each, so dots landed two and three deep where an arc handed over to a straight
 run — barely visible with the old square dots, obvious once they became circles.
@@ -129,8 +129,8 @@ structural, not fundamental: a square border paints its bands as *fills*, so N b
 rounded one paints as a *stroke*, and a pen draws exactly one band - so `double` had nowhere to put
 its second line and `GetPen`'s catch-all arm silently degraded it to a single solid stroke. Once the
 outline builder took an arbitrary inset (with radii reduced to match), `double` became two calls to
-it, at the thirds. `groove`/`ridge` stay on the fallback for a real reason: they shade each side
-differently, and one continuous stroke cannot change color partway round.
+it, at the thirds. `groove`/`ridge` need filled per-side bands instead because one continuous stroke
+cannot change color partway round; the later rounded-band implementation supplies those bands.
 
 One ordering detail worth keeping: the outer line is stroked first. It sits closest to the edge and is
 therefore the last to run out of room, so bailing on it means nothing has been drawn and the caller can

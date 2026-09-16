@@ -521,10 +521,10 @@ namespace PeachPDF.Tests.Integration
         [Theory]
         [InlineData("border-style: dotted; border-color: rgb(51,51,51); border-width: 8pt 4pt 8pt 4pt")]
         [InlineData("border: 8pt dashed; border-color: rgb(51,51,51) rgb(9,9,9) rgb(51,51,51) rgb(51,51,51)")]
-        public async Task RoundedDottedOrDashedBorder_WithSidesThatDiffer_KeepsThePerEdgePaths(string css)
+        public async Task RoundedDottedOrDashedBorder_WithSidesThatDiffer_UsesOneSharedCornerPathPerEdge(string css)
         {
-            // A single stroked outline needs one width and one color; anything else still strokes each
-            // edge's own arc, where the pattern's phase restarts per edge.
+            // A single stroked outline needs one width and one color. Otherwise each edge gets the
+            // width-ratio share of both adjacent corner arcs, and its pattern phase restarts there.
             var (root, container) = await BuildAndLayout(Wrap(
                 $"<div id='b' style='width:80pt; height:40pt; border-radius: 16pt; {css}'>x</div>"));
             var div = FindById(root, "b")!;
@@ -534,6 +534,9 @@ namespace PeachPDF.Tests.Integration
 
             var stroked = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Where(p => p.Stroked).ToList();
             Assert.Equal(4, stroked.Count);
+            Assert.All(stroked, path => Assert.True(path.Points.Count > 4));
+            Assert.Equal(4, g.ClipPaths.Count);
+            Assert.All(g.ClipPaths, clip => Assert.True(clip.Points.Count > 8));
         }
 
         [Fact]
@@ -553,39 +556,28 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task RoundedBorderWithSidesThatDiffer_ReducesEachRadiusForTheCentreline_SoNoRunIsReversed()
+        public async Task RoundedSolidBorder_WithDifferentSideColors_FillsSharedCornerBands()
         {
-            // A per-edge rounded path is stroked down the middle of the border, so its corner radii are
-            // the box's own minus half the border width. Using the box's radii unreduced pushes each
-            // straight run's start half a width too far along - and once a radius reaches half the box (a
-            // pill) the two arcs claim more than the centreline has, the run between them comes out
-            // REVERSED, and the pen paints it as a stub sticking out of the middle of the end cap.
-            //
-            // Per-side colors keep this off the single-outline path, which does its own reduction.
             var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='b' style='width:100pt; height:40pt; border: 10pt solid; border-radius: 999px; " +
                 "border-color: rgb(51,51,51) rgb(9,9,9) rgb(51,51,51) rgb(51,51,51)'>x</div>"));
             var div = FindById(root, "b")!;
+            var borderRect = FragmentPaintHarness.FragmentOf(container, div).Lines[0].Rect;
 
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            var stroked = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Where(p => p.Stroked).ToList();
-            Assert.Equal(4, stroked.Count);
-
-            // The two side edges are plain vertical runs (their corner arcs belong to the top and bottom
-            // edges' paths). On a pill both collapse to zero length; neither may run backwards.
-            var vertical = stroked
-                .Where(p => p.Points.Count == 2 && Math.Abs(p.Points[0].X - p.Points[1].X) < 0.01)
-                .ToList();
-            Assert.Equal(2, vertical.Count);
-
-            Assert.All(vertical, p => Assert.True(p.Points[1].Y >= p.Points[0].Y - 0.01,
-                $"the side run is reversed: it starts at y={p.Points[0].Y} and ends at y={p.Points[1].Y}"));
-
-            // A 60pt-tall border box with a 10pt border: the radius clamps to 30 (half the box), and the
-            // centreline's is 25 - exactly half the 50pt centreline height, so the run is zero-length.
-            Assert.All(vertical, p => Assert.Equal(0, p.Points[1].Y - p.Points[0].Y, 1));
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(), path => path.Stroked);
+            var fills = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+            Assert.Equal(2, fills.Count);
+            Assert.Equal(
+                [RColor.FromArgb(51, 51, 51), RColor.FromArgb(9, 9, 9)],
+                fills.Select(fill => fill.Color));
+            Assert.All(fills.SelectMany(fill => fill.Points), point =>
+            {
+                Assert.InRange(point.X, borderRect.Left - 0.01, borderRect.Right + 0.01);
+                Assert.InRange(point.Y, borderRect.Top - 0.01, borderRect.Bottom + 0.01);
+            });
         }
 
         [Fact]
@@ -779,6 +771,61 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task RoundedGrooveRidge_MixedWithSolidAndDashed_KeepsBeveledBandsAndSharedCorners()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:100pt; height:60pt; border:18pt rgb(74,144,217); " +
+                "border-style:groove solid ridge dashed; border-radius:36pt'>x</div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var paths = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+            var fills = paths.Where(path => !path.Stroked).ToList();
+            var dashed = Assert.Single(paths, path => path.Stroked);
+
+            var color = RColor.FromArgb(74, 144, 217);
+            Assert.Equal(
+                [
+                    BorderBevelColors.Shade(color, darken: true),
+                    color,
+                    BorderBevelColors.Shade(color, darken: false)
+                ],
+                fills.Select(fill => fill.Color));
+
+            Assert.True(dashed.Points.Count > 4);
+            var clip = Assert.Single(g.ClipPaths);
+            Assert.True(clip.Points.Count > 8);
+
+            var pushIndex = g.Log.FindIndex(entry => entry is TestRecordingGraphics.PushClipCall);
+            var strokeIndex = g.Log.FindIndex(entry => ReferenceEquals(entry, dashed));
+            var popIndex = g.Log.FindIndex(entry => entry is TestRecordingGraphics.PopClipCall);
+            Assert.True(pushIndex >= 0 && pushIndex < strokeIndex && strokeIndex < popIndex);
+        }
+
+        [Fact]
+        public async Task RoundedDouble_MixedWithOtherFilledStyles_RetainsBothLines()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:100pt; height:60pt; border-width:12pt; " +
+                "border-style:double solid outset outset; border-color:rgb(51,51,51); " +
+                "border-radius:20pt'>x</div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(), path => path.Stroked);
+            var fills = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+
+            var color = RColor.FromArgb(51, 51, 51);
+            Assert.Equal(2, fills.Count(fill => fill.Color == color));
+            Assert.Contains(fills, fill => fill.Color == BorderBevelColors.Shade(color, darken: true));
+            Assert.Contains(fills, fill => fill.Color == BorderBevelColors.Shade(color, darken: false));
+        }
+
+        [Fact]
         public async Task RoundedGroove_SlicedFragmentWithoutLeftEdge_UsesOpenBeveledBands()
         {
             var (root, container) = await BuildAndLayout(Wrap(
@@ -803,6 +850,44 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains(bands.SelectMany(path => path.Points), point =>
                 Math.Abs(point.X - borderRect.Left) < 0.01 &&
                 Math.Abs(point.Y - borderRect.Bottom) < 0.01);
+        }
+
+        [Theory]
+        [InlineData(0, false, false, true, false)]
+        [InlineData(1, false, true, false, false)]
+        [InlineData(2, false, false, false, true)]
+        [InlineData(3, true, false, false, false)]
+        public async Task RoundedDashed_SlicedFragment_UsesSquareOpenCenterlineEnds(
+            int sideValue, bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
+        {
+            var side = (Border)sideValue;
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:100pt; height:60pt; border:12pt dashed rgb(51,51,51); " +
+                "border-radius:20pt'>x</div>"));
+            var div = FindById(root, "b")!;
+            var borderRect = FragmentPaintHarness.FragmentOf(container, div).Lines[0].Rect;
+
+            var g = new TestRecordingGraphics();
+            BordersDrawHandler.DrawBoxBorders(
+                g, div, borderRect,
+                hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
+
+            var stroke = Assert.Single(
+                g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                path => path.Stroked);
+            Assert.Equal(2, stroke.Points.Count);
+            Assert.Single(g.ClipPaths);
+
+            if (side is Border.Top or Border.Bottom)
+            {
+                Assert.Equal(borderRect.Left, stroke.Points.Min(point => point.X), 3);
+                Assert.Equal(borderRect.Right, stroke.Points.Max(point => point.X), 3);
+            }
+            else
+            {
+                Assert.Equal(borderRect.Top, stroke.Points.Min(point => point.Y), 3);
+                Assert.Equal(borderRect.Bottom, stroke.Points.Max(point => point.Y), 3);
+            }
         }
 
         [Fact]

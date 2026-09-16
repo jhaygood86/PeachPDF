@@ -10,9 +10,9 @@ omitted by fragmentation produces an open square end rather than a false rounded
 the same resolved shade are included in one path rather than painted as abutting fills, avoiding a
 pale antialiasing seam.
 
-The remaining mixed-style case stays documented as an accepted gap because a `groove`/`ridge` edge
-adjoining `solid`, `double`, or a patterned style needs both renderers to share one curved
-corner-transition model.
+A follow-up generalized the corner-transition model to every rounded border style, so a
+`groove`/`ridge` edge now keeps both bands beside `solid`, `double`, or a patterned style. See
+[mixed rounded border styles](2026-09-16-mixed-rounded-border-styles.md).
 
 Evidence: all 63 focused border-style paint tests pass on net8.0, changed production lines have
 90.33% diff coverage, and the whole solution rebuilds with zero warnings. The updated showcase was

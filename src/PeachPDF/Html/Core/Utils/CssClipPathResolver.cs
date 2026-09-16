@@ -45,8 +45,8 @@ namespace PeachPDF.Html.Core.Utils
             // Every coordinate below is resolved against the reference box/box in raw layout-space (the same
             // PixelsPerInch-inflated space CssBox geometry lives in, needed so CssValueParser.ParseLength's
             // own absolute-length PixelsPerPoint catch-up multiply - issue #814 - and the percentage basis
-            // stay consistent with each other). Like RenderUtils.GetRoundRect/BordersDrawHandler.GetRoundedBorderPath
-            // (issue #812), the path itself has no ambient transform to divide it back down, so every final
+            // stay consistent with each other). Like RenderUtils.GetRoundRect and the border contour
+            // builders (issue #812), the path itself has no ambient transform to divide it back down, so every final
             // coordinate is divided by g.PixelsPerPoint right before reaching the path.
             var ppp = g.PixelsPerPoint;
 

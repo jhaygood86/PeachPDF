@@ -29,8 +29,9 @@ layout-space coordinates, and neither the path-building code nor its consumers
 1. `RenderUtils.GetRoundRect` - shared by the `overflow: hidden` descendant clip curve, rounded
    background-color/image fills (including `background-clip: padding-box`/`content-box` curves and
    box-shadow's rounded layer/clip helper), and rounded form-field/list-marker chrome.
-2. `BordersDrawHandler.GetRoundedBorderPath` - a **separate, independent** per-side path builder for the
-   rounded border **stroke** itself, sharing no code with `GetRoundRect`. This is what let symptom B (the
+2. `BordersDrawHandler`'s rounded-border geometry - at the time a separate
+   `GetRoundedBorderPath` stroke builder, now the shared rounded contour/band builder for non-uniform
+   styles - has no ambient transform from `GetRoundRect`. This is what let symptom B (the
    border overshoot) reproduce from `border-radius` alone, with no `overflow: hidden` at all - a
    minimal repro built from the reporter's own follow-up comments (a rounded card containing a header and
    a 3-column CSS Grid) confirmed this: removing just `overflow: hidden` and keeping `border-radius` still
@@ -64,10 +65,10 @@ All four builders above now read `g.PixelsPerPoint` once and divide their rect/r
 inputs by it before building the path - mirroring exactly how every other `GraphicsAdapter` draw primitive
 divides its own raw coordinates at its own call boundary:
 
-- `RenderUtils.GetRoundRect` and `BordersDrawHandler.GetRoundedBorderPath`: divide the rect, radii, and
-  (for the latter) border widths directly. `GetRoundedBorderPath`'s fix is a mechanical rename-and-divide
-  of the existing per-side arc/line arithmetic; the corner-subset/mitre logic itself (the
-  `noTop`/`noBottom` bevel-avoidance branches) is unchanged.
+- `RenderUtils.GetRoundRect` and `BordersDrawHandler`'s rounded border builders divide the rect, radii,
+  and border widths directly. The original `GetRoundedBorderPath` fix was a mechanical
+  rename-and-divide of the existing per-side arc/line arithmetic; that builder was later replaced by
+  the shared rounded contour/band geometry.
 - `CssClipPathResolver`: divides only the *final*, fully-resolved coordinate at each `path.Start`/`LineTo`/
   `AddMove`/`AppendEllipse` call, leaving every upstream `CssValueParser.ParseLength` call (and the
   `referenceBox` it resolves percentages against) completely untouched. This is deliberate, not just
@@ -144,7 +145,7 @@ divides its own raw coordinates at its own call boundary:
   future `PixelsPerPoint`-scaling fix complete, grep every `GetGraphicsPath()` call site in the codebase
   (not just the ones a specific bug report's repro happens to exercise) and verify each one either divides
   by `PixelsPerPoint` itself or paints under an ambient `PushTransform` that already does.
-- `RenderUtils.GetRoundRect`, `BordersDrawHandler.GetRoundedBorderPath`, `CssClipPathResolver`, and
+- `RenderUtils.GetRoundRect`, `BordersDrawHandler`'s rounded contour builders, `CssClipPathResolver`, and
   `FragmentPainter.Decorations.BuildRingPath` are four independent path builders that happen to solve
   variations of the same problem - a future change to one's `PixelsPerPoint` handling (or any other
   coordinate-space concern) does **not** automatically apply to the others.

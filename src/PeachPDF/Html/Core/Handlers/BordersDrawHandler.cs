@@ -67,12 +67,12 @@ namespace PeachPDF.Html.Core.Handlers
             // later, from CssBox.CollapsedBorderSegments instead (issue #735) - see BorderEdges' own remarks.
             var suppressed = box.SuppressedBorderEdges;
 
-            if (TryDrawRoundedGrooveRidgeBorder(
-                    g, box, rect, suppressed,
-                    hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge))
+            if (TryDrawUniformBorder(g, box, rect, suppressed, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge))
                 return;
 
-            if (TryDrawUniformBorder(g, box, rect, suppressed, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge))
+            if (TryDrawRoundedBorder(
+                    g, box, rect, suppressed,
+                    hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge))
                 return;
 
             if (hasTopEdge && !suppressed.HasFlag(BorderEdges.Top) && box.BorderTopStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderTopWidth > 0)
@@ -259,58 +259,40 @@ namespace PeachPDF.Html.Core.Handlers
                 _ => baseColor
             };
 
-            var borderPath = GetRoundedBorderPath(g, border, box, rect);
-            if (borderPath != null)
+            if (style is LineStyle.Inset or LineStyle.Outset or LineStyle.Solid)
             {
-                // rounded border need special path
-                Object? prevMode = null;
-                if (box is { HtmlContainer: { AvoidGeometryAntialias: false }, IsRounded: true })
-                    prevMode = g.SetAntiAliasSmoothingMode();
-
-                var pen = GetPen(g, style, color, GetWidth(border, box));
-                using (borderPath)
-                    g.DrawPath(pen, borderPath);
-
-                g.ReturnPreviousSmoothingMode(prevMode);
+                // Solid (like inset/outset) needs the mitered trapezoid, not a thick straight line
+                // spanning the box's full width/height: CSS2.1 8.5.3 draws each border edge as a
+                // trapezoid whose non-parallel sides cut diagonally into the corner at 45°, meeting
+                // exactly where the adjacent edge's own diagonal cut meets it. A simple thick line
+                // has no such cut - it just overlaps/overwrites whichever adjacent-edge line painted
+                // before it (DrawBoxBorders' fixed Top/Left/Bottom/Right paint order), which is
+                // visually indistinguishable from mitering ONLY when every border shares the same
+                // width and color (the common case) - it silently breaks the classic CSS
+                // zero-content-width "border triangle" technique (mismatched adjacent border colors
+                // on a box with no content) into flat overlapping rectangles instead of a triangle.
+                // Acid2's own ".nose div div:before"/":after" (the nose's diamond, "border-style:
+                // none solid solid"/"solid solid none" with red/yellow/black/yellow colors) is
+                // exactly this technique.
+                g.DrawPolygon(
+                    g.GetSolidBrush(color),
+                    GetInOutsetRectanglePoints(
+                        border, box, rect,
+                        isLineStart, isLineEnd, isBlockStart, isBlockEnd));
+            }
+            else if (style is LineStyle.Double or LineStyle.Groove or LineStyle.Ridge)
+            {
+                DrawDoubleOrGrooveRidgeBorder(border, box, g, rect, style, baseColor, isLineStart, isLineEnd, isBlockStart, isBlockEnd);
             }
             else
             {
-                // non rounded border
-                if (style is LineStyle.Inset or LineStyle.Outset or LineStyle.Solid)
-                {
-                    // Solid (like inset/outset) needs the mitered trapezoid, not a thick straight line
-                    // spanning the box's full width/height: CSS2.1 8.5.3 draws each border edge as a
-                    // trapezoid whose non-parallel sides cut diagonally into the corner at 45°, meeting
-                    // exactly where the adjacent edge's own diagonal cut meets it. A simple thick line
-                    // has no such cut - it just overlaps/overwrites whichever adjacent-edge line painted
-                    // before it (DrawBoxBorders' fixed Top/Left/Bottom/Right paint order), which is
-                    // visually indistinguishable from mitering ONLY when every border shares the same
-                    // width and color (the common case) - it silently breaks the classic CSS
-                    // zero-content-width "border triangle" technique (mismatched adjacent border colors
-                    // on a box with no content) into flat overlapping rectangles instead of a triangle.
-                    // Acid2's own ".nose div div:before"/":after" (the nose's diamond, "border-style:
-                    // none solid solid"/"solid solid none" with red/yellow/black/yellow colors) is
-                    // exactly this technique.
-                    g.DrawPolygon(
-                        g.GetSolidBrush(color),
-                        GetInOutsetRectanglePoints(
-                            border, box, rect,
-                            isLineStart, isLineEnd, isBlockStart, isBlockEnd));
-                }
-                else if (style is LineStyle.Double or LineStyle.Groove or LineStyle.Ridge)
-                {
-                    DrawDoubleOrGrooveRidgeBorder(border, box, g, rect, style, baseColor, isLineStart, isLineEnd, isBlockStart, isBlockEnd);
-                }
-                else
-                {
-                    // Dotted/dashed draw as a stroked line rather than a mitered fill. Matching adjacent
-                    // strokes overlap in the corner square, putting one dot or an L-shaped dash there;
-                    // when the adjacent edge differs, the stroke is clipped to the corner transition
-                    // diagonal so it cannot show through that edge's gaps.
-                    DrawDottedOrDashedBorder(
-                        border, box, g, rect, style, color,
-                        isLineStart, isLineEnd, isBlockStart, isBlockEnd);
-                }
+                // Dotted/dashed draw as a stroked line rather than a mitered fill. Matching adjacent
+                // strokes overlap in the corner square, putting one dot or an L-shaped dash there;
+                // when the adjacent edge differs, the stroke is clipped to the corner transition
+                // diagonal so it cannot show through that edge's gaps.
+                DrawDottedOrDashedBorder(
+                    border, box, g, rect, style, color,
+                    isLineStart, isLineEnd, isBlockStart, isBlockEnd);
             }
         }
 
@@ -380,8 +362,8 @@ namespace PeachPDF.Html.Core.Handlers
         /// fitted to its whole perimeter - and reports whether it did.
         /// </summary>
         /// <remarks>
-        /// <see cref="GetRoundedBorderPath"/> builds a separate path per edge, which costs twice over.
-        /// Four strokes that butt end-to-end leave the same antialiasing seam two abutting fills do, so
+        /// Building a separate stroked path per edge costs twice over. Four strokes that butt end-to-end
+        /// leave the same antialiasing seam two abutting fills do, so
         /// a plain rounded <c>solid</c> border showed a pale mark where each arc met its straight run.
         /// And a dash pattern restarts its phase at every one of those paths - the top edge's path
         /// already carries both corner arcs - so dots piled up two and three deep at the corners, the
@@ -421,31 +403,23 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// Paints a rounded box whose visible borders are all <c>groove</c>/<c>ridge</c>, including
-        /// unequal per-side widths/colors and fragments that omit physical edges.
+        /// Paints a non-uniform rounded border through one shared corner-transition model.
         /// </summary>
-        private static bool TryDrawRoundedGrooveRidgeBorder(
+        private static bool TryDrawRoundedBorder(
             RGraphics g, CssBox box, RRect rect, BorderEdges suppressed,
             bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
         {
-            if (suppressed != BorderEdges.None) return false;
-
             var radii = box.ComputeRadii(rect);
             if (!radii.IsRounded) return false;
 
             var physical = new RoundedBorderSides(hasTopEdge, hasRightEdge, hasBottomEdge, hasLeftEdge);
             var active = new RoundedBorderSides(
-                IsActiveBorder(box, Border.Top, hasTopEdge),
-                IsActiveBorder(box, Border.Right, hasRightEdge),
-                IsActiveBorder(box, Border.Bottom, hasBottomEdge),
-                IsActiveBorder(box, Border.Left, hasLeftEdge));
+                IsActiveBorder(box, Border.Top, hasTopEdge && !suppressed.HasFlag(BorderEdges.Top)),
+                IsActiveBorder(box, Border.Right, hasRightEdge && !suppressed.HasFlag(BorderEdges.Right)),
+                IsActiveBorder(box, Border.Bottom, hasBottomEdge && !suppressed.HasFlag(BorderEdges.Bottom)),
+                IsActiveBorder(box, Border.Left, hasLeftEdge && !suppressed.HasFlag(BorderEdges.Left)));
 
             if (!active.Any) return false;
-            foreach (var side in BorderPaintOrder)
-            {
-                if (active.Is(side) && GetStyle(side, box) is not (LineStyle.Groove or LineStyle.Ridge))
-                    return false;
-            }
 
             var widths = new RoundedBorderWidths(
                 active.Top ? box.ActualBorderTopWidth : 0,
@@ -453,22 +427,38 @@ namespace PeachPDF.Html.Core.Handlers
                 active.Bottom ? box.ActualBorderBottomWidth : 0,
                 active.Left ? box.ActualBorderLeftWidth : 0);
 
-            DrawRoundedBevelBand(g, box, rect, radii, physical, active, widths, 0, 0.5, outerBand: true);
-            DrawRoundedBevelBand(g, box, rect, radii, physical, active, widths, 0.5, 1, outerBand: false);
+            Object? previousMode = null;
+            if (box.HtmlContainer is { AvoidGeometryAntialias: false })
+                previousMode = g.SetAntiAliasSmoothingMode();
+
+            try
+            {
+                DrawRoundedFilledBorderLayer(g, box, rect, radii, physical, active, widths, innerLayer: false);
+                DrawRoundedFilledBorderLayer(g, box, rect, radii, physical, active, widths, innerLayer: true);
+
+                foreach (var side in BorderPaintOrder)
+                {
+                    if (active.Is(side) && GetStyle(side, box) is LineStyle.Dotted or LineStyle.Dashed)
+                        DrawRoundedPatternedSide(g, box, rect, radii, physical, active, widths, side);
+                }
+            }
+            finally
+            {
+                g.ReturnPreviousSmoothingMode(previousMode);
+            }
+
             return true;
         }
 
         /// <summary>
-        /// Fills one rounded border band, grouping every same-colored side into one path so abutting
-        /// sides composite once and cannot leave an antialiasing seam.
+        /// Fills one layer of every non-patterned rounded side, grouping same-colored pieces into one
+        /// path so abutting pieces composite once and cannot leave an antialiasing seam.
         /// </summary>
-        private static void DrawRoundedBevelBand(
+        private static void DrawRoundedFilledBorderLayer(
             RGraphics g, CssBox box, RRect rect, BorderRadii radii,
             RoundedBorderSides physical, RoundedBorderSides active, RoundedBorderWidths widths,
-            double from, double to, bool outerBand)
+            bool innerLayer)
         {
-            var outer = CreateRoundedContour(rect, radii, widths, from, g.PixelsPerPoint);
-            var inner = CreateRoundedContour(rect, radii, widths, to, g.PixelsPerPoint);
             var angles = RoundedCornerAngles.From(widths);
             var groups = new List<(RColor Color, RGraphicsPath Path)>();
 
@@ -477,10 +467,9 @@ namespace PeachPDF.Html.Core.Handlers
                 foreach (var side in BorderPaintOrder)
                 {
                     if (!active.Is(side)) continue;
+                    if (!TryGetRoundedFillBand(box, side, innerLayer, out var from, out var to, out var color))
+                        continue;
 
-                    var style = GetStyle(side, box);
-                    var isInset = outerBand == (style == LineStyle.Groove);
-                    var color = BorderBevelColors.ForSide(GetColor(side, box), side, isInset);
                     var groupIndex = groups.FindIndex(group => group.Color == color);
                     if (groupIndex < 0)
                     {
@@ -488,6 +477,8 @@ namespace PeachPDF.Html.Core.Handlers
                         groups.Add((color, g.GetGraphicsPath()));
                     }
 
+                    var outer = CreateRoundedContour(rect, radii, widths, from, g.PixelsPerPoint);
+                    var inner = CreateRoundedContour(rect, radii, widths, to, g.PixelsPerPoint);
                     AddRoundedBandSide(groups[groupIndex].Path, side, outer, inner, physical, active, angles);
                 }
 
@@ -498,6 +489,76 @@ namespace PeachPDF.Html.Core.Handlers
             {
                 foreach (var (_, path) in groups)
                     path.Dispose();
+            }
+        }
+
+        private static bool TryGetRoundedFillBand(
+            CssBox box, Border side, bool innerLayer,
+            out double from, out double to, out RColor color)
+        {
+            var style = GetStyle(side, box);
+            var baseColor = GetColor(side, box);
+
+            switch (style)
+            {
+                case LineStyle.Solid:
+                    if (innerLayer) break;
+                    from = 0;
+                    to = 1;
+                    color = baseColor;
+                    return true;
+
+                case LineStyle.Inset or LineStyle.Outset:
+                    if (innerLayer) break;
+                    from = 0;
+                    to = 1;
+                    color = BorderBevelColors.ForSide(baseColor, side, inset: style == LineStyle.Inset);
+                    return true;
+
+                case LineStyle.Double:
+                    from = innerLayer ? 2 / 3d : 0;
+                    to = innerLayer ? 1 : 1 / 3d;
+                    color = baseColor;
+                    return true;
+
+                case LineStyle.Groove or LineStyle.Ridge:
+                    from = innerLayer ? 0.5 : 0;
+                    to = innerLayer ? 1 : 0.5;
+                    var isInset = innerLayer != (style == LineStyle.Groove);
+                    color = BorderBevelColors.ForSide(baseColor, side, isInset);
+                    return true;
+            }
+
+            from = to = 0;
+            color = RColor.Empty;
+            return false;
+        }
+
+        private static void DrawRoundedPatternedSide(
+            RGraphics g, CssBox box, RRect rect, BorderRadii radii,
+            RoundedBorderSides physical, RoundedBorderSides active, RoundedBorderWidths widths,
+            Border side)
+        {
+            var angles = RoundedCornerAngles.From(widths);
+            var outer = CreateRoundedContour(rect, radii, widths, 0, g.PixelsPerPoint);
+            var center = CreateRoundedContour(rect, radii, widths, 0.5, g.PixelsPerPoint);
+            var inner = CreateRoundedContour(rect, radii, widths, 1, g.PixelsPerPoint);
+
+            using var path = g.GetGraphicsPath();
+            AddRoundedSideCenterline(path, side, center, physical, active, angles);
+
+            using var clip = g.GetGraphicsPath();
+            AddRoundedBandSide(clip, side, outer, inner, physical, active, angles);
+
+            g.PushClip(clip);
+            try
+            {
+                var pen = GetPen(g, GetStyle(side, box), GetColor(side, box), GetWidth(side, box));
+                g.DrawPath(pen, path);
+            }
+            finally
+            {
+                g.PopClip();
             }
         }
 
@@ -725,6 +786,118 @@ namespace PeachPDF.Html.Core.Handlers
             path.CloseFigure();
         }
 
+        private static void AddRoundedSideCenterline(
+            RGraphicsPath path, Border side, RoundedContour center,
+            RoundedBorderSides physical, RoundedBorderSides active, RoundedCornerAngles angles)
+        {
+            const double QuarterTurn = Math.PI / 2;
+            const double HalfTurn = Math.PI;
+            const double ThreeQuarterTurn = 3 * Math.PI / 2;
+            const double FullTurn = 2 * Math.PI;
+
+            switch (side)
+            {
+                case Border.Top:
+                    if (physical.Left)
+                    {
+                        var startAngle = active.Left ? angles.TopLeft : HalfTurn;
+                        AddMove(path, center, RGraphicsPath.Corner.TopLeft, startAngle);
+                        AddCornerArc(path, center, RGraphicsPath.Corner.TopLeft, startAngle, ThreeQuarterTurn);
+                    }
+                    else
+                    {
+                        path.AddMove(center.Rect.Left, center.Rect.Top);
+                    }
+
+                    if (physical.Right)
+                    {
+                        var endAngle = active.Right ? angles.TopRight : FullTurn;
+                        LineTo(path, center, RGraphicsPath.Corner.TopRight, ThreeQuarterTurn);
+                        AddCornerArc(path, center, RGraphicsPath.Corner.TopRight, ThreeQuarterTurn, endAngle);
+                    }
+                    else
+                    {
+                        path.LineTo(center.Rect.Right, center.Rect.Top);
+                    }
+                    break;
+
+                case Border.Right:
+                    if (physical.Top)
+                    {
+                        var startAngle = active.Top ? angles.TopRight : ThreeQuarterTurn;
+                        AddMove(path, center, RGraphicsPath.Corner.TopRight, startAngle);
+                        AddCornerArc(path, center, RGraphicsPath.Corner.TopRight, startAngle, FullTurn);
+                    }
+                    else
+                    {
+                        path.AddMove(center.Rect.Right, center.Rect.Top);
+                    }
+
+                    if (physical.Bottom)
+                    {
+                        var endAngle = active.Bottom ? angles.BottomRight : QuarterTurn;
+                        LineTo(path, center, RGraphicsPath.Corner.BottomRight, 0);
+                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomRight, 0, endAngle);
+                    }
+                    else
+                    {
+                        path.LineTo(center.Rect.Right, center.Rect.Bottom);
+                    }
+                    break;
+
+                case Border.Bottom:
+                    if (physical.Right)
+                    {
+                        var startAngle = active.Right ? angles.BottomRight : 0;
+                        AddMove(path, center, RGraphicsPath.Corner.BottomRight, startAngle);
+                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomRight, startAngle, QuarterTurn);
+                    }
+                    else
+                    {
+                        path.AddMove(center.Rect.Right, center.Rect.Bottom);
+                    }
+
+                    if (physical.Left)
+                    {
+                        var endAngle = active.Left ? angles.BottomLeft : HalfTurn;
+                        LineTo(path, center, RGraphicsPath.Corner.BottomLeft, QuarterTurn);
+                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomLeft, QuarterTurn, endAngle);
+                    }
+                    else
+                    {
+                        path.LineTo(center.Rect.Left, center.Rect.Bottom);
+                    }
+                    break;
+
+                case Border.Left:
+                    if (physical.Bottom)
+                    {
+                        var startAngle = active.Bottom ? angles.BottomLeft : QuarterTurn;
+                        AddMove(path, center, RGraphicsPath.Corner.BottomLeft, startAngle);
+                        AddCornerArc(path, center, RGraphicsPath.Corner.BottomLeft, startAngle, HalfTurn);
+                    }
+                    else
+                    {
+                        path.AddMove(center.Rect.Left, center.Rect.Bottom);
+                    }
+
+                    if (physical.Top)
+                    {
+                        var endAngle = active.Top ? angles.TopLeft : ThreeQuarterTurn;
+                        LineTo(path, center, RGraphicsPath.Corner.TopLeft, HalfTurn);
+                        AddCornerArc(path, center, RGraphicsPath.Corner.TopLeft, HalfTurn, endAngle);
+                    }
+                    else
+                    {
+                        path.LineTo(center.Rect.Left, center.Rect.Top);
+                    }
+                    break;
+
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(side));
+            }
+        }
+
         private static void AddMove(
             RGraphicsPath path, RoundedContour contour, RGraphicsPath.Corner corner, double angle)
         {
@@ -901,8 +1074,7 @@ namespace PeachPDF.Html.Core.Handlers
         private static void DrawUniformRing(RGraphics g, CssBox box, RRect rect, double from, double to, RBrush brush)
         {
             // Unlike DrawPolygon/DrawLine, whose coordinates the adapter divides on the way out, a path's
-            // coordinates reach the backend as given - so they are divided here, the same correction
-            // GetRoundedBorderPath makes for the same reason (issue #812).
+            // coordinates reach the backend as given, so they are divided here (issue #812).
             var ppp = g.PixelsPerPoint;
 
             using var path = g.GetGraphicsPath();
@@ -1270,138 +1442,19 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// Makes a border path for rounded borders.<br/>
-        /// To support rounded dotted/dashed borders we need to use arc in the border path.<br/>
-        /// Return null if the border is not rounded.<br/>
-        /// </summary>
-        /// <param name="g">the device to draw into</param>
-        /// <param name="border">Desired border</param>
-        /// <param name="b">Box which the border corresponds</param>
-        /// <param name="r">the rectangle the border is enclosing</param>
-        /// <returns>Beveled border path, null if there is no rounded corners</returns>
-        private static RGraphicsPath? GetRoundedBorderPath(RGraphics g, Border border, CssBox b, RRect r)
-        {
-            var rad = b.ComputeRadii(r);
-            if (!rad.IsRounded) return null;
-
-            // r, b's ActualBorder*Width fields, and rad's eight components are all in the caller's
-            // layout-space units (the same PixelsPerInch-inflated space as CssBox geometry). This path
-            // builder is independent of RenderUtils.GetRoundRect (no shared code) and needs the identical
-            // divide-by-PixelsPerPoint correction for the same reason - see that method's remarks (#812).
-            var ppp = g.PixelsPerPoint;
-            var left = r.Left / ppp;
-            var top = r.Top / ppp;
-            var right = r.Right / ppp;
-            var bottom = r.Bottom / ppp;
-            var blw = b.ActualBorderLeftWidth / ppp;
-            var btw = b.ActualBorderTopWidth / ppp;
-            var brw = b.ActualBorderRightWidth / ppp;
-            var bbw = b.ActualBorderBottomWidth / ppp;
-            // The stroke is centered, so this path runs half a border width inside the border box - and
-            // a corner's radius on that centerline is smaller than the border box's by exactly that
-            // half, on each axis independently (the X radii follow the left/right border, the Y radii
-            // the top/bottom). Using the border box's own radii here, as this used to, pushes each
-            // straight run's start point half a border width too far along: harmless when the radius is
-            // large compared to the border, but once a radius reaches half the box - a pill - the two
-            // arcs claim more than the centerline has, the run between them comes out REVERSED, and the
-            // pen paints it as a stub sticking out of the middle of the end cap.
-            var radTLX = Math.Max(0, rad.TLX / ppp - blw / 2);
-            var radTLY = Math.Max(0, rad.TLY / ppp - btw / 2);
-            var radTRX = Math.Max(0, rad.TRX / ppp - brw / 2);
-            var radTRY = Math.Max(0, rad.TRY / ppp - btw / 2);
-            var radBRX = Math.Max(0, rad.BRX / ppp - brw / 2);
-            var radBRY = Math.Max(0, rad.BRY / ppp - bbw / 2);
-            var radBLX = Math.Max(0, rad.BLX / ppp - blw / 2);
-            var radBLY = Math.Max(0, rad.BLY / ppp - bbw / 2);
-
-            // Whether this edge gets a path at all is decided by the box's OWN radii, not the reduced
-            // ones: a border thicker than twice its radius reduces to a square centerline, but it is
-            // still a rounded box and must keep painting as one continuous stroke rather than falling
-            // back to four mitred quads, which would both lose the rounding and reintroduce the corner
-            // seams the quads have.
-            var roundedTL = rad.TLX > 0 || rad.TLY > 0;
-            var roundedTR = rad.TRX > 0 || rad.TRY > 0;
-            var roundedBR = rad.BRX > 0 || rad.BRY > 0;
-            var roundedBL = rad.BLX > 0 || rad.BLY > 0;
-
-            RGraphicsPath? path = null;
-            switch (border)
-            {
-                case Border.Top:
-                    if (roundedTL || roundedTR)
-                    {
-                        path = g.GetGraphicsPath();
-                        path.Start(left + blw / 2, top + btw / 2 + radTLY);
-                        if (radTLX > 0 || radTLY > 0)
-                            path.ArcTo(left + blw / 2 + radTLX, top + btw / 2, radTLX, radTLY, RGraphicsPath.Corner.TopLeft);
-                        path.LineTo(right - brw / 2 - radTRX, top + btw / 2);
-                        if (radTRX > 0 || radTRY > 0)
-                            path.ArcTo(right - brw / 2, top + btw / 2 + radTRY, radTRX, radTRY, RGraphicsPath.Corner.TopRight);
-                    }
-                    break;
-                case Border.Bottom:
-                    if (roundedBL || roundedBR)
-                    {
-                        path = g.GetGraphicsPath();
-                        path.Start(right - brw / 2, bottom - bbw / 2 - radBRY);
-                        if (radBRX > 0 || radBRY > 0)
-                            path.ArcTo(right - brw / 2 - radBRX, bottom - bbw / 2, radBRX, radBRY, RGraphicsPath.Corner.BottomRight);
-                        path.LineTo(left + blw / 2 + radBLX, bottom - bbw / 2);
-                        if (radBLX > 0 || radBLY > 0)
-                            path.ArcTo(left + blw / 2, bottom - bbw / 2 - radBLY, radBLX, radBLY, RGraphicsPath.Corner.BottomLeft);
-                    }
-                    break;
-                case Border.Right:
-                    if (roundedTR || roundedBR)
-                    {
-                        path = g.GetGraphicsPath();
-                        bool noTop = b.BorderTopStyle.Value is LineStyle.None or LineStyle.Hidden;
-                        bool noBottom = b.BorderBottomStyle.Value is LineStyle.None or LineStyle.Hidden;
-                        path.Start(right - brw / 2 - (noTop ? radTRX : 0), top + btw / 2 + (noTop ? 0 : radTRY));
-                        if ((radTRX > 0 || radTRY > 0) && noTop)
-                            path.ArcTo(right - brw / 2, top + btw / 2 + radTRY, radTRX, radTRY, RGraphicsPath.Corner.TopRight);
-                        path.LineTo(right - brw / 2, bottom - bbw / 2 - radBRY);
-                        if ((radBRX > 0 || radBRY > 0) && noBottom)
-                            path.ArcTo(right - brw / 2 - radBRX, bottom - bbw / 2, radBRX, radBRY, RGraphicsPath.Corner.BottomRight);
-                    }
-                    break;
-                case Border.Left:
-                    if (roundedTL || roundedBL)
-                    {
-                        path = g.GetGraphicsPath();
-                        bool noTop = b.BorderTopStyle.Value is LineStyle.None or LineStyle.Hidden;
-                        bool noBottom = b.BorderBottomStyle.Value is LineStyle.None or LineStyle.Hidden;
-                        path.Start(left + blw / 2 + (noBottom ? radBLX : 0), bottom - bbw / 2 - (noBottom ? 0 : radBLY));
-                        if ((radBLX > 0 || radBLY > 0) && noBottom)
-                            path.ArcTo(left + blw / 2, bottom - bbw / 2 - radBLY, radBLX, radBLY, RGraphicsPath.Corner.BottomLeft);
-                        path.LineTo(left + blw / 2, top + btw / 2 + radTLY);
-                        if ((radTLX > 0 || radTLY > 0) && noTop)
-                            path.ArcTo(left + blw / 2 + radTLX, top + btw / 2, radTLX, radTLY, RGraphicsPath.Corner.TopLeft);
-                    }
-                    break;
-            }
-
-            return path;
-        }
-
-        /// <summary>
         /// Get pen to be used for border draw respecting its style.
         /// </summary>
         private static RPen GetPen(RGraphics g, LineStyle style, RColor color, double width)
         {
             var p = g.GetPen(color);
-            // width is the caller's raw, un-divided layout-space (PixelsPerInch-inflated) border
-            // width - every border *position* is already divided by PixelsPerPoint before reaching
-            // the backend (GraphicsAdapter.DrawLine/DrawPolygon, GetRoundedBorderPath's own ppp
-            // setup), but a pen's own stroke width bypasses those and needs the same correction here.
+            // Width is the caller's raw, un-divided layout-space (PixelsPerInch-inflated) value.
+            // Path coordinates are divided while they are built, but a pen width bypasses that path
+            // conversion and needs the same correction here.
             p.Width = width / g.PixelsPerPoint;
             p.LineJoin = RLineJoin.Miter;
 
-            // This is the rounded border whose sides do NOT all agree - a uniform one is stroked as a
-            // single fitted outline by TryDrawUniformRoundedOutline and never reaches here. With one
-            // path per edge there is no single outline to fit a pattern to, so the period stays at its
-            // ideal (a dot every 2x the width) and falls where it falls along each arc. Dotted still
-            // gets its round cap and zero-length dash, so a dot is a dot either way.
+            // A mixed rounded border has one path per patterned edge, so there is no single outline to
+            // fit a pattern to. The period stays at its ideal and falls where it falls along that edge.
             if (style is LineStyle.Dotted)
             {
                 p.LineCap = RLineCap.Round;
@@ -1414,11 +1467,8 @@ namespace PeachPDF.Html.Core.Handlers
             }
             else
             {
-                // double/groove/ridge are handled by DrawDoubleOrGrooveRidgeBorder and never reach
-                // here for non-rounded borders; a rounded border with one of these styles falls back
-                // to a single solid-colored stroke here (GetRoundedBorderPath has no double/groove/
-                // ridge concept - border-radius is CSS2/3 territory, out of scope for CSS1
-                // compliance). Any other unexpected style also degrades to solid rather than crashing.
+                // Multi-band rounded styles are handled by TryDrawRoundedBorder and never reach here.
+                // Any other unexpected style degrades to solid rather than crashing.
                 p.LineCap = RLineCap.Butt;
                 p.DashStyle = RDashStyle.Solid;
             }

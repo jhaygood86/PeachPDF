@@ -580,9 +580,9 @@ await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius
 // Renders the exact same document as the border_radius showcase above, but at a non-default
 // PixelsPerInch (issue #812, reopened) - every rounded border stroke, background fill, and
 // overflow-clip curve above is built from a PdfSharpAdapter.PixelsPerPoint-inflated layout-space
-// rect/radii; RenderUtils.GetRoundRect and BordersDrawHandler.GetRoundedBorderPath must divide by
-// PixelsPerPoint before building their paths, or the rounded geometry above renders too large and
-// mis-positioned relative to everything else on the page. ShrinkToFit is deliberately left off here
+// rect/radii; RenderUtils.GetRoundRect and BordersDrawHandler's rounded contour builders must divide
+// by PixelsPerPoint before building their paths, or the rounded geometry above renders too large
+// and mis-positioned relative to everything else on the page. ShrinkToFit is deliberately left off here
 // (unlike pdfConfig above) since it recomputes its own effective PixelsPerPoint from content
 // measurement and would make the two renders an apples-to-oranges comparison rather than isolating
 // the PixelsPerInch=96-vs-72 difference this showcase exists to demonstrate.
@@ -5854,6 +5854,16 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
     Row(
         SideSwatch("groove, mixed width and color",
             "border-style: groove; border-width: 18px 6px 14px 10px; border-color: #d94a4a #4ad98a #4a90d9 #d9c74a; border-radius: 24px")
+    ) +
+
+    // Every rounded side uses the same width-ratio corner split even when its style differs. This is
+    // especially visible where a two-band bevel meets a solid fill or a clipped patterned stroke.
+    "<h2>Mixed rounded styles</h2>" +
+    Row(
+        SideSwatch("groove / solid / ridge / dashed",
+            "border: 18px #4a90d9; border-style: groove solid ridge dashed; border-radius: 36px"),
+        SideSwatch("double / dotted / inset / outset",
+            "border: 14px #d94a4a; border-style: double dotted inset outset; border-radius: 28px")
     ) +
 
     "</body></html>";

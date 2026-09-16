@@ -320,14 +320,16 @@ With `border-radius`, a border whose four sides share a style, color and width f
 one continuous outline, which keeps the corners seamless and lets a `dotted`/`dashed` pattern be
 fitted to the whole perimeter so it runs evenly all the way round. `double` is drawn as two such
 outlines at its thirds; `groove` and `ridge` are drawn as two curved half-width bands, with their
-per-side bevel colors meeting through each corner. Their rounded bands also support unequal
-per-side widths and colors, mixed `groove`/`ridge` sides, and sliced fragments: the corner transition
-follows the ratio of the adjoining widths, while an omitted fragment edge leaves an open square end
-rather than closing a false corner. Other non-uniform styles are stroked separately and a pattern
-restarts at each edge, which can leave marks bunched near a corner. A dotted/dashed edge is clipped
-to a mixed square corner only when neither end of that edge is rounded; once its per-edge path
-contains a corner arc, it still owns that complete arc rather than clipping its final mark to the
-curved style-transition boundary.
+per-side bevel colors meeting through each corner.
+
+Non-uniform rounded borders share the same curved corner-transition geometry across every style.
+The transition follows the ratio of the adjoining widths, as allowed by [CSS Backgrounds and
+Borders §4.4](https://www.w3.org/TR/css-backgrounds-3/#corner-transitions): solid and shaded sides
+fill their part of the curve, each `double` line and `groove`/`ridge` half keeps its own band, and a
+`dotted`/`dashed` centerline is clipped to its side's part of the corner. A pattern restarts on each
+non-uniform patterned edge, so its spacing can differ slightly from the continuous uniform-outline
+case. Sliced fragments leave an open square end where a physical edge is omitted rather than closing
+a false rounded corner.
 
 ### Border Radius
 
