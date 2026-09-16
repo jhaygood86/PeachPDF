@@ -7,7 +7,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
     /// Coverage for <see cref="UseCategoryClassifier"/> against real Devanagari codepoints (issue
     /// #533, Phase 5b), and real Bengali/Gujarati/Tamil codepoints (issue #533, Phase 5c). Expected
     /// categories were derived by hand-running HarfBuzz's own `gen-use-table.py` predicates against
-    /// the literal Unicode 17.0.0 IndicSyllabicCategory.txt/IndicPositionalCategory.txt lines for each
+    /// the literal Unicode 18.0.0 IndicSyllabicCategory.txt/IndicPositionalCategory.txt lines for each
     /// script's own block - not asserted from a black-box reference shaper, since this port has none
     /// available in-repo (see this feature's own recent-fixes entries for that research, including the
     /// full per-block enumeration that verified Gujarati/Tamil need no new classifier code at all).

@@ -1,6 +1,6 @@
 BidiBrackets.txt, BidiMirroring.txt, DerivedBidiClass.txt, BidiCharacterTest.txt, and
 VerticalOrientation.txt are unmodified files from the Unicode Character Database (UCD),
-version 17.0.0, © 2025 Unicode, Inc. They are licensed under the Unicode License v3
+version 18.0.0, © 2026 Unicode, Inc. They are licensed under the Unicode License v3
 ("Unicode® License Agreement — Data Files and Software").
 
 These files are bundled solely as source data / test fixtures: BidiBrackets.txt,
@@ -19,4 +19,4 @@ States and other countries.
 
 Full license text: https://www.unicode.org/license.txt
 Terms of use: https://www.unicode.org/terms_of_use.html
-Source: https://www.unicode.org/Public/17.0.0/ucd/
+Source: https://www.unicode.org/Public/18.0.0/ucd/

@@ -7,7 +7,7 @@ namespace PeachPDF.Tests.Text
     /// Spot checks for <see cref="ArabicShapingTable"/> against known Unicode <c>Joining_Type</c>
     /// values, covering one representative codepoint per type so a generator or table-loading
     /// regression is caught independently. Values verified directly against the downloaded
-    /// <c>assets/unicode/DerivedJoiningType.txt</c> (Unicode 17.0.0), not from memory.
+    /// <c>assets/unicode/DerivedJoiningType.txt</c> (Unicode 18.0.0), not from memory.
     /// </summary>
     public class ArabicShapingTableTests
     {

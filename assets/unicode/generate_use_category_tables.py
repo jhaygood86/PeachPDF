@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generates the compact, Brotli-compressed Indic_Syllabic_Category/Indic_Positional_Category data
 resources PeachPDF embeds from the Unicode Character Database's IndicSyllabicCategory.txt/
-IndicPositionalCategory.txt (Unicode 17.0.0, https://www.unicode.org/reports/tr44/), matching the
+IndicPositionalCategory.txt (Unicode 18.0.0, https://www.unicode.org/reports/tr44/), matching the
 version already checked in for DerivedBidiClass.txt/VerticalOrientation.txt/Scripts.txt/
 DerivedJoiningType.txt.
 

@@ -20,7 +20,7 @@ namespace PeachPDF.Text.Bidi
     /// <c>CssLayoutEngine.ApplyBidiReordering</c>'s own word-granularity clause-4 reset.
     /// <para>
     /// Validated end to end against Unicode's own <c>BidiCharacterTest.txt</c> conformance suite (Unicode
-    /// 17.0.0, ~91.7k cases covering P2-P3/X1-X9/X10/W1-W7/N0-N2/I1-I2/L1/L2) - see
+    /// 18.0.0, ~91.7k cases covering P2-P3/X1-X9/X10/W1-W7/N0-N2/I1-I2/L1/L2) - see
     /// <c>BidiResolverConformanceTests</c> - with a 100% pass rate, including BD16's canonical-equivalence
     /// note (U+2329/U+232A treated as equivalent to U+3008/U+3009 for bracket-pairing purposes, see
     /// <see cref="CanonicalBracketForm"/>) and N0's sub-rule (c) (NSM characters immediately following a

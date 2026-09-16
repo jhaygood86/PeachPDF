@@ -11,7 +11,7 @@ namespace PeachPDF.Text
     /// <summary>
     /// Per-codepoint <see cref="VerticalOrientationClass"/> (Unicode's <c>Vertical_Orientation</c>
     /// property) lookup, backed by a Brotli-compressed, run-length-encoded table generated from the
-    /// Unicode Character Database's <c>VerticalOrientation.txt</c> (Unicode 17.0.0 - see
+    /// Unicode Character Database's <c>VerticalOrientation.txt</c> (Unicode 18.0.0 - see
     /// <c>assets/unicode/generate_vertical_orientation_table.py</c> for provenance/regeneration),
     /// embedded as <c>Text/Resources/VerticalOrientation/VerticalOrientation.txt.br</c>. Mirrors
     /// <see cref="Bidi.BidiClassTable"/>'s own shape - same run-array/binary-search/Brotli-resource

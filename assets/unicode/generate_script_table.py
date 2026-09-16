@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generates the compact, Brotli-compressed Script property data resource PeachPDF embeds from the
-Unicode Character Database's Scripts.txt (Unicode 17.0.0, UAX #24 - see
+Unicode Character Database's Scripts.txt (Unicode 18.0.0, UAX #24 - see
 https://www.unicode.org/reports/tr24/), matching the version already checked in for
 DerivedBidiClass.txt/VerticalOrientation.txt.
 

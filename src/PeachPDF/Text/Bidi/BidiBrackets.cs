@@ -18,7 +18,7 @@ namespace PeachPDF.Text.Bidi
 
     /// <summary>
     /// Bracket-pair lookup for UAX #9's N0 rule (bracket pairs), backed by a Brotli-compressed table
-    /// generated from the Unicode Character Database's <c>BidiBrackets.txt</c> (Unicode 17.0.0 - see
+    /// generated from the Unicode Character Database's <c>BidiBrackets.txt</c> (Unicode 18.0.0 - see
     /// <c>assets/unicode/generate_bidi_tables.py</c>), embedded as
     /// <c>Text/Resources/Bidi/BidiBrackets.txt.br</c>.
     /// </summary>

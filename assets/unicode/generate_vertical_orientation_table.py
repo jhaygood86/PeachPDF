@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generates the compact, Brotli-compressed Vertical_Orientation data resource PeachPDF embeds
-from the Unicode Character Database's VerticalOrientation.txt (Unicode 17.0.0, UAX #50 - see
+from the Unicode Character Database's VerticalOrientation.txt (Unicode 18.0.0, UAX #50 - see
 https://www.unicode.org/reports/tr50/), matching the version already checked in for
 DerivedBidiClass.txt/BidiBrackets.txt/BidiMirroring.txt (see generate_bidi_tables.py).
 

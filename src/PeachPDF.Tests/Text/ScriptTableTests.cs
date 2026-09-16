@@ -8,7 +8,7 @@ namespace PeachPDF.Tests.Text
     /// covering one representative codepoint per script (plus the <c>Common</c>/<c>Inherited</c>/
     /// <c>Unknown</c> non-script values) so a generator or table-loading regression is caught
     /// independently. Values verified directly against the downloaded <c>assets/unicode/Scripts.txt</c>
-    /// (Unicode 17.0.0), not from memory.
+    /// (Unicode 18.0.0), not from memory.
     /// </summary>
     public class ScriptTableTests
     {

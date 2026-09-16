@@ -12,7 +12,7 @@ namespace PeachPDF.Text
     /// <summary>
     /// Per-codepoint Unicode <c>Script</c> property lookup (<see href="https://www.unicode.org/reports/tr24/">UAX #24</see>),
     /// backed by a Brotli-compressed, run-length-encoded table generated from the Unicode Character
-    /// Database's Scripts.txt (Unicode 17.0.0 - see <c>assets/unicode/generate_script_table.py</c> for
+    /// Database's Scripts.txt (Unicode 18.0.0 - see <c>assets/unicode/generate_script_table.py</c> for
     /// provenance/regeneration), embedded as <c>Text/Resources/Script/Scripts.txt.br</c>. Mirrors
     /// <see cref="VerticalOrientationTable"/>/<see cref="ArabicShapingTable"/>'s own shape - same
     /// run-array/binary-search/Brotli-resource pattern - but returns the raw Unicode script name

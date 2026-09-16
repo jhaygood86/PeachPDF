@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Text.Bidi
 {
     /// <summary>
     /// Runs <see cref="BidiResolver"/> against Unicode's own official conformance suite,
-    /// <c>BidiCharacterTest.txt</c> (Unicode 17.0.0, linked from <c>assets/unicode/</c> - see
+    /// <c>BidiCharacterTest.txt</c> (Unicode 18.0.0, linked from <c>assets/unicode/</c> - see
     /// <c>assets/unicode/generate_bidi_tables.py</c>), rather than a hand-picked subset: the real file is
     /// only ~92k test cases and runs in one pass well within a normal test timeout, so there is no reason
     /// to trust a smaller curated slice when the authoritative one is available. Per the file's own header,
