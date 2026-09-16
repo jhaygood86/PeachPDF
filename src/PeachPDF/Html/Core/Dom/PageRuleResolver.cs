@@ -197,9 +197,11 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Copies every declared property from <paramref name="source"/> into <paramref name="target"/>,
         /// overwriting same-named properties already present - the shared per-declaration merge step for
-        /// <see cref="SelectApplicableMarginRules"/> and <see cref="SelectApplicablePageStyle"/>.
+        /// <see cref="SelectApplicableMarginRules"/> and <see cref="SelectApplicablePageStyle"/>, also reused
+        /// by <see cref="Parse.DomParser.BuildDeclarativePageRules"/> to merge a declarative page's own
+        /// synthesized base <c>@page</c> rule with a document-level stylesheet's own base rule.
         /// </summary>
-        private static void MergeDeclarationsInto(StyleDeclaration target, StyleDeclaration source)
+        internal static void MergeDeclarationsInto(StyleDeclaration target, StyleDeclaration source)
         {
             foreach (var property in source.Declarations)
             {

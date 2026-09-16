@@ -1,5 +1,6 @@
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Svg;
 using System;
@@ -8,6 +9,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 
 namespace PeachPDF.Layout
@@ -34,6 +36,9 @@ namespace PeachPDF.Layout
         private bool _terminalUsed;
 
         internal CssBox Box => box;
+
+        /// <summary>Whether this container's one piece of terminal content has already been placed - used by <see cref="Html(string, PeachPdfCssContent?, Action{SlotContext, IContainer}?)"/>'s slot handling to tell whether a slot callback actually populated the container it was given.</summary>
+        internal bool HasContent => _terminalUsed;
 
         private void MarkTerminal()
         {
@@ -477,6 +482,155 @@ namespace PeachPDF.Layout
             return DecodeSvgMarkup(reader.ReadToEnd());
         }
 
+        public void Html(string html, PeachPdfCssContent? stylesheet = null, Action<SlotContext, IContainer>? onSlot = null)
+        {
+            ArgumentNullException.ThrowIfNull(html);
+            MarkTerminal();
+            SpliceHtmlFragment(html, stylesheet, onSlot);
+        }
+
+        public void Html(Stream stream, PeachPdfCssContent? stylesheet = null, Action<SlotContext, IContainer>? onSlot = null)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            MarkTerminal();
+            SpliceHtmlFragment(DecodeHtmlBytes(ms.ToArray()), stylesheet, onSlot);
+        }
+
+        public void Html(byte[] data, PeachPdfCssContent? stylesheet = null, Action<SlotContext, IContainer>? onSlot = null)
+        {
+            ArgumentNullException.ThrowIfNull(data);
+            MarkTerminal();
+            SpliceHtmlFragment(DecodeHtmlBytes(data), stylesheet, onSlot);
+        }
+
+        /// <summary>BOM-aware byte decode, same idiom as <see cref="DecodeSvgMarkup(byte[])"/>.</summary>
+        private static string DecodeHtmlBytes(byte[] htmlBytes)
+        {
+            using var reader = new StreamReader(new MemoryStream(htmlBytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+            return reader.ReadToEnd();
+        }
+
+        /// <summary>
+        /// Parses <paramref name="html"/>, cascades it, resolves every &lt;slot&gt; it contains, and grafts
+        /// the result onto a new anonymous <c>display: block</c> child of the wrapped box - a wrapper is
+        /// needed (rather than grafting the fragment's own top-level nodes directly onto it) because a
+        /// fragment can have more than one top-level node, and every other terminal method here creates
+        /// exactly one new child of the wrapped box rather than placing content on it directly.
+        /// </summary>
+        private void SpliceHtmlFragment(string html, PeachPdfCssContent? stylesheet, Action<SlotContext, IContainer>? onSlot)
+        {
+            var wrapper = CssPropertyFactory.CreateAnonymousBox(box);
+            properties.Set(wrapper, "display", "block");
+
+            var fragmentRoot = BuildFragmentTree(html, stylesheet);
+
+            // Must run before slot processing: a slot's replacement content is built via ordinary
+            // ContainerBuilder calls afterward, and those boxes must NOT be flagged - only the fragment's
+            // own real-cascade-styled boxes should be (see CssBox.IsFragmentStyled's own remarks).
+            MarkFragmentStyled(fragmentRoot);
+
+            ProcessSlots(fragmentRoot, onSlot);
+
+            wrapper.SetAllBoxes(fragmentRoot);
+        }
+
+        private CssBox BuildFragmentTree(string html, PeachPdfCssContent? stylesheet) =>
+            BuildFragmentTreeAsync(html, stylesheet).GetAwaiter().GetResult();
+
+        private async Task<CssBox> BuildFragmentTreeAsync(string html, PeachPdfCssContent? stylesheet)
+        {
+            var adapter = properties.Adapter;
+
+            // Cloned so this fragment's own <style> tag collection (DomParser.GenerateFragmentCssTree's own
+            // CascadeParseStyles call) never mutates a caller-shared PeachPdfCssContent instance, or the
+            // adapter's cached UA-default CssData.
+            var cssData = (stylesheet?.CssData ?? await adapter.GetDefaultCssData()).Clone();
+
+            var cssParser = new CssParser(adapter, htmlContainer: null);
+            var domParser = new DomParser(cssParser);
+            return await domParser.GenerateFragmentCssTree(html, adapter, cssData);
+        }
+
+        private static void MarkFragmentStyled(CssBox box)
+        {
+            box.IsFragmentStyled = true;
+            foreach (var child in box.Boxes)
+                MarkFragmentStyled(child);
+        }
+
+        /// <summary>
+        /// Finds every &lt;slot&gt; element in <paramref name="fragmentRoot"/> and, when <paramref name="onSlot"/>
+        /// is non-null, invokes it once per slot (document order) with a new, empty <see cref="IContainer"/>
+        /// inserted immediately before that slot's own box. If the callback places any content
+        /// (<see cref="HasContent"/>), the original slot box (and its own fallback content) is discarded;
+        /// otherwise the empty replacement is discarded instead, leaving the slot's fallback content exactly
+        /// as authored - the same outcome as when <paramref name="onSlot"/> is null altogether.
+        /// </summary>
+        private void ProcessSlots(CssBox fragmentRoot, Action<SlotContext, IContainer>? onSlot)
+        {
+            var slotBoxes = new List<CssBox>();
+            CollectSlotBoxes(fragmentRoot, slotBoxes);
+
+            if (slotBoxes.Count == 0 || onSlot is null)
+                return;
+
+            foreach (var slotBox in slotBoxes)
+            {
+                // A <slot> nested inside an earlier sibling slot's own fallback content is still in this
+                // list (collection is a single up-front pass, before any slot is filled) even after that
+                // ancestor slot's own fill already detached the whole fallback subtree it lived in -
+                // invoking its callback at that point would fire real side effects for content that can
+                // never reach the final tree either way, so it's skipped instead.
+                if (!IsAttached(slotBox, fragmentRoot))
+                    continue;
+
+                var attributes = slotBox.HtmlTag?.Attributes is { } tagAttributes
+                    ? new Dictionary<string, string>(tagAttributes, StringComparer.OrdinalIgnoreCase)
+                    : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var name = slotBox.HtmlTag?.TryGetAttribute("name", "") ?? "";
+                var slotContext = new SlotContext(name, attributes);
+
+                var parent = slotBox.ParentBox!;
+                var replacementWrapper = CssBox.CreateBox(parent, tag: null, before: slotBox);
+                var replacementContainer = new ContainerBuilder(replacementWrapper, properties);
+
+                onSlot(slotContext, replacementContainer);
+
+                if (replacementContainer.HasContent)
+                {
+                    slotBox.ParentBox = null;
+                }
+                else
+                {
+                    replacementWrapper.ParentBox = null;
+                }
+            }
+        }
+
+        /// <summary>Whether <paramref name="box"/> can still reach <paramref name="root"/> by walking up its own <see cref="CssBox.ParentBox"/> chain - false once an ancestor has been detached (<see cref="ProcessSlots"/>'s own reachability guard).</summary>
+        private static bool IsAttached(CssBox box, CssBox root)
+        {
+            for (var current = box; current is not null; current = current.ParentBox)
+            {
+                if (ReferenceEquals(current, root))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>Snapshots every &lt;slot&gt; box before any mutation, so later reparenting in <see cref="ProcessSlots"/> can't disturb this walk.</summary>
+        private static void CollectSlotBoxes(CssBox box, List<CssBox> result)
+        {
+            if (box.HtmlTag?.Name.Equals("slot", StringComparison.OrdinalIgnoreCase) == true)
+                result.Add(box);
+
+            foreach (var child in box.Boxes.ToArray())
+                CollectSlotBoxes(child, result);
+        }
+
         public void LineHorizontal(PdfLength thickness, PdfColor? color = null, bool dashed = false)
         {
             // border-*-width never accepts a percentage (unlike height/width on the solid path below),
@@ -602,6 +756,40 @@ namespace PeachPDF.Layout
         {
             ArgumentNullException.ThrowIfNull(sectionId);
             box.SectionEndId = sectionId;
+            return this;
+        }
+
+        // ─── class / id / tag / named page ──────────────────────────────────────
+
+        public IContainer Class(string className)
+        {
+            ArgumentNullException.ThrowIfNull(className);
+            box.EnsureHtmlTag();
+            var existing = box.HtmlTag!.TryGetAttribute("class");
+            box.HtmlTag.SetAttribute("class", string.IsNullOrEmpty(existing) ? className : existing + " " + className);
+            return this;
+        }
+
+        public IContainer Id(string id)
+        {
+            ArgumentNullException.ThrowIfNull(id);
+            box.EnsureHtmlTag();
+            box.HtmlTag!.SetAttribute("id", id);
+            return this;
+        }
+
+        public IContainer Tag(string tagName)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(tagName);
+            box.EnsureHtmlTag();
+            box.HtmlTag!.Name = tagName;
+            return this;
+        }
+
+        public IContainer PageName(string name)
+        {
+            ArgumentNullException.ThrowIfNull(name);
+            properties.Set(box, "page", name);
             return this;
         }
     }

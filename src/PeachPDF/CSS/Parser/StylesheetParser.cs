@@ -44,6 +44,20 @@ namespace PeachPDF.CSS
             return Parse(source);
         }
 
+        /// <summary>
+        /// Parses <paramref name="content"/> without ever materializing a <see cref="string"/> copy of it -
+        /// <see cref="TextSource"/> already stores a <see cref="ReadOnlyMemory{T}"/> (not just a
+        /// <see langword="string"/>), which is what makes this genuinely zero-copy: unlike
+        /// <see cref="ReadOnlySpan{T}"/>, <see cref="ReadOnlyMemory{T}"/> is not a ref struct, so it can be
+        /// retained by the resulting <c>Stylesheet.StylesheetText</c> (a lazy <c>.Text</c> read that can
+        /// happen well after this call returns) with no copy at all.
+        /// </summary>
+        public Stylesheet Parse(ReadOnlyMemory<char> content)
+        {
+            var source = new TextSource(content);
+            return Parse(source);
+        }
+
         public Task<Stylesheet> ParseAsync(string content)
         {
             return ParseAsync(content, CancellationToken.None);

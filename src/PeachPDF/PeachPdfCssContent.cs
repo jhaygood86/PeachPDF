@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;
@@ -6,7 +7,7 @@ using PeachPDF.Html.Core.Parse;
 namespace PeachPDF
 {
     /// <summary>
-    /// An opaque, pre-parsed stylesheet produced by <see cref="PdfGenerator.ParseStyleSheet"/>. Pass an instance
+    /// An opaque, pre-parsed stylesheet produced by <see cref="PdfGenerator.ParseStyleSheet(string, bool)"/>. Pass an instance
     /// to a <c>GeneratePdf</c>/<c>AddPdfPages</c> overload's <c>cssData</c> parameter to reuse the same parsed CSS
     /// across multiple renders instead of re-parsing identical stylesheet text on every call.
     /// </summary>
@@ -31,7 +32,7 @@ namespace PeachPDF
         /// </summary>
         /// <remarks>
         /// <c>@import</c> rules inside <paramref name="stylesheet"/> are not resolved (there is no
-        /// document context here), the same limitation as <see cref="PdfGenerator.ParseStyleSheet"/>.
+        /// document context here), the same limitation as <see cref="PdfGenerator.ParseStyleSheet(string, bool)"/>.
         /// </remarks>
         /// <param name="stylesheet">the stylesheet source to parse and add</param>
         public async Task AddStyleSheet(string stylesheet)
@@ -46,6 +47,26 @@ namespace PeachPDF
 
             // The selector index is built lazily and cached; adding a stylesheet after it has been
             // queried would otherwise leave the new rules invisible to matching.
+            _cssData.InvalidateIndex();
+        }
+
+        /// <summary>
+        /// Genuinely zero-copy counterpart of <see cref="AddStyleSheet(string)"/> - see
+        /// <see cref="CSS.StylesheetParser.Parse(ReadOnlyMemory{char})"/>'s own remarks for why
+        /// <see cref="ReadOnlyMemory{T}"/>, not <see cref="ReadOnlySpan{T}"/> (a ref struct that cannot cross
+        /// this method's own <see langword="await"/>), is what makes this possible.
+        /// </summary>
+        /// <param name="stylesheet">the stylesheet source to parse and add</param>
+        public async Task AddStyleSheet(ReadOnlyMemory<char> stylesheet)
+        {
+            if (stylesheet.IsEmpty)
+            {
+                return;
+            }
+
+            var parser = new CssParser(_adapter, null);
+            await parser.ParseStyleSheet(_cssData, stylesheet);
+
             _cssData.InvalidateIndex();
         }
     }

@@ -14,8 +14,10 @@ using PeachPDF.Layout;
 - [Quick start](#quick-start)
 - [Pages: size, margin, background](#pages-size-margin-background)
 - [Containers: padding, border, background, corner radius, shadow](#containers-padding-border-background-corner-radius-shadow)
+- [Class, Id, Tag, and a document-level stylesheet](#class-id-tag-and-a-document-level-stylesheet)
 - [Text and rich text](#text-and-rich-text)
 - [Images](#images)
+- [HTML fragments and slots](#html-fragments-and-slots)
 - [Hyperlinks and bookmarks](#hyperlinks-and-bookmarks)
 - [Rows and columns](#rows-and-columns)
 - [Tables](#tables)
@@ -98,6 +100,66 @@ container
 container.LineHorizontal(1, PdfColor.FromHex("#BBBBBB"), dashed: true);
 ```
 
+## Class, Id, Tag, and a document-level stylesheet
+
+`Class`/`Id`/`Tag` tag a container the same way an HTML element's `class`/`id`/tag name would, so a stylesheet
+attached to the whole document (`IDocumentBuilder.Stylesheet`) can target it with a real CSS selector:
+
+```csharp
+var stylesheet = await generator.ParseStyleSheet("""
+    .card { border: 1px solid #ccc; }
+    .card .title { font-weight: 700; }
+    #hero { background: #f5f5f5; }
+    """);
+
+var document = await generator.CreateDocument(doc =>
+{
+    doc.Stylesheet(stylesheet);
+    doc.Page(page =>
+    {
+        page.Content(container =>
+        {
+            container.Id("hero").Class("card").Column(column =>
+            {
+                column.Item().Class("title").Text("Card title");
+            });
+        });
+    });
+});
+```
+
+Selector matching is real and general - class, id, compound, descendant, attribute, and `:not()`/`:is()`-style
+selectors all work, the same selector engine HTML rendering uses. `Tag(name)` renames a container's own internal
+tag (every anonymous container defaults to a synthetic `"div"`, an image to `"img"`, a hyperlink to `"a"`) so a
+bare type selector like `li { ... }` can target it precisely - without a rename, a type/universal selector still
+matches this API's own internal structure (`div`/`img`/`a`), so prefer class/id/`Tag` for predictable targeting.
+
+An explicit builder call always outranks a plain (non-`!important`) stylesheet rule for the same property - the
+same precedence an inline `style=""` attribute has over an author stylesheet - but a matching `!important` rule
+still wins, matching ordinary CSS:
+
+```csharp
+// stylesheet: .card { padding: 8pt; }
+container.Class("card").Padding(20);   // ends up 20pt - the explicit call wins
+```
+
+`IDocumentBuilder.Stylesheet` can be called anywhere in the document-building callback (`Page` only records its
+own handler; every page's content tree, and this stylesheet's effect, are built afterward) - only the last call
+is kept. `Class`/`Id`/`Tag` have no visual effect at all when no stylesheet is attached; they're a stable hook a
+document can add before it needs styling.
+
+A stylesheet's `@font-face`/`@property`/`@font-palette-values` rules take effect too - fonts register, custom
+properties resolve through `var()` - with the same precedence rule extended to `@page`: a base `@page` rule's
+`margin`/`size` only fills in whatever the page's own `Margin*`/`Size` call left unset, ranking between an
+explicit call and the document's `PdfGenerateConfig` default. `PageName(name)` sets the CSS `page` property
+(CSS 2.1 §13.2) so a document-level `@page name { ... }` rule can target this point in the flow onward:
+
+```csharp
+var stylesheet = await generator.ParseStyleSheet("@page chapter { size: landscape; }");
+
+column.Item().PageName("chapter").Text("A landscape chapter starts here.");
+```
+
 ## Text and rich text
 
 ```csharp
@@ -162,6 +224,54 @@ container.Width(300).Height(160).Svg(size => RenderChartAsSvgMarkup(size.Width, 
 ```
 
 `Image(Func<PdfSize, byte[]>)`/`Svg(Func<PdfSize, string>)` run their callback once layout knows the container's resolved size, and - unlike the other overloads above - fill that container by default (`width: 100%; height: 100%`), so the generated content is sized to fit rather than needing its own explicit dimensions. The container itself still needs a definite resolved size for this to mean anything: an explicit `Width`/`Height`, or an ancestor that already has one (the page content area, a table cell with a definite column width, a `Row`/`Column` item with an explicit size); an indefinite container throws `InvalidOperationException` rather than generating content at a garbled or zero size. Each callback runs exactly once, even across the layout engine's own internal convergence passes.
+
+## HTML fragments and slots
+
+`Html(markup)` parses an HTML fragment (through the same parser and cascade the HTML-string rendering path
+uses) and splices it into a container's tree in place:
+
+```csharp
+container.Html("""
+    <table>
+      <tr><td>Row 1</td><td>Data</td></tr>
+      <tr><td>Row 2</td><td>Data</td></tr>
+    </table>
+    """);
+```
+
+Unlike every other terminal method here, a fragment can contain more than one top-level element - real HTML
+semantics apply throughout (UA default styles, an anonymous-table fixup for a bare `<tr>`, the fragment's own
+`<style>` tag). Pass a stylesheet for the fragment's own class/id-driven styling to cascade against:
+
+```csharp
+var cardStyles = await generator.ParseStyleSheet(".highlight { background: yellow; }");
+container.Html("""<p class="highlight">Important</p>""", cardStyles);
+```
+
+A `<link rel="stylesheet">` inside the fragment is never loaded (there is no document context to resolve it
+through at this point in building the tree) - author a `<style>` tag, or pass CSS via the stylesheet parameter,
+instead. `Stream`/`byte[]` overloads exist alongside the `string` one, matching `Svg`'s own shape.
+
+### Slots
+
+A fragment can declare replaceable `<slot>` points, Web-Components style:
+
+```csharp
+container.Html(
+    """<div class="card"><slot name="body">Loading…</slot></div>""",
+    onSlot: (slot, slotContainer) =>
+    {
+        if (slot.Name == "body")
+        {
+            slotContainer.Text("Real content, filled in from C#.");
+        }
+    });
+```
+
+`onSlot` fires once per `<slot>` element in the fragment (in document order, regardless of name), with a
+`SlotContext` (its `Name` and `Attributes`) and an `IContainer` positioned to replace it - populate it the same
+way any other container is populated. A slot the callback leaves untouched (including when `onSlot` is `null`
+altogether) keeps its own fallback content - whatever markup it contained - exactly as authored.
 
 ## Hyperlinks and bookmarks
 
@@ -298,3 +408,7 @@ page.Footer(footer => footer.Text(t =>
 
 - **No `Placeholder` prototyping element** — unlike every other terminal method here, a placeholder has no CSS mapping at all, so it needs genuinely new paint code rather than a wrapper over an existing property.
 - **No per-image compression/DPI override, or `ShrinkToFit`/`ScaleToPageSize`** for a declarative document — each of these needs a re-run of the whole builder callback that a hand-built tree has no equivalent for; document-wide settings on `PdfGenerateConfig` (`DownscaleImages`, `PixelsPerInch`, ...) still apply.
+- **A bare type or universal selector in a document-level stylesheet matches this API's own internal box structure** — every anonymous container defaults to a synthetic `"div"` tag (`img`/`a` for images/hyperlinks) unless renamed with `Tag(...)`, so a rule like `div { ... }` or `* { ... }` matches broadly; prefer class/id selectors, or `Tag(...)`, for predictable targeting.
+- **No vertical writing modes for the declarative API** — a document-level stylesheet's `writing-mode` resolves onto individual boxes' computed style but the document root stays fixed at `horizontal-tb` regardless (a separate, much larger feature than this one, and orthogonal to it).
+- **A `<link rel="stylesheet">` inside an `Html(...)` fragment is never loaded** — there is no document context yet at the point a fragment is spliced in to resolve a network/relative URL through; author a `<style>` tag, or pass CSS via `Html`'s own stylesheet parameter, instead.
+- **A `float: footnote` element inside an `Html(...)` fragment renders as ordinary inline content** rather than being detached into a footnote area — footnote detachment needs a real document context the fragment doesn't have at splice time.

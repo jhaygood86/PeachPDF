@@ -150,7 +150,7 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// Discards the lazily-built selector index so it is rebuilt from the full
         /// <see cref="Stylesheets"/> list on the next query. Call after appending a stylesheet to an
-        /// already-queried <see cref="CssData"/> (e.g. <see cref="PeachPdfCssContent.AddStyleSheet"/>).
+        /// already-queried <see cref="CssData"/> (e.g. <see cref="PeachPdfCssContent.AddStyleSheet(string)"/>).
         /// <see cref="EnsureIndex"/> guards on <see cref="_universalRules"/>, so clearing it is enough
         /// to force a full rebuild of every index (<see cref="_tagIndex"/>/<see cref="_classIndex"/>/
         /// <see cref="_idIndex"/>/<see cref="_universalRules"/>/<see cref="_layerRanks"/>).
@@ -504,6 +504,21 @@ namespace PeachPDF.Html.Core
         /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
         /// <returns>the parsed css data</returns>
         public static async Task<CssData> Parse(RAdapter adapter, string stylesheet, bool combineWithDefault = true)
+        {
+            var parser = new CssParser(adapter, null);
+            return await parser.ParseStyleSheet(stylesheet, combineWithDefault);
+        }
+
+        /// <summary>
+        /// Genuinely zero-copy counterpart of <see cref="Parse(RAdapter, string, bool)"/> - see
+        /// <see cref="CssParser.ParseStyleSheet(ReadOnlyMemory{char}, bool)"/>'s own remarks for why
+        /// <see cref="ReadOnlyMemory{T}"/>, not <see cref="ReadOnlySpan{T}"/>, is what makes this possible.
+        /// </summary>
+        /// <param name="adapter">Platform adapter</param>
+        /// <param name="stylesheet">the stylesheet source to parse</param>
+        /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
+        /// <returns>the parsed css data</returns>
+        public static async Task<CssData> Parse(RAdapter adapter, ReadOnlyMemory<char> stylesheet, bool combineWithDefault = true)
         {
             var parser = new CssParser(adapter, null);
             return await parser.ParseStyleSheet(stylesheet, combineWithDefault);

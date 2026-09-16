@@ -10657,6 +10657,150 @@ await SaveDeclarativeShowcaseAsync("declarative_sectioned_page_numbers", "Docume
         });
     });
 
+const string declarativeStylesheetAndHtmlSource =
+    """""
+    var generator = new PdfGenerator();
+    var stylesheet = await generator.ParseStyleSheet(
+        """"
+        .invoice-title { color: #2C3E50; }
+        .line-item.highlight { background-color: #FFF3CD; }
+        @page { margin: 28pt; }
+        """");
+
+    var document = await generator.CreateDocument(doc =>
+    {
+        doc.Stylesheet(stylesheet);
+        doc.Page(page =>
+        {
+            page.Size(PageSize.A4);
+            page.Header(header => header.Text(t => t.Span("Invoice #1042").Bold()));
+            page.Content(container =>
+            {
+                container.Column(column =>
+                {
+                    column.Spacing(14);
+
+                    column.Item().Class("invoice-title").Text(t => t.Span("Acme Consulting Services").FontSize(16).Bold());
+
+                    // A document-level stylesheet lets a caller's own class/id selector target a
+                    // declaratively-built container, and a compound class like "line-item highlight"
+                    // works exactly like it would in HTML.
+                    column.Item().Table(table =>
+                    {
+                        table.Columns(columns =>
+                        {
+                            columns.RelativeColumn(3);
+                            columns.RelativeColumn(1);
+                        });
+                        table.Header(header =>
+                        {
+                            header.Cell().Text(t => t.Span("Item").Bold());
+                            header.Cell().Text(t => t.Span("Amount").Bold());
+                        });
+                        table.Row(row =>
+                        {
+                            row.Cell().Class("line-item").Text("Consulting hours");
+                            row.Cell().Class("line-item").Text("$4,200");
+                        });
+                        table.Row(row =>
+                        {
+                            row.Cell().Class("line-item highlight").Text("Rush delivery fee");
+                            row.Cell().Class("line-item highlight").Text("$350");
+                        });
+                    });
+
+                    // IContainer.Html(...) splices a real parsed HTML fragment into the tree - here, a
+                    // terms paragraph with a <slot> filled in from C# with the customer's own name.
+                    column.Item().Html(
+                        """"
+                        <p>These terms apply to <strong><slot name="customer">this customer</slot></strong>
+                        until the invoice is settled in full.</p>
+                        """",
+                        onSlot: (slot, slotContainer) =>
+                        {
+                            if (slot.Name == "customer")
+                            {
+                                slotContainer.Text("Example Retail Co.");
+                            }
+                        });
+                });
+            });
+        });
+    });
+
+    var stream = new MemoryStream();
+    document.Save(stream);
+    """"";
+
+await SaveDeclarativeShowcaseAsync("declarative_stylesheet_and_html", "Document Building", "Stylesheet, Class/Id, and HTML Fragments",
+    "IDocumentBuilder.Stylesheet attaches a document-level stylesheet so IContainer.Class/Id/Tag can target declaratively-built containers with real CSS selectors (including compound classes like \"line-item highlight\"), a base @page rule's margin merges with the page's own Header, and IContainer.Html(...) splices a real parsed HTML fragment into the tree with a <slot> filled in from C#.",
+    declarativeStylesheetAndHtmlSource,
+    async gen =>
+    {
+        var stylesheet = await gen.ParseStyleSheet(
+            """
+            .invoice-title { color: #2C3E50; }
+            .line-item.highlight { background-color: #FFF3CD; }
+            @page { margin: 28pt; }
+            """);
+
+        return await gen.CreateDocument(doc =>
+        {
+            doc.Stylesheet(stylesheet);
+            doc.Page(page =>
+            {
+                page.Size(PageSize.A4);
+                page.Header(header => header.Text(t => t.Span("Invoice #1042").Bold()));
+                page.Content(container =>
+                {
+                    container.Column(column =>
+                    {
+                        column.Spacing(14);
+
+                        column.Item().Class("invoice-title").Text(t => t.Span("Acme Consulting Services").FontSize(16).Bold());
+
+                        column.Item().Table(table =>
+                        {
+                            table.Columns(columns =>
+                            {
+                                columns.RelativeColumn(3);
+                                columns.RelativeColumn(1);
+                            });
+                            table.Header(header =>
+                            {
+                                header.Cell().Text(t => t.Span("Item").Bold());
+                                header.Cell().Text(t => t.Span("Amount").Bold());
+                            });
+                            table.Row(row =>
+                            {
+                                row.Cell().Class("line-item").Text("Consulting hours");
+                                row.Cell().Class("line-item").Text("$4,200");
+                            });
+                            table.Row(row =>
+                            {
+                                row.Cell().Class("line-item highlight").Text("Rush delivery fee");
+                                row.Cell().Class("line-item highlight").Text("$350");
+                            });
+                        });
+
+                        column.Item().Html(
+                            """
+                            <p>These terms apply to <strong><slot name="customer">this customer</slot></strong>
+                            until the invoice is settled in full.</p>
+                            """,
+                            onSlot: (slot, slotContainer) =>
+                            {
+                                if (slot.Name == "customer")
+                                {
+                                    slotContainer.Text("Example Retail Co.");
+                                }
+                            });
+                    });
+                });
+            });
+        });
+    });
+
 if (benchmarkMode)
 {
     PrintBenchmarkReport();

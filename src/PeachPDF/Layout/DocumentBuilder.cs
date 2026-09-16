@@ -15,10 +15,19 @@ namespace PeachPDF.Layout
     {
         public List<Action<IPageDescriptor>> PageHandlers { get; } = [];
 
+        /// <summary>The last-set document-level stylesheet, or null - see <see cref="Stylesheet"/>.</summary>
+        public PeachPdfCssContent? DocumentStylesheet { get; private set; }
+
         public void Page(Action<IPageDescriptor> handler)
         {
             ArgumentNullException.ThrowIfNull(handler);
             PageHandlers.Add(handler);
+        }
+
+        public void Stylesheet(PeachPdfCssContent content)
+        {
+            ArgumentNullException.ThrowIfNull(content);
+            DocumentStylesheet = content;
         }
 
         /// <summary>
