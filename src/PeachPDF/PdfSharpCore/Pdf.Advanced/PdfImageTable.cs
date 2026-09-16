@@ -121,6 +121,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             if (image.IsCmyk) return (null, null);
 
             if (IsPngPinnedToNaturalSize(image)) return (null, null);
+            if (IsGifPinnedToNaturalSize(image)) return (null, null);
 
             if (!Owner.Options.DownscaleImages) return (null, null);
             if (!(widthPt > 0) || !(heightPt > 0)) return (null, null);
@@ -177,6 +178,19 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             {
                 ImageCompression.Auto => true,
                 ImageCompression.Lossy => pngPassthrough.ColorKeyMask is not null,
+                _ => false,
+            };
+        }
+
+        /// <summary>Same reasoning as <see cref="IsPngPinnedToNaturalSize"/>, mirrored for GIF pass-through (issue #1110).</summary>
+        private bool IsGifPinnedToNaturalSize(XImage image)
+        {
+            if (image.GifPassthrough is not { } gifPassthrough) return false;
+
+            return Owner.Options.ImageCompression switch
+            {
+                ImageCompression.Auto => true,
+                ImageCompression.Lossy => gifPassthrough.ColorKeyMask is not null,
                 _ => false,
             };
         }

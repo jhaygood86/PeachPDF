@@ -96,6 +96,30 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
     }
 
     /// <summary>
+    /// Data needed to embed a GIF source via <c>/LZWDecode</c> pass-through, avoiding a full LZW
+    /// decompress-then-recompress round trip - but GIF's own LZW bitstream isn't literally byte-for-byte
+    /// reusable as PDF's (different bit-packing order and code-width growth timing despite the same
+    /// underlying code values), so the actual embed re-packs it - see
+    /// <c>PeachPDF.PdfSharpCore.Pdf.Advanced.PdfImage.RepackGifLzwForPdf</c>'s own remarks for the full
+    /// explanation. See <see cref="ImageSource.IImageSource.GifPassthrough"/> for when this applies.
+    /// </summary>
+    internal readonly struct GifPassthroughData
+    {
+        /// <summary>The frame's LZW-compressed image data, verbatim from the GIF file (not yet re-packed for PDF - see this struct's own remarks).</summary>
+        public required byte[] LzwData { get; init; }
+
+        /// <summary>The frame's effective palette (flat RGB triples), used to build a PDF <c>/Indexed</c> color space lookup table.</summary>
+        public required byte[] Palette { get; init; }
+
+        /// <summary>
+        /// A PDF color-key <c>/Mask</c> array (a single <c>[index index]</c> pair), built from the frame's
+        /// declared transparent color index - GIF transparency is always exactly one index, unlike PNG's
+        /// palette <c>tRNS</c> which can mark several. Null when the frame declared no transparent index.
+        /// </summary>
+        public int[]? ColorKeyMask { get; init; }
+    }
+
+    /// <summary>
     /// Data needed to embed a CMYK source with no PDF-native byte-for-byte pass-through filter (TIFF -
     /// unlike JPEG's <c>/DCTDecode</c>, there is no <c>/TIFFDecode</c>) as a raw <c>/FlateDecode</c> CMYK
     /// stream instead - see <see cref="ImageSource.IImageSource.CmykRaster"/> for when this applies.
@@ -200,6 +224,24 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
             /// back to decode. Null for every non-PNG source and for a PNG that isn't eligible.
             /// </summary>
             PngPassthroughData? PngPassthrough { get; }
+
+            /// <summary>
+            /// Non-null when this GIF source is eligible for <c>/LZWDecode</c> pass-through instead of the
+            /// normal full decode+<c>/FlateDecode</c> raw-RGB path: not interlaced (GIF's LZW compresses
+            /// whatever row order it's given - an interlaced frame's raw bytes decompress into indices in
+            /// 4-pass order, not top-to-bottom, and PDF has no de-interlace step), the frame's
+            /// <c>MinCodeSize</c> is exactly 8 (GIF then starts codes at the same 9-bit width/Clear-code-256
+            /// convention PDF's <c>/LZWDecode</c> always uses - the code *values* and widths line up, even
+            /// though the bit-packing itself still needs re-packing, since GIF and PDF pack codes in
+            /// opposite bit order - see <c>PdfImage.RepackGifLzwForPdf</c>), and the frame covers the full
+            /// logical canvas (pass-through has no canvas-compositing step, unlike the existing full
+            /// decode). A declared transparent color
+            /// index maps onto <see cref="GifPassthroughData.ColorKeyMask"/>, PDF's color-key mask
+            /// mechanism - GIF transparency is always exactly one index, so this never disqualifies a
+            /// source the way a genuine partial-alpha PNG palette entry does. Null for every non-GIF
+            /// source and for a GIF that isn't eligible.
+            /// </summary>
+            GifPassthroughData? GifPassthrough { get; }
 
             /// <summary>
             /// True when this source's pixel data is known to be lossless: always true for PNG, BMP, or

@@ -10896,6 +10896,49 @@ await SaveShowcaseAsync("lossless_webp_avif", "Images & Replaced Content", "Loss
     "earlier PeachPDF version did regardless of the source's own encoding.",
     losslessRasterHtml, pdfConfig);
 
+// ── GIF LZW pass-through (issue #1110) ─────────────────────────────────────────────────
+static byte[] BuildFullPaletteGifBytes(int size)
+{
+    using var image = PeachImage.Image.Create(size, size, PeachImage.PixelFormat.Rgb24);
+    var pixels = image.GetPixelSpan();
+    for (int i = 0; i < size * size; i++)
+    {
+        int color = i % 256;
+        pixels[i * 3] = (byte)((color * 53) % 256);
+        pixels[i * 3 + 1] = (byte)((color * 97) % 256);
+        pixels[i * 3 + 2] = (byte)((color * 181) % 256);
+    }
+
+    using var ms = new MemoryStream();
+    image.Save(ms, "gif", new PeachImage.Formats.Gif.GifEncoderOptions { MaxColors = 256 });
+    return ms.ToArray();
+}
+
+var gifPassthroughBase64 = Convert.ToBase64String(BuildFullPaletteGifBytes(64));
+
+var gifPassthroughHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 16px; max-width: 640px; }" +
+    "img { image-rendering: pixelated; border: 1px solid #cbd5e1; }" +
+    ".label { font-size: 11px; color: #555; margin-top: 4px; }" +
+    "</style></head><body>" +
+    "<h2>GIF lossless pass-through</h2>" +
+    "<p class=\"note\">A GIF whose LZW minimum code size is exactly 8, isn't interlaced, and whose frame " +
+    "covers the full logical canvas embeds the same LZW codes its own encoder produced as a PDF " +
+    "/LZWDecode stream (re-packed into PDF's bit order) - no LZW decompress/recompress round trip.</p>" +
+    $"<img src=\"data:image/gif;base64,{gifPassthroughBase64}\" width=\"128\" height=\"128\">" +
+    "<div class=\"label\">Full-palette (MinCodeSize 8) GIF</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("gif_passthrough", "Images & Replaced Content", "GIF Lossless Pass-through",
+    "A GIF that isn't interlaced, whose LZW minimum code size is exactly 8, and whose frame covers the " +
+    "full logical canvas embeds the same LZW codes its own encoder produced as /LZWDecode with an " +
+    "/Indexed color space - re-packed from GIF's bit order into PDF's, instead of being decoded and " +
+    "re-encoded.",
+    gifPassthroughHtml, pdfConfig);
+
 const string declarativeApiSource =
     """"
     var generator = new PdfGenerator();
