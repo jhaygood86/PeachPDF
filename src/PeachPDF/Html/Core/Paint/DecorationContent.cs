@@ -1,3 +1,5 @@
+using PeachPDF.CSS;
+using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -37,12 +39,12 @@ namespace PeachPDF.Html.Core.Paint
     {
         private readonly Dictionary<CssLineBox, RRect> _spans = [];
         private readonly Dictionary<CssLineBox, List<DecorationInterval>> _exclusions = [];
-        private readonly Dictionary<CssRect, DecorationWord>? _words;
+        private readonly Dictionary<CssRect, DecorationWord> _words;
         private readonly List<CssLineBox> _order = [];
 
-        private DecorationContent(bool collectWords)
+        private DecorationContent()
         {
-            _words = collectWords ? [] : null;
+            _words = [];
         }
 
         /// <summary>
@@ -62,14 +64,9 @@ namespace PeachPDF.Html.Core.Paint
         /// (css-text-decor-3 §2.4). False for an inline box, whose own per-line rectangles already
         /// <i>are</i> the spans — there, only the exclusions and the ink have to be found.
         /// </param>
-        /// <param name="collectWords">
-        /// whether the walk also gathers the words <c>text-decoration-skip-ink</c> measures ink across.
-        /// False for a box that has opted out (or cannot skip), so the opt-out costs nothing beyond the
-        /// walk the exclusions need anyway.
-        /// </param>
-        internal static DecorationContent Of(BoxFragment fragment, bool collectSpans, bool collectWords)
+        internal static DecorationContent Of(BoxFragment fragment, bool collectSpans)
         {
-            var content = new DecorationContent(collectWords);
+            var content = new DecorationContent();
 
             foreach (var child in fragment.Children)
             {
@@ -100,7 +97,7 @@ namespace PeachPDF.Html.Core.Paint
         /// </summary>
         internal IReadOnlyList<DecorationWord>? InkWordsOn(CssLineBox? line)
         {
-            if (line is null || _words is not { Count: > 0 }) return null;
+            if (line is null || _words.Count == 0) return null;
 
             List<DecorationWord>? words = null;
 
@@ -113,6 +110,84 @@ namespace PeachPDF.Html.Core.Paint
             }
 
             return words;
+        }
+
+        /// <summary>
+        /// The alphabetic baseline the words of <paramref name="line"/> sit on, in the same
+        /// fragmentainer-local space as every rectangle here, or null when the line holds no word that
+        /// sits on it. Measured in layout's own convention - a whole <see cref="RFont.Ascent"/> below each
+        /// word's rectangle - so the caller applies its own font's ascent rounding to reach the baseline
+        /// the glyphs are painted on.
+        /// </summary>
+        /// <param name="line">the line box whose baseline is wanted</param>
+        /// <param name="decoratingBox">
+        /// the box whose decoration is being painted. The walk for a vertical-align shift stops below it,
+        /// because its own <c>vertical-align</c> positions the decorating box on <i>its</i> parent's line -
+        /// it does not move this line's words off the baseline they share. A table cell is the case that
+        /// makes the distinction load-bearing: the UA stylesheet gives it <c>vertical-align: middle</c>,
+        /// which centers the cell's content block inside the cell without tilting any line inside it.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// This is measured from the words rather than taken from <see cref="CssLineBox.BaselineY"/>
+        /// deliberately. Paint's contract is the fragment tree, and the word rectangles in it are what
+        /// <c>DrawString</c> is actually handed, so a baseline derived from them is the one on the page by
+        /// construction. <c>BaselineY</c> is layout's own record and can disagree with it - inside a
+        /// vertically-centered table cell it is short by the centering offset, because the cell's content
+        /// moved after the line closed.
+        /// </para>
+        /// <para>
+        /// A word raised or lowered by <c>vertical-align</c> is not on this baseline and is skipped;
+        /// a superscript is the common case. That is the one part of this that the spec states outright:
+        /// <see href="https://www.w3.org/TR/css-text-decor-3/#text-underline-position-property">css-text-decor-3
+        /// §2.5</see> says a UA "<i>must</i> adjust line positions to match the shifted metrics of
+        /// decorating boxes shifted with <c>vertical-align</c> values other than <c>baseline</c> ... but
+        /// <i>must not</i> adjust the line position or thickness in response to descendants of a
+        /// decorating box that are so styled". Both halves fall out of where the walk stops: a shift on
+        /// the decorating box itself has already moved these words, so the baseline follows it, while a
+        /// shift below it excludes that word and leaves the line where the rest of the text is. Every word that remains reports the same baseline however
+        /// large it is set, because layout placed each one's rectangle exactly its own
+        /// <see cref="RFont.Ascent"/> above the line's baseline - so the first is taken and the rest
+        /// cannot disagree.
+        /// </para>
+        /// </remarks>
+        internal double? AlphabeticBaselineOn(CssLineBox? line, CssBox decoratingBox)
+        {
+            if (line is null || _words.Count == 0) return null;
+
+            foreach (var word in line.Words)
+            {
+                if (!_words.TryGetValue(word, out var placed)) continue;
+                if (IsShiftedOffTheBaseline(placed.Owner, decoratingBox)) continue;
+
+                // The word's own style font, not the face DrawWordGlyphs may fall back to per codepoint:
+                // a fallback face is re-seated on this same baseline (see AddInkExclusions, which shifts a
+                // word's draw origin by exactly the difference between the two ascents), so it is the
+                // style font's ascent that layout measured the rectangle's top from.
+                var wordStyle = word.FirstLineStyle ?? placed.Owner;
+                return placed.Rect.Y + wordStyle.ActualFont.Ascent;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Whether <c>vertical-align</c> moves <paramref name="owner"/>'s words off the baseline their
+        /// line shares, looking only at the boxes strictly below <paramref name="decoratingBox"/> - see
+        /// <see cref="AlphabeticBaselineOn"/> for why the decorating box's own value is not one of them.
+        /// </summary>
+        private static bool IsShiftedOffTheBaseline(CssBox owner, CssBox decoratingBox)
+        {
+            for (var box = owner; box is not null && !ReferenceEquals(box, decoratingBox); box = box.ParentBox)
+            {
+                var verticalAlign = box.VerticalAlign.Value;
+
+                // A length (or calc) is a shift by definition; among the keywords only `baseline` leaves
+                // the word where the line's own baseline runs.
+                if (verticalAlign.IsValue || verticalAlign.Keyword != VerticalAlignment.Baseline) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -180,8 +255,6 @@ namespace PeachPDF.Html.Core.Paint
 
         private void CollectWords(BoxFragment fragment)
         {
-            if (_words is null) return;
-
             foreach (var wordFragment in fragment.Words)
             {
                 var word = wordFragment.Word;
