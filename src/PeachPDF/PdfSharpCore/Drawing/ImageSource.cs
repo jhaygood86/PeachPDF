@@ -41,11 +41,12 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
     }
 
     /// <summary>
-    /// Which PDF color space a <see cref="PngPassthroughData"/> embed uses. Unlike
-    /// <see cref="JpegPassthroughColorSpace"/> there is no ICC-profile variant here - PNG pass-through
-    /// never preserves an embedded <c>iCCP</c> profile, since extracting one needs a full pixel decode
-    /// (defeating the point of pass-through for the common opaque case). See
-    /// <c>.claude/accepted-gaps/png-webp-avif-icc-not-preserved.md</c>.
+    /// Which bare Device*/Indexed color space a <see cref="PngPassthroughData"/> embed's pixel data is
+    /// in - separate from whether the embed's actual PDF color space ends up <c>/ICCBased</c> instead
+    /// (see <see cref="PngPassthroughData.IccProfile"/>, issue #1106): the source's own <c>iCCP</c>
+    /// chunk, when PeachImage can parse it into a usable profile of the expected shape, rides straight
+    /// through unchanged - no extra decode needed, since <c>PngPassthrough.TryRead</c> already inflates
+    /// it as part of reading the pass-through data itself.
     /// </summary>
     internal enum PngPassthroughColorSpace
     {
@@ -116,6 +117,16 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
 
         /// <summary>The bit depth of <see cref="AlphaIdatData"/>'s samples (always 8 today). Meaningless when <see cref="AlphaIdatData"/> is null.</summary>
         public byte? AlphaBitDepth { get; init; }
+
+        /// <summary>
+        /// A usable embedded ICC profile's raw bytes (already inflated -
+        /// <see cref="PeachImage.Formats.Png.PngPassthroughInfo.IccProfileData"/>, issue #1106), or
+        /// <see langword="null"/> if the source has none. Written as an <c>/ICCBased</c> color space
+        /// instead of a bare Device*/Indexed one - see <see cref="ImageSource.IImageSource.PngPassthrough"/>'s
+        /// own remarks. Orthogonal to <see cref="AlphaIdatData"/>/<see cref="ColorKeyMask"/>: a source can
+        /// carry an ICC profile independent of whether it also has alpha or a chroma-key mask.
+        /// </summary>
+        public byte[]? IccProfile { get; init; }
     }
 
     /// <summary>
@@ -246,8 +257,11 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
             /// <see cref="PngPassthroughData.AlphaIdatData"/> - embedded as byte-for-byte color data plus a
             /// child <c>/SMask</c>, rather than the full decode+<c>/SMask</c> path. Non-contiguous
             /// transparent palette indices, or an alpha-split PeachImage can't perform (interlaced, or
-            /// 16-bit color type 4/6), still fall back to decode. Null for every non-PNG source and for a
-            /// PNG that isn't eligible either way.
+            /// 16-bit color type 4/6), still fall back to decode. A usable embedded <c>iCCP</c> profile
+            /// (issue #1106) rides along on <see cref="PngPassthroughData.IccProfile"/> independent of
+            /// eligibility for any of the above - a PNG can pass through and preserve its ICC profile
+            /// regardless of which color-space/alpha/mask shape it takes. Null for every non-PNG source
+            /// and for a PNG that isn't pass-through-eligible either way.
             /// </summary>
             PngPassthroughData? PngPassthrough { get; }
 
@@ -281,6 +295,17 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
             /// e.g. interlaced).
             /// </summary>
             bool IsLosslessSourceFormat { get; }
+
+            /// <summary>
+            /// A usable embedded ICC profile's raw bytes for a WebP or AVIF source (issue #1106), or
+            /// <see langword="null"/> if none/not applicable. Rides the raw-bitmap <c>ReadTrueColorMemoryBitmap</c>
+            /// embed path (the only one these two formats ever reach - neither has a pass-through
+            /// mechanism of its own the way PNG/JPEG do), replacing that path's hardcoded bare
+            /// <c>/DeviceRGB</c> with an <c>/ICCBased</c> color space when present. Always null for every
+            /// other format - PNG's own embedded profile rides <see cref="PngPassthroughData.IccProfile"/>
+            /// instead, and JPEG/CMYK's ride <see cref="JpegPassthroughData.IccProfile"/>.
+            /// </summary>
+            byte[]? RgbIccProfile { get; }
         }
 
         /// <remarks>

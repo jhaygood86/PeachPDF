@@ -642,6 +642,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             Assert.Null(img.PngPassthrough);
             Assert.Null(img.GifPassthrough);
             Assert.False(img.IsLosslessSourceFormat);
+            Assert.Null(img.RgbIccProfile);
         }
 
         [Fact]
@@ -1123,6 +1124,97 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             var img = ImageSource.FromBinary("test.jpg", () => bytes);
 
             Assert.Null(img.GifPassthrough);
+        }
+
+        // --- ICC profile preservation (issue #1106) ---
+
+        [Fact]
+        public void PngPassthrough_TruecolorWithIccProfile_ExposesProfile()
+        {
+            var withoutIcc = RasterPngFixture.MakeInterlacedPngBytes(4, 4, 200, 100, 50, interlace: false);
+            var iccBytes = IccProfileFixture.BuildRgbProfile();
+            var bytes = IccProfileFixture.InsertIccProfileIntoPng(withoutIcc, iccBytes);
+
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+            var passthrough = img.PngPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(iccBytes, passthrough.Value.IccProfile);
+        }
+
+        [Fact]
+        public void PngPassthrough_GrayscaleWithMismatchedRgbIccProfile_ProfileIsNull()
+        {
+            // An RGB-shaped profile embedded in a grayscale PNG is malformed/mismatched - rejected the
+            // same way TryGetUsableIccProfileBytes already rejects a mismatched JPEG/CMYK profile, rather
+            // than trusting the file's own (wrong) declaration.
+            using var image = Image.Create(4, 4, PixelFormat.Gray8);
+            image.GetPixelSpan().Fill(128);
+            using var ms = new MemoryStream();
+            image.Save(ms, "png");
+            var iccBytes = IccProfileFixture.BuildRgbProfile();
+            var bytes = IccProfileFixture.InsertIccProfileIntoPng(ms.ToArray(), iccBytes);
+
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+            var passthrough = img.PngPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(PngPassthroughColorSpace.Gray, passthrough.Value.ColorSpace);
+            Assert.Null(passthrough.Value.IccProfile);
+        }
+
+        [Fact]
+        public void PngPassthrough_AlphaSplitWithIccProfile_ExposesProfile()
+        {
+            using var image = MakeSolidImage(4, 4, 200, 100, 50, a: 128);
+            using var ms = new MemoryStream();
+            image.Save(ms, "png", new PngEncoderOptions { ColorMode = PngColorMode.Truecolor });
+            var iccBytes = IccProfileFixture.BuildRgbProfile();
+            var bytes = IccProfileFixture.InsertIccProfileIntoPng(ms.ToArray(), iccBytes);
+
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+            var passthrough = img.PngPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.NotNull(passthrough.Value.AlphaIdatData);
+            Assert.Equal(iccBytes, passthrough.Value.IccProfile);
+        }
+
+        [Fact]
+        public void FromBinary_OpaqueWebpWithIccProfile_ExposesRgbIccProfile()
+        {
+            using var image = MakeSolidImage(4, 4, 200, 100, 50, a: 255);
+            using var ms = new MemoryStream();
+            image.Save(ms, "webp", new WebpEncoderOptions());
+            var iccBytes = IccProfileFixture.BuildRgbProfile();
+            var bytes = IccProfileFixture.InsertIccProfileIntoWebp(ms.ToArray(), iccBytes);
+
+            var img = ImageSource.FromBinary("test.webp", () => bytes);
+
+            Assert.Equal(iccBytes, img.RgbIccProfile);
+        }
+
+        [Fact]
+        public void FromBinary_WebpWithoutIccProfile_RgbIccProfileIsNull()
+        {
+            using var image = MakeSolidImage(4, 4, 200, 100, 50, a: 255);
+            using var ms = new MemoryStream();
+            image.Save(ms, "webp", new WebpEncoderOptions());
+
+            var img = ImageSource.FromBinary("test.webp", () => ms.ToArray());
+
+            Assert.Null(img.RgbIccProfile);
+        }
+
+        [Fact]
+        public void FromBinary_PngSource_RgbIccProfileIsAlwaysNull()
+        {
+            // RgbIccProfile only ever applies to WebP/AVIF (the raw-bitmap embed path) - a PNG's own
+            // profile rides PngPassthroughData.IccProfile instead, regardless of pass-through eligibility.
+            var bytes = MakePngBytes(4, 4, 255, 0, 0);
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+
+            Assert.Null(img.RgbIccProfile);
         }
 
         // A minimal, hand-built 2x2 uncompressed CMYK TIFF (PhotometricInterpretation=5/Separated,

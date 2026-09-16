@@ -249,6 +249,12 @@ namespace PeachPDF.PdfSharpCore.Drawing
         internal bool IsLosslessSourceFormat => _source.IsLosslessSourceFormat;
 
         /// <summary>
+        /// A usable embedded ICC profile's raw bytes for a WebP or AVIF source (issue #1106), or
+        /// <see langword="null"/> - see <see cref="IImageSource.RgbIccProfile"/>.
+        /// </summary>
+        internal byte[]? RgbIccProfile => _source.RgbIccProfile;
+
+        /// <summary>
         /// True when this image's source is single-channel grayscale - see
         /// <see cref="IImageSource.IsGrayscale"/>. Consulted by <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfImage"/>'s
         /// JPEG resize-fallback path to write a matching <c>/ColorSpace</c>.

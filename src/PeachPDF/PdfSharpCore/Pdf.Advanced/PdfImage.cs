@@ -222,8 +222,15 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             // profile to preserve via pass-through - see DecodeRgbOrGrayJpeg) re-encodes here as a
             // genuine 1-component grayscale JPEG, not 3-component YCbCr (PeachImage's JPEG encoder
             // branches on the source's own PixelFormat) - /ColorSpace must match, or a strict reader sees
-            // a /DeviceRGB image backed by a 1-component DCTDecode stream.
-            Elements[Keys.ColorSpace] = new PdfName(_image.IsGrayscale ? "/DeviceGray" : "/DeviceRGB");
+            // a /DeviceRGB image backed by a 1-component DCTDecode stream. _image.RgbIccProfile (issue
+            // #1106), when present, still describes what the re-encoded JPEG's own samples mean: this
+            // path only ever recompresses the already-decoded pixel bytes (optionally resized) - it
+            // never converts them into a different color space - so the source's own profile stays
+            // accurate through the re-encode the same way ReadTrueColorMemoryBitmap's own raw-bitmap
+            // embed already relies on.
+            Elements[Keys.ColorSpace] = _image.IsGrayscale
+                ? BuildDeviceOrIccColorSpace(1, "/DeviceGray", _image.RgbIccProfile)
+                : BuildDeviceOrIccColorSpace(3, "/DeviceRGB", _image.RgbIccProfile);
         }
 
         /// <summary>
@@ -318,11 +325,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// as <c>/FlateDecode</c> with a <c>/DecodeParms</c> describing PNG's own predictor/color
         /// layout - a conformant reader reconstructs the identical pixels with no re-encoding on
         /// PeachPDF's part. The single choke point <see cref="InitializeJpeg"/>'s fast path calls into,
-        /// mirroring <see cref="EmbedJpegPassthrough"/>'s shape closely; unlike that method (and
-        /// <see cref="InitializeCmykRaster"/>), there is no ICC-profile branch here at all - PNG
-        /// pass-through never preserves an embedded <c>iCCP</c> profile (see
-        /// <see cref="PngPassthroughColorSpace"/>'s own remarks). A <c>tRNS</c>-derived
-        /// <see cref="PngPassthroughData.ColorKeyMask"/>, when present, writes as a color-key
+        /// mirroring <see cref="EmbedJpegPassthrough"/>'s shape closely; its color space comes from
+        /// <see cref="BuildPngColorSpace"/>, which (issue #1106) wraps the bare Device*/Indexed space in
+        /// <c>/ICCBased</c> when the source PNG carried an <c>iCCP</c> chunk PeachImage could parse. A
+        /// <c>tRNS</c>-derived <see cref="PngPassthroughData.ColorKeyMask"/>, when present, writes as a color-key
         /// <c>/Mask</c> array - no PDF/A guard needed here, unlike an <c>/SMask</c> alpha channel: color-
         /// key masking predates PDF's transparency model entirely and isn't restricted under any
         /// <c>PdfAConformance</c> level. <see cref="PngPassthroughData.AlphaIdatData"/> (issue #1109),
@@ -393,26 +399,32 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
 
         /// <summary>
-        /// A bare <c>/DeviceGray</c>/<c>/DeviceRGB</c> name for the Gray/Rgb cases, or (for Palette source
-        /// PNGs) an <c>/Indexed</c> array via <see cref="BuildIndexedColorSpace"/>.
+        /// A bare <c>/DeviceGray</c>/<c>/DeviceRGB</c> name for the Gray/Rgb cases (or <c>/ICCBased</c>
+        /// when <see cref="PngPassthroughData.IccProfile"/> is present, issue #1106), or (for Palette
+        /// source PNGs) an <c>/Indexed</c> array via <see cref="BuildIndexedColorSpace"/>.
         /// </summary>
         PdfItem BuildPngColorSpace(PngPassthroughData data) => data.ColorSpace switch
         {
-            PngPassthroughColorSpace.Gray => new PdfName("/DeviceGray"),
-            PngPassthroughColorSpace.Rgb => new PdfName("/DeviceRGB"),
-            PngPassthroughColorSpace.Indexed => BuildIndexedColorSpace(data.PaletteRgb!),
+            PngPassthroughColorSpace.Gray => BuildDeviceOrIccColorSpace(1, "/DeviceGray", data.IccProfile),
+            PngPassthroughColorSpace.Rgb => BuildDeviceOrIccColorSpace(3, "/DeviceRGB", data.IccProfile),
+            PngPassthroughColorSpace.Indexed => BuildIndexedColorSpace(data.PaletteRgb!, data.IccProfile),
             _ => throw new ArgumentOutOfRangeException(nameof(data)),
         };
 
         /// <summary>
-        /// Builds a PDF <c>/Indexed [/DeviceRGB hival lookup]</c> color space array from a PNG's raw
-        /// <c>PLTE</c> bytes (tightly packed RGB triples) - no existing code in this codebase constructs
-        /// one. <paramref name="paletteRgb"/> becomes the lookup table via an indirect stream object, the
-        /// same shape <see cref="BuildDeviceOrIccColorSpace"/> already uses for an ICC profile - simpler
-        /// and less risky than encoding a raw binary blob as a PDF string literal for what is always a
-        /// small (&#8804;768-byte) table.
+        /// Builds a PDF <c>/Indexed [base hival lookup]</c> color space array from a PNG's raw <c>PLTE</c>
+        /// bytes (tightly packed RGB triples) - no existing code in this codebase constructs one.
+        /// <paramref name="paletteRgb"/> becomes the lookup table via an indirect stream object, the same
+        /// shape <see cref="BuildDeviceOrIccColorSpace"/> already uses for an ICC profile - simpler and
+        /// less risky than encoding a raw binary blob as a PDF string literal for what is always a small
+        /// (&#8804;768-byte) table. <paramref name="iccProfile"/> (issue #1106), when present, makes the
+        /// base color space <c>/ICCBased</c> instead of a bare <c>/DeviceRGB</c> - a PNG's <c>iCCP</c>
+        /// describes the color space its palette entries themselves live in, so this is the base an
+        /// <c>/Indexed</c> array's lookup table is interpreted against, not a separate per-pixel concern.
+        /// Also reused by <see cref="EmbedGifPassthrough"/> for GIF's own palette (always
+        /// <paramref name="iccProfile"/>: <see langword="null"/> - GIF has no embedded-profile concept).
         /// </summary>
-        PdfItem BuildIndexedColorSpace(byte[] paletteRgb)
+        PdfItem BuildIndexedColorSpace(byte[] paletteRgb, byte[]? iccProfile = null)
         {
             int hival = paletteRgb.Length / 3 - 1;
 
@@ -421,7 +433,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             lookupStream.Stream = new PdfStream(paletteRgb, lookupStream);
             lookupStream.Elements[PdfStream.Keys.Length] = new PdfInteger(paletteRgb.Length);
 
-            return new PdfArray(_document, new PdfName("/Indexed"), new PdfName("/DeviceRGB"),
+            return new PdfArray(_document, new PdfName("/Indexed"), BuildDeviceOrIccColorSpace(3, "/DeviceRGB", iccProfile),
                 new PdfInteger(hival), lookupStream.Reference);
         }
 
@@ -808,7 +820,11 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 Elements[Keys.Height] = new PdfInteger(height);
                 Elements[Keys.BitsPerComponent] = new PdfInteger(8);
                 // TODO: CMYK
-                Elements[Keys.ColorSpace] = new PdfName("/DeviceRGB");
+                // RgbIccProfile (issue #1106) is only ever non-null for a WebP/AVIF source - every other
+                // format reaching this raw-bitmap path (PNG/BMP/GIF fallback, or a lossless-source-format
+                // WebP/AVIF/TIFF under ImageCompression.Auto/Lossless) leaves it at its null default, so
+                // this stays a bare /DeviceRGB for them exactly as before.
+                Elements[Keys.ColorSpace] = BuildDeviceOrIccColorSpace(3, "/DeviceRGB", _image.RgbIccProfile);
                 if (AllowInterpolate)
                     Elements[Keys.Interpolate] = PdfBoolean.True;
             }

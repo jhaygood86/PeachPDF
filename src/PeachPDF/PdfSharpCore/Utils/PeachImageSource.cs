@@ -76,18 +76,7 @@ namespace PeachPDF.PdfSharpCore.Utils
                     return DecodeGif(name, bytes, quality);
                 }
 
-                // Not disposed here - PeachImageSourceImpl takes ownership of it for its whole lifetime
-                // (same as before this change; see its own Dispose() remarks on why that's a safe no-op
-                // to skip).
-                var decoded = Image.Load(new MemoryStream(bytes), Rgba32DecoderOptions);
-
-                // BMP/GIF are unconditionally lossless (neither format has a lossy encoding mode at
-                // all). WebP/AVIF/TIFF each support both, so they only qualify when this specific
-                // decoded source actually used the lossless one (issue #1107 - PeachImage 0.4.6's
-                // ImageInfo.IsLosslessEncoding, see IsLosslessSourceFormat's own remarks).
-                bool isLosslessSourceFormat = info.FormatName is "bmp" or "gif" ||
-                    (info.FormatName is "webp" or "avif" or "tiff" && info.IsLosslessEncoding);
-                return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat);
+                return DecodeGenericRaster(name, bytes, quality, info);
             }
             catch (ImageFormatException ex)
             {
@@ -99,6 +88,41 @@ namespace PeachPDF.PdfSharpCore.Utils
                 // bytes) to that contract, rather than letting it crash the whole render.
                 throw new InvalidOperationException(ex.Message, ex);
             }
+        }
+
+        /// <summary>
+        /// Routes every raster format with no dedicated pass-through mechanism of its own (BMP, WebP,
+        /// AVIF, TIFF) - decodes to <see cref="PixelFormat.Rgba32"/> like every non-pass-through format
+        /// does, and computes <see cref="ImageSource.IImageSource.IsLosslessSourceFormat"/> (issue #1107:
+        /// unconditional for BMP/GIF, conditional on <see cref="ImageInfo.IsLosslessEncoding"/> for
+        /// WebP/AVIF/TIFF). For WebP/AVIF specifically, also extracts a usable embedded ICC profile
+        /// (issue #1106) via a second, native (no <c>TargetPixelFormat</c>) decode purely to read
+        /// <c>Image.Metadata</c> - forcing <see cref="Rgba32DecoderOptions"/> in one hop, the way every
+        /// other call site here does, would silently lose it for an opaque source (native format Rgb24):
+        /// PeachImage's per-format pixel-format converters build a brand-new <see cref="Image"/> with an
+        /// empty <c>Metadata</c> whenever a conversion actually runs (confirmed against WebP's own
+        /// converter source - the same root cause as the JPEG ICC bug issue #1085 fixed, see
+        /// <see cref="DecodeRgbOrGrayJpeg"/>'s own remarks). Not extended to BMP/GIF/TIFF - none of the
+        /// three carry an embedded ICC profile PeachPDF has a use for here (TIFF's CMYK case already
+        /// routes through <see cref="DecodeCmykRaster"/> instead, and a CMYK TIFF's RGB counterpart isn't
+        /// in scope for issue #1106).
+        /// </summary>
+        private static IImageSource DecodeGenericRaster(string name, byte[] bytes, int quality, ImageInfo info)
+        {
+            byte[]? rgbIccProfile = null;
+            if (info.FormatName is "webp" or "avif")
+            {
+                using var probe = Image.Load(new MemoryStream(bytes));
+                rgbIccProfile = TryGetUsableIccProfileBytes(probe, IccColorSpace.Rgb, expectedChannelCount: 3);
+            }
+
+            // Not disposed here - PeachImageSourceImpl takes ownership of it for its whole lifetime (same
+            // as before this change; see its own Dispose() remarks on why that's a safe no-op to skip).
+            var decoded = Image.Load(new MemoryStream(bytes), Rgba32DecoderOptions);
+
+            bool isLosslessSourceFormat = info.FormatName is "bmp" or "gif" ||
+                (info.FormatName is "webp" or "avif" or "tiff" && info.IsLosslessEncoding);
+            return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat, rgbIccProfile);
         }
 
         /// <summary>
@@ -244,6 +268,7 @@ namespace PeachPDF.PdfSharpCore.Utils
                         BitDepth = pngInfo.BitDepth,
                         PaletteRgb = pngInfo.PaletteData,
                         ColorKeyMask = colorKeyMask,
+                        IccProfile = GetUsablePngIccProfile(colorSpace, pngInfo.IccProfileData),
                     };
 
                     return new PeachPngPassthroughImageSourceImpl(name, bytes, quality, pngInfo.Width, pngInfo.Height, passthrough);
@@ -256,8 +281,15 @@ namespace PeachPDF.PdfSharpCore.Utils
                 }
             }
 
+            // An interlaced or 16-bit-per-channel-alpha PNG reaches here even when PngPassthrough.TryRead
+            // succeeded (it just failed both eligibility checks above) - pngInfo.IccProfileData is
+            // already the inflated iCCP bytes in that case, so this still preserves the profile with no
+            // extra decode, the same way the pass-through/alpha-split branches above do. When TryRead
+            // itself failed (a malformed file), pngInfo is the default struct and IccProfileData is null,
+            // which TryGetUsablePngIccProfileBytes already treats as "no profile" up front.
             var decoded = Image.Load(new MemoryStream(bytes), Rgba32DecoderOptions);
-            return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat: true);
+            var rgbIccProfile = TryGetUsablePngIccProfileBytes(pngInfo.IccProfileData, IccColorSpace.Rgb, expectedChannelCount: 3);
+            return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat: true, rgbIccProfile);
         }
 
         /// <summary>
@@ -268,19 +300,22 @@ namespace PeachPDF.PdfSharpCore.Utils
         /// null for the palette case (the original indexed <c>IdatData</c>/<c>PaletteData</c> already need
         /// no change - only the alpha plane is new). <see cref="PngPassthroughData.ColorKeyMask"/> is
         /// always null here - a source only reaches alpha-split because it has real alpha, which
-        /// <see cref="IsPassthroughEligible"/> already ruled out being chroma-key-only.
+        /// <see cref="IsPassthroughEligible"/> already ruled out being chroma-key-only. An embedded ICC
+        /// profile (issue #1106) rides along either way, same as the opaque/chroma-key branch.
         /// </summary>
         private static PngPassthroughData BuildAlphaSplitPassthroughData(in PngPassthroughInfo pngInfo, in PngAlphaSplitInfo alphaSplit)
         {
             if (alphaSplit.ColorData is { } colorData)
             {
+                var colorSpace = alphaSplit.ColorIsRgb ? PngPassthroughColorSpace.Rgb : PngPassthroughColorSpace.Gray;
                 return new PngPassthroughData
                 {
                     IdatData = colorData,
-                    ColorSpace = alphaSplit.ColorIsRgb ? PngPassthroughColorSpace.Rgb : PngPassthroughColorSpace.Gray,
+                    ColorSpace = colorSpace,
                     BitDepth = alphaSplit.ColorBitDepth,
                     AlphaIdatData = alphaSplit.AlphaData,
                     AlphaBitDepth = alphaSplit.AlphaBitDepth,
+                    IccProfile = GetUsablePngIccProfile(colorSpace, pngInfo.IccProfileData),
                 };
             }
 
@@ -292,8 +327,21 @@ namespace PeachPDF.PdfSharpCore.Utils
                 PaletteRgb = pngInfo.PaletteData,
                 AlphaIdatData = alphaSplit.AlphaData,
                 AlphaBitDepth = alphaSplit.AlphaBitDepth,
+                IccProfile = GetUsablePngIccProfile(PngPassthroughColorSpace.Indexed, pngInfo.IccProfileData),
             };
         }
+
+        /// <summary>
+        /// Validates <paramref name="rawIccProfile"/> against the ICC shape <paramref name="colorSpace"/>
+        /// implies (Gray -&gt; 1-channel Gray, Rgb/Indexed -&gt; 3-channel Rgb - an <c>/Indexed</c> PNG's
+        /// <c>iCCP</c> describes the color space its palette entries live in) via
+        /// <see cref="TryGetUsablePngIccProfileBytes"/>, shared by both <see cref="DecodePng"/>'s
+        /// opaque/chroma-key branch and <see cref="BuildAlphaSplitPassthroughData"/>.
+        /// </summary>
+        private static byte[]? GetUsablePngIccProfile(PngPassthroughColorSpace colorSpace, byte[]? rawIccProfile) =>
+            colorSpace == PngPassthroughColorSpace.Gray
+                ? TryGetUsablePngIccProfileBytes(rawIccProfile, IccColorSpace.Gray, expectedChannelCount: 1)
+                : TryGetUsablePngIccProfileBytes(rawIccProfile, IccColorSpace.Rgb, expectedChannelCount: 3);
 
         /// <summary>
         /// Not interlaced (PDF's <c>/DecodeParms</c> predictor has no Adam7 concept - Adam7 data can't be
@@ -499,6 +547,26 @@ namespace PeachPDF.PdfSharpCore.Utils
         }
 
         /// <summary>
+        /// Same idea as <see cref="TryGetUsableIccProfileBytes"/>, for a PNG pass-through source (issue
+        /// #1106): PNG pass-through never decodes to an <see cref="Image"/> at all (that's the point of
+        /// pass-through), so there's no <c>Metadata.GetIccColorProfile()</c> to call - this validates
+        /// <paramref name="rawIccProfile"/> (<see cref="PeachImage.Formats.Png.PngPassthroughInfo.IccProfileData"/>,
+        /// already inflated) directly via <see cref="IccColorProfile.TryCreate"/> instead, returning it
+        /// unchanged only when its declared shape actually matches the PNG's own color type - a
+        /// malformed/mismatched <c>iCCP</c> chunk (e.g. an RGB profile in a grayscale PNG) is defended
+        /// against the same way the JPEG/CMYK path already does.
+        /// </summary>
+        private static byte[]? TryGetUsablePngIccProfileBytes(byte[]? rawIccProfile, IccColorSpace expectedColorSpace, int expectedChannelCount)
+        {
+            if (rawIccProfile is null || !IccColorProfile.TryCreate(rawIccProfile, out var profile) || profile is null)
+                return null;
+
+            return profile.DataColorSpace != expectedColorSpace || profile.ChannelCount != expectedChannelCount
+                ? null
+                : rawIccProfile;
+        }
+
+        /// <summary>
         /// The raw bytes behind whichever <see cref="MetadataProfileKind.Icc"/> entry
         /// <see cref="ImageMetadata.GetIccColorProfile"/> just validated - that call only checks the
         /// profile parses, not which raw entry it came from, so this re-finds it by kind rather than
@@ -545,6 +613,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             public PngPassthroughData? PngPassthrough => null;
             public GifPassthroughData? GifPassthrough => null;
             public bool IsLosslessSourceFormat => false;
+            public byte[]? RgbIccProfile => null;
 
             public PeachCmykImageSourceImpl(string name, int width, int height, JpegPassthroughData passthrough)
             {
@@ -600,6 +669,13 @@ namespace PeachPDF.PdfSharpCore.Utils
             public GifPassthroughData? GifPassthrough => null;
             public bool IsLosslessSourceFormat => true;
 
+            // Read by InitializeJpeg's ImageCompression.Lossy fallback (issue #1106): when Lossy forces
+            // this source through DecodedFallback's JPEG re-encode instead of EmbedPngPassthrough, the
+            // re-encoded stream's samples are still the same ones the source's own iCCP profile
+            // describes (a JPEG re-encode recompresses pixel values, it doesn't reinterpret them), so
+            // the profile the pass-through path already parsed carries over rather than being dropped.
+            public byte[]? RgbIccProfile => _passthrough.IccProfile;
+
             public PeachPngPassthroughImageSourceImpl(string name, byte[] bytes, int quality, int width, int height, PngPassthroughData passthrough)
             {
                 Name = name;
@@ -650,6 +726,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             public PngPassthroughData? PngPassthrough => null;
             public GifPassthroughData? GifPassthrough => _passthrough;
             public bool IsLosslessSourceFormat => true;
+            public byte[]? RgbIccProfile => null;
 
             public PeachGifPassthroughImageSourceImpl(string name, byte[] bytes, int quality, int width, int height, GifPassthroughData passthrough)
             {
@@ -710,7 +787,12 @@ namespace PeachPDF.PdfSharpCore.Utils
             // its false default, since JPEG always has a lossy encoding mode.
             public bool IsLosslessSourceFormat { get; }
 
-            public PeachImageSourceImpl(string name, Image rgba, int quality, bool transparent, JpegPassthroughData? jpegPassthrough = null, bool isLosslessSourceFormat = false)
+            // Set only by DecodeGenericRaster for a WebP/AVIF source with a usable embedded ICC profile
+            // (issue #1106) - every other caller leaves this at its null default. See RgbIccProfile's own
+            // interface-level remarks for why this is the only format pair that ever populates it.
+            public byte[]? RgbIccProfile { get; }
+
+            public PeachImageSourceImpl(string name, Image rgba, int quality, bool transparent, JpegPassthroughData? jpegPassthrough = null, bool isLosslessSourceFormat = false, byte[]? rgbIccProfile = null)
             {
                 Name = name;
                 _rgba = rgba;
@@ -718,6 +800,7 @@ namespace PeachPDF.PdfSharpCore.Utils
                 Transparent = transparent;
                 _jpegPassthrough = jpegPassthrough;
                 IsLosslessSourceFormat = isLosslessSourceFormat;
+                RgbIccProfile = rgbIccProfile;
             }
 
             public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null)

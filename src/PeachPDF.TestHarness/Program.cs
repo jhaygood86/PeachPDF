@@ -10985,6 +10985,165 @@ await SaveShowcaseAsync("png_alpha_split", "Images & Replaced Content", "PNG Alp
     "out of the source's own interleaved IDAT data, instead of a full pixel decode and a raw alpha mask.",
     pngAlphaSplitHtml, pdfConfig);
 
+// ── PNG/WebP/AVIF ICC profile preservation (issue #1106) ───────────────────────────────
+// Minimal spec-valid ICC RGB-matrix-TRC profile (ICC.1:2010 §6.3.1.2), just large enough for
+// PeachImage's IccColorProfile.TryCreate to parse it successfully - mirrors PeachPDF.Tests'
+// IccProfileFixture.BuildRgbProfile (not referenced directly; TestHarness doesn't depend on the
+// test project), condensed since only "the profile rides the embed" needs demonstrating here, not
+// colorimetric accuracy.
+static byte[] BuildShowcaseRgbIccProfile()
+{
+    static byte[] Curve()
+    {
+        var d = new byte[14];
+        "curv"u8.CopyTo(d);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(d.AsSpan(8), 1);
+        d[12] = 1; d[13] = 0; // gamma = 1.0 (u8Fixed8)
+        return d;
+    }
+
+    static byte[] Xyz(double x, double y, double z)
+    {
+        var d = new byte[20];
+        "XYZ "u8.CopyTo(d);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(d.AsSpan(8), (int)Math.Round(x * 65536.0));
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(d.AsSpan(12), (int)Math.Round(y * 65536.0));
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(d.AsSpan(16), (int)Math.Round(z * 65536.0));
+        return d;
+    }
+
+    var tags = new (string Signature, byte[] Data)[]
+    {
+        ("rTRC", Curve()), ("gTRC", Curve()), ("bTRC", Curve()),
+        ("rXYZ", Xyz(0.4360747, 0.2225045, 0.0139322)),
+        ("gXYZ", Xyz(0.3850649, 0.7168786, 0.0971045)),
+        ("bXYZ", Xyz(0.1430804, 0.0606169, 0.7141733)),
+    };
+
+    const int headerSize = 128;
+    int tagTableSize = 4 + tags.Length * 12;
+    int tagDataStart = headerSize + tagTableSize;
+    var offsets = new int[tags.Length];
+    int cursor = tagDataStart;
+    for (var i = 0; i < tags.Length; i++)
+    {
+        offsets[i] = cursor;
+        cursor += tags[i].Data.Length;
+    }
+
+    var buffer = new byte[cursor];
+    System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(buffer.AsSpan(0), (uint)buffer.Length);
+    "mntr"u8.CopyTo(buffer.AsSpan(12));
+    "RGB "u8.CopyTo(buffer.AsSpan(16));
+    "XYZ "u8.CopyTo(buffer.AsSpan(20));
+    "acsp"u8.CopyTo(buffer.AsSpan(36));
+
+    System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(buffer.AsSpan(headerSize), (uint)tags.Length);
+    for (var i = 0; i < tags.Length; i++)
+    {
+        int entryOffset = headerSize + 4 + i * 12;
+        Encoding.ASCII.GetBytes(tags[i].Signature).CopyTo(buffer.AsSpan(entryOffset));
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(buffer.AsSpan(entryOffset + 4), (uint)offsets[i]);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(buffer.AsSpan(entryOffset + 8), (uint)tags[i].Data.Length);
+        tags[i].Data.CopyTo(buffer.AsSpan(offsets[i]));
+    }
+
+    return buffer;
+}
+
+static byte[] InsertShowcaseIccProfileIntoPng(byte[] pngBytes, byte[] iccProfile)
+{
+    uint ihdrLength = (uint)((pngBytes[8] << 24) | (pngBytes[9] << 16) | (pngBytes[10] << 8) | pngBytes[11]);
+    int ihdrChunkEnd = 8 + 4 + 4 + (int)ihdrLength + 4;
+
+    using var compressed = new MemoryStream();
+    using (var zlib = new System.IO.Compression.ZLibStream(compressed, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
+    {
+        zlib.Write(iccProfile);
+    }
+
+    var chunkData = new byte[4 + 1 + compressed.Length]; // "icc\0" (name + terminator) + compression-method + data
+    "icc\0"u8.CopyTo(chunkData); // chunkData[4] (compression method: zlib/deflate) stays 0
+    compressed.ToArray().CopyTo(chunkData.AsSpan(5));
+
+    using var result = new MemoryStream();
+    result.Write(pngBytes, 0, ihdrChunkEnd);
+
+    Span<byte> lengthBytes = stackalloc byte[4];
+    System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(lengthBytes, (uint)chunkData.Length);
+    result.Write(lengthBytes);
+    var typeBytes = "iCCP"u8.ToArray();
+    result.Write(typeBytes);
+    result.Write(chunkData);
+    var crcInput = new byte[typeBytes.Length + chunkData.Length];
+    typeBytes.CopyTo(crcInput, 0);
+    chunkData.CopyTo(crcInput, typeBytes.Length);
+    Span<byte> crcBytes = stackalloc byte[4];
+    System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(crcBytes, ShowcaseCrc32(crcInput));
+    result.Write(crcBytes);
+
+    result.Write(pngBytes, ihdrChunkEnd, pngBytes.Length - ihdrChunkEnd);
+    return result.ToArray();
+}
+
+static uint ShowcaseCrc32(byte[] data)
+{
+    uint crc = 0xFFFFFFFF;
+    foreach (var b in data)
+    {
+        crc ^= b;
+        for (var k = 0; k < 8; k++)
+        {
+            crc = (crc & 1) != 0 ? 0xEDB88320 ^ (crc >> 1) : crc >> 1;
+        }
+    }
+    return crc ^ 0xFFFFFFFF;
+}
+
+static byte[] BuildIccTaggedGradientPngBytes(int size)
+{
+    using var image = PeachImage.Image.Create(size, size, PeachImage.PixelFormat.Rgb24);
+    var pixels = image.GetPixelSpan();
+    for (var y = 0; y < size; y++)
+    {
+        for (var x = 0; x < size; x++)
+        {
+            int i = (y * size + x) * 3;
+            pixels[i] = (byte)(x * 255 / (size - 1));
+            pixels[i + 1] = (byte)(y * 255 / (size - 1));
+            pixels[i + 2] = 0x99;
+        }
+    }
+
+    using var ms = new MemoryStream();
+    image.Save(ms, "png", new PeachImage.Formats.Png.PngEncoderOptions { ColorMode = PeachImage.Formats.Png.PngColorMode.Truecolor });
+    return InsertShowcaseIccProfileIntoPng(ms.ToArray(), BuildShowcaseRgbIccProfile());
+}
+
+var iccPngBase64 = Convert.ToBase64String(BuildIccTaggedGradientPngBytes(160));
+
+var iccPreservationHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 16px; max-width: 640px; }" +
+    "img { display: block; border: 1px solid #cbd5e1; }" +
+    "</style></head><body>" +
+    "<h2>ICC color profile preservation</h2>" +
+    "<p class=\"note\">A PNG carrying an embedded iCCP color profile now embeds that profile as an " +
+    "/ICCBased color space alongside its pass-through pixel data (instead of a bare /DeviceRGB that " +
+    "silently drops the source's color intent) - the same treatment WebP and AVIF sources get via a " +
+    "second native decode used only to read their embedded profile.</p>" +
+    $"<img src=\"data:image/png;base64,{iccPngBase64}\" width=\"160\" height=\"160\">" +
+    "</body></html>";
+
+await SaveShowcaseAsync("icc_profile_preservation", "Images & Replaced Content", "ICC Color Profile Preservation",
+    "A PNG, WebP, or AVIF source's embedded ICC color profile is now extracted and embedded as an " +
+    "/ICCBased color space (/N + /Alternate + the raw profile bytes) instead of being silently dropped " +
+    "in favor of a bare /DeviceRGB or /DeviceGray - preserving the source's actual color intent for " +
+    "wide-gamut or non-sRGB-tagged images.",
+    iccPreservationHtml, pdfConfig);
+
 const string declarativeApiSource =
     """"
     var generator = new PdfGenerator();
