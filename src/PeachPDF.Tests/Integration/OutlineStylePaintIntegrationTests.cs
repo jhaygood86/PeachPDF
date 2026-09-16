@@ -5,6 +5,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.Tests.TestSupport;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -250,12 +251,14 @@ namespace PeachPDF.Tests.Integration
         [Theory]
         [InlineData("dotted")]
         [InlineData("dashed")]
-        public async Task OutlineStyleDottedOrDashed_LinesReachTheRingsOuterCorner_NoGap(string style)
+        public async Task OutlineStyleDottedOrDashed_LinesSpanTheRingsOuterEdge(string style)
         {
-            // Unlike border (which bands inward, so a line left at the bare box edges still meets its
-            // neighbor within the box), outline bands outward - a line whose span stops at the box's own
-            // edge leaves the outward-facing corner square entirely uncovered. Each side's line must
-            // extend by its own mid-band distance so it actually reaches its neighbor's endpoint.
+            // Chrome paints an outline by handing its border painter an outer rectangle inflated by
+            // outline-offset + outline-width, so each side's line spans that outer rectangle's full
+            // side - corner squares included - exactly as a border's own dotted edge spans
+            // rect.Left..rect.Right. That span is what the dash pattern is fitted to, so a line stopped
+            // at the mid-band distance instead would be fitted to an edge one whole outline-width
+            // short: wrong gap sizes, and the first and last dot pulled half a width in from the corner.
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 $"<div id='b' style='width:20pt; height:20pt; outline: 8pt {style} rgb(3,3,3); outline-offset: 2pt'>x</div>"));
             var div = LayoutHarness.FindById(root, "b")!;
@@ -267,22 +270,61 @@ namespace PeachPDF.Tests.Integration
             const double offset = 2;
             const double width = 8;
             var mid = offset + width / 2;
+            var reach = offset + width;
 
             var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
             var top = lines.Single(l => l.Y1 == l.Y2 && l.Y1 < rect.Top);
             var left = lines.Single(l => l.X1 == l.X2 && l.X1 < rect.Left);
 
             // A dotted path runs dot-centre to dot-centre, so its endpoint sits half a dot inside the
-            // corner - and the round cap then paints that half back out to it. What has to reach the
-            // corner is the ink, not the path, so compare the inked reach for both styles.
+            // outer corner - and the round cap then paints that half back out to it. What has to reach
+            // the corner is the ink, not the path, so compare the inked reach for both styles.
             var inset = style == "dotted" ? width / 2 : 0;
 
-            // Top's leading endpoint and Left's leading endpoint must resolve to the exact same corner
-            // point - (rect.Left - mid, rect.Top - mid) - for the two lines to meet with no hole.
-            Assert.Equal(rect.Left - mid, top.X1 - inset, 1);
+            // Each line sits on its own band's centreline, but starts at the outer rectangle's corner,
+            // so the two overlap across the whole corner square and leave no hole.
             Assert.Equal(rect.Top - mid, top.Y1, 1);
-            Assert.Equal(top.X1 - inset, left.X1, 1);
-            Assert.Equal(top.Y1, left.Y1 - inset, 1);
+            Assert.Equal(rect.Left - reach, top.X1 - inset, 1);
+            Assert.Equal(rect.Left - mid, left.X1, 1);
+            Assert.Equal(rect.Top - reach, left.Y1 - inset, 1);
+        }
+
+        [Theory]
+        [InlineData("dotted")]
+        [InlineData("dashed")]
+        public async Task OutlineStyleDottedOrDashed_MatchesTheEquivalentBorder(string style)
+        {
+            // An outline-offset of -outline-width lands the ring exactly where an equal-width border
+            // would sit, so the two must produce identical strokes: same centrelines, same span, and
+            // therefore the same fitted dash pattern. Border's own dotted/dashed rendering was measured
+            // against Chrome (PR #1126), which makes it the reference the outline path has to agree
+            // with - and the fitted pattern only agrees if both measure the same edge length.
+            const string box = "width:120pt; height:60pt; margin:0";
+
+            var (borderRoot, borderContainer) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='b' style='{box}; border: 6pt {style} rgb(3,3,3)'>x</div>"));
+            var borderG = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(borderContainer, LayoutHarness.FindById(borderRoot, "b")!, borderG);
+
+            var (outlineRoot, outlineContainer) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='b' style='{box}; border: 6pt solid transparent; " +
+                $"outline: 6pt {style} rgb(3,3,3); outline-offset: -6pt'>x</div>"));
+            var outlineG = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(outlineContainer, LayoutHarness.FindById(outlineRoot, "b")!, outlineG);
+
+            var borderLines = borderG.Log.OfType<TestRecordingGraphics.DrawLineCall>()
+                .Where(l => l.Color == RColor.FromArgb(3, 3, 3)).ToList();
+            var outlineLines = outlineG.Log.OfType<TestRecordingGraphics.DrawLineCall>()
+                .Where(l => l.Color == RColor.FromArgb(3, 3, 3)).ToList();
+
+            Assert.Equal(4, borderLines.Count);
+            Assert.Equal(4, outlineLines.Count);
+
+            static (double, double, double, double, double, double) Key(TestRecordingGraphics.DrawLineCall l) =>
+                (Math.Round(l.X1, 3), Math.Round(l.Y1, 3), Math.Round(l.X2, 3), Math.Round(l.Y2, 3),
+                 Math.Round(l.DashPattern![0], 3), Math.Round(l.DashPattern[1], 3));
+
+            Assert.Equal(borderLines.Select(Key).OrderBy(k => k), outlineLines.Select(Key).OrderBy(k => k));
         }
 
         [Fact]

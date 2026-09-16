@@ -314,7 +314,10 @@ border and each half of a `groove`/`ridge`, so adjacent edges of differing width
 corner's diagonal — and the mitre follows the line from the border box's outer corner to its inner
 corner, so it stays correct when the two sides differ in width and the cut is not 45°. This is what
 makes the classic zero-size "border triangle" work. `outline-style` uses all the same rendering,
-banded outward from the border edge.
+banded outward from the border edge — an outline is drawn exactly as a border of the same width would
+be on the rectangle that `outline-offset` + `outline-width` inflates the border box to, so a
+`dotted`/`dashed` outline fits its pattern to that outer rectangle's sides and a dot lands in each of
+its corners.
 
 With `border-radius`, a border whose four sides share a style, color and width follows the curve as
 one continuous outline, which keeps the corners seamless and lets a `dotted`/`dashed` pattern be
