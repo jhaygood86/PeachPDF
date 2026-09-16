@@ -870,6 +870,76 @@ namespace PeachPDF.Html.Core.Dom
 
         #endregion
 
+        #region Text alignment
+
+        private HorizontalAlignment? _actualTextAlignAll;
+
+        /// <summary>
+        /// This box's own <see cref="TextArea.TextAlignAll"/> (css-text-3 §6.2), with <c>match-parent</c>
+        /// fully resolved: an inherited <c>start</c>/<c>end</c> that <c>match-parent</c> asks to be
+        /// interpreted against the <i>parent's</i> own <c>direction</c> is resolved right here, against
+        /// <see cref="CssBox.ParentBox"/>'s direction - not <see cref="Owner"/>'s own, and not deferred to
+        /// whichever box's <c>CssLayoutEngine.ApplyHorizontalAlignment</c> eventually reads this value.
+        /// <c>Left</c>/<c>Right</c>/<c>Center</c>/<c>Justify</c> pass through unchanged; a plain
+        /// (non-<c>match-parent</c>) <c>Start</c>/<c>End</c> stays symbolic - <c>CssLayoutEngine</c> still
+        /// resolves those against <see cref="Owner"/>'s own direction, unchanged. The root element's
+        /// <c>match-parent</c> computes to <c>Start</c> (there being no parent to consult), per spec.
+        /// Recursive like <see cref="ActualNumericWeight"/>'s own parent walk - cached with no
+        /// invalidation-on-every-ancestor-mutation for the same reason that one needs none: both are only
+        /// ever read after the cascade has finished assigning every box's own properties.
+        /// </summary>
+        public HorizontalAlignment ActualTextAlignAll => _actualTextAlignAll ??= ComputeTextAlignAll();
+
+        private HorizontalAlignment ComputeTextAlignAll()
+        {
+            var value = Style.Text.TextAlignAll.Value;
+            if (value != HorizontalAlignment.MatchParent) return value;
+
+            var parent = Owner.ParentBox;
+            if (parent is null) return HorizontalAlignment.Start;
+
+            return parent.ActualTextAlignAll switch
+            {
+                HorizontalAlignment.Start => parent.Direction.Value == DirectionMode.Rtl ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+                HorizontalAlignment.End => parent.Direction.Value == DirectionMode.Rtl ? HorizontalAlignment.Left : HorizontalAlignment.Right,
+                var other => other
+            };
+        }
+
+        internal void InvalidateTextAlignAll() => _actualTextAlignAll = null;
+
+        private TextAlignLast? _actualTextAlignLast;
+
+        /// <summary>
+        /// This box's own <see cref="TextArea.TextAlignLast"/> (css-text-3 §6.3), with <c>match-parent</c>
+        /// fully resolved the same way as <see cref="ActualTextAlignAll"/> - see its own doc comment for
+        /// the parent-direction reasoning. A parent whose own resolved value is <c>Auto</c> (it never
+        /// declared its own <c>text-align-last</c>) passes <c>Auto</c> straight through the <c>other</c>
+        /// arm below, so <c>match-parent</c> degrades to <c>auto</c>'s existing "defer to
+        /// <c>text-align-all</c>" behavior with no special-casing needed.
+        /// </summary>
+        public TextAlignLast ActualTextAlignLast => _actualTextAlignLast ??= ComputeTextAlignLast();
+
+        private TextAlignLast ComputeTextAlignLast()
+        {
+            var value = Style.Text.TextAlignLast.Value;
+            if (value != TextAlignLast.MatchParent) return value;
+
+            var parent = Owner.ParentBox;
+            if (parent is null) return TextAlignLast.Start;
+
+            return parent.ActualTextAlignLast switch
+            {
+                TextAlignLast.Start => parent.Direction.Value == DirectionMode.Rtl ? TextAlignLast.Right : TextAlignLast.Left,
+                TextAlignLast.End => parent.Direction.Value == DirectionMode.Rtl ? TextAlignLast.Left : TextAlignLast.Right,
+                var other => other
+            };
+        }
+
+        internal void InvalidateTextAlignLast() => _actualTextAlignLast = null;
+
+        #endregion
+
         #region Font palette
 
         private RFontPalette? _actualFontPalette;

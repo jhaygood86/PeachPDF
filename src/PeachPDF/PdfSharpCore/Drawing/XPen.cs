@@ -259,11 +259,22 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 //if (length == 0)
                 //  throw new ArgumentException("Dash pattern array must not be empty.");
 
+                // PDF 32000-1 §8.4.3.6: dash array elements "shall be nonnegative and shall not all be
+                // zero". A single zero-length dash IS legal, and under a round line cap it is exactly
+                // how a dotted line is expressed - the renderer paints a filled circle of the pen's
+                // width at each one (verified identical in PDFium and MuPDF). Rejecting it, as this
+                // used to, made a true round dot inexpressible; the spec's real constraints are below.
+                bool anyPositive = false;
                 for (int idx = 0; idx < length; idx++)
                 {
-                    if (value[idx] <= 0)
-                        throw new ArgumentException("Dash pattern value must greater than zero.");
+                    if (value[idx] < 0)
+                        throw new ArgumentException("Dash pattern value must not be negative.");
+                    if (value[idx] > 0)
+                        anyPositive = true;
                 }
+
+                if (length > 0 && !anyPositive)
+                    throw new ArgumentException("Dash pattern values must not all be zero.");
 
                 _dirty = true;
                 _dashStyle = XDashStyle.Custom;

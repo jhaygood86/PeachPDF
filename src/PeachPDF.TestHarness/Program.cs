@@ -253,6 +253,62 @@ static string BorderStyleSwatch(string desc, string style) =>
     $"<div class=\"css\">border-style: {style}</div>" +
     "</td>";
 
+static string BorderColorSwatch(string desc, string style, string color) =>
+    "<td>" +
+    $"<div class=\"bsbox\" style=\"border: 16px {style} {color}\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">border: 16px {style} {color}</div>" +
+    "</td>";
+
+static string BorderFitSwatch(string desc, string style, string width) =>
+    "<td>" +
+    $"<div class=\"bsbox\" style=\"border: 10px {style} #4a90d9; width: {width}; box-sizing: border-box\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">border: 10px {style}; width: {width}</div>" +
+    "</td>";
+
+/// <summary>One cell stacking the same style at each of <paramref name="widths"/>, so the styles can be
+/// read down a column and the widths across a row.</summary>
+static string WidthSwatch(string style, int[] widths) =>
+    "<td>" +
+    string.Join("", widths.Select(w =>
+        $"<div class=\"wbox\" style=\"border: {w}px {style} #4a90d9\"></div>" +
+        $"<div class=\"wlabel\">{w}px</div>")) +
+    $"<div class=\"desc\">{style}</div>" +
+    "</td>";
+
+static string SideSwatch(string desc, string inlineCss) =>
+    "<td>" +
+    $"<div class=\"bsbox\" style=\"{inlineCss}\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">{inlineCss}</div>" +
+    "</td>";
+
+static string RoundedPatternPhaseComparisonSwatch() =>
+    "<td>" +
+    "<div class=\"phasepair\">" +
+    "<div class=\"phasebox\" style=\"width:240px\"></div>" +
+    "<div class=\"phasebox second\" style=\"width:245px\"></div>" +
+    "</div>" +
+    "<div class=\"desc\">one dot / two dots</div>" +
+    "<div class=\"css\">same rounded border at width: 240px / 245px</div>" +
+    "</td>";
+
+/// <summary>A zero-content box whose four borders meet at its center - the classic "border triangle".</summary>
+static string TriangleSwatch(string desc, string colors) =>
+    "<td>" +
+    $"<div style=\"width: 0; height: 0; border: 34px solid; border-color: {colors}; margin: 0 auto 3px\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">width/height: 0; border-color: {colors}</div>" +
+    "</td>";
+
+static string RadiusBorderSwatch(string desc, string style, string width, string radius) =>
+    "<td>" +
+    $"<div class=\"bsbox\" style=\"border: {width} {style} #4a90d9; border-radius: {radius}\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">border: {width} {style}; border-radius: {radius}</div>" +
+    "</td>";
+
 static string OriginSwatch(string desc, string inlineCss, string cssLabel = "") =>
     "<td>" +
     $"<div class=\"obox\" style=\"{inlineCss}\"></div>" +
@@ -534,9 +590,9 @@ await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius
 // Renders the exact same document as the border_radius showcase above, but at a non-default
 // PixelsPerInch (issue #812, reopened) - every rounded border stroke, background fill, and
 // overflow-clip curve above is built from a PdfSharpAdapter.PixelsPerPoint-inflated layout-space
-// rect/radii; RenderUtils.GetRoundRect and BordersDrawHandler.GetRoundedBorderPath must divide by
-// PixelsPerPoint before building their paths, or the rounded geometry above renders too large and
-// mis-positioned relative to everything else on the page. ShrinkToFit is deliberately left off here
+// rect/radii; RenderUtils.GetRoundRect and BordersDrawHandler's rounded contour builders must divide
+// by PixelsPerPoint before building their paths, or the rounded geometry above renders too large
+// and mis-positioned relative to everything else on the page. ShrinkToFit is deliberately left off here
 // (unlike pdfConfig above) since it recomputes its own effective PixelsPerPoint from content
 // measurement and would make the two renders an apples-to-oranges comparison rather than isolating
 // the PixelsPerInch=96-vs-72 difference this showcase exists to demonstrate.
@@ -5726,6 +5782,11 @@ const string BorderStyleCss = """
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .bsbox { height: 48px; background: #eee; margin-bottom: 3px }
+    .phasepair { position: relative; height: 38px; margin-bottom: 3px }
+    .phasebox { position: absolute; left: 0; top: 0; height: 48px; border: 14px #d94a4a; border-style: double dotted inset outset; border-radius: 28px; background: #eee; transform: scale(.5); transform-origin: top left }
+    .phasebox.second { left: 140px }
+    .wbox { height: 16px; background: #eee; margin-bottom: 1px }
+    .wlabel { font-size: 6pt; color: #888; margin-bottom: 4px }
     .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
     .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
     </style>
@@ -5751,6 +5812,113 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
     Row(
         BorderStyleSwatch("inset", "inset"),
         BorderStyleSwatch("outset", "outset")
+    ) +
+
+    // The dot/dash period is fitted to each edge so the run starts and ends flush with the corner
+    // rather than being cut off part-way through - which means the spacing shifts as the box changes
+    // size, and an edge's horizontal and vertical runs can land on slightly different gaps. Showing
+    // the same style at several widths is the only way to see that actually happening.
+    "<h2>Dot/dash spacing adapts to each edge</h2>" +
+    Row(
+        BorderFitSwatch("dotted, 100%", "dotted", "100%"),
+        BorderFitSwatch("dotted, 85%", "dotted", "85%"),
+        BorderFitSwatch("dotted, 70%", "dotted", "70%"),
+        BorderFitSwatch("dotted, 55%", "dotted", "55%")
+    ) +
+    Row(
+        BorderFitSwatch("dashed, 100%", "dashed", "100%"),
+        BorderFitSwatch("dashed, 85%", "dashed", "85%"),
+        BorderFitSwatch("dashed, 70%", "dashed", "70%"),
+        BorderFitSwatch("dashed, 55%", "dashed", "55%")
+    ) +
+
+    // A beveled style shades one pair of sides darker and the other lighter, so the same keyword reads
+    // differently per edge - and a color too dark to darken visibly (black, the initial border-color
+    // via currentColor) lightens both faces instead rather than disappearing into itself.
+    "<h2>Bevel shading, including colors too dark to darken</h2>" +
+    Row(
+        BorderColorSwatch("inset, black", "inset", "#000"),
+        BorderColorSwatch("outset, black", "outset", "#000"),
+        BorderColorSwatch("groove, black", "groove", "#000"),
+        BorderColorSwatch("ridge, black", "ridge", "#000")
+    ) +
+
+    // Each style scales differently: double needs 3px before its three bands are a whole unit each,
+    // and a dot/dash pattern's period is a multiple of the width, so a thin edge carries many more of
+    // them. An edge too short to hold two dashes degenerates to solid.
+    "<h2>The same style at several border widths</h2>" +
+    Row(
+        WidthSwatch("dotted", [1, 2, 4, 8, 16]),
+        WidthSwatch("dashed", [1, 2, 4, 8, 16]),
+        WidthSwatch("double", [1, 2, 4, 8, 16]),
+        WidthSwatch("groove", [1, 2, 4, 8, 16])
+    ) +
+
+    // A corner's mitre runs from the border box's outer corner to its inner corner, so with unequal
+    // widths it is not a 45 degree cut - and each band of a double/groove/ridge edge has to follow that
+    // same diagonal. Mismatched colors are what make the seam visible at all.
+    "<h2>Different width, style and color per side</h2>" +
+    Row(
+        SideSwatch("mixed widths", "border: solid #4a90d9; border-width: 4px 24px 12px 8px"),
+        SideSwatch("mixed colors", "border: 16px solid; border-color: #d94a4a #4ad98a #4a90d9 #d9c74a"),
+        SideSwatch("mixed styles", "border: 14px #4a90d9; border-style: solid dashed double dotted"),
+        SideSwatch("mixed everything",
+            "border-color: #d94a4a #4ad98a #4a90d9 #d9c74a; border-style: double solid groove dashed; border-width: 18px 6px 14px 10px")
+    ) +
+
+    // The classic zero-content "border triangle": four mitred trapezoids meeting at the box's center.
+    // It only works if every corner really is cut on the diagonal, so it is the sharpest test there is
+    // for the mitre - and the same trick Acid2's nose relies on.
+    "<h2>Mitred corners, seen directly</h2>" +
+    Row(
+        TriangleSwatch("all four sides", "#d94a4a #4ad98a #4a90d9 #d9c74a"),
+        TriangleSwatch("one side visible", "transparent transparent #4a90d9 transparent"),
+        SideSwatch("thick vs thin", "border: solid #4a90d9; border-width: 30px 2px 30px 2px"),
+        SideSwatch("double, uneven", "border: double #4a90d9; border-width: 9px 24px 15px 30px")
+    ) +
+
+    // A border whose four sides agree is painted as one continuous outline, so its corners stay seamless
+    // and a dot/dash period can be fitted to the whole perimeter. double is two such outlines at the
+    // thirds; groove/ridge are two rounded half-width bands whose side colors meet midway through each
+    // corner.
+    "<h2>Rounded corners</h2>" +
+    Row(
+        RadiusBorderSwatch("solid", "solid", "16px", "24px"),
+        RadiusBorderSwatch("dotted", "dotted", "16px", "24px"),
+        RadiusBorderSwatch("dashed", "dashed", "16px", "24px"),
+        RadiusBorderSwatch("double", "double", "16px", "24px")
+    ) +
+    Row(
+        RadiusBorderSwatch("solid, pill", "solid", "10px", "999px"),
+        RadiusBorderSwatch("dotted, pill", "dotted", "10px", "999px"),
+        RadiusBorderSwatch("double, pill", "double", "12px", "999px"),
+        RadiusBorderSwatch("groove", "groove", "16px", "24px")
+    ) +
+    Row(
+        RadiusBorderSwatch("solid, elliptical", "solid", "12px", "40px / 20px"),
+        RadiusBorderSwatch("double, elliptical", "double", "15px", "40px / 20px"),
+        RadiusBorderSwatch("dashed, pill", "dashed", "10px", "999px"),
+        RadiusBorderSwatch("ridge", "ridge", "16px", "24px")
+    ) +
+
+    // The corner transition follows the ratio of the adjoining widths, so the wider edge owns more
+    // of the curve. Opening border_style.html in Chrome provides a direct comparison of the same
+    // non-uniform two-band bevel.
+    "<h2>Non-uniform rounded bevel</h2>" +
+    Row(
+        SideSwatch("groove, mixed width and color",
+            "border-style: groove; border-width: 18px 6px 14px 10px; border-color: #d94a4a #4ad98a #4a90d9 #d9c74a; border-radius: 24px")
+    ) +
+
+    // Every rounded side uses the same width-ratio corner split even when its style differs. This is
+    // especially visible where a two-band bevel meets a solid fill or a clipped patterned stroke.
+    "<h2>Mixed rounded styles</h2>" +
+    Row(
+        SideSwatch("groove / solid / ridge / dashed",
+            "border: 18px #4a90d9; border-style: groove solid ridge dashed; border-radius: 36px"),
+        // Chrome fits the dotted side against the complete rounded centerline. A two-pixel width
+        // change shifts that global phase across the top-right transition.
+        RoundedPatternPhaseComparisonSwatch()
     ) +
 
     "</body></html>";
@@ -6265,6 +6433,66 @@ await SaveShowcaseAsync("text_decoration_thickness", "Typography & Text", "text-
     "text-decoration-thickness (CSS Text Decoration 4): auto, from-font, and explicit length/percentage underline thickness.",
     decorationThicknessHtml, pdfConfig);
 
+// --- text-decoration-style showcase (css-text-decor-3 §2.2) ---
+
+var decorationStyleHtml = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 12pt sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.2em }
+    p.lede { font-size: 10pt; color: #444; margin: 0 0 1.2em }
+    h2 { font-size: 11pt; color: #444; margin: 1.3em 0 0.5em;
+         border-bottom: 1px solid #ddd; padding-bottom: 2px }
+    .row { margin-bottom: 1.5em; line-height: 1.6 }
+    .label { font-size: 9pt; color: #666; margin-bottom: 4px; line-height: 1.2 }
+    .solid { text-decoration: underline solid }
+    .dotted { text-decoration: underline dotted }
+    .dashed { text-decoration: underline dashed }
+    .doubled { text-decoration: underline double }
+    .over { text-decoration: overline double }
+    /* A double overline grows upward, so it needs headroom; flush against a page top the upper
+       stroke falls outside the page. See docs/html-css-support.md. */
+    .row.over-row { margin-top: 1.9em }
+    .through { text-decoration: line-through double }
+    .heavy { text-decoration: underline double; text-decoration-thickness: 2px;
+             text-decoration-color: #c0392b }
+    table { border-collapse: collapse; width: 62%; font-size: 11pt }
+    td { padding: 3px 6px }
+    td.n { text-align: right; font-variant-numeric: tabular-nums }
+    tr.total td { font-weight: bold }
+    tr.total td.n { text-decoration: underline double }
+    </style>
+
+    <h1>text-decoration-style</h1>
+    <p class="lede">Every style is one stroke with a dash pattern, except <b>double</b>, which is two
+    strokes of the resolved thickness separated by a gap of the same thickness. The first stroke stays
+    where a single one would sit and the second grows away from the text &mdash; downward for an
+    underline and a line-through, upward for an overline &mdash; which is what browsers do.</p>
+
+    <h2>The four styles, as underlines</h2>
+    <div class="row"><div class="label">solid</div><span class="solid">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">dotted</div><span class="dotted">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">dashed</div><span class="dashed">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">double</div><span class="doubled">Hamburgefonstiv</span></div>
+
+    <h2>double on each line, and at a heavier thickness</h2>
+    <div class="row"><div class="label">underline double &mdash; grows downward</div><span class="doubled">Hamburgefonstiv</span></div>
+    <div class="row over-row"><div class="label">overline double &mdash; grows upward</div><span class="over">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">line-through double &mdash; grows downward</div><span class="through">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">underline double, text-decoration-thickness: 2px</div><span class="heavy">Hamburgefonstiv</span></div>
+
+    <h2>What it is for</h2>
+    <table>
+      <tr><td>Subtotal</td><td class="n">1,000.00</td></tr>
+      <tr><td>Tax</td><td class="n">80.00</td></tr>
+      <tr class="total"><td>Total</td><td class="n">1,080.00</td></tr>
+    </table>
+    """;
+
+await SaveShowcaseAsync("text_decoration_style", "Typography & Text", "text-decoration-style",
+    "text-decoration-style (CSS Text Decoration 3 \u00a72.2): solid, dotted and dashed as pen patterns, and double as two strokes \u2014 the accounting rule under a grand total.",
+    decorationStyleHtml, pdfConfig);
+
 // --- text-decoration skipping showcase (css-text-decor-3 §2.4 + css-text-decor-4 §2.5) ---
 
 // Bundled (see assets/fonts/SourceSans3-Regular.LICENSE.txt) rather than a system family: what this
@@ -6511,6 +6739,9 @@ const string TextAlignLastCss = """
     .last-center { text-align-last: center }
     .last-right { text-align-last: right }
     .rtl { direction: rtl }
+    .justify-all { text-align: justify-all; width: 360px }
+    .match-parent-outer { direction: rtl; border: 1px solid #999; padding: 8px; width: 380px; font-family: Arial, sans-serif; font-size: 9pt }
+    .match-parent-outer p { width: auto; text-align: match-parent; background: #eef6fb; margin: 0 0 6px }
     </style>
     """;
 
@@ -6536,10 +6767,20 @@ var textAlignLastHtml = "<!DOCTYPE html><html><head>" + TextAlignLastCss + "</he
     "<h2>direction: rtl - the default text-align-last: auto is <i>start</i>, which is the right edge</h2>" +
     "<p class=\"rtl\">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.</p>" +
 
+    "<h2>text-align is a real shorthand over text-align-all/text-align-last (issue #1027)</h2>" +
+    "<p>Plain text-align: justify (default text-align-last: auto) - the closing line stays ragged.<br>Second sentence to give this paragraph a forced break.</p>" +
+    "<p class=\"justify-all\">text-align: justify-all sets text-align-all AND text-align-last to justify - even the closing line stretches to the full measure.<br>Second sentence, same treatment.</p>" +
+
+    "<h2>text-align: match-parent resolves against the *parent's* own direction (issue #1027)</h2>" +
+    "<div class=\"match-parent-outer\">" +
+    "<p>This RTL container's own child paragraphs declare <code>text-align: match-parent</code> with no direction of their own.</p>" +
+    "<p>Match-parent's <i>start</i> resolves against the container's RTL direction, so both paragraphs pack against the physical right edge - the same result an explicit <code>text-align: right</code> would give here, but automatically following whichever direction the container ends up with.</p>" +
+    "</div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("text_align_last", "Typography & Text", "Justification & text-align-last",
-    "text-align: justify leaves every line that ends a paragraph ragged - the block's last line and the last line before a <br> - and text-align-last (auto, justify, center, right) says how those lines are aligned instead.",
+    "text-align: justify leaves every line that ends a paragraph ragged - the block's last line and the last line before a <br> - and text-align-last (auto, justify, center, right) says how those lines are aligned instead. text-align is a real shorthand (CSS Text 3 §6.1) over text-align-all and text-align-last: justify-all forces both to justify, and match-parent resolves a logical start/end against the parent's own direction rather than the element's own.",
     textAlignLastHtml, pdfConfig);
 
 // --- writing-mode (vertical-rl/vertical-lr) showcase ---

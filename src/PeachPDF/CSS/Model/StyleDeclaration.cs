@@ -1560,6 +1560,12 @@ namespace PeachPDF.CSS
             set => SetPropertyValue(PropertyNames.TextAlign, value);
         }
 
+        public string TextAlignAll
+        {
+            get => GetPropertyValue(PropertyNames.TextAlignAll);
+            set => SetPropertyValue(PropertyNames.TextAlignAll, value);
+        }
+
         public string TextAlignLast
         {
             get => GetPropertyValue(PropertyNames.TextAlignLast);

@@ -4925,14 +4925,16 @@ namespace PeachPDF.Html.Core.Dom
         /// </param>
         private static void ApplyHorizontalAlignment(CssLineBox lineBox, bool blockFinished)
         {
-            // text-align's initial/logical values, start/end (css-text-3 §6.1), resolve against the
-            // owning box's own direction - the CSS-OM-visible value (box.TextAlign) stays exactly as
-            // authored/defaulted; only this *used*-value resolution is direction-aware.
+            // text-align-all's initial/logical values, start/end (css-text-3 §6.1), resolve against the
+            // owning box's own direction - the CSS-OM-visible value (box.TextAlignAll) stays exactly as
+            // authored/defaulted; only this *used*-value resolution is direction-aware. ActualTextAlignAll
+            // (DerivedStyle) has already fully resolved match-parent by this point - it can never appear
+            // here, so ResolveLogicalAlignment only ever sees Start/End/Left/Right/Center/Justify.
             var isRtl = lineBox.OwnerBox.Direction.Value == DirectionMode.Rtl;
             var towardStart = isRtl ? HorizontalAlignment.Right : HorizontalAlignment.Left;
             var towardEnd = isRtl ? HorizontalAlignment.Left : HorizontalAlignment.Right;
 
-            var declared = ResolveLogicalAlignment(lineBox.OwnerBox.TextAlign.Value, towardStart, towardEnd);
+            var declared = ResolveLogicalAlignment(lineBox.OwnerBox.ActualTextAlignAll, towardStart, towardEnd);
 
             var (textAlign, opportunities) = ResolveUsedAlignment(lineBox,
                 EndsAParagraph(lineBox, blockFinished), declared, towardStart, towardEnd);
@@ -5039,14 +5041,15 @@ namespace PeachPDF.Html.Core.Dom
         /// start instead, which is why an ordinary justified paragraph's last line is ragged.
         /// </summary>
         /// <remarks>
-        /// PeachPDF treats <c>text-align-last</c> as an independent inherited longhand, the way every
-        /// shipping browser does, rather than as one half of a <c>text-align</c> shorthand over
-        /// <c>text-align-all</c>/<c>text-align-last</c> - see
-        /// <c>.claude/accepted-gaps/text-align-is-not-a-shorthand-of-text-align-all-and-last.md</c>.
+        /// Reads <see cref="CssBox.ActualTextAlignLast"/> (<see cref="DerivedStyle.ActualTextAlignLast"/>),
+        /// not the raw <c>TextAlignLast</c> longhand value - <c>match-parent</c> (set via the <c>text-align</c>
+        /// shorthand or directly) is already fully resolved by that point, so it can never reach this
+        /// switch; a parent that never declared its own <c>text-align-last</c> naturally falls through to
+        /// the <c>Auto</c> arm below via the same recursive resolution.
         /// </remarks>
         private static HorizontalAlignment ResolveLastLineAlignment(CssBox blockBox, HorizontalAlignment textAlign,
             HorizontalAlignment towardStart, HorizontalAlignment towardEnd) =>
-            blockBox.TextAlignLast.Value switch
+            blockBox.ActualTextAlignLast switch
             {
                 TextAlignLast.Start => towardStart,
                 TextAlignLast.End => towardEnd,
@@ -5222,7 +5225,7 @@ namespace PeachPDF.Html.Core.Dom
             var towardStart = finalFrame.InlineStartIsBottom ? HorizontalAlignment.Right : HorizontalAlignment.Left;
             var towardEnd = finalFrame.InlineStartIsBottom ? HorizontalAlignment.Left : HorizontalAlignment.Right;
 
-            var declared = ResolveLogicalAlignment(lineBox.OwnerBox.TextAlign.Value, towardStart, towardEnd);
+            var declared = ResolveLogicalAlignment(lineBox.OwnerBox.ActualTextAlignAll, towardStart, towardEnd);
 
             // isLastColumn rather than EndsAParagraph's blockFinished-gated check: CreateVerticalLineBoxes is
             // always a single monolithic pass with no fragmentation break to leave an ambiguous "last" column

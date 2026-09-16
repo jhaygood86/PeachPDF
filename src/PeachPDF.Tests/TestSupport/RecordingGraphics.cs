@@ -52,10 +52,9 @@ namespace PeachPDF.Tests.TestSupport
         public List<RecordingGraphicsPath> DrawnPaths { get; } = [];
 
         /// <summary>
-        /// Every path stroked via <see cref="DrawPath(RPen, RGraphicsPath)"/>, in order - the rounded
-        /// border-stroke curve <c>BordersDrawHandler.GetRoundedBorderPath</c> builds (issue #812's
-        /// second, independent rounded-path builder; a rounded border always strokes via the <c>RPen</c>
-        /// overload, never the <c>RBrush</c> one <see cref="DrawnPaths"/> tracks).
+        /// Every path stroked via <see cref="DrawPath(RPen, RGraphicsPath)"/>, in order. Uniform rounded
+        /// outlines and patterned sides take this route; filled non-uniform border bands are recorded by
+        /// <see cref="DrawnPaths"/>.
         /// </summary>
         public List<RecordingGraphicsPath> StrokedPaths { get; } = [];
 

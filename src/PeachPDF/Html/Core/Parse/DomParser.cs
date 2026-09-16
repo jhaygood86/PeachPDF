@@ -2135,7 +2135,7 @@ namespace PeachPDF.Html.Core.Parse
                 || trimmed.Equals(HtmlConstants.Center, StringComparison.OrdinalIgnoreCase)
                 || trimmed.Equals(HtmlConstants.Right, StringComparison.OrdinalIgnoreCase)
                 || trimmed.Equals(HtmlConstants.Justify, StringComparison.OrdinalIgnoreCase))
-                box.TextAlign = CssProperty<HorizontalAlignment>.FromCssText(trimmed.ToLower(), Map.HorizontalAlignments, HorizontalAlignment.Start);
+                box.TextAlignAll = CssProperty<HorizontalAlignment>.FromCssText(trimmed.ToLower(), Map.HorizontalAlignments, HorizontalAlignment.Start);
             // An unrecognized value must leave the box's already-cascaded vertical-align alone (issue #642)
             // rather than forcing baseline - see the Valign case's own comment above for why the membership
             // check has to happen here instead of relying on FromCssText's fallback.
@@ -2802,7 +2802,7 @@ namespace PeachPDF.Html.Core.Parse
                 blockBox.Right = box.Right;
                 blockBox.Width = box.Width;
                 blockBox.Height = box.Height;
-                blockBox.TextAlign = box.TextAlign;
+                blockBox.TextAlignAll = box.TextAlignAll;
 
                 box.Position = CssProperty<PositionMode>.FromValue(Keywords.Static, PositionMode.Static);
                 box.ParentBox = blockBox;

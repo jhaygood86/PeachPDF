@@ -726,7 +726,7 @@ namespace PeachPDF.Html.Core.Paint
         {
             if (!DecorationsWorthCollecting(box)) return;
 
-            var content = DecorationContent.Of(fragment, collectSpans: true, collectWords: WantsInkFrom(box));
+            var content = DecorationContent.Of(fragment, collectSpans: true);
 
             foreach (var lineBox in content.Order)
             {
@@ -755,15 +755,6 @@ namespace PeachPDF.Html.Core.Paint
         /// </summary>
         private static bool DecorationsWorthCollecting(CssBox box) =>
             DeclaresADecorationLine(box) || DeclaresADecorationLine(box.ResolvedFirstLineStyle);
-
-        /// <summary>
-        /// Whether any line <paramref name="box"/> draws could ask for glyph ink, and so whether the
-        /// subtree walk should gather words at all. Asks the <c>::first-line</c> style too, since it can
-        /// carry a different <c>text-decoration-skip-ink</c> than the box's own.
-        /// </summary>
-        private static bool WantsInkFrom(CssBox box) =>
-            IsHorizontalWritingMode(box)
-            && (SkipsInk(box) || (box.ResolvedFirstLineStyle is { } firstLine && SkipsInk(firstLine)));
 
         /// <summary>
         /// Paints the text decoration (underline/strike-through/over-line)
@@ -852,14 +843,34 @@ namespace PeachPDF.Html.Core.Paint
             // of the same glyphs - so it is measured inside the loop, against that line's own band.
             var inkWords = horizontal && SkipsInk(styleSource) ? content?.InkWordsOn(lineBox) : null;
 
+            // Where an automatic underline hangs from. Only the underline needs it, but it is a fact about
+            // the line rather than about a keyword, so it is resolved once rather than per keyword.
+            //
+            // The line reports its baseline the way layout measured it - a whole (rounded) ascent above
+            // each word's rectangle - while glyphs are painted from the unrounded TextBaselineOffset, so
+            // the decorating box's own font supplies that correction. css-text-decor-3 §2.5 leaves the
+            // exact position UA-defined, but requires "a single thickness and position on each line for
+            // the decorations deriving from a single decorating box", which is what taking it from the
+            // line rather than from each rectangle's own top is what guarantees. Its note is the reason
+            // to prefer the line: "since line decorations can span elements with varying font sizes and
+            // vertical alignments, the best position for a line decoration is not necessarily the ideal
+            // position dictated by the decorating box".
+            //
+            // For a line set entirely in the decorating box's font the two steps cancel back to
+            // `rectangle.Top + TextBaselineOffset`, which is what this expression used to be and what it
+            // still paints.
+            var font = styleSource.ActualFont;
+            var baseline = content?.AlphabeticBaselineOn(lineBox, box) is { } lineBaseline
+                ? lineBaseline - (font.Ascent - font.TextBaselineOffset)
+                : rectangle.Top + font.TextBaselineOffset;
+
             // text-decoration-line may list several keywords (e.g. "underline overline"); draw each.
             var bottomInset = ownDecorationArea ? box.ActualPaddingBottom - box.ActualBorderBottomWidth : 0;
             foreach (var line in textDecorationLine.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
                 double y = line switch
                 {
-                    Keywords.Underline => rectangle.Top + ResolveAutomaticUnderlineCenterOffset(
-                        styleSource.ActualFont, pen.Width, g.PixelsPerPoint),
+                    Keywords.Underline => baseline + ResolveAutomaticUnderlineClearance(pen.Width, g.PixelsPerPoint),
                     Keywords.LineThrough => rectangle.Top + rectangle.Height / 2f,
                     Keywords.Overline => rectangle.Top,
                     _ => double.NaN
@@ -882,9 +893,64 @@ namespace PeachPDF.Html.Core.Paint
 
                 foreach (var segment in DecorationSegments.Subtract(span, exclusions ?? []))
                 {
-                    g.DrawLine(pen, segment.Start, y, segment.End, y);
+                    StrokeDecorationSegment(g, pen, textDecorationStyle, line, segment.Start, segment.End, y);
                 }
             }
+        }
+
+        /// <summary>
+        /// Strokes one segment of a decoration line, in the <c>text-decoration-style</c> it is drawn with.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Every style but <c>double</c> is one stroke, since <c>solid</c>/<c>dotted</c>/<c>dashed</c>
+        /// differ only in the pen's dash pattern, which
+        /// <see cref="TextDecorationStyleMapper.ToDashStyle"/> has already set. <c>double</c> is the one
+        /// that is not a pen at all: it is two strokes.
+        /// </para>
+        /// <para>
+        /// <see href="https://www.w3.org/TR/css-text-decor-3/#text-decoration-style-property">css-text-decor-3
+        /// §2.2</see> does not define the styles itself - it says their "values have the same meaning as for
+        /// the border-style properties", which for
+        /// <see href="https://www.w3.org/TR/css-backgrounds-3/#border-style">css-backgrounds-3</see>'s
+        /// <c>double</c> means "two lines ... the sum of the two lines and the space between them equals
+        /// the value of border-width". <b>This deliberately deviates from that cross-reference</b>: a
+        /// decoration's <c>text-decoration-thickness</c> describes the stroke, not a total, so dividing it
+        /// three ways would render the initial 1px double underline as two one-third-pixel hairlines.
+        /// Instead each stroke is the resolved thickness and the gap between them matches, so the pair
+        /// spans three times a single line. See
+        /// <c>.claude/accepted-gaps/double-decoration-thickness-is-per-stroke-not-a-total.md</c>.
+        /// </para>
+        /// <para>
+        /// Which way the second stroke grows is measured against Chrome 141 rather than reasoned about:
+        /// at 300dpi it keeps the first stroke exactly where the single stroke sits and adds the second
+        /// <i>above</i> for an overline and <i>below</i> for both an underline and a line-through. That
+        /// also suits an underline's own anchor, whose top edge is kept below the alphabetic baseline (see
+        /// <see cref="ResolveAutomaticUnderlineClearance"/>) and would be pushed back through the
+        /// glyphs by growing upward.
+        /// </para>
+        /// </remarks>
+        private static void StrokeDecorationSegment(RGraphics g, RPen pen, string? style, string line,
+            double x1, double x2, double y)
+        {
+            if (style != Keywords.Double)
+            {
+                g.DrawLine(pen, x1, y, x2, y);
+                return;
+            }
+
+            var separation = 2 * pen.Width;
+
+            var (first, second) = line switch
+            {
+                Keywords.Overline => (y - separation, y),
+                // Underline and line-through both grow downward, and anything else that reached here
+                // with a position of its own follows the same default.
+                _ => (y, y + separation)
+            };
+
+            g.DrawLine(pen, x1, first, x2, first);
+            g.DrawLine(pen, x1, second, x2, second);
         }
 
         /// <summary>
@@ -912,18 +978,17 @@ namespace PeachPDF.Html.Core.Paint
             styleSource.TextDecorationSkipInk.Value != TextDecorationSkipInk.None;
 
         /// <summary>
-        /// Resolves the center of an automatically positioned underline relative to the text rectangle's
-        /// top edge. The underline's top edge stays below the alphabetic baseline by at least one CSS
+        /// Resolves the center of an automatically positioned underline relative to the alphabetic
+        /// baseline it hangs from. The underline's top edge stays below that baseline by at least one CSS
         /// pixel, with the gap growing to half the stroke thickness (rounded up to a CSS pixel), matching
         /// browser behavior for a thick line. Since <see cref="RGraphics.DrawLine"/> centers its stroke on
         /// the supplied coordinate, half the thickness is added once more to obtain that center.
         /// </summary>
-        private static double ResolveAutomaticUnderlineCenterOffset(
-            RFont font, double thickness, double pixelsPerPoint)
+        private static double ResolveAutomaticUnderlineClearance(double thickness, double pixelsPerPoint)
         {
             var cssPixel = Length.PointsPerPx * pixelsPerPoint;
             var gap = Math.Max(cssPixel, Math.Ceiling(thickness / (2 * cssPixel)) * cssPixel);
-            return font.TextBaselineOffset + gap + thickness / 2;
+            return gap + thickness / 2;
         }
 
         /// <summary>

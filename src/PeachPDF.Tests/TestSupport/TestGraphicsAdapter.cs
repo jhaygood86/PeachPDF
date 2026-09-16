@@ -92,17 +92,45 @@ namespace PeachPDF.Tests.TestSupport
         public override void Dispose() { }
     }
 
-    /// <summary>A pen that remembers the color/width/dash-style it was created with.</summary>
+    /// <summary>
+    /// A pen that remembers the color/width/dash-style it was created with, plus the line cap and any
+    /// explicit dash pattern. Those last two are what distinguish a dotted border from a dashed one now
+    /// that both are expressed as a fitted <see cref="RPen.SetDashPattern"/> rather than a canned
+    /// <see cref="RDashStyle"/> - a dot is a zero-length dash under a round cap, so a test that only
+    /// looked at <see cref="RecordedDashStyle"/> could not tell a circle from a square.
+    /// </summary>
     internal sealed class TestPen(RColor color) : RPen
     {
         public RColor Color { get; } = color;
         public override double Width { get; set; }
         public RDashStyle RecordedDashStyle { get; private set; }
-        public override RDashStyle DashStyle { set => RecordedDashStyle = value; }
+
+        public override RDashStyle DashStyle
+        {
+            set
+            {
+                RecordedDashStyle = value;
+                RecordedDashPattern = null;
+            }
+        }
+
         public override double MiterLimit { get; set; }
-        public override RLineCap LineCap { set { } }
+        public RLineCap RecordedLineCap { get; private set; } = RLineCap.Butt;
+        public override RLineCap LineCap { set => RecordedLineCap = value; }
         public override RLineJoin LineJoin { set { } }
-        public override void SetDashPattern(double[] pattern, double offset) { }
+
+        /// <summary>The dash array of the last <see cref="SetDashPattern"/>, or null if the pen is on a
+        /// canned <see cref="RDashStyle"/> instead. In the same absolute units as <see cref="Width"/>.</summary>
+        public double[]? RecordedDashPattern { get; private set; }
+
+        public double RecordedDashOffset { get; private set; }
+
+        public override void SetDashPattern(double[] pattern, double offset)
+        {
+            RecordedDashPattern = (double[])pattern.Clone();
+            RecordedDashOffset = offset;
+            RecordedDashStyle = RDashStyle.Custom;
+        }
     }
 
     /// <summary>A fixed-size image, independent of any real pixel decoding - see ImageFromStreamInt's
@@ -204,8 +232,27 @@ namespace PeachPDF.Tests.TestSupport
             /// fill/stroke, or a non-gradient brush) - see <see cref="TestBrush.GradientStart"/>.</summary>
             public RPoint? GradientStart { get; init; }
             public RPoint? GradientEnd { get; init; }
+
+            /// <summary>True when the path was stroked with a pen rather than filled with a brush.</summary>
+            public bool Stroked { get; init; }
+            public double StrokeWidth { get; init; }
+            public RLineCap LineCap { get; init; }
+            public IReadOnlyList<double>? DashPattern { get; init; }
+            public double DashOffset { get; init; }
         }
-        public sealed record DrawLineCall(RColor Color, double Width, RDashStyle DashStyle, double X1, double Y1, double X2, double Y2);
+        /// <param name="LineCap">
+        /// The pen's cap AS OF this call. Load-bearing for dotted styles: the dot itself is a
+        /// zero-length dash, so it is the round cap - not the dash array - that makes it a circle
+        /// rather than nothing at all.
+        /// </param>
+        /// <param name="DashPattern">
+        /// The explicit dash array (absolute units, same as <paramref name="Width"/>) when the pen was
+        /// given one, else null. A fitted border/outline pattern always takes this route, so
+        /// <paramref name="DashStyle"/> alone no longer says what a dotted/dashed edge looks like.
+        /// </param>
+        public sealed record DrawLineCall(
+            RColor Color, double Width, RDashStyle DashStyle, double X1, double Y1, double X2, double Y2,
+            RLineCap LineCap = RLineCap.Butt, IReadOnlyList<double>? DashPattern = null);
         public sealed record DrawPolygonCall(RColor Color, RPoint[] Points);
         public sealed record PushClipCall(RRect Rect);
         public sealed record PopClipCall;
@@ -291,11 +338,46 @@ namespace PeachPDF.Tests.TestSupport
 
         public override void DrawPath(RPen pen, RGraphicsPath path)
         {
-            Log.Add(new DrawPathCall(pen is TestPen tp ? tp.Color : RColor.Empty, PointsOf(path)));
+            var testPen = pen as TestPen;
+            Log.Add(new DrawPathCall(testPen?.Color ?? RColor.Empty, PointsOf(path))
+            {
+                Stroked = true,
+                StrokeWidth = testPen?.Width ?? 0,
+                LineCap = testPen?.RecordedLineCap ?? RLineCap.Butt,
+                DashPattern = testPen?.RecordedDashPattern,
+                DashOffset = testPen?.RecordedDashOffset ?? 0
+            });
         }
 
         private static IReadOnlyList<RPoint> PointsOf(RGraphicsPath path) =>
             path is TestGraphicsPath testPath ? testPath.Points.ToArray() : [];
+
+        /// <summary>One filled shape, whichever primitive produced it.</summary>
+        public sealed record FilledShape(RColor Color, RRect Bounds);
+
+        /// <summary>
+        /// Every filled shape in order, whether it arrived as a polygon or as a filled path.
+        /// </summary>
+        /// <remarks>
+        /// A border paints as four mitred polygons when its edges differ, but as a single closed ring
+        /// path when all four share a style and color (<c>BordersDrawHandler.TryDrawUniformBorder</c> -
+        /// abutting polygons leave a pale antialiasing seam along every mitre, a ring has no seam). A
+        /// test asking "did this border paint", or counting how many fills it made, should read this
+        /// rather than <see cref="DrawPolygonCall"/> alone, which would otherwise silently see nothing
+        /// for the commonest border there is.
+        /// </remarks>
+        public IEnumerable<FilledShape> FilledShapes =>
+            Log.Select(entry => entry switch
+                {
+                    DrawPolygonCall p when p.Points.Length > 0 =>
+                        new FilledShape(p.Color, RRect.FromLTRB(
+                            p.Points.Min(pt => pt.X), p.Points.Min(pt => pt.Y),
+                            p.Points.Max(pt => pt.X), p.Points.Max(pt => pt.Y))),
+                    DrawPathCall { Stroked: false, Points.Count: > 0 } p => new FilledShape(p.Color, p.Bounds),
+                    _ => null
+                })
+                .Where(shape => shape is not null)
+                .Select(shape => shape!);
 
         /// <summary>Every matrix pushed, in order - convenience shortcut for tests that only need the
         /// matrices/count without filtering <see cref="Log"/> themselves (e.g. asserting a rotation
@@ -402,7 +484,7 @@ namespace PeachPDF.Tests.TestSupport
         public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2)
         {
             var call = pen is TestPen tp
-                ? new DrawLineCall(tp.Color, tp.Width, tp.RecordedDashStyle, x1, y1, x2, y2)
+                ? new DrawLineCall(tp.Color, tp.Width, tp.RecordedDashStyle, x1, y1, x2, y2, tp.RecordedLineCap, tp.RecordedDashPattern)
                 : new DrawLineCall(RColor.Empty, 0, RDashStyle.Solid, x1, y1, x2, y2);
             Log.Add(call);
         }

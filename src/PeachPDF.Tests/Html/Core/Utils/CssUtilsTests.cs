@@ -18,13 +18,13 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var box = await FindDivBox(
                 "color: rgb(1, 2, 3); display: block; position: relative; overflow: hidden; " +
-                "text-align: center; font-weight: bold; z-index: 5;");
+                "text-align-all: center; font-weight: bold; z-index: 5;");
 
             Assert.Equal(box.Color, CssUtils.GetPropertyValue(box, "color"));
             Assert.Equal(box.Display.ToString(), CssUtils.GetPropertyValue(box, "display"));
             Assert.Equal(box.Position.ToString(), CssUtils.GetPropertyValue(box, "position"));
             Assert.Equal(box.Overflow.ToString(), CssUtils.GetPropertyValue(box, "overflow"));
-            Assert.Equal(box.TextAlign.ToString(), CssUtils.GetPropertyValue(box, "text-align"));
+            Assert.Equal(box.TextAlignAll.ToString(), CssUtils.GetPropertyValue(box, "text-align-all"));
             Assert.Equal(box.FontWeight.ToString(), CssUtils.GetPropertyValue(box, "font-weight"));
             Assert.Equal(box.ZIndex.ToString(), CssUtils.GetPropertyValue(box, "z-index"));
         }
@@ -460,7 +460,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             ["background-origin", "border-box"], ["background-clip", "padding-box"], ["background-attachment", "fixed"],
             ["color", "rgb(7, 8, 9)"], ["content", "normal"], ["display", "block"], ["direction", "rtl"], ["empty-cells", "hide"], ["caption-side", "bottom"],
             ["clear", "both"], ["position", "absolute"], ["line-height", "1.5"], ["vertical-align", "middle"], ["text-indent", "20px"],
-            ["text-align", "center"], ["text-decoration-color", "rgb(1, 2, 3)"], ["text-decoration-line", "underline"], ["text-decoration-style", "solid"],
+            ["text-align-all", "center"], ["text-decoration-color", "rgb(1, 2, 3)"], ["text-decoration-line", "underline"], ["text-decoration-style", "solid"],
             ["text-transform", "uppercase"], ["white-space", "nowrap"], ["word-break", "break-all"], ["overflow-wrap", "anywhere"], ["word-wrap", "break-word"], ["visibility", "hidden"], ["word-spacing", "2px"], ["letter-spacing", "1px"], ["tab-size", "4"], ["tab-size", "2em"],
             ["font-style", "italic"], ["font-variant-caps", "small-caps"], ["font-weight", "bold"], ["font-stretch", "condensed"],
             ["list-style-position", "inside"], ["list-style-type", "square"], ["overflow", "hidden"], ["z-index", "5"],
@@ -532,6 +532,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("list-style", "square inside", "list-style-type")]
         [InlineData("border-radius", "90px", "border-top-left-radius")]
         [InlineData("font-variant", "all-small-caps", "font-variant-caps")]
+        [InlineData("text-align", "center", "text-align-all")]
         public async Task SetPropertyValue_ShorthandName_IsIgnoredByLayerB(string shorthand, string shorthandValue, string longhand)
         {
             var (box, parser) = await FindDivBoxAndParser("");
@@ -546,6 +547,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
                 "flex-direction" => "row-reverse",
                 "list-style-type" => "square",
                 "font-variant-caps" => "small-caps",
+                "text-align-all" => "right",
                 _ => "7px", // the length-valued longhands
             };
             CssUtils.SetPropertyValue(parser, box, longhand, seed);
@@ -954,7 +956,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("box-sizing", "BORDER-BOX", "border-box")]
         [InlineData("display", "BLOCK", "block")]
         [InlineData("overflow", "AUTO", "auto")]
-        [InlineData("text-align", "CENTER", "center")]
+        [InlineData("text-align-all", "CENTER", "center")]
         [InlineData("border-top-style", "SOLID", "solid")]
         [InlineData("flex-direction", "ROW", "row")]
         [InlineData("justify-content", "CENTER", "center")]

@@ -128,12 +128,28 @@ namespace PeachPDF.Html.Adapters
         /// </summary>
         /// <param name="color">the color to get pen for</param>
         /// <returns>pen instance</returns>
+        /// <remarks>
+        /// The cache exists to avoid re-allocating a pen per stroke, not to carry stroke state between
+        /// callers - so a cached pen is reset to a freshly-created one's settings before it is handed
+        /// back. Without that, a caller that sets only some properties silently inherits the rest from
+        /// whoever last drew in the same color: a dotted border leaves behind a round cap and a
+        /// zero-length dash array, which would turn the next same-colored solid stroke into a row of
+        /// dots. Callers already set every property they care about, so resetting can only remove
+        /// leakage, never a deliberate carry-over.
+        /// </remarks>
         public RPen GetPen(RColor color)
         {
             if (!_penCache.TryGetValue(color, out var pen))
             {
                 _penCache[color] = pen = CreatePen(color);
+                return pen;
             }
+
+            pen.Width = 1;
+            pen.MiterLimit = 0;
+            pen.LineCap = RLineCap.Butt;
+            pen.LineJoin = RLineJoin.Miter;
+            pen.DashStyle = RDashStyle.Solid;
             return pen;
         }
 

@@ -8,15 +8,11 @@ using Xunit;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// Issue #812 (reopened): a rounded border stroke is built by
-    /// <c>BordersDrawHandler.GetRoundedBorderPath</c> - a path builder entirely independent of
-    /// <c>RenderUtils.GetRoundRect</c>, sharing no code with it - from raw, un-divided layout-space
-    /// coordinates. At the library's default <c>PixelsPerInch = 72</c> (<c>PixelsPerPoint = 1.0</c>) a
-    /// missing division is invisible; at any other value the rounded border stroke renders too large and
-    /// mis-positioned relative to the rest of the page (the reported "border leaking past its own box").
-    /// Asserted on the actual per-corner radii/positions a painted stroke path was built with (see
-    /// <see cref="RecordingGraphicsPath.Arcs"/>/<see cref="RecordingGraphicsPath.Points"/>), not just that
-    /// a rounded stroke happened, per this repo's own painting-test convention.
+    /// Rounded border paths receive raw layout-space coordinates, while the backend expects points.
+    /// At the default <c>PixelsPerInch = 72</c> (<c>PixelsPerPoint = 1.0</c>) a missing division is
+    /// invisible; at any other value the border renders too large and mis-positioned relative to the
+    /// rest of the page. These tests cover both the continuous uniform outline and the filled
+    /// per-side bands used by non-uniform rounded borders.
     /// </summary>
     public class RoundedBorderStrokePixelsPerPointIntegrationTests
     {
@@ -97,35 +93,28 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// <c>Border.Left</c>/<c>Border.Right</c>'s <c>noTop</c>/<c>noBottom</c> mitre-avoidance branches
-        /// (when the adjacent top/bottom edge is <c>none</c>/<c>hidden</c>, that side's own left/right
-        /// stroke takes the corner arc a mitred edge would otherwise cut) only run when an adjacent edge
-        /// is actually suppressed - exercised here by disabling the top and bottom borders, hitting all
-        /// four corner-arc branches (<c>Border.Right</c>'s top/bottom arcs, <c>Border.Left</c>'s
-        /// bottom/top arcs) the other two facts in this file never reach.
+        /// When an adjacent top/bottom edge is <c>none</c>/<c>hidden</c>, the visible left/right side
+        /// owns that corner's entire arc. This exercises all four omitted-neighbor branches.
         /// </summary>
         [Fact]
-        public async Task RoundedBorderStroke_MitreAvoidanceBranches_AreInvariantUnderNonDefaultPixelsPerInch()
+        public async Task RoundedBorderBands_OmittedTopAndBottom_AreInvariantUnderNonDefaultPixelsPerInch()
         {
             const string html = "<div id='box' style='width:100pt;height:100pt;border:6pt solid black;" +
                                  "border-top-style:none;border-bottom-style:none;border-radius:14pt;'></div>";
 
-            var (defaultPaths, scaledPaths) = await LayoutAndPaintAtDefaultAndScaled(html);
+            var (defaultPaths, scaledPaths) = await LayoutAndPaintFilledAtDefaultAndScaled(html);
 
-            // Only the left/right strokes are drawn (top/bottom are `none`).
-            Assert.Equal(2, defaultPaths.Count);
-            AssertPathsMatch(defaultPaths, scaledPaths);
+            // The same-colored left/right side bands share one fill operation.
+            Assert.Single(defaultPaths);
+            AssertFilledPathsMatch(defaultPaths, scaledPaths);
         }
 
         /// <summary>
-        /// Issue #853: <c>GetRoundedBorderPath</c>'s <c>Border.Right</c> case offset the top-right arc's
-        /// endpoint by half the <b>left</b> border's width instead of the right border's own - a
-        /// copy-paste typo unrelated to <c>PixelsPerInch</c>, only visible when the left and right border
-        /// widths differ. Asymmetric widths plus <c>border-top: none</c> (the <c>noTop</c> branch that
-        /// reaches the buggy line) isolate exactly the arc endpoint the fix changes.
+        /// Issue #853: the top-right inner contour must use the right border's own width. Asymmetric
+        /// widths plus <c>border-top: none</c> isolate that corner.
         /// </summary>
         [Fact]
-        public async Task RoundedBorderStroke_TopRightArcEndpoint_UsesRightBorderOwnWidth()
+        public async Task RoundedBorderBand_TopRightInnerContour_UsesRightBorderOwnWidth()
         {
             const string html = "<div id='box' style='width:100pt;height:100pt;border-radius:14pt;" +
                                  "border-left:10pt solid black;border-right:2pt solid black;" +
@@ -135,23 +124,18 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfSharpAdapter()) { PixelsPerPointOverride = 1.0 };
+            var recording = new TestRecordingGraphics { PixelsPerPointOverride = 1.0 };
             FragmentPaintHarness.PaintBox(container, box!, recording);
 
-            // Paint order (DrawBoxBorders) is Top/Left/Bottom/Right; Top is suppressed (none), so the
-            // right border's path is the third one recorded.
-            Assert.Equal(3, recording.StrokedPaths.Count);
-            var rightBorderPath = recording.StrokedPaths[2];
+            var borderPath = Assert.Single(
+                recording.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                path => !path.Stroked);
 
-            // Start, then the top-right ArcTo endpoint (noTop is true here), then a LineTo - no
-            // bottom-right arc, since the bottom border is present (noBottom is false).
-            Assert.Equal(3, rightBorderPath.Points.Count);
-            var topRightArcEndpoint = rightBorderPath.Points[1];
-
-            var expectedX = box!.ActualRight - box.ActualBorderRightWidth / 2;
-            var wrongX = box.ActualRight - box.ActualBorderLeftWidth / 2;
+            var expectedX = box!.ActualRight - box.ActualBorderRightWidth;
+            var wrongX = box.ActualRight - box.ActualBorderLeftWidth;
             Assert.NotEqual(wrongX, expectedX, 3);
-            Assert.Equal(expectedX, topRightArcEndpoint.X, 3);
+            Assert.Contains(borderPath.Points, point => Math.Abs(point.X - expectedX) < 0.001);
+            Assert.DoesNotContain(borderPath.Points, point => Math.Abs(point.X - wrongX) < 0.001);
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────
@@ -181,6 +165,26 @@ namespace PeachPDF.Tests.Integration
             return (recordingDefault.StrokedPaths, recordingScaled.StrokedPaths);
         }
 
+        private static async Task<(IReadOnlyList<TestRecordingGraphics.DrawPathCall> Default, IReadOnlyList<TestRecordingGraphics.DrawPathCall> Scaled)>
+            LayoutAndPaintFilledAtDefaultAndScaled(string html)
+        {
+            var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
+            var boxDefault = LayoutHarness.FindById(rootDefault, "box");
+            Assert.NotNull(boxDefault);
+            var recordingDefault = new TestRecordingGraphics { PixelsPerPointOverride = 1.0 };
+            FragmentPaintHarness.PaintBox(containerDefault, boxDefault!, recordingDefault);
+
+            var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
+            var boxScaled = LayoutHarness.FindById(rootScaled, "box");
+            Assert.NotNull(boxScaled);
+            var recordingScaled = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
+            FragmentPaintHarness.PaintBox(containerScaled, boxScaled!, recordingScaled);
+
+            return (
+                recordingDefault.Log.OfType<TestRecordingGraphics.DrawPathCall>().Where(path => !path.Stroked).ToList(),
+                recordingScaled.Log.OfType<TestRecordingGraphics.DrawPathCall>().Where(path => !path.Stroked).ToList());
+        }
+
         /// <summary>
         /// Asserts <paramref name="expected"/> and <paramref name="actual"/> hold the same number of
         /// paths, and each corresponding pair has identical arc radii and point coordinates (3 decimal
@@ -203,6 +207,22 @@ namespace PeachPDF.Tests.Integration
                     Assert.Equal(e.X, a.X, 3);
                     Assert.Equal(e.Y, a.Y, 3);
                 });
+            }
+        }
+
+        private static void AssertFilledPathsMatch(
+            IReadOnlyList<TestRecordingGraphics.DrawPathCall> expected,
+            IReadOnlyList<TestRecordingGraphics.DrawPathCall> actual)
+        {
+            Assert.Equal(expected.Count, actual.Count);
+            for (var i = 0; i < expected.Count; i++)
+            {
+                Assert.Equal(expected[i].Points.Count, actual[i].Points.Count);
+                for (var p = 0; p < expected[i].Points.Count; p++)
+                {
+                    Assert.Equal(expected[i].Points[p].X, actual[i].Points[p].X, 3);
+                    Assert.Equal(expected[i].Points[p].Y, actual[i].Points[p].Y, 3);
+                }
             }
         }
 
