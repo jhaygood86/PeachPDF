@@ -8207,6 +8207,167 @@ await SaveShowcaseAsync("cmyk_tiff", "Images & Replaced Content", "CMYK TIFF Ima
     "byte-for-byte copy, preserving the source's CMYK separations without ever touching RGB.",
     cmykTiffHtml, pdfConfig);
 
+// ── PNG lossless pass-through (issue #1086) ─────────────────────────────────────────────
+// Two opaque PNGs, deliberately the kind of content JPEG re-encoding used to visibly damage: a
+// QR-code-style pattern (hard black/white edges - a real QR code would stop scanning if re-encoded
+// lossily) and a multi-color flat-fill logo/icon (indexed palette). Both are embedded byte-for-byte via
+// /FlateDecode pass-through instead of being decoded and re-encoded as lossy JPEG.
+static byte[] BuildQrLikePatternPngBytes(int modules, int scale)
+{
+    // A deterministic, QR-ish-looking black/white module grid - not a real scannable QR code, just a
+    // visual stand-in with the same "hard edges everywhere" property that makes lossy re-encoding
+    // visibly wrong for this kind of content. Gray8 (not Rgb24) so this actually demonstrates the
+    // DeviceGray pass-through branch, distinct from the indexed-palette logo below - an Rgb24 source
+    // here would auto-index under PeachImage's PngColorMode.Auto default instead (only two colors),
+    // exercising the same /Indexed path twice rather than two different colorspaces.
+    int size = modules * scale;
+    using var image = PeachImage.Image.Create(size, size, PeachImage.PixelFormat.Gray8);
+    var pixels = image.GetPixelSpan();
+    for (int y = 0; y < size; y++)
+    {
+        int my = y / scale;
+        for (int x = 0; x < size; x++)
+        {
+            int mx = x / scale;
+            bool isFinder = (mx < 7 && my < 7) || (mx >= modules - 7 && my < 7) || (mx < 7 && my >= modules - 7);
+            bool dark = isFinder
+                ? (mx == 0 || mx == 6 || my == 0 || my == 6 || (mx >= 2 && mx <= 4 && my >= 2 && my <= 4))
+                : ((mx * 7 + my * 3) % 5 == 0);
+            pixels[y * size + x] = dark ? (byte)0 : (byte)255;
+        }
+    }
+
+    using var ms = new MemoryStream();
+    image.Save(ms, "png");
+    return ms.ToArray();
+}
+
+static byte[] BuildFlatLogoPngBytes(int width, int height)
+{
+    var palette = new (byte R, byte G, byte B)[]
+    {
+        (0xEA, 0x58, 0x0C), // orange
+        (0x16, 0xA3, 0x4A), // green
+        (0x25, 0x63, 0xEB), // blue
+        (0xFF, 0xFF, 0xFF), // white background
+    };
+
+    using var image = PeachImage.Image.Create(width, height, PeachImage.PixelFormat.Rgb24);
+    var pixels = image.GetPixelSpan();
+    int cx = width / 2, cy = height / 2;
+    for (int y = 0; y < height; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            int dx = x - cx, dy = y - cy;
+            int distSq = dx * dx + dy * dy;
+            int radius = Math.Min(width, height) / 2;
+            var (r, g, b) = distSq > radius * radius
+                ? palette[3]
+                : palette[((x / (width / 6)) + (y / (height / 6))) % 3];
+            int i = (y * width + x) * 3;
+            pixels[i] = r; pixels[i + 1] = g; pixels[i + 2] = b;
+        }
+    }
+
+    using var ms = new MemoryStream();
+    image.Save(ms, "png");
+    return ms.ToArray();
+}
+
+// A five-pointed-star icon on a flat background color, the background declared transparent via a
+// tRNS chroma-key chunk (PngEncoderOptions.TransparentColor) - no alpha channel at all, just PNG's
+// non-alpha transparency convention. Passes through with a PDF color-key /Mask array built from the
+// tRNS chunk instead of a separate alpha plane. Drawn over a checkerboard so the transparency is
+// visibly doing something, the same "checker" idiom the Modern CSS Colors showcase already uses.
+static byte[] BuildTrnsStarIconPngBytes(int size, (byte R, byte G, byte B) background, (byte R, byte G, byte B) foreground)
+{
+    using var image = PeachImage.Image.Create(size, size, PeachImage.PixelFormat.Rgb24);
+    var pixels = image.GetPixelSpan();
+    double cx = size / 2.0, cy = size / 2.0;
+    double outerR = size * 0.48, innerR = outerR * 0.42;
+
+    // Point-in-polygon test against a 10-vertex star (5 outer points, 5 inner points).
+    var star = new (double X, double Y)[10];
+    for (int i = 0; i < 10; i++)
+    {
+        double angle = -Math.PI / 2 + i * Math.PI / 5;
+        double r = i % 2 == 0 ? outerR : innerR;
+        star[i] = (cx + r * Math.Cos(angle), cy + r * Math.Sin(angle));
+    }
+
+    bool InsideStar(double px, double py)
+    {
+        bool inside = false;
+        for (int i = 0, j = star.Length - 1; i < star.Length; j = i++)
+        {
+            var (xi, yi) = star[i];
+            var (xj, yj) = star[j];
+            if (((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi))
+            {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    for (int y = 0; y < size; y++)
+    {
+        for (int x = 0; x < size; x++)
+        {
+            var (r, g, b) = InsideStar(x + 0.5, y + 0.5) ? foreground : background;
+            int i = (y * size + x) * 3;
+            pixels[i] = r; pixels[i + 1] = g; pixels[i + 2] = b;
+        }
+    }
+
+    using var ms = new MemoryStream();
+    image.Save(ms, "png", new PeachImage.Formats.Png.PngEncoderOptions
+    {
+        ColorMode = PeachImage.Formats.Png.PngColorMode.Truecolor,
+        TransparentColor = background,
+    });
+    return ms.ToArray();
+}
+
+var qrLikeBase64 = Convert.ToBase64String(BuildQrLikePatternPngBytes(21, 6));
+var flatLogoBase64 = Convert.ToBase64String(BuildFlatLogoPngBytes(120, 120));
+var trnsStarBase64 = Convert.ToBase64String(BuildTrnsStarIconPngBytes(120, (255, 0, 255), (0xF5, 0x9E, 0x0B)));
+
+var pngPassthroughHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 16px; max-width: 640px; }" +
+    ".row { display: flex; gap: 24px; align-items: flex-start; }" +
+    ".row img { image-rendering: pixelated; border: 1px solid #cbd5e1; }" +
+    ".label { font-size: 11px; color: #555; margin-top: 4px; }" +
+    ".checker { background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 0 / 16px 16px; " +
+    "  display: inline-block; border-radius: 4px; }" +
+    "</style></head><body>" +
+    "<h2>PNG lossless pass-through</h2>" +
+    "<p class=\"note\">Each opaque PNG below embeds via byte-for-byte <code>/FlateDecode</code> " +
+    "pass-through - the PNG's own compressed pixel data, unchanged - instead of being decoded and " +
+    "re-encoded as a lossy JPEG. Every edge stays exactly as sharp as the source, and the embedded " +
+    "file is typically smaller too.</p>" +
+    "<div class=\"row\">" +
+    $"<div><img src=\"data:image/png;base64,{qrLikeBase64}\" width=\"189\" height=\"189\">" +
+    "<div class=\"label\">Grayscale, hard-edged pattern</div></div>" +
+    $"<div><img src=\"data:image/png;base64,{flatLogoBase64}\" width=\"120\" height=\"120\">" +
+    "<div class=\"label\">Indexed-palette flat-fill logo</div></div>" +
+    "<div><div class=\"checker\">" +
+    $"<img src=\"data:image/png;base64,{trnsStarBase64}\" width=\"120\" height=\"120\" style=\"border:none\">" +
+    "</div><div class=\"label\">tRNS chroma-key transparency (PDF color-key /Mask)</div></div>" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("png_passthrough", "Images & Replaced Content", "PNG Lossless Pass-through",
+    "An opaque PNG (no real per-pixel alpha, not interlaced) embeds byte-for-byte via /FlateDecode " +
+    "pass-through - the PNG's own compressed IDAT data, unchanged, with an /Indexed color space for a " +
+    "palette source or a color-key /Mask array for tRNS chroma-key transparency - instead of being " +
+    "decoded and re-encoded as a lossy JPEG at quality 75.",
+    pngPassthroughHtml, pdfConfig);
+
 // ── Modern CSS colors: oklch/oklab/lab/lch palette + color-mix() opacity ──────────────
 var modernColorHtml =
     "<html><head><style>" +

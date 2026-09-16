@@ -551,9 +551,29 @@ A CMYK TIFF is preserved the same way in spirit, but by a different mechanism: T
 
 An RGB or grayscale JPEG carrying a usable embedded ICC profile is *also* embedded via byte-for-byte pass-through, specifically to preserve that profile (`ICCBased` referencing it, rather than the usual bare `DeviceRGB`/`DeviceGray`). Unlike a CMYK source, this doesn't disable resizing: if the image is being downscaled for its on-page display size, that particular embed falls back to the ordinary re-encoded path instead (losing the embedded profile for that embed, not the image) — pass-through and downscaling are mutually exclusive for a given embed, and downscaling wins when both would otherwise apply. An RGB/grayscale JPEG with no embedded ICC profile is unaffected by any of this.
 
-PNG, WebP, and AVIF sources may also carry an embedded ICC profile, but PeachPDF doesn't yet have an equivalent byte-for-byte pass-through path for those formats, so their embedded profiles aren't preserved today.
+PNG, WebP, and AVIF sources may also carry an embedded ICC profile, but PeachPDF doesn't yet preserve it: PNG's own byte-for-byte pass-through path (below) never reads it (extracting it would require decoding, defeating the point of pass-through for the common case), and WebP/AVIF have no pass-through mechanism at all.
 
 Requesting `PdfAConformance` on a document containing a CMYK image without an embedded ICC profile throws an `InvalidOperationException` at generation time: a bare `DeviceCMYK` image has no relationship to PeachPDF's RGB-based `OutputIntent`, so it isn't PDF/A-conformant on its own. An `ICCBased` CMYK image (one with an embedded profile) is self-describing and doesn't have this problem. An RGB or grayscale image is unaffected either way — it stays conformant with or without an embedded ICC profile.
+
+#### Lossless embedding for opaque PNG/BMP/GIF images
+
+An opaque PNG — a screenshot, chart, logo, QR code, or line art, with no real per-pixel alpha channel and not Adam7-interlaced — is embedded via the same kind of byte-for-byte pass-through as a CMYK JPEG, but for its pixel data rather than its color separations: the PDF `Filter` is `FlateDecode`, with `DecodeParms` describing PNG's own predictor/color layout, and the stream bytes are the PNG's own compressed `IDAT` data, unchanged. This is smaller and pixel-exact, unlike re-encoding as JPEG (which this replaces) — a QR code, for example, stays scannable regardless of how sharp its edges are. A PNG carrying a `tRNS` chroma-key chunk still qualifies too: a grayscale/truecolor `tRNS` (always a single exact transparent color) or a palette `tRNS` where every listed entry is fully opaque or fully transparent both pass through the same way, with a PDF color-key `Mask` array built from the chunk instead of a separate alpha plane — only a palette entry with a genuinely partial alpha value falls back to the full decode path, since that can't be expressed as a binary mask. Like a CMYK JPEG, a pass-through-eligible PNG is always embedded at its natural pixel size; `DownscaleImages` and `MaximumDownscaleMultiplier` don't apply to it.
+
+An opaque BMP or GIF — neither format has a lossy encoding mode at all — also stops being silently re-encoded as JPEG at its own natural display size, embedding via a raw `FlateDecode` RGB stream instead (the same path an alpha-bearing PNG already used). Downscaling one, though, keeps the existing JPEG-at-`DownscaleQuality` behavior, since that's a deliberate, separate size/quality trade-off.
+
+`PdfGenerateConfig.ImageCompression` controls all of this:
+
+```csharp
+var config = new PdfGenerateConfig { ImageCompression = ImageCompression.Lossless };
+```
+
+| Value | Behavior |
+|---|---|
+| `Auto` (default) | The behavior described above: an eligible PNG always passes through; a PNG/BMP/GIF that can't (interlaced, or being downscaled) still avoids lossy JPEG only at its own natural size. |
+| `Lossless` | Same as `Auto`, but a *downscaled* PNG/BMP/GIF also never gets JPEG'd — it's decoded, resampled, and re-`FlateDecode`-encoded instead, at any size. Larger downscaled files, always pixel-exact. |
+| `Lossy` | Always re-encode an opaque PNG/BMP/GIF as JPEG — the behavior every PeachPDF version before this option used. An explicit opt-in for the smallest files when fidelity doesn't matter, even for diagram/line-art content. |
+
+An interlaced PNG, an alpha-bearing PNG, and every other raster format (WebP, AVIF, TIFF) are unaffected by `ImageCompression` in every mode — WebP/AVIF/TIFF each support both a lossy and a lossless internal encoding and PeachPDF currently has no way to tell which a given source used, so extending this protection to them isn't safe yet.
 
 ## Authoring colors in CMYK
 

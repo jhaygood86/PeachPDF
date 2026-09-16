@@ -128,7 +128,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
             var page = document.AddPage();
             var gfx = XGraphics.FromPdfPage(page);
 
-            var bytes = RasterPngFixture.MakeSolidRgbaPngBytes(200, 200, 255, 0, 0);
+            var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 255, 0, 0);
             using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
 
             // 20pt display size, default MaximumDownscaleMultiplier (1.0): 20 / 0.75 = 26.67px, rounds to 27.
@@ -149,7 +149,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
             var page = document.AddPage();
             var gfx = XGraphics.FromPdfPage(page);
 
-            var bytes = RasterPngFixture.MakeSolidRgbaPngBytes(200, 200, 255, 0, 0);
+            var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 255, 0, 0);
             using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
 
             gfx.DrawImage(xImage, 0, 0, 20, 20);
@@ -167,7 +167,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
             var page = document.AddPage();
             var gfx = XGraphics.FromPdfPage(page);
 
-            var bytes = RasterPngFixture.MakeSolidRgbaPngBytes(200, 200, 0, 255, 0);
+            var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 0, 255, 0);
             using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
 
             gfx.DrawImage(xImage, 0, 0, 20, 20);   // 20 / 0.75 = 26.67px, rounds to 27
@@ -190,7 +190,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
             var page = document.AddPage();
             var gfx = XGraphics.FromPdfPage(page);
 
-            var bytes = RasterPngFixture.MakeSolidRgbaPngBytes(200, 200, 0, 0, 255);
+            var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 0, 0, 255);
             using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
 
             gfx.DrawImage(xImage, 0, 0, 20, 20);
@@ -214,7 +214,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
             var page = document.AddPage();
             var gfx = XGraphics.FromPdfPage(page);
 
-            var bytes = RasterPngFixture.MakeSolidRgbaPngBytes(200, 200, 255, 255, 0);
+            var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 255, 255, 0);
             using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
 
             gfx.ScaleTransform(2.0, 2.0);
@@ -238,7 +238,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
             var page = document.AddPage();
             var gfx = XGraphics.FromPdfPage(page);
 
-            var bytes = RasterPngFixture.MakeSolidRgbaPngBytes(200, 200, 0, 255, 255);
+            var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 0, 255, 255);
             using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
 
             gfx.ScaleTransform(3.0, 1.0);
