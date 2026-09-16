@@ -2148,7 +2148,20 @@ namespace PeachPDF.Html.Core.Dom
             // loop's later Math.Max across every cell's ActualBottom (CssLayoutEngineTable.LayoutBodyRow)
             // then reconciles the row height from correct per-cell values instead of ones already
             // clipped to their own too-small specified height (issue #729).
-            box.ActualBottom = boxHeight is not null && !box.IsTableCell
+            //
+            // §17.5.3 makes the SAME "maximum of specified and content" rule apply to the table box
+            // itself: "the height of a 'table' element's box is the maximum of the table's specified
+            // height and the sum of the row heights". Reached here because this call runs generically on
+            // every box in PerformLayoutEpilogue, including a table's own outer box, after
+            // CssLayoutEngineTable.Layout has already set ActualBottom from real row geometry - Math.Max
+            // against that is exactly "never shrink below the rows' real content", the same carve-out the
+            // cell already gets, rather than the general §10.6.3 rule clipping a short explicit height
+            // below content that CssLayoutEngineTable.PerformLayout may since have grown to satisfy it
+            // (issue #1116).
+            var neverShrinksBelowContent = box.IsTableCell
+                || box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable;
+
+            box.ActualBottom = boxHeight is not null && !neverShrinksBelowContent
                 ? box.Location.Y + height
                 : Math.Max(box.ActualBottom, box.Location.Y + height);
 

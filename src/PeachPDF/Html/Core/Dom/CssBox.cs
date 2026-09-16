@@ -721,6 +721,18 @@ namespace PeachPDF.Html.Core.Dom
         internal TableSetup? TableSetup { get; set; }
 
         /// <summary>
+        /// Per-row minimum row-axis extents a measurement pass computed for this table, because its own
+        /// explicit CSS 2.1 §17.5.3 <c>height</c>/<c>min-height</c> exceeded the rows' natural total -
+        /// see <see cref="CssLayoutEngineTable.PerformLayout"/>. Set only for the duration of the
+        /// redo pass that applies them (cleared again once that pass returns), and read by
+        /// <see cref="CssLayoutEngineTable"/>'s own row-height candidate as one more floor alongside a
+        /// row's own explicit height. Null on every box that is not a table, and on a table whenever no
+        /// redistribution is in progress - which is every table without an explicit height/min-height,
+        /// and every pass of one that has.
+        /// </summary>
+        internal IReadOnlyDictionary<CssBox, double>? RowHeightRedistribution { get; set; }
+
+        /// <summary>
         /// The vertical line segments (in absolute document coordinates) to draw between adjacent
         /// columns of a multi-column container — one segment per gap per page-row actually used.
         /// Set by <see cref="CssLayoutEngineColumns"/>, painted by <see cref="FragmentPainter"/>.

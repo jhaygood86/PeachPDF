@@ -71,6 +71,59 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
         #endregion
 
+        #region Explicit Table Height Redistribution Across Pages (issue #1116)
+
+        [Fact]
+        public async Task TableHeight_RedistributedRows_StraddlePageBoundariesCorrectly()
+        {
+            // A table's explicit `height` (CSS 2.1 §17.5.3) grows each row via
+            // CssLayoutEngineTable's measure-then-redo mechanism - the redo pass re-runs the whole row
+            // loop, including its own per-row page-break decisions, against the GROWN rows. Three rows
+            // that would all fit on one page at their natural (short) height are grown enough here that
+            // they must straddle two pages instead - proving the redo's own pagination isn't just replayed
+            // from the first (natural-height) pass's decisions.
+            var pageHeight = 150.0;
+
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='width:100%;border-collapse:collapse;height:400pt'>
+        <tr id='r1'><td style='padding:5pt'>Row 1</td></tr>
+        <tr id='r2'><td style='padding:5pt'>Row 2</td></tr>
+        <tr id='r3'><td style='padding:5pt'>Row 3</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight, marginTop: 0, marginBottom: 0);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var r1 = FindById(rootBox, "r1");
+            var r2 = FindById(rootBox, "r2");
+            var r3 = FindById(rootBox, "r3");
+            Assert.NotNull(r1);
+            Assert.NotNull(r2);
+            Assert.NotNull(r3);
+
+            // Grown far past what 3 one-line rows would naturally need (well under 150pt total) -
+            // redistribution must have pushed at least the last row onto a later page.
+            Assert.True(r3!.Location.Y >= pageHeight,
+                $"row 3 (Location.Y={r3.Location.Y}) should have been pushed past the first page's own " +
+                $"{pageHeight}pt band by redistribution - natural (unredistributed) rows this short would " +
+                "all fit on page 1");
+
+            // Rows still in strict document order, each starting no earlier than the previous row's own
+            // bottom - the redo's own row loop must not have produced overlapping or out-of-order rows.
+            Assert.True(r1!.Location.Y < r2!.Location.Y);
+            Assert.True(r2.ActualBottom <= r3.Location.Y + 1);
+        }
+
+
+        #endregion
+
         #region Available Height / Bottom Margin Tests
 
         [Fact]
@@ -1112,6 +1165,22 @@ namespace PeachPDF.Tests.Html.Core.Dom
             foreach (var child in box.Boxes)
             {
                 var result = FindTableBox(child);
+                if (result != null)
+                    return result;
+            }
+
+            return null;
+        }
+
+        private static CssBox? FindById(CssBox box, string id)
+        {
+            var val = box.HtmlTag?.TryGetAttribute("id", "");
+            if (val != null && val.Equals(id, System.StringComparison.OrdinalIgnoreCase))
+                return box;
+
+            foreach (var child in box.Boxes)
+            {
+                var result = FindById(child, id);
                 if (result != null)
                     return result;
             }

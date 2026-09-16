@@ -137,6 +137,16 @@ namespace PeachPDF.Html.Core.Dom
         private readonly List<CssBox> _bodyRows = [];
 
         /// <summary>
+        /// The row grid's own natural (content-driven) row-axis far edge, in the same border-box basis as
+        /// <see cref="CssLayoutEngine.GetBoxHeight"/>'s resolved table height - set once, at the point
+        /// <c>LayoutBodyRows</c>' Step 7 computes <c>gridBorderBoxBottom</c>, and read back by
+        /// <see cref="TryComputeRowHeightRedistribution"/> once this pass returns. Meaningless (left at 0)
+        /// for a vertical table, which this engine does not extend row-height redistribution to - see the
+        /// writing-mode remarks at the top of this file.
+        /// </summary>
+        private double _naturalGridFarEdge;
+
+        /// <summary>
         /// For each row kept in <see cref="_bodyRows"/>, its ordinal position among the table's rows in
         /// source order - counting <c>visibility: collapse</c> rows that <see cref="AssignBoxKinds"/>
         /// left out of <see cref="_bodyRows"/> (CSS 2.1 §17.6.1) too. A cell's <c>rowspan</c> counts rows
@@ -464,6 +474,55 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var table = new CssLayoutEngineTable(g, tableBox, resume);
                 await table.Layout(g);
+
+                // CSS 2.1 §17.5.3's table-height minimum can only be measured against REAL row geometry
+                // (unlike column width, a row's natural height is a genuine result of laying out content,
+                // not something a pre-pass can estimate) - so a table whose explicit height/min-height
+                // exceeds what its rows naturally reached is laid out again, this time with each row's own
+                // proportional share of the shortfall fed back in as a floor (see RowHeightFloor). This is
+                // a fifth reason this engine runs again over the same table, alongside the four
+                // fragmentation.a-table-is-laid-out-again-for-four-reasons invariant already names - and
+                // like the three "fresh" ones there, RestoreStructureFromAnyPreviousRun (at the top of
+                // Layout) undoes what this first pass just did before the redo starts from the markup
+                // again. Every downstream computation that already derives correctly from row geometry
+                // (rowspan band-closing, collapsed-border grid lines, captions, header/footer proxies,
+                // per-row page-break decisions) is therefore correct on the redo for free - it is the same
+                // code, now simply seeing taller rows - rather than needing a second, parallel patch.
+                //
+                // Gated on resume/PendingBreakToken being null: only a table that completed entirely
+                // within this first top-level (natural) pass is redistributed. A table whose row loop
+                // itself had to stop mid-cell on the NATURAL pass (a real continuation into a later
+                // top-level pass) is left alone - its total natural height across every pass isn't known
+                // until the LAST of those passes completes, and by then earlier rows are already
+                // committed/painted and cannot be redone. RowHeightRedistribution being null guards
+                // against ever starting a second redo: the redo pass's own floors are exact, so it should
+                // already meet the target on an ordinary table - this is a safety net, not expected to
+                // matter in practice.
+                if (resume is null && tableBox.PendingBreakToken is null && tableBox.RowHeightRedistribution is null
+                    && table.TryComputeRowHeightRedistribution(out var rowHeightFloors))
+                {
+                    tableBox.RowHeightRedistribution = rowHeightFloors;
+
+                    var redo = new CssLayoutEngineTable(g, tableBox, resume: null);
+                    await redo.Layout(g);
+                }
+
+                // Cleared once the table is genuinely, fully done - PendingBreakToken null after
+                // WHICHEVER call actually finished it, not unconditionally after the redo above. The redo
+                // pass can itself need a true continuation even though the natural (unredistributed) pass
+                // above did not: pushing an earlier row taller can displace a later row's own real content
+                // past what now fits in the remaining fragmentainer space, which is a genuine
+                // cursor.Stopped case the natural pass never hit. That continuation resumes as a SEPARATE
+                // later call to this same method (resume non-null, entered from CssBox.LayoutContents),
+                // and its own row loop still needs these floors for whatever rows it places -
+                // RowHeightFloor reads RowHeightRedistribution directly, with no dependency on how this
+                // call ends. Left set whenever PendingBreakToken is still non-null here, for exactly that
+                // reason; a table that never triggered redistribution at all leaves this a harmless
+                // null-to-null assignment.
+                if (tableBox.PendingBreakToken is null)
+                {
+                    tableBox.RowHeightRedistribution = null;
+                }
             }
             catch (Exception ex)
             {
@@ -2012,6 +2071,90 @@ namespace PeachPDF.Html.Core.Dom
             var surplus = availCellSpace - occupiedSpace;
             for (var i = 0; i < _columnWidths!.Length; i++)
                 _columnWidths[i] += surplus * (_columnWidths[i] / occupiedSpace);
+        }
+
+        /// <summary>
+        /// The row-axis counterpart of <see cref="SpreadSurplusProportionally"/>: called once, by
+        /// <see cref="PerformLayout"/>, right after this instance's own (natural, unfloored) pass has
+        /// returned. Decides whether the table's own explicit CSS 2.1 §17.5.3 <c>height</c>/<c>min-height</c>
+        /// exceeded what its rows naturally reached and, if so, computes each row's proportional share of
+        /// the shortfall - mirroring the column-width formula exactly, so the two axes agree on what
+        /// "distributed proportionally" means. Unlike column width, this cannot run before layout: a row's
+        /// natural height is a genuine result of laying out real content, not something knowable ahead of
+        /// time the way an auto column's intrinsic width is.
+        /// </summary>
+        /// <param name="floors">
+        /// Populated with each placed row's target row-axis height (natural height plus its own share of
+        /// the surplus) when this returns true - fed back into a redo pass via
+        /// <see cref="CssBox.RowHeightRedistribution"/>, read by <see cref="RowHeightFloor"/>.
+        /// </param>
+        /// <returns>
+        /// False (with <paramref name="floors"/> null) when the table has no explicit height/min-height,
+        /// when its rows already meet or exceed it, or for a vertical table - this engine does not extend
+        /// row-height redistribution to a vertical table's own row axis (physical X, not the physical-Y
+        /// axis <c>height</c> resolves); see the writing-mode remarks at the top of this file.
+        /// </returns>
+        private bool TryComputeRowHeightRedistribution(out IReadOnlyDictionary<CssBox, double>? floors)
+        {
+            floors = null;
+
+            if (_isVertical) return false;
+
+            // min-height's initial value is the literal string "0" (unlike height's "auto"), so
+            // IsValidLength alone is true for it on every table whether or not an author ever wrote it -
+            // see RowHeightFloor's own remarks on the identical trap. Excluded here purely to skip the
+            // GetBoxHeight call on the overwhelmingly common table with no explicit height at all; unlike
+            // a row, a table safely went through PerformLayoutPrologue, so GetBoxHeight(_tableBox) itself
+            // would still resolve correctly either way - the surplus check below is the real gate.
+            var hasExplicitHeight = CssValueParser.IsValidLength(_tableBox.Height);
+            var hasExplicitMinHeight = _tableBox.MinHeight != "0" && CssValueParser.IsValidLength(_tableBox.MinHeight);
+            if (!hasExplicitHeight && !hasExplicitMinHeight) return false;
+
+            // The same number ApplyHeight's own generic epilogue call would already assign to
+            // _tableBox.ActualBottom for a non-shrinking table box - see its own remarks on the
+            // "maximum of specified and content" carve-out this mirrors, applied here one layer earlier so
+            // the extra height actually reaches row/cell/border geometry instead of only this bookkeeping
+            // field.
+            var desiredFarEdge = _tableBox.Location.Y + (CssLayoutEngine.GetBoxHeight(_tableBox) ?? 0);
+            var surplus = desiredFarEdge - _naturalGridFarEdge;
+
+            // Also covers the ordinary case of a min-height smaller than content, and a plain height this
+            // pass's own content already exceeded - nothing to redistribute either way.
+            if (surplus <= 0 || _bodyRows.Count == 0) return false;
+
+            var naturalHeights = new double[_bodyRows.Count];
+            var totalNatural = 0d;
+
+            for (var i = 0; i < _bodyRows.Count; i++)
+            {
+                var row = _bodyRows[i];
+                naturalHeights[i] = Math.Max(0, row.ActualBottom - row.Location.Y);
+                totalNatural += naturalHeights[i];
+            }
+
+            var computed = new Dictionary<CssBox, double>(_bodyRows.Count);
+
+            if (totalNatural > 0)
+            {
+                for (var i = 0; i < _bodyRows.Count; i++)
+                {
+                    computed[_bodyRows[i]] = naturalHeights[i] + surplus * (naturalHeights[i] / totalNatural);
+                }
+            }
+            else
+            {
+                // Every row measured zero-height (e.g. every cell empty) - nothing to be proportional to,
+                // so split the surplus evenly instead, mirroring DetermineMissingColumnWidths' own
+                // equal-share fallback for the analogous all-columns-unset case.
+                var share = surplus / _bodyRows.Count;
+                foreach (var row in _bodyRows)
+                {
+                    computed[row] = share;
+                }
+            }
+
+            floors = computed;
+            return true;
         }
 
         /// <summary>
@@ -3872,6 +4015,15 @@ namespace PeachPDF.Html.Core.Dom
             // grid's own border still had to be drawn beneath it.
             var gridBorderBoxBottom = contentBottom + TableRowAxisBorderEnd;
 
+            // The row grid's own natural (content-driven) far edge, captured here rather than re-derived
+            // from border/padding/spacing arithmetic a second time - read by TryComputeRowHeightRedistribution
+            // once this pass returns, in the same row-axis/border-box basis GetBoxHeight's own resolved
+            // table height already uses, so the two compare directly. Deliberately taken BEFORE any bottom
+            // caption adjustment below: a caption belongs after the table's real content, not inflated by
+            // its own explicit height, so redistribution (which only ever grows rows, never captions) must
+            // compare against the grid alone.
+            _naturalGridFarEdge = gridBorderBoxBottom;
+
             if (tableContinuation is null && _bottomCaptions.Count > 0)
             {
                 // The caption's own returned position (its own far row-axis edge plus its own trailing
@@ -5510,6 +5662,20 @@ namespace PeachPDF.Html.Core.Dom
                 currentX = cellColumnAxisEdge + spacingAfterCell;
             }
 
+            // CSS 2.1 §17.5.3: a row's own explicit height/min-height, and any per-row floor a prior
+            // measurement pass computed when the table's own explicit height exceeded its rows' natural
+            // total (see PerformLayout), only ever RAISE rowMaxBottom - never shrink it below what the
+            // row's real cell content above already requires. Applied before both the spanning-cell band
+            // check and the vertical-alignment loop below, so every cell this row aligns (and any cell
+            // whose own content might still straddle a page boundary here) sees the final, floor-applied
+            // value - mirroring the identical "raise, never shrink" carve-out ApplyHeight already gives a
+            // table cell.
+            var rowHeightFloor = RowHeightFloor(row);
+            if (rowHeightFloor > 0)
+            {
+                rowMaxBottom = Math.Max(rowMaxBottom, currentY + rowHeightFloor);
+            }
+
             // Vertical alignment
             IEnumerable<CssBox> boxesToVerticallyAlign = row.Boxes;
             if (rowSpannedBoxes.TryGetValue(rowIndex, out var boxesThatEndOnRow))
@@ -5641,6 +5807,70 @@ namespace PeachPDF.Html.Core.Dom
                         cell, cursor.SlotIndex, new RRect(left, currentY, cellWidth, rowMaxBottom - currentY));
                 }
             }
+        }
+
+        /// <summary>
+        /// The minimum row-axis extent (physical Y — this engine does not extend the row-height concept
+        /// to a vertical table's own row axis, physical X; see the writing-mode remarks at the top of
+        /// this file) <paramref name="row"/> must reach: its own explicit CSS 2.1 §17.5.3
+        /// <c>height</c>/<c>min-height</c>, and/or the per-row share <see cref="PerformLayout"/>'s own
+        /// measurement pass computed when the table's explicit height exceeded the rows' natural total.
+        /// Zero when neither applies, or always for a vertical table.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>row</c> is never itself given a <c>PerformLayoutPrologue</c> call (see <see
+        /// cref="LayoutBodyRow"/>'s own remarks), so this calls <see cref="CssLayoutEngine.GetBoxHeight"/>
+        /// directly rather than through <see cref="CssLayoutEngine.ApplyHeight"/> the way a cell's height
+        /// is resolved — every field <c>GetBoxHeight</c> reads for a row (<c>ContainingBlock</c>, the CSS
+        /// height/min-height properties themselves, border/padding) is either a pure style read or a
+        /// computed property that walks the DOM chain up to the table box (already laid out by the time
+        /// this runs), not a field <c>PerformLayoutPrologue</c> would otherwise have to seed first -
+        /// <b>except</b> its own auto-height fallback baseline, <c>ActualBoxSizingHeight</c>
+        /// (<c>Size.Height + ActualBoxSizeIncludedHeight</c>), which is exactly the field a row never gets
+        /// a chance to resolve, and can hold a stale value this same <c>CssBox</c> picked up from an
+        /// unrelated earlier layout of some other box kind (a table's own child <c>CssBox</c> instances
+        /// persist and get relaid-out across the reflow loop, <c>ShrinkToFit</c>, and this engine's own
+        /// redo pass - see the "table is laid out again" invariant).
+        /// </para>
+        /// <para>
+        /// <c>min-height</c>'s initial value is the literal string <c>"0"</c> (CSS 2.1, unlike
+        /// <c>height</c>'s <c>"auto"</c>), so <c>CssValueParser.IsValidLength</c> is true for it on
+        /// <i>every</i> row whether or not an author ever wrote it - calling <c>GetBoxHeight</c> whenever
+        /// that alone holds true would fall through to the unsafe baseline above on every ordinary,
+        /// unconstrained row (found the hard way: it grew rowMaxBottom by a few points on rows that had no
+        /// explicit height at all, shifting page-break decisions in tests calibrated to exact geometry).
+        /// <c>row.Height</c> is safe on its own - a genuine <c>IsValidLength</c> there always takes
+        /// <c>GetBoxHeight</c>'s direct-parse branch, which never reads <c>ActualBoxSizingHeight</c> - so
+        /// only <c>MinHeight</c> needs the extra "not just the default" check.
+        /// </para>
+        /// <para>
+        /// Not airtight against a redundant zero-valued <c>calc()</c> (<c>min-height: calc(0px + 0px)</c>):
+        /// <c>CssValueParser.IsValidLength</c> accepts any <c>calc(...)</c> expression without evaluating
+        /// it, so such a value would not literally equal the string <c>"0"</c> and would slip past this
+        /// guard into the same unsafe-baseline path above. Deliberately not closed here - it is an
+        /// exotic, redundant authoring pattern, not a realistic regression risk, and closing it would mean
+        /// evaluating <c>calc()</c> just to decide whether to skip evaluating it.
+        /// </para>
+        /// </remarks>
+        private double RowHeightFloor(CssBox row)
+        {
+            if (_isVertical) return 0;
+
+            var hasExplicitHeight = CssValueParser.IsValidLength(row.Height);
+            var hasExplicitMinHeight = row.MinHeight != "0" && CssValueParser.IsValidLength(row.MinHeight);
+
+            var floor = hasExplicitHeight || hasExplicitMinHeight
+                ? CssLayoutEngine.GetBoxHeight(row) ?? 0
+                : 0;
+
+            if (_tableBox.RowHeightRedistribution is { } redistribution
+                && redistribution.TryGetValue(row, out var computed))
+            {
+                floor = Math.Max(floor, computed);
+            }
+
+            return floor;
         }
 
         /// <summary>
