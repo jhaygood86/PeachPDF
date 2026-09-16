@@ -15,9 +15,18 @@
          resolved SDK's own root folder and is reliably set this early on every SDK version
          tested. That path's trailing separator is present under some SDK versions and absent
          under others (also observed directly), hence the explicit TrimEnd normalization before
-         taking the final path segment. -->
+         taking the final path segment. Under VS2026 Insiders, $(MSBuildExtensionsPath) resolves
+         to VS's own MSBuild toolset path rather than a dotnet-SDK folder, so this final segment
+         comes back as the literal string "MSBuild" instead of a version - feeding that straight
+         into VersionGreaterThanOrEquals is a hard MSBuild evaluation error (not just a false
+         condition), which blocked VS2026 from loading the project at all (issue #1130). The
+         regex guard below only invokes VersionGreaterThanOrEquals when the resolved segment
+         actually looks like a version, so an unrecognized host value (this one, or a future
+         one from some other IDE/MSBuild) just leaves TargetFrameworks at the net8.0;net10.0
+         default instead of crashing. -->
     <NormalizedSdkPath>$(MSBuildExtensionsPath.TrimEnd('\').TrimEnd('/'))</NormalizedSdkPath>
     <ResolvedNETCoreSdkVersion>$([System.IO.Path]::GetFileName($(NormalizedSdkPath)))</ResolvedNETCoreSdkVersion>
-    <TargetFrameworks Condition="$([MSBuild]::VersionGreaterThanOrEquals($(ResolvedNETCoreSdkVersion), '11.0.100'))">$(TargetFrameworks);net11.0</TargetFrameworks>
+    <ResolvedNETCoreSdkVersionLooksVersioned>$([System.Text.RegularExpressions.Regex]::IsMatch($(ResolvedNETCoreSdkVersion), '^\d+(\.\d+){2,3}'))</ResolvedNETCoreSdkVersionLooksVersioned>
+    <TargetFrameworks Condition="'$(ResolvedNETCoreSdkVersionLooksVersioned)' == 'true' AND $([MSBuild]::VersionGreaterThanOrEquals($(ResolvedNETCoreSdkVersion), '11.0.100'))">$(TargetFrameworks);net11.0</TargetFrameworks>
   </PropertyGroup>
 </Project>
