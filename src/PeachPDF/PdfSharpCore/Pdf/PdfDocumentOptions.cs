@@ -135,6 +135,16 @@ namespace PeachPDF.PdfSharpCore.Pdf
         double _maximumDownscaleMultiplier = 1.0;
 
         /// <summary>
+        /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.ImageCompression"/> - see there for behavior.
+        /// </summary>
+        public ImageCompression ImageCompression
+        {
+            get { return _imageCompression; }
+            set { _imageCompression = value; }
+        }
+        ImageCompression _imageCompression = ImageCompression.Auto;
+
+        /// <summary>
         /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.PdfAConformance"/> - see there for behavior.
         /// Read by <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfATransparencyGuard"/> to reject
         /// PDF/A-1-incompatible transparency usage, and by <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfCatalog"/>/

@@ -293,6 +293,12 @@ namespace PeachPDF
         public double MaximumDownscaleMultiplier { get; set; } = 1.0;
 
         /// <summary>
+        /// How an opaque PNG/BMP/GIF source is embedded - see <see cref="PeachPDF.ImageCompression"/> for
+        /// what each level does. Defaults to <see cref="PeachPDF.ImageCompression.Auto"/>.
+        /// </summary>
+        public ImageCompression ImageCompression { get; set; } = ImageCompression.Auto;
+
+        /// <summary>
         /// The PDF/X (ISO 15930) print-production conformance level to target. Defaults to
         /// <see cref="PeachPDF.PdfXConformance.None"/> - no PDF/X-specific work is done. See
         /// <see cref="PeachPDF.PdfXConformance"/> for what each level requires, including the mandatory

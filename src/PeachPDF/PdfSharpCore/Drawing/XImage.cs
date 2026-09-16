@@ -222,6 +222,25 @@ namespace PeachPDF.PdfSharpCore.Drawing
         internal CmykRasterData? CmykRaster => _source.CmykRaster;
 
         /// <summary>
+        /// Non-null when this image should be embedded via byte-for-byte PNG pass-through - see
+        /// <see cref="IImageSource.PngPassthrough"/>. An eligible PNG is never <c>Transparent</c> (only
+        /// alpha-free color types qualify), so it already resolves to <see cref="XImageFormat.Jpeg"/>
+        /// above without needing its own branch - <see cref="PdfImage"/>'s own JPEG-dispatch
+        /// fast path checks this before falling into its lossy re-encode, mirroring
+        /// <see cref="JpegPassthrough"/>'s.
+        /// </summary>
+        internal PngPassthroughData? PngPassthrough => _source.PngPassthrough;
+
+        /// <summary>
+        /// True when this image's source format has no lossy encoding mode at all (PNG/BMP/GIF) - see
+        /// <see cref="IImageSource.IsLosslessSourceFormat"/>. Consulted by <see cref="PdfImage"/>'s
+        /// JPEG-dispatch fast path to decide whether <see cref="PeachPDF.ImageCompression.Auto"/>/
+        /// <see cref="PeachPDF.ImageCompression.Lossless"/> should avoid its lossy JPEG fallback for this
+        /// source.
+        /// </summary>
+        internal bool IsLosslessSourceFormat => _source.IsLosslessSourceFormat;
+
+        /// <summary>
         /// True when this image's source is single-channel grayscale - see
         /// <see cref="IImageSource.IsGrayscale"/>. Consulted by <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfImage"/>'s
         /// JPEG resize-fallback path to write a matching <c>/ColorSpace</c>.

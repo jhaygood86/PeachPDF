@@ -605,6 +605,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             Assert.Equal(bytes, passthrough.Value.Data);
             Assert.True(passthrough.Value.NeedsInvertedDecode);
             Assert.Null(passthrough.Value.IccProfile);
+            Assert.Null(img.PngPassthrough);
+            Assert.False(img.IsLosslessSourceFormat);
         }
 
         [Fact]
@@ -700,6 +702,246 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             var img = ImageSource.FromBinary("test.png", () => MakePngBytes(4, 4, 255, 0, 0));
 
             Assert.Null(img.JpegPassthrough);
+        }
+
+        // --- PngPassthrough ---
+
+        [Fact]
+        public void PngPassthrough_OpaqueIndexedPng_IsPopulated()
+        {
+            // Same fixture shape as FromBinary_OpaquePng_IsNotTransparent above (PeachImage's encoder
+            // auto-indexes a small uniform-color source) - now also proving it populates PngPassthrough,
+            // not just that it reports Transparent = false.
+            var bytes = MakePngBytes(4, 4, 255, 0, 0);
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+
+            var passthrough = img.PngPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(PngPassthroughColorSpace.Indexed, passthrough.Value.ColorSpace);
+            Assert.NotNull(passthrough.Value.PaletteRgb);
+            Assert.False(img.Transparent);
+            Assert.True(img.IsLosslessSourceFormat);
+            Assert.Null(img.JpegPassthrough);
+            Assert.Null(img.CmykRaster);
+            Assert.False(img.IsGrayscale);
+            Assert.False(img.IsCmyk);
+        }
+
+        [Fact]
+        public void PngPassthrough_OpaqueTruecolorPng_IsPopulatedAsRgb()
+        {
+            // An Rgb24 source (not Rgba32 - that would carry real alpha and encode as color type 6
+            // TruecolorAlpha even under ColorMode.Truecolor, same shape as
+            // FromBinary_OpaqueTruecolorPng_IsTransparent above) with ColorMode.Truecolor forces a real
+            // color type 2 (no palette, no alpha) encode, isolating the plain RGB case from the
+            // auto-indexed shape MakePngBytes/PngPassthrough_OpaqueIndexedPng_IsPopulated covers.
+            var bytes = RasterPngFixture.MakeInterlacedPngBytes(4, 4, 10, 20, 30, interlace: false);
+
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+
+            var passthrough = img.PngPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(PngPassthroughColorSpace.Rgb, passthrough.Value.ColorSpace);
+            Assert.Null(passthrough.Value.PaletteRgb);
+        }
+
+        [Fact]
+        public void PngPassthrough_OpaqueGrayscalePng_IsPopulatedAsGray()
+        {
+            using var image = Image.Create(4, 4, PixelFormat.Gray8);
+            image.GetPixelSpan().Fill(128);
+            using var ms = new MemoryStream();
+            image.Save(ms, "png");
+
+            var img = ImageSource.FromBinary("test.png", () => ms.ToArray());
+
+            var passthrough = img.PngPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(PngPassthroughColorSpace.Gray, passthrough.Value.ColorSpace);
+        }
+
+        [Fact]
+        public void PngPassthrough_RealAlphaPng_IsNull()
+        {
+            var bytes = MakePngBytes(4, 4, 255, 0, 0, a: 128);
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+
+            Assert.Null(img.PngPassthrough);
+            Assert.True(img.IsLosslessSourceFormat);
+        }
+
+        [Fact]
+        public void PngPassthrough_TruecolorTrnsPng_IsPopulatedWithChromaKeyMask()
+        {
+            // A Truecolor tRNS is always a single exact chroma-key value - eligible for byte-for-byte
+            // pass-through with a PDF /Mask color-key array, not disqualified by HasTrns the way a real
+            // per-pixel alpha channel is.
+            var bytes = RasterPngFixture.MakeTrnsPngBytes(4, 4, 255, 0, 0, (10, 20, 30));
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+
+            var passthrough = img.PngPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(PngPassthroughColorSpace.Rgb, passthrough.Value.ColorSpace);
+            Assert.Equal([10, 10, 20, 20, 30, 30], passthrough.Value.ColorKeyMask!);
+        }
+
+        [Fact]
+        public void PngPassthrough_GrayscaleTrnsPng_IsPopulatedWithChromaKeyMask()
+        {
+            var bytes = RasterPngFixture.MakeGrayscaleTrnsPngBytes(4, 4, gray: 128, transparentGray: 64);
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+
+            var passthrough = img.PngPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(PngPassthroughColorSpace.Gray, passthrough.Value.ColorSpace);
+            Assert.Equal([64, 64], passthrough.Value.ColorKeyMask!);
+        }
+
+        [Fact]
+        public void PngPassthrough_PaletteTrnsAllBinary_IsPopulatedWithIndexMask()
+        {
+            (byte, byte, byte)[] palette = [(255, 0, 0), (0, 255, 0), (0, 0, 255)];
+            byte[] alphas = [255, 0, 255]; // index 1 (green) is the transparent entry
+            var bytes = RasterPngFixture.MakeIndexedPngBytesWithTrns(2, 2, palette, alphas, (x, y) => (byte)((x + y) % 3));
+
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+            var passthrough = img.PngPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(PngPassthroughColorSpace.Indexed, passthrough.Value.ColorSpace);
+            Assert.Equal([1, 1], passthrough.Value.ColorKeyMask!);
+        }
+
+        [Fact]
+        public void PngPassthrough_PaletteTrnsContiguousMultiIndex_IsPopulatedWithRangeMask()
+        {
+            // Two transparent indices that ARE contiguous (1 and 2) still collapse to a single [min max]
+            // range, which is all PDF's colour-key mask supports for an Indexed colour space (one
+            // component, ISO 32000-1 8.9.6.4) - not one pair per index.
+            (byte, byte, byte)[] palette = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)];
+            byte[] alphas = [255, 0, 0, 255];
+            var bytes = RasterPngFixture.MakeIndexedPngBytesWithTrns(2, 2, palette, alphas, (x, y) => (byte)((x + y) % 4));
+
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+            var passthrough = img.PngPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal([1, 2], passthrough.Value.ColorKeyMask!);
+        }
+
+        [Fact]
+        public void PngPassthrough_PaletteTrnsNonContiguousIndices_IsNull()
+        {
+            // Indices 0 and 2 are transparent but 1 is opaque - a single [min max] range can't express
+            // "these two, but not the one in between" without also masking index 1, so this falls back to
+            // the existing decode+SMask path instead of emitting an incorrect mask.
+            (byte, byte, byte)[] palette = [(255, 0, 0), (0, 255, 0), (0, 0, 255)];
+            byte[] alphas = [0, 255, 0];
+            var bytes = RasterPngFixture.MakeIndexedPngBytesWithTrns(2, 2, palette, alphas, (x, y) => (byte)((x + y) % 3));
+
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+
+            Assert.Null(img.PngPassthrough);
+            Assert.True(img.IsLosslessSourceFormat);
+        }
+
+        [Fact]
+        public void PngPassthrough_PaletteTrnsAllOpaque_IsPopulatedWithNoMask()
+        {
+            // A tRNS chunk with only fully-opaque entries is a legal (if wasteful) PNG - still a valid
+            // pass-through, just with nothing to mask.
+            (byte, byte, byte)[] palette = [(255, 0, 0), (0, 255, 0)];
+            byte[] alphas = [255, 255];
+            var bytes = RasterPngFixture.MakeIndexedPngBytesWithTrns(2, 2, palette, alphas, (x, y) => (byte)((x + y) % 2));
+
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+            var passthrough = img.PngPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Null(passthrough.Value.ColorKeyMask);
+        }
+
+        [Fact]
+        public void PngPassthrough_PalettePartialAlphaTrns_IsNull()
+        {
+            // A partial (neither 0 nor 255) palette alpha entry can't be expressed as a binary color-key
+            // mask - falls back to the existing decode+SMask path, same as a real per-pixel alpha channel.
+            (byte, byte, byte)[] palette = [(255, 0, 0), (0, 255, 0)];
+            byte[] alphas = [255, 128];
+            var bytes = RasterPngFixture.MakeIndexedPngBytesWithTrns(2, 2, palette, alphas, (x, y) => (byte)((x + y) % 2));
+
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+
+            Assert.Null(img.PngPassthrough);
+            Assert.True(img.IsLosslessSourceFormat);
+        }
+
+        [Fact]
+        public void PngPassthrough_InterlacedPng_IsNull()
+        {
+            var bytes = RasterPngFixture.MakeInterlacedPngBytes(4, 4, 10, 20, 30);
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+
+            Assert.Null(img.PngPassthrough);
+            Assert.False(img.Transparent);
+            Assert.True(img.IsLosslessSourceFormat);
+        }
+
+        [Fact]
+        public void PngPassthrough_InterlacedTrnsPng_IsNull()
+        {
+            // Interlace wins regardless of whether the tRNS itself would otherwise be a valid chroma key.
+            var bytes = RasterPngFixture.MakeInterlacedPngBytes(4, 4, 10, 20, 30, transparentColor: (10, 20, 30));
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+
+            Assert.Null(img.PngPassthrough);
+        }
+
+        [Fact]
+        public void PngPassthrough_JpegSource_IsNull()
+        {
+            var bytes = MakeJpegBytes(4, 4, 255, 0, 0);
+            var img = ImageSource.FromBinary("test.jpg", () => bytes);
+
+            Assert.Null(img.PngPassthrough);
+        }
+
+        [Fact]
+        public void IsLosslessSourceFormat_Bmp_IsTrue()
+        {
+            var bytes = MakeBmpBytes(4, 4, 255, 0, 0);
+            var img = ImageSource.FromBinary("test.bmp", () => bytes);
+
+            Assert.True(img.IsLosslessSourceFormat);
+        }
+
+        [Fact]
+        public void IsLosslessSourceFormat_Jpeg_IsFalse()
+        {
+            var bytes = MakeJpegBytes(4, 4, 255, 0, 0);
+            var img = ImageSource.FromBinary("test.jpg", () => bytes);
+
+            Assert.False(img.IsLosslessSourceFormat);
+        }
+
+        [Fact]
+        public void IsLosslessSourceFormat_Webp_IsFalse()
+        {
+            // WebP can itself be lossy or lossless depending on how the source file was encoded, and
+            // PeachImage doesn't currently expose which - see
+            // .claude/accepted-gaps/webp-avif-tiff-lossy-detection-unavailable.md.
+            using var image = MakeSolidImage(4, 4, 10, 20, 30, a: 255);
+            using var ms = new MemoryStream();
+            image.Save(ms, "webp", new WebpEncoderOptions());
+
+            var img = ImageSource.FromBinary("test.webp", () => ms.ToArray());
+
+            Assert.False(img.IsLosslessSourceFormat);
         }
 
         // A minimal, hand-built 2x2 uncompressed CMYK TIFF (PhotometricInterpretation=5/Separated,

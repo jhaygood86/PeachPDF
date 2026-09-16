@@ -314,6 +314,7 @@ namespace PeachPDF
             document.PdfDocument.Options.DownscaleImages = config.DownscaleImages;
             document.PdfDocument.Options.DownscaleQuality = config.DownscaleQuality;
             document.PdfDocument.Options.MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier;
+            document.PdfDocument.Options.ImageCompression = config.ImageCompression;
             // PDF/A conformance is a whole-document property, but AddPdfPages/AddPages are repeatable
             // public APIs (a caller can append more pages to an existing PeachPdfDocument) - a second call
             // requesting a different level than the first would otherwise silently leave the document's
