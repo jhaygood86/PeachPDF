@@ -1,6 +1,7 @@
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using PeachImage;
 using PeachImage.Formats.Bmp;
+using PeachImage.Formats.Gif;
 using PeachImage.Formats.Jpeg;
 using PeachImage.Formats.Png;
 using System;
@@ -68,6 +69,11 @@ namespace PeachPDF.PdfSharpCore.Utils
                 if (info.FormatName == "png")
                 {
                     return DecodePng(name, bytes, quality);
+                }
+
+                if (info.FormatName == "gif")
+                {
+                    return DecodeGif(name, bytes, quality);
                 }
 
                 // Not disposed here - PeachImageSourceImpl takes ownership of it for its whole lifetime
@@ -360,6 +366,47 @@ namespace PeachPDF.PdfSharpCore.Utils
         }
 
         /// <summary>
+        /// Routes a GIF source: eligible for <c>/LZWDecode</c> pass-through (see
+        /// <see cref="ImageSource.IImageSource.GifPassthrough"/>'s own remarks on eligibility) returns a
+        /// <see cref="PeachGifPassthroughImageSourceImpl"/> that skips the full pixel decode entirely -
+        /// same shape as <see cref="DecodePng"/>. An ineligible GIF (interlaced, small palette, doesn't
+        /// cover the full canvas, or a malformed/inconsistent file <see cref="GifPassthrough.TryRead"/>
+        /// itself rejects) falls through to the ordinary decode path, same as before this feature existed.
+        /// </summary>
+        private static IImageSource DecodeGif(string name, byte[] bytes, int quality)
+        {
+            if (GifPassthrough.TryRead(new MemoryStream(bytes), out var gifInfo) && IsGifPassthroughEligible(gifInfo))
+            {
+                var passthrough = new GifPassthroughData
+                {
+                    LzwData = gifInfo.LzwData,
+                    Palette = gifInfo.Palette,
+                    ColorKeyMask = gifInfo.TransparentColorIndex is int transparentIndex ? [transparentIndex, transparentIndex] : null,
+                };
+
+                return new PeachGifPassthroughImageSourceImpl(name, bytes, quality, gifInfo.Width, gifInfo.Height, passthrough);
+            }
+
+            var decoded = Image.Load(new MemoryStream(bytes), Rgba32DecoderOptions);
+            return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat: true);
+        }
+
+        /// <summary>
+        /// Not interlaced (GIF's LZW compresses whatever row order it's given, so an interlaced frame's
+        /// raw bytes decompress into indices in 4-pass order, not top-to-bottom - PDF has no de-interlace
+        /// step for image data), <c>MinCodeSize == 8</c> (the hard byte-compatibility gate between GIF's
+        /// and PDF's LZW conventions - see <see cref="ImageSource.IImageSource.GifPassthrough"/>'s own
+        /// remarks), and the frame covers the full logical canvas (pass-through has no
+        /// canvas-compositing step the way the existing full decode does, so a frame offset from the
+        /// canvas origin or smaller than it can't be embedded as-is).
+        /// </summary>
+        private static bool IsGifPassthroughEligible(GifPassthroughInfo gifInfo) =>
+            !gifInfo.Interlaced &&
+            gifInfo.MinCodeSize == 8 &&
+            gifInfo.Left == 0 && gifInfo.Top == 0 &&
+            gifInfo.Width == gifInfo.CanvasWidth && gifInfo.Height == gifInfo.CanvasHeight;
+
+        /// <summary>
         /// Returns <paramref name="image"/>'s embedded ICC profile's raw bytes, but only when it's
         /// actually usable for <paramref name="image"/>: PeachImage's own <c>GetIccColorProfile()</c>
         /// validates that the profile parses at all, but doesn't cross-check its declared color space or
@@ -447,6 +494,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             public JpegPassthroughData? JpegPassthrough => _passthrough;
             public CmykRasterData? CmykRaster => _raster;
             public PngPassthroughData? PngPassthrough => null;
+            public GifPassthroughData? GifPassthrough => null;
             public bool IsLosslessSourceFormat => false;
 
             public PeachCmykImageSourceImpl(string name, int width, int height, JpegPassthroughData passthrough)
@@ -500,6 +548,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             public JpegPassthroughData? JpegPassthrough => null;
             public CmykRasterData? CmykRaster => null;
             public PngPassthroughData? PngPassthrough => _passthrough;
+            public GifPassthroughData? GifPassthrough => null;
             public bool IsLosslessSourceFormat => true;
 
             public PeachPngPassthroughImageSourceImpl(string name, byte[] bytes, int quality, int width, int height, PngPassthroughData passthrough)
@@ -518,6 +567,51 @@ namespace PeachPDF.PdfSharpCore.Utils
             // decode and re-encode are consistently RGB here, so no /ColorSpace-vs-stream mismatch results,
             // just a 3-component JPEG for what could have been a 1-component one - an acceptable size
             // trade for what's already an explicit Lossy opt-out of the lossless default.
+            private PeachImageSourceImpl DecodedFallback() =>
+                _decodedFallback ??= new PeachImageSourceImpl(Name, Image.Load(new MemoryStream(_bytes), Rgba32DecoderOptions), _quality, transparent: false);
+
+            public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null) =>
+                DecodedFallback().SaveAsJpeg(ms, targetWidth, targetHeight, qualityOverride);
+
+            public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
+                DecodedFallback().SaveAsPdfBitmap(ms, targetWidth, targetHeight);
+        }
+
+        /// <summary>
+        /// A GIF source eligible for <c>/LZWDecode</c> pass-through (see <see cref="DecodeGif"/>/
+        /// <see cref="IsGifPassthroughEligible"/>) - same shape as
+        /// <see cref="PeachPngPassthroughImageSourceImpl"/>, including its <see cref="ImageCompression.Lossy"/>
+        /// decoded-fallback reasoning.
+        /// </summary>
+        private sealed class PeachGifPassthroughImageSourceImpl : IImageSource
+        {
+            private readonly byte[] _bytes;
+            private readonly int _quality;
+            private readonly GifPassthroughData _passthrough;
+            private PeachImageSourceImpl? _decodedFallback;
+
+            public int Width { get; }
+            public int Height { get; }
+            public string Name { get; }
+            public bool Transparent => false;
+            public bool IsCmyk => false;
+            public bool IsGrayscale => false;
+            public JpegPassthroughData? JpegPassthrough => null;
+            public CmykRasterData? CmykRaster => null;
+            public PngPassthroughData? PngPassthrough => null;
+            public GifPassthroughData? GifPassthrough => _passthrough;
+            public bool IsLosslessSourceFormat => true;
+
+            public PeachGifPassthroughImageSourceImpl(string name, byte[] bytes, int quality, int width, int height, GifPassthroughData passthrough)
+            {
+                Name = name;
+                _bytes = bytes;
+                _quality = quality;
+                Width = width;
+                Height = height;
+                _passthrough = passthrough;
+            }
+
             private PeachImageSourceImpl DecodedFallback() =>
                 _decodedFallback ??= new PeachImageSourceImpl(Name, Image.Load(new MemoryStream(_bytes), Rgba32DecoderOptions), _quality, transparent: false);
 
@@ -560,6 +654,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             public JpegPassthroughData? JpegPassthrough => _jpegPassthrough;
             public CmykRasterData? CmykRaster => null;
             public PngPassthroughData? PngPassthrough => null;
+            public GifPassthroughData? GifPassthrough => null;
 
             // True for BMP/GIF and for a PNG that decoded here because it wasn't pass-through-eligible
             // (see DecodePng) - both callers pass this explicitly; JPEG (DecodeRgbOrGrayJpeg) leaves it at

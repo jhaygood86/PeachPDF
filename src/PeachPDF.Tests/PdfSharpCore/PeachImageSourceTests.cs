@@ -609,6 +609,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             Assert.True(passthrough.Value.NeedsInvertedDecode);
             Assert.Null(passthrough.Value.IccProfile);
             Assert.Null(img.PngPassthrough);
+            Assert.Null(img.GifPassthrough);
             Assert.False(img.IsLosslessSourceFormat);
         }
 
@@ -998,6 +999,83 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             var img = ImageSource.FromBinary("test.tiff", () => bytes);
 
             Assert.True(img.IsLosslessSourceFormat);
+        }
+
+        // --- GifPassthrough (issue #1110) ---
+
+        [Fact]
+        public void GifPassthrough_FullPaletteOpaqueGif_IsPopulated()
+        {
+            var bytes = RasterGifFixture.MakeFullPaletteGifBytes(16, 16);
+            var img = ImageSource.FromBinary("test.gif", () => bytes);
+
+            var passthrough = img.GifPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(768, passthrough.Value.Palette.Length); // 256 entries x 3
+            Assert.Null(passthrough.Value.ColorKeyMask);
+            Assert.False(img.Transparent);
+            Assert.True(img.IsLosslessSourceFormat);
+            Assert.Null(img.PngPassthrough);
+            Assert.Null(img.JpegPassthrough);
+            Assert.Null(img.CmykRaster);
+        }
+
+        [Fact]
+        public void GifPassthrough_TransparentGif_IsPopulatedWithColorKeyMask()
+        {
+            var bytes = RasterGifFixture.MakeTransparentGifBytes(16, 16);
+            var img = ImageSource.FromBinary("test.gif", () => bytes);
+
+            var passthrough = img.GifPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.NotNull(passthrough.Value.ColorKeyMask);
+            Assert.Equal(2, passthrough.Value.ColorKeyMask!.Length);
+            Assert.Equal(passthrough.Value.ColorKeyMask[0], passthrough.Value.ColorKeyMask[1]);
+        }
+
+        [Fact]
+        public void GifPassthrough_SmallPaletteGif_IsNull()
+        {
+            // MinCodeSize < 8 - GIF's and PDF's LZW conventions are only byte-compatible when
+            // MinCodeSize == 8 (see GifPassthroughData's own remarks).
+            var bytes = RasterGifFixture.MakeSmallPaletteGifBytes(8, 8, maxColors: 4);
+            var img = ImageSource.FromBinary("test.gif", () => bytes);
+
+            Assert.Null(img.GifPassthrough);
+            Assert.True(img.IsLosslessSourceFormat);
+        }
+
+        [Fact]
+        public void GifPassthrough_InterlacedGif_IsNull()
+        {
+            var bytes = RasterGifFixture.MakeInterlacedGifBytes(8, 8);
+            var img = ImageSource.FromBinary("test.gif", () => bytes);
+
+            Assert.Null(img.GifPassthrough);
+            Assert.True(img.IsLosslessSourceFormat);
+        }
+
+        [Fact]
+        public void GifPassthrough_PartialCanvasGif_IsNull()
+        {
+            // A frame smaller than its own logical screen - byte-for-byte pass-through has no
+            // canvas-compositing step the way the existing full decode does.
+            var bytes = RasterGifFixture.MakePartialCanvasGifBytes(canvasWidth: 16, canvasHeight: 16, frameWidth: 8, frameHeight: 8);
+            var img = ImageSource.FromBinary("test.gif", () => bytes);
+
+            Assert.Null(img.GifPassthrough);
+            Assert.True(img.IsLosslessSourceFormat);
+        }
+
+        [Fact]
+        public void GifPassthrough_JpegSource_IsNull()
+        {
+            var bytes = MakeJpegBytes(4, 4, 255, 0, 0);
+            var img = ImageSource.FromBinary("test.jpg", () => bytes);
+
+            Assert.Null(img.GifPassthrough);
         }
 
         // A minimal, hand-built 2x2 uncompressed CMYK TIFF (PhotometricInterpretation=5/Separated,

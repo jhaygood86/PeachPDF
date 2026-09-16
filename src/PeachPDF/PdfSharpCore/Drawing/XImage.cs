@@ -232,6 +232,14 @@ namespace PeachPDF.PdfSharpCore.Drawing
         internal PngPassthroughData? PngPassthrough => _source.PngPassthrough;
 
         /// <summary>
+        /// Non-null when this image should be embedded via GIF <c>/LZWDecode</c> pass-through - see
+        /// <see cref="IImageSource.GifPassthrough"/>. Same reasoning as <see cref="PngPassthrough"/>: an
+        /// eligible GIF is never <c>Transparent</c>, so it already resolves to <see cref="XImageFormat.Jpeg"/>
+        /// above without needing its own branch.
+        /// </summary>
+        internal GifPassthroughData? GifPassthrough => _source.GifPassthrough;
+
+        /// <summary>
         /// True when this image's source format has no lossy encoding mode at all (PNG/BMP/GIF) - see
         /// <see cref="IImageSource.IsLosslessSourceFormat"/>. Consulted by <see cref="PdfImage"/>'s
         /// JPEG-dispatch fast path to decide whether <see cref="PeachPDF.ImageCompression.Auto"/>/
