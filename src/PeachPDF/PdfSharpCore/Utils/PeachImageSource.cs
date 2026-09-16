@@ -74,7 +74,13 @@ namespace PeachPDF.PdfSharpCore.Utils
                 // (same as before this change; see its own Dispose() remarks on why that's a safe no-op
                 // to skip).
                 var decoded = Image.Load(new MemoryStream(bytes), Rgba32DecoderOptions);
-                bool isLosslessSourceFormat = info.FormatName is "bmp" or "gif";
+
+                // BMP/GIF are unconditionally lossless (neither format has a lossy encoding mode at
+                // all). WebP/AVIF/TIFF each support both, so they only qualify when this specific
+                // decoded source actually used the lossless one (issue #1107 - PeachImage 0.4.6's
+                // ImageInfo.IsLosslessEncoding, see IsLosslessSourceFormat's own remarks).
+                bool isLosslessSourceFormat = info.FormatName is "bmp" or "gif" ||
+                    (info.FormatName is "webp" or "avif" or "tiff" && info.IsLosslessEncoding);
                 return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat);
             }
             catch (ImageFormatException ex)

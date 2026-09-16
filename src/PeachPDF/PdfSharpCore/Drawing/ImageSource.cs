@@ -202,10 +202,11 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
             PngPassthroughData? PngPassthrough { get; }
 
             /// <summary>
-            /// True when this source's own format has no lossy encoding mode at all (PNG, BMP, or GIF -
-            /// WebP/AVIF/TIFF can each be lossy or lossless depending on how the source file was encoded,
-            /// and PeachImage doesn't expose which, so those stay <see langword="false"/> here). Drives
-            /// <see cref="PeachPDF.ImageCompression.Auto"/>/<see cref="PeachPDF.ImageCompression.Lossless"/>'s
+            /// True when this source's pixel data is known to be lossless: always true for PNG, BMP, or
+            /// GIF (neither has a lossy encoding mode at all), and true for WebP/AVIF/TIFF only when this
+            /// specific decoded source actually used its format's lossless mode
+            /// (<see cref="PeachImage.ImageInfo.IsLosslessEncoding"/>, PeachImage 0.4.6+ - issue #1107).
+            /// Drives <see cref="PeachPDF.ImageCompression.Auto"/>/<see cref="PeachPDF.ImageCompression.Lossless"/>'s
             /// decision to never silently re-encode this source as lossy JPEG - see
             /// <c>PdfImage.InitializeJpeg</c>. True regardless of whether <see cref="PngPassthrough"/> is
             /// actually non-null (a PNG can be losslessly-formatted but not itself pass-through-eligible,
