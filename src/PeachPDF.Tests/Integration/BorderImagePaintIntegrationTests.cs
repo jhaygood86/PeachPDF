@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+﻿using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
@@ -62,9 +62,9 @@ namespace PeachPDF.Tests.Integration
             var (_, g) = await PaintAsync("");
 
             Assert.Empty(g.DrawImageCalls);
-            // A solid border paints a mitered quad (BordersDrawHandler.SetInOutsetRectanglePoints) via
-            // DrawPolygon, one per edge.
-            Assert.Equal(4, g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().Count());
+            // A uniform solid border paints as one closed ring (BordersDrawHandler.TryDrawUniformBorder);
+            // only a border whose edges differ needs four separately mitred quads.
+            Assert.Single(g.FilledShapes);
         }
 
         [Fact]
@@ -254,7 +254,7 @@ namespace PeachPDF.Tests.Integration
                 "border-image-source:linear-gradient(red,blue);border-image-slice:1;border-image-width:10pt");
 
             Assert.Empty(g.DrawImageCalls);
-            Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            Assert.NotEmpty(g.FilledShapes);
         }
 
         [Fact]
@@ -355,7 +355,7 @@ namespace PeachPDF.Tests.Integration
                 new TileCapableGraphics());
 
             Assert.Empty(g.DrawImageCalls);
-            Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            Assert.NotEmpty(g.FilledShapes);
         }
 
         [Fact]

@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+﻿using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
@@ -237,11 +237,9 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, span, g);
 
-            // Two vertical edges per line, against slice's two for the whole box.
-            var vertical = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
-                .Where(p => p.Color == RColor.FromArgb(0, 0, 255) && IsVerticalEdge(p.Points)).ToList();
-
-            Assert.Equal(6, vertical.Count);
+            // A line closed on all four sides paints as one closed ring, so clone gives one per line -
+            // against slice, whose lines are open at the wrap and so still paint as separate edges.
+            Assert.Equal(3, CountBlueRings(g));
         }
 
         [Fact]
@@ -366,9 +364,8 @@ namespace PeachPDF.Tests.Integration
             Assert.True(fill.Y + fill.Height <= bandHeight + 1,
                 $"expected the fragment to end at the band bottom ({bandHeight}), got {fill.Y + fill.Height}");
 
-            var horizontal = page0.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
-                .Where(p => !IsVerticalEdge(p.Points)).ToList();
-            Assert.Contains(horizontal, p => p.Points.Max(pt => pt.Y) >= bandHeight - 1);
+            // The fragment's own ring closes at the band edge - that bottom side is the whole point.
+            Assert.Contains(BlackRings(page0), ring => ring.Bounds.Bottom >= bandHeight - 1);
         }
 
         [Fact]
@@ -437,7 +434,9 @@ namespace PeachPDF.Tests.Integration
             var fragments = FragmentCountOf(container, LayoutHarness.FindById(root, "long")!);
             Assert.True(fragments > 2, $"expected the paragraph to split across columns, got {fragments} fragments");
 
-            Assert.Equal(2 * fragments, CountBlueEdges(container, vertical: false));
+            // One closed ring per fragment: clone gives every fragment its own top AND bottom side, which
+            // makes each one a complete four-sided border rather than an open slice.
+            Assert.Equal(fragments, CountBlueRingsAcrossPages(container));
         }
 
         /// <summary>
@@ -614,6 +613,35 @@ namespace PeachPDF.Tests.Integration
         /// what the production loop does, and it is also the only way to see a fragment that shares a page
         /// with another fragment of the same box.
         /// </summary>
+        /// <summary>
+        /// Every closed border ring painted in <paramref name="g"/>, in the given color. A fragment
+        /// closed on all four sides paints as a single ring path rather than four edge quads (see
+        /// <c>BordersDrawHandler.TryDrawUniformBorder</c> - abutting quads leave an antialiasing seam
+        /// along each mitre), so a ring is exactly the observable for "this fragment closed itself".
+        /// </summary>
+        private static IEnumerable<TestRecordingGraphics.DrawPathCall> RingsOf(TestRecordingGraphics g, RColor color) =>
+            g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Where(p => !p.Stroked && p.Color == color);
+
+        private static int CountBlueRings(TestRecordingGraphics g) =>
+            RingsOf(g, RColor.FromArgb(0, 0, 255)).Count();
+
+        private static IEnumerable<TestRecordingGraphics.DrawPathCall> BlackRings(TestRecordingGraphics g) =>
+            RingsOf(g, RColor.Black);
+
+        private static int CountBlueRingsAcrossPages(PeachPDF.Html.Core.HtmlContainerInt container)
+        {
+            var count = 0;
+
+            for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
+            {
+                var g = new TestRecordingGraphics();
+                FragmentPaintHarness.PaintPage(container, g, page);
+                count += CountBlueRings(g);
+            }
+
+            return count;
+        }
+
         private static int CountBlueEdges(PeachPDF.Html.Core.HtmlContainerInt container, bool vertical)
         {
             var blue = RColor.FromArgb(0, 0, 255);

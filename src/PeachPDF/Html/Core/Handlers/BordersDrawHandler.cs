@@ -1,4 +1,4 @@
-// "Therefore those skilled at the unorthodox
+﻿// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -31,6 +31,14 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         private static readonly RPoint[] _borderPts = new RPoint[4];
 
+        /// <summary>
+        /// How close two border widths have to be to count as the same one. Widths reach paint through
+        /// percentage resolution and unit conversion, so two sides declared identically can differ in
+        /// the last bits; a tolerance far below one device pixel at any sane resolution avoids treating
+        /// that as a genuine per-side difference.
+        /// </summary>
+        private const double Epsilon = 1e-6;
+
         #endregion
 
 
@@ -62,6 +70,9 @@ namespace PeachPDF.Html.Core.Handlers
             // A collapse participant's own stroke on an edge CollapsedBorderModel resolved is drawn once,
             // later, from CssBox.CollapsedBorderSegments instead (issue #735) - see BorderEdges' own remarks.
             var suppressed = box.SuppressedBorderEdges;
+
+            if (TryDrawUniformBorder(g, box, rect, suppressed, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge))
+                return;
 
             if (hasTopEdge && !suppressed.HasFlag(BorderEdges.Top) && box.BorderTopStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderTopWidth > 0)
             {
@@ -105,16 +116,35 @@ namespace PeachPDF.Html.Core.Handlers
 
                 case LineStyle.Dotted or LineStyle.Dashed:
                 {
-                    var pen = GetPen(g, style, color, width);
+                    var pen = g.GetPen(color);
+                    pen.Width = width / g.PixelsPerPoint;
+                    pen.LineJoin = RLineJoin.Miter;
+
+                    var dotted = style == LineStyle.Dotted;
+                    var start = isHorizontal ? rect.Left : rect.Top;
+                    var end = isHorizontal ? rect.Right : rect.Bottom;
+
+                    var span = StyledStrokeFitting.Apply(pen, dotted, width, start, end, g.PixelsPerPoint);
+                    if (span is { } fitted)
+                    {
+                        start = fitted.Start;
+                        end = fitted.End;
+                    }
+                    else
+                    {
+                        pen.LineCap = RLineCap.Butt;
+                        pen.DashStyle = RDashStyle.Solid;
+                    }
+
                     if (isHorizontal)
                     {
                         var y = rect.Top + width / 2;
-                        g.DrawLine(pen, rect.Left, y, rect.Right, y);
+                        g.DrawLine(pen, start, y, end, y);
                     }
                     else
                     {
                         var x = rect.Left + width / 2;
-                        g.DrawLine(pen, x, rect.Top, x, rect.Bottom);
+                        g.DrawLine(pen, x, start, x, end);
                     }
                     break;
                 }
@@ -123,10 +153,11 @@ namespace PeachPDF.Html.Core.Handlers
                 {
                     // Solid, Inset, Outset - a collapsed segment has no owning box to shade a bevel
                     // "into" the way DrawBorder's per-edge convention does, so this approximates with
-                    // the same asymmetry GetColor already uses for a box's own top/left edges (a
-                    // horizontal segment behaves like a top edge, a vertical one like a left edge -
-                    // both darken for Inset, stay normal for Outset).
-                    var resolvedColor = style == LineStyle.Inset ? Darken(color) : color;
+                    // the same asymmetry BorderBevelColors.ForSide uses for a box's own top/left edges
+                    // (a horizontal segment behaves like a top edge, a vertical one like a left edge).
+                    var resolvedColor = style is LineStyle.Inset or LineStyle.Outset
+                        ? BorderBevelColors.ForSegment(color, isHorizontal, inset: style == LineStyle.Inset)
+                        : color;
                     g.DrawPolygon(g.GetSolidBrush(resolvedColor),
                     [
                         new RPoint(rect.Left, rect.Top),
@@ -139,46 +170,49 @@ namespace PeachPDF.Html.Core.Handlers
             }
         }
 
-        /// <summary>Value-based twin of <see cref="DrawDoubleOrGrooveRidgeBorder"/> for one collapsed-border segment - see <see cref="DrawCollapsedSegment"/>.</summary>
+        /// <summary>
+        /// Value-based twin of <see cref="DrawDoubleOrGrooveRidgeBorder"/> for one collapsed-border
+        /// segment - see <see cref="DrawCollapsedSegment"/>. A segment has no corner of its own, so the
+        /// two rings are plain sub-rectangles rather than mitred bands, but the thirds and the per-side
+        /// bevel shading are the same.
+        /// </summary>
         private static void DrawDoubleOrGrooveRidgeSegment(RGraphics g, bool isHorizontal, RRect rect, LineStyle style, RColor color, double width)
         {
-            double outerWidth;
-            double innerWidth;
+            double bandWidth;
             RColor outerColor;
             RColor innerColor;
 
             if (style == LineStyle.Double)
             {
-                outerWidth = innerWidth = Math.Max(1, Math.Floor(width / 3));
+                bandWidth = width / 3;
                 outerColor = innerColor = color;
             }
             else
             {
-                outerWidth = innerWidth = width / 2;
-                outerColor = style == LineStyle.Groove ? Darken(color) : color;
-                innerColor = style == LineStyle.Groove ? color : Darken(color);
+                bandWidth = width / 2;
+                var outerIsInset = style == LineStyle.Groove;
+                outerColor = BorderBevelColors.ForSegment(color, isHorizontal, outerIsInset);
+                innerColor = BorderBevelColors.ForSegment(color, isHorizontal, !outerIsInset);
             }
 
-            // outerWidth/innerWidth stay in the caller's raw, un-divided layout-space units below -
-            // see DrawDoubleOrGrooveRidgeBorder's matching remark.
-            var outerPen = g.GetPen(outerColor);
-            outerPen.Width = outerWidth / g.PixelsPerPoint;
-            outerPen.DashStyle = RDashStyle.Solid;
+            DrawSegmentBand(g, isHorizontal, rect, outerColor, 0, bandWidth);
+            DrawSegmentBand(g, isHorizontal, rect, innerColor, width - bandWidth, width);
+        }
 
-            var innerPen = g.GetPen(innerColor);
-            innerPen.Width = innerWidth / g.PixelsPerPoint;
-            innerPen.DashStyle = RDashStyle.Solid;
+        /// <summary>Fills the sub-rectangle of a collapsed segment between two offsets from its outer edge.</summary>
+        private static void DrawSegmentBand(RGraphics g, bool isHorizontal, RRect rect, RColor color, double from, double to)
+        {
+            var band = isHorizontal
+                ? RRect.FromLTRB(rect.Left, rect.Top + from, rect.Right, rect.Top + to)
+                : RRect.FromLTRB(rect.Left + from, rect.Top, rect.Left + to, rect.Bottom);
 
-            if (isHorizontal)
-            {
-                g.DrawLine(outerPen, rect.Left, rect.Top + outerWidth / 2, rect.Right, rect.Top + outerWidth / 2);
-                g.DrawLine(innerPen, rect.Left, rect.Top + width - innerWidth / 2, rect.Right, rect.Top + width - innerWidth / 2);
-            }
-            else
-            {
-                g.DrawLine(outerPen, rect.Left + outerWidth / 2, rect.Top, rect.Left + outerWidth / 2, rect.Bottom);
-                g.DrawLine(innerPen, rect.Left + width - innerWidth / 2, rect.Top, rect.Left + width - innerWidth / 2, rect.Bottom);
-            }
+            g.DrawPolygon(g.GetSolidBrush(color),
+            [
+                new RPoint(band.Left, band.Top),
+                new RPoint(band.Right, band.Top),
+                new RPoint(band.Right, band.Bottom),
+                new RPoint(band.Left, band.Bottom)
+            ]);
         }
 
         /// <summary>
@@ -215,7 +249,13 @@ namespace PeachPDF.Html.Core.Handlers
             bool isLineStart, bool isLineEnd, bool isBlockStart, bool isBlockEnd)
         {
             var style = GetStyle(border, box);
-            var color = GetColor(border, box, style);
+            var baseColor = GetColor(border, box);
+            var color = style switch
+            {
+                LineStyle.Inset => BorderBevelColors.ForSide(baseColor, border, inset: true),
+                LineStyle.Outset => BorderBevelColors.ForSide(baseColor, border, inset: false),
+                _ => baseColor
+            };
 
             var borderPath = GetRoundedBorderPath(g, border, box, rect);
             if (borderPath != null)
@@ -254,32 +294,255 @@ namespace PeachPDF.Html.Core.Handlers
                 }
                 else if (style is LineStyle.Double or LineStyle.Groove or LineStyle.Ridge)
                 {
-                    DrawDoubleOrGrooveRidgeBorder(border, box, g, rect, style, color);
+                    DrawDoubleOrGrooveRidgeBorder(border, box, g, rect, style, baseColor, isLineStart, isLineEnd, isBlockStart, isBlockEnd);
                 }
                 else
                 {
-                    // dotted/dashed border draw as simple line - representing dash/dot patterns as a
-                    // mitered trapezoid fill is far more involved than this repo's scope needs, and
-                    // (unlike solid) real UAs commonly render dotted/dashed corners as simple joins too.
-                    var pen = GetPen(g, style, color, GetWidth(border, box));
-
-                    switch (border)
-                    {
-                        case Border.Top:
-                            g.DrawLine(pen, rect.Left, rect.Top + box.ActualBorderTopWidth / 2, rect.Right, rect.Top + box.ActualBorderTopWidth / 2);
-                            break;
-                        case Border.Left:
-                            g.DrawLine(pen, rect.Left + box.ActualBorderLeftWidth / 2, rect.Top, rect.Left + box.ActualBorderLeftWidth / 2, rect.Bottom);
-                            break;
-                        case Border.Bottom:
-                            g.DrawLine(pen, rect.Left, rect.Bottom - box.ActualBorderBottomWidth / 2, rect.Right, rect.Bottom - box.ActualBorderBottomWidth / 2);
-                            break;
-                        case Border.Right:
-                            g.DrawLine(pen, rect.Right - box.ActualBorderRightWidth / 2, rect.Top, rect.Right - box.ActualBorderRightWidth / 2, rect.Bottom);
-                            break;
-                    }
+                    // Dotted/dashed draw as a stroked line rather than a mitered fill - unlike solid,
+                    // real UAs don't mitre a dash pattern into the corner either. Each edge's stroke
+                    // spans its full outer length, so two adjacent edges overlap in the corner square,
+                    // which is what puts a dot exactly on each corner and makes two dashed edges meet
+                    // in an L, the same as a browser.
+                    DrawDottedOrDashedBorder(border, box, g, rect, style, color);
                 }
             }
+        }
+
+        /// <summary>
+        /// Paints a border whose four edges share one style and one color as closed rings, and reports
+        /// whether it did. Returns false for anything else, which then paints per edge as usual.
+        /// </summary>
+        /// <remarks>
+        /// Two antialiased polygons that share an exact edge do not composite to full coverage: each
+        /// contributes partial alpha along the seam, so the mitre diagonal at every corner shows up as a
+        /// pale hairline over the background. It is invisible when the adjacent edges differ in color
+        /// (the diagonal is meant to be seen there) and glaring when they do not - which is the common
+        /// case, a plain <c>border: 4px solid</c>.
+        ///
+        /// A ring has no interior seam to show. Each band is one path of two rectangular subpaths -
+        /// outer and inner - filled even-odd, so every pixel of the border is painted exactly once.
+        /// Painting once rather than overlapping matters beyond the seam: a translucent border color or
+        /// an active blend mode would show any doubly-painted corner.
+        ///
+        /// Only <c>solid</c> and <c>double</c> qualify. <c>inset</c>/<c>outset</c>/<c>groove</c>/
+        /// <c>ridge</c> deliberately shade each side differently (see <see cref="BorderBevelColors"/>),
+        /// so they have no uniform color to fill a ring with - and being multi-colored, they are exactly
+        /// the cases where the seam does not show anyway.
+        /// </remarks>
+        private static bool TryDrawUniformBorder(
+            RGraphics g, CssBox box, RRect rect, BorderEdges suppressed,
+            bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
+        {
+            if (!hasLeftEdge || !hasRightEdge || !hasTopEdge || !hasBottomEdge) return false;
+            if (suppressed != BorderEdges.None) return false;
+
+            var style = box.BorderTopStyle.Value;
+            if (box.BorderRightStyle.Value != style ||
+                box.BorderBottomStyle.Value != style ||
+                box.BorderLeftStyle.Value != style) return false;
+
+            var color = box.ActualBorderTopColor;
+            if (box.ActualBorderRightColor != color ||
+                box.ActualBorderBottomColor != color ||
+                box.ActualBorderLeftColor != color) return false;
+
+            if (box.ActualBorderTopWidth <= 0 || box.ActualBorderRightWidth <= 0 ||
+                box.ActualBorderBottomWidth <= 0 || box.ActualBorderLeftWidth <= 0) return false;
+
+            var radii = box.ComputeRadii(rect);
+            if (radii.IsRounded)
+                return TryDrawUniformRoundedOutline(g, box, rect, radii, style, color);
+
+            if (style is not (LineStyle.Solid or LineStyle.Double)) return false;
+
+            var brush = g.GetSolidBrush(color);
+            if (style == LineStyle.Solid)
+            {
+                DrawUniformRing(g, box, rect, 0, 1, brush);
+            }
+            else
+            {
+                DrawUniformRing(g, box, rect, 0, 1 / 3d, brush);
+                DrawUniformRing(g, box, rect, 2 / 3d, 1, brush);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Strokes a uniform rounded border as one continuous outline - with a dotted/dashed pattern
+        /// fitted to its whole perimeter - and reports whether it did.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="GetRoundedBorderPath"/> builds a separate path per edge, which costs twice over.
+        /// Four strokes that butt end-to-end leave the same antialiasing seam two abutting fills do, so
+        /// a plain rounded <c>solid</c> border showed a pale mark where each arc met its straight run.
+        /// And a dash pattern restarts its phase at every one of those paths - the top edge's path
+        /// already carries both corner arcs - so dots piled up two and three deep at the corners, the
+        /// more visibly the rounder the corner. One closed path has one continuous stroke and one phase.
+        ///
+        /// This needs a single width and color to stroke with, so it only takes the case where all four
+        /// sides agree. Anything else falls back to the per-edge paths, as do <c>double</c>/
+        /// <c>groove</c>/<c>ridge</c>, which a single centered stroke cannot represent at all.
+        /// </remarks>
+        private static bool TryDrawUniformRoundedOutline(
+            RGraphics g, CssBox box, RRect rect, BorderRadii radii, LineStyle style, RColor color)
+        {
+            if (style is not (LineStyle.Solid or LineStyle.Dotted or LineStyle.Dashed)) return false;
+
+            var width = box.ActualBorderTopWidth;
+            if (Math.Abs(box.ActualBorderRightWidth - width) > Epsilon ||
+                Math.Abs(box.ActualBorderBottomWidth - width) > Epsilon ||
+                Math.Abs(box.ActualBorderLeftWidth - width) > Epsilon) return false;
+
+            // The stroke is centered, so its outline is the border box pulled in by half the width -
+            // and every corner radius shrinks by the same half, never past zero.
+            var inset = width / 2;
+            var centerRect = RRect.FromLTRB(rect.Left + inset, rect.Top + inset, rect.Right - inset, rect.Bottom - inset);
+            if (centerRect is not { Width: > 0, Height: > 0 }) return false;
+
+            var tlx = Math.Max(0, radii.TLX - inset); var tly = Math.Max(0, radii.TLY - inset);
+            var trx = Math.Max(0, radii.TRX - inset); var try_ = Math.Max(0, radii.TRY - inset);
+            var brx = Math.Max(0, radii.BRX - inset); var bry = Math.Max(0, radii.BRY - inset);
+            var blx = Math.Max(0, radii.BLX - inset); var bly = Math.Max(0, radii.BLY - inset);
+
+            var pen = g.GetPen(color);
+            pen.Width = width / g.PixelsPerPoint;
+            pen.LineJoin = RLineJoin.Miter;
+
+            if (style == LineStyle.Solid)
+            {
+                pen.LineCap = RLineCap.Butt;
+                pen.DashStyle = RDashStyle.Solid;
+            }
+            else
+            {
+                var perimeter =
+                    Math.Max(0, centerRect.Width - tlx - trx) + Math.Max(0, centerRect.Width - blx - brx) +
+                    Math.Max(0, centerRect.Height - tly - bly) + Math.Max(0, centerRect.Height - try_ - bry) +
+                    (StyledStrokeFitting.EllipsePerimeter(tlx, tly) + StyledStrokeFitting.EllipsePerimeter(trx, try_) +
+                     StyledStrokeFitting.EllipsePerimeter(brx, bry) + StyledStrokeFitting.EllipsePerimeter(blx, bly)) / 4;
+
+                var dotted = style == LineStyle.Dotted;
+                if (StyledStrokeFitting.FitClosed(dotted, width, perimeter) is not { } pattern) return false;
+
+                pen.LineCap = dotted ? RLineCap.Round : RLineCap.Butt;
+                pen.SetDashPattern(
+                    dotted
+                        ? [0, pattern.Period / g.PixelsPerPoint]
+                        : [pattern.DashLength / g.PixelsPerPoint, pattern.GapLength / g.PixelsPerPoint],
+                    0);
+            }
+
+            using var path = RenderUtils.GetRoundRect(g, centerRect, tlx, tly, trx, try_, brx, bry, blx, bly);
+            g.DrawPath(pen, path);
+            return true;
+        }
+
+        /// <summary>
+        /// Fills the closed ring between two <see cref="SetBandPoints"/> band boundaries - see
+        /// <see cref="TryDrawUniformBorder"/>.
+        /// </summary>
+        private static void DrawUniformRing(RGraphics g, CssBox box, RRect rect, double from, double to, RBrush brush)
+        {
+            // Unlike DrawPolygon/DrawLine, whose coordinates the adapter divides on the way out, a path's
+            // coordinates reach the backend as given - so they are divided here, the same correction
+            // GetRoundedBorderPath makes for the same reason (issue #812).
+            var ppp = g.PixelsPerPoint;
+
+            using var path = g.GetGraphicsPath();
+            path.FillMode = RFillMode.EvenOdd;
+            AddBandRectangle(path, box, rect, from, ppp);
+            AddBandRectangle(path, box, rect, to, ppp);
+
+            g.DrawPath(brush, path);
+        }
+
+        /// <summary>
+        /// Adds one closed rectangular subpath at <paramref name="fraction"/> of the way through each
+        /// side's own border width - the boundary a band of that fraction sits on.
+        /// </summary>
+        private static void AddBandRectangle(RGraphicsPath path, CssBox box, RRect rect, double fraction, double pixelsPerPoint)
+        {
+            var left = (rect.Left + fraction * box.ActualBorderLeftWidth) / pixelsPerPoint;
+            var top = (rect.Top + fraction * box.ActualBorderTopWidth) / pixelsPerPoint;
+            var right = (rect.Right - fraction * box.ActualBorderRightWidth) / pixelsPerPoint;
+            var bottom = (rect.Bottom - fraction * box.ActualBorderBottomWidth) / pixelsPerPoint;
+
+            path.AddMove(left, top);
+            path.LineTo(right, top);
+            path.LineTo(right, bottom);
+            path.LineTo(left, bottom);
+            path.CloseFigure();
+        }
+
+        /// <summary>
+        /// Strokes one dotted/dashed edge, with the pattern fitted to the edge so it starts and ends
+        /// flush with the corners - see <see cref="StyledStrokeFitting"/> for why that matters and how
+        /// the period is chosen. The stroke spans the edge's full outer length (corner square included),
+        /// which is what puts a dot exactly on each corner and makes two adjacent dashed edges meet in
+        /// an L, matching a browser.
+        /// </summary>
+        private static void DrawDottedOrDashedBorder(Border border, CssBox box, RGraphics g, RRect rect, LineStyle style, RColor color)
+        {
+            var width = GetWidth(border, box);
+            var pen = g.GetPen(color);
+            // width is the caller's raw, un-divided layout-space width - see GetPen's own remark for
+            // why only the pen's stroke width (and, below, its dash array) needs this correction.
+            pen.Width = width / g.PixelsPerPoint;
+            pen.LineJoin = RLineJoin.Miter;
+
+            bool isHorizontal;
+            double acrossAxis;
+            double start;
+            double end;
+
+            switch (border)
+            {
+                case Border.Top:
+                    isHorizontal = true;
+                    acrossAxis = rect.Top + box.ActualBorderTopWidth / 2;
+                    start = rect.Left;
+                    end = rect.Right;
+                    break;
+                case Border.Bottom:
+                    isHorizontal = true;
+                    acrossAxis = rect.Bottom - box.ActualBorderBottomWidth / 2;
+                    start = rect.Left;
+                    end = rect.Right;
+                    break;
+                case Border.Left:
+                    isHorizontal = false;
+                    acrossAxis = rect.Left + box.ActualBorderLeftWidth / 2;
+                    start = rect.Top;
+                    end = rect.Bottom;
+                    break;
+                default:
+                    isHorizontal = false;
+                    acrossAxis = rect.Right - box.ActualBorderRightWidth / 2;
+                    start = rect.Top;
+                    end = rect.Bottom;
+                    break;
+            }
+
+            var span = StyledStrokeFitting.Apply(pen, style == LineStyle.Dotted, width, start, end, g.PixelsPerPoint);
+            if (span is { } fitted)
+            {
+                start = fitted.Start;
+                end = fitted.End;
+            }
+            else
+            {
+                // Too short to carry even two dashes - a single dash spanning the whole edge is just a
+                // solid stripe, which is also what a browser degenerates to here.
+                pen.LineCap = RLineCap.Butt;
+                pen.DashStyle = RDashStyle.Solid;
+            }
+
+            if (isHorizontal)
+                g.DrawLine(pen, start, acrossAxis, end, acrossAxis);
+            else
+                g.DrawLine(pen, acrossAxis, start, acrossAxis, end);
         }
 
         /// <summary>
@@ -301,110 +564,127 @@ namespace PeachPDF.Html.Core.Handlers
         /// </remarks>
         private static void SetInOutsetRectanglePoints(
             Border border, CssBox b, RRect r,
+            bool isLineStart, bool isLineEnd, bool isBlockStart, bool isBlockEnd) =>
+            SetBandPoints(border, b, r, 0, 1, isLineStart, isLineEnd, isBlockStart, isBlockEnd);
+
+        /// <summary>
+        /// The generalization of <see cref="SetInOutsetRectanglePoints"/> to a <i>sub-band</i> of one
+        /// edge, from <paramref name="from"/> to <paramref name="to"/> as fractions of that edge's
+        /// width (0 = the border box's outer edge, 1 = its inner edge). This is what lets
+        /// <c>double</c>/<c>groove</c>/<c>ridge</c> paint as properly mitred nested rings rather than
+        /// four full-length stripes that cross each other's gaps at every corner.
+        /// </summary>
+        /// <remarks>
+        /// A corner's mitre runs from the border box's outer corner to its inner corner, so a point at
+        /// fraction <c>f</c> through one edge's width sits <c>f</c> of the *adjacent* edge's width in
+        /// from the box side - which is exactly the parametrization below, and stays correct for
+        /// unequal per-side widths (where the mitre is not 45°). The four flags suppress the cut on a
+        /// side that isn't really there, per <see cref="SetInOutsetRectanglePoints"/>'s own remarks.
+        /// </remarks>
+        private static void SetBandPoints(
+            Border border, CssBox b, RRect r, double from, double to,
             bool isLineStart, bool isLineEnd, bool isBlockStart, bool isBlockEnd)
         {
+            var left = isLineStart ? b.ActualBorderLeftWidth : 0;
+            var right = isLineEnd ? b.ActualBorderRightWidth : 0;
             var top = isBlockStart ? b.ActualBorderTopWidth : 0;
             var bottom = isBlockEnd ? b.ActualBorderBottomWidth : 0;
 
             switch (border)
             {
                 case Border.Top:
-                    _borderPts[0] = new RPoint(r.Left, r.Top);
-                    _borderPts[1] = new RPoint(r.Right, r.Top);
-                    _borderPts[2] = new RPoint(r.Right, r.Top + b.ActualBorderTopWidth);
-                    _borderPts[3] = new RPoint(r.Left, r.Top + b.ActualBorderTopWidth);
-                    if (isLineEnd)
-                        _borderPts[2].X -= b.ActualBorderRightWidth;
-                    if (isLineStart)
-                        _borderPts[3].X += b.ActualBorderLeftWidth;
+                {
+                    var near = r.Top + from * b.ActualBorderTopWidth;
+                    var far = r.Top + to * b.ActualBorderTopWidth;
+                    _borderPts[0] = new RPoint(r.Left + from * left, near);
+                    _borderPts[1] = new RPoint(r.Right - from * right, near);
+                    _borderPts[2] = new RPoint(r.Right - to * right, far);
+                    _borderPts[3] = new RPoint(r.Left + to * left, far);
                     break;
+                }
                 case Border.Right:
-                    _borderPts[0] = new RPoint(r.Right - b.ActualBorderRightWidth, r.Top + top);
-                    _borderPts[1] = new RPoint(r.Right, r.Top);
-                    _borderPts[2] = new RPoint(r.Right, r.Bottom);
-                    _borderPts[3] = new RPoint(r.Right - b.ActualBorderRightWidth, r.Bottom - bottom);
+                {
+                    var near = r.Right - from * b.ActualBorderRightWidth;
+                    var far = r.Right - to * b.ActualBorderRightWidth;
+                    _borderPts[0] = new RPoint(near, r.Top + from * top);
+                    _borderPts[1] = new RPoint(near, r.Bottom - from * bottom);
+                    _borderPts[2] = new RPoint(far, r.Bottom - to * bottom);
+                    _borderPts[3] = new RPoint(far, r.Top + to * top);
                     break;
+                }
                 case Border.Bottom:
-                    _borderPts[0] = new RPoint(r.Left, r.Bottom - b.ActualBorderBottomWidth);
-                    _borderPts[1] = new RPoint(r.Right, r.Bottom - b.ActualBorderBottomWidth);
-                    _borderPts[2] = new RPoint(r.Right, r.Bottom);
-                    _borderPts[3] = new RPoint(r.Left, r.Bottom);
-                    if (isLineStart)
-                        _borderPts[0].X += b.ActualBorderLeftWidth;
-                    if (isLineEnd)
-                        _borderPts[1].X -= b.ActualBorderRightWidth;
+                {
+                    var near = r.Bottom - from * b.ActualBorderBottomWidth;
+                    var far = r.Bottom - to * b.ActualBorderBottomWidth;
+                    _borderPts[0] = new RPoint(r.Left + from * left, near);
+                    _borderPts[1] = new RPoint(r.Right - from * right, near);
+                    _borderPts[2] = new RPoint(r.Right - to * right, far);
+                    _borderPts[3] = new RPoint(r.Left + to * left, far);
                     break;
+                }
                 case Border.Left:
-                    _borderPts[0] = new RPoint(r.Left, r.Top);
-                    _borderPts[1] = new RPoint(r.Left + b.ActualBorderLeftWidth, r.Top + top);
-                    _borderPts[2] = new RPoint(r.Left + b.ActualBorderLeftWidth, r.Bottom - bottom);
-                    _borderPts[3] = new RPoint(r.Left, r.Bottom);
+                {
+                    var near = r.Left + from * b.ActualBorderLeftWidth;
+                    var far = r.Left + to * b.ActualBorderLeftWidth;
+                    _borderPts[0] = new RPoint(near, r.Top + from * top);
+                    _borderPts[1] = new RPoint(near, r.Bottom - from * bottom);
+                    _borderPts[2] = new RPoint(far, r.Bottom - to * bottom);
+                    _borderPts[3] = new RPoint(far, r.Top + to * top);
                     break;
+                }
             }
         }
 
         /// <summary>
-        /// Draws a "double", "groove", or "ridge" border as two solid stripes. A <see cref="RDashStyle"/>
-        /// pen can't represent two parallel strokes with a gap (double) or a two-tone bevel
-        /// (groove/ridge), so this paints the two stripes directly with their own pens instead of
-        /// going through <see cref="GetPen"/>.
+        /// Draws a "double", "groove", or "ridge" border as two mitred bands of the edge - the outer
+        /// and inner rings - rather than two full-length stripes.
         /// </summary>
-        private static void DrawDoubleOrGrooveRidgeBorder(Border border, CssBox box, RGraphics g, RRect rect, LineStyle style, RColor color)
+        /// <remarks>
+        /// Stripes spanning the whole edge are what this used to do, and they cross the adjacent edges'
+        /// gaps at every corner: the top edge's inner stripe runs straight through the left and right
+        /// borders' gap, turning all four corners into a visible ladder. Painting each ring as a
+        /// <see cref="SetBandPoints"/> band mitres it into its neighbours instead, which is what a
+        /// browser draws.
+        ///
+        /// <c>double</c> is three exact thirds (CSS 2.1 §8.5.3's "two lines ... the sum of the two
+        /// lines and the space equals border-width"); rounding a third down to a whole unit, as this
+        /// used to, makes the gap wider than either line at most widths. <c>groove</c> paints its outer
+        /// half as <c>inset</c> and its inner half as <c>outset</c>, and <c>ridge</c> the reverse - and
+        /// since inset/outset shade per *side* (see <see cref="BorderBevelColors.ForSide"/>), that is
+        /// what gives the ring its carved/raised look instead of a flat two-tone frame.
+        /// </remarks>
+        private static void DrawDoubleOrGrooveRidgeBorder(
+            Border border, CssBox box, RGraphics g, RRect rect, LineStyle style, RColor color,
+            bool isLineStart, bool isLineEnd, bool isBlockStart, bool isBlockEnd)
         {
-            var width = GetWidth(border, box);
-
-            double outerWidth;
-            double innerWidth;
-            RColor outerColor;
-            RColor innerColor;
+            double outerEnd, innerStart;
+            RColor outerColor, innerColor;
 
             if (style == LineStyle.Double)
             {
-                outerWidth = innerWidth = Math.Max(1, Math.Floor(width / 3));
+                outerEnd = 1 / 3d;
+                innerStart = 2 / 3d;
                 outerColor = innerColor = color;
             }
             else
             {
-                // groove looks carved in (dark outer stripe, light inner stripe); ridge is its
-                // mirror image (light outer, dark inner). CSS2.1 leaves the exact shading direction
-                // UA-defined - the only spec-relevant property is that groove/ridge are visually
-                // distinct from each other and from solid/double/inset/outset.
-                outerWidth = innerWidth = width / 2;
-                outerColor = style == LineStyle.Groove ? Darken(color) : color;
-                innerColor = style == LineStyle.Groove ? color : Darken(color);
+                outerEnd = innerStart = 0.5;
+                var outerIsInset = style == LineStyle.Groove;
+                outerColor = BorderBevelColors.ForSide(color, border, outerIsInset);
+                innerColor = BorderBevelColors.ForSide(color, border, !outerIsInset);
             }
 
-            // outerWidth/innerWidth stay in the caller's raw, un-divided layout-space units below -
-            // they're paired with the still-raw rect in the DrawLine calls, which divide position and
-            // width together downstream (GraphicsAdapter.DrawLine). Only the pen's own stroke width
-            // needs the PixelsPerPoint correction here, same reason as GetPen's.
-            var outerPen = g.GetPen(outerColor);
-            outerPen.Width = outerWidth / g.PixelsPerPoint;
-            outerPen.DashStyle = RDashStyle.Solid;
+            DrawBand(border, box, g, rect, 0, outerEnd, outerColor, isLineStart, isLineEnd, isBlockStart, isBlockEnd);
+            DrawBand(border, box, g, rect, innerStart, 1, innerColor, isLineStart, isLineEnd, isBlockStart, isBlockEnd);
+        }
 
-            var innerPen = g.GetPen(innerColor);
-            innerPen.Width = innerWidth / g.PixelsPerPoint;
-            innerPen.DashStyle = RDashStyle.Solid;
-
-            switch (border)
-            {
-                case Border.Top:
-                    g.DrawLine(outerPen, rect.Left, rect.Top + outerWidth / 2, rect.Right, rect.Top + outerWidth / 2);
-                    g.DrawLine(innerPen, rect.Left, rect.Top + width - innerWidth / 2, rect.Right, rect.Top + width - innerWidth / 2);
-                    break;
-                case Border.Left:
-                    g.DrawLine(outerPen, rect.Left + outerWidth / 2, rect.Top, rect.Left + outerWidth / 2, rect.Bottom);
-                    g.DrawLine(innerPen, rect.Left + width - innerWidth / 2, rect.Top, rect.Left + width - innerWidth / 2, rect.Bottom);
-                    break;
-                case Border.Bottom:
-                    g.DrawLine(outerPen, rect.Left, rect.Bottom - outerWidth / 2, rect.Right, rect.Bottom - outerWidth / 2);
-                    g.DrawLine(innerPen, rect.Left, rect.Bottom - width + innerWidth / 2, rect.Right, rect.Bottom - width + innerWidth / 2);
-                    break;
-                case Border.Right:
-                    g.DrawLine(outerPen, rect.Right - outerWidth / 2, rect.Top, rect.Right - outerWidth / 2, rect.Bottom);
-                    g.DrawLine(innerPen, rect.Right - width + innerWidth / 2, rect.Top, rect.Right - width + innerWidth / 2, rect.Bottom);
-                    break;
-            }
+        /// <summary>Fills one <see cref="SetBandPoints"/> band of an edge in a single flat color.</summary>
+        private static void DrawBand(
+            Border border, CssBox box, RGraphics g, RRect rect, double from, double to, RColor color,
+            bool isLineStart, bool isLineEnd, bool isBlockStart, bool isBlockEnd)
+        {
+            SetBandPoints(border, box, rect, from, to, isLineStart, isLineEnd, isBlockStart, isBlockEnd);
+            g.DrawPolygon(g.GetSolidBrush(color), _borderPts);
         }
 
         /// <summary>
@@ -435,20 +715,38 @@ namespace PeachPDF.Html.Core.Handlers
             var btw = b.ActualBorderTopWidth / ppp;
             var brw = b.ActualBorderRightWidth / ppp;
             var bbw = b.ActualBorderBottomWidth / ppp;
-            var radTLX = rad.TLX / ppp;
-            var radTLY = rad.TLY / ppp;
-            var radTRX = rad.TRX / ppp;
-            var radTRY = rad.TRY / ppp;
-            var radBRX = rad.BRX / ppp;
-            var radBRY = rad.BRY / ppp;
-            var radBLX = rad.BLX / ppp;
-            var radBLY = rad.BLY / ppp;
+            // The stroke is centered, so this path runs half a border width inside the border box - and
+            // a corner's radius on that centerline is smaller than the border box's by exactly that
+            // half, on each axis independently (the X radii follow the left/right border, the Y radii
+            // the top/bottom). Using the border box's own radii here, as this used to, pushes each
+            // straight run's start point half a border width too far along: harmless when the radius is
+            // large compared to the border, but once a radius reaches half the box - a pill - the two
+            // arcs claim more than the centerline has, the run between them comes out REVERSED, and the
+            // pen paints it as a stub sticking out of the middle of the end cap.
+            var radTLX = Math.Max(0, rad.TLX / ppp - blw / 2);
+            var radTLY = Math.Max(0, rad.TLY / ppp - btw / 2);
+            var radTRX = Math.Max(0, rad.TRX / ppp - brw / 2);
+            var radTRY = Math.Max(0, rad.TRY / ppp - btw / 2);
+            var radBRX = Math.Max(0, rad.BRX / ppp - brw / 2);
+            var radBRY = Math.Max(0, rad.BRY / ppp - bbw / 2);
+            var radBLX = Math.Max(0, rad.BLX / ppp - blw / 2);
+            var radBLY = Math.Max(0, rad.BLY / ppp - bbw / 2);
+
+            // Whether this edge gets a path at all is decided by the box's OWN radii, not the reduced
+            // ones: a border thicker than twice its radius reduces to a square centerline, but it is
+            // still a rounded box and must keep painting as one continuous stroke rather than falling
+            // back to four mitred quads, which would both lose the rounding and reintroduce the corner
+            // seams the quads have.
+            var roundedTL = rad.TLX > 0 || rad.TLY > 0;
+            var roundedTR = rad.TRX > 0 || rad.TRY > 0;
+            var roundedBR = rad.BRX > 0 || rad.BRY > 0;
+            var roundedBL = rad.BLX > 0 || rad.BLY > 0;
 
             RGraphicsPath? path = null;
             switch (border)
             {
                 case Border.Top:
-                    if (radTLX > 0 || radTLY > 0 || radTRX > 0 || radTRY > 0)
+                    if (roundedTL || roundedTR)
                     {
                         path = g.GetGraphicsPath();
                         path.Start(left + blw / 2, top + btw / 2 + radTLY);
@@ -460,7 +758,7 @@ namespace PeachPDF.Html.Core.Handlers
                     }
                     break;
                 case Border.Bottom:
-                    if (radBLX > 0 || radBLY > 0 || radBRX > 0 || radBRY > 0)
+                    if (roundedBL || roundedBR)
                     {
                         path = g.GetGraphicsPath();
                         path.Start(right - brw / 2, bottom - bbw / 2 - radBRY);
@@ -472,7 +770,7 @@ namespace PeachPDF.Html.Core.Handlers
                     }
                     break;
                 case Border.Right:
-                    if (radTRX > 0 || radTRY > 0 || radBRX > 0 || radBRY > 0)
+                    if (roundedTR || roundedBR)
                     {
                         path = g.GetGraphicsPath();
                         bool noTop = b.BorderTopStyle.Value is LineStyle.None or LineStyle.Hidden;
@@ -486,7 +784,7 @@ namespace PeachPDF.Html.Core.Handlers
                     }
                     break;
                 case Border.Left:
-                    if (radTLX > 0 || radTLY > 0 || radBLX > 0 || radBLY > 0)
+                    if (roundedTL || roundedBL)
                     {
                         path = g.GetGraphicsPath();
                         bool noTop = b.BorderTopStyle.Value is LineStyle.None or LineStyle.Hidden;
@@ -515,39 +813,49 @@ namespace PeachPDF.Html.Core.Handlers
             // the backend (GraphicsAdapter.DrawLine/DrawPolygon, GetRoundedBorderPath's own ppp
             // setup), but a pen's own stroke width bypasses those and needs the same correction here.
             p.Width = width / g.PixelsPerPoint;
-            p.DashStyle = style switch
+            p.LineJoin = RLineJoin.Miter;
+
+            // This is the rounded border whose sides do NOT all agree - a uniform one is stroked as a
+            // single fitted outline by TryDrawUniformRoundedOutline and never reaches here. With one
+            // path per edge there is no single outline to fit a pattern to, so the period stays at its
+            // ideal (a dot every 2x the width) and falls where it falls along each arc. Dotted still
+            // gets its round cap and zero-length dash, so a dot is a dot either way.
+            if (style is LineStyle.Dotted)
             {
-                LineStyle.Solid => RDashStyle.Solid,
-                LineStyle.Dotted => RDashStyle.Dot,
-                LineStyle.Dashed => RDashStyle.Dash,
+                p.LineCap = RLineCap.Round;
+                p.SetDashPattern([0, 2 * width / g.PixelsPerPoint], 0);
+            }
+            else if (style is LineStyle.Dashed)
+            {
+                p.LineCap = RLineCap.Butt;
+                p.SetDashPattern([2 * width / g.PixelsPerPoint, width / g.PixelsPerPoint], 0);
+            }
+            else
+            {
                 // double/groove/ridge are handled by DrawDoubleOrGrooveRidgeBorder and never reach
                 // here for non-rounded borders; a rounded border with one of these styles falls back
                 // to a single solid-colored stroke here (GetRoundedBorderPath has no double/groove/
                 // ridge concept - border-radius is CSS2/3 territory, out of scope for CSS1
                 // compliance). Any other unexpected style also degrades to solid rather than crashing.
-                _ => RDashStyle.Solid
-            };
+                p.LineCap = RLineCap.Butt;
+                p.DashStyle = RDashStyle.Solid;
+            }
 
             return p;
         }
 
         /// <summary>
-        /// Get the border color for the given box border.
+        /// Get the declared border color for the given box border, before any bevel shading - see
+        /// <see cref="BorderBevelColors"/>, which the caller applies per style.
         /// </summary>
-        private static RColor GetColor(Border border, CssBox box, LineStyle style)
+        private static RColor GetColor(Border border, CssBox box)
         {
             return border switch
             {
-                Border.Top => style == LineStyle.Inset ? Darken(box.ActualBorderTopColor) : box.ActualBorderTopColor,
-                Border.Right => style == LineStyle.Outset
-                    ? Darken(box.ActualBorderRightColor)
-                    : box.ActualBorderRightColor,
-                Border.Bottom => style == LineStyle.Outset
-                    ? Darken(box.ActualBorderBottomColor)
-                    : box.ActualBorderBottomColor,
-                Border.Left => style == LineStyle.Inset
-                    ? Darken(box.ActualBorderLeftColor)
-                    : box.ActualBorderLeftColor,
+                Border.Top => box.ActualBorderTopColor,
+                Border.Right => box.ActualBorderRightColor,
+                Border.Bottom => box.ActualBorderBottomColor,
+                Border.Left => box.ActualBorderLeftColor,
                 _ => throw new ArgumentOutOfRangeException(nameof(border))
             };
         }
@@ -580,16 +888,6 @@ namespace PeachPDF.Html.Core.Handlers
                 Border.Left => box.BorderLeftStyle.Value,
                 _ => throw new ArgumentOutOfRangeException(nameof(border))
             };
-        }
-
-        /// <summary>
-        /// Makes the specified color darker for inset/outset borders - also shared by
-        /// <see cref="OutlineDrawHandler"/> for its own inset/outset/groove/ridge shading, since
-        /// darkening a color for a beveled line style isn't a border-specific operation.
-        /// </summary>
-        internal static RColor Darken(RColor c)
-        {
-            return RColor.FromArgb(c.R / 2, c.G / 2, c.B / 2);
         }
 
         #endregion

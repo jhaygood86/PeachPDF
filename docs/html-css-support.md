@@ -282,10 +282,46 @@ Each logical longhand keeps its own identity through the cascade and is resolved
 |----------|--------------|-------|
 | `border` | [border](https://developer.mozilla.org/en-US/docs/Web/CSS/border) | Shorthand supported; also `border-top`, `border-right`, `border-bottom`, `border-left` |
 | `border-width` | [border-width](https://developer.mozilla.org/en-US/docs/Web/CSS/border-width) | Shorthand and all four longhands supported |
-| `border-style` | [border-style](https://developer.mozilla.org/en-US/docs/Web/CSS/border-style) | Shorthand and all four longhands supported; values: `none`, `solid`, `dashed`, `dotted`, `double`, `inset`, `outset`, `groove`, `ridge` |
+| `border-style` | [border-style](https://developer.mozilla.org/en-US/docs/Web/CSS/border-style) | Shorthand and all four longhands supported; values: `none`, `solid`, `dashed`, `dotted`, `double`, `inset`, `outset`, `groove`, `ridge`. See [How each border style is drawn](#how-each-border-style-is-drawn) below |
 | `border-color` | [border-color](https://developer.mozilla.org/en-US/docs/Web/CSS/border-color) | Shorthand and all four longhands supported |
 | `border-collapse` | [border-collapse](https://developer.mozilla.org/en-US/docs/Web/CSS/border-collapse) | `collapse` resolves borders per CSS 2.1 [§17.6.2](https://www.w3.org/TR/CSS21/tables.html#border-conflict-resolution) (width, then style, then cell/row/row-group/column/column-group/table origin, then position), including on a repeated `<thead>`/`<tfoot>` across pages; `border-radius` is undefined by the spec on a collapsed table and is not drawn there, matching common browser behavior |
 | `border-spacing` | [border-spacing](https://developer.mozilla.org/en-US/docs/Web/CSS/border-spacing) | Full support for tables |
+
+#### How each border style is drawn
+
+[CSS 2.1 §8.5.3](https://www.w3.org/TR/CSS21/box.html#border-style-properties) defines what each keyword
+means but leaves the exact rendering to the renderer. PeachPDF draws them to match what a browser
+produces, so a document proofed in a browser prints the same way:
+
+- **`dotted`** paints round dots whose diameter is the border width, and **`dashed`** paints dashes
+  twice the border width. In both cases the ideal gap is one border width, but the gap is then
+  stretched or squeezed so that a whole number of dots/dashes spans the edge exactly — the pattern
+  always begins and ends flush with the corner rather than being cut off part-way through. Because the
+  fit depends on the edge, the spacing changes slightly as a box's width or height changes, and an
+  edge's horizontal and vertical runs may use slightly different gaps. An edge too short to hold two
+  dashes is drawn solid.
+- **`double`** paints two lines with a gap between them, each exactly one third of the border width.
+- **`groove`** and **`ridge`** each paint two halves of the border: `groove` draws its outer half as
+  `inset` and its inner half as `outset`, and `ridge` does the reverse.
+- **`inset`** and **`outset`** shade one pair of sides darker and the other lighter. `inset` darkens the
+  top and left and lightens the bottom and right; `outset` is the mirror image. A color too dark to
+  darken visibly — black, most importantly, which is the initial `border-color` via `currentColor` —
+  lightens both faces instead, by differing amounts, so the bevel stays visible rather than
+  disappearing into itself.
+
+Every style mitres into its neighbours at the corners, including each individual line of a `double`
+border and each half of a `groove`/`ridge`, so adjacent edges of differing width or color meet on the
+corner's diagonal — and the mitre follows the line from the border box's outer corner to its inner
+corner, so it stays correct when the two sides differ in width and the cut is not 45°. This is what
+makes the classic zero-size "border triangle" work. `outline-style` uses all the same rendering,
+banded outward from the border edge.
+
+With `border-radius`, `solid`/`dotted`/`dashed` follow the curve. A border whose four sides share a
+style, color and width is stroked as one continuous outline, which keeps the corners seamless and lets
+a `dotted`/`dashed` pattern be fitted to the whole perimeter so it runs evenly all the way round. If
+the sides differ, each is stroked separately and a pattern restarts at each one, which can leave marks
+bunched near a corner. See [Border Radius](#border-radius) for how `double`/`groove`/`ridge` behave
+there.
 
 ### Border Radius
 
@@ -327,7 +363,7 @@ Known limitations:
 |----------|--------------|-------|
 | `outline` | [outline](https://developer.mozilla.org/en-US/docs/Web/CSS/outline) | Shorthand for `outline-color`, `outline-style`, `outline-width`, in any order |
 | `outline-color` | [outline-color](https://developer.mozilla.org/en-US/docs/Web/CSS/outline-color) | Any `<color>`, `currentcolor` (the initial value), or the legacy `invert` keyword |
-| `outline-style` | [outline-style](https://developer.mozilla.org/en-US/docs/Web/CSS/outline-style) | `none` (initial), `auto`, `solid`, `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset`, `outset` |
+| `outline-style` | [outline-style](https://developer.mozilla.org/en-US/docs/Web/CSS/outline-style) | `none` (initial), `auto`, `solid`, `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset`, `outset`, each drawn as described under [How each border style is drawn](#how-each-border-style-is-drawn) |
 | `outline-width` | [outline-width](https://developer.mozilla.org/en-US/docs/Web/CSS/outline-width) | `<length>`, or `thin`/`medium`/`thick` |
 | `outline-offset` | [outline-offset](https://developer.mozilla.org/en-US/docs/Web/CSS/outline-offset) | `<length>`, may be negative to pull the outline back over the border |
 

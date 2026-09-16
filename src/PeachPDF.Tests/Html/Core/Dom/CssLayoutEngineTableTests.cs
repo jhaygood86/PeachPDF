@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+﻿using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
@@ -2287,12 +2287,12 @@ Assert.NotNull(tbody);
 
             var gEmpty = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, emptyCell!, gEmpty);
-            Assert.Empty(gEmpty.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            Assert.Empty(gEmpty.FilledShapes);
             Assert.Empty(gEmpty.Log.OfType<TestRecordingGraphics.DrawRectCall>());
 
             var gFull = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, fullCell!, gFull);
-            Assert.NotEmpty(gFull.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            Assert.NotEmpty(gFull.FilledShapes);
         }
 
         #endregion
@@ -2566,7 +2566,7 @@ Assert.NotNull(tbody);
             // the point of this test.
             var gCell = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, firstCell, gCell);
-            Assert.NotEmpty(gCell.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            Assert.NotEmpty(gCell.FilledShapes);
         }
 
         [Fact]
@@ -2604,12 +2604,11 @@ Assert.NotNull(tbody);
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, table, g);
 
-            var borderPolygons = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
-            Assert.NotEmpty(borderPolygons);
-            Assert.All(borderPolygons, polygon =>
-                Assert.All(polygon.Points, point =>
-                    Assert.True(point.Y >= caption.ActualBottom - 0.5,
-                        $"Table's own border must not paint above y={caption.ActualBottom} (the caption's own area), but a border point painted at y={point.Y}")));
+            var borderShapes = g.FilledShapes.ToList();
+            Assert.NotEmpty(borderShapes);
+            Assert.All(borderShapes, shape =>
+                Assert.True(shape.Bounds.Top >= caption.ActualBottom - 0.5,
+                    $"Table's own border must not paint above y={caption.ActualBottom} (the caption's own area), but a border shape painted at y={shape.Bounds.Top}"));
         }
 
         [Fact]
