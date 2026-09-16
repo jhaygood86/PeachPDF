@@ -63,14 +63,22 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
     /// </summary>
     internal readonly struct PngPassthroughData
     {
-        /// <summary>The concatenated, CRC-validated <c>IDAT</c> chunk payloads, unchanged.</summary>
+        /// <summary>
+        /// The concatenated, CRC-validated <c>IDAT</c> chunk payloads, unchanged - except when
+        /// <see cref="AlphaIdatData"/> is set for a color type 4/6 source, where this is instead
+        /// <see cref="PeachImage.Formats.Png.PngAlphaSplitInfo.ColorData"/>, the de-interleaved color-only
+        /// plane (see that field's own remarks).
+        /// </summary>
         public required byte[] IdatData { get; init; }
 
         /// <summary>Which PDF color space this pass-through embed uses.</summary>
         public required PngPassthroughColorSpace ColorSpace { get; init; }
 
-        /// <summary>The PNG's own IHDR bit depth - written as both <c>/BitsPerComponent</c> and the
-        /// <c>/DecodeParms</c> predictor's own bit depth.</summary>
+        /// <summary>The bit depth of <see cref="IdatData"/>'s samples - written as both <c>/BitsPerComponent</c> and the
+        /// <c>/DecodeParms</c> predictor's own bit depth. The PNG's own IHDR bit depth, except when
+        /// <see cref="AlphaIdatData"/> is set for a color type 4/6 source, where it's
+        /// <see cref="PeachImage.Formats.Png.PngAlphaSplitInfo.ColorBitDepth"/> instead (always 8, per that
+        /// API's current v1 limitation).</summary>
         public required byte BitDepth { get; init; }
 
         /// <summary>
@@ -88,11 +96,26 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
         /// run (PDF's colour-key mask for an Indexed colour space is exactly one <c>[min max]</c> range,
         /// per ISO 32000-1 §8.9.6.4 - see <c>PeachImageSource.TryBuildPaletteColorKeyMask</c>).
         /// Null when the source has no <c>tRNS</c>, or (Palette only) when it has one but nothing in it is
-        /// actually transparent. Never set for a source with a real per-pixel alpha channel - reaching
-        /// pass-through at all already rules that out (see
-        /// <see cref="ImageSource.IImageSource.PngPassthrough"/>'s own remarks).
+        /// actually transparent. Mutually exclusive with <see cref="AlphaIdatData"/> - a source reaches
+        /// exactly one of the two, since a real per-pixel alpha channel can't be expressed as a binary
+        /// color-key mask (see <see cref="ImageSource.IImageSource.PngPassthrough"/>'s own remarks).
         /// </summary>
         public int[]? ColorKeyMask { get; init; }
+
+        /// <summary>
+        /// A complete, independent zlib stream of single-channel (DeviceGray) alpha samples, PNG-row-filtered
+        /// the same way <see cref="IdatData"/> itself is - <see cref="PeachImage.Formats.Png.PngAlphaSplitInfo.AlphaData"/>,
+        /// for a source with a real per-pixel alpha channel (color type 4/6, or a palette source whose
+        /// <c>tRNS</c> has a genuine partial-alpha entry) that <see cref="PeachImage.Formats.Png.PngAlphaSplit"/>
+        /// was able to split. Embedded as a child <c>/SMask</c> image object alongside the main color
+        /// stream. Null for every ordinary pass-through source (no real alpha, or alpha-split wasn't
+        /// possible - e.g. interlaced or 16-bit color type 4/6, still falls back to the existing full
+        /// decode+<c>/SMask</c> path in that case).
+        /// </summary>
+        public byte[]? AlphaIdatData { get; init; }
+
+        /// <summary>The bit depth of <see cref="AlphaIdatData"/>'s samples (always 8 today). Meaningless when <see cref="AlphaIdatData"/> is null.</summary>
+        public byte? AlphaBitDepth { get; init; }
     }
 
     /// <summary>
@@ -210,18 +233,21 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
             CmykRasterData? CmykRaster { get; }
 
             /// <summary>
-            /// Non-null when this PNG source is eligible for byte-for-byte <c>/FlateDecode</c> pass-through
-            /// instead of the normal lossy-re-encode (<see cref="SaveAsJpeg"/>) or bitmap
-            /// (<see cref="SaveAsPdfBitmap"/>) paths: not interlaced (PDF's <c>/Predictor</c> has no Adam7
-            /// concept) and no real per-pixel alpha channel (color type 4/6 stays on the existing
-            /// decode+<c>/SMask</c> path - splitting pass-through color data from a separately-decoded
-            /// alpha plane is real additional work, deliberately deferred). A <c>tRNS</c> chunk doesn't
-            /// disqualify a source by itself - Grayscale/Truecolor <c>tRNS</c> is always a single exact
-            /// chroma-key value, and a Palette <c>tRNS</c> qualifies whenever every listed entry is
+            /// Non-null when this PNG source is eligible for <c>/FlateDecode</c> pass-through instead of
+            /// the normal lossy-re-encode (<see cref="SaveAsJpeg"/>) or bitmap (<see cref="SaveAsPdfBitmap"/>)
+            /// paths: not interlaced (PDF's <c>/Predictor</c> has no Adam7 concept). A <c>tRNS</c> chunk
+            /// doesn't disqualify a source by itself - Grayscale/Truecolor <c>tRNS</c> is always a single
+            /// exact chroma-key value, and a Palette <c>tRNS</c> qualifies whenever every listed entry is
             /// exactly 0 or 255 and the transparent indices form a single contiguous run - both map onto
-            /// <see cref="PngPassthroughData.ColorKeyMask"/>, PDF's own equivalent chroma-key mechanism;
-            /// a genuine partial-alpha palette entry, or non-contiguous transparent indices, still fall
-            /// back to decode. Null for every non-PNG source and for a PNG that isn't eligible.
+            /// <see cref="PngPassthroughData.ColorKeyMask"/>, PDF's own equivalent chroma-key mechanism.
+            /// A source with a real per-pixel alpha channel (color type 4/6, or a palette source with a
+            /// genuine partial-alpha <c>tRNS</c> entry) is also eligible when
+            /// <c>PeachImage.Formats.Png.PngAlphaSplit</c> can split its alpha plane out - see
+            /// <see cref="PngPassthroughData.AlphaIdatData"/> - embedded as byte-for-byte color data plus a
+            /// child <c>/SMask</c>, rather than the full decode+<c>/SMask</c> path. Non-contiguous
+            /// transparent palette indices, or an alpha-split PeachImage can't perform (interlaced, or
+            /// 16-bit color type 4/6), still fall back to decode. Null for every non-PNG source and for a
+            /// PNG that isn't eligible either way.
             /// </summary>
             PngPassthroughData? PngPassthrough { get; }
 

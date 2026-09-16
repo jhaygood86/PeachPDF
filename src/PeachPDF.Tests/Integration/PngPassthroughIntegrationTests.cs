@@ -115,17 +115,11 @@ namespace PeachPDF.Tests.Integration
             AssertContainsRawBytes(pdfText, info.IdatData);
         }
 
-        [Fact]
-        public async Task AlphaPng_UsesExistingSMaskPath_NotPassthrough()
-        {
-            var bytes = RasterPngFixture.MakeSolidRgbaPngBytes(4, 4, 255, 0, 0, a: 128);
-            var html = $"<html><body><img src=\"{DataUri(bytes)}\" width=\"4\" height=\"4\" /></body></html>";
-
-            var pdfText = await GetPdfText(html, new PdfGenerateConfig { PageSize = PageSize.A4 });
-
-            Assert.Contains("/SMask", pdfText);
-            Assert.DoesNotContain("/Predictor", pdfText);
-        }
+        // AlphaPng_UsesExistingSMaskPath_NotPassthrough and PalettePartialAlphaTrns_UsesExistingSMaskPath_NotPassthrough
+        // moved to PngAlphaSplitIntegrationTests.cs (issue #1109) - a real per-pixel alpha channel now
+        // passes through too (color+alpha split into a color XObject + child /SMask), so their old
+        // "falls back to decode" premise no longer holds. A PNG that genuinely can't alpha-split
+        // (interlaced, or 16-bit color type 4/6) still uses the plain decode+SMask path covered there.
 
         [Fact]
         public async Task TruecolorTrnsPng_EmbedsWithColorKeyMask()
@@ -163,22 +157,6 @@ namespace PeachPDF.Tests.Integration
             Assert.Matches(new Regex(@"/Indexed\s*/DeviceRGB"), pdfText);
             Assert.Matches(new Regex(@"/Mask\s*\[\s*1\s+1\s*\]"), pdfText);
             AssertContainsRawBytes(pdfText, info.IdatData);
-        }
-
-        [Fact]
-        public async Task PalettePartialAlphaTrns_UsesExistingSMaskPath_NotPassthrough()
-        {
-            // A partial palette alpha entry can't be expressed as a binary color-key mask - falls back to
-            // the pre-existing decode+SMask path, the same as a real per-pixel alpha channel does.
-            (byte, byte, byte)[] palette = [(255, 0, 0), (0, 255, 0)];
-            byte[] alphas = [255, 128];
-            var bytes = RasterPngFixture.MakeIndexedPngBytesWithTrns(4, 4, palette, alphas, (x, y) => (byte)((x + y) % 2));
-            var html = $"<html><body><img src=\"{DataUri(bytes)}\" width=\"4\" height=\"4\" /></body></html>";
-
-            var pdfText = await GetPdfText(html, new PdfGenerateConfig { PageSize = PageSize.A4 });
-
-            Assert.Contains("/SMask", pdfText);
-            Assert.DoesNotContain("/Predictor", pdfText);
         }
 
         [Fact]

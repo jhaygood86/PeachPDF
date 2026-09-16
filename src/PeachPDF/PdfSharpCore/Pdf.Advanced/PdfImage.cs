@@ -144,12 +144,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             // pixel-exact, and (like CmykRaster/JpegPassthrough) never resized: PdfImageTable's resize
             // skip (IsPngPinnedToNaturalSize) guarantees _targetWidth is null whenever this fast path is
             // about to be taken. Lossy normally forces the lossy fallback below instead - except for a
-            // source with a ColorKeyMask (tRNS-derived transparency): JPEG can't represent that at all, so
-            // Lossy simply doesn't apply to it, the same "the format can't hold this" treatment a real
-            // per-pixel-alpha PNG already gets by never reaching InitializeJpeg's dispatch in the first
-            // place. PdfImageTable.IsPngPinnedToNaturalSize mirrors this exact condition.
+            // source with a ColorKeyMask (tRNS-derived transparency) or AlphaIdatData (a real per-pixel
+            // alpha channel split via PngAlphaSplit, issue #1109): JPEG can't represent either at all, so
+            // Lossy simply doesn't apply to them, the same "the format can't hold this" treatment.
+            // PdfImageTable.IsPngPinnedToNaturalSize mirrors this exact condition.
             if (_targetWidth is null && _image.PngPassthrough is { } pngPassthrough &&
-                (!allowLossy || pngPassthrough.ColorKeyMask is not null))
+                (!allowLossy || pngPassthrough.ColorKeyMask is not null || pngPassthrough.AlphaIdatData is not null))
             {
                 EmbedPngPassthrough(pngPassthrough);
                 return;
@@ -325,7 +325,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <see cref="PngPassthroughData.ColorKeyMask"/>, when present, writes as a color-key
         /// <c>/Mask</c> array - no PDF/A guard needed here, unlike an <c>/SMask</c> alpha channel: color-
         /// key masking predates PDF's transparency model entirely and isn't restricted under any
-        /// <c>PdfAConformance</c> level.
+        /// <c>PdfAConformance</c> level. <see cref="PngPassthroughData.AlphaIdatData"/> (issue #1109),
+        /// when present, writes a child <c>/SMask</c> image object built the same way - its own
+        /// <c>/FlateDecode</c> stream with a matching PNG-predictor <c>/DecodeParms</c>, since
+        /// <c>PngAlphaSplit</c> PNG-row-filters the alpha plane exactly like a real PNG <c>IDAT</c> - and,
+        /// unlike the color-key case, does need the PDF/A transparency-group guard
+        /// <see cref="ReadTrueColorMemoryBitmap"/>'s own <c>/SMask</c> block already applies, since an
+        /// image <c>/SMask</c> is a transparency-group-requiring construct PDF/A-1 forbids.
         /// </summary>
         void EmbedPngPassthrough(PngPassthroughData data)
         {
@@ -350,6 +356,33 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                     maskArray.Elements.Add(new PdfInteger(component));
                 }
                 Elements[Keys.Mask] = maskArray;
+            }
+
+            if (data.AlphaIdatData is { } alphaIdatData)
+            {
+                PdfATransparencyGuard.RequireAllowed(_document, "An image with an alpha channel (e.g. a transparent PNG)");
+
+                var smask = new PdfDictionary(_document);
+                smask.Elements.SetName(Keys.Type, "/XObject");
+                smask.Elements.SetName(Keys.Subtype, "/Image");
+
+                Owner._irefTable.Add(smask);
+                smask.Stream = new PdfStream(alphaIdatData, smask);
+                smask.Elements[PdfStream.Keys.Length] = new PdfInteger(alphaIdatData.Length);
+                smask.Elements[PdfStream.Keys.Filter] = new PdfName("/FlateDecode");
+
+                var alphaDecodeParms = new PdfDictionary(_document);
+                alphaDecodeParms.Elements.SetInteger("/Predictor", 15);
+                alphaDecodeParms.Elements.SetInteger("/Colors", 1);
+                alphaDecodeParms.Elements.SetInteger("/BitsPerComponent", data.AlphaBitDepth!.Value);
+                alphaDecodeParms.Elements.SetInteger("/Columns", EffectiveWidth);
+                smask.Elements[PdfStream.Keys.DecodeParms] = alphaDecodeParms;
+
+                smask.Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
+                smask.Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
+                smask.Elements[Keys.BitsPerComponent] = new PdfInteger(data.AlphaBitDepth.Value);
+                smask.Elements[Keys.ColorSpace] = new PdfName("/DeviceGray");
+                Elements[Keys.SMask] = smask.Reference;
             }
 
             if (AllowInterpolate)

@@ -164,11 +164,11 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// lossless source" promise would be silently broken for the one format (PNG) that actually has a
         /// pass-through mechanism to forfeit. Under <see cref="ImageCompression.Lossy"/>, an <em>opaque</em>
         /// pass-through-eligible PNG resizes normally into the lossy JPEG path (the whole point of that
-        /// mode) - but one with a <c>PngPassthroughData.ColorKeyMask</c> is pinned even there: JPEG
-        /// cannot represent that transparency at all, so <see cref="PdfImage.InitializeJpeg"/> always takes
-        /// the pass-through fast path for it regardless of <c>ImageCompression</c> (the same "the format
-        /// can't hold this, so the setting doesn't apply" treatment a real per-pixel-alpha PNG already gets
-        /// by never reaching the JPEG-dispatch path at all).
+        /// mode) - but one with a <c>PngPassthroughData.ColorKeyMask</c> or <c>AlphaIdatData</c> (issue
+        /// #1109 - a real per-pixel alpha channel split via <c>PngAlphaSplit</c>) is pinned even there:
+        /// JPEG cannot represent either at all, so <see cref="PdfImage.InitializeJpeg"/> always takes the
+        /// pass-through fast path for it regardless of <c>ImageCompression</c> (the same "the format can't
+        /// hold this, so the setting doesn't apply" treatment).
         /// </remarks>
         private bool IsPngPinnedToNaturalSize(XImage image)
         {
@@ -177,7 +177,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             return Owner.Options.ImageCompression switch
             {
                 ImageCompression.Auto => true,
-                ImageCompression.Lossy => pngPassthrough.ColorKeyMask is not null,
+                ImageCompression.Lossy => pngPassthrough.ColorKeyMask is not null || pngPassthrough.AlphaIdatData is not null,
                 _ => false,
             };
         }

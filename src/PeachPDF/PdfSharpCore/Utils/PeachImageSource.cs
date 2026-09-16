@@ -210,40 +210,89 @@ namespace PeachPDF.PdfSharpCore.Utils
         }
 
         /// <summary>
-        /// Routes a PNG source: eligible for byte-for-byte pass-through (see
+        /// Routes a PNG source: eligible for pass-through (see
         /// <see cref="ImageSource.IImageSource.PngPassthrough"/>'s own remarks on eligibility) returns a
         /// <see cref="PeachPngPassthroughImageSourceImpl"/> that skips the full pixel decode entirely -
         /// genuinely cheaper than today's decode-and-re-encode, unlike the CMYK JPEG/TIFF precedents,
-        /// which still decode for unrelated reasons (ICC-profile extraction). An ineligible PNG (alpha,
-        /// <c>tRNS</c>, interlaced, or a malformed/inconsistent file <see cref="PngPassthrough.TryRead"/>
-        /// itself rejects) falls through to the ordinary decode path, same as before this feature existed.
+        /// which still decode for unrelated reasons (ICC-profile extraction). A source with real
+        /// per-pixel alpha that <see cref="IsPassthroughEligible"/> rejects gets a second chance via
+        /// <see cref="PngAlphaSplit.TrySplit(in PngPassthroughInfo, out PngAlphaSplitInfo)"/> (issue
+        /// #1109) - that call has its own narrower eligibility (not interlaced, 8-bit color type 4/6, or
+        /// a palette source with a genuine partial-alpha <c>tRNS</c> entry) and safely returns false for
+        /// anything else, so this doesn't need to duplicate that logic here. An ineligible PNG either way
+        /// (or a malformed/inconsistent file <see cref="PngPassthrough.TryRead"/> itself rejects) falls
+        /// through to the ordinary decode path, same as before this feature existed.
         /// </summary>
         private static IImageSource DecodePng(string name, byte[] bytes, int quality)
         {
-            if (PngPassthrough.TryRead(new MemoryStream(bytes), out var pngInfo) && IsPassthroughEligible(pngInfo, out var colorKeyMask))
+            if (PngPassthrough.TryRead(new MemoryStream(bytes), out var pngInfo))
             {
-                var colorSpace = pngInfo.ColorType switch
+                if (IsPassthroughEligible(pngInfo, out var colorKeyMask))
                 {
-                    PngColorType.Grayscale => PngPassthroughColorSpace.Gray,
-                    PngColorType.Truecolor => PngPassthroughColorSpace.Rgb,
-                    PngColorType.Palette => PngPassthroughColorSpace.Indexed,
-                    _ => throw new InvalidOperationException("Unreachable - IsPassthroughEligible already restricted ColorType to these three values."),
-                };
+                    var colorSpace = pngInfo.ColorType switch
+                    {
+                        PngColorType.Grayscale => PngPassthroughColorSpace.Gray,
+                        PngColorType.Truecolor => PngPassthroughColorSpace.Rgb,
+                        PngColorType.Palette => PngPassthroughColorSpace.Indexed,
+                        _ => throw new InvalidOperationException("Unreachable - IsPassthroughEligible already restricted ColorType to these three values."),
+                    };
 
-                var passthrough = new PngPassthroughData
+                    var passthrough = new PngPassthroughData
+                    {
+                        IdatData = pngInfo.IdatData,
+                        ColorSpace = colorSpace,
+                        BitDepth = pngInfo.BitDepth,
+                        PaletteRgb = pngInfo.PaletteData,
+                        ColorKeyMask = colorKeyMask,
+                    };
+
+                    return new PeachPngPassthroughImageSourceImpl(name, bytes, quality, pngInfo.Width, pngInfo.Height, passthrough);
+                }
+
+                if (PngAlphaSplit.TrySplit(in pngInfo, out var alphaSplit))
                 {
-                    IdatData = pngInfo.IdatData,
-                    ColorSpace = colorSpace,
-                    BitDepth = pngInfo.BitDepth,
-                    PaletteRgb = pngInfo.PaletteData,
-                    ColorKeyMask = colorKeyMask,
-                };
-
-                return new PeachPngPassthroughImageSourceImpl(name, bytes, quality, pngInfo.Width, pngInfo.Height, passthrough);
+                    var passthrough = BuildAlphaSplitPassthroughData(pngInfo, alphaSplit);
+                    return new PeachPngPassthroughImageSourceImpl(name, bytes, quality, pngInfo.Width, pngInfo.Height, passthrough);
+                }
             }
 
             var decoded = Image.Load(new MemoryStream(bytes), Rgba32DecoderOptions);
             return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha, jpegPassthrough: null, isLosslessSourceFormat: true);
+        }
+
+        /// <summary>
+        /// Builds the <see cref="PngPassthroughData"/> for an alpha-split-eligible source.
+        /// <paramref name="alphaSplit"/>.<see cref="PngAlphaSplitInfo.ColorData"/> is non-null exactly for
+        /// color type 4/6 (the de-interleaved color-only plane, replacing <paramref name="pngInfo"/>'s own
+        /// interleaved <c>IdatData</c> - see <see cref="PngPassthroughData.IdatData"/>'s own remarks) and
+        /// null for the palette case (the original indexed <c>IdatData</c>/<c>PaletteData</c> already need
+        /// no change - only the alpha plane is new). <see cref="PngPassthroughData.ColorKeyMask"/> is
+        /// always null here - a source only reaches alpha-split because it has real alpha, which
+        /// <see cref="IsPassthroughEligible"/> already ruled out being chroma-key-only.
+        /// </summary>
+        private static PngPassthroughData BuildAlphaSplitPassthroughData(in PngPassthroughInfo pngInfo, in PngAlphaSplitInfo alphaSplit)
+        {
+            if (alphaSplit.ColorData is { } colorData)
+            {
+                return new PngPassthroughData
+                {
+                    IdatData = colorData,
+                    ColorSpace = alphaSplit.ColorIsRgb ? PngPassthroughColorSpace.Rgb : PngPassthroughColorSpace.Gray,
+                    BitDepth = alphaSplit.ColorBitDepth,
+                    AlphaIdatData = alphaSplit.AlphaData,
+                    AlphaBitDepth = alphaSplit.AlphaBitDepth,
+                };
+            }
+
+            return new PngPassthroughData
+            {
+                IdatData = pngInfo.IdatData,
+                ColorSpace = PngPassthroughColorSpace.Indexed,
+                BitDepth = pngInfo.BitDepth,
+                PaletteRgb = pngInfo.PaletteData,
+                AlphaIdatData = alphaSplit.AlphaData,
+                AlphaBitDepth = alphaSplit.AlphaBitDepth,
+            };
         }
 
         /// <summary>

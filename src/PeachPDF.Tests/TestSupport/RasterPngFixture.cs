@@ -48,14 +48,16 @@ namespace PeachPDF.Tests.TestSupport
             MakeRgbaPngBytes(width, height, (_, _) => (r, g, b, a));
 
         /// <summary>
-        /// A real, forced-TruecolorAlpha (color type 6) opaque PNG - same shape as
-        /// <c>PeachImageSourceTests.FromBinary_OpaqueTruecolorPng_IsTransparent</c>'s fixture: every pixel
-        /// is fully opaque (a=255), but the declared alpha channel still makes <c>Image.HasAlpha</c> (and
-        /// so <c>Transparent</c>) true, which - unlike <see cref="MakeSolidRgbaPngBytes"/>'s auto-indexed
-        /// equivalent - makes it ineligible for byte-for-byte pass-through regardless of how few distinct
-        /// colors it has. For tests that need a plain "some opaque, resizable raster image" fixture
-        /// without incidentally exercising the pass-through carve-out (which, by design, is never
-        /// resized/downscaled).
+        /// A real, forced-TruecolorAlpha (color type 6), <em>interlaced</em> opaque PNG: every pixel is
+        /// fully opaque (a=255), but the declared alpha channel still makes <c>Image.HasAlpha</c> (and so
+        /// <c>Transparent</c>) true - which, unlike <see cref="MakeSolidRgbaPngBytes"/>'s auto-indexed
+        /// equivalent, makes it ineligible for pass-through regardless of how few distinct colors it has.
+        /// Interlaced specifically so it stays ineligible after issue #1109's alpha-split extension too
+        /// (<c>PngAlphaSplit</c> excludes interlaced sources the same way opaque/chroma-key pass-through
+        /// already did) - a non-interlaced version of this exact shape passes through today (see
+        /// <c>PeachImageSourceTests.FromBinary_OpaqueTruecolorAlphaPng_IsAlphaSplitEligible_NotTransparent</c>).
+        /// For tests that need a plain "some opaque, resizable raster image" fixture without incidentally
+        /// exercising any pass-through carve-out (none of which is ever resized/downscaled).
         /// </summary>
         public static byte[] MakeOpaqueTruecolorAlphaPngBytes(int width, int height, byte r, byte g, byte b)
         {
@@ -67,7 +69,7 @@ namespace PeachPDF.Tests.TestSupport
             }
 
             using var ms = new MemoryStream();
-            image.Save(ms, "png", new PngEncoderOptions { ColorMode = PngColorMode.Truecolor });
+            image.Save(ms, "png", new PngEncoderOptions { ColorMode = PngColorMode.Truecolor, Interlace = true });
             return ms.ToArray();
         }
 
