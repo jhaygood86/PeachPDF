@@ -2,7 +2,9 @@ using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Fragments;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -133,6 +135,82 @@ namespace PeachPDF.Tests.Integration
             Assert.True(beforeWord.Left < helloWord.Left);
             Assert.True(helloWord.Left < worldWord.Left);
             Assert.True(worldWord.Left < afterWord.Left);
+        }
+
+        [Fact]
+        public async Task InlineBlockWithBlockThenText_GivesTrailingInlineRunItsOwnAnonymousBlock()
+        {
+            // The outer block's only child is itself inline-level. Both DOM-normalization passes used to
+            // stop at that all-inline boundary, so they never normalized the inline-block's independent
+            // formatting context: the title block rendered, while the bare trailing text was dispatched
+            // as a block child, received zero width/no line boxes, and disappeared.
+            var (root, container) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body>
+                <div id="card" style="display:inline-block;width:120pt;padding:10pt">
+                  <b id="title" style="display:block">Title</b>Description text must render below the title.
+                </div>
+                </body></html>
+                """);
+
+            var card = FindById(root, "card")!;
+            var title = FindById(root, "title")!;
+            var description = FindWord(root, "Description");
+            var anonymousRun = Assert.Single(card.Boxes, box => box.IsInlineRunWrapper);
+
+            Assert.Contains(description, anonymousRun.Boxes.SelectMany(box => box.Words));
+            Assert.True(description.Top >= title.ActualBottom,
+                $"description top ({description.Top}) must follow the title block ({title.ActualBottom})");
+
+            var graphics = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintPage(container, graphics);
+            Assert.Contains(graphics.DrawStringCalls, call => call.Text == "Description");
+        }
+
+        [Fact]
+        public async Task FixedWidthAtomicInlineBlocks_UseContentBoxWidthAndWrapAsWholeBoxes()
+        {
+            var (root, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body style="margin:0">
+                <div id="row" style="width:220pt"><span id="a" style="display:inline-block;width:80pt;padding:10pt;margin:0 5pt 12pt 0;vertical-align:top"><b style="display:block">A</b>body</span><span id="b" style="display:inline-block;width:80pt;padding:10pt;margin:0 5pt 12pt 0;vertical-align:top"><b style="display:block">B</b>body</span><span id="c" style="display:inline-block;width:80pt;padding:10pt;margin:0 5pt 12pt 0;vertical-align:top"><b style="display:block">C</b>body</span></div>
+                </body></html>
+                """);
+
+            var row = FindById(root, "row")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            var c = FindById(root, "c")!;
+
+            Assert.Equal(100, a.ActualBoxSizingWidth, 3);
+            Assert.Equal(100, b.ActualBoxSizingWidth, 3);
+            Assert.Equal(100, c.ActualBoxSizingWidth, 3);
+            Assert.Equal(a.Location.Y, b.Location.Y, 3);
+            Assert.True(c.Location.Y > a.Location.Y,
+                $"third 105pt margin box must wrap below the first two (a.Y={a.Location.Y}, c.Y={c.Location.Y})");
+            Assert.Equal(a.Location.X, c.Location.X, 3);
+            Assert.True(c.Location.Y >= a.ActualBottom + a.ActualMarginBottom - 0.01,
+                $"wrapped row must start below the previous row's bottom margin (a.Bottom={a.ActualBottom}, margin={a.ActualMarginBottom}, c.Y={c.Location.Y})");
+            Assert.True(c.Location.X + c.ActualBoxSizingWidth + c.ActualMarginRight <= row.ClientRight + 0.01,
+                "wrapped atomic inline must stay inside the containing block");
+        }
+
+        [Fact]
+        public async Task AtomicInlineWrapAtLineClamp_StopsBeforeLayingOutTheHiddenBox()
+        {
+            var (root, container) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body style="margin:0">
+                <div id="row" style="width:140pt;line-clamp:1">visible words <span id="card" style="display:inline-block;width:100pt"><b style="display:block">HiddenCardTitle</b></span></div>
+                </body></html>
+                """);
+
+            var row = FindById(root, "row")!;
+            var card = FindById(root, "card")!;
+
+            Assert.Single(row.LineBoxes);
+            Assert.Empty(card.LineBoxes);
+
+            var graphics = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintPage(container, graphics);
+            Assert.DoesNotContain(graphics.DrawStringCalls, call => call.Text.Contains("HiddenCardTitle"));
         }
 
         [Fact]

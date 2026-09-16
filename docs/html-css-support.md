@@ -597,12 +597,13 @@ Two knock-on gaps remain:
   height comes from the flowed content plus padding/border, so
   `<span style="display: inline-block; height: 100px">x</span>` reserves only its natural text
   height, not 100px (CSS2.1 §10.8.1 expects the atomic box's margin box to size the line).
-- An atomic box is never moved onto a line of its own when it does not fit in what is left of the
-  current one: it overhangs the containing block's edge where a browser would start a new line for
-  it. A row of fixed-width `inline-block` cards therefore stays on one line instead of wrapping.
-  Relatedly, an `inline-block` that holds block-level content and declares a `width` paints that
-  width as its whole border box, rather than adding its padding and border to it under the default
-  `box-sizing: content-box`.
+- An `inline-block` laid out as an independent formatting context (because it holds block-level
+  content or wraps its own inline content) moves whole to the next line when its margin box does not
+  fit, and a declared content-box `width` correctly grows by its padding and border. The approximated
+  one-line path described above can still discover that the box's declared width does not fit only
+  after flowing some of its content, rather than moving the opaque box as a unit. Engine-backed
+  atomic displays (`inline-flex`, `inline-grid`, and `inline-table`) likewise do not yet preflight
+  their final used width against the remaining line measure.
 ### Stacking Context
 
 Paint order follows the CSS [stacking context](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Positioned_layout/Stacking_context) model. A new stacking context is established by:
