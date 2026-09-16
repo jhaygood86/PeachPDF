@@ -256,6 +256,222 @@ var tallCellHeight = tallCell.ActualBottom - tallCell.Location.Y;
 
         #endregion
 
+        #region Table/Row Explicit Height Tests (issue #1116)
+
+        [Fact]
+        public async Task TrHeight_StretchesEveryCellInTheRow()
+        {
+            // CSS 2.1 §17.5.3: a row's own specified `height` is one of the candidates its computed
+            // height is the maximum of - previously CssLayoutEngineTable never read <tr> height/min-height
+            // at all, so this had no effect (issue #1116).
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head><style>table { border-collapse: collapse; } td { border: 1px solid black; }</style></head>
+<body>
+    <table>
+        <tr id='row' style='height:80pt'><td id='a'>x</td><td id='b'>y</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var row = FindById(rootBox, "row");
+            var a = FindById(rootBox, "a");
+            var b = FindById(rootBox, "b");
+
+            Assert.NotNull(row);
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            Assert.True(Height(row!) >= 79, $"row should grow to its explicit height (actual: {Height(row!)})");
+            Assert.Equal(row!.ActualBottom, a!.ActualBottom, 1);
+            Assert.Equal(row.ActualBottom, b!.ActualBottom, 1);
+        }
+
+        [Fact]
+        public async Task TrMinHeight_SmallerThanContent_DoesNotShrinkRow()
+        {
+            // min-height only ever raises the row's height - a min-height smaller than the content
+            // several tall lines require must not shrink the row below its natural content height.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head><style>table { border-collapse: collapse; } td { border: 1px solid black; font-size: 14pt; }</style></head>
+<body>
+    <table>
+        <tr id='row' style='min-height:1pt'><td id='a'>Line one<br>Line two<br>Line three</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var row = FindById(rootBox, "row");
+            Assert.NotNull(row);
+
+            Assert.True(Height(row!) > 30, $"row must keep its content-driven height, not shrink to min-height:1pt (actual: {Height(row!)})");
+        }
+
+        [Fact]
+        public async Task TableHeight_GrowsRowsSoVerticalAlignActuallyDiffers()
+        {
+            // The issue's own repro: without table height taking effect, the row is exactly one line
+            // tall, so top/middle/bottom vertical-align all land in the same place. Once the table's
+            // explicit height correctly grows the (single) row, the three cells' content must sit at
+            // three distinct Y positions.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head><style>table { border-collapse: collapse; }</style></head>
+<body>
+    <table style='width:400px; height:80pt'>
+        <tr>
+            <td id='top' style='vertical-align:top'>top</td>
+            <td id='middle' style='vertical-align:middle'>middle</td>
+            <td id='bottom' style='vertical-align:bottom'>bottom</td>
+        </tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox);
+            var top = FindById(rootBox, "top");
+            var middle = FindById(rootBox, "middle");
+            var bottom = FindById(rootBox, "bottom");
+
+            Assert.NotNull(table);
+            Assert.NotNull(top);
+            Assert.NotNull(middle);
+            Assert.NotNull(bottom);
+
+            Assert.True(Height(table!) >= 79, $"table should grow to its explicit height (actual: {Height(table!)})");
+
+            var topLineY = top!.Boxes.Single().Location.Y;
+            var middleLineY = middle!.Boxes.Single().Location.Y;
+            var bottomLineY = bottom!.Boxes.Single().Location.Y;
+
+            Assert.True(topLineY < middleLineY - 1,
+                $"top-aligned content ({topLineY}) must sit above middle-aligned content ({middleLineY})");
+            Assert.True(middleLineY < bottomLineY - 1,
+                $"middle-aligned content ({middleLineY}) must sit above bottom-aligned content ({bottomLineY})");
+        }
+
+        [Fact]
+        public async Task TableHeight_SmallerThanContent_DoesNotClipTable()
+        {
+            // §17.5.3 makes the table's own height a maximum-of rule too, mirroring the cell carve-out:
+            // an explicit height smaller than the rows' real content must never shrink the table's own
+            // ActualBottom below it.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head><style>table { border-collapse: collapse; } td { font-size: 14pt; }</style></head>
+<body>
+    <table id='t' style='height:1pt'>
+        <tr><td>Line one<br>Line two<br>Line three</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindById(rootBox, "t");
+            Assert.NotNull(table);
+
+            Assert.True(Height(table!) > 30,
+                $"table must keep its content-driven height, not shrink to height:1pt (actual: {Height(table!)})");
+        }
+
+        [Fact]
+        public async Task TableHeight_TwoRows_DistributesSurplusProportionallyToNaturalRowHeight()
+        {
+            // No explicit height on either row, so CssLayoutEngineTable's own measurement pass has to
+            // decide how the table's shortfall is shared between them. Mirrors this repo's column-width
+            // surplus rule (CssLayoutEngineTable.SpreadSurplusProportionally): each row grows by a share
+            // of the surplus proportional to its own natural (pre-redistribution) height, not equally.
+            const string style = "table { border-collapse: collapse; } td { font-size: 14pt; }";
+            var naturalHtml = $@"
+<!DOCTYPE html>
+<html>
+<head><style>{style}</style></head>
+<body>
+    <table>
+        <tr id='short'><td>one line</td></tr>
+        <tr id='tall'><td>Line one<br>Line two<br>Line three</td></tr>
+    </table>
+</body>
+</html>";
+            var (naturalRoot, _) = await BuildCssBoxTree(naturalHtml);
+            var naturalShort = Height(FindById(naturalRoot, "short")!);
+            var naturalTall = Height(FindById(naturalRoot, "tall")!);
+            var naturalTotal = naturalShort + naturalTall;
+
+            var html = $@"
+<!DOCTYPE html>
+<html>
+<head><style>{style}</style></head>
+<body>
+    <table style='height:{naturalTotal + 100}pt'>
+        <tr id='short'><td>one line</td></tr>
+        <tr id='tall'><td>Line one<br>Line two<br>Line three</td></tr>
+    </table>
+</body>
+</html>";
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox);
+            var shortRow = FindById(rootBox, "short");
+            var tallRow = FindById(rootBox, "tall");
+
+            Assert.NotNull(table);
+            Assert.NotNull(shortRow);
+            Assert.NotNull(tallRow);
+
+            Assert.True(Height(table!) >= naturalTotal + 99,
+                $"table should grow to its explicit height (actual: {Height(table!)}, target: {naturalTotal + 100})");
+
+            var grownShort = Height(shortRow!);
+            var grownTall = Height(tallRow!);
+
+            // The taller row started with more natural height, so it must both grow by more in absolute
+            // terms and keep its larger share of the total - equal-split redistribution would instead
+            // narrow the gap between them.
+            Assert.True(grownTall - naturalTall > grownShort - naturalShort,
+                $"the taller row's own growth ({grownTall - naturalTall}) should exceed the shorter row's ({grownShort - naturalShort})");
+            Assert.True(grownTall / (grownShort + grownTall) > naturalTall / naturalTotal - 0.02,
+                "the taller row should keep at least roughly its natural share of the grown total");
+        }
+
+        [Fact]
+        public async Task TableHeight_RowspanCellCrossingAGrownRow_StretchesToTheNewCombinedHeight()
+        {
+            // A rowspan cell spanning both rows must still cover their combined (now taller, via
+            // redistribution) height - verifying the redo's fresh pass correctly re-closes a spanning
+            // cell against the new row geometry rather than the pre-redistribution one.
+            const string style = "table { border-collapse: collapse; } td { font-size: 14pt; }";
+            var html = $@"
+<!DOCTYPE html>
+<html>
+<head><style>{style}</style></head>
+<body>
+    <table style='height:200pt'>
+        <tr><td id='span' rowspan='2'>span</td><td>one line</td></tr>
+        <tr><td>Line one<br>Line two<br>Line three</td></tr>
+    </table>
+</body>
+</html>";
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox);
+            var span = FindById(rootBox, "span");
+
+            Assert.NotNull(table);
+            Assert.NotNull(span);
+
+            Assert.True(Height(table!) >= 199, $"table should grow to its explicit height (actual: {Height(table!)})");
+            Assert.Equal(table!.ActualBottom, span!.ActualBottom, 1);
+        }
+
+        #endregion
+
         #region Header/Footer Layout Tests
 
   [Fact]

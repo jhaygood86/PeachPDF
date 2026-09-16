@@ -10170,6 +10170,58 @@ await SaveShowcaseAsync("table_caption", "Layout", "Table Captions (caption-side
     + "<table>'s own border/background wrapping the row grid only.",
     tableCaptionHtml, pdfConfig);
 
+// --- table/row explicit height showcase (issue #1116) ---
+//
+// height/min-height on a <table> or <tr> was previously silently ignored - the table/row always
+// laid out at its content height, which also made vertical-align on a cell look like a no-op (a
+// one-line-tall row leaves top/middle/bottom nowhere to go). CSS 2.1 §17.5.3 makes both a minimum:
+// the table's used height is the maximum of its specified height and the rows' natural total, with
+// surplus distributed proportionally across rows - the same rule this engine already applies to
+// column-width surplus.
+var tableRowHeightHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a5 landscape; margin: 12mm }
+    body { font: 9.5pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 14pt; margin: 0 0 0.3em }
+    h2 { font-size: 10.5pt; margin: 1.1em 0 0.35em; break-after: avoid }
+    p.intro { color: #6b7280; font-size: 9pt; margin: 0 0 0.6em; max-width: 44em }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 0.4em }
+    td, th { border: 0.75pt solid #94a3b8; padding: 3pt 8pt; text-align: left }
+    th { background: #f1f5f9; font-weight: 600 }
+    #valign td { width: 33%; background: #eef2ff }
+    #band tr { height: 26pt }
+    #band td:first-child { color: #6b7280; width: 30% }
+    </style></head><body>
+
+    <h1>height / min-height on &lt;table&gt; and &lt;tr&gt;</h1>
+    <p class="intro">CSS 2.1 &sect;17.5.3: a table's (or row's) specified height is a
+    <em>minimum</em>, never a clip - the used height is the greater of the specified value and the
+    rows' own natural content height, with any surplus spread proportionally across the rows.</p>
+
+    <h2>1 &mdash; table height, with vertical-align finally having room to matter</h2>
+    <table id="valign" style="height: 70pt">
+    <tr>
+    <td style="vertical-align: top">top</td>
+    <td style="vertical-align: middle">middle</td>
+    <td style="vertical-align: bottom">bottom</td>
+    </tr>
+    </table>
+
+    <h2>2 &mdash; per-row height, for a uniform banded/letterhead layout</h2>
+    <table id="band">
+    <tr><td>Invoice #</td><td>INV-2026-0142</td></tr>
+    <tr><td>Bill to</td><td>Acme Logistics, 400 Harbor Way</td></tr>
+    <tr><td>Notes</td><td>Net 30. A short cell and a much longer wrapped one still share the exact
+    same 26pt row height, since it's declared on each &lt;tr&gt; rather than left to content.</td></tr>
+    </table>
+    </body></html>
+    """;
+await SaveShowcaseAsync("table_row_height", "Layout", "Table & Row Height (height / min-height)",
+    "height/min-height on a <table> or <tr> (CSS 2.1 §17.5.3): a minimum, never a clip - the table "
+    + "grows to fit an explicit height taller than its content, with the surplus distributed "
+    + "proportionally across rows, giving vertical-align real room to differ within a row.",
+    tableRowHeightHtml, pdfConfig);
+
 // --- table-layout showcase (issue #918) ---
 //
 // table-layout was previously parsed but never wired into CssLayoutEngineTable, so a table declared
