@@ -4448,14 +4448,23 @@ await SaveShowcaseAsync("svg", "Graphics & Effects", "SVG",
 
 // --- SVG Form XObject reuse showcase ---
 
-// Two pieces of SVG artwork, both repeated on every one of twelve pages: a `position: fixed` logo, and
-// a border-image whose source is an SVG sliced into corners and tiled edges (so it is invoked many
-// times per page, not once). Each is rendered into ONE document-local Form XObject and invoked
-// wherever it appears, so the file carries two copies of the artwork rather than two per page - the
-// saving this showcase exists to make visible. Measured by rendering this same document with the form
-// cache switched off: 24 Form XObjects instead of 2, and 176,077 bytes instead of 126,666 - 39% larger.
+// Three pieces of SVG artwork: a `position: fixed` logo and a border-image repeated on every one of
+// twelve pages (so the border is invoked many times per page too, not once), plus a small icon
+// referenced by four SEPARATE <img> elements on one page - demonstrating the two distinct ways this
+// reuse pays off: one element repainted across pages, and separate elements sharing one source. Each
+// is rendered into ONE document-local Form XObject and invoked wherever it appears, so the file carries
+// three copies of the artwork rather than one per placement - the saving this showcase exists to make
+// visible. Measured by rendering this same document with the form cache switched off: 28 Form XObjects
+// instead of 3, and 157,352 bytes instead of 129,640 - about 18% larger.
 const string SvgFormReuseBorderSource =
     "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'120'%20height%3D'120'%20viewBox%3D'0%200%20120%20120'%20preserveAspectRatio%3D'none'%3E%3Crect%20width%3D'120'%20height%3D'120'%20fill%3D'%23fde5d5'%2F%3E%3Crect%20x%3D'48'%20y%3D'48'%20width%3D'24'%20height%3D'24'%20fill%3D'%23fffaf6'%2F%3E%3Cg%20fill%3D'%23c95e58'%3E%3Ccircle%20cx%3D'24'%20cy%3D'24'%20r%3D'13'%2F%3E%3Ccircle%20cx%3D'96'%20cy%3D'24'%20r%3D'13'%2F%3E%3Ccircle%20cx%3D'24'%20cy%3D'96'%20r%3D'13'%2F%3E%3Ccircle%20cx%3D'96'%20cy%3D'96'%20r%3D'13'%2F%3E%3Cpath%20d%3D'M60%2010L74%2024%2060%2038%2046%2024Z%20M60%2082L74%2096%2060%20110%2046%2096Z%20M10%2060L24%2046%2038%2060%2024%2074Z%20M82%2060L96%2046%20110%2060%2096%2074Z'%2F%3E%3C%2Fg%3E%3Cg%20fill%3D'%23fff6e9'%3E%3Ccircle%20cx%3D'24'%20cy%3D'24'%20r%3D'5'%2F%3E%3Ccircle%20cx%3D'96'%20cy%3D'24'%20r%3D'5'%2F%3E%3Ccircle%20cx%3D'24'%20cy%3D'96'%20r%3D'5'%2F%3E%3Ccircle%20cx%3D'96'%20cy%3D'96'%20r%3D'5'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E";
+
+// A third, independent SVG source referenced by four SEPARATE <img> elements (not one element
+// repainted across pages, like the logo and border above) - demonstrating that separate elements
+// resolving to the same standalone SVG source share one parsed document and therefore one Form
+// XObject too, once instead of once per <img>.
+const string SvgFormReuseIconSource =
+    "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2024%2024'%3E%3Cpath%20fill%3D'%23a64246'%20d%3D'M12%202L14.9%209.1%2022%2012%2014.9%2014.9%2012%2022%209.1%2014.9%202%2012%209.1%209.1Z'%2F%3E%3C%2Fsvg%3E";
 
 var svgFormReuseSheetTitles = new[]
 {
@@ -4485,6 +4494,8 @@ var svgFormReuseHtml =
     ".sheet p { max-width: 570px; line-height: 1.65; margin: 0 0 16px }" +
     ".sample-row { margin-top: 30px; border-top: 1px solid #e8b9a4; padding-top: 11px }" +
     ".sample-row strong { float: right; color: #a64246 }" +
+    ".icon-row { margin: 4px 0 18px }" +
+    ".icon-row img { width: 22px; height: 22px; margin-right: 10px }" +
     "</style></head><body>" +
 
     // One parsed SvgDocument - the project's own peach mark, from docs/assets/img/peach.svg, plus the
@@ -4529,6 +4540,14 @@ var svgFormReuseHtml =
         "<section class=\"sheet\">" +
         $"<div class=\"sheet-number\">PAGE {index + 1:00} / 12</div>" +
         $"<h1>{title}</h1>" +
+        (index == 0
+            ? "<div class=\"icon-row\">" +
+              string.Concat(Enumerable.Repeat(SvgFormReuseIconSource, 4)
+                  .Select(src => $"<img src=\"{src}\" alt=\"\" width=\"22\" height=\"22\"/>")) +
+              "</div>" +
+              "<p>The four marks above are four separate &lt;img&gt; elements, not one element repeated - " +
+              "each resolves the same SVG source, so they share one Form XObject between them too.</p>"
+            : "") +
         "<p>This page repeats the same fixed vector logo and the same SVG border-image. Nothing about " +
         "the artwork changes from sheet to sheet, which is exactly the case a per-page copy would pay " +
         "for twelve times over.</p>" +
@@ -4541,7 +4560,7 @@ var svgFormReuseHtml =
     "</body></html>";
 
 await SaveShowcaseAsync("svg_form_reuse", "Graphics & Effects", "SVG Form XObject Reuse",
-    "The same SVG logo and SVG border-image on all twelve pages: each is stored once as a document-local Form XObject and invoked wherever it appears, rather than written into the PDF again per page - two copies of the artwork instead of twenty-four, and a file around 40% smaller.",
+    "The same SVG logo and SVG border-image on all twelve pages, plus a small icon referenced by four separate <img> elements on one page: each is stored once as a document-local Form XObject and invoked wherever it appears, rather than written into the PDF again per page or per element - three copies of the artwork instead of twenty-eight, and a file around 18% smaller.",
     svgFormReuseHtml, pdfConfig);
 
 // --- advanced SVG text showcase (gradient/pattern fill, stroke, textPath) ---
