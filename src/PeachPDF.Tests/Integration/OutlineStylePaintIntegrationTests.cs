@@ -38,26 +38,22 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            var polys = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
-            Assert.Equal(4, polys.Count);
-            Assert.All(polys, p => Assert.Equal(RColor.FromArgb(10, 20, 30), p.Color));
+            var ring = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                p => !p.Stroked && p.Color == RColor.FromArgb(10, 20, 30));
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>(),
+                p => p.Color == RColor.FromArgb(10, 20, 30));
 
             const double offset = 4;
             const double width = 6;
             const double reach = offset + width;
 
-            var top = polys.OrderBy(p => p.Points.Average(pt => pt.Y)).First();
-            var ys = top.Points.Select(pt => pt.Y).ToList();
-            var xs = top.Points.Select(pt => pt.X).ToList();
-            Assert.Equal(rect.Top - offset, ys.Max(), 1);
-            Assert.Equal(rect.Top - reach, ys.Min(), 1);
-            Assert.Equal(rect.Left - reach, xs.Min(), 1);
-            Assert.Equal(rect.Right + reach, xs.Max(), 1);
-
-            var right = polys.OrderByDescending(p => p.Points.Average(pt => pt.X)).First();
-            var rxs = right.Points.Select(pt => pt.X).ToList();
-            Assert.Equal(rect.Right + offset, rxs.Min(), 1);
-            Assert.Equal(rect.Right + reach, rxs.Max(), 1);
+            var outer = ring.Points.Take(4).ToList();
+            var inner = ring.Points.Skip(4).Take(4).ToList();
+            Assert.Equal(rect.Top - reach, outer.Min(p => p.Y), 1);
+            Assert.Equal(rect.Left - reach, outer.Min(p => p.X), 1);
+            Assert.Equal(rect.Right + reach, outer.Max(p => p.X), 1);
+            Assert.Equal(rect.Top - offset, inner.Min(p => p.Y), 1);
+            Assert.Equal(rect.Right + offset, inner.Max(p => p.X), 1);
         }
 
         [Fact]
@@ -71,14 +67,162 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            var polys = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
-            var top = polys.OrderBy(p => p.Points.Average(pt => pt.Y)).First();
-            var ys = top.Points.Select(pt => pt.Y).ToList();
+            var ring = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                p => !p.Stroked && p.Color == RColor.FromArgb(10, 20, 30));
+            var outerTop = ring.Points.Take(4).Min(p => p.Y);
+            var innerTop = ring.Points.Skip(4).Take(4).Min(p => p.Y);
 
             // offset = -3, width = 6: the ring's inner boundary sits 3pt *inside* the border edge and
             // its outer boundary sits 3pt outside it - straddling the box's own edge.
-            Assert.Equal(rect.Top + 3, ys.Max(), 1);
-            Assert.Equal(rect.Top - 3, ys.Min(), 1);
+            Assert.Equal(rect.Top + 3, innerTop, 1);
+            Assert.Equal(rect.Top - 3, outerTop, 1);
+        }
+
+        [Theory]
+        [InlineData(20, 20, -20, 8, 8)]
+        [InlineData(8, 40, -10, 8, 28)]
+        public async Task OutlineOffset_LargeNegative_KeepsOutsideShapeAtLeastTwiceTheOutlineWidth(
+            double boxWidth, double boxHeight, double offset, double expectedWidth, double expectedHeight)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='b' style='width:{boxWidth}pt; height:{boxHeight}pt; " +
+                $"outline:4pt solid rgb(10,20,30); outline-offset:{offset}pt'>x</div>"));
+            var div = LayoutHarness.FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var ring = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                p => !p.Stroked && p.Color == RColor.FromArgb(10, 20, 30));
+            var outer = ring.Points.Take(4).ToList();
+
+            Assert.Equal(expectedWidth, outer.Max(p => p.X) - outer.Min(p => p.X), 1);
+            Assert.Equal(expectedHeight, outer.Max(p => p.Y) - outer.Min(p => p.Y), 1);
+        }
+
+        [Fact]
+        public async Task RoundedSolidOutline_ExpandsTheBorderRadiusWithItsOffsetAndWidth()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='b' style='width:80pt; height:50pt; border-radius:20pt; " +
+                "outline:6pt solid rgb(10,20,30); outline-offset:4pt'>x</div>"));
+            var div = LayoutHarness.FindById(root, "b")!;
+            var rect = FragmentPaintHarness.FragmentOf(container, div).Lines[0].Rect;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var outline = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                p => p.Stroked && p.Color == RColor.FromArgb(10, 20, 30));
+            Assert.True(outline.Points.Count > 8);
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+
+            // Outer radius = 20 + offset 4 + width 6 = 30. The 6pt stroke's centerline is
+            // inset 3pt from that contour, hence a 27pt centerline radius on a rectangle inflated 7pt.
+            Assert.Equal(rect.Left - 7, outline.Bounds.Left, 2);
+            Assert.Equal(rect.Top - 7, outline.Bounds.Top, 2);
+            Assert.Equal(rect.Left + 20, outline.Points[0].X, 2);
+            Assert.Equal(rect.Top - 7, outline.Points[0].Y, 2);
+        }
+
+        [Fact]
+        public async Task AsymmetricRoundedSolidOutline_MatchesTheEquivalentBorder()
+        {
+            const string box =
+                "width:80pt; height:50pt; margin:0; border-top-left-radius:20pt";
+            var color = RColor.FromArgb(10, 20, 30);
+
+            var (borderRoot, borderContainer) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='b' style='{box}; border:6pt solid rgb(10,20,30)'>x</div>"));
+            var borderG = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(
+                borderContainer, LayoutHarness.FindById(borderRoot, "b")!, borderG);
+
+            var (outlineRoot, outlineContainer) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='b' style='{box}; border:6pt solid transparent; " +
+                "outline:6pt solid rgb(10,20,30); outline-offset:-6pt'>x</div>"));
+            var outlineG = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(
+                outlineContainer, LayoutHarness.FindById(outlineRoot, "b")!, outlineG);
+
+            var borderPath = Assert.Single(
+                borderG.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                path => path.Stroked && path.Color == color);
+            var outlinePath = Assert.Single(
+                outlineG.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                path => path.Stroked && path.Color == color);
+
+            Assert.Equal(borderPath.StrokeWidth, outlinePath.StrokeWidth);
+            Assert.Equal(borderPath.Points, outlinePath.Points);
+        }
+
+        [Fact]
+        public async Task RoundedOutline_NegativeOffsetPastRadius_BecomesSquare()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='b' style='width:80pt; height:50pt; border-radius:2pt; " +
+                "outline:4pt solid rgb(10,20,30); outline-offset:-10pt'>x</div>"));
+            var div = LayoutHarness.FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var outline = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                path => !path.Stroked && path.Color == RColor.FromArgb(10, 20, 30));
+            Assert.Equal(8, outline.Points.Count);
+        }
+
+        [Theory]
+        [InlineData("solid")]
+        [InlineData("dashed")]
+        [InlineData("dotted")]
+        [InlineData("double")]
+        [InlineData("groove")]
+        [InlineData("ridge")]
+        [InlineData("inset")]
+        [InlineData("outset")]
+        public async Task RoundedOutline_AllLineStylesUseCurvedPaths(string style)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='b' style='width:80pt; height:50pt; border-radius:20pt; " +
+                $"outline:8pt {style} rgb(51,51,51); outline-offset:3pt'>x</div>"));
+            var div = LayoutHarness.FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var paths = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+            Assert.NotEmpty(paths);
+            Assert.All(paths, path => Assert.True(path.Points.Count > 8));
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+        }
+
+        [Theory]
+        [InlineData("groove")]
+        [InlineData("ridge")]
+        [InlineData("inset")]
+        [InlineData("outset")]
+        public async Task RoundedBevelOutline_BuildsCurvedSideBandsWithoutRectangularClips(string style)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='b' style='width:80pt; height:50pt; border-radius:20pt; " +
+                $"outline:8pt {style} rgb(51,51,51); outline-offset:3pt'>x</div>"));
+            var div = LayoutHarness.FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            // A rounded ring clipped by rectangular side trapezoids looks plausible in the recording
+            // mock but exposes square inner corners in the PDF backend. Each colored side must instead
+            // be an intrinsically curved band path, exactly as for a rounded border.
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.PushClipCall>());
+            var bands = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+            Assert.Equal(style is "groove" or "ridge" ? 4 : 2, bands.Count);
+            Assert.All(bands, band =>
+            {
+                Assert.False(band.Stroked);
+                Assert.True(band.Points.Count > 16);
+            });
         }
 
         /// <summary>
@@ -111,30 +255,26 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            var polys = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
-            Assert.Equal(4, polys.Count);
-            Assert.All(polys, p => Assert.Equal(RColor.FromArgb(9, 9, 9), p.Color));
+            var ring = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                p => !p.Stroked && p.Color == RColor.FromArgb(9, 9, 9));
 
             // Chrome centres the auto ring on the rectangle outline-offset inflates the border box to,
             // rather than seating it wholly outside that rectangle the way every other style sits - so
             // at the default zero offset it straddles the border edge, half a ring either side.
             var half = AutoRingWidthPt / 2;
-            var top = polys.OrderBy(p => p.Points.Average(pt => pt.Y)).First();
-            var ys = top.Points.Select(pt => pt.Y).ToList();
-            Assert.Equal(rect.Top + half, ys.Max(), 3);
-            Assert.Equal(rect.Top - half, ys.Min(), 3);
-
-            var right = polys.OrderByDescending(p => p.Points.Average(pt => pt.X)).First();
-            var rxs = right.Points.Select(pt => pt.X).ToList();
-            Assert.Equal(rect.Right - half, rxs.Min(), 3);
-            Assert.Equal(rect.Right + half, rxs.Max(), 3);
+            var outer = ring.Points.Take(4).ToList();
+            var inner = ring.Points.Skip(4).Take(4).ToList();
+            Assert.Equal(rect.Top - half, outer.Min(p => p.Y), 3);
+            Assert.Equal(rect.Top + half, inner.Min(p => p.Y), 3);
+            Assert.Equal(rect.Right + half, outer.Max(p => p.X), 3);
+            Assert.Equal(rect.Right - half, inner.Max(p => p.X), 3);
         }
 
         [Fact]
         public async Task OutlineStyleAuto_PaintsAsSolid_AtTheUaWidthCentredOnTheOffsetEdge()
         {
             // "User agents may treat auto as solid" licenses the style, not the width - so auto is the
-            // same four mitred solid quads any solid outline paints, but at the UA's own width and
+            // same seam-free solid ring any solid outline paints, but at the UA's own width and
             // centred on the offset edge. An equal-width solid outline pulled back half a width is
             // exactly that ring, which makes solid the oracle for auto's geometry.
             const string box = "width:40pt; height:40pt; outline-color: rgb(9,9,9)";
@@ -155,11 +295,11 @@ namespace PeachPDF.Tests.Integration
             var solidG = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(solidContainer, LayoutHarness.FindById(solidRoot, "b")!, solidG);
 
-            var autoPolys = autoG.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
-            var solidPolys = solidG.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
-            Assert.Equal(4, autoPolys.Count);
-            Assert.Equal(solidPolys.Select(p => p.Color), autoPolys.Select(p => p.Color));
-            Assert.Equal(solidPolys.Select(p => p.Points), autoPolys.Select(p => p.Points));
+            var autoRing = Assert.Single(autoG.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                p => !p.Stroked && p.Color == RColor.FromArgb(9, 9, 9));
+            var solidRing = Assert.Single(solidG.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                p => !p.Stroked && p.Color == RColor.FromArgb(9, 9, 9));
+            Assert.Equal(solidRing.Points, autoRing.Points);
         }
 
         [Fact]
@@ -172,12 +312,11 @@ namespace PeachPDF.Tests.Integration
             const string html = "<div id='b' style='width:40pt; height:40pt; outline-style: auto; " +
                                 "outline-color: rgb(9,9,9)'>x</div>";
 
-            static double RingThickness(TestRecordingGraphics g, double pixelsPerPoint)
+            static double RingThickness(TestRecordingGraphics g)
             {
-                var top = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
-                    .OrderBy(p => p.Points.Average(pt => pt.Y)).First();
-                var ys = top.Points.Select(pt => pt.Y).ToList();
-                return (ys.Max() - ys.Min()) / pixelsPerPoint;
+                var ring = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                    .Single(p => !p.Stroked && p.Color == RColor.FromArgb(9, 9, 9));
+                return ring.Points.Skip(4).Take(4).Min(p => p.Y) - ring.Points.Take(4).Min(p => p.Y);
             }
 
             var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
@@ -189,8 +328,8 @@ namespace PeachPDF.Tests.Integration
             var gScaled = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
             FragmentPaintHarness.PaintBox(containerScaled, LayoutHarness.FindById(rootScaled, "b")!, gScaled);
 
-            Assert.Equal(AutoRingWidthPt, RingThickness(gDefault, 1.0), 3);
-            Assert.Equal(AutoRingWidthPt, RingThickness(gScaled, 2.0), 3);
+            Assert.Equal(AutoRingWidthPt, RingThickness(gDefault), 3);
+            Assert.Equal(AutoRingWidthPt, RingThickness(gScaled), 3);
         }
 
         [Fact]
@@ -206,9 +345,8 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            var polys = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
-            Assert.Equal(4, polys.Count);
-            Assert.All(polys, p => Assert.Equal(RColor.FromArgb(7, 8, 9), p.Color));
+            Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                p => !p.Stroked && p.Color == RColor.FromArgb(7, 8, 9));
         }
 
         [Fact]
@@ -228,15 +366,13 @@ namespace PeachPDF.Tests.Integration
             Assert.True(popIndex > pushIndex, "expected PopBlendMode to follow PushBlendMode");
             Assert.Equal(RBlendMode.Difference, ((TestRecordingGraphics.PushBlendModeCall)g.Log[pushIndex]).Mode);
 
-            var polys = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
-            Assert.Equal(4, polys.Count);
-            Assert.All(polys, p => Assert.Equal(RColor.White, p.Color));
+            var ring = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                p => !p.Stroked && p.Color == RColor.White);
 
             // Every outline draw call sits inside the push/pop bracket.
-            var firstPolyIndex = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawPolygonCall);
-            var lastPolyIndex = g.Log.FindLastIndex(e => e is TestRecordingGraphics.DrawPolygonCall);
-            Assert.True(firstPolyIndex > pushIndex);
-            Assert.True(lastPolyIndex < popIndex);
+            var ringIndex = g.Log.IndexOf(ring);
+            Assert.True(ringIndex > pushIndex);
+            Assert.True(ringIndex < popIndex);
         }
 
         [Fact]
@@ -263,8 +399,8 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            // The border is uniform, so it paints as one ring path; the outline's four sides differ in
-            // nothing but still paint as quads. Match on color rather than on which primitive was used.
+            // Both the uniform border and the complete solid outline paint as one ring path. Match on
+            // color so this assertion remains about paint order rather than path representation.
             static bool IsFill(object entry, RColor color) => entry switch
             {
                 TestRecordingGraphics.DrawPolygonCall p => p.Color == color,
@@ -296,7 +432,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             var lastTextIndex = g.Log.FindLastIndex(e => e is TestRecordingGraphics.DrawStringCall);
-            var firstOutlineIndex = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawPolygonCall p && p.Color == RColor.FromArgb(2, 2, 2));
+            var firstOutlineIndex = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawPathCall { Stroked: false } p && p.Color == RColor.FromArgb(2, 2, 2));
 
             Assert.True(lastTextIndex >= 0);
             Assert.True(firstOutlineIndex >= 0);
@@ -426,50 +562,52 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            // Every band strictly above the box's own top edge belongs to the top side's pair of rings -
-            // unambiguous, since the bottom side's rings sit strictly below rect.Bottom. Draw order (not
-            // Y order) distinguishes them: the near-the-box ring is always drawn first
-            // (OutlineDrawHandler.DrawDoubleOrGrooveRidge).
-            var topBands = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
-                .Select(Band)
-                .Where(b => b.Bottom <= rect.Top + 0.01)
+            // Each stripe is one complete even-odd ring rather than four abutting side polygons.
+            var rings = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(p => !p.Stroked && p.Color == RColor.FromArgb(51, 51, 51))
                 .ToList();
-            Assert.Equal(2, topBands.Count);
+            Assert.Equal(2, rings.Count);
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>(),
+                p => p.Color == RColor.FromArgb(51, 51, 51));
 
-            var nearBox = topBands[0];
-            var farFromBox = topBands[1];
-            Assert.Equal(RColor.FromArgb(51, 51, 51), nearBox.Color);
-            Assert.Equal(RColor.FromArgb(51, 51, 51), farFromBox.Color);
+            var nearBox = rings.OrderByDescending(InnerTop).First();
+            var farFromBox = rings.OrderBy(InnerTop).First();
 
             // CSS 2.1 §8.5.3's exact thirds: 4pt ring, 4pt gap, 4pt ring out of 12pt.
-            Assert.Equal(4, nearBox.Height, 2);
-            Assert.Equal(4, farFromBox.Height, 2);
-            Assert.Equal(4, nearBox.Top - farFromBox.Bottom, 2);
+            Assert.Equal(4, RingThickness(nearBox), 2);
+            Assert.Equal(4, RingThickness(farFromBox), 2);
+            Assert.Equal(rect.Top, InnerTop(nearBox), 2);
+            Assert.Equal(4, OuterTop(nearBox) - InnerTop(farFromBox), 2);
         }
 
-        [Fact]
-        public async Task OutlineStyleGroove_ShadesEachHalfLikeAnInsetThenAnOutsetRing()
+        [Theory]
+        [InlineData("groove", true)]
+        [InlineData("ridge", false)]
+        public async Task OutlineStyleGrooveRidge_GroupsEqualShadePairsWithoutCornerSeams(
+            string style, bool outerIsInset)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
-                "<div id='b' style='width:20pt; height:20pt; outline: 12pt groove rgb(51,51,51)'>x</div>"));
+                $"<div id='b' style='width:20pt; height:20pt; outline: 12pt {style} rgb(51,51,51)'>x</div>"));
             var div = LayoutHarness.FindById(root, "b")!;
-            var rect = FragmentPaintHarness.FragmentOf(container, div).Lines[0].Rect;
-
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            var topBands = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
-                .Select(Band)
-                .Where(b => b.Bottom <= rect.Top + 0.01)
-                .OrderBy(b => b.Top)
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            var pairs = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(path => !path.Stroked)
                 .ToList();
-            Assert.Equal(2, topBands.Count);
+            Assert.Equal(4, pairs.Count);
+            Assert.All(pairs, pair => Assert.Equal(6, pair.Points.Count));
 
             // groove's outer half (farthest from the box) paints as `inset`, its inner half as `outset`.
-            // On a top edge inset is the darkened face - the same rule border uses, so the two agree.
-            Assert.Equal(BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: true), topBands[0].Color);
-            Assert.Equal(BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: false), topBands[1].Color);
-            Assert.NotEqual(topBands[0].Color, topBands[1].Color);
+            // Each entry is one connected equal-shade side pair, so no same-color corner seam remains.
+            var dark = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: true);
+            var light = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: false);
+            var outerTopLeft = outerIsInset ? dark : light;
+            var outerBottomRight = outerIsInset ? light : dark;
+            Assert.Equal(
+                [outerTopLeft, outerBottomRight, outerBottomRight, outerTopLeft],
+                pairs.Select(pair => pair.Color));
         }
 
         [Fact]
@@ -482,13 +620,12 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            var polys = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
-            Assert.Equal(4, polys.Count);
-
-            var top = polys.OrderBy(p => p.Points.Average(pt => pt.Y)).First();
-            var left = polys.OrderBy(p => p.Points.Average(pt => pt.X)).First();
-            var right = polys.OrderByDescending(p => p.Points.Average(pt => pt.X)).First();
-            var bottom = polys.OrderByDescending(p => p.Points.Average(pt => pt.Y)).First();
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            var pairs = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(path => !path.Stroked)
+                .ToList();
+            Assert.Equal(2, pairs.Count);
+            Assert.All(pairs, pair => Assert.Equal(6, pair.Points.Count));
 
             var baseColor = RColor.FromArgb(100, 100, 100);
             var dark = BorderBevelColors.Shade(baseColor, darken: true);
@@ -497,10 +634,8 @@ namespace PeachPDF.Tests.Integration
             // The lit pair is genuinely lightened rather than left at the declared color, matching what
             // a browser paints - and matching border, which shares the same shading.
             Assert.NotEqual(baseColor, light);
-            Assert.Equal(dark, top.Color);
-            Assert.Equal(dark, left.Color);
-            Assert.Equal(light, right.Color);
-            Assert.Equal(light, bottom.Color);
+            Assert.Equal(dark, pairs[0].Color);  // one connected top + left path
+            Assert.Equal(light, pairs[1].Color); // one connected bottom + right path
         }
 
         [Fact]
@@ -513,22 +648,19 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            var polys = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
-            Assert.Equal(4, polys.Count);
-
-            var top = polys.OrderBy(p => p.Points.Average(pt => pt.Y)).First();
-            var left = polys.OrderBy(p => p.Points.Average(pt => pt.X)).First();
-            var right = polys.OrderByDescending(p => p.Points.Average(pt => pt.X)).First();
-            var bottom = polys.OrderByDescending(p => p.Points.Average(pt => pt.Y)).First();
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            var pairs = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(path => !path.Stroked)
+                .ToList();
+            Assert.Equal(2, pairs.Count);
+            Assert.All(pairs, pair => Assert.Equal(6, pair.Points.Count));
 
             var baseColor = RColor.FromArgb(100, 100, 100);
             var dark = BorderBevelColors.Shade(baseColor, darken: true);
             var light = BorderBevelColors.Shade(baseColor, darken: false);
 
-            Assert.Equal(light, top.Color);
-            Assert.Equal(light, left.Color);
-            Assert.Equal(dark, right.Color);
-            Assert.Equal(dark, bottom.Color);
+            Assert.Equal(light, pairs[0].Color); // one connected top + left path
+            Assert.Equal(dark, pairs[1].Color);  // one connected bottom + right path
         }
 
         [Fact]
@@ -616,6 +748,70 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task RoundedOutlineOnAWrappingInlineElement_UsesEachFragmentAsItsBase()
+        {
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'>" +
+                "<span id='s' style='border-radius:6pt;outline:2pt solid #00f'>Alpha<br>Beta<br>Gamma</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+            var rects = FragmentPaintHarness.FragmentOf(container, span).Lines.Select(line => line.Rect).ToList();
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            var bluePaths = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(path => path.Color == RColor.FromArgb(0, 0, 255))
+                .ToList();
+            Assert.Equal(3, bluePaths.Count);
+
+            // A sliced background/border still resolves against the unbroken horizontal strip, but an
+            // outline cannot: its outward spill would disagree with the fragment clip. Each path is
+            // instead based on its own fragment, with only the true first/last inline edges expanded.
+            // No clip is needed because the physical-edge flags leave both break sides open.
+            Assert.All(
+                g.Log.Select((entry, index) => (entry, index))
+                    .Where(item => item.entry is TestRecordingGraphics.DrawPathCall path &&
+                                   path.Color == RColor.FromArgb(0, 0, 255)),
+                item => Assert.IsNotType<TestRecordingGraphics.PushClipCall>(g.Log[item.index - 1]));
+
+            for (var i = 0; i < bluePaths.Count; i++)
+            {
+                Assert.Equal(rects[i].Top - 2, bluePaths[i].Bounds.Top, 1);
+                Assert.Equal(rects[i].Bottom + 2, bluePaths[i].Bounds.Bottom, 1);
+            }
+
+            Assert.Equal(rects[0].Left - 2, bluePaths[0].Bounds.Left, 1);
+            Assert.Equal(rects[0].Right, bluePaths[0].Bounds.Right, 1);
+            Assert.Equal(rects[1].Left, bluePaths[1].Bounds.Left, 1);
+            Assert.Equal(rects[1].Right, bluePaths[1].Bounds.Right, 1);
+            Assert.Equal(rects[2].Left, bluePaths[2].Bounds.Left, 1);
+            Assert.Equal(rects[2].Right + 2, bluePaths[2].Bounds.Right, 1);
+        }
+
+        [Fact]
+        public async Task RoundedOutlineOnAWrappingInlineElement_LargeNegativeOffsetOutsideFragmentsPaintsNothing()
+        {
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'>" +
+                "<span id='s' style='border-radius:6pt;outline:4pt solid #00f;outline-offset:-20pt'>" +
+                "Alpha<br>Beta<br>Gamma</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                path => path.Color == RColor.FromArgb(0, 0, 255));
+
+            var pdf = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
+            using var stream = new MemoryStream();
+            pdf.Save(stream);
+            Assert.True(stream.Length > 0);
+        }
+
+        [Fact]
         public async Task Outline_DoesNotAffectLayout()
         {
             var withoutOutline = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
@@ -667,7 +863,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task OutlineStyleDoubleAndGroove_StripeWidths_AreInvariantUnderNonDefaultPixelsPerInch()
+        public async Task OutlineStyleDouble_StripeWidths_AreInvariantUnderNonDefaultPixelsPerInch()
         {
             const string html = "<div id='b' style='width:20pt; height:20pt; outline: 12pt double rgb(51,51,51)'>x</div>";
 
@@ -675,23 +871,27 @@ namespace PeachPDF.Tests.Integration
             var divDefault = LayoutHarness.FindById(rootDefault, "b")!;
             var gDefault = new TestRecordingGraphics { PixelsPerPointOverride = 1.0 };
             FragmentPaintHarness.PaintBox(containerDefault, divDefault, gDefault);
-            var bandsDefault = gDefault.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().Select(Band).ToList();
+            var bandsDefault = gDefault.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(p => !p.Stroked && p.Color == RColor.FromArgb(51, 51, 51)).ToList();
 
             var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
             var divScaled = LayoutHarness.FindById(rootScaled, "b")!;
             var gScaled = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
             FragmentPaintHarness.PaintBox(containerScaled, divScaled, gScaled);
-            var bandsScaled = gScaled.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().Select(Band).ToList();
+            var bandsScaled = gScaled.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(p => !p.Stroked && p.Color == RColor.FromArgb(51, 51, 51)).ToList();
 
-            // double contributes 2 rings per side, 4 sides.
-            Assert.Equal(8, bandsDefault.Count);
+            // double contributes two complete rings, one for each stripe.
+            Assert.Equal(2, bandsDefault.Count);
             Assert.Equal(bandsDefault.Count, bandsScaled.Count);
 
-            // A band is a polygon, so its coordinates stay in layout space and the adapter divides them
-            // on the way out - meaning the scaled run SHOULD be exactly PixelsPerPoint larger. What this
-            // guards is a thickness that skipped or double-applied that correction (issue #851).
+            // Ring paths normalize their layout-space coordinates before reaching the adapter, so both
+            // resolutions must record the same physical 4pt stripe width (issue #812).
             for (var i = 0; i < bandsDefault.Count; i++)
-                Assert.Equal(bandsDefault[i].Thickness, bandsScaled[i].Thickness / 2.0, 3);
+            {
+                Assert.Equal(4, RingThickness(bandsDefault[i]), 3);
+                Assert.Equal(RingThickness(bandsDefault[i]), RingThickness(bandsScaled[i]), 3);
+            }
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -712,6 +912,15 @@ namespace PeachPDF.Tests.Integration
             var top = p.Points.Min(pt => pt.Y);
             return new BandInfo(p.Color, left, top, p.Points.Max(pt => pt.X) - left, p.Points.Max(pt => pt.Y) - top);
         }
+
+        private static double OuterTop(TestRecordingGraphics.DrawPathCall ring) =>
+            ring.Points.Take(4).Min(p => p.Y);
+
+        private static double InnerTop(TestRecordingGraphics.DrawPathCall ring) =>
+            ring.Points.Skip(4).Take(4).Min(p => p.Y);
+
+        private static double RingThickness(TestRecordingGraphics.DrawPathCall ring) =>
+            InnerTop(ring) - OuterTop(ring);
 
         private static bool IsVerticalEdge(System.Collections.Generic.IReadOnlyList<RPoint> points)
         {

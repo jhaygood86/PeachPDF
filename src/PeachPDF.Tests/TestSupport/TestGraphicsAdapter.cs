@@ -360,7 +360,7 @@ namespace PeachPDF.Tests.TestSupport
         /// </summary>
         /// <remarks>
         /// A border paints as four mitred polygons when its edges differ, but as a single closed ring
-        /// path when all four share a style and color (<c>BordersDrawHandler.TryDrawUniformBorder</c> -
+        /// path when all four share a style and color (<c>BoxEdgesDrawHandler</c>'s uniform fast path -
         /// abutting polygons leave a pale antialiasing seam along every mitre, a ring has no seam). A
         /// test asking "did this border paint", or counting how many fills it made, should read this
         /// rather than <see cref="DrawPolygonCall"/> alone, which would otherwise silently see nothing

@@ -616,7 +616,7 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// Every closed border ring painted in <paramref name="g"/>, in the given color. A fragment
         /// closed on all four sides paints as a single ring path rather than four edge quads (see
-        /// <c>BordersDrawHandler.TryDrawUniformBorder</c> - abutting quads leave an antialiasing seam
+        /// <c>BoxEdgesDrawHandler</c>'s uniform fast path - abutting quads leave an antialiasing seam
         /// along each mitre), so a ring is exactly the observable for "this fragment closed itself".
         /// </summary>
         private static IEnumerable<TestRecordingGraphics.DrawPathCall> RingsOf(TestRecordingGraphics g, RColor color) =>

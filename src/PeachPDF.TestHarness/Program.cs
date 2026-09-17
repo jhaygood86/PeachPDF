@@ -5998,6 +5998,32 @@ static string OutlineStyleSwatch(string desc, string style) =>
     $"<div class=\"css\">outline: 8px {style} #4a90d9</div>" +
     "</td>";
 
+static string RoundedOutlineStyleSwatch(string desc, string style) =>
+    "<td>" +
+    $"<div class=\"obox\" style=\"border-radius: 16px; outline: 8px {style} #4a90d9\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">border-radius: 16px; outline: 8px {style} #4a90d9</div>" +
+    "</td>";
+
+static string AsymmetricRoundedOutlineSwatch(string desc, string radiusProperty) =>
+    "<td>" +
+    $"<div class=\"obox\" style=\"border: 3px solid #d94a4a; {radiusProperty}: 24px; outline: 8px solid #4a90d9; outline-offset: 4px\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">{radiusProperty}: 24px; outline: 8px solid</div>" +
+    "</td>";
+
+static string BorderAndOutlineSwatch(
+    string desc, string borderStyle, string outlineStyle, bool rounded = false)
+{
+    var radius = rounded ? "; border-radius: 16px" : "";
+    var css = $"border: 6px {borderStyle} #d94a4a; outline: 6px {outlineStyle} #4a90d9{radius}";
+    return "<td>" +
+           $"<div class=\"obox\" style=\"{css}\"></div>" +
+           $"<div class=\"desc\">{desc}</div>" +
+           $"<div class=\"css\">{css}</div>" +
+           "</td>";
+}
+
 var outlineHtml = "<!DOCTYPE html><html><head>" + OutlineCss + "</head><body>" +
 
     "<h1>CSS outline Test Page</h1>" +
@@ -6028,6 +6054,54 @@ var outlineHtml = "<!DOCTYPE html><html><head>" + OutlineCss + "</head><body>" +
         "<div class=\"css\">outline: 8px solid #4a90d9</div></td>"
     ) +
 
+    "<h2>border-radius following</h2>" +
+    Row(
+        RoundedOutlineStyleSwatch("rounded solid", "solid"),
+        RoundedOutlineStyleSwatch("rounded dashed", "dashed"),
+        RoundedOutlineStyleSwatch("rounded double", "double"),
+        RoundedOutlineStyleSwatch("rounded groove", "groove")
+    ) +
+    Row(
+        RoundedOutlineStyleSwatch("rounded dotted", "dotted"),
+        RoundedOutlineStyleSwatch("rounded ridge", "ridge"),
+        RoundedOutlineStyleSwatch("rounded inset", "inset"),
+        RoundedOutlineStyleSwatch("rounded outset", "outset")
+    ) +
+
+    "<h2>asymmetric border-radius following</h2>" +
+    "<p class=\"intro\">The red border has exactly one rounded corner. The blue outline should follow that corner while its other three corners remain square.</p>" +
+    Row(
+        AsymmetricRoundedOutlineSwatch("top-left only", "border-top-left-radius"),
+        AsymmetricRoundedOutlineSwatch("top-right only", "border-top-right-radius"),
+        AsymmetricRoundedOutlineSwatch("bottom-right only", "border-bottom-right-radius"),
+        AsymmetricRoundedOutlineSwatch("bottom-left only", "border-bottom-left-radius")
+    ) +
+
+    "<h2>wrapped inline outline</h2>" +
+    "<p class=\"intro\">A sliced inline outline keeps its rounded corners at the element's real start and end, spills outside each line vertically, and stops exactly at internal line breaks. The other samples show the equivalent border geometry alone and together with the outline.</p>" +
+    "<div style=\"display:flex; gap:36px; margin:12px; font-size:12pt; line-height:2\">" +
+    "<div style=\"width:180px\"><div class=\"desc\">outline</div>" +
+    "<span style=\"border-radius:12px; outline:6px solid #4a90d9\">Alpha<br>Beta<br>Gamma</span></div>" +
+    "<div style=\"width:180px\"><div class=\"desc\">border</div>" +
+    "<span style=\"border-radius:12px; border:6px solid #d94a4a\">Alpha<br>Beta<br>Gamma</span></div>" +
+    "<div style=\"width:180px\"><div class=\"desc\">border + outline</div>" +
+    "<span style=\"border-radius:12px; border:6px solid #d94a4a; outline:6px solid #4a90d9\">Alpha<br>Beta<br>Gamma</span></div></div>" +
+
+    "<h2>border + outline together</h2>" +
+    "<p class=\"intro\">The red border occupies the box edge; the blue outline is a separate ring outside it. Rounded samples show both contours following the same border-radius.</p>" +
+    Row(
+        BorderAndOutlineSwatch("solid border + solid outline", "solid", "solid"),
+        BorderAndOutlineSwatch("double border + dashed outline", "double", "dashed"),
+        BorderAndOutlineSwatch("groove border + double outline", "groove", "double"),
+        BorderAndOutlineSwatch("inset border + outset outline", "inset", "outset")
+    ) +
+    Row(
+        BorderAndOutlineSwatch("rounded solid + solid", "solid", "solid", rounded: true),
+        BorderAndOutlineSwatch("rounded double + dashed", "double", "dashed", rounded: true),
+        BorderAndOutlineSwatch("rounded groove + double", "groove", "double", rounded: true),
+        BorderAndOutlineSwatch("rounded inset + outset", "inset", "outset", rounded: true)
+    ) +
+
     "<h2>outline-offset</h2>" +
     "<p class=\"intro\">A negative offset pulls the outline back over the border and padding; a positive offset pushes it further away.</p>" +
     Row(
@@ -6039,7 +6113,10 @@ var outlineHtml = "<!DOCTYPE html><html><head>" + OutlineCss + "</head><body>" +
         "<div class=\"css\">outline: 6px solid #d94a4a; border: 3px solid #333</div></td>" +
         "<td><div class=\"obox\" style=\"outline: 6px solid #d94a4a; outline-offset: 10px; border: 3px solid #333\"></div>" +
         "<div class=\"desc\">outline-offset: 10px</div>" +
-        "<div class=\"css\">outline: 6px solid #d94a4a; outline-offset: 10px</div></td>"
+        "<div class=\"css\">outline: 6px solid #d94a4a; outline-offset: 10px</div></td>" +
+        "<td><div class=\"obox\" style=\"width: 30px; height: 30px; outline: 6px solid #d94a4a; outline-offset: -40px; border: 3px solid #333\"></div>" +
+        "<div class=\"desc\">large negative offset stays visible</div>" +
+        "<div class=\"css\">width: 30px; height: 30px; outline: 6px solid #d94a4a; outline-offset: -40px</div></td>"
     ) +
 
     "<h2>outline-color: invert</h2>" +

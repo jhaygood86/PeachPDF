@@ -61,11 +61,11 @@ namespace PeachPDF.Html.Core.Paint
 
         /// <summary>
         /// Paints one page: the fragmentainer's whole fragment subtree, clipped to the page's content
-        /// window.
+        /// window plus the room an outline on this page needs to spill into the page margin.
         /// </summary>
         /// <remarks>
-        /// This is the only clip <c>RGraphics.PushClip</c> pushes for page content - and that is exactly
-        /// what lets a <c>position: fixed</c> box's own paint reach its spec-correct containing block (the
+        /// This is the only page-level clip <c>RGraphics.PushClip</c> pushes for page content - and that
+        /// is exactly what lets a <c>position: fixed</c> box's own paint reach its spec-correct containing block (the
         /// page box, margins included, per CSS2.1 §10.1): <c>RGraphics.SuspendClipping</c> pops the clip
         /// stack down to exactly one entry, which is always the unconditionally-infinite clip
         /// <see cref="PeachPDF.Adapters.GraphicsAdapter"/>'s constructor pushes before this method ever
@@ -80,11 +80,40 @@ namespace PeachPDF.Html.Core.Paint
         /// </remarks>
         internal void Paint(RGraphics g, FragmentainerFragment fragmentainer)
         {
-            g.PushClip(container.PageClipOverride ?? container.PageBoxRect);
+            var pageClip = container.PageClipOverride ?? container.PageBoxRect;
+            var outlineReach = MaximumOutlineReach(g, fragmentainer.Root);
+            if (outlineReach > 0)
+            {
+                // The page's ordinary content clip starts at the content-area edge. An outline is
+                // explicitly allowed to paint outside the border box and therefore into the page
+                // margin; clipping it to the ordinary window reduces a declared multi-point band to
+                // an antialiased hairline when the element starts at that edge. Widen only the
+                // page-level clip here. Any ancestor/own overflow clips pushed below still constrain
+                // the outline normally.
+                pageClip = RRect.FromLTRB(
+                    pageClip.Left - outlineReach,
+                    pageClip.Top - outlineReach,
+                    pageClip.Right + outlineReach,
+                    pageClip.Bottom + outlineReach);
+            }
+
+            g.PushClip(pageClip);
 
             PaintFragment(g, fragmentainer.Root);
 
             g.PopClip();
+        }
+
+        private static double MaximumOutlineReach(RGraphics g, BoxFragment fragment)
+        {
+            var maximum = fragment.Lines.Count > 0
+                ? OutlineDrawHandler.OutwardReach(g, fragment.Box)
+                : 0;
+
+            foreach (var child in fragment.Children)
+                maximum = Math.Max(maximum, MaximumOutlineReach(g, child));
+
+            return maximum;
         }
 
         /// <summary>
@@ -475,7 +504,7 @@ namespace PeachPDF.Html.Core.Paint
             // geometry this box's outline needs is captured here, alongside border's own (which paints
             // immediately, unlike outline), and the actual outline draw calls are deferred to their own
             // pass after this box's text/decorations/descendants have all painted, below.
-            List<(RRect Rect, BoxDecorationGeometry Geometry)>? outlinePaints = null;
+            List<(RRect Rect, bool HasLeftEdge, bool HasRightEdge, bool HasTopEdge, bool HasBottomEdge)>? outlinePaints = null;
 
             for (var i = 0; i < lines.Count; i++)
             {
@@ -569,7 +598,19 @@ namespace PeachPDF.Html.Core.Paint
 
                 if (geometry.NeedsClip) g.PopClip();
 
-                (outlinePaints ??= []).Add((rectForBorders, geometry));
+                // Unlike backgrounds and borders, an outline spills outside the rectangle it is
+                // built from. Building it from the unbroken strip and then clipping it to this line
+                // makes the path and clip disagree by exactly that spill: the real outside edge is
+                // clipped away while an edge inside the slice can remain visible. Resolve the
+                // outline against the slice itself instead. The physical-edge flags still keep the
+                // two inline break sides open and limit rounded corners to the box's true ends.
+                var outlineRect = geometry.NeedsClip ? geometry.ClipRect : rectForBorders;
+                (outlinePaints ??= []).Add((
+                    outlineRect,
+                    geometry.HasLeftEdge,
+                    geometry.HasRightEdge,
+                    geometry.HasTopEdge,
+                    geometry.HasBottomEdge));
             }
 
             if (box.ColumnRuleSegments is { Count: > 0 } && box.ActualColumnRuleWidth > 0)
@@ -678,14 +719,10 @@ namespace PeachPDF.Html.Core.Paint
 
             if (outlinePaints is not null)
             {
-                foreach (var (paintRect, geometry) in outlinePaints)
+                foreach (var (paintRect, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge) in outlinePaints)
                 {
-                    if (geometry.NeedsClip) g.PushClip(geometry.ClipRect);
-
                     OutlineDrawHandler.DrawOutline(g, box, paintRect,
-                        geometry.HasLeftEdge, geometry.HasRightEdge, geometry.HasTopEdge, geometry.HasBottomEdge);
-
-                    if (geometry.NeedsClip) g.PopClip();
+                        hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
                 }
             }
 
