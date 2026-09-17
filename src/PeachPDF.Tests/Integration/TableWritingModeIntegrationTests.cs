@@ -179,6 +179,38 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task VerticalRl_ExplicitHeight_AutoColumn_DoesNotThrow_Issue1157()
+        {
+            // Issue #1157's min/max-content interpolation fix for horizontal tables must not break a
+            // vertical table: GetColumnsMinMaxWidthByContent reports every column's max-content width as
+            // +Infinity for a vertical table (no writing-mode-aware content measurement exists yet - see
+            // its own remarks), so naively interpolating against an infinite upper bound
+            // (t = remaining / Infinity = 0, then 0 * Infinity = NaN) crashed layout for any
+            // height-constrained vertical table with an auto (no explicit height) column. This must
+            // still lay out cleanly, splitting the explicit column-axis budget evenly across the auto
+            // column - the same equal-share fallback this method always used here, before this issue's
+            // fix added the (horizontal-only) interpolation branch.
+            var html = LayoutHarness.Wrap("""
+                <table id="t" style="writing-mode: vertical-rl; height: 300pt; border-spacing: 0">
+                  <tr><td id="a1" style="width: 30pt">A1</td></tr>
+                  <tr><td id="a2" style="width: 30pt">A2</td></tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var a1 = LayoutHarness.FindById(root, "a1");
+            var a2 = LayoutHarness.FindById(root, "a2");
+            Assert.NotNull(a1);
+            Assert.NotNull(a2);
+
+            // The single auto column takes the full 300pt column-axis budget (no min/max content bound
+            // available), shared by both rows' cells - and, above all, must be a real finite number, not
+            // NaN.
+            Assert.Equal(300, a1!.ActualBottom - a1.Location.Y, 1);
+            Assert.Equal(300, a2!.ActualBottom - a2.Location.Y, 1);
+        }
+
+        [Fact]
         public async Task VerticalRl_AutoHeightCell_StretchesToColumnExtent()
         {
             // Issue #836: a table cell with height:auto (the default) must still fill its column's
