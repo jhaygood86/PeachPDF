@@ -680,12 +680,9 @@ namespace PeachPDF.Html.Core.Paint
             {
                 foreach (var (paintRect, geometry) in outlinePaints)
                 {
-                    if (geometry.NeedsClip) g.PushClip(geometry.ClipRect);
-
                     OutlineDrawHandler.DrawOutline(g, box, paintRect,
-                        geometry.HasLeftEdge, geometry.HasRightEdge, geometry.HasTopEdge, geometry.HasBottomEdge);
-
-                    if (geometry.NeedsClip) g.PopClip();
+                        geometry.HasLeftEdge, geometry.HasRightEdge, geometry.HasTopEdge, geometry.HasBottomEdge,
+                        geometry.NeedsClip ? geometry.ClipRect : null);
                 }
             }
 

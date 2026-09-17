@@ -89,13 +89,16 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(bands[0].Height, bands[1].Height, 2);
         }
 
-        [Fact]
-        public async Task BorderStyleGroove_BottomEdge_ReversesTheShadingOfTheTopEdge()
+        [Theory]
+        [InlineData("groove", true)]
+        [InlineData("ridge", false)]
+        public async Task BorderStyleGrooveRidge_GroupsEqualShadePairsWithoutCornerSeams(
+            string style, bool outerIsInset)
         {
             // The per-side flip is the whole 3D effect, and is exactly what a "darken the outer stripe"
             // implementation gets wrong: shading all four sides alike gives a flat two-tone frame.
             var (root, container) = await BuildAndLayout(Wrap(
-                "<div id='b' style='border-style: groove; border-width: 12px; border-color: rgb(51,51,51)'>x</div>"));
+                $"<div id='b' style='border-style: {style}; border-width: 12px; border-color: rgb(51,51,51)'>x</div>"));
             var div = FindById(root, "b")!;
 
             var g = new TestRecordingGraphics();
@@ -105,15 +108,19 @@ namespace PeachPDF.Tests.Integration
             var light = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: false);
             Assert.NotEqual(dark, light);
 
-            var bands = HorizontalBands(g);
-            Assert.Equal(4, bands.Count); // top's two, bottom's two
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            var pairs = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(path => !path.Stroked)
+                .ToList();
+            Assert.Equal(4, pairs.Count);
+            Assert.All(pairs, pair => Assert.Equal(6, pair.Points.Count));
 
-            // Top edge, outermost band first.
-            Assert.Equal(dark, bands[0].Color);
-            Assert.Equal(light, bands[1].Color);
-            // Bottom edge: the band nearer the content is the dark one, the outermost is light.
-            Assert.Equal(light, bands[3].Color);
-            Assert.Equal(dark, bands[2].Color);
+            // Outer top+left / bottom+right, followed by the reversed inner pair.
+            var outerTopLeft = outerIsInset ? dark : light;
+            var outerBottomRight = outerIsInset ? light : dark;
+            Assert.Equal(
+                [outerTopLeft, outerBottomRight, outerBottomRight, outerTopLeft],
+                pairs.Select(pair => pair.Color));
         }
 
         [Fact]
@@ -173,13 +180,12 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            var polys = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().Select(Band).ToList();
-            Assert.Equal(4, polys.Count);
-
-            var top = polys.OrderBy(p => p.Top + p.Height / 2).First();
-            var bottom = polys.OrderByDescending(p => p.Top + p.Height / 2).First();
-            var left = polys.OrderBy(p => p.Left + p.Width / 2).First();
-            var right = polys.OrderByDescending(p => p.Left + p.Width / 2).First();
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            var pairs = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(path => !path.Stroked)
+                .ToList();
+            Assert.Equal(2, pairs.Count);
+            Assert.All(pairs, pair => Assert.Equal(6, pair.Points.Count));
 
             var baseColor = RColor.FromArgb(74, 144, 217);
             var dark = BorderBevelColors.Shade(baseColor, darken: true);
@@ -190,10 +196,8 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(RColor.FromArgb(45, 88, 133), dark);
             Assert.Equal(RColor.FromArgb(87, 169, 255), light);
 
-            Assert.Equal(inset ? dark : light, top.Color);
-            Assert.Equal(inset ? dark : light, left.Color);
-            Assert.Equal(inset ? light : dark, bottom.Color);
-            Assert.Equal(inset ? light : dark, right.Color);
+            Assert.Equal(inset ? dark : light, pairs[0].Color); // one connected top + left path
+            Assert.Equal(inset ? light : dark, pairs[1].Color); // one connected bottom + right path
         }
 
         [Fact]
@@ -487,7 +491,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task BorderInset_DoesNotTakeTheRingPath_BecauseEachSideIsShadedDifferently()
+        public async Task BorderInset_GroupsEachEqualShadePairIntoOneSeamlessPath()
         {
             var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='b' style='width:40pt; height:40pt; border: 6pt inset rgb(51,51,51)'>x</div>"));
@@ -496,8 +500,12 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
 
-            Assert.Equal(4, g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().Count());
-            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(), p => !p.Stroked);
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            var pairs = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(path => !path.Stroked)
+                .ToList();
+            Assert.Equal(2, pairs.Count);
+            Assert.All(pairs, pair => Assert.Equal(6, pair.Points.Count));
         }
 
         // ─── a rounded dotted/dashed border is one continuous outline ────────────
@@ -966,6 +974,24 @@ namespace PeachPDF.Tests.Integration
                 Math.Abs(point.Y - borderRect.Bottom) < 0.01);
         }
 
+        [Fact]
+        public async Task SquareGroove_SlicedFragmentWithoutLeftEdge_DrawsTheRemainingBands()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:100pt; height:60pt; border:12pt groove rgb(51,51,51)'>x</div>"));
+            var div = FindById(root, "b")!;
+            var borderRect = FragmentPaintHarness.FragmentOf(container, div).Lines[0].Rect;
+
+            var g = new TestRecordingGraphics();
+            BordersDrawHandler.DrawBoxBorders(
+                g, div, borderRect,
+                hasLeftEdge: false, hasRightEdge: true, hasTopEdge: true, hasBottomEdge: true);
+
+            var bands = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
+            Assert.Equal(6, bands.Count);
+            Assert.DoesNotContain(bands.SelectMany(band => band.Points), point => point.X < borderRect.Left);
+        }
+
         [Theory]
         [InlineData(0, false, false, true, false)]
         [InlineData(1, false, true, false, false)]
@@ -1293,7 +1319,7 @@ namespace PeachPDF.Tests.Integration
         public async Task CollapsedBorderStyleDouble_StripeWidths_AreInvariantUnderNonDefaultPixelsPerInch()
         {
             // BordersDrawHandler.DrawDoubleOrGrooveRidgeSegment is the collapsed-table-border twin of
-            // DrawDoubleOrGrooveRidgeBorder covered above - a separate code path (CollapsedBorderModel's
+            // Box-edge groove/ridge painting is covered above - a separate code path (CollapsedBorderModel's
             // resolved segments, not a box's own DrawBoxBorders) with its own scaling.
             var html = LayoutHarness.Wrap(
                 "<table style='border-collapse:collapse'><tr><td style='border:12pt double rgb(51,51,51)'>x</td></tr></table>");

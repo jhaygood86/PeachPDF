@@ -10,15 +10,14 @@ namespace PeachPDF.Html.Core.Handlers
     /// <summary>
     /// Paints CSS <c>outline</c> - a ring drawn outside the border edge, offset by
     /// <c>outline-offset</c>, that never affects box sizing (CSS Basic User Interface 4 §4). Structured
-    /// in parallel with <see cref="BordersDrawHandler"/> but simplified: outline has a single
-    /// width/color/style for all four sides (no per-side values to independently miter, unlike border),
-    /// so each side's ring quad is built directly from the box's own two nested "reach" rectangles
-    /// (one at <c>outline-offset</c>, one at <c>outline-offset + outline-width</c>) rather than
-    /// <see cref="BordersDrawHandler"/>'s per-side width bookkeeping. <c>outline-style: auto</c> is
+    /// as a uniform border around the rectangle inflated by <c>outline-offset + outline-width</c>, so
+    /// every ordinary outline style delegates to the same neutral <see cref="BoxEdgesDrawHandler"/>
+    /// used by uniform borders. This handler only resolves outline-specific behavior before handing it off:
+    /// <c>outline-style: auto</c> is
     /// drawn as <c>solid</c> (CSS-UI-4 leaves <c>auto</c>'s actual appearance UA-defined) at the UA's
     /// own width rather than the declared one, which the same section says is ignored - see
-    /// <see cref="AutoRingWidth"/>.
-    /// Never follows <c>border-radius</c> - CSS-UI-4 only says a UA <i>may</i> do so.
+    /// <see cref="AutoRingWidth"/>. When the box has <c>border-radius</c>, each outline contour expands
+    /// that radius by the same distance as its rectangle, matching Chromium's rounded-outline geometry.
     /// </summary>
     internal static class OutlineDrawHandler
     {
@@ -38,9 +37,14 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="hasRightEdge">whether the box's trailing edge belongs to this rectangle</param>
         /// <param name="hasTopEdge">whether the box's own top edge belongs to this rectangle</param>
         /// <param name="hasBottomEdge">whether the box's own bottom edge belongs to this rectangle</param>
+        /// <param name="sliceClip">
+        /// the fragment rectangle at whose break edges a sliced outline is clipped, or null for an
+        /// unbroken box
+        /// </param>
         public static void DrawOutline(
             RGraphics g, CssBox box, RRect rect,
-            bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
+            bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge,
+            RRect? sliceClip = null)
         {
             if (rect is not { Width: > 0, Height: > 0 }) return;
 
@@ -68,14 +72,52 @@ namespace PeachPDF.Html.Core.Handlers
                 if (width <= 0) return;
             }
 
+            var reach = offset + width;
+            var horizontalReach = ClampReach(
+                reach, rect.Width, width, hasLeftEdge, hasRightEdge);
+            var verticalReach = ClampReach(
+                reach, rect.Height, width, hasTopEdge, hasBottomEdge);
+            var outerRect = RRect.FromLTRB(
+                hasLeftEdge ? rect.Left - horizontalReach : rect.Left,
+                hasTopEdge ? rect.Top - verticalReach : rect.Top,
+                hasRightEdge ? rect.Right + horizontalReach : rect.Right,
+                hasBottomEdge ? rect.Bottom + verticalReach : rect.Bottom);
+
+            BorderRadii? outerRadii = null;
+            var borderRadii = box.ComputeRadii(rect);
+            if (borderRadii.IsRounded)
+            {
+                var (tlx, tly) = ExpandCorner(
+                    borderRadii.TLX, borderRadii.TLY, horizontalReach, verticalReach);
+                var (trx, try_) = ExpandCorner(
+                    borderRadii.TRX, borderRadii.TRY, horizontalReach, verticalReach);
+                var (brx, bry) = ExpandCorner(
+                    borderRadii.BRX, borderRadii.BRY, horizontalReach, verticalReach);
+                var (blx, bly) = ExpandCorner(
+                    borderRadii.BLX, borderRadii.BLY, horizontalReach, verticalReach);
+                outerRadii = DerivedStyle.ApplyCornerOverlap(
+                    outerRect,
+                    tlx, tly, trx, try_, brx, bry, blx, bly);
+            }
+
+            if (sliceClip is { } clip)
+            {
+                var outlineClip = RRect.FromLTRB(
+                    hasLeftEdge ? outerRect.Left : clip.Left,
+                    hasTopEdge ? outerRect.Top : clip.Top,
+                    hasRightEdge ? outerRect.Right : clip.Right,
+                    hasBottomEdge ? outerRect.Bottom : clip.Bottom);
+                if (outlineClip is not { Width: > 0, Height: > 0 }) return;
+                g.PushClip(outlineClip);
+            }
             if (isInvert) g.PushBlendMode(RBlendMode.Difference);
 
-            if (hasTopEdge) DrawSide(Border.Top, g, rect, effectiveStyle, color, width, offset, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
-            if (hasLeftEdge) DrawSide(Border.Left, g, rect, effectiveStyle, color, width, offset, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
-            if (hasBottomEdge) DrawSide(Border.Bottom, g, rect, effectiveStyle, color, width, offset, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
-            if (hasRightEdge) DrawSide(Border.Right, g, rect, effectiveStyle, color, width, offset, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
+            BoxEdgesDrawHandler.DrawBoxEdges(
+                g, outerRect, ToLineStyle(effectiveStyle), color, width,
+                hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge, outerRadii);
 
             if (isInvert) g.PopBlendMode();
+            if (sliceClip is not null) g.PopClip();
         }
 
         #region Private methods
@@ -102,207 +144,38 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>Chrome's own focus-ring thickness - see <see cref="AutoRingWidth"/>.</summary>
         private const double AutoRingWidthInCssPixels = 2;
 
-        private static void DrawSide(
-            Border side, RGraphics g, RRect rect, OutlineStyle style, RColor color, double width, double offset,
-            bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
+        private static double ClampReach(
+            double reach, double size, double width, bool hasStartEdge, bool hasEndEdge)
         {
-            switch (style)
-            {
-                case OutlineStyle.Solid:
-                    DrawRing(side, g, rect, g.GetSolidBrush(color), offset, offset + width, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
-                    break;
-                case OutlineStyle.Inset:
-                case OutlineStyle.Outset:
-                    DrawRing(side, g, rect, g.GetSolidBrush(BorderBevelColors.ForSide(color, side, inset: style == OutlineStyle.Inset)), offset, offset + width, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
-                    break;
-                case OutlineStyle.Double:
-                case OutlineStyle.Groove:
-                case OutlineStyle.Ridge:
-                    DrawDoubleOrGrooveRidge(side, g, rect, style, color, width, offset, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
-                    break;
-                default:
-                    // Dotted/dashed draw as a single mid-band line - the corner join itself isn't
-                    // mitred (representing dash/dot patterns as a mitred ring fill is far more involved
-                    // than this repo's scope needs, the same simplification BordersDrawHandler's own
-                    // dotted/dashed branch already accepts), but each line's span still has to run the
-                    // full length of the ring's outer edge, corner squares included, exactly as
-                    // BordersDrawHandler spans its own outer edge from rect.Left to rect.Right - that
-                    // span is what the pattern is fitted to, so shortening it changes the dash count.
-                    DrawDottedOrDashedLine(side, g, rect, style, color, width, offset, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
-                    break;
-            }
+            var adjustableEdges = (hasStartEdge ? 1 : 0) + (hasEndEdge ? 1 : 0);
+            return adjustableEdges == 0
+                ? reach
+                : Math.Max(reach, (2 * width - size) / adjustableEdges);
         }
 
-        /// <summary>
-        /// Builds and fills the ring quad for one side, between the two nested "reach" rectangles at
-        /// distance <paramref name="offset"/> (inner, nearest the box) and <paramref name="reach"/>
-        /// (outer, farthest from the box) from the box's own edge. Adjacent sides' quads share an exact
-        /// edge at each corner - see this class's own doc comment - so long as both sides are actually
-        /// drawn (<paramref name="hasLeftEdge"/> etc.); when the perpendicular side isn't drawn (an open
-        /// fragment edge, e.g. mid-wrap on an inline element), the quad collapses flush to the box's own
-        /// edge on that end instead of bulging outward with nothing to miter into.
-        /// </summary>
-        /// <remarks>
-        /// The two distances are passed in rather than derived from one width so a <c>double</c>/
-        /// <c>groove</c>/<c>ridge</c> outline can fill a sub-band of the ring through this same mitred
-        /// builder - every corner point sits on the box corner's own 45° diagonal at whatever distance
-        /// it is given, so a band mitres into its neighbours exactly as the full ring does.
-        /// </remarks>
-        private static void DrawRing(
-            Border side, RGraphics g, RRect rect, RBrush brush, double offset, double reach,
-            bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
+        private static (double X, double Y) ExpandCorner(
+            double radiusX, double radiusY, double horizontalReach, double verticalReach)
         {
-            RPoint[] points;
+            if (radiusX <= 0 || radiusY <= 0) return (0, 0);
 
-            switch (side)
-            {
-                case Border.Top:
-                    points =
-                    [
-                        new RPoint(hasLeftEdge ? rect.Left - offset : rect.Left, rect.Top - offset),
-                        new RPoint(hasRightEdge ? rect.Right + offset : rect.Right, rect.Top - offset),
-                        new RPoint(hasRightEdge ? rect.Right + reach : rect.Right, rect.Top - reach),
-                        new RPoint(hasLeftEdge ? rect.Left - reach : rect.Left, rect.Top - reach)
-                    ];
-                    break;
-                case Border.Right:
-                    points =
-                    [
-                        new RPoint(rect.Right + offset, hasTopEdge ? rect.Top - offset : rect.Top),
-                        new RPoint(rect.Right + reach, hasTopEdge ? rect.Top - reach : rect.Top),
-                        new RPoint(rect.Right + reach, hasBottomEdge ? rect.Bottom + reach : rect.Bottom),
-                        new RPoint(rect.Right + offset, hasBottomEdge ? rect.Bottom + offset : rect.Bottom)
-                    ];
-                    break;
-                case Border.Bottom:
-                    points =
-                    [
-                        new RPoint(hasLeftEdge ? rect.Left - offset : rect.Left, rect.Bottom + offset),
-                        new RPoint(hasRightEdge ? rect.Right + offset : rect.Right, rect.Bottom + offset),
-                        new RPoint(hasRightEdge ? rect.Right + reach : rect.Right, rect.Bottom + reach),
-                        new RPoint(hasLeftEdge ? rect.Left - reach : rect.Left, rect.Bottom + reach)
-                    ];
-                    break;
-                default: // Border.Left
-                    points =
-                    [
-                        new RPoint(rect.Left - offset, hasBottomEdge ? rect.Bottom + offset : rect.Bottom),
-                        new RPoint(rect.Left - reach, hasBottomEdge ? rect.Bottom + reach : rect.Bottom),
-                        new RPoint(rect.Left - reach, hasTopEdge ? rect.Top - reach : rect.Top),
-                        new RPoint(rect.Left - offset, hasTopEdge ? rect.Top - offset : rect.Top)
-                    ];
-                    break;
-            }
-
-            g.DrawPolygon(brush, points);
+            var expandedX = radiusX + horizontalReach;
+            var expandedY = radiusY + verticalReach;
+            return expandedX > 0 && expandedY > 0 ? (expandedX, expandedY) : (0, 0);
         }
 
-        /// <summary>
-        /// Draws a "double", "groove", or "ridge" outline as two mitred bands of the ring, mirroring
-        /// <c>BordersDrawHandler.DrawDoubleOrGrooveRidgeBorder</c> but banded outward from the border
-        /// edge (within <c>[offset, offset + width]</c>) instead of inward from it, and using one
-        /// uniform width/color for all four sides rather than border's independent per-side values.
-        /// "Outer" therefore means the band farthest from the box, the reverse of border's own sense.
-        /// </summary>
-        private static void DrawDoubleOrGrooveRidge(
-            Border side, RGraphics g, RRect rect, OutlineStyle style, RColor color, double width, double offset,
-            bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
+        private static LineStyle ToLineStyle(OutlineStyle style) => style switch
         {
-            double innerEnd;
-            double outerStart;
-            RColor outerColor;
-            RColor innerColor;
-
-            if (style == OutlineStyle.Double)
-            {
-                innerEnd = width / 3;
-                outerStart = 2 * width / 3;
-                outerColor = innerColor = color;
-            }
-            else
-            {
-                innerEnd = outerStart = width / 2;
-                var outerIsInset = style == OutlineStyle.Groove;
-                outerColor = BorderBevelColors.ForSide(color, side, outerIsInset);
-                innerColor = BorderBevelColors.ForSide(color, side, !outerIsInset);
-            }
-
-            DrawRing(side, g, rect, g.GetSolidBrush(innerColor), offset, offset + innerEnd, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
-            DrawRing(side, g, rect, g.GetSolidBrush(outerColor), offset + outerStart, offset + width, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
-        }
-
-        private static void DrawDottedOrDashedLine(
-            Border side, RGraphics g, RRect rect, OutlineStyle style, RColor color, double width, double offset,
-            bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
-        {
-            // The line runs down the middle of the band, but spans the band's *outer* edge end to end.
-            // Chrome paints an outline by handing its border painter an outer rectangle inflated by
-            // outline-offset + outline-width with uniform side widths, so a side's dash pattern is
-            // fitted to that outer rectangle's full side length - corner squares included, the same way
-            // a border's own dotted edge spans rect.Left..rect.Right. Fitting to the mid-band span
-            // instead would measure an edge one whole outline-width short, which both mis-sizes the
-            // gaps and pulls the first and last dot half a width in from each corner.
-            var mid = offset + width / 2;
-            var reach = offset + width;
-
-            var pen = g.GetPen(color);
-            // width is the caller's raw, un-divided layout-space (PixelsPerInch-inflated) outline
-            // width - every outline *position* is already built from correctly-scaled coordinates (see
-            // DrawRing/DrawDottedOrDashedLine), but a pen's own stroke width bypasses those and needs
-            // the same PixelsPerPoint correction here (mirrors BordersDrawHandler.GetPen, issue #851).
-            pen.Width = width / g.PixelsPerPoint;
-            pen.LineJoin = RLineJoin.Miter;
-
-            bool isHorizontal;
-            double acrossAxis;
-            double start;
-            double end;
-
-            switch (side)
-            {
-                case Border.Top:
-                    isHorizontal = true;
-                    acrossAxis = rect.Top - mid;
-                    start = hasLeftEdge ? rect.Left - reach : rect.Left;
-                    end = hasRightEdge ? rect.Right + reach : rect.Right;
-                    break;
-                case Border.Bottom:
-                    isHorizontal = true;
-                    acrossAxis = rect.Bottom + mid;
-                    start = hasLeftEdge ? rect.Left - reach : rect.Left;
-                    end = hasRightEdge ? rect.Right + reach : rect.Right;
-                    break;
-                case Border.Left:
-                    isHorizontal = false;
-                    acrossAxis = rect.Left - mid;
-                    start = hasTopEdge ? rect.Top - reach : rect.Top;
-                    end = hasBottomEdge ? rect.Bottom + reach : rect.Bottom;
-                    break;
-                default:
-                    isHorizontal = false;
-                    acrossAxis = rect.Right + mid;
-                    start = hasTopEdge ? rect.Top - reach : rect.Top;
-                    end = hasBottomEdge ? rect.Bottom + reach : rect.Bottom;
-                    break;
-            }
-
-            var span = StyledStrokeFitting.Apply(pen, style == OutlineStyle.Dotted, width, start, end, g.PixelsPerPoint);
-            if (span is { } fitted)
-            {
-                start = fitted.Start;
-                end = fitted.End;
-            }
-            else
-            {
-                pen.LineCap = RLineCap.Butt;
-                pen.DashStyle = RDashStyle.Solid;
-            }
-
-            if (isHorizontal)
-                g.DrawLine(pen, start, acrossAxis, end, acrossAxis);
-            else
-                g.DrawLine(pen, acrossAxis, start, acrossAxis, end);
-        }
+            OutlineStyle.Solid or OutlineStyle.Auto => LineStyle.Solid,
+            OutlineStyle.Double => LineStyle.Double,
+            OutlineStyle.Dotted => LineStyle.Dotted,
+            OutlineStyle.Dashed => LineStyle.Dashed,
+            OutlineStyle.Inset => LineStyle.Inset,
+            OutlineStyle.Outset => LineStyle.Outset,
+            OutlineStyle.Groove => LineStyle.Groove,
+            OutlineStyle.Ridge => LineStyle.Ridge,
+            OutlineStyle.Hidden => LineStyle.Hidden,
+            _ => LineStyle.None
+        };
 
         #endregion
     }

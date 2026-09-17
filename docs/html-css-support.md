@@ -317,7 +317,8 @@ makes the classic zero-size "border triangle" work. `outline-style` uses all the
 banded outward from the border edge — an outline is drawn exactly as a border of the same width would
 be on the rectangle that `outline-offset` + `outline-width` inflates the border box to, so a
 `dotted`/`dashed` outline fits its pattern to that outer rectangle's sides and a dot lands in each of
-its corners.
+its corners. A large negative `outline-offset` shrinks the outline into the border box, but its outside
+shape remains at least twice the outline width in each dimension so the outline stays visible.
 
 With `border-radius`, a border whose four sides share a style, color and width follows the curve as
 one continuous outline, which keeps the corners seamless and lets a `dotted`/`dashed` pattern be

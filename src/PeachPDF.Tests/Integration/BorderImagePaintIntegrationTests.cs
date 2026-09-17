@@ -62,7 +62,7 @@ namespace PeachPDF.Tests.Integration
             var (_, g) = await PaintAsync("");
 
             Assert.Empty(g.DrawImageCalls);
-            // A uniform solid border paints as one closed ring (BordersDrawHandler.TryDrawUniformBorder);
+            // A uniform solid border paints as one closed ring (BoxEdgesDrawHandler's uniform fast path);
             // only a border whose edges differ needs four separately mitred quads.
             Assert.Single(g.FilledShapes);
         }
