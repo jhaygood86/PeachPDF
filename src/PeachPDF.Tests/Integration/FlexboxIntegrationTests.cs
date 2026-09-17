@@ -2112,6 +2112,35 @@ namespace PeachPDF.Tests.Integration
                 $"space-between must push the last item to the row's right edge, ended at {b.ActualRight}");
         }
 
+        [Theory]
+        [InlineData(28)]
+        [InlineData(30)]
+        [InlineData(31)]
+        [InlineData(32)]
+        [InlineData(33)]
+        [InlineData(34)]
+        [InlineData(36)]
+        [InlineData(48)]
+        public async Task FlexItem_WithBlockChildHeading_DoesNotSpuriouslyWrap(int fontSizePx)
+        {
+            // #1154: this shape hits MeasureItem's block-child branch (CssLayoutEngineFlex.cs), not the
+            // inline-only branch that already carries a +0.01 epsilon for exactly this failure mode. The
+            // block-child branch's max-content sum came out a few ULPs short of what FlowBox's strict `>`
+            // fit-check needed at several font sizes, wrapping "JOB SHEET" to two lines even though the
+            // item is plainly wide enough for it on one - non-monotonically across font size, the classic
+            // symptom of accumulated floating-point rounding rather than a genuine missing width.
+            var html = Wrap($@"
+                <div class='row' style='display:flex'>
+                    <div id='heading'><h1 style='margin:0;font-size:{fontSizePx}px'>JOB SHEET</h1></div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var heading = FindById(root, "heading")!;
+
+            var lineCount = LayoutHarness.Descendants(heading).Sum(b => b.LineBoxes.Count);
+            Assert.Equal(1, lineCount);
+        }
+
         [Fact]
         public async Task Item_WhoseMinContentExceedsTheRow_KeepsItsMinContent()
         {
