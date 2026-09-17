@@ -488,9 +488,20 @@ namespace PeachPDF.Html.Core.Dom
                         // min-content floor either. Both of these return outer widths, which is
                         // what `hypothetical` is.
                         var minContent = await CssLayoutEngine.GetMinContentWidth(g, box);
+                        // Add the same sub-pixel epsilon the inline-only branch above uses (see its
+                        // comment) and for the same reason: this max-content value is computed by
+                        // CssBox.GetMinMaxWidth/GetMinMaxSumWords, a recursive per-descendant walk that
+                        // resets and re-accumulates its running sum at every block boundary in the
+                        // subtree - a different floating-point addition order/grouping than
+                        // LineContentWidth's flat per-line loop, even though both sum the same cached
+                        // per-word widths. That sum is written back as this item's real CSS width a few
+                        // lines below and re-laid-out for real; the real line-wrap fit-check (FlowBox,
+                        // CssLayoutEngine.cs) uses a strict `>` with zero tolerance, so a shortfall of
+                        // even a few ULPs wraps text that fits (#1154).
+                        var maxIntrinsicWidth = await CssLayoutEngine.GetMaxContentWidth(g, box) + 0.01;
                         maxContent = Math.Max(
                             minContent,
-                            Math.Min(await CssLayoutEngine.GetMaxContentWidth(g, box), naturalMain));
+                            Math.Min(maxIntrinsicWidth, naturalMain));
                     }
                     // min-width constrains content width; outer minimum = min-width + padding + border
                     if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
