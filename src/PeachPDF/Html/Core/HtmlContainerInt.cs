@@ -25,6 +25,7 @@ using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -768,6 +769,42 @@ namespace PeachPDF.Html.Core
         /// own remarks for why this needs to be document-wide rather than per-<c>&lt;svg&gt;</c>.
         /// </summary>
         internal SvgClipPathRegistry SvgClipPaths => _svgClipPathRegistry ??= new SvgClipPathRegistry(this);
+
+        /// <summary>
+        /// Decoded image resources resolved by <see cref="Handlers.ImageLoadHandler"/>, keyed by resolved
+        /// absolute source URI (<see cref="RUri.AbsoluteUri"/>) - shared by every <c>ImageLoadHandler</c>
+        /// this render creates (<c>&lt;img&gt;</c>, <c>&lt;object&gt;</c>, <c>background-image</c>/
+        /// <c>list-style-image</c>/<c>content: url()</c>) so the same source referenced more than once is
+        /// only fetched and decoded once. Deliberately NOT cleared by <see cref="Clear"/>: the container-
+        /// query convergence loop disposes and rebuilds <see cref="Root"/> wholesale between passes within
+        /// one render (see <see cref="SetHtml"/>), and a rebuilt box tree's fresh handlers should still hit
+        /// this cache rather than re-decoding. Owns the cached <see cref="RImage"/> instances - disposed
+        /// only in <see cref="Dispose(bool)"/>, once, at the true end of this render.
+        /// </summary>
+        private readonly Dictionary<string, (RImage? Image, SvgDocument? SvgDocument)> _resolvedImageResources = new();
+
+        /// <summary>
+        /// Looks up a previously resolved image/SVG resource by its resolved absolute source URI.
+        /// </summary>
+        internal bool TryGetResolvedImageResource(string absoluteUri, out (RImage? Image, SvgDocument? SvgDocument) resource)
+            => _resolvedImageResources.TryGetValue(absoluteUri, out resource);
+
+        /// <summary>
+        /// Records a successfully resolved image/SVG resource under its resolved absolute source URI, so a
+        /// later <see cref="Handlers.ImageLoadHandler"/> for the same source reuses it instead of decoding
+        /// again. Every current caller checks <see cref="TryGetResolvedImageResource"/> first and never
+        /// reaches here on a hit, so this never actually overwrites a live entry today - but disposes one
+        /// if it ever does, rather than silently orphaning it undisposed until this render's teardown.
+        /// </summary>
+        internal void CacheResolvedImageResource(string absoluteUri, RImage? image, SvgDocument? svgDocument)
+        {
+            if (_resolvedImageResources.TryGetValue(absoluteUri, out var existing) && !ReferenceEquals(existing.Image, image))
+            {
+                existing.Image?.Dispose();
+            }
+
+            _resolvedImageResources[absoluteUri] = (image, svgDocument);
+        }
 
         /// <summary>
         /// The document's root (<c>&lt;html&gt;</c>) element's own resolved <c>writing-mode</c>, defaulting
@@ -3250,6 +3287,27 @@ namespace PeachPDF.Html.Core
             }
             catch
             { }
+
+            // Separate from the box-tree disposal above: an exception walking Root must not skip releasing
+            // the cached images, which are owned here regardless of how the box tree fared. Each image is
+            // disposed in its own try/catch, not one try around the whole loop, so one image throwing
+            // can't stop the rest of the loop from running - the dictionary is cleared in finally either way.
+            try
+            {
+                foreach (var (image, _) in _resolvedImageResources.Values)
+                {
+                    try
+                    {
+                        image?.Dispose();
+                    }
+                    catch
+                    { }
+                }
+            }
+            finally
+            {
+                _resolvedImageResources.Clear();
+            }
         }
 
         #endregion

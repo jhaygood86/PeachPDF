@@ -597,6 +597,21 @@ An interlaced PNG (alpha-bearing or not) is unaffected by `ImageCompression` in 
 
 A losslessly-encoded WebP, AVIF, or TIFF source gets the same protection as an opaque PNG/BMP/GIF: PeachPDF can tell whether a given source actually used its format's lossless mode (WebP's VP8L, AVIF's lossless AV1 tool, or TIFF's uncompressed/LZW/PackBits compression), and only re-encodes it as lossy JPEG under `ImageCompression.Lossy`. A *lossy*-encoded WebP/AVIF/TIFF source is unaffected by `ImageCompression` in every mode — re-encoding an already-lossy source as JPEG loses nothing a lossless re-embed would have recovered, so it stays on the JPEG-re-encode path regardless of the setting.
 
+### Deduplicating repeated images
+
+Referencing the same image source more than once in a document — the same `<img src>` twice, an `<img>` and a `background-image`/`list-style-image`/`content: url()` sharing a source, or an `<object>` pointing at the same source as an `<img>` — fetches and decodes it only once per `GeneratePdf`/`AddPdfPages` call, and every reference at the same on-page size shares one embedded PDF image object. This happens automatically; there's nothing to opt into.
+
+What that doesn't cover is a duplicate that spans two separate `AddPdfPages`/`AddPages` calls into the same document, or two different sources that happen to encode to identical bytes. For those, call `PeachPdfDocument.ConsolidateImages()` after adding all pages and before `Save`:
+
+```csharp
+var document = await generator.GeneratePdf(html, config);
+await generator.AddPdfPages(document, moreHtml, config);
+document.ConsolidateImages();
+document.Save(stream);
+```
+
+It merges embedded images whose encoded bytes are identical, keeping one copy and repointing every other reference at it. It's opt-in rather than automatic, since hashing every embedded image isn't a cost most documents should pay on every `Save`.
+
 ## Authoring colors in CMYK
 
 Colors written with the [CSS Color 5 `device-cmyk()`](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value/device-cmyk) function are carried through PeachPDF's whole pipeline natively — never approximated to RGB — and reach the PDF as a real `DeviceCMYK` fill or stroke operator:

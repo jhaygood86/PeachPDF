@@ -61,19 +61,22 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             if (!Owner.Options.DownscaleImages)
             {
                 // No resize ever applies while downscaling is off, so the selector never depends on
-                // display size - the original single-selector-per-XImage cache, unconditionally.
-                selector = image._selector ??= new ImageSelector(image);
+                // display size - the original single-selector-per-XImage cache, unconditionally (but see
+                // GetPlainSelector's own remarks on why "unconditionally" still has to check Interpolate).
+                selector = GetPlainSelector(image);
             }
             else if (image._lastSizedSelector != null
                 && image._lastSizedSelectorWidthPt == widthPt
-                && image._lastSizedSelectorHeightPt == heightPt)
+                && image._lastSizedSelectorHeightPt == heightPt
+                && image._lastSizedSelector.Interpolate == image.Interpolate)
             {
-                // Same (image, display size) as the immediately preceding call - e.g. a logo redrawn
-                // identically across a repeating header/footer - reuse the selector without recomputing
-                // ComputeTargetPixelSize or allocating a new ImageSelector. Safe to skip straight to the
-                // dictionary lookup below without targetWidth/targetHeight: this selector, if it needed a
-                // resize, is already a key in _images from whichever call first computed it, so the
-                // TryGetValue below is guaranteed to hit and a fresh PdfImage is never constructed here.
+                // Same (image, display size, Interpolate) as the immediately preceding call - e.g. a logo
+                // redrawn identically across a repeating header/footer - reuse the selector without
+                // recomputing ComputeTargetPixelSize or allocating a new ImageSelector. Safe to skip
+                // straight to the dictionary lookup below without targetWidth/targetHeight: this selector,
+                // if it needed a resize, is already a key in _images from whichever call first computed
+                // it, so the TryGetValue below is guaranteed to hit and a fresh PdfImage is never
+                // constructed here.
                 selector = image._lastSizedSelector;
             }
             else
@@ -81,7 +84,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 (targetWidth, targetHeight) = ComputeTargetPixelSize(image, widthPt, heightPt);
                 selector = targetWidth.HasValue
                     ? new ImageSelector(image, targetWidth, targetHeight)
-                    : (image._selector ??= new ImageSelector(image));
+                    : GetPlainSelector(image);
 
                 image._lastSizedSelector = selector;
                 image._lastSizedSelectorWidthPt = widthPt;
@@ -96,6 +99,23 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 _images[selector] = pdfImage;
             }
             return pdfImage;
+        }
+
+        /// <summary>
+        /// Returns <see cref="XImage._selector"/>, recomputing it first if it's missing or was built for a
+        /// different <see cref="XImage.Interpolate"/> than <paramref name="image"/> currently has. The
+        /// cached field is a plain <c>??=</c> - fine while an XImage had exactly one consumer, but an
+        /// XImage can now be shared across draw sites that transiently toggle Interpolate around one draw
+        /// call (a repeating background tile, a border-image slice - see ImageSelector's own remarks), so
+        /// a stale cached selector built under the wrong Interpolate would otherwise wrongly identify
+        /// (and merge into) a PdfImage that doesn't match the image's current Interpolate request.
+        /// </summary>
+        private static ImageSelector GetPlainSelector(XImage image)
+        {
+            if (image._selector == null || image._selector.Interpolate != image.Interpolate)
+                image._selector = new ImageSelector(image);
+
+            return image._selector;
         }
 
         /// <summary>
@@ -204,7 +224,15 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// A collection of information that uniquely identifies a particular PdfImage. When a resize
         /// target is in play, the target pixel size is part of the identity - the same source image used
         /// at two different display sizes embeds as two distinct PdfImages, each correctly sized, rather
-        /// than one embed at whichever size happened to be requested first.
+        /// than one embed at whichever size happened to be requested first. <see cref="XImage.Interpolate"/>
+        /// is part of the identity for the same reason: an <see cref="XImage"/> can now be shared across
+        /// unrelated draw sites (the same decoded image referenced by more than one HTML element - see
+        /// <c>PeachPDF.Html.Core.HtmlContainerInt</c>'s resolved-image cache) that each toggle it
+        /// transiently around their own draw call (e.g. a repeating background tile forcing it off). Since
+        /// a <see cref="PdfImage"/>'s own <c>/Interpolate</c> key is baked in once, at whichever call first
+        /// creates it for a given selector, folding the flag into the selector keeps a tile draw's "off"
+        /// request from being permanently inherited by every other draw of the same shared image at the
+        /// same size - it simply gets its own <see cref="PdfImage"/> instead.
         /// </summary>
         internal class ImageSelector
         {
@@ -220,6 +248,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
                 // HACK: just use full path to identify
                 _path = image._path.ToLowerInvariant();
+                _interpolate = image.Interpolate;
             }
 
             /// <summary>
@@ -240,6 +269,11 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             string _path;
             readonly int? _targetWidth;
             readonly int? _targetHeight;
+            readonly bool _interpolate;
+
+            /// <summary>The <see cref="XImage.Interpolate"/> value this selector was built from - read by
+            /// <see cref="GetPlainSelector"/>/<see cref="GetImage"/> to detect a stale cached selector.</summary>
+            public bool Interpolate => _interpolate;
 
             public override bool Equals(object? obj)
             {
@@ -248,12 +282,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                     return false;
                 return _path == selector._path
                     && _targetWidth == selector._targetWidth
-                    && _targetHeight == selector._targetHeight;
+                    && _targetHeight == selector._targetHeight
+                    && _interpolate == selector._interpolate;
             }
 
             public override int GetHashCode()
             {
-                return HashCode.Combine(_path, _targetWidth, _targetHeight);
+                return HashCode.Combine(_path, _targetWidth, _targetHeight, _interpolate);
             }
         }
     }

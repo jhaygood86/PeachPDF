@@ -202,6 +202,32 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         }
 
         [Fact]
+        public void SameXImageAndSize_DrawnWithDifferentInterpolate_EmbedsSeparateCopies()
+        {
+            // Regression guard for issue #1172's resolved-source image cache: once the same XImage can be
+            // shared across draw sites that transiently toggle Interpolate around one draw call
+            // (BackgroundImageDrawHandler forcing nearest-neighbor for a repeating tile, BorderImageDrawHandler
+            // for a slice), the dedup selector must include Interpolate - otherwise whichever draw happens
+            // first permanently bakes its Interpolate value into the one embed every other draw reuses.
+            var document = new PdfDocument();
+            var page = document.AddPage();
+            var gfx = XGraphics.FromPdfPage(page);
+
+            var bytes = RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(200, 200, 100, 150, 200);
+            using var xImage = XImage.FromStream(() => new MemoryStream(bytes));
+
+            xImage.Interpolate = false;
+            gfx.DrawImage(xImage, 0, 0, 20, 20);    // 20 / 0.75 = 26.67px, rounds to 27
+            xImage.Interpolate = true;
+            gfx.DrawImage(xImage, 50, 50, 20, 20);  // same target size, different Interpolate
+
+            var pdfText = SaveAndReadAscii(document);
+
+            Assert.Equal(2, CountOccurrences(pdfText, "/Width 27"));
+            Assert.Equal(1, CountOccurrences(pdfText, "/Interpolate"));
+        }
+
+        [Fact]
         public void DownscaleImages_UnderActiveTransform_AccountsForTransformScale()
         {
             // A raster image drawn while a transform (CSS `transform: scale(...)`, or an SVG viewport/
