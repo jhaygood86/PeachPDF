@@ -2631,9 +2631,10 @@ namespace PeachPDF.Html.Core.Dom
                 : startY;
 
             // handle height setting: the flowed content came out shorter than the box's own
-            // ActualHeight (e.g. an inline-block button whose vertical padding exceeds its one
-            // small-font text line), so extend MaxBottom to cover the box's full height from
-            // where it started. This must be trueStartY-anchored: the old
+            // declared height (e.g. an inline-block button whose vertical padding exceeds its one
+            // small-font text line, or a declared `height`/`min-height` per #1166), so extend
+            // MaxBottom to cover the box's full height from where it started. This must be
+            // trueStartY-anchored: the old
             // `MaxBottom = ActualHeight - (MaxBottom - startY)` form assigned the deficit as an
             // ABSOLUTE document Y (a tiny value near the page top), dragging MaxBottom above
             // startY - when such a box was a block's last/only inline content, the block's
@@ -2644,19 +2645,28 @@ namespace PeachPDF.Html.Core.Dom
             // Restricted to non-plain-inline boxes: per CSS2.1 §10.8.1, the vertical padding/
             // border of a non-replaced `display: inline` box does not influence line box height
             // at all (it paints, overflowing the line, without taking vertical space) - only an
-            // atomic inline-level box (inline-block/inline-table) contributes its full box
-            // height to the line it sits on, which is what ActualHeight approximates here (a
-            // plain inline's ActualHeight is just its own padding+border, since it never gets a
-            // Size of its own - extending the flow by that would grow the containing block in
-            // violation of §10.8.1).
+            // atomic inline-level box (inline-block/inline-table) contributes its full margin box
+            // to the line it sits on (CSS2.1 §10.8: "For replaced elements, inline-block elements,
+            // and inline-table elements, this is the height of their margin box").
+            //
+            // Compares against ResolveAtomicInlineDeclaredHeight(box), not box.ActualHeight
+            // (Size.Height + ActualBoxSizeIncludedHeight): Size.Height is never assigned for an
+            // inline-flowed inline-block (#1166), so box.ActualHeight was always just its own
+            // border+padding here, regardless of any declared height/min-height - this branch was
+            // dead in exactly the case it was meant to cover. ResolveAtomicInlineDeclaredHeight
+            // resolves the actual declared border-box height/min-height (including, once #1167
+            // extends it, a percentage against a definite containing block) with no dependency on
+            // Size.Height ever being set.
             //
             // Like the width branch below, this compares an advance measured in this pass against the
             // box's whole height, so it only means anything for a box this pass both opened and
             // finished. For one it merely walked through the deficit is the box's entire height, which
             // it would then add to the flow all over again.
-            if (opensHere && box.DerivedStyle.ActualDisplay is not Keywords.Inline && coordinates.MaxBottom - trueStartY < box.ActualHeight)
+            if (opensHere && box.DerivedStyle.ActualDisplay is not Keywords.Inline
+                && ResolveAtomicInlineDeclaredHeight(box) is { } declaredFlowHeight
+                && coordinates.MaxBottom - trueStartY < declaredFlowHeight)
             {
-                coordinates.MaxBottom = trueStartY + box.ActualHeight;
+                coordinates.MaxBottom = trueStartY + declaredFlowHeight;
             }
 
             // handle width setting

@@ -1,6 +1,7 @@
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
+using System.Linq;
 using System.Threading.Tasks;
 using static PeachPDF.Tests.TestSupport.LayoutHarness;
 
@@ -203,6 +204,35 @@ namespace PeachPDF.Tests.Integration
                 "<span id='inner' style='display:inline-block;height:25pt'></span></span></div>"));
 
             Assert.Equal(25.0, PaintedRectOf(FindById(root, "inner")!).Height, 3);
+        }
+
+        /// <summary>
+        /// #1166: the line/flow must reserve the box's full declared height, not just paint it — a
+        /// wrapped continuation line after a tall inline-flowed inline-block, and the containing
+        /// block's own height, must both clear the tall box rather than overlap it. This is the exact
+        /// sibling-overlap regression an earlier, reverted in-development attempt at this fix
+        /// reintroduced (see <c>.claude/recent-fixes/</c> for the #1101 entry) — CSS 2.1
+        /// <see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">§10.8</see>: an
+        /// inline-block contributes its whole margin box to the line box it sits on.
+        /// </summary>
+        [Fact]
+        public async Task AWrappedLineAfterATallDeclaredHeightBoxClearsIt()
+        {
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div id='container' style='width:80pt'>" +
+                "<span id='tall' style='display:inline-block;height:100pt'>x</span> " +
+                "wwwwwwwwww wwwwwwwwww wwwwwwwwww wwwwwwwwww</div>"));
+
+            var tallRect = PaintedRectOf(FindById(root, "tall")!);
+            var container = FindById(root, "container")!;
+
+            var lastWord = Descendants(root).SelectMany(b => b.Words).Last();
+            var lastLineTop = LineTopOf(root, lastWord);
+
+            Assert.True(lastLineTop >= tallRect.Bottom - 0.01,
+                $"a line after the tall box must clear it: line top {lastLineTop}, box bottom {tallRect.Bottom}");
+            Assert.True(container.ActualBottom >= tallRect.Bottom - 0.01,
+                $"the container's own height must clear the tall box: {container.ActualBottom} vs {tallRect.Bottom}");
         }
 
         /// <summary>
