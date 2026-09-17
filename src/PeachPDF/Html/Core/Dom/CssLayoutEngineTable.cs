@@ -2138,37 +2138,98 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (numOfNans > 0)
                 {
-                    // Determine the max width for each column
-                    GetColumnsMinMaxWidthByContent(true, out _, out var maxFullWidths);
+                    // Determine the min and max content width for each still-auto (NaN) column.
+                    GetColumnsMinMaxWidthByContent(true, out var minFullWidths, out var maxFullWidths);
 
-                    // set the columns that can fulfill by the max width in a loop because it changes the nanWidth
-                    int oldNumOfNans;
-                    do
+                    // Issue #1157: the previous algorithm here was a left-to-right greedy pass that
+                    // recomputed a running average (availCellSpace - occupiedSpace) / numOfNans on
+                    // every column and granted a column its FULL max-content (unwrapped) width the
+                    // moment that average happened to exceed it - removing it from the averaging pool
+                    // and raising the average for whatever column was processed next. It never checked
+                    // the grant against a global budget, so on a wide multi-column header row it could
+                    // hand some columns their entire un-wrapped width while squeezing others down near
+                    // their bare minimum, with the columns' sum exceeding availCellSpace outright - the
+                    // table overflowed even though every column, wrapped, would have fit (matching
+                    // Chrome). CSS 2.1 §17.5.2.2 requires each auto column's used width to land between
+                    // its own min-content and max-content width; this resolves every NaN column against
+                    // the total budget actually available for them, in one order-independent pass.
+                    var remaining = availCellSpace - occupiedSpace;
+
+                    double minSum = 0, maxSum = 0;
+                    for (var i = 0; i < _columnWidths.Length; i++)
                     {
-                        oldNumOfNans = numOfNans;
+                        if (!double.IsNaN(_columnWidths[i])) continue;
+                        minSum += minFullWidths[i];
+                        maxSum += maxFullWidths[i];
+                    }
 
+                    if (double.IsPositiveInfinity(maxSum))
+                    {
+                        // A vertical table reports every column's max-content width as +Infinity here
+                        // (GetColumnsMinMaxWidthByContent has no writing-mode-aware content measurement
+                        // for a vertical cell's own inline-axis extent, so it skips straight to "no known
+                        // upper bound" for every column - see its own remarks). There is no meaningful
+                        // min/max interpolation against an infinite bound (it would divide-and-multiply
+                        // through Infinity into NaN), so split the available space evenly across the
+                        // auto columns instead - the same equal share this method used unconditionally
+                        // before this issue's fix, which a vertical table still relies on.
+                        var share = remaining / numOfNans;
                         for (var i = 0; i < _columnWidths.Length; i++)
                         {
-                            var nanWidth = (availCellSpace - occupiedSpace) / numOfNans;
-                            if (!double.IsNaN(_columnWidths[i]) || !(nanWidth > maxFullWidths[i])) continue;
-
-                            _columnWidths[i] = maxFullWidths[i];
-                            numOfNans--;
-                            occupiedSpace += maxFullWidths[i];
-                        }
-                    } while (oldNumOfNans != numOfNans);
-
-                    if (numOfNans > 0)
-                    {
-                        // Determine width that will be assigned to un assigned widths
-                        var nanWidth = (availCellSpace - occupiedSpace) / numOfNans;
-
-                        for (var i = 0; i < _columnWidths.Length; i++)
-                        {
-                            if (double.IsNaN(_columnWidths[i]))
-                                _columnWidths[i] = nanWidth;
+                            if (!double.IsNaN(_columnWidths[i])) continue;
+                            _columnWidths[i] = share;
+                            occupiedSpace += share;
                         }
                     }
+                    else if (maxSum <= minSum || remaining <= minSum)
+                    {
+                        // No room to spare beyond content minimums (or every column's own min already
+                        // equals its max, so there is nothing to distribute). Give each column its own
+                        // minimum - the table may still end up wider than availCellSpace when
+                        // remaining < minSum, since CSS 2.1 never shrinks a column below its content
+                        // minimum; this mirrors the !_widthSpecified branch below, which does the same
+                        // thing for every auto column when there is no specified width to negotiate
+                        // against at all.
+                        for (var i = 0; i < _columnWidths.Length; i++)
+                        {
+                            if (!double.IsNaN(_columnWidths[i])) continue;
+                            _columnWidths[i] = minFullWidths[i];
+                            occupiedSpace += minFullWidths[i];
+                        }
+                    }
+                    else if (remaining >= maxSum)
+                    {
+                        // A genuine surplus - every column can have its full max-content (unwrapped)
+                        // width and they still all fit. Any leftover is handled by the existing
+                        // proportional surplus spread a few lines below (occupiedSpace < availCellSpace),
+                        // so it is not duplicated here.
+                        for (var i = 0; i < _columnWidths.Length; i++)
+                        {
+                            if (!double.IsNaN(_columnWidths[i])) continue;
+                            _columnWidths[i] = maxFullWidths[i];
+                            occupiedSpace += maxFullWidths[i];
+                        }
+                    }
+                    else
+                    {
+                        // The case this issue is actually about: more than every column's combined
+                        // minimum, but less than every column's combined max-content width. Interpolate
+                        // each column linearly between its own min and max using a single global scale
+                        // factor, so every column lands strictly within its own [min, max] content
+                        // bounds (as §17.5.2.2 requires) and the columns sum exactly to `remaining` -
+                        // no column is singled out to keep its full unwrapped width while its siblings
+                        // wrap down to bare minimum, which is the actual symptom reported in #1157.
+                        var t = (remaining - minSum) / (maxSum - minSum);
+                        for (var i = 0; i < _columnWidths.Length; i++)
+                        {
+                            if (!double.IsNaN(_columnWidths[i])) continue;
+                            var width = minFullWidths[i] + t * (maxFullWidths[i] - minFullWidths[i]);
+                            _columnWidths[i] = width;
+                            occupiedSpace += width;
+                        }
+                    }
+
+                    numOfNans = 0;
                 }
 
                 if (numOfNans != 0 || !(occupiedSpace < availCellSpace)) return;

@@ -2058,6 +2058,123 @@ Assert.NotNull(tbody);
             Assert.Equal(150, Width(FindById(rootBox, "q2")!), precision: 1);
         }
 
+        [Fact]
+        public async Task TableLayout_AsymmetricWrappableHeaders_InterpolateBetweenColumnMinAndMax_Issue1157()
+        {
+            // https://github.com/jhaygood86/PeachPDF/issues/1157: a width:100% table with a dozen <th>
+            // columns of long two-word headers (e.g. "C (Carbon)", "Mn (Manganese)") laid out ~19pt wider
+            // than Chrome's and could overflow its container, because the old greedy distribution granted
+            // some columns their full un-wrapped max-content width while squeezing others toward bare
+            // minimum, with the sum never checked against the table's own available width. This measures
+            // each column's TRUE content min (a 1pt-wide table - every column forced to its bare minimum)
+            // and TRUE content max (a width:auto table - every column reaches its own unwrapped width)
+            // independently, then lays the same headers out a third time at the exact midpoint between
+            // the combined min and max, and checks the result against both references.
+            var minMaxHtml = @"
+<!DOCTYPE html>
+<html><head><style>
+    table { border-collapse: separate; border-spacing: 0; border: 0; margin: 0; font-size: 10pt }
+    th { padding: 0; border: 0 }
+</style></head>
+<body>
+<table id='minTbl' style='width: 1pt'>
+  <tr><th id='min0'>C (Carbon)</th><th id='min1'>Mn (Manganese)</th><th id='min2'>Ni (Nickel)</th><th id='min3'>Ferrite Content</th></tr>
+</table>
+<table id='maxTbl'>
+  <tr><th id='max0'>C (Carbon)</th><th id='max1'>Mn (Manganese)</th><th id='max2'>Ni (Nickel)</th><th id='max3'>Ferrite Content</th></tr>
+</table>
+</body></html>";
+
+            var (refRoot, _) = await BuildCssBoxTree(minMaxHtml);
+
+            var minWidths = new[] { "min0", "min1", "min2", "min3" }.Select(id => Width(FindById(refRoot, id)!)).ToArray();
+            var maxWidths = new[] { "max0", "max1", "max2", "max3" }.Select(id => Width(FindById(refRoot, id)!)).ToArray();
+            var minSum = minWidths.Sum();
+            var maxSum = maxWidths.Sum();
+            Assert.True(maxSum > minSum + 10, $"Test fixture needs real min/max headroom (min={minSum}, max={maxSum})");
+
+            var desiredWidth = (minSum + maxSum) / 2;
+
+            var realHtml = $@"
+<!DOCTYPE html>
+<html><head><style>
+    table {{ border-collapse: separate; border-spacing: 0; border: 0; margin: 0; font-size: 10pt; width: {desiredWidth}pt }}
+    th {{ padding: 0; border: 0 }}
+</style></head>
+<body>
+<table id='realTbl'>
+  <tr><th id='r0'>C (Carbon)</th><th id='r1'>Mn (Manganese)</th><th id='r2'>Ni (Nickel)</th><th id='r3'>Ferrite Content</th></tr>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(realHtml);
+            var table = FindById(rootBox, "realTbl")!;
+            var realWidths = new[] { "r0", "r1", "r2", "r3" }.Select(id => Width(FindById(rootBox, id)!)).ToArray();
+            var tableWidth = table.ActualRight - table.Location.X;
+
+            _output.WriteLine($"minSum={minSum}, maxSum={maxSum}, desiredWidth={desiredWidth}, tableWidth={tableWidth}");
+            _output.WriteLine($"real widths: {string.Join(", ", realWidths)}");
+
+            // The core bug: the table must not overflow the width it was actually given.
+            Assert.True(tableWidth <= desiredWidth + 0.5,
+                $"Table width {tableWidth} overflowed its specified {desiredWidth}pt width");
+            Assert.Equal(desiredWidth, realWidths.Sum(), precision: 1);
+
+            for (var i = 0; i < 4; i++)
+            {
+                Assert.True(realWidths[i] >= minWidths[i] - 0.5,
+                    $"col{i} ({realWidths[i]}) fell below its own content minimum ({minWidths[i]})");
+
+                // The actual reported symptom: no column should keep its full un-wrapped max-content width
+                // while the table overall does not have room for every column to do that - each column
+                // must have given up real room from its own max, not just some of them.
+                Assert.True(realWidths[i] <= maxWidths[i] - 1,
+                    $"col{i} kept its full un-wrapped max-content width ({maxWidths[i]}) instead of sharing the shortfall");
+            }
+        }
+
+        [Fact]
+        public async Task TableLayout_NarrowExplicitWidth_MultipleAutoColumns_EachGetsOwnContentMinimum()
+        {
+            // Issue #1157's deficit branch: an explicit width narrower than even the auto columns' combined
+            // content minimum. CSS 2.1 never shrinks a column below its content minimum, so the table is
+            // forced wider than its own declared width - but each column must still land at its OWN
+            // distinct content minimum (driven by its own longest unbreakable word), not an equal share of
+            // the too-small declared width.
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    table { border-collapse: separate; border-spacing: 0; border: 0; margin: 0; font-size: 10pt; width: 5pt }
+    th { padding: 0; border: 0 }
+</style></head>
+<body>
+<table>
+  <tr>
+    <th id='s0'>X (A)</th>
+    <th id='s1'>X (BBBBBBBBBB)</th>
+    <th id='s2'>X (CCCCCCCCCCCCCCCCCCCC)</th>
+  </tr>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox)!;
+            var w0 = Width(FindById(rootBox, "s0")!);
+            var w1 = Width(FindById(rootBox, "s1")!);
+            var w2 = Width(FindById(rootBox, "s2")!);
+            var tableWidth = table.ActualRight - table.Location.X;
+
+            _output.WriteLine($"table={tableWidth}, s0={w0}, s1={w1}, s2={w2}");
+
+            Assert.True(tableWidth > 5, $"Table should grow past its too-small declared width, but was {tableWidth}");
+
+            // Each column's own longest unbreakable word strictly grows (3, 12, 22 characters), so each
+            // column's content-minimum width must strictly grow too - an equal-split fallback would
+            // instead leave these equal.
+            Assert.True(w0 < w1 - 1, $"col0 ({w0}) should be narrower than col1 ({w1})");
+            Assert.True(w1 < w2 - 1, $"col1 ({w1}) should be narrower than col2 ({w2})");
+        }
+
         #endregion
 
         #region Fixed Table Layout (table-layout: fixed) Tests
