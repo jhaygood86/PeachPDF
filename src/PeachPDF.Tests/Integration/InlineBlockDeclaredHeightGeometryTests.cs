@@ -236,6 +236,173 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// #1169: <c>vertical-align: top</c> anchors the box's own top regardless of declared height —
+        /// unchanged from the default-baseline-with-content case, stated explicitly as its own regression
+        /// guard rather than relying only on the default case's own test.
+        /// </summary>
+        [Fact]
+        public async Task VerticalAlignTopGrowsDownwardKeepingTheTopEdgeFixed()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:top'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:top;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            Assert.Equal(naturalRect.Top, grownRect.Top, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
+        }
+
+        /// <summary>
+        /// #1169: <c>vertical-align: bottom</c> anchors the box's own bottom — CSS 2.1 §10.8.1 places
+        /// the box's bottom at the line's bottom regardless of the box's own height, so growth must extend
+        /// upward, keeping that bottom edge fixed, not downward past it.
+        /// </summary>
+        [Fact]
+        public async Task VerticalAlignBottomGrowsUpwardKeepingTheBottomEdgeFixed()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:bottom'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:bottom;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            Assert.Equal(naturalRect.Bottom, grownRect.Bottom, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
+            Assert.True(grownRect.Top < naturalRect.Top,
+                $"growth must extend upward, keeping the bottom fixed: natural top {naturalRect.Top}, grown top {grownRect.Top}");
+        }
+
+        /// <summary>
+        /// #1169: <c>vertical-align: text-bottom</c> anchors the parent font's own bottom the same way
+        /// <c>bottom</c> anchors the line's bottom.
+        /// </summary>
+        [Fact]
+        public async Task VerticalAlignTextBottomGrowsUpwardKeepingTheBottomEdgeFixed()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:text-bottom'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:text-bottom;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            Assert.Equal(naturalRect.Bottom, grownRect.Bottom, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
+        }
+
+        /// <summary>
+        /// #1169: <c>vertical-align: middle</c> centers the box on the line using its natural height —
+        /// growing symmetrically around the box's own already-centered midpoint keeps that midpoint on
+        /// the line's own middle regardless of the natural height that produced it.
+        /// </summary>
+        [Fact]
+        public async Task VerticalAlignMiddleGrowsSymmetricallyAroundItsCenter()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:middle'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:middle;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            var naturalCenter = naturalRect.Top + naturalRect.Height / 2;
+            var grownCenter = grownRect.Top + grownRect.Height / 2;
+
+            Assert.Equal(naturalCenter, grownCenter, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
+        }
+
+        /// <summary>
+        /// #1169: <c>vertical-align: sub</c>/<c>super</c> only ever reach a content-bearing box (an empty
+        /// or <c>overflow</c>-hidden box's baseline offset does not depend on either), so they are grouped
+        /// with default-baseline-with-content's top anchoring — stated as its own regression guard on the
+        /// currently-shipped, tested behavior.
+        /// </summary>
+        [Fact]
+        public async Task VerticalAlignSubGrowsDownwardKeepingTheTopEdgeFixed()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:sub'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:sub;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            Assert.Equal(naturalRect.Top, grownRect.Top, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
+        }
+
+        /// <summary>
+        /// #1169's still-open, genuinely circular case: an empty box's default-<c>baseline</c> "baseline"
+        /// is itself computed from its still-natural rectangle inside <c>ApplyVerticalAlignment</c>, before
+        /// growth runs, so growth stays exactly as it was before #1169 (downward, from the flow-assigned
+        /// top). An earlier, since-reverted attempt at bottom-anchoring this case produced a measured
+        /// regression; this pins the empty case's behavior alongside
+        /// <see cref="TheEmittedFragmentCarriesTheDeclaredHeight"/>.
+        /// </summary>
+        [Fact]
+        public async Task AnEmptyBoxUnderDefaultVerticalAlignStillGrowsDownwardFromItsFlowPosition()
+        {
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='box' style='display:inline-block;height:40pt;border:1pt solid'></span></div>"));
+
+            var rect = PaintedRectOf(FindById(root, "box")!);
+
+            Assert.Equal(20.0, rect.Y, 3);
+            Assert.Equal(42.0, rect.Height, 3);
+        }
+
+        /// <summary>
+        /// The circular case's other trigger: content whose <c>overflow</c> isn't <c>visible</c> also has
+        /// no baseline of its own (<see cref="AtomicInlineBaselineOf"/>'s bottom-margin-edge fallback), so
+        /// it must grow downward, unchanged, exactly like the empty case above — even though it holds
+        /// content, unlike the empty case.
+        /// </summary>
+        [Fact]
+        public async Task OverflowHiddenContentStillGrowsDownwardUnderDefaultVerticalAlign()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'><span id='box' style='display:inline-block;overflow:hidden'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'><span id='box' style='display:inline-block;overflow:hidden;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            Assert.Equal(naturalRect.Top, grownRect.Top, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
+        }
+
+        /// <summary>
         /// The border-box rectangle this box's decorations are drawn over - its one per-line rectangle,
         /// which is where an inline box's real geometry lives. Asserting a single one also states that
         /// the box did not wrap, which every fixture here depends on.

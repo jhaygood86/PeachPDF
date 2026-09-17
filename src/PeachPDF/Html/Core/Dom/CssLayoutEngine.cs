@@ -5116,12 +5116,137 @@ namespace PeachPDF.Html.Core.Dom
             && ReferenceEquals(box.LastHostingLineBox, line);
 
         /// <summary>
+        /// Which edge of an atomic inline-level box's post-alignment rectangle
+        /// <see cref="HeightenAtomicInlineRectangles"/> must keep fixed while growing it to a declared
+        /// height — the edge <see cref="ApplyVerticalAlignment"/>'s per-<c>vertical-align</c>-case
+        /// arithmetic already anchored at a position independent of the box's own (natural, pre-growth)
+        /// height, per CSS 2.1 <see href="https://www.w3.org/TR/CSS21/visudet.html#propdef-vertical-align">
+        /// §10.8.1</see>.
+        /// </summary>
+        private enum RectangleGrowthAnchor
+        {
+            /// <summary>The box's own top stays fixed; extra height is added below it.</summary>
+            Top,
+
+            /// <summary>The box's own bottom stays fixed; extra height is added above it.</summary>
+            Bottom,
+
+            /// <summary>The box's own vertical center stays fixed; extra height splits evenly around it.</summary>
+            Middle,
+
+            /// <summary>
+            /// Neither edge is safely knowable post-alignment without risking a worse mispositioning than
+            /// leaving the rectangle's current top fixed — see <see cref="AnchorOf"/>'s own remarks.
+            /// </summary>
+            Circular
+        }
+
+        /// <summary>
+        /// Classifies <paramref name="box"/>'s <see cref="RectangleGrowthAnchor"/> for
+        /// <see cref="HeightenAtomicInlineRectangles"/>, from the same <c>vertical-align</c> this box was
+        /// just positioned by in <see cref="ApplyVerticalAlignment"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Derived by checking, for each case <see cref="ApplyVerticalAlignment"/>'s own per-box switch
+        /// distinguishes, whether that case's <c>OffsetBoxWithinLine</c> delta is a function of the box's
+        /// own (natural, pre-growth) <c>rect.Height</c> — if it is not, the edge that delta places the box
+        /// at is height-independent and therefore safe to hold fixed while growing:
+        /// <see cref="VerticalAlignment.Top"/> and <see cref="VerticalAlignment.TextTop"/> place
+        /// <c>rect.Top</c> directly (independent of height) → <see cref="RectangleGrowthAnchor.Top"/>.
+        /// <see cref="VerticalAlignment.Bottom"/> and <see cref="VerticalAlignment.TextBottom"/> place
+        /// <c>rect.Bottom</c> directly (the height term cancels out of the delta arithmetic) →
+        /// <see cref="RectangleGrowthAnchor.Bottom"/>. <see cref="VerticalAlignment.Middle"/> centers the
+        /// box in the line using its natural height, so growing symmetrically around the box's own
+        /// already-centered midpoint keeps that midpoint exactly on the line's own middle regardless of the
+        /// natural height that produced it → <see cref="RectangleGrowthAnchor.Middle"/>.
+        /// </para>
+        /// <para>
+        /// The default <c>baseline</c> case splits in two: with real, non-replaced content
+        /// (<see cref="AtomicInlineBaselineOf"/>'s word-ascent branch), the box's <c>rect.Top</c> is placed
+        /// from the word's own top minus a height-independent offset (the word sits a fixed distance below
+        /// the box's own top border/padding, regardless of the box's height) →
+        /// <see cref="RectangleGrowthAnchor.Top"/>, matching content's natural top-anchoring inside the
+        /// box's own content area. <see cref="VerticalAlignment.Sub"/>/<see cref="VerticalAlignment.Super"/>/
+        /// a length or percentage offset only ever reach this method already excluded from the empty/
+        /// <c>overflow</c>-hidden case below (an empty or non-<c>visible</c> box's baseline offset does not
+        /// depend on sub/super/an author-declared offset at all — CSS 2.1 §10.8.1 defines those as relative
+        /// to the box's <i>own</i> baseline, which for a content-bearing box is itself top-anchored), so
+        /// they are folded into <see cref="RectangleGrowthAnchor.Top"/> too.
+        /// </para>
+        /// <para>
+        /// An empty box, or one whose <c>overflow</c> isn't <c>visible</c>, has no baseline of its own —
+        /// <see cref="AtomicInlineBaselineOf"/> falls back to its bottom margin edge, and that fallback is
+        /// read from inside <see cref="ApplyVerticalAlignment"/>'s own baseline-extent fold, using the
+        /// box's still-natural (pre-growth) rectangle, before this method ever runs. An earlier,
+        /// since-reverted attempt at growing this specific case from its (algebraically bottom-anchored)
+        /// post-alignment position produced a measured regression — an empty bordered box's emitted
+        /// fragment landed at <c>Y = -20</c> instead of <c>20</c> in what is now
+        /// <c>TheEmittedFragmentCarriesTheDeclaredHeight</c> — so this case is classified
+        /// <see cref="RectangleGrowthAnchor.Circular"/> and left growing downward, unchanged, matching this
+        /// box shape's pre-#1169 behavior exactly (<see href="https://github.com/jhaygood86/PeachPDF/issues/1169">
+        /// #1169</see>).
+        /// </para>
+        /// </remarks>
+        private static RectangleGrowthAnchor AnchorOf(CssBox box, CssLineBox line)
+        {
+            var effectiveVerticalAlign = EffectiveVerticalAlignOf(box, line, out _);
+
+            if (effectiveVerticalAlign.Value.IsValue)
+            {
+                // A length/percentage offset - reaches this method only when the box has real content
+                // (see remarks), so it is top-anchored the same as default baseline-with-content.
+                return RectangleGrowthAnchor.Top;
+            }
+
+            switch (effectiveVerticalAlign.Value.Keyword)
+            {
+                case VerticalAlignment.Bottom:
+                case VerticalAlignment.TextBottom:
+                    return RectangleGrowthAnchor.Bottom;
+                case VerticalAlignment.Middle:
+                    return RectangleGrowthAnchor.Middle;
+                case VerticalAlignment.Top:
+                case VerticalAlignment.TextTop:
+                case VerticalAlignment.Sub:
+                case VerticalAlignment.Super:
+                    return RectangleGrowthAnchor.Top;
+                default:
+                    // Default baseline (and the deprecated PeachBaselineMiddle sentinel, which has no
+                    // distinct inline-layout effect - see its own Keywords doc comment).
+                    return box.Overflow.Value != Overflow.Visible || !HasWordOnLine(box, line)
+                        ? RectangleGrowthAnchor.Circular
+                        : RectangleGrowthAnchor.Top;
+            }
+        }
+
+        /// <summary>
+        /// Grows <paramref name="rect"/> to <paramref name="declaredHeight"/> from
+        /// <paramref name="anchor"/>, holding that edge (or, for <see cref="RectangleGrowthAnchor.Middle"/>,
+        /// the midpoint) fixed. <see cref="RectangleGrowthAnchor.Circular"/> grows downward, matching
+        /// <see cref="RectangleGrowthAnchor.Top"/> — see <see cref="AnchorOf"/>'s own remarks for why.
+        /// </summary>
+        private static RRect GrowAtomicInlineRectangle(RRect rect, double declaredHeight, RectangleGrowthAnchor anchor)
+        {
+            var newTop = anchor switch
+            {
+                RectangleGrowthAnchor.Bottom => rect.Bottom - declaredHeight,
+                RectangleGrowthAnchor.Middle => rect.Top - (declaredHeight - rect.Height) / 2,
+                _ => rect.Y
+            };
+
+            return new RRect(rect.X, newTop, rect.Width, declaredHeight);
+        }
+
+        /// <summary>
         /// The block-axis counterpart of <see cref="WidenAtomicInlineRectangles"/>: grows each atomic
         /// inline-level box on <paramref name="line"/> from the rectangle its own content just bubbled up
         /// to its declared/used height
         /// (<see href="https://www.w3.org/TR/CSS22/visudet.html#normal-block">CSS 2.1 §10.6.3</see>), when
         /// that is taller than what the content produced
-        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1101">#1101</see>).
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1101">#1101</see>), from whichever
+        /// edge <see cref="AnchorOf"/> says <see cref="ApplyVerticalAlignment"/> already anchored
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1169">#1169</see>).
         /// </summary>
         /// <remarks>
         /// <para>
@@ -5130,47 +5255,27 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ApplyVerticalAlignment"/> folds every baseline-aligned atomic inline's <i>whole
         /// margin box</i> — not just its own baseline point — into the line's shared baseline extent (CSS
         /// 2.1 §10.8.1), which is exactly how a declared height is supposed to size the <i>line</i> too;
-        /// but that is a separate, still-open gap this change deliberately leaves alone (see
-        /// <see cref="ResolveAtomicInlineDeclaredHeight"/>'s own remarks). Growing the rectangle before
-        /// that fold would feed it a height the rest of the line was never sized for, moving every other
-        /// box on the line along with it. Running after alignment instead means the box's own final,
-        /// already-decided position is what gets grown — invisible to <see cref="ApplyVerticalAlignment"/>
-        /// itself and to the ordinary block flow's own height (<see cref="FinalizeFlowBoxExit"/>'s
-        /// <c>MaxBottom</c>, computed before this ever runs). A table cell's own auto-height is a
-        /// different, later mechanism (<c>CssBox.GetMaximumBottom</c>) that reads a box's <c>Rectangles</c>
-        /// directly, so a declared-height box inside a cell does grow that cell (and its row) — consistent
-        /// with CSS 2.1 §17.5.3 sizing a cell to its content, not a special case this method adds.
+        /// that is handled separately, by <see cref="FinalizeFlowBoxExit"/>'s own <c>MaxBottom</c>
+        /// extension (<see href="https://github.com/jhaygood86/PeachPDF/issues/1166">#1166</see>), which
+        /// runs earlier, during the flow itself, rather than by feeding a grown rectangle back into this
+        /// fold. Growing the rectangle before the fold would feed it a height the rest of the line was
+        /// never sized for, moving every other box on the line along with it. Running after alignment
+        /// instead means the box's own final, already-decided position is what gets grown — invisible to
+        /// <see cref="ApplyVerticalAlignment"/> itself. A table cell's own auto-height is a different,
+        /// later mechanism (<c>CssBox.GetMaximumBottom</c>) that reads a box's <c>Rectangles</c> directly,
+        /// so a declared-height box inside a cell does grow that cell (and its row) — consistent with CSS
+        /// 2.1 §17.5.3 sizing a cell to its content, not a special case this method adds.
         /// </para>
         /// <para>
-        /// Only ever grows the rectangle downward, keeping its own top: content is top-anchored inside a
-        /// non-replaced box's content area, so extra declared height appears below it, symmetric to
-        /// <see cref="WidenAtomicInlineRectangles"/> growing rightward from the box's own already-correct
-        /// left edge. Like its width sibling, this never shrinks a rectangle already taller than the
-        /// declared height — the "declared height smaller than content" case this deliberately leaves
-        /// alone, matching <see cref="WidenAtomicInlineRectangles"/>'s own equivalent choice not to pull an
-        /// overflowing rectangle back to a narrower declared width.
-        /// </para>
-        /// <para>
-        /// Growing down from the box's post-alignment top is exactly right when the box's own baseline came
-        /// from its first word's ascent (<see cref="AtomicInlineBaselineOf"/>'s content-bearing,
-        /// <c>overflow: visible</c> branch — content is top-anchored inside the box's own content area
-        /// regardless of alignment) or when <c>vertical-align</c> is <c>top</c> (which anchors the box's own
-        /// top directly, regardless of content). <b>It is not exactly right otherwise</b> — an explicit
-        /// <c>bottom</c>/<c>middle</c>/<c>sub</c>/<c>super</c>/<c>text-top</c>/<c>text-bottom</c>/length
-        /// offset, or a <c>baseline</c> box whose own bottom margin edge stood in for its baseline (an
-        /// empty box, or one whose <c>overflow</c> isn't <c>visible</c>), anchors a <i>different</i> edge,
-        /// and the fully-correct fix would need to grow from that edge instead. Doing so cleanly needs the
-        /// grown height known <i>before</i> <see cref="ApplyVerticalAlignment"/> computes that edge's
-        /// position in the first place (a bottom-anchored box's baseline is itself derived from its own,
-        /// still-natural rectangle) — which reopens the same "sizes the line" gap this method's other
-        /// remarks explain growing-before-alignment causes. Left as a documented, narrower gap
-        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1169">#1169</see>) rather than risking
-        /// a second, subtly-wrong direction for the sake of a technically-more-general one.
+        /// Never shrinks a rectangle already taller than the declared height — the "declared height
+        /// smaller than content" case this deliberately leaves alone, matching
+        /// <see cref="WidenAtomicInlineRectangles"/>'s own equivalent choice not to pull an overflowing
+        /// rectangle back to a narrower declared width.
         /// </para>
         /// </remarks>
         private static void HeightenAtomicInlineRectangles(CssLineBox line)
         {
-            List<(CssBox Box, double Height)>? heightening = null;
+            List<(CssBox Box, double Height, RectangleGrowthAnchor Anchor)>? heightening = null;
 
             foreach (var (box, rect) in line.Rectangles)
             {
@@ -5179,15 +5284,14 @@ namespace PeachPDF.Html.Core.Dom
                 if (ResolveAtomicInlineDeclaredHeight(box) is not { } declaredHeight) continue;
                 if (declaredHeight <= rect.Height) continue;
 
-                (heightening ??= []).Add((box, declaredHeight));
+                (heightening ??= []).Add((box, declaredHeight, AnchorOf(box, line)));
             }
 
             if (heightening is null) return;
 
-            foreach (var (box, declaredHeight) in heightening)
+            foreach (var (box, declaredHeight, anchor) in heightening)
             {
-                var rect = line.Rectangles[box];
-                line.Rectangles[box] = new RRect(rect.X, rect.Y, rect.Width, declaredHeight);
+                line.Rectangles[box] = GrowAtomicInlineRectangle(line.Rectangles[box], declaredHeight, anchor);
             }
         }
 
