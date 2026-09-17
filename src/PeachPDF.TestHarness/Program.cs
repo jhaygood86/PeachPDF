@@ -6234,6 +6234,11 @@ const string AtomicInlineWidthCss = """
                border: 1pt solid #6b4fa1; background: #eee8fa }
     .wrapbox { display: inline-block; width: 120pt; padding: 3pt 5pt;
                border: 1pt solid #1d6fa5; background: #e8f4fb }
+    .boxh { display: inline-block; height: 50pt; padding: 3pt 5pt; margin-right: 6pt;
+            border: 1pt solid #1d6fa5; background: #e8f4fb; vertical-align: top }
+    .boxh-min { display: inline-block; min-height: 50pt; padding: 3pt 5pt; margin-right: 6pt;
+                border: 1pt solid #b8960f; background: #fdf6dd; vertical-align: top }
+    .boxh-narrow { width: 90pt }
     </style>
     """;
 
@@ -6243,7 +6248,9 @@ var atomicInlineWidthHtml = "<!DOCTYPE html><html><head>" + AtomicInlineWidthCss
     "<p class=\"intro\">CSS 2.1 &sect;10.3.9 hands a non-replaced <code>inline-block</code> to shrink-to-fit " +
     "only when its <code>width</code> is <code>auto</code>. An explicit width is used as declared, and it " +
     "sizes the box itself &mdash; not merely the room the line reserves for it &mdash; so the background, " +
-    "border and overflow clip are painted at that width whether or not the content fills it.</p>" +
+    "border and overflow clip are painted at that width whether or not the content fills it. CSS 2.1 " +
+    "&sect;10.6.3 does the same for a non-auto <code>height</code>/<code>min-height</code> on the block " +
+    "axis.</p>" +
 
     "<h2>The same declared width, whatever is inside</h2>" +
     "<div class=\"caption\">Three 90pt boxes: a full one, a one-character one, and an empty one. All " +
@@ -6291,10 +6298,24 @@ var atomicInlineWidthHtml = "<!DOCTYPE html><html><head>" + AtomicInlineWidthCss
     "<div class=\"caption\">The same 120pt box holding one unbreakable word.</div>" +
     "<div class=\"row\">before <span class=\"wrapbox\">Unbreakableextremelylongword</span> after Agy</div>" +
 
+    "<h2>A declared height sizes the box the same way (CSS 2.1 §10.6.3)</h2>" +
+    "<div class=\"caption\">Three 50pt-tall boxes: a full one, a one-character one, and an empty one. All " +
+    "three paint the same height, whether or not their content fills it — an empty box included, the same " +
+    "gap a declared width closed above.</div>" +
+    "<div class=\"row\"><span class=\"boxh\">filled right up</span><span class=\"boxh\">x</span>" +
+    "<span class=\"boxh\"></span>text after</div>" +
+
+    "<h2>min-height is a floor, not an override</h2>" +
+    "<div class=\"caption\">The gold box declares <code>min-height: 50pt</code> with enough wrapped text " +
+    "that its natural content is already taller than that — so it keeps its natural (taller) height " +
+    "rather than being shrunk to 50pt, unlike the blue <code>height: 50pt</code> box beside it.</div>" +
+    "<div class=\"row\"><span class=\"boxh boxh-narrow\">x</span>" +
+    "<span class=\"boxh-min boxh-narrow\">min-height is only a floor, so content taller than it keeps its own height</span></div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("atomic_inline_width", "Layout", "Atomic Inline Sizing",
-    "CSS 2.1 §10.3.9: a declared length or percentage width on a display: inline-block sizes the box itself — fixed-width labels, empty checkbox glyphs, percentage sizing, and box-sizing.",
+    "CSS 2.1 §10.3.9/§10.6.3: a declared width, height, or min-height on a display: inline-block sizes the box itself — fixed-width labels, empty checkbox glyphs, percentage sizing, box-sizing, and the block axis.",
     atomicInlineWidthHtml, pdfConfig);
 
 // --- line-height: normal showcase (CSS 2.1 §10.8.1) ---
