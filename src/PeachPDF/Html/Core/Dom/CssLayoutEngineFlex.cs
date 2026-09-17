@@ -623,6 +623,14 @@ namespace PeachPDF.Html.Core.Dom
                 final = ClampMainAxis(item.Box, final, mainSize);
                 item.FinalMainSize = final;
 
+                // For a column-direction container the main axis is height, and a flex item's used main
+                // size is always definite once resolved (CSS Flexbox 1 SS9.7) - there is no "auto main
+                // size" once this algorithm has run. Durably record it so a percentage-height descendant
+                // can resolve against it (CssLayoutEngine.IsHeightDefinite/ResolveDefiniteHeightValue,
+                // issue #1167) - Height's own CSS string only ever reflects this transiently, inside
+                // ResizeItem's own temporary set/relayout/revert below.
+                if (!_mainAxisIsPhysicalX) item.Box.AlgorithmicDefiniteHeight = final;
+
                 // Re-layout only when the final size differs from what was used during measurement
                 if (Math.Abs(final - item.NaturalMainSize) > 0.5)
                     await ResizeItem(g, item, final);
@@ -930,6 +938,14 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var item in line.Items)
             {
                 var align = item.Box.AlignSelf.Value == AlignItem.Auto ? _flexBox.AlignItems.Value : item.Box.AlignSelf.Value;
+
+                // Reset every pass, before deciding whether this item's cross axis (row-direction only;
+                // height is the main axis under column-direction, recorded separately by
+                // ResolveFlexibleLengths) actually stretches this time - a stale value from an earlier
+                // pass, or from an alignment that no longer resolves to stretch, must not leak through.
+                // The Stretch/Normal case below re-sets this when it does apply.
+                if (_mainAxisIsPhysicalX) item.Box.AlgorithmicDefiniteHeight = null;
+
                 // Cross-start's own physical side, from writing-mode alone (CrossBefore/CrossAfter,
                 // sharing MainBefore/MainAfter's underlying PhysicalBefore rule), deliberately ignoring
                 // _isWrapReverse here too: that swap is handled separately by flushCrossStart/flushCrossEnd
@@ -975,10 +991,18 @@ namespace PeachPDF.Html.Core.Dom
                         bool canStretch = _mainAxisIsPhysicalX
                             ? !CssValueParser.IsValidLength(item.Box.Height)
                             : !CssValueParser.IsValidLength(item.Box.Width);
+
                         if (canStretch)
                         {
                             double targetCross = line.CrossSize - crossMarginBefore - crossMarginAfter;
                             double currentCross = _mainAxisIsPhysicalX ? item.Box.ActualBoxSizingHeight : item.Box.ActualBoxSizingWidth;
+
+                            // CSS Flexbox 1 SS9.4 step 7 (stretch): a definite value by construction, for
+                            // both single-line and multi-line containers - line.CrossSize is already
+                            // resolved by this point regardless. Durably recorded here (rather than only
+                            // reflected transiently in item.Box.Height's own string below) so a
+                            // percentage-height descendant can resolve against it (issue #1167).
+                            if (_mainAxisIsPhysicalX) item.Box.AlgorithmicDefiniteHeight = targetCross;
                             if (Math.Abs(targetCross - currentCross) > 0.5)
                             {
                                 if (_mainAxisIsPhysicalX)
