@@ -748,7 +748,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task RoundedOutlineOnAWrappingInlineElement_ClipsOnlyAtBreakEdges()
+        public async Task RoundedOutlineOnAWrappingInlineElement_UsesEachFragmentAsItsBase()
         {
             var html = LayoutHarness.Wrap(
                 "<div style='width:200pt;font:10pt Arial'>" +
@@ -765,31 +765,32 @@ namespace PeachPDF.Tests.Integration
                 .ToList();
             Assert.Equal(3, bluePaths.Count);
 
-            var outlineClips = g.Log
-                .Select((entry, index) => (entry, index))
-                .Where(item => item.entry is TestRecordingGraphics.PushClipCall &&
-                               item.index + 1 < g.Log.Count &&
-                               g.Log[item.index + 1] is TestRecordingGraphics.DrawPathCall path &&
-                               path.Color == RColor.FromArgb(0, 0, 255))
-                .Select(item => ((TestRecordingGraphics.PushClipCall)item.entry).Rect)
-                .ToList();
+            // A sliced background/border still resolves against the unbroken horizontal strip, but an
+            // outline cannot: its outward spill would disagree with the fragment clip. Each path is
+            // instead based on its own fragment, with only the true first/last inline edges expanded.
+            // No clip is needed because the physical-edge flags leave both break sides open.
+            Assert.All(
+                g.Log.Select((entry, index) => (entry, index))
+                    .Where(item => item.entry is TestRecordingGraphics.DrawPathCall path &&
+                                   path.Color == RColor.FromArgb(0, 0, 255)),
+                item => Assert.IsNotType<TestRecordingGraphics.PushClipCall>(g.Log[item.index - 1]));
 
-            Assert.Equal(3, outlineClips.Count);
-            Assert.True(outlineClips[0].Left < rects[0].Left);
-            Assert.Equal(rects[0].Right, outlineClips[0].Right, 3);
-            Assert.Equal(rects[1].Left, outlineClips[1].Left, 3);
-            Assert.Equal(rects[1].Right, outlineClips[1].Right, 3);
-            Assert.Equal(rects[2].Left, outlineClips[2].Left, 3);
-            Assert.True(outlineClips[2].Right > rects[2].Right);
-            for (var i = 0; i < outlineClips.Count; i++)
+            for (var i = 0; i < bluePaths.Count; i++)
             {
-                Assert.True(outlineClips[i].Top < rects[i].Top);
-                Assert.True(outlineClips[i].Bottom > rects[i].Bottom);
+                Assert.Equal(rects[i].Top - 2, bluePaths[i].Bounds.Top, 1);
+                Assert.Equal(rects[i].Bottom + 2, bluePaths[i].Bounds.Bottom, 1);
             }
+
+            Assert.Equal(rects[0].Left - 2, bluePaths[0].Bounds.Left, 1);
+            Assert.Equal(rects[0].Right, bluePaths[0].Bounds.Right, 1);
+            Assert.Equal(rects[1].Left, bluePaths[1].Bounds.Left, 1);
+            Assert.Equal(rects[1].Right, bluePaths[1].Bounds.Right, 1);
+            Assert.Equal(rects[2].Left, bluePaths[2].Bounds.Left, 1);
+            Assert.Equal(rects[2].Right + 2, bluePaths[2].Bounds.Right, 1);
         }
 
         [Fact]
-        public async Task RoundedOutlineOnAWrappingInlineElement_EmptyInsetSlicePaintsNothing()
+        public async Task RoundedOutlineOnAWrappingInlineElement_LargeNegativeOffsetOutsideFragmentsPaintsNothing()
         {
             var html = LayoutHarness.Wrap(
                 "<div style='width:200pt;font:10pt Arial'>" +
@@ -801,9 +802,8 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, span, g);
 
-            Assert.All(
-                g.Log.OfType<TestRecordingGraphics.PushClipCall>(),
-                clip => Assert.True(clip.Rect.Width > 0 && clip.Rect.Height > 0));
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                path => path.Color == RColor.FromArgb(0, 0, 255));
 
             var pdf = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
             using var stream = new MemoryStream();

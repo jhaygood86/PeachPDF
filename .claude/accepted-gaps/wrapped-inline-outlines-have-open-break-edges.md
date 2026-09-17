@@ -3,9 +3,9 @@
 Tracked in [#1163](https://github.com/jhaygood86/PeachPDF/issues/1163).
 
 When an inline element wraps across line boxes, PeachPDF currently applies
-`box-decoration-break: slice`-style geometry to its outline: the first fragment has the physical
-start edge, the last fragment has the physical end edge, and the edges at internal line breaks
-remain open.
+`box-decoration-break: slice`-style geometry to its outline: every fragment retains its physical
+top/bottom edges, the first fragment has the physical start edge, the last fragment has the physical
+end edge, and the inline-axis edges at internal line breaks remain open.
 
 [CSS Basic User Interface Level 4](https://drafts.csswg.org/css-ui-4/#outline) does not prescribe
 the exact position or shape of a fragmented outline, but recommends that each part be fully

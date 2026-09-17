@@ -22,6 +22,24 @@ namespace PeachPDF.Html.Core.Handlers
     internal static class OutlineDrawHandler
     {
         /// <summary>
+        /// The farthest this box's outline can paint outside its border edge. Used by the page painter
+        /// to give outlines at a content-area edge room to enter the page margin before any narrower
+        /// overflow clips are established.
+        /// </summary>
+        internal static double OutwardReach(RGraphics g, CssBox box)
+        {
+            var style = box.OutlineStyle.Value;
+            if (style is OutlineStyle.None or OutlineStyle.Hidden) return 0;
+
+            if (style == OutlineStyle.Auto)
+                return Math.Max(0, box.ActualOutlineOffset + AutoRingWidth(g) / 2);
+
+            return box.ActualOutlineWidth > 0
+                ? Math.Max(0, box.ActualOutlineOffset + box.ActualOutlineWidth)
+                : 0;
+        }
+
+        /// <summary>
         /// Draws the box's outline, if any, around <paramref name="rect"/> (the same border-box
         /// rectangle <see cref="BordersDrawHandler.DrawBoxBorders"/> receives).
         /// </summary>
@@ -37,14 +55,9 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="hasRightEdge">whether the box's trailing edge belongs to this rectangle</param>
         /// <param name="hasTopEdge">whether the box's own top edge belongs to this rectangle</param>
         /// <param name="hasBottomEdge">whether the box's own bottom edge belongs to this rectangle</param>
-        /// <param name="sliceClip">
-        /// the fragment rectangle at whose break edges a sliced outline is clipped, or null for an
-        /// unbroken box
-        /// </param>
         public static void DrawOutline(
             RGraphics g, CssBox box, RRect rect,
-            bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge,
-            RRect? sliceClip = null)
+            bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
         {
             if (rect is not { Width: > 0, Height: > 0 }) return;
 
@@ -100,16 +113,6 @@ namespace PeachPDF.Html.Core.Handlers
                     tlx, tly, trx, try_, brx, bry, blx, bly);
             }
 
-            if (sliceClip is { } clip)
-            {
-                var outlineClip = RRect.FromLTRB(
-                    hasLeftEdge ? outerRect.Left : clip.Left,
-                    hasTopEdge ? outerRect.Top : clip.Top,
-                    hasRightEdge ? outerRect.Right : clip.Right,
-                    hasBottomEdge ? outerRect.Bottom : clip.Bottom);
-                if (outlineClip is not { Width: > 0, Height: > 0 }) return;
-                g.PushClip(outlineClip);
-            }
             if (isInvert) g.PushBlendMode(RBlendMode.Difference);
 
             BoxEdgesDrawHandler.DrawBoxEdges(
@@ -117,7 +120,6 @@ namespace PeachPDF.Html.Core.Handlers
                 hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge, outerRadii);
 
             if (isInvert) g.PopBlendMode();
-            if (sliceClip is not null) g.PopClip();
         }
 
         #region Private methods
