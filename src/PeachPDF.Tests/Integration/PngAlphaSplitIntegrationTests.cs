@@ -83,6 +83,58 @@ namespace PeachPDF.Tests.Integration
         // BuildAlphaSplitPassthroughData's own ColorIsRgb ternary either way.
 
         [Fact]
+        public async Task TruecolorAlpha_SMaskAlsoGetsInterpolateTrue()
+        {
+            // Issue #1174: the parent color Image XObject already writes /Interpolate true (its own
+            // XImage.Interpolate default), but the grayscale /SMask image built alongside it here was
+            // silently omitting the same key - a strict reader could then resample the color plane
+            // smoothly while sampling the alpha silhouette with nearest-neighbor, producing a jagged
+            // edge on an enlarged transparent PNG. Both dictionaries in this alpha-split-eligible path
+            // are simple (no nested arrays/dicts), so a plain global count is a reliable proxy for "both
+            // the parent and the child SMask have it" - a single /Interpolate true would mean only the
+            // parent (or only the child) got it.
+            var bytes = MakeGradientRgbaPngBytes(8, 8);
+            var html = $"<html><body><img src=\"{DataUri(bytes)}\" width=\"8\" height=\"8\" /></body></html>";
+
+            var pdfText = await GetPdfText(html, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+            Assert.Contains("/SMask", pdfText);
+            Assert.Equal(2, Regex.Matches(pdfText, "/Interpolate true").Count);
+        }
+
+        [Fact]
+        public async Task InterlacedAlpha_SMaskGetsInterpolateTrueButHardMaskDoesNot()
+        {
+            // Same issue as TruecolorAlpha_SMaskAlsoGetsInterpolateTrue, but for the decode+SMask
+            // fallback path (ReadTrueColorMemoryBitmap) instead of the alpha-split pass-through - a
+            // semi-transparent interlaced source is ineligible for pass-through (see
+            // InterlacedAlpha_FallsBackToExistingDecodePlusSMask) and has a non-opaque pixel, so it
+            // builds both a 1-bit hard /Mask (ImageMask true) and an 8-bit /SMask. Only the 8-bit
+            // /SMask is a sampled grayscale channel interpolation actually applies to - the 1-bit hard
+            // mask is a stencil, and per the issue must not get /Interpolate even though it sits right
+            // next to the (correctly) interpolated SMask in the same dictionary shape.
+            var bytes = MakeInterlacedRgbaPngBytes(8, 8);
+            var html = $"<html><body><img src=\"{DataUri(bytes)}\" width=\"8\" height=\"8\" /></body></html>";
+
+            var pdfText = await GetPdfText(html, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+            Assert.Contains("/SMask", pdfText);
+            Assert.Contains("/ImageMask true", pdfText);
+
+            // Split on endobj first (same precedent as RadialGradientIntegrationTests.ShadingPatternMatrices)
+            // so /Interpolate belonging to some other object can never be picked up for the object being
+            // checked - a plain substring/global-regex check can't tell "the hard mask has it" apart from
+            // "the SMask (or the parent color image) has it and the hard mask merely sits nearby".
+            var objects = pdfText.Split("endobj");
+
+            var hardMaskObject = Assert.Single(objects, o => o.Contains("/ImageMask true"));
+            Assert.DoesNotContain("/Interpolate", hardMaskObject);
+
+            var softMaskObject = Assert.Single(objects, o => o.Contains("/ColorSpace /DeviceGray"));
+            Assert.Contains("/Interpolate true", softMaskObject);
+        }
+
+        [Fact]
         public async Task PalettePartialAlphaTrns_EmbedsIndexedColorPlusSMask()
         {
             (byte, byte, byte)[] palette = [(255, 0, 0), (0, 255, 0), (0, 0, 255)];

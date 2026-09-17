@@ -71,6 +71,34 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("/Interpolate true", plainText);
         }
 
+        [Fact]
+        public async Task TransparentImage_UnderPdfAConformance_SMaskAlsoNeverGetsInterpolateTrue()
+        {
+            // Issue #1174: the same ISO 19005-2 §6.2.8 guard that suppresses /Interpolate on a plain
+            // opaque image must also suppress it on the child /SMask image object a transparent PNG
+            // gets - PdfA2B (unlike PdfA1B) permits transparency, so this is the conformance level
+            // where an alpha-channel image's SMask actually gets built and is worth checking.
+            var pngBytes = RasterPngFixture.MakeRgbaPngBytes(4, 4,
+                (x, y) => ((byte)(x * 64), (byte)(y * 64), (byte)128, (byte)(x * 64)));
+            var html = $"<html><body><img src=\"data:image/png;base64,{Convert.ToBase64String(pngBytes)}\" width=\"4\" height=\"4\" /></body></html>";
+
+            var pdfAConfig = new PdfGenerateConfig
+            {
+                PageSize = PageSize.A4,
+                PdfAConformance = PdfAConformance.PdfA2B,
+                Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+            };
+            var pdfAText = await GetPdfText(html, pdfAConfig);
+            Assert.Contains("/SMask", pdfAText);
+            Assert.DoesNotContain("/Interpolate true", pdfAText);
+
+            // Confirm the guard is actually scoped to PdfAConformance, not a global change - the same
+            // transparent image without it gets /Interpolate true on both the parent and the SMask.
+            var plainConfig = new PdfGenerateConfig { PageSize = PageSize.A4 };
+            var plainText = await GetPdfText(html, plainConfig);
+            Assert.Equal(2, Regex.Matches(plainText, "/Interpolate true").Count);
+        }
+
         [Theory]
         [InlineData(PdfAConformance.PdfA2B, 17)]
         [InlineData(PdfAConformance.PdfA2U, 17)]
