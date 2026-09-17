@@ -244,6 +244,22 @@ foreach (var invoiceHtml in invoiceHtmlDocuments)
 
 Reusing `sharedCssData` this way avoids re-parsing identical CSS on every iteration; the same `PdfGenerator` instance can also be reused across renders like this — sequentially, as in the loop above (font mappings and loaded fonts persist on it). See [Thread safety](#thread-safety) if you're parallelizing this loop across threads: use one `PdfGenerator` per thread rather than sharing this one.
 
+### Applying compatibility styles to legacy HTML
+
+Caller-supplied stylesheets can also provide compatibility rules when the input HTML cannot be changed. For example, the obsolete, non-standard `<nobr>` element is intentionally not included in PeachPDF's user-agent stylesheet. To give ordinary, well-formed `<nobr>` elements their historical non-wrapping behavior, add the equivalent CSS explicitly:
+
+```csharp
+var generator = new PdfGenerator();
+
+var styles = await generator.ParseStyleSheet(
+    "nobr { white-space: nowrap; }",
+    combineWithDefault: true);
+
+var document = await generator.GeneratePdf(html, pdfConfig, styles);
+```
+
+This adds an author stylesheet on top of PeachPDF's defaults, so styles in the document can still override it. It only supplies the layout rule: it does not implement a browser's special HTML parser error recovery for malformed or nested `<nobr>` markup. When you control the HTML, prefer a standard element such as `<span class="nobr">` with `.nobr { white-space: nowrap; }` instead.
+
 ## Saving a PDF to a file
 
 `PeachPdfDocument.Save` writes to any `Stream`, so saving directly to disk just means opening a file stream instead of a `MemoryStream`:

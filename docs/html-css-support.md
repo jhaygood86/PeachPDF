@@ -153,6 +153,7 @@ Example:
 | `i` | [i](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/i) | Rendered as italic |
 | `ins` | [ins](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ins) | Rendered with underline |
 | `kbd` | [kbd](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/kbd) | Rendered in a monospace font |
+| `nobr` | [nobr](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/nobr) | Obsolete, non-standard element; not supported. Use a standard element with `white-space: nowrap` instead. For well-formed legacy input that cannot be changed, an opt-in stylesheet can reproduce its non-wrapping layout, but malformed/nested parser recovery remains unsupported; see [Applying compatibility styles to legacy HTML](usage-examples.md#applying-compatibility-styles-to-legacy-html) |
 | `s` | [s](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/s) | Rendered with strikethrough |
 | `samp` | [samp](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/samp) | Rendered in a monospace font |
 | `small` | [small](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/small) | Rendered with a smaller font size |
