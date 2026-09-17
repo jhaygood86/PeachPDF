@@ -1502,6 +1502,43 @@ namespace PeachPDF.Html.Core.Dom
         {
             var containingWidth = box.ContainingBlock.Size.Width;
 
+            // A display:block image/SVG's synthetic wrapper (IsReplacedBlockWrapper) forces this box's
+            // own Display back to inline purely so it can be sized as an atomic inline word (see the
+            // flag's own remarks) - it never goes through GetBoxWidth's own block-width resolution, so
+            // its Size.Width (and so ActualBoxSizingWidth, which the branches below read) is never
+            // populated. CSS 2.1 §10.3.4 defers a replaced element's width to §10.3.2 - never to "fills
+            // the containing block" like the non-replaced-box branch just below - so a declared definite
+            // width is read directly here rather than through either branch (issue #1176). Read from
+            // `box.Width` itself, not `box.FirstWord.Width`: FlowBox resolves this same auto-margin
+            // question (via leftSpacing) before it calls this box's own MeasureWordsSize, so the word's
+            // width is not populated yet at this point in the flow - only an intrinsically-sized (no
+            // declared length) replaced element still has to fall back to it, best-effort.
+            if (box.ParentBox is { IsReplacedBlockWrapper: true })
+            {
+                var replacedContentWidth = CssValueParser.IsValidLength(box.Width)
+                    ? CssValueParser.ParseLength(box.Width, containingWidth, box)
+                    : box.FirstWord.Width;
+
+                // Mirror the auto-width branch's own max-then-min clamp (CSS 2.1 §10.4) just below -
+                // GetBoxWidth would apply this same clamp for a box that went through ordinary block-width
+                // resolution, which this one never does (see the remarks above).
+                if (CssValueParser.IsValidLength(box.MaxWidth))
+                {
+                    replacedContentWidth = Math.Min(replacedContentWidth,
+                        CssValueParser.ParseLength(box.MaxWidth, containingWidth, box));
+                }
+
+                if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
+                {
+                    replacedContentWidth = Math.Max(replacedContentWidth,
+                        CssValueParser.ParseLength(box.MinWidth, containingWidth, box));
+                }
+
+                var replacedUsedWidth = replacedContentWidth + box.ActualBoxSizeIncludedWidth;
+                var replacedRemaining = containingWidth - replacedUsedWidth;
+                return replacedRemaining > 0 ? replacedRemaining / 2 : 0;
+            }
+
             if (box.Width == Keywords.Auto || string.IsNullOrEmpty(box.Width))
             {
                 // An auto width fills the containing block, so its auto margins are 0. `max-width` can
@@ -5514,6 +5551,19 @@ namespace PeachPDF.Html.Core.Dom
         /// </param>
         private static void ApplyHorizontalAlignment(CssLineBox lineBox, bool blockFinished)
         {
+            // A display:block image/SVG's synthetic single-word wrapper (IsReplacedBlockWrapper) is not
+            // a real inline formatting context an author can see or target - it exists solely so this
+            // engine can size the replaced element as an atomic inline "word" (see the flag's own
+            // remarks). css-text-3 §6.1 scopes text-align (and, by the same reasoning, text-align-last)
+            // to a block's inline-level content only, which this wrapper's one "word" semantically is
+            // not - exactly the reasoning LineBoxContributionOf already relies on to exempt it from the
+            // CSS 2.1 §10.8 strut. The wrapped element's own horizontal position is already fully settled
+            // by GetActualMarginLeft/GetActualMarginRight's CSS 2.1 §10.3.3/§10.3.4 auto-margin
+            // resolution at flow time, so returning here - rather than resolving ActualTextAlignAll, whose
+            // case HorizontalAlignment.Left below is already a no-op - leaves that position untouched
+            // instead of re-centering/re-flushing it a second, spec-unsupported way (issue #1176).
+            if (lineBox.OwnerBox.IsReplacedBlockWrapper) return;
+
             // text-align-all's initial/logical values, start/end (css-text-3 §6.1), resolve against the
             // owning box's own direction - the CSS-OM-visible value (box.TextAlignAll) stays exactly as
             // authored/defaulted; only this *used*-value resolution is direction-aware. ActualTextAlignAll
@@ -5813,6 +5863,23 @@ namespace PeachPDF.Html.Core.Dom
             // pair start/end - and text-align-last's own start/end - resolve against here.
             var towardStart = finalFrame.InlineStartIsBottom ? HorizontalAlignment.Right : HorizontalAlignment.Left;
             var towardEnd = finalFrame.InlineStartIsBottom ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+
+            // See ApplyHorizontalAlignment's own IsReplacedBlockWrapper remarks - the same css-text-3
+            // §6.1 reasoning exempts this synthetic wrapper's column from text-align/text-align-last
+            // here too. Unlike horizontal, this axis's natural (pre-alignment) placement is not always
+            // already flush to the column's own inline-start edge (see this method's own remarks above),
+            // so the exemption still has to actively flush to towardStart - it just must never read
+            // ActualTextAlignAll/ActualTextAlignLast to decide which edge that is (issue #1176).
+            if (lineBox.OwnerBox.IsReplacedBlockWrapper)
+            {
+                // towardStart == Right exactly when InlineStartIsBottom (see its own derivation just
+                // above) - read that directly rather than through the just-derived HorizontalAlignment,
+                // so this stays correct by construction if a future writing-mode case changes how
+                // towardStart itself is derived.
+                ApplyVerticalFlushAlignment(lineBox, toBottom: finalFrame.InlineStartIsBottom,
+                    clientTop, clientBottom);
+                return;
+            }
 
             var declared = ResolveLogicalAlignment(lineBox.OwnerBox.ActualTextAlignAll, towardStart, towardEnd);
 
