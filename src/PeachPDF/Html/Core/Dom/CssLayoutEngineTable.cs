@@ -2361,15 +2361,18 @@ namespace PeachPDF.Html.Core.Dom
         private void ShrinkColumnsToFitAvailableWidth()
         {
             // A vertical table's column axis is physical Y (height) - see GetAvailableTableWidth's own
-            // remarks. Unlike Width, which block layout always resolves top-down before a child lays
-            // out, an auto-height containing block only reaches its own real Size.Height in its
-            // post-order height epilogue (CssLayoutEngine's IsHeightCalculated setter) - which runs
-            // strictly after this table, one of its children, has already laid out. So when the table
-            // itself has no explicit height (GetAvailableTableWidth never set _widthSpecified) and
-            // nothing up the containing-block chain has a definite height yet either,
-            // GetAvailableTableWidth reports whatever placeholder Size.Height an earlier pass left
-            // behind (commonly 0) - not a genuine constraint - and there is nothing to shrink toward.
-            if (_isVertical && !_widthSpecified && !_tableBox.ContainingBlock.IsHeightCalculated)
+            // remarks. CssLayoutEngine.IsHeightDefinite answers whether the containing block's height is
+            // definite by declaration alone (recursive, order-independent), but GetAvailableTableWidth
+            // itself still reads the containing block's live Size.Height, which - for an auto-height
+            // containing block - only reaches its own real value in its post-order height epilogue
+            // (CssLayoutEngine.ApplyHeight), strictly after this table, one of its children, has already
+            // laid out. So when the table itself has no explicit height (GetAvailableTableWidth never set
+            // _widthSpecified) and nothing up the containing-block chain is height-definite, there is
+            // nothing to shrink toward - and when it IS height-definite but that ancestor's own epilogue
+            // hasn't run yet, GetAvailableTableWidth's own Size.Height read may still be a placeholder
+            // (commonly 0) even though this guard now passes; that residual is unrelated to what this
+            // guard decides and pre-dates it.
+            if (_isVertical && !_widthSpecified && !CssLayoutEngine.IsHeightDefinite(_tableBox.ContainingBlock))
                 return;
 
             var curCol = 0;

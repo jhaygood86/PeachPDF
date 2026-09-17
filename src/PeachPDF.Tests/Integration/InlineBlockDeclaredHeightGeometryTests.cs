@@ -150,23 +150,62 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// A percentage <c>height</c> is excluded from this fix, exactly as a percentage <c>width</c>
-        /// originally was (#1091, before #1097 added it): such a box is sized entirely by its content,
-        /// as though <c>height: auto</c> were declared. See
-        /// <c>.claude/accepted-gaps/percentage-height-on-an-inline-content-inline-block-is-ignored.md</c>.
+        /// #1167: a percentage <c>height</c> now sizes the box's own painted border box, exactly like an
+        /// absolute-length declared height, when the containing block's own height is definite (CSS 2.1
+        /// §10.5) — resolved via <c>CssLayoutEngine.IsHeightDefinite</c>/<c>ResolveDefiniteHeightValue</c>,
+        /// which are recursive and order-independent rather than dependent on the containing block's own
+        /// layout epilogue having already run.
         /// </summary>
         [Fact]
-        public async Task APercentageHeightIsIgnored()
+        public async Task APercentageHeightSizesAgainstADefiniteContainingBlockHeight()
+        {
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt;height:400pt'><span id='box' style='display:inline-block;height:50%'>x</span></div>"));
+
+            Assert.Equal(200.0, PaintedRectOf(FindById(root, "box")!).Height, 3);
+        }
+
+        /// <summary>
+        /// The genuinely spec-correct no-op case (CSS 2.1 §10.5): a percentage height still has no effect
+        /// against a containing block whose own height is content-driven (indefinite), not just against
+        /// one that happens not to have been laid out yet — this is the case #1167's fix keeps behaving
+        /// exactly as before, not a residual limitation.
+        /// </summary>
+        [Fact]
+        public async Task APercentageHeightAgainstAnIndefiniteContainingBlockIsIgnored()
         {
             var (natural, _) = await LayoutAsync(Wrap(
                 "<div style='width:400pt'><span id='box' style='display:inline-block'>x</span></div>"));
             var (percent, _) = await LayoutAsync(Wrap(
-                "<div style='width:400pt;height:400pt'><span id='box' style='display:inline-block;height:50%'>x</span></div>"));
+                "<div style='width:400pt'><span id='box' style='display:inline-block;height:50%'>x</span></div>"));
 
             var naturalHeight = PaintedRectOf(FindById(natural, "box")!).Height;
             var percentHeight = PaintedRectOf(FindById(percent, "box")!).Height;
 
             Assert.Equal(naturalHeight, percentHeight, 3);
+        }
+
+        /// <summary>
+        /// #1167's percentage resolution now also participates in Fix 1's line/flow reservation and Fix
+        /// 2's anchor-aware growth, since <c>ResolveAtomicInlineDeclaredHeight</c> resolves the percentage
+        /// case at the same flow-time hook as the absolute-length case, with no separate corrective pass.
+        /// </summary>
+        [Fact]
+        public async Task APercentageHeightReservesLineSpaceLikeAnAbsoluteLengthDoes()
+        {
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div id='container' style='width:80pt;height:400pt'>" +
+                "<span id='tall' style='display:inline-block;height:50%'>x</span> " +
+                "wwwwwwwwww wwwwwwwwww wwwwwwwwww wwwwwwwwww</div>"));
+
+            var tallRect = PaintedRectOf(FindById(root, "tall")!);
+            Assert.Equal(200.0, tallRect.Height, 3);
+
+            var lastWord = Descendants(root).SelectMany(b => b.Words).Last();
+            var lastLineTop = LineTopOf(root, lastWord);
+
+            Assert.True(lastLineTop >= tallRect.Bottom - 0.01,
+                $"a line after the percentage-tall box must clear it: line top {lastLineTop}, box bottom {tallRect.Bottom}");
         }
 
         /// <summary>

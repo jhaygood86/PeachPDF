@@ -143,6 +143,30 @@ namespace PeachPDF.Tests.Integration
                 $"growth must extend upward: natural top {naturalClip.Top}, grown top {grownClip.Top}");
         }
 
+        /// <summary>
+        /// #1167: a percentage height against a definite containing block must grow the clip too, not
+        /// just <c>InlineBlockDeclaredHeightGeometryTests</c>'s <c>CssBox</c>-level assertion — proving the
+        /// resolved value actually reaches <c>FragmentEmitter.ClipSourceBoundsOf</c>, per this repo's
+        /// convention that a purely numeric geometry assertion isn't sufficient proof for anything that
+        /// also affects painting/clipping.
+        /// </summary>
+        [Fact]
+        public async Task ClippedInlineBlockWithAPercentageHeight_ClipsToTheResolvedHeightNotTheContent()
+        {
+            const string html = """
+                <!DOCTYPE html>
+                <html><body style='font:10pt Arial,sans-serif;margin:0'>
+                <div style='height:200pt'>before <span style='display:inline-block;overflow:hidden;height:50%;border:1pt solid'>inside</span> after</div>
+                </body></html>
+                """;
+
+            var content = await PageContentAsync(html);
+            var clip = ClipRectOf(content);
+
+            // The containing div's declared height is 200pt, so 50% resolves to 100pt.
+            Assert.Equal(100.0, clip.Top - clip.Bottom, 1);
+        }
+
         private static (double Bottom, double Top) ClipRectOf(string content)
         {
             // Anchored on the same BT/Td text-draw suffix the other tests in this file use, so this

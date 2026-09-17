@@ -188,9 +188,9 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     maxHeightVal = maxHeightUnits;
                 }
-                else if (maxHeight.IsPercentage && word.OwnerBox.ContainingBlock.IsHeightCalculated)
+                else if (maxHeight.IsPercentage && IsHeightDefinite(word.OwnerBox.ContainingBlock))
                 {
-                    maxHeightVal = maxHeight.Number * word.OwnerBox.ContainingBlock.Size.Height;
+                    maxHeightVal = maxHeight.Number * (ResolveDefiniteHeightValue(word.OwnerBox.ContainingBlock) ?? word.OwnerBox.ContainingBlock.Size.Height);
                 }
 
                 if (maxHeightVal > -1 && word.Height > maxHeightVal)
@@ -211,9 +211,9 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     minHeightVal = minHeightUnits;
                 }
-                else if (minHeight.IsPercentage && word.OwnerBox.ContainingBlock.IsHeightCalculated)
+                else if (minHeight.IsPercentage && IsHeightDefinite(word.OwnerBox.ContainingBlock))
                 {
-                    minHeightVal = minHeight.Number * word.OwnerBox.ContainingBlock.Size.Height;
+                    minHeightVal = minHeight.Number * (ResolveDefiniteHeightValue(word.OwnerBox.ContainingBlock) ?? word.OwnerBox.ContainingBlock.Size.Height);
                 }
 
                 if (minHeightVal > -1 && word.Height < minHeightVal)
@@ -500,11 +500,13 @@ namespace PeachPDF.Html.Core.Dom
             var clientRight = blockBox.ClientRight;
 
             // The inline axis's own extent (physical height, for vertical-rl/vertical-lr) is what content
-            // wraps against. IsHeightCalculated is never usable here - it is only ever set true by
-            // ApplyHeight, in the epilogue, well after this runs, for an explicit height exactly as much
-            // as an auto one - so a definite height has to be resolved directly from the box's own CSS
-            // Height string instead. An auto height has nothing else to consult (height is resolved
-            // bottom-up), so it falls back to one full page's own depth - deliberately NOT "whatever
+            // wraps against. A definite height is resolved directly from the box's own CSS Height string
+            // via DefiniteContentHeight rather than IsHeightDefinite/ResolveDefiniteHeightValue - those
+            // exist for a DESCENDANT's percentage resolution against this box, a different question from
+            // this box's own wrap limit, and DefiniteContentHeight's own percentage basis is a pre-existing,
+            // narrower approximation this change does not extend. An auto height has nothing else to
+            // consult (height is resolved bottom-up), so it falls back to one full page's own depth -
+            // deliberately NOT "whatever
             // remains between this box's own (document-continuous, not page-relative) ClientTop and the
             // bottom of whichever page it currently lands on": that would make an auto-height box near the
             // bottom of a page self-limit to a sliver of remaining space instead of the fresh page's worth
@@ -1966,8 +1968,10 @@ namespace PeachPDF.Html.Core.Dom
             // after the ancestor's epilogue and supplies the authoritative used size.
             var heightBasisIsCalculated = isFixedToPage
                 || box.Position.Value is PositionMode.Absolute
-                || heightCb.IsHeightCalculated;
-            var heightBasis = isFixedToPage ? box.HtmlContainer!.PageGeometry.GetPage(0).BandHeight : heightCb.Size.Height;
+                || IsHeightDefinite(heightCb);
+            var heightBasis = isFixedToPage
+                ? box.HtmlContainer!.PageGeometry.GetPage(0).BandHeight
+                : ResolveDefiniteHeightValue(heightCb) ?? heightCb.Size.Height;
 
             // CSS 2.1 §10.6.3: a definite (non-auto) `height` is the used height regardless of
             // content - content taller than it overflows past ActualBottom (clipped or not per
@@ -2049,8 +2053,10 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// True when the box has a definite used height: a non-percentage length, or a percentage resolved
-        /// against a height-calculated containing block. A percentage against an indefinite (auto-height)
-        /// containing block is NOT definite — CSS Box Sizing 4 §5 treats it as automatic.
+        /// against a height-definite containing block. A percentage against an indefinite (auto-height)
+        /// containing block is NOT definite — CSS Box Sizing 4 §5 treats it as automatic. Recurses through
+        /// <see cref="IsHeightDefinite"/> rather than reading a cached flag — see that method's own remarks
+        /// for why this is safe to call at any point during layout.
         /// </summary>
         internal static bool HasDefiniteHeight(CssBox box)
         {
@@ -2067,7 +2073,157 @@ namespace PeachPDF.Html.Core.Dom
             if (box.Position.Value is PositionMode.Fixed && box.HtmlContainer is not null) return true;
             if (box.Position.Value is PositionMode.Absolute) return true;
 
-            return PercentageBase(box).IsHeightCalculated;
+            return IsHeightDefinite(PercentageBase(box));
+        }
+
+        /// <summary>
+        /// True when a box's used height is "specified explicitly" per CSS 2.1
+        /// <see href="https://www.w3.org/TR/CSS21/visudet.html#the-height-property">§10.5</see> / CSS
+        /// Sizing 3 <see href="https://www.w3.org/TR/css-sizing-3/#definite">§4</see>'s "definite size" —
+        /// computable purely from the box's own declared height and, recursively, its containing block's
+        /// own definiteness, with no dependency on any bottom-up-resolved value except an
+        /// already-top-down-resolved width (for the aspect-ratio branch, since CSS width is always resolved
+        /// before a box's own content is laid out) and, once a flex/grid layout algorithm has resolved a
+        /// stretched/main-axis height for this box this pass, <see cref="CssBox.AlgorithmicDefiniteHeight"/>.
+        /// Safe to call at ANY point during layout, including before this box's own content — or any
+        /// ancestor's — has been processed.
+        /// </summary>
+        /// <remarks>
+        /// Replaces the old <c>CssBox.IsHeightCalculated</c> cached field (removed), which was only ever
+        /// written bottom-up, in each box's own post-content layout epilogue — so it could only be trusted
+        /// once <c>ApplyHeight</c> had already run for every relevant ancestor, which for many callers
+        /// (an inline-flowed atomic inline-level box's own percentage-height resolution among them, issue
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/1167">#1167</see>) is later than the
+        /// point at which the answer is actually needed. Definiteness does not require layout to have
+        /// happened at all — CSS Sizing 3 §4 defines it recursively over the box tree's own declared sizes
+        /// — so this is a from-scratch, on-demand computation instead of a cache read.
+        /// <para>
+        /// Equivalent by construction to what the old field was assigned exactly once, in
+        /// <c>ApplyHeight</c>: <c>isRootWithPageHeight || isDefiniteHeight || isRatioHeight</c>, where
+        /// <c>isDefiniteHeight = HasDefiniteHeight(box)</c> and <c>isRatioHeight = !isDefiniteHeight &amp;&amp;
+        /// TryGetAspectRatioHeight(box, out _)</c>. Since the two are OR'd, the <c>!isDefiniteHeight</c>
+        /// guard on the ratio term is redundant in the union - this method is exactly that simplified
+        /// expression, with <see cref="HasDefiniteHeight"/>'s own recursive tail changed to call this
+        /// method instead of reading the old field.
+        /// </para>
+        /// </remarks>
+        internal static bool IsHeightDefinite(CssBox box)
+        {
+            if (box == box.ContainingBlock && box.HtmlContainer is not null) return true; // root/ICB: page height
+            if (box.AlgorithmicDefiniteHeight is not null) return true;
+            if (HasDefiniteHeight(box)) return true;
+            return TryGetAspectRatioHeight(box, out _);
+        }
+
+        /// <summary>
+        /// The box's own definite border-box height, resolved purely from its declared height chain
+        /// (CSS 2.1 §10.5, §10.7's min/max-height clamps, CSS Sizing 3 §4, and a flex/grid algorithm's
+        /// <see cref="CssBox.AlgorithmicDefiniteHeight"/>) — the value-returning twin of
+        /// <see cref="IsHeightDefinite"/>. Returns <c>null</c> exactly when <see cref="IsHeightDefinite"/>
+        /// is false, OR when <paramref name="box"/> is one of the two kinds whose final used height can
+        /// still grow past this value from content even though it is "definite" by declaration: a table
+        /// cell stretched by its row (CSS 2.1 §17.5.3), or a box whose height comes from a preferred
+        /// <c>aspect-ratio</c> (not from its own <c>height</c> declaration, and not from a flex/grid
+        /// algorithm, which is its own, later-checked, always-authoritative sizing model — see below)
+        /// while also establishing an independent formatting context that could still grow it past that
+        /// ratio-derived value from a contained float (CSS 2.1 §10.6.7) — the same condition
+        /// <see cref="ApplyHeight"/>'s own float-containment growth is gated on (<c>!isDefiniteHeight</c>,
+        /// i.e. <see cref="HasDefiniteHeight"/> is false; a box whose OWN <c>height</c> is genuinely
+        /// declared is never grown past it by §10.6.3 regardless of floats, so only the ratio case needs
+        /// this carve-out). For exactly those two kinds, callers must fall back to the existing
+        /// (already-correct, if bottom-up-only) <c>CssBox.Size.Height</c> read; every other box's definite
+        /// height is fully static and this never needs that fallback.
+        /// <para>
+        /// A flex/grid algorithm's own resolved height (<see cref="CssBox.AlgorithmicDefiniteHeight"/>) is
+        /// checked <i>before</i> the independent-formatting-context carve-out, not after: unlike ordinary
+        /// block auto-sizing, a flex/grid item's used cross/main size comes entirely from that layout
+        /// model's own algorithm, which does not get further grown by a float inside the item's own
+        /// content the way §10.6.7's ordinary auto-height-block rule does — so it needs no such carve-out,
+        /// even though a flex/grid item is itself always an independent-formatting-context box.
+        /// </para>
+        /// </summary>
+        internal static double? ResolveDefiniteHeightValue(CssBox box)
+        {
+            if (box.IsTableCell || box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable)
+                return null; // §17.5.3 row-stretch can grow this past its own declared height
+
+            if (box == box.ContainingBlock && box.HtmlContainer is not null)
+                return box.HtmlContainer.PageGeometry.GetPage(0).BandHeight; // mirrors GetBoxHeight's own root branch
+
+            double? declared = null;
+
+            if (HasDefiniteHeight(box))
+            {
+                if (!box.Height.EndsWith('%'))
+                {
+                    declared = CssValueParser.ParseLength(box.Height, 0, box) + box.ActualBoxSizeIncludedHeight;
+                }
+                else
+                {
+                    double? basis = box.Position.Value switch
+                    {
+                        PositionMode.Fixed when box.HtmlContainer is not null
+                            => box.HtmlContainer.PageGeometry.GetPage(0).BandHeight,
+                        PositionMode.Absolute
+                            => null, // not reachable for this method's current callers - verify before relying
+                                     // on this if a future caller can hand back an absolutely-positioned box;
+                                     // GetBoxHeight's own nearest-positioned-ancestor basis logic would be
+                                     // needed for that case, a separate, addressable follow-up.
+                        _ => ResolveDefiniteHeightValue(PercentageBase(box)),
+                    };
+                    declared = basis is { } b ? CssValueParser.ParseLength(box.Height, b, box) + box.ActualBoxSizeIncludedHeight : null;
+                }
+            }
+            else if (box.AlgorithmicDefiniteHeight is { } algoHeight)
+            {
+                declared = algoHeight;
+            }
+            else if (DomUtils.EstablishesIndependentFormattingContext(box))
+            {
+                // §10.6.7 float-containment growth could still apply on top of a ratio-derived height for
+                // a box whose OWN Height isn't itself definite - see this method's own remarks.
+                return null;
+            }
+            else if (TryGetAspectRatioHeight(box, out var ratioHeight))
+            {
+                declared = ratioHeight;
+            }
+
+            if (declared is null) return null;
+
+            // Mirror GetBoxHeight's own unconditional min-height floor first (a min-height taller than
+            // the plain declared value always wins, independent of max-height), then ApplyHeight's own
+            // second pass (CSS 2.1 §10.7: max-height can shrink the result, but min-height wins back on
+            // conflict) - both using the same recursive basis so a min/max-height percentage is resolved
+            // here too, not just a naive single-property read.
+            double? MinHeightBasis() => box.MinHeight.EndsWith('%') ? ResolveDefiniteHeightValue(box.ContainingBlock) : 0;
+            double? MaxHeightBasis() => box.MaxHeight.EndsWith('%') ? ResolveDefiniteHeightValue(box.ContainingBlock) : 0;
+
+            if (CssValueParser.IsValidLength(box.MinHeight) && MinHeightBasis() is { } floorBasis)
+            {
+                var minHeight = CssValueParser.ParseLength(box.MinHeight, floorBasis, box) + box.ActualBoxSizeIncludedHeight;
+                if (minHeight > declared) declared = minHeight;
+            }
+
+            if (CssValueParser.IsValidLength(box.MaxHeight) && MaxHeightBasis() is { } maxBasis)
+            {
+                var maxHeight = CssValueParser.ParseLength(box.MaxHeight, maxBasis, box) + box.ActualBoxSizeIncludedHeight;
+
+                if (declared > maxHeight)
+                {
+                    declared = maxHeight;
+
+                    // min-height wins over max-height on conflict (CSS 2.1 §10.7) - re-floor with the
+                    // same min-height already applied above.
+                    if (CssValueParser.IsValidLength(box.MinHeight) && MinHeightBasis() is { } minBasis)
+                    {
+                        var minHeight = CssValueParser.ParseLength(box.MinHeight, minBasis, box) + box.ActualBoxSizeIncludedHeight;
+                        if (declared < minHeight) declared = minHeight;
+                    }
+                }
+            }
+
+            return declared;
         }
 
         /// <summary>
@@ -2167,28 +2323,20 @@ namespace PeachPDF.Html.Core.Dom
                 ? box.Location.Y + height
                 : Math.Max(box.ActualBottom, box.Location.Y + height);
 
-            // IsHeightCalculated drives whether a DESCENDANT's percentage height/min-height/max-height
-            // resolves against this box, per CSS 2.1 §10.5: only true when this box's own height is
-            // "specified explicitly" (a definite, non-auto length, or a percentage against a containing
-            // block that is itself height-calculated), or this box is the root/initial containing block
-            // (whose used height is the page height regardless of its `height` computed value). It must
-            // NOT simply mirror "GetBoxHeight returned a usable number" - GetBoxHeight also returns a
-            // real number for plain content-driven `height: auto` boxes (e.g. via ActualBoxSizingHeight/
-            // Words height), and treating THAT as "calculated" incorrectly makes every percentage-height
-            // descendant of an auto-height block resolve against that content-driven height instead of
-            // being treated as auto (CSS2.1 Acid2 test's `.nose { height: 60% }` inside auto-height
-            // `.picture` is exactly this trap - it must resolve to `auto`, not to a huge value derived
-            // from `.picture`'s own content height).
+            // Whether a DESCENDANT's percentage height/min-height/max-height resolves against this box,
+            // per CSS 2.1 §10.5: only true when this box's own height is "specified explicitly" (a
+            // definite, non-auto length, or a percentage against a containing block that is itself
+            // height-definite), or this box is the root/initial containing block (whose used height is the
+            // page height regardless of its `height` computed value) — see IsHeightDefinite, which computes
+            // this on demand rather than needing it cached here. It must NOT simply mirror "GetBoxHeight
+            // returned a usable number" - GetBoxHeight also returns a real number for plain content-driven
+            // `height: auto` boxes (e.g. via ActualBoxSizingHeight/Words height), and treating THAT as
+            // "definite" incorrectly makes every percentage-height descendant of an auto-height block
+            // resolve against that content-driven height instead of being treated as auto (CSS2.1 Acid2
+            // test's `.nose { height: 60% }` inside auto-height `.picture` is exactly this trap - it must
+            // resolve to `auto`, not to a huge value derived from `.picture`'s own content height).
             var isRootWithPageHeight = box == box.ContainingBlock && box.HtmlContainer is not null;
             var isDefiniteHeight = HasDefiniteHeight(box);
-            // An aspect-ratio with a definite width and no definite height yields a definite (ratio-derived)
-            // height too, so a percentage-height descendant resolves against it — this is what lets the
-            // Charts.css bars take their height from the ratio-sized tbody. "No definite height" is exactly
-            // !isDefiniteHeight, which covers both an auto height and an *indefinite* percentage height
-            // (a `%` whose containing block isn't itself height-calculated — CSS Box Sizing 4 §5 treats
-            // that as automatic, so the ratio applies there too).
-            var isRatioHeight = !isDefiniteHeight && TryGetAspectRatioHeight(box, out _);
-            box.IsHeightCalculated = isRootWithPageHeight || isDefiniteHeight || isRatioHeight;
 
             // CSS 2.1 §10.6.7: a box that establishes a formatting context of its own and takes its height
             // from content grows to cover any floating descendant whose bottom margin edge falls below its
@@ -2200,9 +2348,10 @@ namespace PeachPDF.Html.Core.Dom
             // 2em black side borders had no height to be drawn over.
             //
             // Gated on !isDefiniteHeight, not merely on `height: auto`: an indefinite percentage height is
-            // automatic too (the same reading isRatioHeight above already relies on). A definite height is
-            // the used height regardless of content (§10.6.3), float included, so it is left alone; the
-            // min/max-height clamps below then apply to the result either way, since §10.6.7's increase is
+            // automatic too (the same reading IsHeightDefinite's own aspect-ratio fallback already relies
+            // on). A definite height is the used height regardless of content (§10.6.3), float included, so
+            // it is left alone; the min/max-height clamps below then apply to the result either way, since
+            // §10.6.7's increase is
             // part of computing the auto height rather than something that outranks §10.7.
             if (!isDefiniteHeight && !isRootWithPageHeight && DomUtils.EstablishesIndependentFormattingContext(box))
             {
@@ -2219,10 +2368,13 @@ namespace PeachPDF.Html.Core.Dom
             // grow ActualBottom), max-height must be able to shrink the box below its content's
             // natural extent — content simply overflows past ActualBottom, mirroring the existing
             // overflow:hidden clip elsewhere in this engine.
+            var isContainingBlockHeightDefinite = IsHeightDefinite(box.ContainingBlock);
+
             if (CssValueParser.IsValidLength(box.MaxHeight) &&
-                (box.ContainingBlock.IsHeightCalculated || !box.MaxHeight.EndsWith('%')))
+                (isContainingBlockHeightDefinite || !box.MaxHeight.EndsWith('%')))
             {
-                var maxHeight = CssValueParser.ParseLength(box.MaxHeight, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                var maxHeightBasis = ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height;
+                var maxHeight = CssValueParser.ParseLength(box.MaxHeight, maxHeightBasis, box) + box.ActualBoxSizeIncludedHeight;
                 var maxBottom = box.Location.Y + maxHeight;
 
                 if (box.ActualBottom > maxBottom)
@@ -2231,9 +2383,10 @@ namespace PeachPDF.Html.Core.Dom
 
                     // min-height wins over max-height on conflict (CSS 2.1 §10.7)
                     if (CssValueParser.IsValidLength(box.MinHeight) &&
-                        (box.ContainingBlock.IsHeightCalculated || !box.MinHeight.EndsWith('%')))
+                        (isContainingBlockHeightDefinite || !box.MinHeight.EndsWith('%')))
                     {
-                        var minHeight = CssValueParser.ParseLength(box.MinHeight, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                        var minHeightBasis = ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height;
+                        var minHeight = CssValueParser.ParseLength(box.MinHeight, minHeightBasis, box) + box.ActualBoxSizeIncludedHeight;
                         var minBottom = box.Location.Y + minHeight;
 
                         if (box.ActualBottom < minBottom)
@@ -2554,24 +2707,23 @@ namespace PeachPDF.Html.Core.Dom
         /// Unlike <see cref="ResolveAtomicInlineDeclaredWidth"/>, this does not write
         /// <see cref="CssBox.Size"/> — there is no same-pass consumer on the height axis analogous to the
         /// line's cursor advance on the width axis (the reservation this box's declared width still needs
-        /// to make for what follows it on the line), and writing it would also feed
-        /// <see cref="FinalizeFlowBoxExit"/>'s existing <c>MaxBottom</c> line-height correction, sizing the
-        /// surrounding line itself — a separate, still-open gap
-        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1166">#1166</see>, see also
-        /// <c>docs/html-css-support.md</c>'s "Atomic inline-level layout is approximated" note) this
-        /// change deliberately leaves alone. This is a pure computation the caller combines with the
-        /// box's own content-derived rectangle height.
+        /// to make for what follows it on the line); this is a pure computation the caller combines with
+        /// the box's own content-derived rectangle height. <see cref="FinalizeFlowBoxExit"/>'s own
+        /// <c>MaxBottom</c> line-height correction
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1166">#1166</see>) calls this method
+        /// too, so both the line/flow and the painted rectangle stay consistent with exactly one
+        /// resolution of "what height did this box declare".
         /// </para>
         /// <para>
-        /// A percentage <c>height</c>/<c>min-height</c> is excluded
-        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1167">#1167</see>), matching
-        /// <see cref="ResolveAtomicInlineDeclaredWidth"/>'s own original scope before percentage support
-        /// was added for width (#1097): resolving one correctly needs to know whether this box's
-        /// containing block itself has a definite height (<see cref="CssBox.IsHeightCalculated"/>), which
-        /// is only ever set in that ancestor's own layout epilogue — strictly <i>after</i> this box's
-        /// content (and this very call) already ran, since a block lays out its content before its own
-        /// epilogue. Unlike a percentage <i>width</i> (usually stretch-fit and known top-down before
-        /// children are placed), a percentage height is not reliably knowable at this point at all.
+        /// A percentage <c>height</c>/<c>min-height</c>
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1167">#1167</see>) resolves against
+        /// <see cref="ResolveDefiniteHeightValue"/> when <see cref="IsHeightDefinite"/> says the containing
+        /// block's height is definite — both computed purely from declared CSS, on demand, with no
+        /// dependency on the containing block's own layout epilogue having run yet (unlike the old
+        /// <c>CssBox.IsHeightCalculated</c> cached flag this replaced). When the containing block's height
+        /// is genuinely indefinite (content-driven, per CSS 2.1
+        /// <see href="https://www.w3.org/TR/CSS21/visudet.html#the-height-property">§10.5</see>), the
+        /// percentage correctly has no effect here, same as it never did.
         /// </para>
         /// <para>
         /// <c>max-height</c> is not read, matching <see cref="ResolveAtomicInlineDeclaredWidth"/>'s own
@@ -2585,16 +2737,22 @@ namespace PeachPDF.Html.Core.Dom
         {
             double? declared = null;
 
-            if (CssValueParser.IsValidLength(box.Height) && !box.Height.EndsWith('%'))
+            if (CssValueParser.IsValidLength(box.Height) &&
+                (!box.Height.EndsWith('%') || IsHeightDefinite(box.ContainingBlock)))
             {
-                declared = CssValueParser.ParseLength(box.Height, box.ContainingBlock.Size.Height, box)
-                    + box.ActualBoxSizeIncludedHeight;
+                var basis = box.Height.EndsWith('%')
+                    ? ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height
+                    : 0; // unused by ParseLength for a non-percentage length
+                declared = CssValueParser.ParseLength(box.Height, basis, box) + box.ActualBoxSizeIncludedHeight;
             }
 
-            if (CssValueParser.IsValidLength(box.MinHeight) && !box.MinHeight.EndsWith('%'))
+            if (CssValueParser.IsValidLength(box.MinHeight) &&
+                (!box.MinHeight.EndsWith('%') || IsHeightDefinite(box.ContainingBlock)))
             {
-                var minHeight = CssValueParser.ParseLength(box.MinHeight, box.ContainingBlock.Size.Height, box)
-                    + box.ActualBoxSizeIncludedHeight;
+                var basis = box.MinHeight.EndsWith('%')
+                    ? ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height
+                    : 0;
+                var minHeight = CssValueParser.ParseLength(box.MinHeight, basis, box) + box.ActualBoxSizeIncludedHeight;
                 declared = declared is { } d ? Math.Max(d, minHeight) : minHeight;
             }
 
