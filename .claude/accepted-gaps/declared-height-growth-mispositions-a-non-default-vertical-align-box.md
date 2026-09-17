@@ -1,37 +1,35 @@
-# A declared-height correction mispositions an inline-flowed inline-block under a non-default vertical-align
+# A declared-height correction still mispositions an empty/overflow-hidden box under default baseline alignment
 
-Tracked as **#1169**. Left in place by #1101, which made a declared `height`/`min-height` grow an
-inline-flowed `inline-block`'s painted rectangle downward from its already-aligned top.
+Tracked as **#1169**. `CssLayoutEngine.HeightenAtomicInlineRectangles` grows an inline-flowed
+`inline-block`'s declared-height rectangle from whichever edge `AnchorOf` says
+`ApplyVerticalAlignment` already anchored: `vertical-align: top`/`bottom`/`text-bottom`/`middle`
+(and the default `baseline` on a box with real, `overflow: visible` content) all grow from the
+correct edge now.
 
-That growth direction is exactly right when the box's own baseline came from its first word's ascent
-(an `overflow: visible` box holding text) or when `vertical-align: top` is declared — both anchor the
-box's top regardless of its height. It is not right for `vertical-align: bottom`/`middle`/`sub`/
-`super`/`text-top`/`text-bottom`/a length offset, or the default `baseline` on a box whose own bottom
-margin edge stood in for its baseline (an empty box, or one whose `overflow` isn't `visible`) — each
-of those anchors a *different* edge, and growing down from the (unchanged) top moves the box's real
-position past where alignment placed it.
+## What remains circular
 
-## Why it stays out
+The default `baseline` case on an **empty box, or one whose `overflow` isn't `visible`**, is still
+left growing downward from its flow-assigned top, unconditionally — because that box has no
+baseline of its own: `CssLayoutEngine.AtomicInlineBaselineOf` falls back to treating its bottom
+margin edge as its baseline (`rect.Bottom + box.ActualMarginBottom`), read from inside
+`ApplyVerticalAlignment`, using the box's still-natural (pre-growth) rectangle, before growth ever
+runs. Anchoring this case correctly needs the grown height known *before* `ApplyVerticalAlignment`
+computes that fallback baseline — which is a different, deeper problem than #1166's own line-sizing
+gap (already closed): #1166's fix hooks into `FinalizeFlowBoxExit`, a completely separate code path
+from `ApplyVerticalAlignment`'s own baseline-extent fold, specifically so it wouldn't need to touch
+this. Feeding a grown rectangle into the fold itself, to fix *this* case, would still risk exactly
+the previously-measured regression below.
 
-The keyword-anchored cases (`bottom`, `middle`, `text-bottom`) are individually fixable by growing
-from the correct edge instead. The harder case — the default `baseline` on an empty or
-`overflow`-non-`visible` box — is circular: that edge's position is *computed* by
-`ApplyVerticalAlignment` from the box's still-natural (pre-growth) rectangle
-(`CssLayoutEngine.AtomicInlineBaselineOf`'s `rect.Bottom + ActualMarginBottom` branch), so anchoring
-it correctly needs the grown height known *before* alignment runs — which reopens
-[the still-open "sizes the line" gap](declared-height-on-an-inline-flowed-inline-block-does-not-size-the-line.md)
-(#1166): growing before alignment feeds the inflated rectangle into `ApplyVerticalAlignment`'s own
-CSS 2.1 §10.8.1 baseline-extent fold and genuinely grows the line.
-
-An anchor-aware version was implemented and tested while fixing #1101: it corrected the
-keyword-anchored cases but produced a *worse* result for the empty-box/`overflow`-non-`visible` case
-(its own "anchor" was itself derived from the wrong, pre-growth baseline) — exactly the shape #1101's
-primary repro uses. Rather than trade one wrong direction for another in the still-circular case,
-growth stayed simple (always downward), which is exactly right for the common case (text content,
-default alignment) #1101's own issue text uses throughout.
+An anchor-aware rewrite that also bottom-anchored this specific case was tried during #1169's own
+implementation and reverted: it made the empty/`overflow`-non-`visible` case land at the wrong
+position, because its own "anchor" was itself computed from the pre-growth rectangle — the same
+shape of regression #1101's development history already recorded once. `HeightenAtomicInlineRectangles`
+and `AnchorOf`'s own remarks record this reasoning at the code they apply to.
 
 ## What remains correct
 
-Every shape #1101's own issue and tests cover — text content or an empty box under the default
-`vertical-align: baseline`, and `vertical-align: top` — grows correctly. Only an explicit non-default
-`vertical-align` combined with a declared height taller than natural content is affected.
+Every keyword-anchored case (`top`/`bottom`/`text-bottom`/`middle`/`sub`/`super`/a length offset)
+and the default `baseline` case on a box with real content grows from the correct edge, per
+`InlineBlockDeclaredHeightGeometryTests`' anchor-specific tests and
+`InlineBlockOverflowClipPaintTests`' paint-level regression test. Only the narrower empty/
+`overflow`-non-`visible`-under-default-`baseline` shape remains open.
