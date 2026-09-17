@@ -440,10 +440,74 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(container.MarginTop + band / 4, fixedBox.Location.Y, 1.5);
         }
 
+        // ─── §10.1 the containing block is the PADDING box, not the content box (issue #1160) ──
+        //
+        // Every other fixture in this file zeroes the positioned ancestor's padding, which is
+        // exactly why this went unnoticed: with `padding: 0` the padding edge and the content
+        // edge are the same point, and the two agree whichever one the code reads.
+        //
+        // #cb below is a 400×140pt border box at the page origin (300×60 content + 30/40pt
+        // padding + a 10pt border), so its padding box is the rectangle (10,10)-(390,130) and
+        // its content box is (50,40)-(350,100). Every expected value here is one of those
+        // literals rather than anything read back off the tree.
+
+        [Fact]
+        public async Task AbsoluteZeroInsets_AnchorAtTheAncestorsPaddingEdge_NotItsContentEdge()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(PaddedContainingBlock(
+                "<div id='abs' style='position:absolute; top:0; left:0; width:10pt; height:10pt;'></div>")));
+            var abs = FindById(root, "abs")!;
+
+            // The padding box's top-left, just inside the 10pt border. The content box's would
+            // be (50, 40) - one padding further in on each axis.
+            Assert.Equal(10, abs.Location.X, 0.5);
+            Assert.Equal(10, abs.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task AbsoluteFarInsets_AnchorAtTheAncestorsPaddingEdge_AndAlwaysDid()
+        {
+            // The contrast case, and the reason the defect was self-evident once measured: `right`
+            // and `bottom` were already resolved against the padding box, so a single box
+            // disagreed with itself depending on which pair of offsets placed it. This must not
+            // move.
+            var (root, _) = await BuildAndLayout(Wrap(PaddedContainingBlock(
+                "<div id='abs' style='position:absolute; bottom:0; right:0; width:10pt; height:10pt;'></div>")));
+            var abs = FindById(root, "abs")!;
+
+            Assert.Equal(380, abs.Location.X, 0.5);
+            Assert.Equal(120, abs.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task AbsoluteZeroInsets_AncestorWithoutPadding_IsUnaffected()
+        {
+            // The same fixture with the padding removed: the padding edge and the content edge
+            // coincide, so this lands on the border's inner corner either way. It passes with the
+            // defect present, which is what makes the padded case above the one that proves
+            // anything.
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<style>html,body{margin:0;padding:0}</style>" +
+                "<div id='cb' style='position:relative; width:300pt; height:60pt;" +
+                " padding:0; border:10pt solid black;'>" +
+                "<div id='abs' style='position:absolute; top:0; left:0; width:10pt; height:10pt;'></div>" +
+                "</div>"));
+            var abs = FindById(root, "abs")!;
+
+            Assert.Equal(10, abs.Location.X, 0.5);
+            Assert.Equal(10, abs.Location.Y, 0.5);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
+
+        private static string PaddedContainingBlock(string child) =>
+            "<style>html,body{margin:0;padding:0}</style>" +
+            "<div id='cb' style='position:relative; width:300pt; height:60pt;" +
+            " padding:30pt 40pt; border:10pt solid black;'>" + child + "</div>";
+
 
         private static async Task<CssBox> FindByIdAsync(string fragment, string id)
         {

@@ -6099,19 +6099,38 @@ namespace PeachPDF.Html.Core.Dom
                     child._appliedPositionedAutoMarginTop = 0;
                     var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(child);
 
-                    // CSS 2.1 §10.3.7: `left`/`top` on an absolutely positioned box are measured
-                    // from the containing block's PADDING edge (ClientLeft/ClientTop - inside the
-                    // border), not its border-box edge (Location.X/Y) - and, like every other
+                    // CSS 2.1 §10.1: an absolutely positioned box's containing block is formed by
+                    // the PADDING edge of its nearest positioned ancestor, so `left`/`top` are
+                    // measured from there rather than from that ancestor's border-box edge
+                    // (Location.X/Y) - and, like every other
                     // positioning scheme, the box's own margin still applies on top of that offset
                     // (previously dropped entirely here, unlike the static/relative branch above
                     // which already adds ActualMarginLeft). Acid2's own
                     // "[class~=one].first.one { position:absolute; margin: 36px 0 0 60px; }" inside
                     // ".picture" (which has a 1em border) exercises both of these: the missing
                     // margin alone lands the box ~36px/60px off, on top of the next sibling.
-                    var left = nearestPositionedAncestor.ClientLeft + child.ActualMarginLeft +
+                    // NOT ClientLeft/ClientTop, which this used to read: those are the CONTENT
+                    // edge (Location + border + padding), one padding inside the containing block,
+                    // so a positioned ancestor with padding pushed every `left`/`top`-anchored
+                    // descendant that far down and across. `right`/`bottom` were already measured
+                    // from the padding edge, so the same box disagreed with itself depending on
+                    // which pair of offsets it used. Measured against Chrome 141 on a
+                    // `position: relative` box with `padding: 30pt 40pt; border: 10pt`, an absolute
+                    // child at `top: 0; left: 0` (page margin subtracted, points):
+                    //
+                    //   Chrome              30.0, 30.0
+                    //   before             70.0, 60.0   <- +40pt / +30pt, exactly the padding
+                    //   after               30.0, 30.0
+                    //
+                    // and the same child at `bottom: 0; right: 0` agreed with Chrome before and
+                    // after, as does every offset once the ancestor's padding is zero.
+                    var containingBlockLeft = nearestPositionedAncestor.Location.X + nearestPositionedAncestor.ActualBorderLeftWidth;
+                    var containingBlockTop = nearestPositionedAncestor.Location.Y + nearestPositionedAncestor.ActualBorderTopWidth;
+
+                    var left = containingBlockLeft + child.ActualMarginLeft +
                                ResolveOffsetOrZero(child.Left, nearestPositionedAncestor.ActualWidth, child);
 
-                    var top = nearestPositionedAncestor.ClientTop + child.ActualMarginTop +
+                    var top = containingBlockTop + child.ActualMarginTop +
                               ResolveOffsetOrZero(child.Top, nearestPositionedAncestor.ActualHeight, child);
 
                     child.Location = new RPoint(left, top);
