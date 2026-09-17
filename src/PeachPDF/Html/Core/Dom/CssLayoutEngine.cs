@@ -1247,6 +1247,7 @@ namespace PeachPDF.Html.Core.Dom
                 BubbleRectangles(blockBox, lineBox);
                 WidenAtomicInlineRectangles(lineBox);
                 ApplyVerticalAlignment(lineBox);
+                HeightenAtomicInlineRectangles(lineBox);
                 lineBox.AssignRectanglesToBoxes();
             }
         }
@@ -2540,6 +2541,75 @@ namespace PeachPDF.Html.Core.Dom
 
             child.Size = new RSize(declared, child.Size.Height);
             return child.AvailableWidth;
+        }
+
+        /// <summary>
+        /// The declared/used <b>border-box</b> height of an inline-flowed atomic inline-level box, from
+        /// its own <c>height</c>/<c>min-height</c> — or <c>null</c> when neither applies, meaning the
+        /// box's content-derived rectangle stands as-is
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1101">#1101</see>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Unlike <see cref="ResolveAtomicInlineDeclaredWidth"/>, this does not write
+        /// <see cref="CssBox.Size"/> — there is no same-pass consumer on the height axis analogous to the
+        /// line's cursor advance on the width axis (the reservation this box's declared width still needs
+        /// to make for what follows it on the line), and writing it would also feed
+        /// <see cref="FinalizeFlowBoxExit"/>'s existing <c>MaxBottom</c> line-height correction, sizing the
+        /// surrounding line itself — a separate, still-open gap
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1166">#1166</see>, see also
+        /// <c>docs/html-css-support.md</c>'s "Atomic inline-level layout is approximated" note) this
+        /// change deliberately leaves alone. This is a pure computation the caller combines with the
+        /// box's own content-derived rectangle height.
+        /// </para>
+        /// <para>
+        /// A percentage <c>height</c>/<c>min-height</c> is excluded
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1167">#1167</see>), matching
+        /// <see cref="ResolveAtomicInlineDeclaredWidth"/>'s own original scope before percentage support
+        /// was added for width (#1097): resolving one correctly needs to know whether this box's
+        /// containing block itself has a definite height (<see cref="CssBox.IsHeightCalculated"/>), which
+        /// is only ever set in that ancestor's own layout epilogue — strictly <i>after</i> this box's
+        /// content (and this very call) already ran, since a block lays out its content before its own
+        /// epilogue. Unlike a percentage <i>width</i> (usually stretch-fit and known top-down before
+        /// children are placed), a percentage height is not reliably knowable at this point at all.
+        /// </para>
+        /// <para>
+        /// <c>max-height</c> is not read, matching <see cref="ResolveAtomicInlineDeclaredWidth"/>'s own
+        /// scope, which never reads <c>max-width</c> either — this method only ever grows a box's
+        /// rectangle (never shrinks it below its natural content), so a clamp that can shrink the used
+        /// value below content, per CSS 2.1 §10.7, would need a different combining rule than the
+        /// <c>Math.Max</c> this one uses for <c>min-height</c>.
+        /// </para>
+        /// </remarks>
+        private static double? ResolveAtomicInlineDeclaredHeight(CssBox box)
+        {
+            double? declared = null;
+
+            if (CssValueParser.IsValidLength(box.Height) && !box.Height.EndsWith('%'))
+            {
+                declared = CssValueParser.ParseLength(box.Height, box.ContainingBlock.Size.Height, box)
+                    + box.ActualBoxSizeIncludedHeight;
+            }
+
+            if (CssValueParser.IsValidLength(box.MinHeight) && !box.MinHeight.EndsWith('%'))
+            {
+                var minHeight = CssValueParser.ParseLength(box.MinHeight, box.ContainingBlock.Size.Height, box)
+                    + box.ActualBoxSizeIncludedHeight;
+                declared = declared is { } d ? Math.Max(d, minHeight) : minHeight;
+            }
+
+            if (declared is not { } result) return null;
+
+            if (box.BoxSizing.Value is BoxSizingMode.BorderBox)
+            {
+                // css-sizing-3 §6.2, the same floor ResolveAtomicInlineDeclaredWidth applies on the inline
+                // axis: a border-box declared height cannot shrink the box below its own border+padding.
+                result = Math.Max(result,
+                    box.ActualBorderTopWidth + box.ActualPaddingTop
+                    + box.ActualPaddingBottom + box.ActualBorderBottomWidth);
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -5004,12 +5074,7 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var (box, rect) in line.Rectangles)
             {
-                if (box.DerivedStyle.ActualDisplay is not Keywords.InlineBlock
-                    || !ReferenceEquals(box.FirstHostingLineBox, line)
-                    || !ReferenceEquals(box.LastHostingLineBox, line))
-                {
-                    continue;
-                }
+                if (!IsWhollyHostedOnLine(box, line)) continue;
 
                 // Only ever forward: content wider than the declared width overflows rather than being
                 // pulled back to it, which is what `overflow: visible` means.
@@ -5024,6 +5089,95 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var rect = line.Rectangles[box];
                 line.Rectangles[box] = new RRect(rect.X, rect.Y, box.ActualBoxSizingWidth, rect.Height);
+            }
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is an atomic inline-level box wholly hosted on
+        /// <paramref name="line"/> — the one line it both opened and closed on, per
+        /// <see cref="CssBox.FirstHostingLineBox"/>/<see cref="CssBox.LastHostingLineBox"/> — which is the
+        /// eligibility <see cref="WidenAtomicInlineRectangles"/> and <see cref="HeightenAtomicInlineRectangles"/>
+        /// both need before correcting <paramref name="line"/>'s rectangle for it: a box spanning more than
+        /// one of the parent's own lines has only a slice of its extent on any single one.
+        /// </summary>
+        private static bool IsWhollyHostedOnLine(CssBox box, CssLineBox line) =>
+            box.DerivedStyle.ActualDisplay is Keywords.InlineBlock
+            && ReferenceEquals(box.FirstHostingLineBox, line)
+            && ReferenceEquals(box.LastHostingLineBox, line);
+
+        /// <summary>
+        /// The block-axis counterpart of <see cref="WidenAtomicInlineRectangles"/>: grows each atomic
+        /// inline-level box on <paramref name="line"/> from the rectangle its own content just bubbled up
+        /// to its declared/used height
+        /// (<see href="https://www.w3.org/TR/CSS22/visudet.html#normal-block">CSS 2.1 §10.6.3</see>), when
+        /// that is taller than what the content produced
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1101">#1101</see>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Unlike <see cref="WidenAtomicInlineRectangles"/>, this runs <i>after</i>
+        /// <see cref="ApplyVerticalAlignment"/> rather than between it and <see cref="BubbleRectangles"/>.
+        /// <see cref="ApplyVerticalAlignment"/> folds every baseline-aligned atomic inline's <i>whole
+        /// margin box</i> — not just its own baseline point — into the line's shared baseline extent (CSS
+        /// 2.1 §10.8.1), which is exactly how a declared height is supposed to size the <i>line</i> too;
+        /// but that is a separate, still-open gap this change deliberately leaves alone (see
+        /// <see cref="ResolveAtomicInlineDeclaredHeight"/>'s own remarks). Growing the rectangle before
+        /// that fold would feed it a height the rest of the line was never sized for, moving every other
+        /// box on the line along with it. Running after alignment instead means the box's own final,
+        /// already-decided position is what gets grown — invisible to <see cref="ApplyVerticalAlignment"/>
+        /// itself and to the ordinary block flow's own height (<see cref="FinalizeFlowBoxExit"/>'s
+        /// <c>MaxBottom</c>, computed before this ever runs). A table cell's own auto-height is a
+        /// different, later mechanism (<c>CssBox.GetMaximumBottom</c>) that reads a box's <c>Rectangles</c>
+        /// directly, so a declared-height box inside a cell does grow that cell (and its row) — consistent
+        /// with CSS 2.1 §17.5.3 sizing a cell to its content, not a special case this method adds.
+        /// </para>
+        /// <para>
+        /// Only ever grows the rectangle downward, keeping its own top: content is top-anchored inside a
+        /// non-replaced box's content area, so extra declared height appears below it, symmetric to
+        /// <see cref="WidenAtomicInlineRectangles"/> growing rightward from the box's own already-correct
+        /// left edge. Like its width sibling, this never shrinks a rectangle already taller than the
+        /// declared height — the "declared height smaller than content" case this deliberately leaves
+        /// alone, matching <see cref="WidenAtomicInlineRectangles"/>'s own equivalent choice not to pull an
+        /// overflowing rectangle back to a narrower declared width.
+        /// </para>
+        /// <para>
+        /// Growing down from the box's post-alignment top is exactly right when the box's own baseline came
+        /// from its first word's ascent (<see cref="AtomicInlineBaselineOf"/>'s content-bearing,
+        /// <c>overflow: visible</c> branch — content is top-anchored inside the box's own content area
+        /// regardless of alignment) or when <c>vertical-align</c> is <c>top</c> (which anchors the box's own
+        /// top directly, regardless of content). <b>It is not exactly right otherwise</b> — an explicit
+        /// <c>bottom</c>/<c>middle</c>/<c>sub</c>/<c>super</c>/<c>text-top</c>/<c>text-bottom</c>/length
+        /// offset, or a <c>baseline</c> box whose own bottom margin edge stood in for its baseline (an
+        /// empty box, or one whose <c>overflow</c> isn't <c>visible</c>), anchors a <i>different</i> edge,
+        /// and the fully-correct fix would need to grow from that edge instead. Doing so cleanly needs the
+        /// grown height known <i>before</i> <see cref="ApplyVerticalAlignment"/> computes that edge's
+        /// position in the first place (a bottom-anchored box's baseline is itself derived from its own,
+        /// still-natural rectangle) — which reopens the same "sizes the line" gap this method's other
+        /// remarks explain growing-before-alignment causes. Left as a documented, narrower gap
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1169">#1169</see>) rather than risking
+        /// a second, subtly-wrong direction for the sake of a technically-more-general one.
+        /// </para>
+        /// </remarks>
+        private static void HeightenAtomicInlineRectangles(CssLineBox line)
+        {
+            List<(CssBox Box, double Height)>? heightening = null;
+
+            foreach (var (box, rect) in line.Rectangles)
+            {
+                if (!IsWhollyHostedOnLine(box, line)) continue;
+
+                if (ResolveAtomicInlineDeclaredHeight(box) is not { } declaredHeight) continue;
+                if (declaredHeight <= rect.Height) continue;
+
+                (heightening ??= []).Add((box, declaredHeight));
+            }
+
+            if (heightening is null) return;
+
+            foreach (var (box, declaredHeight) in heightening)
+            {
+                var rect = line.Rectangles[box];
+                line.Rectangles[box] = new RRect(rect.X, rect.Y, rect.Width, declaredHeight);
             }
         }
 
