@@ -612,7 +612,7 @@ block around it. Content that genuinely cannot be broken — a single long word 
 the box rather than widening it. A box holding block-level content (a `<div>` inside an
 `inline-block`) has always been laid out this way.
 
-One knock-on gap remains:
+Two knock-on gaps remain:
 
 - An `inline-block` laid out as an independent formatting context (because it holds block-level
   content or wraps its own inline content) moves whole to the next line when its margin box does not
@@ -621,14 +621,14 @@ One knock-on gap remains:
   after flowing some of its content, rather than moving the opaque box as a unit. Engine-backed
   atomic displays (`inline-flex`, `inline-grid`, and `inline-table`) likewise do not yet preflight
   their final used width against the remaining line measure.
+- A declared `height`/`min-height` taller than the box's natural content grows correctly from
+  whichever edge `vertical-align` anchors, with one narrower exception: the default
+  `vertical-align: baseline` on an **empty box, or one whose `overflow` isn't `visible`** — both have
+  no baseline of their own, so the engine falls back to treating the box's bottom margin edge as its
+  baseline, computed from the box's still-natural (pre-growth) rectangle before the extra height is
+  applied. That case still only grows downward from its own top, which can leave the box positioned
+  too low relative to the rest of the line.
 
-A declared `height`/`min-height` taller than the box's natural content grows correctly from
-whichever edge `vertical-align` anchors, with one narrower exception: the default
-`vertical-align: baseline` on an **empty box, or one whose `overflow` isn't `visible`** — both have
-no baseline of their own, so the engine falls back to treating the box's bottom margin edge as its
-baseline, computed from the box's still-natural (pre-growth) rectangle before the extra height is
-applied. That case still only grows downward from its own top, which can leave the box positioned
-too low relative to the rest of the line.
 ### Stacking Context
 
 Paint order follows the CSS [stacking context](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Positioned_layout/Stacking_context) model. A new stacking context is established by:

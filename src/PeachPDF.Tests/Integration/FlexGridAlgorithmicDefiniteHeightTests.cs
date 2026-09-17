@@ -45,6 +45,29 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(100.0, child.ActualBoxSizingHeight, 1);
         }
 
+        /// <summary>
+        /// A column-direction flex item's used main size is always the flex algorithm's own resolved
+        /// result (CSS Flexbox 1 §9.7), even when that differs from the item's own declared <c>height</c>
+        /// (used only as the flex-basis input) — <c>flex-grow</c> here grows the item well past its own
+        /// declared 20%. <see cref="CssLayoutEngine.ResolveDefiniteHeightValue"/> must check
+        /// <see cref="CssBox.AlgorithmicDefiniteHeight"/> before the item's own declared <c>Height</c> to
+        /// get this right, matching <see cref="CssLayoutEngine.IsHeightDefinite"/>'s own priority.
+        /// </summary>
+        [Fact]
+        public async Task ColumnFlexItemWithADifferingDeclaredHeightAndFlexGrow_ChildResolvesAgainstTheGrownSize()
+        {
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div style='display:flex;flex-direction:column;height:300pt'>" +
+                "<div id='item' style='height:20%;flex-grow:1'><div id='child' style='height:50%'>x</div></div></div>"));
+
+            var item = FindById(root, "item")!;
+            var child = FindById(root, "child")!;
+
+            // The lone item grows to fill the whole 300pt container, not the 60pt its own 20% declares.
+            Assert.Equal(300.0, item.ActualBoxSizingHeight, 1);
+            Assert.Equal(150.0, child.ActualBoxSizingHeight, 1);
+        }
+
         [Fact]
         public async Task GridItemStretchedByDefaultAlignSelf_PercentageHeightChildResolves()
         {

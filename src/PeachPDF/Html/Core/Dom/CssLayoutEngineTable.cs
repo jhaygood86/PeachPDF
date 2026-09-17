@@ -2362,16 +2362,13 @@ namespace PeachPDF.Html.Core.Dom
         {
             // A vertical table's column axis is physical Y (height) - see GetAvailableTableWidth's own
             // remarks. CssLayoutEngine.IsHeightDefinite answers whether the containing block's height is
-            // definite by declaration alone (recursive, order-independent), but GetAvailableTableWidth
-            // itself still reads the containing block's live Size.Height, which - for an auto-height
-            // containing block - only reaches its own real value in its post-order height epilogue
-            // (CssLayoutEngine.ApplyHeight), strictly after this table, one of its children, has already
-            // laid out. So when the table itself has no explicit height (GetAvailableTableWidth never set
-            // _widthSpecified) and nothing up the containing-block chain is height-definite, there is
-            // nothing to shrink toward - and when it IS height-definite but that ancestor's own epilogue
-            // hasn't run yet, GetAvailableTableWidth's own Size.Height read may still be a placeholder
-            // (commonly 0) even though this guard now passes; that residual is unrelated to what this
-            // guard decides and pre-dates it.
+            // definite by declaration alone (recursive, order-independent) - matching
+            // GetAvailableTableWidth's own vertical branch, which now resolves that same containing
+            // block's height via CssLayoutEngine.ResolveDefiniteHeightValue rather than only its live
+            // Size.Height, so the two agree on when a real (not placeholder) constraint is available. When
+            // the table itself has no explicit height (GetAvailableTableWidth never set _widthSpecified)
+            // and nothing up the containing-block chain is height-definite, there is nothing to shrink
+            // toward.
             if (_isVertical && !_widthSpecified && !CssLayoutEngine.IsHeightDefinite(_tableBox.ContainingBlock))
                 return;
 
@@ -6313,8 +6310,16 @@ namespace PeachPDF.Html.Core.Dom
             // remarks on why the table's own Location never moves once a continuation begins) - so
             // resolving against it here already gives one consistent width for the table's whole
             // lifetime, correctly reflecting whichever page the table itself starts on.
+            // The vertical branch resolves the containing block's height deterministically
+            // (CssLayoutEngine.ResolveDefiniteHeightValue) rather than only reading its live Size.Height,
+            // which - for an auto-height containing block - only reaches its own real value in that box's
+            // own post-order height epilogue (CssLayoutEngine.ApplyHeight), strictly after this table, one
+            // of its children, has already laid out. Falling back to Size.Height keeps prior behavior for
+            // a containing block whose height genuinely can't be resolved this way (a table cell stretched
+            // by its own row, or a float-containing box with a ratio-derived height - see
+            // ResolveDefiniteHeightValue's own remarks).
             var containingBlockInlineSize = _isVertical
-                ? _tableBox.ContainingBlock.Size.Height
+                ? CssLayoutEngine.ResolveDefiniteHeightValue(_tableBox.ContainingBlock) ?? _tableBox.ContainingBlock.Size.Height
                 : CssLayoutEngine.PageAwareWidthBasis(_tableBox.ContainingBlock, _tableBox.ClientTop);
 
             if (!CssValueParser.IsValidLength(inlineSizeCss)) return containingBlockInlineSize;

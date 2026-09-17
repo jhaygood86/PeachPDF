@@ -144,5 +144,24 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.True(CssLayoutEngine.IsHeightDefinite(box));
             Assert.Equal(40.0, CssLayoutEngine.ResolveDefiniteHeightValue(box)!.Value, 3);
         }
+
+        /// <summary>
+        /// A detached box with no parent (so <c>ContainingBlock</c> returns itself — the same shape as
+        /// the true root/initial containing block) and no <see cref="CssBox.HtmlContainer"/> has no page
+        /// to be definite against. Regression guard for a real recursion hazard: since
+        /// <c>HasDefiniteHeight</c>
+        /// recurses into <c>IsHeightDefinite(PercentageBase(box))</c>, and <c>PercentageBase</c> of a
+        /// parentless box is the box itself, a percentage <c>Height</c> here would recurse into itself
+        /// forever unless the root check terminates on <c>box == box.ContainingBlock</c> alone, before
+        /// checking <c>HtmlContainer</c>.
+        /// </summary>
+        [Fact]
+        public void DetachedBoxWithNoParentAndNoHtmlContainer_PercentageHeightIsIndefiniteNotInfiniteRecursion()
+        {
+            var detached = new CssBox(null, null) { Height = "50%" };
+
+            Assert.False(CssLayoutEngine.IsHeightDefinite(detached));
+            Assert.Null(CssLayoutEngine.ResolveDefiniteHeightValue(detached));
+        }
     }
 }

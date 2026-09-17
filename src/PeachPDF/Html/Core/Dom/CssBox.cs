@@ -999,6 +999,28 @@ namespace PeachPDF.Html.Core.Dom
         /// descendant of a stretched flex/grid item could not resolve
         /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1167">#1167</see>).
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Reset every layout pass by <c>CssLayoutEngineFlex</c>/<c>CssLayoutEngineGrid</c>'s own per-item
+        /// loops, before each decides whether this pass's alignment/main-size resolution actually applies
+        /// — but only for a box those loops still visit this pass, i.e. one still a flex/grid item under
+        /// its current <c>display</c>. A box that stops being a flex/grid item between two passes of the
+        /// same layout (e.g. a container query flipping an ancestor's <c>display</c> from <c>flex</c> to
+        /// <c>block</c> mid-convergence) is not visited by either loop in the later pass, so this field is
+        /// not cleared for it there — a narrow, accepted residual; nothing in the current codebase exercises
+        /// that combination, and general per-box invalidation on a <c>display</c> change would need its own
+        /// design pass rather than a drive-by fix here.
+        /// </para>
+        /// <para>
+        /// Set from whatever the algorithm's <i>final</i> resolved size is, even when that pass declines
+        /// to re-lay the item's own content out because the size is already within tolerance of what an
+        /// earlier (pre-resolution) measurement pass used — so a percentage-height descendant laid out
+        /// during that earlier, indefinite-basis pass keeps whatever it resolved to then, rather than
+        /// being re-laid out against this now-known value. Also a narrow, accepted residual: pre-existing
+        /// even before this field existed (that descendant was never re-laid out in this case either way),
+        /// not a regression this field introduces.
+        /// </para>
+        /// </remarks>
         public double? AlgorithmicDefiniteHeight { get; set; }
 
         /// <summary>
