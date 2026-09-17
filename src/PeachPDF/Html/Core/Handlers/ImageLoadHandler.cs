@@ -39,9 +39,10 @@ namespace PeachPDF.Html.Core.Handlers
     /// Supports sync and async image loading.
     /// </para>
     /// <para>
-    /// If the image object is created by the handler on calling dispose of the handler the image will be released, this
-    /// makes release of unused images faster as they can be large.<br/>
-    /// Disposing image load handler will also cancel download of image from the web.
+    /// A successfully resolved image or SVG document is cached on the owning <see cref="HtmlContainerInt"/>
+    /// keyed by resolved source URI (see <see cref="SetImageFromUrl"/>), so it outlives this handler and is
+    /// shared with any other handler loading the same source this render. Disposing this handler only
+    /// releases its own fetch stream, never the resolved resource itself.
     /// </para>
     /// </remarks>
     internal sealed class ImageLoadHandler : IDisposable
@@ -57,11 +58,6 @@ namespace PeachPDF.Html.Core.Handlers
         /// The resource stream the image was decoded from; disposed when the handler is released.
         /// </summary>
         private Stream? _imageStream;
-
-        /// <summary>
-        /// flag to indicate if to release the image object on box dispose (only if image was loaded by the box)
-        /// </summary>
-        private bool _releaseImageObject;
 
         /// <summary>
         /// is the handler has been disposed
@@ -249,8 +245,24 @@ namespace PeachPDF.Html.Core.Handlers
         /// <c>file:</c>, <c>data:</c>, HTTP and archive resources uniformly) and decode it. SVG is
         /// detected from the source extension or a <c>Content-Type: image/svg+xml</c> response header.
         /// </summary>
+        /// <remarks>
+        /// Resolved resources are cached on <see cref="_htmlContainer"/> keyed by <paramref name="source"/>'s
+        /// resolved absolute URI, so a source referenced by more than one element (repeated <c>&lt;img&gt;</c>
+        /// tags, an <c>&lt;object&gt;</c>, a <c>background-image</c>) is fetched and decoded only once per
+        /// render - see <see cref="HtmlContainerInt.CacheResolvedImageResource"/>. A cached resource is
+        /// owned by the container, not this handler, so it is never disposed by <see cref="ReleaseObjects"/>.
+        /// </remarks>
         private async ValueTask SetImageFromUrl(RUri source)
         {
+            var cacheKey = source.AbsoluteUri;
+            if (_htmlContainer.TryGetResolvedImageResource(cacheKey, out var cached))
+            {
+                Image = cached.Image;
+                SvgDocument = cached.SvgDocument;
+                ImageLoadComplete();
+                return;
+            }
+
             var networkResponse = await _htmlContainer.Adapter.GetResourceStream(source);
 
             if (networkResponse?.ResourceStream is not null)
@@ -264,9 +276,9 @@ namespace PeachPDF.Html.Core.Handlers
                 {
                     await LoadImageFromStream(_imageStream, _srcHintsSvg || contentTypeHintsSvg, source);
 
-                    if (Image is not null)
+                    if (Image is not null || SvgDocument is not null)
                     {
-                        _releaseImageObject = true;
+                        _htmlContainer.CacheResolvedImageResource(cacheKey, Image, SvgDocument);
                     }
                 }
             }
@@ -285,16 +297,13 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// Release the image and client objects.
+        /// Release resources owned by this handler. The decoded <see cref="Image"/>/<see cref="SvgDocument"/>
+        /// are never disposed here - once resolved they are owned by <see cref="_htmlContainer"/>'s
+        /// resolved-resource cache (see <see cref="SetImageFromUrl"/>), which may be sharing them with
+        /// other handlers for the same source.
         /// </summary>
         private void ReleaseObjects()
         {
-            if (_releaseImageObject && Image != null)
-            {
-                Image.Dispose();
-                Image = null;
-            }
-
             if (_imageStream == null) return;
 
             _imageStream.Dispose();
