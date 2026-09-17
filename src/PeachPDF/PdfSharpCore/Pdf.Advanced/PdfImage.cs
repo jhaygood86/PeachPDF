@@ -388,6 +388,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 smask.Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
                 smask.Elements[Keys.BitsPerComponent] = new PdfInteger(data.AlphaBitDepth.Value);
                 smask.Elements[Keys.ColorSpace] = new PdfName("/DeviceGray");
+                if (AllowInterpolate)
+                    smask.Elements[Keys.Interpolate] = PdfBoolean.True;
                 Elements[Keys.SMask] = smask.Reference;
             }
 
@@ -808,6 +810,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                     smask.Elements[Keys.Height] = new PdfInteger(height);
                     smask.Elements[Keys.BitsPerComponent] = new PdfInteger(8);
                     smask.Elements[Keys.ColorSpace] = new PdfName("/DeviceGray");
+                    if (AllowInterpolate)
+                        smask.Elements[Keys.Interpolate] = PdfBoolean.True;
                     Elements[Keys.SMask] = smask.Reference;
                 }
 
