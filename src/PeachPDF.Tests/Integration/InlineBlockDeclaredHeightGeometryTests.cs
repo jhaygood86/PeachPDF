@@ -400,6 +400,30 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// #1169: an explicit <c>vertical-align</c> length/percentage offset takes the same
+        /// <c>AnchorOf</c> branch as <c>sub</c>/<c>super</c> — grouped with default-baseline-with-content's
+        /// top anchoring for the same reason (only ever reaches a content-bearing box).
+        /// </summary>
+        [Fact]
+        public async Task VerticalAlignLengthOffsetGrowsDownwardKeepingTheTopEdgeFixed()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:10pt'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:10pt;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            Assert.Equal(naturalRect.Top, grownRect.Top, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
+        }
+
+        /// <summary>
         /// #1169's still-open, genuinely circular case: an empty box's default-<c>baseline</c> "baseline"
         /// is itself computed from its still-natural rectangle inside <c>ApplyVerticalAlignment</c>, before
         /// growth runs, so growth stays exactly as it was before #1169 (downward, from the flow-assigned
