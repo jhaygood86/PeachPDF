@@ -923,17 +923,21 @@ namespace PeachPDF.Html.Core.Dom
             var height = CssLayoutEngine.GetBoxHeight(this);
             if (height is null) return null;
 
-            if (CssValueParser.IsValidLength(MaxHeight) && (ContainingBlock.IsHeightCalculated || !MaxHeight.EndsWith('%')))
+            var isContainingBlockHeightDefinite = CssLayoutEngine.IsHeightDefinite(ContainingBlock);
+
+            if (CssValueParser.IsValidLength(MaxHeight) && (isContainingBlockHeightDefinite || !MaxHeight.EndsWith('%')))
             {
-                var maxHeight = CssValueParser.ParseLength(MaxHeight, ContainingBlock.Size.Height, this) + ActualBoxSizeIncludedHeight;
+                var maxHeightBasis = CssLayoutEngine.ResolveDefiniteHeightValue(ContainingBlock) ?? ContainingBlock.Size.Height;
+                var maxHeight = CssValueParser.ParseLength(MaxHeight, maxHeightBasis, this) + ActualBoxSizeIncludedHeight;
 
                 if (height > maxHeight)
                 {
                     height = maxHeight;
 
-                    if (CssValueParser.IsValidLength(MinHeight) && (ContainingBlock.IsHeightCalculated || !MinHeight.EndsWith('%')))
+                    if (CssValueParser.IsValidLength(MinHeight) && (isContainingBlockHeightDefinite || !MinHeight.EndsWith('%')))
                     {
-                        var minHeight = CssValueParser.ParseLength(MinHeight, ContainingBlock.Size.Height, this) + ActualBoxSizeIncludedHeight;
+                        var minHeightBasis = CssLayoutEngine.ResolveDefiniteHeightValue(ContainingBlock) ?? ContainingBlock.Size.Height;
+                        var minHeight = CssValueParser.ParseLength(MinHeight, minHeightBasis, this) + ActualBoxSizeIncludedHeight;
                         if (height < minHeight) height = minHeight;
                     }
                 }
@@ -982,7 +986,42 @@ namespace PeachPDF.Html.Core.Dom
             return (width, height, inlineSizePt, blockSizePt);
         }
 
-        public bool IsHeightCalculated { get; set; } = false;
+        /// <summary>
+        /// The border-box height a flex or grid layout algorithm has already definitely resolved for this
+        /// box this layout pass (CSS Flexbox Module Level 1
+        /// <see href="https://www.w3.org/TR/css-flexbox-1/#algo-stretch">§9.4</see>/
+        /// <see href="https://www.w3.org/TR/css-flexbox-1/#resolve-flexible-lengths">§9.7</see>, CSS Grid
+        /// Layout Module Level 1 §11.4) — <see langword="null"/> when neither applies. Exists because
+        /// <c>CssLayoutEngineFlex</c>/<c>CssLayoutEngineGrid</c> only ever reflect a resolved height in
+        /// <see cref="Height"/>'s own CSS string transiently (set it, re-lay the item out, revert it), so
+        /// nothing durable would otherwise survive for <c>CssLayoutEngine.IsHeightDefinite</c>/
+        /// <c>ResolveDefiniteHeightValue</c> to read afterward — without this, a percentage-height
+        /// descendant of a stretched flex/grid item could not resolve
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1167">#1167</see>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Reset every layout pass by <c>CssLayoutEngineFlex</c>/<c>CssLayoutEngineGrid</c>'s own per-item
+        /// loops, before each decides whether this pass's alignment/main-size resolution actually applies
+        /// — but only for a box those loops still visit this pass, i.e. one still a flex/grid item under
+        /// its current <c>display</c>. A box that stops being a flex/grid item between two passes of the
+        /// same layout (e.g. a container query flipping an ancestor's <c>display</c> from <c>flex</c> to
+        /// <c>block</c> mid-convergence) is not visited by either loop in the later pass, so this field is
+        /// not cleared for it there — a narrow, accepted residual; nothing in the current codebase exercises
+        /// that combination, and general per-box invalidation on a <c>display</c> change would need its own
+        /// design pass rather than a drive-by fix here.
+        /// </para>
+        /// <para>
+        /// Set from whatever the algorithm's <i>final</i> resolved size is, even when that pass declines
+        /// to re-lay the item's own content out because the size is already within tolerance of what an
+        /// earlier (pre-resolution) measurement pass used — so a percentage-height descendant laid out
+        /// during that earlier, indefinite-basis pass keeps whatever it resolved to then, rather than
+        /// being re-laid out against this now-known value. Also a narrow, accepted residual: pre-existing
+        /// even before this field existed (that descendant was never re-laid out in this case either way),
+        /// not a regression this field introduces.
+        /// </para>
+        /// </remarks>
+        public double? AlgorithmicDefiniteHeight { get; set; }
 
         /// <summary>
         /// Gets the actual top's Margin
@@ -8267,7 +8306,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>.empty { height: 10% }</c> is written to exercise exactly that.
         /// </summary>
         private bool HasAutoBlockEndHeight() =>
-            Height == Keywords.Auto || (Height.EndsWith('%') && !ContainingBlock.IsHeightCalculated);
+            Height == Keywords.Auto || (Height.EndsWith('%') && !CssLayoutEngine.IsHeightDefinite(ContainingBlock));
 
         /// <summary>
         /// Folds into <paramref name="margins"/> this box's own block-end margin and every
@@ -8421,7 +8460,7 @@ namespace PeachPDF.Html.Core.Dom
             // ".empty { margin: 6.25em; height: 10%; }" is written to exercise exactly this: its own
             // comment notes "computes to auto which makes it empty per 8.3.1:7 (own margins)".
             var heightIsAuto = Height == Keywords.Auto ||
-                (Height.EndsWith('%') && !ContainingBlock.IsHeightCalculated);
+                (Height.EndsWith('%') && !CssLayoutEngine.IsHeightDefinite(ContainingBlock));
             if (!heightIsAuto) return false;
             if (Overflow.Value != PeachPDF.CSS.Overflow.Visible) return false;
             if (!(ActualPaddingTop < 0.1) || !(ActualPaddingBottom < 0.1)) return false;

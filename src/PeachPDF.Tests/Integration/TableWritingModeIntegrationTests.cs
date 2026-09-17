@@ -1442,6 +1442,44 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(table!.PageBreakBottoms);
         }
 
+        /// <summary>
+        /// Regression guard for #1167's <c>CssLayoutEngine.IsHeightDefinite</c> refactor:
+        /// <c>ShrinkColumnsToFitAvailableWidth</c>'s guard now answers "is the containing block's height
+        /// definite" correctly and order-independently, but must not shrink an auto-height vertical
+        /// table's columns toward a stale placeholder read of that containing block's still-unresolved
+        /// live <c>Size.Height</c> — <c>GetAvailableTableWidth</c>'s own vertical branch resolves that
+        /// height the same deterministic way. The containing <c>div</c>'s own layout epilogue (which
+        /// would otherwise be the only place its explicit 400pt height becomes live) hasn't run yet at
+        /// the point this table — one of its children — lays out. Each row's cell sits in the table's
+        /// one (and only) column, so both share that column's own auto column-axis extent — which fills
+        /// the real 400pt available space (matching ordinary horizontal auto-table behavior mapped onto
+        /// the column axis) rather than shrinking toward zero, which is what a stale placeholder read
+        /// would have produced.
+        /// </summary>
+        [Fact]
+        public async Task PlainGridVerticalTable_AutoHeight_InsideADefiniteHeightAncestor_DoesNotShrinkColumnsTowardAPlaceholder()
+        {
+            var html = LayoutHarness.Wrap("""
+                <div style="height:400pt">
+                  <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
+                    <tr><td id="a" style="height:150pt; width:30pt">A</td></tr>
+                    <tr><td id="b" style="height:150pt; width:30pt">B</td></tr>
+                  </table>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            // Neither cell shrinks toward zero (the stale-placeholder bug this guards against); the
+            // table's own auto column-axis extent instead fills the real 400pt available space.
+            Assert.InRange(a!.ActualBoxSizingHeight, 395, 405);
+            Assert.InRange(b!.ActualBoxSizingHeight, 395, 405);
+        }
+
         private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
         {
             yield return fragment;

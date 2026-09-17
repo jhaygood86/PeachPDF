@@ -144,6 +144,30 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(img.ActualBoxSizingHeight, 56, 64);
         }
 
+        [Fact]
+        public async Task Image_PercentageMaxHeight_ClampsAgainstADefiniteContainingBlock()
+        {
+            var html = Wrap(@"
+                <div style='height:200pt;'>
+                    <img id='img' style='width:50pt; height:200pt; max-height:40%;' />
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var img = FindById(root, "img")!;
+            Assert.InRange(img.ActualBoxSizingHeight, 76, 84);
+        }
+
+        [Fact]
+        public async Task Image_PercentageMinHeight_GrowsAgainstADefiniteContainingBlock()
+        {
+            var html = Wrap(@"
+                <div style='height:200pt;'>
+                    <img id='img' style='width:50pt; height:20pt; min-height:30%;' />
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var img = FindById(root, "img")!;
+            Assert.InRange(img.ActualBoxSizingHeight, 56, 64);
+        }
+
         // ─── Absolutely positioned boxes ────────────────────────────────────────
 
         [Fact]

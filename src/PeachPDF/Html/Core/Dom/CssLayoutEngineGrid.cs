@@ -1308,6 +1308,11 @@ namespace PeachPDF.Html.Core.Dom
             var savedWidth = box.Width;
             var savedHeight = box.Height;
 
+            // Reset every pass, before deciding whether this item actually stretches this time - a stale
+            // value from an earlier layout pass, or from an align-self that no longer resolves to
+            // stretch, must not leak through. Set below when stretchHeight applies.
+            box.AlgorithmicDefiniteHeight = null;
+
             var cellContentWidth = Math.Max(0, cellWidth - HorizontalMarginBorderPadding(box));
             if (autoWidth)
             {
@@ -1329,6 +1334,13 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var usedHeight = Math.Max(0, cellHeight - box.ActualMarginTop - box.ActualMarginBottom - box.ActualBoxSizeIncludedHeight);
                 box.Height = FormatLayoutUnits(usedHeight, box);
+
+                // CSS Grid Layout Module Level 1 SS11.4 stretch alignment (the default align-self): fills
+                // the (by-then-resolved, definite) grid area. Durably recorded as a border-box height -
+                // usedHeight above is content-space (ActualBoxSizeIncludedHeight already subtracted) - so
+                // a percentage-height descendant can resolve against it (issue #1167); Height's own CSS
+                // string only ever reflects this transiently, reverted right below.
+                box.AlgorithmicDefiniteHeight = Math.Max(0, cellHeight - box.ActualMarginTop - box.ActualMarginBottom);
             }
 
             box.Location = new RPoint(_gridBox.ClientLeft, _gridBox.ClientTop);

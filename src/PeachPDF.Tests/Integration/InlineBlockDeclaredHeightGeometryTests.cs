@@ -1,6 +1,7 @@
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
+using System.Linq;
 using System.Threading.Tasks;
 using static PeachPDF.Tests.TestSupport.LayoutHarness;
 
@@ -149,23 +150,62 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// A percentage <c>height</c> is excluded from this fix, exactly as a percentage <c>width</c>
-        /// originally was (#1091, before #1097 added it): such a box is sized entirely by its content,
-        /// as though <c>height: auto</c> were declared. See
-        /// <c>.claude/accepted-gaps/percentage-height-on-an-inline-content-inline-block-is-ignored.md</c>.
+        /// #1167: a percentage <c>height</c> now sizes the box's own painted border box, exactly like an
+        /// absolute-length declared height, when the containing block's own height is definite (CSS 2.1
+        /// §10.5) — resolved via <c>CssLayoutEngine.IsHeightDefinite</c>/<c>ResolveDefiniteHeightValue</c>,
+        /// which are recursive and order-independent rather than dependent on the containing block's own
+        /// layout epilogue having already run.
         /// </summary>
         [Fact]
-        public async Task APercentageHeightIsIgnored()
+        public async Task APercentageHeightSizesAgainstADefiniteContainingBlockHeight()
+        {
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt;height:400pt'><span id='box' style='display:inline-block;height:50%'>x</span></div>"));
+
+            Assert.Equal(200.0, PaintedRectOf(FindById(root, "box")!).Height, 3);
+        }
+
+        /// <summary>
+        /// The genuinely spec-correct no-op case (CSS 2.1 §10.5): a percentage height still has no effect
+        /// against a containing block whose own height is content-driven (indefinite), not just against
+        /// one that happens not to have been laid out yet — this is the case #1167's fix keeps behaving
+        /// exactly as before, not a residual limitation.
+        /// </summary>
+        [Fact]
+        public async Task APercentageHeightAgainstAnIndefiniteContainingBlockIsIgnored()
         {
             var (natural, _) = await LayoutAsync(Wrap(
                 "<div style='width:400pt'><span id='box' style='display:inline-block'>x</span></div>"));
             var (percent, _) = await LayoutAsync(Wrap(
-                "<div style='width:400pt;height:400pt'><span id='box' style='display:inline-block;height:50%'>x</span></div>"));
+                "<div style='width:400pt'><span id='box' style='display:inline-block;height:50%'>x</span></div>"));
 
             var naturalHeight = PaintedRectOf(FindById(natural, "box")!).Height;
             var percentHeight = PaintedRectOf(FindById(percent, "box")!).Height;
 
             Assert.Equal(naturalHeight, percentHeight, 3);
+        }
+
+        /// <summary>
+        /// #1167's percentage resolution now also participates in Fix 1's line/flow reservation and Fix
+        /// 2's anchor-aware growth, since <c>ResolveAtomicInlineDeclaredHeight</c> resolves the percentage
+        /// case at the same flow-time hook as the absolute-length case, with no separate corrective pass.
+        /// </summary>
+        [Fact]
+        public async Task APercentageHeightReservesLineSpaceLikeAnAbsoluteLengthDoes()
+        {
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div id='container' style='width:80pt;height:400pt'>" +
+                "<span id='tall' style='display:inline-block;height:50%'>x</span> " +
+                "wwwwwwwwww wwwwwwwwww wwwwwwwwww wwwwwwwwww</div>"));
+
+            var tallRect = PaintedRectOf(FindById(root, "tall")!);
+            Assert.Equal(200.0, tallRect.Height, 3);
+
+            var lastWord = Descendants(root).SelectMany(b => b.Words).Last();
+            var lastLineTop = LineTopOf(root, lastWord);
+
+            Assert.True(lastLineTop >= tallRect.Bottom - 0.01,
+                $"a line after the percentage-tall box must clear it: line top {lastLineTop}, box bottom {tallRect.Bottom}");
         }
 
         /// <summary>
@@ -203,6 +243,226 @@ namespace PeachPDF.Tests.Integration
                 "<span id='inner' style='display:inline-block;height:25pt'></span></span></div>"));
 
             Assert.Equal(25.0, PaintedRectOf(FindById(root, "inner")!).Height, 3);
+        }
+
+        /// <summary>
+        /// #1166: the line/flow must reserve the box's full declared height, not just paint it — a
+        /// wrapped continuation line after a tall inline-flowed inline-block, and the containing
+        /// block's own height, must both clear the tall box rather than overlap it. This is the exact
+        /// sibling-overlap regression an earlier, reverted in-development attempt at this fix
+        /// reintroduced (see <c>.claude/recent-fixes/</c> for the #1101 entry) — CSS 2.1
+        /// <see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">§10.8</see>: an
+        /// inline-block contributes its whole margin box to the line box it sits on.
+        /// </summary>
+        [Fact]
+        public async Task AWrappedLineAfterATallDeclaredHeightBoxClearsIt()
+        {
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div id='container' style='width:80pt'>" +
+                "<span id='tall' style='display:inline-block;height:100pt'>x</span> " +
+                "wwwwwwwwww wwwwwwwwww wwwwwwwwww wwwwwwwwww</div>"));
+
+            var tallRect = PaintedRectOf(FindById(root, "tall")!);
+            var container = FindById(root, "container")!;
+
+            var lastWord = Descendants(root).SelectMany(b => b.Words).Last();
+            var lastLineTop = LineTopOf(root, lastWord);
+
+            Assert.True(lastLineTop >= tallRect.Bottom - 0.01,
+                $"a line after the tall box must clear it: line top {lastLineTop}, box bottom {tallRect.Bottom}");
+            Assert.True(container.ActualBottom >= tallRect.Bottom - 0.01,
+                $"the container's own height must clear the tall box: {container.ActualBottom} vs {tallRect.Bottom}");
+        }
+
+        /// <summary>
+        /// #1169: <c>vertical-align: top</c> anchors the box's own top regardless of declared height —
+        /// unchanged from the default-baseline-with-content case, stated explicitly as its own regression
+        /// guard rather than relying only on the default case's own test.
+        /// </summary>
+        [Fact]
+        public async Task VerticalAlignTopGrowsDownwardKeepingTheTopEdgeFixed()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:top'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:top;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            Assert.Equal(naturalRect.Top, grownRect.Top, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
+        }
+
+        /// <summary>
+        /// #1169: <c>vertical-align: bottom</c> anchors the box's own bottom — CSS 2.1 §10.8.1 places
+        /// the box's bottom at the line's bottom regardless of the box's own height, so growth must extend
+        /// upward, keeping that bottom edge fixed, not downward past it.
+        /// </summary>
+        [Fact]
+        public async Task VerticalAlignBottomGrowsUpwardKeepingTheBottomEdgeFixed()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:bottom'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:bottom;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            Assert.Equal(naturalRect.Bottom, grownRect.Bottom, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
+            Assert.True(grownRect.Top < naturalRect.Top,
+                $"growth must extend upward, keeping the bottom fixed: natural top {naturalRect.Top}, grown top {grownRect.Top}");
+        }
+
+        /// <summary>
+        /// #1169: <c>vertical-align: text-bottom</c> anchors the parent font's own bottom the same way
+        /// <c>bottom</c> anchors the line's bottom.
+        /// </summary>
+        [Fact]
+        public async Task VerticalAlignTextBottomGrowsUpwardKeepingTheBottomEdgeFixed()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:text-bottom'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:text-bottom;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            Assert.Equal(naturalRect.Bottom, grownRect.Bottom, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
+        }
+
+        /// <summary>
+        /// #1169: <c>vertical-align: middle</c> centers the box on the line using its natural height —
+        /// growing symmetrically around the box's own already-centered midpoint keeps that midpoint on
+        /// the line's own middle regardless of the natural height that produced it.
+        /// </summary>
+        [Fact]
+        public async Task VerticalAlignMiddleGrowsSymmetricallyAroundItsCenter()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:middle'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:middle;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            var naturalCenter = naturalRect.Top + naturalRect.Height / 2;
+            var grownCenter = grownRect.Top + grownRect.Height / 2;
+
+            Assert.Equal(naturalCenter, grownCenter, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
+        }
+
+        /// <summary>
+        /// #1169: <c>vertical-align: sub</c>/<c>super</c> only ever reach a content-bearing box (an empty
+        /// or <c>overflow</c>-hidden box's baseline offset does not depend on either), so they are grouped
+        /// with default-baseline-with-content's top anchoring — stated as its own regression guard on the
+        /// currently-shipped, tested behavior.
+        /// </summary>
+        [Fact]
+        public async Task VerticalAlignSubGrowsDownwardKeepingTheTopEdgeFixed()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:sub'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:sub;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            Assert.Equal(naturalRect.Top, grownRect.Top, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
+        }
+
+        /// <summary>
+        /// #1169: an explicit <c>vertical-align</c> length/percentage offset takes the same
+        /// <c>AnchorOf</c> branch as <c>sub</c>/<c>super</c> — grouped with default-baseline-with-content's
+        /// top anchoring for the same reason (only ever reaches a content-bearing box).
+        /// </summary>
+        [Fact]
+        public async Task VerticalAlignLengthOffsetGrowsDownwardKeepingTheTopEdgeFixed()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:10pt'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='tall' style='font-size:40pt'>Tall</span>" +
+                "<span id='box' style='display:inline-block;vertical-align:10pt;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            Assert.Equal(naturalRect.Top, grownRect.Top, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
+        }
+
+        /// <summary>
+        /// #1169's still-open, genuinely circular case: an empty box's default-<c>baseline</c> "baseline"
+        /// is itself computed from its still-natural rectangle inside <c>ApplyVerticalAlignment</c>, before
+        /// growth runs, so growth stays exactly as it was before #1169 (downward, from the flow-assigned
+        /// top). An earlier, since-reverted attempt at bottom-anchoring this case produced a measured
+        /// regression; this pins the empty case's behavior alongside
+        /// <see cref="TheEmittedFragmentCarriesTheDeclaredHeight"/>.
+        /// </summary>
+        [Fact]
+        public async Task AnEmptyBoxUnderDefaultVerticalAlignStillGrowsDownwardFromItsFlowPosition()
+        {
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'>" +
+                "<span id='box' style='display:inline-block;height:40pt;border:1pt solid'></span></div>"));
+
+            var rect = PaintedRectOf(FindById(root, "box")!);
+
+            Assert.Equal(20.0, rect.Y, 3);
+            Assert.Equal(42.0, rect.Height, 3);
+        }
+
+        /// <summary>
+        /// The circular case's other trigger: content whose <c>overflow</c> isn't <c>visible</c> also has
+        /// no baseline of its own (<see cref="AtomicInlineBaselineOf"/>'s bottom-margin-edge fallback), so
+        /// it must grow downward, unchanged, exactly like the empty case above — even though it holds
+        /// content, unlike the empty case.
+        /// </summary>
+        [Fact]
+        public async Task OverflowHiddenContentStillGrowsDownwardUnderDefaultVerticalAlign()
+        {
+            var (natural, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'><span id='box' style='display:inline-block;overflow:hidden'>x</span></div>"));
+            var (grown, _) = await LayoutAsync(Wrap(
+                "<div style='width:400pt'><span id='box' style='display:inline-block;overflow:hidden;height:80pt'>x</span></div>"));
+
+            var naturalRect = PaintedRectOf(FindById(natural, "box")!);
+            var grownRect = PaintedRectOf(FindById(grown, "box")!);
+
+            Assert.Equal(naturalRect.Top, grownRect.Top, 3);
+            Assert.Equal(80.0, grownRect.Height, 3);
         }
 
         /// <summary>

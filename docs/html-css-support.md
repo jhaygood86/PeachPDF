@@ -588,16 +588,20 @@ label column and the empty-bordered-box checkbox glyph work — and the line res
 width, honoring `box-sizing`. Percentage widths resolve against the containing block's content
 width, just as they do on other boxes.
 
-A non-`auto` `height`/`min-height` sizes the box's painted background, border and overflow clip
-the same way
+A non-`auto` `height`/`min-height` — including a percentage, resolved against the containing
+block's own height when that is itself definite
+([CSS 2.1 §10.5](https://www.w3.org/TR/CSS22/visudet.html#the-height-property)) — sizes the box's
+painted background, border and overflow clip the same way
 ([CSS 2.1 §10.6.3](https://www.w3.org/TR/CSS22/visudet.html#normal-block)): the box paints at the
-declared (or floored-by-`min-height`) height whether or not its content fills it, growing downward
-from its own top so the extra space appears below the content. A declared height smaller than the
-content's own natural height is not shrunk to — the painted box always keeps at least its natural
-height, the same "never pulled back" rule a wider-than-declared `width` already gets. This is
-independent of whether the *line* itself reserves that height — see the gap below. Unlike width, a
-percentage `height`/`min-height` is not resolved here and is a no-op (as though `height: auto` were
-declared).
+declared (or floored-by-`min-height`) height whether or not its content fills it, and the line
+itself reserves that same height
+([CSS 2.1 §10.8](https://www.w3.org/TR/CSS21/visudet.html#line-height)). The extra height grows
+from whichever edge the box's `vertical-align` anchors — the box's own top for `top` and the
+default `baseline` on a box with real content, its own bottom for `bottom`/`text-bottom`, split
+evenly around its own center for `middle` — except the one case noted in the gap below. A declared
+height smaller than the content's own natural height is not shrunk to — the painted box always
+keeps at least its natural height, the same "never pulled back" rule a wider-than-declared `width`
+already gets.
 
 A box whose content **does not** fit on one line inside it — because it declares a `width`
 narrower than its content, or because its content is wider than the containing block — is instead
@@ -611,10 +615,6 @@ the box rather than widening it. A box holding block-level content (a `<div>` in
 
 Two knock-on gaps remain:
 
-- An explicit `height` on an inline-flowed `inline-block` does not size the line — the line's
-  height comes from the flowed content plus padding/border, so
-  `<span style="display: inline-block; height: 100px">x</span>` reserves only its natural text
-  height, not 100px (CSS2.1 §10.8.1 expects the atomic box's margin box to size the line).
 - An `inline-block` laid out as an independent formatting context (because it holds block-level
   content or wraps its own inline content) moves whole to the next line when its margin box does not
   fit, and a declared content-box `width` correctly grows by its padding and border. The approximated
@@ -622,12 +622,14 @@ Two knock-on gaps remain:
   after flowing some of its content, rather than moving the opaque box as a unit. Engine-backed
   atomic displays (`inline-flex`, `inline-grid`, and `inline-table`) likewise do not yet preflight
   their final used width against the remaining line measure.
-- A declared `height`/`min-height` taller than the box's natural content only grows the box downward
-  from its own top, which is correct for the default `vertical-align: baseline` (when the box's own
-  content supplies the baseline) and for `vertical-align: top`, but not for `bottom`/`middle`/`sub`/
-  `super`/`text-top`/`text-bottom`/a length offset, or `baseline` on an empty or `overflow`-hidden box
-  (whose bottom margin edge stands in for its baseline instead) — those anchor a different edge, and
-  the box can come out positioned too low relative to the rest of the line.
+- A declared `height`/`min-height` taller than the box's natural content grows correctly from
+  whichever edge `vertical-align` anchors, with one narrower exception: the default
+  `vertical-align: baseline` on an **empty box, or one whose `overflow` isn't `visible`** — both have
+  no baseline of their own, so the engine falls back to treating the box's bottom margin edge as its
+  baseline, computed from the box's still-natural (pre-growth) rectangle before the extra height is
+  applied. That case still only grows downward from its own top, which can leave the box positioned
+  too low relative to the rest of the line.
+
 ### Stacking Context
 
 Paint order follows the CSS [stacking context](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Positioned_layout/Stacking_context) model. A new stacking context is established by:

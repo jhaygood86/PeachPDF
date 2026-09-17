@@ -106,6 +106,84 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(100.0, top - bottom, 1);
         }
 
+        /// <summary>
+        /// #1169: a declared height taller than the box's content under a non-default <c>vertical-align</c>
+        /// must grow the clip from the anchored edge, not always downward — <c>vertical-align: bottom</c>
+        /// anchors the box's own bottom (CSS 2.1 §10.8.1), so the clip's bottom edge must stay fixed
+        /// between the natural and declared-height renders while its top moves up, exactly mirroring
+        /// <c>InlineBlockDeclaredHeightGeometryTests.VerticalAlignBottomGrowsUpwardKeepingTheBottomEdgeFixed</c>
+        /// at the paint level, per this repo's convention that a purely numeric <c>CssBox</c> assertion is
+        /// not sufficient proof for anything that also affects painting/clipping.
+        /// </summary>
+        [Fact]
+        public async Task ClippedInlineBlockWithVerticalAlignBottom_ClipGrowsUpwardKeepingItsBottomEdgeFixed()
+        {
+            // Body margin-top gives the bottom-anchored, 80pt-tall box enough headroom to grow upward
+            // without its top going past the page edge (which the page's own outer clip would then
+            // truncate, defeating the point of this test).
+            const string naturalHtml = """
+                <!DOCTYPE html>
+                <html><body style='font:10pt Arial,sans-serif;margin:200pt 0 0 0'>
+                <div><span style='font-size:40pt'>Tall</span> <span style='display:inline-block;overflow:hidden;vertical-align:bottom;border:1pt solid'>inside</span></div>
+                </body></html>
+                """;
+            const string grownHtml = """
+                <!DOCTYPE html>
+                <html><body style='font:10pt Arial,sans-serif;margin:200pt 0 0 0'>
+                <div><span style='font-size:40pt'>Tall</span> <span style='display:inline-block;overflow:hidden;vertical-align:bottom;height:80pt;border:1pt solid'>inside</span></div>
+                </body></html>
+                """;
+
+            var naturalClip = ClipRectOf(await PageContentAsync(naturalHtml));
+            var grownClip = ClipRectOf(await PageContentAsync(grownHtml));
+
+            Assert.Equal(naturalClip.Bottom, grownClip.Bottom, 1);
+            Assert.Equal(80.0, grownClip.Top - grownClip.Bottom, 1);
+            Assert.True(grownClip.Top > naturalClip.Top,
+                $"growth must extend upward: natural top {naturalClip.Top}, grown top {grownClip.Top}");
+        }
+
+        /// <summary>
+        /// #1167: a percentage height against a definite containing block must grow the clip too, not
+        /// just <c>InlineBlockDeclaredHeightGeometryTests</c>'s <c>CssBox</c>-level assertion — proving the
+        /// resolved value actually reaches <c>FragmentEmitter.ClipSourceBoundsOf</c>, per this repo's
+        /// convention that a purely numeric geometry assertion isn't sufficient proof for anything that
+        /// also affects painting/clipping.
+        /// </summary>
+        [Fact]
+        public async Task ClippedInlineBlockWithAPercentageHeight_ClipsToTheResolvedHeightNotTheContent()
+        {
+            const string html = """
+                <!DOCTYPE html>
+                <html><body style='font:10pt Arial,sans-serif;margin:0'>
+                <div style='height:200pt'>before <span style='display:inline-block;overflow:hidden;height:50%;border:1pt solid'>inside</span> after</div>
+                </body></html>
+                """;
+
+            var content = await PageContentAsync(html);
+            var clip = ClipRectOf(content);
+
+            // The containing div's declared height is 200pt, so 50% resolves to 100pt.
+            Assert.Equal(100.0, clip.Top - clip.Bottom, 1);
+        }
+
+        private static (double Bottom, double Top) ClipRectOf(string content)
+        {
+            // Anchored on the same BT/Td text-draw suffix the other tests in this file use, so this
+            // matches the clip immediately governing the box's own drawn text - not an unrelated clip
+            // (e.g. the page itself) earlier in the stream. Unlike the other fixtures here, this one's
+            // preceding text ("Tall") is a different font size, so the box's own text run DOES re-emit a
+            // font-selection operator between BT and Td - optionally matched rather than assumed absent.
+            var clipped = Regex.Match(content,
+                @"q\s+([-\d.]+) ([-\d.]+) m\s+([-\d.]+) ([-\d.]+) l\s+([-\d.]+) ([-\d.]+) l\s+([-\d.]+) ([-\d.]+) l\s+h\s+W\*? n\s+BT\s+(?:/\S+ [-\d.]+ Tf\s+)?([-\d.]+) ([-\d.]+) Td");
+
+            Assert.True(clipped.Success, "the box must push a clip path and draw its text inside it");
+
+            double N(int group) => double.Parse(clipped.Groups[group].Value, CultureInfo.InvariantCulture);
+
+            return (Math.Min(N(2), N(6)), Math.Max(N(2), N(6)));
+        }
+
         private static async Task<string> PageContentAsync(string html)
         {
             var generator = new PdfGenerator();
