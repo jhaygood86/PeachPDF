@@ -42,6 +42,62 @@ namespace PeachPDF.Tests.Integration
                 Assert.Equal(2, placements);
         }
 
+        /// <summary>
+        /// Same-page sibling of <see cref="AssertOneFormOnTwoPages"/>: asserts a single page contains
+        /// exactly one Form XObject invoked <paramref name="placementCount"/> times, for the
+        /// separate-elements-sharing-one-source scenario (issue #1173) rather than one element repainted
+        /// across pages.
+        /// </summary>
+        private static void AssertOneFormOnOnePage(string pdf, int placementCount)
+        {
+            Assert.Single(Regex.Matches(pdf, @"/Type /Page\b"));
+            Assert.Single(Regex.Matches(pdf, @"/Subtype /Form\b"));
+
+            var formObject = Regex.Match(pdf, @"(\d+) 0 obj(?:(?!\d+ 0 obj).)*?/Subtype /Form",
+                RegexOptions.Singleline).Groups[1].Value;
+            Assert.NotEmpty(formObject);
+            Assert.Equal(placementCount, Regex.Matches(pdf, @"/\w+ Do\b").Count);
+        }
+
+        [Fact]
+        public async Task TwoImgElementsWithSameSvgSource_ShareOneFormOnOnePage()
+        {
+            var url = SvgDataUri();
+            var pdf = await Render($"""
+                <img src="{url}" style="width:40pt;height:40pt"/>
+                <img src="{url}" style="width:40pt;height:40pt"/>
+                """);
+
+            AssertOneFormOnOnePage(pdf, placementCount: 2);
+        }
+
+        [Fact]
+        public async Task ImgAndBackgroundImage_SameSvgSource_ShareOneFormOnOnePage()
+        {
+            var url = SvgDataUri();
+            var pdf = await Render($"""
+                <img src="{url}" style="width:40pt;height:40pt"/>
+                <div style="width:40pt;height:40pt;background-image:url('{url}');
+                            background-size:40pt 40pt;background-repeat:no-repeat"></div>
+                """);
+
+            AssertOneFormOnOnePage(pdf, placementCount: 2);
+        }
+
+        [Fact]
+        public async Task TwoImgElementsWithDifferentSvgSources_KeepDistinctForms()
+        {
+            var pdf = await Render($"""
+                <img src="{SvgDataUri("#c0392b")}" style="width:40pt;height:40pt"/>
+                <img src="{SvgDataUri("#2980b9")}" style="width:40pt;height:40pt"/>
+                """);
+
+            Assert.Equal(2, Regex.Matches(pdf, @"/Subtype /Form\b").Count);
+            Assert.Equal(2, Regex.Matches(pdf, @"/\w+ Do\b").Count);
+            Assert.Contains("0.753", pdf);
+            Assert.Contains("0.161", pdf);
+        }
+
         [Fact]
         public async Task FixedInlineSvg_ReusesOneFormAcrossPages()
         {
