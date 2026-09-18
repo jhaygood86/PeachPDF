@@ -7442,6 +7442,46 @@ namespace PeachPDF.Html.Core.Dom
             && box.FlexDirection.Value is CSS.FlexDirection.Row or CSS.FlexDirection.RowReverse;
 
         /// <summary>
+        /// Whether <paramref name="box"/> is an atomic inline-level box (css-display-3
+        /// <see href="https://www.w3.org/TR/css-display-3/#atomic-inline">&#167;2.3</see>) that must be
+        /// measured in isolation, via its own top-level <see cref="GetMinMaxWidth"/> call, rather than by
+        /// continuing the flat <see cref="GetMinMaxSumWords"/> walk into its children.
+        /// <para>
+        /// <c>inline-block</c>, <c>inline-table</c> and <c>inline-grid</c> always qualify - each
+        /// establishes its own independent formatting context regardless of what is inside it. An
+        /// <c>inline-flex</c> qualifies only when it is NOT a flex row (i.e. <c>flex-direction: column</c>
+        /// or <c>column-reverse</c>) - a flex ROW is already isolated per-ITEM by <see cref="IsFlexRow"/>
+        /// a few lines below in <see cref="GetMinMaxSumWords"/>, which sums each item's own isolated width
+        /// rather than isolating the row as a single opaque unit, so the two conditions are deliberately
+        /// mutually exclusive rather than one subsuming the other.
+        /// </para>
+        /// <para>
+        /// Without this, a block-level descendant inside one of these boxes resets the flat walk's single
+        /// running <c>maxSum</c>, and the epilogue restores it with <c>Math.Max</c> instead of adding it
+        /// back onto the line the atomic box sits on - undercounting a shrink-to-fit box (a float, an auto
+        /// table column) that holds one of these as a child (issue #1032).
+        /// </para>
+        /// <para>
+        /// Excludes a flex or grid ITEM (<see cref="IsFlexOrGridItem"/>), even though its own computed
+        /// display can be one of the atomic-inline values above: participating in a flex/grid formatting
+        /// context blockifies it (css-display-3 §2.7) regardless of that computed display, so it is not on
+        /// any inline formatting context's line at all and must compete for "widest line wins" via the
+        /// ordinary <see cref="StartsNewLine"/> path instead of being isolated and SUMMED as if it sat
+        /// beside its siblings. Isolating it here anyway reintroduces exactly the bug
+        /// <see cref="IsFlexOrGridItem"/>'s own remarks describe: a single-line flex COLUMN of
+        /// <c>inline-block</c> items measuring as their SUM (72.5742pt) instead of their widest (39.5859pt).
+        /// </para>
+        /// </summary>
+        private static bool IsAtomicInlineRequiringIsolatedMeasurement(CssBox box) =>
+            !IsFlexOrGridItem(box)
+            && box.DerivedStyle.ActualDisplay switch
+            {
+                Keywords.InlineBlock or Keywords.InlineTable or Keywords.InlineGrid => true,
+                Keywords.InlineFlex => !IsFlexRow(box),
+                _ => false
+            };
+
+        /// <summary>
         /// Get the <paramref name="min"/> and <paramref name="maxSum"/> of the box words content and <paramref name="paddingSum"/>.<br/>
         /// </summary>
         /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
@@ -7739,6 +7779,65 @@ namespace PeachPDF.Html.Core.Dom
 
                         maxSum += floatMax + floatMargins;
 
+                        atLineStart = false;
+                        continue;
+                    }
+
+                    // An atomic inline-level box (inline-block/-table/-grid, and inline-flex that is not
+                    // a flex row) is one opaque unit on the line it sits on (css-display-3 §2.3) and must
+                    // be measured through its OWN top-level GetMinMaxWidth call, exactly as the flex-row
+                    // branch above measures each of ITS items - never by continuing this flat walk into
+                    // its children, which is what let a block-level descendant inside it reset and
+                    // mismeasure the shared running total (issue #1032).
+                    //
+                    // Bypassing the recursive GetMinMaxSumWords call entirely (rather than special-casing
+                    // it from inside that call, the way the flex-row branch handles its OWN box) is what
+                    // keeps childBox's own border/padding from being counted twice: entering a recursive
+                    // frame for childBox would fold its decoration into the ambient `paddingSum` this
+                    // frame is already carrying (line ~7501 below), and then AGAIN into `itemMax` from its
+                    // own isolated GetMinMaxWidth call. Skipping the recursive call avoids the first half
+                    // of that double count - the same reason the float branch above never recurses into
+                    // the float either.
+                    if (IsAtomicInlineRequiringIsolatedMeasurement(childBox))
+                    {
+                        childBox.GetMinMaxWidth(g, out var itemMin, out var itemMax);
+
+                        // GetMinMaxWidth deliberately excludes a box's OWN explicit width from its own
+                        // top-level call (a non-replaced box's width has no effect on the measurement of
+                        // its own content, CSS 2.1 §10.3.1) - normally the CALLER folds a child's explicit
+                        // width in afterwards (the includeExplicitWidth fold further down this method), but
+                        // that fold never runs for childBox since it never enters a recursive frame here.
+                        // Apply it directly instead, replacing rather than flooring the content-based
+                        // result: an atomic inline's non-auto `width` fixes its used width regardless of
+                        // its content (CSS 2.1 §10.3.9), the same way a float's already does a few lines
+                        // above. Without this an empty `<span style="display:inline-block;width:50pt">`
+                        // measured as 0 instead of 50pt.
+                        if (CssValueParser.IsValidLength(childBox.Width) && !childBox.Width.EndsWith('%'))
+                        {
+                            itemMin = itemMax = CssValueParser.ParseLength(childBox.Width, 0, childBox)
+                                + childBox.ActualBoxSizeIncludedWidth;
+                        }
+
+                        var itemMargins = childBox.ActualMarginLeft + childBox.ActualMarginRight;
+
+                        // The atomic box is itself an unbreakable unit on the line, so the run of words
+                        // before it ends here rather than continuing through it - same treatment as the
+                        // float branch above.
+                        UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
+                        unbreakableRunWidth = 0;
+                        previousWord = null;
+                        trailingRegionalIndicatorCount = 0;
+                        trailingGraphemeContext = string.Empty;
+                        UpdateMinWidth(ref min, ref minDecoration, itemMin + itemMargins, paddingSum);
+
+                        // Unlike a float, this box is in-flow: the space before it is an ordinary
+                        // inter-word gap already folded into maxSum by the preceding word, not a hanging
+                        // one, so there is no trailingSpace subtraction here. Its own trailing space (if
+                        // any content follows it) was already hung internally by its own GetMinMaxWidth
+                        // call (that method's own `maxSum -= trailingSpace`), so nothing hangs off the
+                        // outer maxSum either, once it is added.
+                        maxSum += itemMax + itemMargins;
+                        trailingSpace = 0;
                         atLineStart = false;
                         continue;
                     }
