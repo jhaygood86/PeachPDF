@@ -1315,6 +1315,250 @@ namespace PeachPDF.Tests.Integration
                     + "unpainted"));
         }
 
+        [Theory]
+        [InlineData(
+            "<div style='width:260px;line-height:2;font:16px Arial;padding:14px'>" +
+            "<span id='s' style='outline:6px groove #4a90d9;border-radius:12px'>" +
+            "Alpha<br>Beta<br>Gamma</span></div>")]
+        [InlineData(
+            "<div style='width:260px;line-height:1.2;padding:14px'>" +
+            "<span id='s' style='outline:10px inset #4a90d9;outline-offset:-3px;border-radius:16px'>" +
+            "wwwwwwwwwwwwwwww<br>wwwwwwwwwwwww<br>wwwwwwwwww<br>wwwwwwwwwwwwwwwwwwww<br>ww</span></div>")]
+        [InlineData(
+            "<div style='width:260px;line-height:1.2;padding:14px'>" +
+            "<span id='s' style='outline:8px inset #4a90d9;border-radius:12px;outline-offset:2px'>" +
+            "wwwwwwwwww<br>i<br>wwwwwwwwww</span></div>")]
+        [InlineData(
+            "<div style='width:200pt;font:10pt Arial;line-height:40pt'>" +
+            "<span id='s' style='border-radius:8pt;outline:6pt groove #36c'>" +
+            "Alpha<br>Beta<br>Gamma</span></div>")]
+        public async Task BevelledOutline_ShadesEveryBandPixelFromItsOwnEdge(string body)
+        {
+            // The lit and shaded fills go through the same band path one after the other, so a band
+            // pixel inside both clips is repainted in whichever shade runs second. A clip that
+            // carries its corner radius along the whole edge reaches a different edge's band
+            // whenever another boundary edge passes within about half the outline width plus the
+            // radius of the edge's centreline: separate line pieces close together, short staircase
+            // steps, narrow necks. The repaint is the wrong shade, not missing paint, so the
+            // mask-diff coverage test and the clip-convexity test above both pass with it present.
+            // The four cases are separate pieces (light sliver along Beta/Gamma's outer top), a
+            // staircase notch overwritten by the wrong shade, a narrow middle line with a positive
+            // offset, and widely spaced lines exercising one band fill per disjoint contour - each
+            // correct without the radius-wide clips and wrong with them, in both PDFium and MuPDF.
+            //
+            // Only one direction shows: the shaded fill runs second, so it is a shaded clip
+            // reaching a lit-owned pixel that paints wrong - a lit clip reaching a shaded-owned
+            // pixel is repainted correctly by the shaded fill running after it. Ownership comes
+            // from the band path's own outer straights, which run parallel to the boundary edges
+            // that chose each segment's shade in the first place: the nearest straight names the
+            // pixel's edge.
+            var html = LayoutHarness.Wrap(body);
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            // One band fill per contour, clipped to that contour's own edges only: each contour
+            // contributes its lit clip then its shaded clip (twice that for groove/ridge's two
+            // passes), so consecutive pairs guard the same band with the same geometry twice.
+            var bands = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(p => !p.Stroked).ToList();
+            Assert.NotEmpty(bands);
+            Assert.Equal(bands.Count, g.ClipPaths.Count);
+            Assert.True(bands.Count % 2 == 0);
+
+            for (var i = 0; i < bands.Count; i += 2)
+            {
+                var shadedPolys = Quads(g.ClipPaths[i + 1]).ToList();
+                Assert.NotEmpty(Quads(g.ClipPaths[i]));
+                Assert.NotEmpty(shadedPolys);
+
+                var straights = OuterStraights(bands[i]).ToList();
+
+                var litPolys = Quads(g.ClipPaths[i]).ToList();
+
+                foreach (var point in StraightSamples(bands[i]))
+                {
+                    var litDistance = straights
+                        .Where(s => s.IsLit).Select(s => DistanceToSegment(point, s))
+                        .DefaultIfEmpty(double.MaxValue).Min();
+                    var shadedDistance = straights
+                        .Where(s => !s.IsLit).Select(s => DistanceToSegment(point, s))
+                        .DefaultIfEmpty(double.MaxValue).Min();
+
+                    // Lit-owned, away from any mitre bisector: the shaded fill running second must
+                    // not touch it. Pixels whose nearest lit and shaded straights tie sit on the
+                    // mitre itself, where either shade is correct.
+                    if (litDistance + 0.05 < shadedDistance)
+                    {
+                        var owner = straights
+                            .Where(s => s.IsLit)
+                            .MinBy(s => DistanceToSegment(point, s));
+                        var hit = shadedPolys
+                            .Select((poly, index) => (poly, index))
+                            .Where(item => StrictlyContains(item.poly, point))
+                            .ToList();
+                        var hitDesc = string.Join(
+                            ";",
+                            hit.Select(item =>
+                                $"#{item.index}[{string.Join(";", item.poly.Select(p => $"{p.X:0.##},{p.Y:0.##}"))}]"));
+                        Assert.False(
+                            hit.Any(),
+                            $"band pixel ({point.X:0.##}, {point.Y:0.##}) belongs to a lit edge "
+                            + $"({owner.From.X:0.##},{owner.From.Y:0.##})->({owner.To.X:0.##},{owner.To.Y:0.##}) "
+                            + $"but falls inside shaded clip(s) [{hitDesc}] "
+                            + $"(dLit {litDistance:0.###}, dShaded {shadedDistance:0.###}), "
+                            + "so the shaded fill repaints it");
+                    }
+
+                    // Shaded-owned, away from any mitre bisector: it must be painted shaded, so a
+                    // lit clip reaching it is only harmless while a shaded clip covers it too (the
+                    // shaded fill running second then repaints it correctly). A shaded-owned pixel
+                    // inside a lit clip but no shaded clip keeps the lit shade - the dark triangle
+                    // in a light run.
+                    if (shadedDistance + 0.05 < litDistance
+                        && litPolys.Any(poly => StrictlyContains(poly, point))
+                        && !shadedPolys.Any(poly => ContainsPoint(poly, point)))
+                    {
+                        Assert.Fail(
+                            $"band pixel ({point.X:0.##}, {point.Y:0.##}) belongs to a shaded edge "
+                            + "but falls inside a lit clip and no shaded clip, "
+                            + "so it keeps the lit shade");
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// One straight run of a band path's outer contour, which travels the same direction the
+        /// boundary edge it came from does - so the direction of travel names its bevel shade the
+        /// same way: rightwards or upwards is lit.
+        /// </summary>
+        private readonly record struct BandStraight(RPoint From, RPoint To, bool IsLit);
+
+        /// <summary>
+        /// The straight runs of <paramref name="path"/>'s outer subpaths (even indices: each contour
+        /// contributes its outer edge wound forwards, then its inner edge wound backwards, so the
+        /// odd ones travel the other way and would name every shade backwards).
+        /// </summary>
+        private static IEnumerable<BandStraight> OuterStraights(
+            TestRecordingGraphics.DrawPathCall path)
+        {
+            for (var subpath = 0; subpath < path.SubpathStarts.Count; subpath += 2)
+            {
+                var start = path.SubpathStarts[subpath];
+                var end = subpath + 1 < path.SubpathStarts.Count
+                    ? path.SubpathStarts[subpath + 1]
+                    : path.Points.Count;
+
+                for (var k = start; k + 1 < end; k++)
+                {
+                    if (path.BezierControlPoints.Contains(k)
+                        || path.BezierControlPoints.Contains(k + 1))
+                        continue;
+
+                    var from = path.Points[k];
+                    var to = path.Points[k + 1];
+                    var dx = Math.Sign(to.X - from.X);
+                    var dy = Math.Sign(to.Y - from.Y);
+                    if ((dx == 0) == (dy == 0)) continue;
+
+                    yield return new BandStraight(from, to, dx > 0 || dy < 0);
+                }
+            }
+        }
+
+        /// <summary>
+        /// The points of <paramref name="path"/>'s straight runs, endpoints included, subdivided to
+        /// half a point. A point on a run sits exactly on its own straight, so the nearest straight
+        /// names its edge unambiguously - except a corner shared by two runs, which is distance zero
+        /// from both and skipped as tied. A wrong-shade repaint always covers a whole run of the
+        /// band, so half-point spacing cannot step over one.
+        /// </summary>
+        private static IEnumerable<RPoint> StraightSamples(
+            TestRecordingGraphics.DrawPathCall path)
+        {
+            for (var subpath = 0; subpath < path.SubpathStarts.Count; subpath++)
+            {
+                var start = path.SubpathStarts[subpath];
+                var end = subpath + 1 < path.SubpathStarts.Count
+                    ? path.SubpathStarts[subpath + 1]
+                    : path.Points.Count;
+
+                for (var k = start; k + 1 < end; k++)
+                {
+                    if (path.BezierControlPoints.Contains(k)
+                        || path.BezierControlPoints.Contains(k + 1))
+                        continue;
+
+                    var from = path.Points[k];
+                    var to = path.Points[k + 1];
+
+                    var length = Math.Abs(to.X - from.X) + Math.Abs(to.Y - from.Y);
+                    var steps = Math.Max(1, (int)Math.Ceiling(length / 0.5));
+                    for (var step = 0; step <= steps; step++)
+                        yield return new RPoint(
+                            from.X + (to.X - from.X) * step / steps,
+                            from.Y + (to.Y - from.Y) * step / steps);
+                }
+            }
+        }
+
+        /// <summary>
+        /// The distance from <paramref name="point"/> to the segment
+        /// <paramref name="straight"/> spans.
+        /// </summary>
+        private static double DistanceToSegment(RPoint point, BandStraight straight)
+        {
+            var dx = straight.To.X - straight.From.X;
+            var dy = straight.To.Y - straight.From.Y;
+            var lengthSquared = dx * dx + dy * dy;
+            if (lengthSquared <= 0) return double.MaxValue;
+
+            var t = ((point.X - straight.From.X) * dx + (point.Y - straight.From.Y) * dy)
+                / lengthSquared;
+            t = Math.Max(0, Math.Min(1, t));
+
+            var x = straight.From.X + t * dx;
+            var y = straight.From.Y + t * dy;
+            return Math.Sqrt(
+                (point.X - x) * (point.X - x) + (point.Y - y) * (point.Y - y));
+        }
+
+        /// <summary>
+        /// Whether <paramref name="point"/> lies strictly inside <paramref name="polygon"/> - on its
+        /// boundary counts as outside, since neighbouring edges' territories meet along their shared
+        /// mitre by construction.
+        /// </summary>
+        private static bool StrictlyContains(IReadOnlyList<RPoint> polygon, RPoint point)
+        {
+            const double tolerance = 1e-9;
+            var inside = false;
+
+            for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+            {
+                var a = polygon[i];
+                var b = polygon[j];
+
+                // On the edge itself, within tolerance: boundary, not interior.
+                var cross = (b.X - a.X) * (point.Y - a.Y) - (b.Y - a.Y) * (point.X - a.X);
+                var length = Math.Sqrt((b.X - a.X) * (b.X - a.X) + (b.Y - a.Y) * (b.Y - a.Y));
+                if (length > 0 && Math.Abs(cross) / length <= tolerance
+                    && point.X >= Math.Min(a.X, b.X) - tolerance
+                    && point.X <= Math.Max(a.X, b.X) + tolerance
+                    && point.Y >= Math.Min(a.Y, b.Y) - tolerance
+                    && point.Y <= Math.Max(a.Y, b.Y) + tolerance)
+                    return false;
+
+                if (a.Y > point.Y != b.Y > point.Y
+                    && point.X < (b.X - a.X) * (point.Y - a.Y) / (b.Y - a.Y) + a.X)
+                    inside = !inside;
+            }
+
+            return inside;
+        }
+
         /// <summary>
         /// Whether any two non-adjacent sides of the closed polygon <paramref name="polygon"/> cross.
         /// </summary>
