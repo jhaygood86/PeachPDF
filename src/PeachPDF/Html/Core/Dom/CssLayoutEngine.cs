@@ -3241,7 +3241,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="blockBox">The block establishing the inline formatting context <paramref name="b"/>
         /// flows within - the box whose own <c>white-space</c>/line-clamp/text-indent govern the line.</param>
         /// <param name="box">The box whose recursive <c>FlowBox</c> call is placing <paramref name="b"/> -
-        /// passed through to the float-intersection lookups, which query floats relative to it.</param>
+        /// passed through to <see cref="LeftFloatAt"/>/<see cref="RightFloatAt"/>, which query floats
+        /// relative to it - both a float preceding <paramref name="box"/> as an ordinary sibling AND one
+        /// living among <paramref name="box"/>'s own inline content (issue #1038), so an atomic inline-level
+        /// box sharing a line with an inline float wraps around it exactly as an ordinary word would.</param>
         /// <param name="b">The atomic inline-level box being preflighted.</param>
         /// <param name="outerContentWidth">
         /// The box's estimated outer content-box width (border/padding included, margin excluded) - for
@@ -3271,7 +3274,7 @@ namespace PeachPDF.Html.Core.Dom
             double clonedTrailing, bool clonesDecorations, bool isRtl)
         {
             var actualLimitRight = coordinates.Line.ContentRight;
-            var rightFloat = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates);
+            var rightFloat = RightFloatAt(coordinates, box);
             if (rightFloat is not null)
             {
                 actualLimitRight = rightFloat.Location.X - rightFloat.ActualMarginLeft;
@@ -3302,7 +3305,7 @@ namespace PeachPDF.Html.Core.Dom
             OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX,
                 coordinates.WordOrdinal, followsForcedBreak: false, isRtl);
 
-            var leftFloat = DomUtils.GetLastLeftIntersectingFloatBox(box, coordinates);
+            var leftFloat = LeftFloatAt(coordinates, box);
             if (leftFloat is not null)
             {
                 coordinates.CurrentX = leftFloat.ActualRight + leftFloat.ActualMarginRight;
@@ -3443,6 +3446,196 @@ namespace PeachPDF.Html.Core.Dom
                 coordinates.CurrentX += GetLineTextIndent(blockBox, isFirstLine: false,
                     coordinates.Line.FollowsForcedBreak);
             }
+        }
+
+        /// <summary>
+        /// Places a floated child encountered mid-inline-flow (issue #1038: a float that is a sibling of
+        /// ordinary inline content within one inline formatting context, rather than a separate block-level
+        /// box that merely precedes or follows one) and lays out its own content.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Positioned directly from the live inline cursor rather than through
+        /// <see cref="CssBox.PerformLayoutImp"/>'s ordinary block-child path
+        /// (<c>CssBox.PlaceAndSizeBlockChild</c>/<c>ResolveBlockChildOffset</c>): that path resolves a
+        /// block-level child's top from its previous BLOCK-level sibling's bottom edge, which has no
+        /// relationship to <paramref name="coordinates"/>'s current line - and CSS 2.1 §9.5.1 rule 6 puts a
+        /// float's outer top no higher than the top of THAT line, the one this flow is building right now.
+        /// This mirrors <see cref="PrepareAtomicBlockContentChild"/>'s own direct-from-cursor placement for
+        /// an inline-block.
+        /// </para>
+        /// <para>
+        /// Content is then laid out through <see cref="CssBox.LayoutContentAtItsAssignedPosition"/> - the
+        /// same entry point <see cref="FlowAtomicBlockContentChild"/> already uses for an inline-block
+        /// holding real block-level content - so a float with block-level children of its own gets the
+        /// identical, already-tested block-content layout machinery an ordinary block-level floated
+        /// sibling already gets via <c>CssBox.PlaceAndSizeBlockChild</c>: <c>framePlacesChild: false</c> is
+        /// what makes that shared entry point skip re-resolving a position this method has already
+        /// assigned, while still running the box's own prologue/content/epilogue phases unchanged.
+        /// </para>
+        /// <para>
+        /// <b>Scope</b>: like <see cref="CssLayoutEngine.FloatBox"/> itself (via
+        /// <c>containingBox.Boxes.IndexOf(box)</c>), this assumes <paramref name="b"/> is a direct child of
+        /// <paramref name="blockBox"/>'s own <see cref="CssBox.Boxes"/> - the shape #1038 and every existing
+        /// float-placement call site already assume. A float nested deeper inside another inline element's
+        /// own children is placed here too (FlowBox recurses into nested inlines regardless), but
+        /// <c>ClearBox</c>'s own sibling scan would not find it among the right list in that shape, exactly
+        /// as it already would not for an ordinary block-level float in that position today.
+        /// </para>
+        /// <para>
+        /// <b>Pagination</b>: if <paramref name="b"/>'s own content is taller than fits in the remaining
+        /// fragmentainer, <see cref="CssBox.LayoutContentAtItsAssignedPosition"/> leaves a
+        /// <c>PendingBreakToken</c> on <paramref name="b"/> exactly as it would for an inline-block with
+        /// block content reached through <see cref="FlowAtomicBlockContentChild"/> - which today, like this
+        /// call, does not thread that token any further. Both are monolithic-in-practice for this flow's own
+        /// pagination the same way an <c>inline-table</c>/<c>inline-grid</c>/<c>inline-flex</c> child already
+        /// is (see this function's own <c>!childOpensHere</c> handling for those): <paramref name="b"/>'s
+        /// excess content overflows the page it starts on rather than continuing onto a later one. This is
+        /// not a regression against the "float before inline content" shape that already worked before
+        /// #1038 - it shares the identical limitation an inline-block with tall block content already had -
+        /// and it is safe rather than corrupting: <paramref name="b"/> is positioned once, its own content
+        /// layout is the ordinary (already fragmentainer-aware) block-content dispatch, and nothing here
+        /// re-enters or re-places it. See the #1038 migration note for the precise scope this leaves open.
+        /// </para>
+        /// </remarks>
+        private static async ValueTask FlowFloatChild(RGraphics g, CssBox blockBox, CssBox b, CssLineBoxCoordinates coordinates)
+        {
+            // A speculative wrap may have rejected this box earlier in the same layout generation -
+            // reaching real placement is the authoritative point at which it becomes fragment-visible,
+            // exactly as for FlowAtomicBlockContentChild's identical call.
+            b.AllowFragmentEmissionForCurrentLayout();
+
+            b.Location = new RPoint(
+                blockBox.ClientLeft + b.ActualMarginLeft, coordinates.Line.FlowTop ?? coordinates.CurrentY);
+            b.ActualBottom = b.Location.Y;
+
+            var width = await GetBoxWidth(g, b, b.Location.Y);
+            b.ActualRight = b.Location.X + width + b.ActualBoxSizeIncludedWidth;
+
+            // The actual left/right placement scan (past any other already-placed float) and `clear`
+            // handling - the same call the ordinary block-child float path makes from
+            // CssBox.CommitBlockChildOffset.
+            FloatBox(b);
+
+            (coordinates.InlineFloats ??= []).Add(b);
+
+            await b.LayoutContentAtItsAssignedPosition(g);
+        }
+
+        /// <summary>
+        /// The most restrictive of <paramref name="coordinates"/>'s own
+        /// <see cref="CssLineBoxCoordinates.InlineFloats"/> on <paramref name="side"/> whose vertical span
+        /// covers the line currently being built - the counterpart, for a float <see cref="FlowBox"/> has
+        /// placed directly among a box's own inline content, of what
+        /// <see cref="DomUtils.GetLastLeftIntersectingFloatBox"/> (furthest reach wins) and
+        /// <see cref="DomUtils.GetLastRightIntersectingFloatBox"/> (narrowest reach wins) already do for a
+        /// float that precedes the box being flowed as a SIBLING of it. Kept as a separate, small,
+        /// unoptimized scan over <see cref="CssLineBoxCoordinates.InlineFloats"/> (typically holding very
+        /// few floats) rather than folded into those two: they walk ancestors and preceding siblings by
+        /// index for performance reasons that do not apply here, and would need an index bound to safely
+        /// avoid reading a not-yet-placed float's stale geometry if changed to scan a box's own children.
+        /// </summary>
+        /// <remarks>
+        /// A left float is a POINT-collision test against <see cref="CssLineBoxCoordinates.CurrentX"/> -
+        /// the same convention <see cref="DomUtils.GetLastLeftIntersectingFloatBox"/> already uses (see its
+        /// own remarks) - not merely a vertical-span one: once the cursor has genuinely advanced past the
+        /// float's right edge (placing earlier words on this same line), it must stop being reported as
+        /// intersecting, or every later word on the line is clamped straight back to that edge instead of
+        /// being left where it actually landed. A right float keeps the lookahead convention
+        /// <see cref="DomUtils.GetLastRightIntersectingFloatBox"/> already documents instead (its own
+        /// remarks: "independent of the cursor's current position") - it caps how far right content on
+        /// this row may extend in advance, not where the cursor happens to sit right now.
+        /// </remarks>
+        private static CssBox? GetIntersectingInlineFloat(CssLineBoxCoordinates coordinates, Floating side)
+        {
+            if (coordinates.InlineFloats is not { Count: > 0 } floats) return null;
+
+            CssBox? best = null;
+
+            foreach (var floatBox in floats)
+            {
+                if (floatBox.Float.Value != side) continue;
+
+                var top = floatBox.Location.Y;
+                var bottom = floatBox.ActualBottom + floatBox.ActualMarginBottom;
+
+                if (coordinates.CurrentY < top || coordinates.CurrentY >= bottom) continue;
+
+                if (side == Floating.Left)
+                {
+                    var rightEdge = floatBox.ActualRight + floatBox.ActualMarginRight;
+
+                    // The cursor has already moved past this float's right edge (earlier words on this
+                    // line advanced it there) - it no longer constrains anything further along the line.
+                    if (coordinates.CurrentX >= rightEdge) continue;
+
+                    if (best is null || rightEdge > best.ActualRight + best.ActualMarginRight)
+                    {
+                        best = floatBox;
+                    }
+                }
+                else if (best is null || floatBox.Location.X - floatBox.ActualMarginLeft
+                         < best.Location.X - best.ActualMarginLeft)
+                {
+                    best = floatBox;
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>
+        /// The more restrictive of the last LEFT float intersecting the line at <paramref name="reference"/>'s
+        /// position - combining <see cref="DomUtils.GetLastLeftIntersectingFloatBox"/> (a float preceding
+        /// <paramref name="reference"/> as a sibling of it, or of one of its ancestors) with
+        /// <see cref="GetIntersectingInlineFloat"/> (a float <see cref="FlowBox"/> placed directly among
+        /// <paramref name="reference"/>'s own inline content, issue #1038) - since neither one alone can
+        /// discover a float the other shape reaches. A document with no float in the #1038 shape leaves
+        /// <see cref="CssLineBoxCoordinates.InlineFloats"/> empty, so this returns exactly what the
+        /// ancestor-only lookup already did on its own.
+        /// </summary>
+        /// <remarks>
+        /// Shared rather than duplicated: originally a local function inside <see cref="FlowBox"/> (which
+        /// still calls it, passing its own <c>coordinates</c>/<c>box</c>), promoted to a standalone method
+        /// once <see cref="FitAtomicInlineOnLine"/> needed the identical combining logic for an atomic
+        /// inline-level box's own line-fit check (issue #1105) - a float living among the SAME box's
+        /// inline content must narrow that check's available width exactly as it narrows an ordinary
+        /// word's, and a plain <see cref="DomUtils.GetLastLeftIntersectingFloatBox"/> call there would miss
+        /// it precisely as this method's own remarks describe.
+        /// </remarks>
+        private static CssBox? LeftFloatAt(CssLineBoxCoordinates coordinates, CssBox reference)
+        {
+            var ancestorFloat = DomUtils.GetLastLeftIntersectingFloatBox(reference, coordinates);
+            var inlineFloat = GetIntersectingInlineFloat(coordinates, Floating.Left);
+
+            if (ancestorFloat is null) return inlineFloat;
+            if (inlineFloat is null) return ancestorFloat;
+
+            return inlineFloat.ActualRight + inlineFloat.ActualMarginRight
+                   > ancestorFloat.ActualRight + ancestorFloat.ActualMarginRight
+                ? inlineFloat
+                : ancestorFloat;
+        }
+
+        /// <summary>
+        /// The RIGHT-float counterpart of <see cref="LeftFloatAt"/> - see its own remarks for why this is
+        /// shared between <see cref="FlowBox"/> and <see cref="FitAtomicInlineOnLine"/> rather than
+        /// duplicated, and why the two sides combine <see cref="DomUtils.GetLastRightIntersectingFloatBox"/>
+        /// with <see cref="GetIntersectingInlineFloat"/> differently (narrowest reach wins here, matching
+        /// <see cref="DomUtils.GetLastRightIntersectingFloatBox"/>'s own lookahead convention).
+        /// </summary>
+        private static CssBox? RightFloatAt(CssLineBoxCoordinates coordinates, CssBox reference)
+        {
+            var ancestorFloat = DomUtils.GetLastRightIntersectingFloatBox(reference, coordinates);
+            var inlineFloat = GetIntersectingInlineFloat(coordinates, Floating.Right);
+
+            if (ancestorFloat is null) return inlineFloat;
+            if (inlineFloat is null) return ancestorFloat;
+
+            return inlineFloat.Location.X - inlineFloat.ActualMarginLeft
+                   < ancestorFloat.Location.X - ancestorFloat.ActualMarginLeft
+                ? inlineFloat
+                : ancestorFloat;
         }
 
         /// <summary>
@@ -3865,8 +4058,22 @@ namespace PeachPDF.Html.Core.Dom
                     await b.MeasureWordsSize(g);
                 }
 
-                var leftSpacing = (b.Position.Value != PositionMode.Absolute && b.Position.Value != PositionMode.Fixed) ? b.ActualMarginLeft + b.ActualBorderLeftWidth + b.ActualPaddingLeft : 0;
-                var rightSpacing = (b.Position.Value != PositionMode.Absolute && b.Position.Value != PositionMode.Fixed) ? b.ActualMarginRight + b.ActualBorderRightWidth + b.ActualPaddingRight : 0;
+                // A float (like an absolute/fixed-positioned child, already excluded here) never sits ON
+                // the line - FlowFloatChild/FloatBox derive its real position from blockBox.ClientLeft/
+                // ActualMarginLeft, never from coordinates.CurrentX - so its own margin/border/padding
+                // must not be added to the cursor at all. Left in (as it was before #1038, when a float
+                // could not yet be reached mid-line), the float's own leftSpacing gets added to CurrentX
+                // at line ~3895 below and, whenever no preceding float on the line overrides it again at
+                // the lastLeftIntersectingFloatBox check further down, survives into the NEXT sibling's
+                // iteration unchanged (this branch continues without ever resetting CurrentX itself) - a
+                // float with a non-zero margin-left/border-left-width/padding-left that is first on its
+                // line then leaves the cursor short of (or past) its own true right edge instead of
+                // untouched, which can make GetIntersectingInlineFloat's point-collision test wrongly
+                // conclude the float has already been passed, dropping the space the next sibling should
+                // reserve for it (CSS 2.1 §9.5.1 rule 6).
+                var excludedFromLineSpacing = b.Position.Value is PositionMode.Absolute or PositionMode.Fixed || b.IsFloated;
+                var leftSpacing = excludedFromLineSpacing ? 0 : b.ActualMarginLeft + b.ActualBorderLeftWidth + b.ActualPaddingLeft;
+                var rightSpacing = excludedFromLineSpacing ? 0 : b.ActualMarginRight + b.ActualBorderRightWidth + b.ActualPaddingRight;
 
                 // Room for the border and padding a `box-decoration-break: clone` ancestor re-inserts at each
                 // line break (css-break-3 §6.2), which the wrap decision has to leave for the fragment it
@@ -3913,7 +4120,7 @@ namespace PeachPDF.Html.Core.Dom
                 // amount - re-applying the raw `leftSpacing` would put back exactly what `slice` suppresses.
                 var appliedLeftSpacing = childOpensHere || b.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone ? leftSpacing : 0;
 
-                var lastLeftIntersectingFloatBox = DomUtils.GetLastLeftIntersectingFloatBox(box, coordinates);
+                var lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, box);
 
                 if (lastLeftIntersectingFloatBox is not null)
                 {
@@ -3928,6 +4135,48 @@ namespace PeachPDF.Html.Core.Dom
                 // border box at it.
                 var childContentStartX = coordinates.CurrentX;
                 var childDeclaredContentWidth = ResolveAtomicInlineDeclaredWidth(b, box, coordinates.CurrentY);
+
+                // !ReferenceEquals(b, box): a floated box with no children of its own but real words
+                // (a replaced element - <img align="left">'s presentational float is the reachable case,
+                // via DomParser.CorrectReplacedElementBoxes' IsReplacedBlockWrapper) hits FlowBox's own
+                // self-iteration convention (`boxes = [box]` a few lines up, when box.Boxes is empty but
+                // box.Words is not) - so this loop's b IS box on that call. By the time this specific
+                // FlowBox call runs at all, b has already been positioned as a float by whichever CALLER
+                // reached it (FlowFloatChild itself, laying out b's own content via
+                // LayoutContentAtItsAssignedPosition - see that method's own remarks) - this inner call's
+                // job is only to flow b's own word to satisfy PlacesItselfAsBlockBox's ContainsInlinesOnly
+                // dispatch (vacuously true for a box with no children), not to place b all over again.
+                // Without this guard, FlowFloatChild → LayoutContentAtItsAssignedPosition →
+                // (ContainsInlinesOnly, vacuous) → CreateLineBoxes → FlowBox → self-iteration → this
+                // branch → FlowFloatChild again, forever - a real stack overflow for exactly this shape.
+                if (b.IsFloated && !ReferenceEquals(b, box))
+                {
+                    // A float contributes no word ordinals of its own (CSS 2.1 §9.5: it is taken out of
+                    // the normal flow), so childOpensHere - computed from childStartOrdinal, the ordinal
+                    // this loop had already reached before visiting b - is exactly "has this box been
+                    // structurally reached before the point an earlier fragmentainer pass stopped at",
+                    // the same question InlineTable/InlineGrid/an atomic inline-block ask of themselves
+                    // below. A float this pass has already placed (on an earlier fragmentainer) still has
+                    // to re-enter CssLineBoxCoordinates.InlineFloats here, though, since that list starts
+                    // empty on every fresh pass - its real, already-committed geometry from the earlier
+                    // pass is what lets a later line on THIS pass keep narrowing around it correctly.
+                    if (!childOpensHere)
+                    {
+                        (coordinates.InlineFloats ??= []).Add(b);
+                    }
+                    else
+                    {
+                        await FlowFloatChild(g, blockBox, b, coordinates);
+                    }
+
+                    // A float never sits on the line - it contributes no content width to the cursor at
+                    // all (subsequent content narrows around it via LeftFloatAt/RightFloatAt instead) - so
+                    // every one of the shared per-child steps below this dispatch chain (the atomic-inset
+                    // undo, the declared-width reservation, and above all the trailing-spacing add, which
+                    // would otherwise nudge the cursor by this box's own margin/border/padding with no
+                    // corresponding advance to nudge it from) is meaningless for it and skipped entirely.
+                    continue;
+                }
 
                 if (b.Words.Count > 0)
                 {
@@ -3996,7 +4245,7 @@ namespace PeachPDF.Html.Core.Dom
                         GrowLineToItsExtent(word);
 
                         var actualLimitRight = coordinates.Line.ContentRight;
-                        var lastRightIntersectingFloatBox = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates);
+                        var lastRightIntersectingFloatBox = RightFloatAt(coordinates, box);
 
                         if (lastRightIntersectingFloatBox is not null)
                         {
@@ -4128,7 +4377,7 @@ namespace PeachPDF.Html.Core.Dom
                             OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, wordOrdinal,
                                 word.IsLineBreak, isRtl);
 
-                            lastLeftIntersectingFloatBox = DomUtils.GetLastLeftIntersectingFloatBox(b, coordinates);
+                            lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, b);
 
                             if (lastLeftIntersectingFloatBox is not null)
                             {
@@ -4223,7 +4472,7 @@ namespace PeachPDF.Html.Core.Dom
                         if (wrapping && overflows && !word.IsLineBreak)
                         {
                             var emergencyLimitRight = coordinates.Line.ContentRight;
-                            var emergencyRightFloat = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates);
+                            var emergencyRightFloat = RightFloatAt(coordinates, box);
                             if (emergencyRightFloat is not null)
                             {
                                 emergencyLimitRight = emergencyRightFloat.Location.X
@@ -4259,7 +4508,7 @@ namespace PeachPDF.Html.Core.Dom
                             UpdateTrailingTextState(word, coordinates.TrailingRegionalIndicatorCount,
                                 coordinates.TrailingGraphemeContext);
 
-                        lastLeftIntersectingFloatBox = DomUtils.GetLastLeftIntersectingFloatBox(box, coordinates);
+                        lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, box);
 
                         if (lastLeftIntersectingFloatBox is not null)
                         {

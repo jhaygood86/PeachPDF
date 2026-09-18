@@ -2604,6 +2604,21 @@ namespace PeachPDF.Html.Core.Parse
                 {
                     CorrectBlockInsideInlineBlockFormattingContexts(child);
                 }
+                else if (child.IsFloated)
+                {
+                    // A float joins ContainsInlinesOnly's own shallow test (issue #1038: DomUtils.
+                    // ContainsInlinesOnly, which is what routes this box here at all), so the ordinary
+                    // per-child recursion in CorrectBlockInsideInline's ELSE branch - the one every other
+                    // block-level child reaches - never runs for it here; this is the one place left that
+                    // still visits every child of an inlines-only box. Without this arm a float's own
+                    // "block inside inline" problem (e.g. <div style="float:left"><span><div>...</div>
+                    // </span></div>) was never corrected at all, neither here nor by the generic recursion,
+                    // since ContainsInlinesOnly(box) being true short-circuits that recursion entirely.
+                    // Not `inspectInlineBlockFormattingContext: true` - that flag is inline-block's own
+                    // opaque-boundary rule and does not apply to a float, matching the ordinary top-level
+                    // recursion's own (default-false) call for a plain block child.
+                    CorrectBlockInsideInline(child);
+                }
             }
         }
 
@@ -2799,6 +2814,17 @@ namespace PeachPDF.Html.Core.Parse
                 {
                     CorrectInlineParentsInsideInlineBlockFormattingContexts(child);
                 }
+                else if (child.IsFloated)
+                {
+                    // Same reasoning as CorrectBlockInsideInlineBlockFormattingContexts' own float arm: a
+                    // float joins DomUtils.ContainsInlinesOnly's shallow test (issue #1038), so the box
+                    // holding it is routed to THIS specialized walk instead of CorrectInlineBoxesParent's
+                    // ordinary per-child recursion - which is the one call that would otherwise reach the
+                    // float's own subtree. Without this arm a float's own content (e.g. a floated <div>
+                    // holding a mixed inline/block run of its own that needs an anonymous block wrapper)
+                    // never got normalized at all.
+                    CorrectInlineBoxesParent(child);
+                }
             }
         }
 
@@ -2859,8 +2885,21 @@ namespace PeachPDF.Html.Core.Parse
         /// whose content was block-level (<c>&lt;li&gt;&lt;p&gt;…&lt;/p&gt;&lt;/li&gt;</c>) got no marker at
         /// all, on any page (<see href="https://github.com/jhaygood86/PeachPDF/issues/467">#467</see>).
         /// An <c>inside</c> marker <i>is</i> an ordinary flowed inline, and is wrapped like any other.
+        /// <para>
+        /// A floated box joins the run too, even though <see cref="CssBox.IsBlock"/> reports it as
+        /// block-level (CSS 2.1 §9.7 blockifies it): being taken out of the normal flow does not make an
+        /// out-of-flow box part of the block-level content around it (CSS Display 3 §2.7's blockification
+        /// is a computed-<c>display</c> rule, not a box-generation one), so it must not count as the
+        /// "block" half of <see cref="ContainsVariantBoxes"/>'s mixed-content test. Browsers generate no
+        /// anonymous-block wrapper around a run merely because a float sits in it; before this, a run
+        /// like <c>XY &lt;span style="float:left"&gt;Z&lt;/span&gt; more</c> was split at the float into
+        /// two separate anonymous blocks, which ends the line there and places the float as an ordinary
+        /// block-level sibling between them instead of beside the text on one shared line
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1038">#1038</see>).
+        /// </para>
         /// </remarks>
-        private static bool JoinsTheInlineRun(CssBox box) => box.IsInline && !CssBox.IsOutsideMarker(box);
+        private static bool JoinsTheInlineRun(CssBox box) =>
+            (box.IsInline || box.IsFloated) && !CssBox.IsOutsideMarker(box);
 
         /// <summary>
         /// Collapses a collapsible white space run that continues across an inline element boundary with
@@ -3307,6 +3346,17 @@ namespace PeachPDF.Html.Core.Parse
                 if (childBox.DerivedStyle.ActualDisplay == Keywords.None)
                     continue;
 
+                // A float establishes a block formatting context of its own (CSS 2.1 §9.4.1) exactly the
+                // way an atomic inline-level box does, so whatever it holds is that float's own business,
+                // never this ancestor's "block inside inline" problem - matching JoinsTheInlineRun's own
+                // shallow treatment of a float as fine either way. Skipped rather than recursed into
+                // (unlike the atomic-inline-level early return above, which answers for BOX itself): a
+                // float being examined as an ancestor's CHILD here must not be inspected, but the same
+                // float reached as this function's own top-level BOX argument (CorrectBlockInsideInline
+                // recurses into every child, floats included) still needs its own real content inspected,
+                // so a genuine block-inside-inline problem nested inside a float is still corrected.
+                if (childBox.IsFloated) continue;
+
                 if (!childBox.IsInline || !ContainsInlinesOnlyDeep(childBox))
                 {
                     return false;
@@ -3353,9 +3403,41 @@ namespace PeachPDF.Html.Core.Parse
                 if (box.Boxes[i].DerivedStyle.ActualDisplay == Keywords.None)
                     continue;
 
-                var isBlock = !box.Boxes[i].IsInline;
-                hasBlock = hasBlock || isBlock;
-                hasInline = hasInline || JoinsTheInlineRun(box.Boxes[i]);
+                // A float counts toward NEITHER half: it joins the run for JoinsTheInlineRun's own
+                // purpose (which box the wrapping loop below pulls into an existing run), but a float
+                // with nothing genuinely inline anywhere in the box is not itself a reason to wrap
+                // anything - CSS 2.1 §9.2.1.1 wraps a block container's inline children away from its
+                // block-level ones, and an out-of-flow float, on its own, is neither. Before this read
+                // `!box.Boxes[i].IsInline` for hasBlock (true for a float, since floats are blockified)
+                // and JoinsTheInlineRun(...) for hasInline (also true for a float, since issue #1038): a
+                // LONE floated child then satisfied hasBlock AND hasInline by itself, reporting variance
+                // in a box with only one child. CorrectInlineBoxesParent wrapped that lone float into a
+                // new anonymous block, whose own lone child was the same float again - infinite regress
+                // of ever-deeper single-float wrappers (a real stack overflow: <div><div style=
+                // "float:left"></div></div> alone was enough) - and even once that no longer looped, a
+                // float immediately after an ordinary block sibling with no other inline content at all
+                // (`<div id='before'></div><div style='float:left'></div>`) still got wrapped alone,
+                // routing it through FlowBox's inline-formatting-context float placement (positioned
+                // from the current line, CSS 2.1 §9.5.1 rule 6) instead of the ordinary block-child path
+                // that resolves its margin against the preceding sibling (CssBox.ResolveBlockChildOffset/
+                // CollapsedMarginBefore) - dropping the float's own margin-top and clearance handling
+                // entirely, since nothing in that box's single-line inline formatting context asks for
+                // either.
+                // An outside ::marker contributes to NEITHER half either, for a third, separate reason
+                // from a float's: it is ordinary inline-level content (CssBox.IsInline is true for it,
+                // both "inside" and "outside"), but §12.5.1 positions it beside the item's own principal
+                // box rather than in the item's flow at all - JoinsTheInlineRun already excludes it for
+                // that reason (see its own remarks). `!JoinsTheInlineRun(...)` alone is therefore NOT the
+                // same predicate as "is this genuinely block-level": it is also true of an outside marker,
+                // which would otherwise make hasBlock true for an <li> whose only other content is
+                // ordinary inline text - a mix ContainsInlinesOnly already reports as inlines-only and
+                // CorrectInlineBoxesParent must not wrap.
+                var child = box.Boxes[i];
+                var isFloatOrOutsideMarker = child.IsFloated || CssBox.IsOutsideMarker(child);
+                var isRealBlock = !child.IsInline && !isFloatOrOutsideMarker;
+                var isRealInline = child.IsInline && !isFloatOrOutsideMarker;
+                hasBlock = hasBlock || isRealBlock;
+                hasInline = hasInline || isRealInline;
             }
 
             return hasBlock && hasInline;

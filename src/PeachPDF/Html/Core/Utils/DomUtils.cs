@@ -58,9 +58,18 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         /// <param name="box">the box to check</param>
         /// <returns>true - only inline child boxes, false - otherwise</returns>
+        /// <remarks>
+        /// A floated child counts as inline-compatible here too, even though it is blockified
+        /// (<see cref="CssBox.IsBlock"/>): a browser generates no anonymous block around a floated child
+        /// sitting among inline content, so this box's own content dispatch (<c>CssBox.LayoutContents</c>)
+        /// must still treat it as a box whose children flow through one inline formatting context
+        /// (<c>CssLayoutEngine.CreateLineBoxes</c>/<c>FlowBox</c>, which has its own dispatch branch for a
+        /// floated child) rather than the block-children path - see <c>DomParser.JoinsTheInlineRun</c>'s
+        /// own remarks and <see href="https://github.com/jhaygood86/PeachPDF/issues/1038">#1038</see>.
+        /// </remarks>
         public static bool ContainsInlinesOnly(CssBox box)
         {
-            return box.Boxes.All(b => b.IsInline);
+            return box.Boxes.All(b => b.IsInline || b.IsFloated);
         }
 
         /// <summary>

@@ -3895,7 +3895,19 @@ namespace PeachPDF.Html.Core.Dom
                     // pages is CssLayoutEngineTable's long-standing, well-tested feature, and
                     // both display types are always positioned by that engine (PositionAssignedByEngine)
                     // rather than by this generic dispatch's own frame.
-                    var dispatchesToColumnsEngine = EstablishesMultiColumnContext && Boxes.Count > 0 && !DomUtils.ContainsInlinesOnly(this);
+                    //
+                    // The `|| Boxes.Any(IsFloated)` disjunct exists because DomUtils.ContainsInlinesOnly
+                    // now also reports true for a box holding floats (issue #1038: a float joins the same
+                    // inline formatting context as surrounding inline content) - including a multi-column
+                    // box whose direct children are floats with no other content, or floats mixed with
+                    // genuinely inline content. Without it, such a box would newly take the
+                    // ContainsInlinesOnly/CreateLineBoxes branch below instead of the columns engine,
+                    // silently dropping real column layout for that combination - a column is still a real
+                    // fragmentainer for a float-containing box exactly as it already is for one holding
+                    // genuine block-level content, so this box's own dispatch must not change just because
+                    // ContainsInlinesOnly's set of "inline-compatible" children grew.
+                    var dispatchesToColumnsEngine = EstablishesMultiColumnContext && Boxes.Count > 0
+                        && (!DomUtils.ContainsInlinesOnly(this) || Boxes.Any(b => b.IsFloated));
                     var suppressMonolithicBreaking = MonolithicContent.IsMonolithic(this)
                         && !dispatchesToColumnsEngine
                         && DerivedStyle.ActualDisplay is not (Keywords.TableCell or Keywords.TableCaption);
@@ -3907,7 +3919,7 @@ namespace PeachPDF.Html.Core.Dom
                     try
                     {
                         //If there's just inline boxes, create LineBoxes
-                        if (DomUtils.ContainsInlinesOnly(this))
+                        if (DomUtils.ContainsInlinesOnly(this) && !dispatchesToColumnsEngine)
                         {
                             if (resume is null) ActualBottom = Location.Y;
 
@@ -7814,17 +7826,29 @@ namespace PeachPDF.Html.Core.Dom
                         // A float is out of flow, and
                         // <see href="https://www.w3.org/TR/css-text-3/#text-processing">css-text-3
                         // §1.5</see> says "intervening inline box boundaries and out-of-flow elements
-                        // must be ignored" - so landing on the line does NOT make the float content
-                        // following the space before it. That space is still the end of the line's own
-                        // in-flow content, and §4.1.2 hangs it. This is the one place the two questions
-                        // this branch answers come apart: the float's WIDTH joins the line (above),
-                        // while for whitespace the float is transparent and the line has ended (here).
-                        // Treated as an ordinary inter-word gap instead, `XY <span style="float:left">
-                        // ZZZZ</span>` measured 46.1836pt where Chromium and Firefox both give
-                        // 39.5859pt - one space too wide.
-                        maxSum -= trailingSpace;
-                        trailingSpace = 0;
-
+                        // must be ignored" for white-space adjacency - which is exactly why
+                        // DomParser.CollapseWhitespaceRun already treats a float as transparent and
+                        // collapses a run that continues across it into the ONE space living on
+                        // whichever side opened the run - normally the words BEFORE the float, so
+                        // `trailingSpace` (this word run's own hanging space, not yet added to maxSum)
+                        // already IS that one surviving space and there is nothing further to do here:
+                        // it is left exactly as the preceding word run set it, to be resolved the
+                        // ordinary way by whatever follows.
+                        //
+                        // Deliberately NOT hung immediately (an earlier version of this branch did
+                        // `maxSum -= trailingSpace; trailingSpace = 0`, on the reasoning that a float
+                        // can never be followed by more content on the same line): issue #1038 made
+                        // that false - a float is now a plain sibling of ordinary inline content within
+                        // one box, so `XY <span style="float:left">ZZZZ</span> more` is a real, reachable
+                        // shape, and hanging the space unconditionally here discarded it even though
+                        // DomParser's own collapse pass had already made it the run's one surviving
+                        // interior space, undercounting by one space no matter what followed. Leaving it
+                        // pending instead lets the ordinary mechanisms take over: if the float is
+                        // genuinely last, GetMinMaxWidth's own epilogue (`maxSum -= trailingSpace`) hangs
+                        // it exactly as before; if more content follows, that content's own leading space
+                        // was the one the DOM-time pass removed, so simply adding its word width on top
+                        // of the still-pending trailingSpace’s worth already in maxSum reconstructs the
+                        // single interior space, matching Chromium/Firefox either way.
                         maxSum += floatMax + floatMargins;
 
                         atLineStart = false;

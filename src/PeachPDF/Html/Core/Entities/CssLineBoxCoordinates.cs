@@ -1,5 +1,6 @@
 ﻿using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
+using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Entities
 {
@@ -124,5 +125,21 @@ namespace PeachPDF.Html.Core.Entities
         /// advances the cursor by a word space of its own.
         /// </summary>
         public bool PendingWordSeparator { get; set; }
+
+        /// <summary>
+        /// Floats <see cref="CssLayoutEngine.FlowBox"/> has itself placed directly among the block's own
+        /// inline content (issue #1038) - a float that is a sibling of ordinary inline content in the
+        /// same box rather than a separate block-level box that merely precedes one. Not discoverable
+        /// through <see cref="Utils.DomUtils.GetLastLeftIntersectingFloatBox"/>/
+        /// <see cref="Utils.DomUtils.GetLastRightIntersectingFloatBox"/>: those only look at floats that
+        /// precede their own <c>box</c> argument as a SIBLING of it (or of one of its ancestors), which is
+        /// exactly the shape a float living among <c>box</c>'s own children never has. Appended, in flow
+        /// order, both the moment such a float is placed and - on a resumed pass - the moment the walk
+        /// structurally passes back through one placed on an earlier fragmentainer (so its real, already-
+        /// committed geometry re-enters this fresh pass's list rather than the list starting empty and
+        /// silently forgetting it). Consulted alongside the two ordinary queries wherever this flow asks
+        /// for the nearest intersecting float, so whichever of the two is more restrictive wins.
+        /// </summary>
+        public List<CssBox>? InlineFloats { get; set; }
     }
 }

@@ -484,6 +484,36 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task AFloatImmediatelyFollowedByAForcedBreak_StillHangsTheSpaceBeforeIt()
+        {
+            // Issue #1038 made a float a reachable predecessor of a <br> within one inline formatting
+            // context (`XY <float>ZZZZ</float><br>more` is now real, reachable markup, where before a
+            // float could only ever be the LAST thing measured on a line) - a combination the existing
+            // suite had never exercised. This pins the walk's overall answer for it (the float's own
+            // line, closed out by the <br>, still measures "XY"+"ZZZZ" with the space between them
+            // hung, matching AFloat_AddsToTheLineItSitsBeside's own established value for the no-<br>
+            // case). It does NOT, on its own, distinguish the float branch's "leave trailingSpace
+            // pending" design (see the comment on `maxSum += floatMax + floatMargins` in
+            // GetMinMaxSumWords) from the simpler "hang it immediately at the float" alternative that
+            // predated issue #1038's fix: for THIS shape (nothing but the break follows the float on its
+            // line), both strategies hang the exact same space and produce the same number - confirmed
+            // by temporarily reverting to the immediate-hang form and re-running this assertion, which
+            // still passed. `InlineContentEitherSideOfAFloat_StaysOnOneLine` (real word content, not a
+            // break, following the float) is what actually discriminates between the two.
+            Assert.Equal(
+                await FloatWidthAsync("XYZZZZ"),
+                await FloatWidthAsync("XY <span style='float:left'>ZZZZ</span><br>Q"), 3);
+
+            // The contrast case: the SECOND line (after the break) must still be free to win if it is
+            // the wider one, exactly as an ordinary <br> without a float beside it already requires
+            // (ForcedBreak_StillTakesTheWidestLine_NotTheFirst) — the float must not make the walk
+            // ignore the rest of the subtree once its own line has been closed out.
+            Assert.Equal(
+                await FloatWidthAsync("WWWWWWWWWW"),
+                await FloatWidthAsync("XY <span style='float:left'>ZZZZ</span><br>WWWWWWWWWW"), 3);
+        }
+
+        [Fact]
         public async Task InlineContentEitherSideOfAFloat_StaysOnOneLine()
         {
             // What `SharesItsLineWithAFloat` is for, now that hanging the space is decided separately:

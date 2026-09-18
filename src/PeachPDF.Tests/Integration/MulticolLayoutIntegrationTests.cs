@@ -84,6 +84,49 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FloatOnlyChildren_InMultiColumnContainer_DispatchStillReachesColumnsEngine()
+        {
+            // Issue #1038 made DomUtils.ContainsInlinesOnly report true for a box holding only floats
+            // (a float now joins the same inline formatting context as any surrounding inline content),
+            // which could have made a multicol container whose direct children are all floats wrongly
+            // take the ContainsInlinesOnly/CreateLineBoxes dispatch instead of CssLayoutEngineColumns -
+            // routing them through CssLayoutEngine.FlowFloatChild's real, non-zero inline-flow float
+            // placement instead. CssBox.LayoutContents' dispatchesToColumnsEngine was widened
+            // specifically to keep that from happening (`|| Boxes.Any(b => b.IsFloated)`), and this
+            // pins that it still does.
+            //
+            // It does NOT pin correct column placement for these floats: CssLayoutEngineColumns.Layout's
+            // own item filter (`!b.IsExcludedFromFlow`) excludes every floated child from its column-
+            // distribution list before anything lays them out, so they are left at their never-assigned,
+            // all-zero geometry - a confirmed pre-existing bug, unrelated to and unaffected by the #1038
+            // dispatch fix (reproduced identically against unmodified origin/main with the #1038 changes
+            // stashed away), tracked as
+            // .claude/accepted-gaps/a-multicol-containers-floated-children-are-never-laid-out.md /
+            // issue #1203. Asserting that all-zero result here - rather than a real per-column placement
+            // this engine does not yet produce - is exactly what makes this a dispatch-regression test
+            // and not a (false) claim that the columns engine positions floats correctly: if dispatch
+            // ever wrongly reroutes this combination to the inline-flow path instead, FlowFloatChild
+            // gives these boxes real, non-zero, differing coordinates and this assertion catches it.
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:10px; width:200px'>
+                    <div class='item' style='float:left; width:200px; height:400px;'></div>
+                    <div class='item' style='float:left; width:50px; height:20px;'></div>
+                    <div class='item' style='float:left; width:50px; height:20px;'></div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
+            var items = FindAllByClass(root, "item");
+
+            Assert.Equal(3, items.Count);
+            Assert.True(items.All(i => i.IsFloated));
+            Assert.All(items, i =>
+            {
+                Assert.Equal(0, i.Location.X);
+                Assert.Equal(0, i.Location.Y);
+                Assert.Equal(0, i.ActualRight);
+            });
+        }
+
+        [Fact]
         public async Task ColumnCount1_DegeneratesToOrdinaryBlockFlow()
         {
             var html = Wrap(@"

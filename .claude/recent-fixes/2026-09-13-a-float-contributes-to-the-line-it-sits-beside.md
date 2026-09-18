@@ -102,10 +102,12 @@ before it was built on.
 ## Deliberately not done
 
 **Placement.** The box now reserves the room; layout still draws a float that *follows* inline content
-at the block's left edge, on top of that content. Tracked as #1038 and recorded in
-[.claude/accepted-gaps/a-float-after-inline-content-is-placed-on-the-next-line.md](../accepted-gaps/a-float-after-inline-content-is-placed-on-the-next-line.md) —
-it is a box-tree change (not generating the wrapper at all, which `DomUtils.ContainsInlinesOnly`,
-`CssBox.LayoutContents`' inline-vs-block dispatch and `CssLayoutEngine.FlowBox` all have to absorb),
+at the block's left edge, on top of that content. Tracked as #1038 (since fixed - a float now shares
+one inline formatting context with surrounding content regardless of source order; the residual,
+narrower gap is recorded in
+[.claude/accepted-gaps/a-floats-own-content-taller-than-one-page-overflows.md](../accepted-gaps/a-floats-own-content-taller-than-one-page-overflows.md)) —
+it was a box-tree change (not generating the wrapper at all, which `DomUtils.ContainsInlinesOnly`,
+`CssBox.LayoutContents`' inline-vs-block dispatch and `CssLayoutEngine.FlowBox` all had to absorb),
 not a placement tweak. Two floats with nothing between them are already placed side by side, so the
 measurement fix is fully visible there.
 
