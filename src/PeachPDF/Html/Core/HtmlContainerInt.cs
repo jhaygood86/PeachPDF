@@ -557,14 +557,29 @@ namespace PeachPDF.Html.Core
         /// (issue #1047's own diagnostic - see that type's remarks on <c>_wordClaimSite</c>). Off by
         /// default even in a DEBUG build: the ledger's own investigation found the same
         /// <c>ClaimsLine</c>/<c>FallsPast</c> straddle tie-break it targets already disagreeing with a
-        /// handful of OTHER, unrelated fixtures (table rowspan continuations, a multi-column child kept by
-        /// the no-progress backstop, a flex/grid wrapping column) that this diagnostic was never meant to
-        /// adjudicate - each is a real, separate finding worth its own follow-up, not evidence against the
-        /// ledger itself. Scoping the check to opt-in keeps it precise and false-positive-free for the
-        /// ordinary block-flow shape #1047 is about, without either turning those other fixtures into
-        /// unplanned bug reports or trying to special-case every one of them away here.
+        /// handful of OTHER, unrelated fixtures that this diagnostic was never meant to adjudicate - each
+        /// a real, separate finding worth its own follow-up, not evidence against the ledger itself.
+        /// Scoping the check to opt-in keeps it precise and false-positive-free for the ordinary
+        /// block-flow shape #1047 is about, without either turning those other fixtures into unplanned bug
+        /// reports or trying to special-case every one of them away here.
         /// </summary>
-        internal bool VerifyWordClaims { get; set; }
+        /// <remarks>
+        /// Defaults from <c>PEACHPDF_VERIFY_WORD_CLAIMS=1</c> in the environment, the same idiom
+        /// <see cref="Fragmentation.FragmentEmitter.VerifyPruningAgainstFullWalk"/> uses, so the ledger can
+        /// be run over the *whole* suite in one pass rather than only the handful of fixtures that
+        /// currently set this per-instance. A full-suite run with the env var set (after #1202's fix for
+        /// #1047) still finds two of the three fixtures #1200 originally listed as live-but-out-of-scope
+        /// live: table rowspan continuation (<see href="https://github.com/jhaygood86/PeachPDF/issues/1210">#1210</see>)
+        /// and a <c>break-inside:avoid</c> box taller than one band, whose translate fallback trips the
+        /// identical gap (<see href="https://github.com/jhaygood86/PeachPDF/issues/1211">#1211</see>) - both
+        /// through <c>FragmentEmitter.Finish()</c>'s own stale-slot replay loop, which calls
+        /// <c>EmitSlot</c> directly and so never sets <c>_currentPassFromSlot</c>, leaving the tie-break
+        /// unconditional there exactly as it was before #1202. The multi-column no-progress-backstop and
+        /// flex/grid wrapping-column shapes #1200 also listed did not reproduce anywhere in that same
+        /// full-suite run.
+        /// </remarks>
+        internal bool VerifyWordClaims { get; set; } =
+            Environment.GetEnvironmentVariable("PEACHPDF_VERIFY_WORD_CLAIMS") == "1";
 #endif
 
         /// <summary>
