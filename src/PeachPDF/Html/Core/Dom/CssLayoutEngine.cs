@@ -39,6 +39,17 @@ namespace PeachPDF.Html.Core.Dom
     internal static class CssLayoutEngine
     {
         /// <summary>
+        /// Slack, in layout units, a word (or a whole <c>nowrap</c> run) may overshoot the line's limit by
+        /// and still count as fitting. The same idiom as the existing <c>+ 0.01</c> fit tests in this file,
+        /// and the same order of magnitude as Chrome's 1/64px <c>LayoutUnit</c> (not numerically identical:
+        /// one layout unit is a point at a pixel scale of 1). A shrink-wrapped item is exactly its text's
+        /// natural width, and the commit pass re-accumulates that line's <c>CurrentX</c> word by word at
+        /// a shifted X, so the running sum can land one floating-point ULP past a limit the item was sized
+        /// to exactly - which a strict compare would read as overflow and wrap the last word.
+        /// </summary>
+        private const double LineFitTolerance = 0.01;
+
+        /// <summary>
         /// Measure image box size by the width\height set on the box and the actual rendered image size.<br/>
         /// If no image exists for the box error icon will be set.
         /// </summary>
@@ -624,7 +635,7 @@ namespace PeachPDF.Html.Core.Dom
                 // checked unconditionally, independent of column position, the same way FlowBox's own
                 // `overflows` is: a word that alone is too long for even an empty column must still get a
                 // real hyphenation attempt, not just an unavoidable-overflow pass-through.
-                var wordDoesNotFit = permitsOverflowWrap && inlineOffset + wordAdvance > effectiveWrapLimit;
+                var wordDoesNotFit = permitsOverflowWrap && inlineOffset + wordAdvance > effectiveWrapLimit + LineFitTolerance;
 
                 // hyphens:auto/manual: before giving up and wrapping the whole word, see if a cached
                 // candidate break point (from CssBox.ParseToWords - either an explicit soft hyphen or an
@@ -707,7 +718,7 @@ namespace PeachPDF.Html.Core.Dom
                         runExtent += runWidth + runWord.ActualWordSpacing;
                     }
 
-                    wrapsWholeNoWrapRun = inlineOffset + runExtent > effectiveWrapLimit;
+                    wrapsWholeNoWrapRun = inlineOffset + runExtent > effectiveWrapLimit + LineFitTolerance;
                 }
 
                 // A fragment split from what was one word - a per-codepoint-font run, or a
@@ -2937,7 +2948,16 @@ namespace PeachPDF.Html.Core.Dom
             // box's whole height, so it only means anything for a box this pass both opened and
             // finished. For one it merely walked through the deficit is the box's entire height, which
             // it would then add to the flow all over again.
-            if (opensHere && box.DerivedStyle.ActualDisplay is not Keywords.Inline
+            //
+            // And never for the flow root itself (box == blockBox): CreateLineBoxes flows every block,
+            // grid item, flex item and table cell holding inline content as FlowBox(blockBox, blockBox), so
+            // this exit runs for the root too. Its own declared height/min-height is applied by
+            // ApplyHeight/GetBoxHeight (min-height, max-height, the table cell's own maximum), and its
+            // startY is the CONTENT edge while ResolveAtomicInlineDeclaredHeight answers in border-box
+            // terms - so comparing them here counted the root's vertical padding and border twice (a
+            // padded one-line block came out P + max(content, declared) tall, since the caller adds the
+            // bottom padding and border to MaxBottom again). Only a NESTED atomic inline is compared.
+            if (box != blockBox && opensHere && box.DerivedStyle.ActualDisplay is not Keywords.Inline
                 && ResolveAtomicInlineDeclaredHeight(box) is { } declaredFlowHeight
                 && coordinates.MaxBottom - trueStartY < declaredFlowHeight)
             {
@@ -4203,7 +4223,7 @@ namespace PeachPDF.Html.Core.Dom
                             ? coordinates.Line.ContentRight - GetLineTextIndent(blockBox, coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak)
                             : coordinates.Line.ContentRight;
 
-                        if (boxRight > noWrapLimitRight)
+                        if (boxRight > noWrapLimitRight + LineFitTolerance)
                             wrapNoWrapBox = true;
                     }
 
@@ -4262,7 +4282,7 @@ namespace PeachPDF.Html.Core.Dom
                         }
 
                         var overflows = b.WhiteSpace.Value != Whitespace.NoWrap && b.WhiteSpace.Value != Whitespace.Pre
-                                         && coordinates.CurrentX + word.Width + rightSpacing + clonedTrailing > actualLimitRight
+                                         && coordinates.CurrentX + word.Width + rightSpacing + clonedTrailing > actualLimitRight + LineFitTolerance
                                          && (b.WhiteSpace.Value != Whitespace.PreWrap || !word.IsSpaces);
 
                         // hyphens:auto/manual: before giving up and wrapping the whole word, see if a

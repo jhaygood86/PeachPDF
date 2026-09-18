@@ -113,6 +113,15 @@ namespace PeachPDF.Html.Adapters
         public void ClearFontCache() => _fontsHandler.ClearCache();
 
         /// <summary>
+        /// The factor between the layout units font sizes are requested in and the points the font behind
+        /// them is built at (<c>points = size / LayoutUnitsPerPoint</c>). It is part of a cached font's identity:
+        /// the same requested size under a different scale is a different physical font, so
+        /// <see cref="FontsHandler"/> keys every font cache by it. 1 for an adapter whose layout unit is
+        /// the point.
+        /// </summary>
+        internal virtual double LayoutUnitsPerPoint => 1.0;
+
+        /// <summary>
         /// Resolve color value from given color name.
         /// </summary>
         /// <param name="colorName">the color name</param>

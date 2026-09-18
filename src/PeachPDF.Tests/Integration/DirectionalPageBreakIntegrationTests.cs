@@ -22,6 +22,11 @@ namespace PeachPDF.Tests.Integration
     {
         private const double PageHeight = 300;
 
+        // A narrow page (A5's width) so a paragraph wraps to enough lines for a chapter to span pages
+        // without an enormous fixture; the wide default page makes the same shape pass by luck of where
+        // the last line of the first page falls.
+        private const double A5Width = 419.53;
+
         // Two short blocks: without a break they share slot 0, so whatever slot the second one ends up
         // in is entirely the doing of the declaration under test.
         private static string Document(string declaration, string firstStyle = "") =>
@@ -522,6 +527,145 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("Tj", ContentStreams(pdf)[1]);
         }
 
+        // The regression the fixtures above cannot reach: every one of them uses fixed-height blocks that
+        // finish inside the page they land on, so the layout pass never ends inside the sweep that also
+        // contains the reserved blank slot. Here the chapter is a paragraph far taller than a page, so the
+        // pass that lays out slot 0's cover, the blank slot 1 and the chapter's first page ends with the
+        // chapter still open - and its last line on that page straddles the page bottom (the half-leading
+        // shift), so the pass ends with a break token naming <html>/<body>/the chapter. A box that continues
+        // into the next pass has no settled bottom yet (its height is only applied in its epilogue), so the
+        // emitter must not treat <html>/<body> as done for good after the empty slot 1: doing so pruned the
+        // whole document from slot 2 on, silently dropping everything the chapter's first page held.
+        //
+        // `line-height:20pt` and `1.4` are the values that failed before the fix (the chapter's first pages
+        // were dropped, slots 2 and 3 never materialized); `normal` happens to land its last line clear of
+        // the page bottom on this band and passes either way - it is here as the unaffected control, not as
+        // the reproduction.
+        [Theory]
+        [InlineData("line-height:20pt")]
+        [InlineData("line-height:normal")]
+        [InlineData("line-height:1.4")]
+        public async Task LongChapterAfterARectoBreak_LosesNoWords(string lineHeight)
+        {
+            const int wordCount = 800;
+            var paragraph = string.Join(' ', Enumerable.Range(1, wordCount).Select(i => $"w{i}"));
+
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:50pt'>cover</div>"
+                    + $"<div style='break-before: recto; font-size:10pt; margin:0; {lineHeight}'><p style='margin:0'>{paragraph}</p></div>"),
+                pageHeight: PageHeight);
+
+            var fragmentainers = container.FragmentTree!.Fragmentainers;
+
+            // Slots stay contiguous: slot 1 is the reserved blank page and the chapter begins on slot 2, a
+            // right page, and then runs on for as many pages as it needs.
+            Assert.Equal(Enumerable.Range(0, fragmentainers.Count), fragmentainers.Select(f => f.SlotIndex));
+            Assert.True(fragmentainers.Count >= 4, $"the chapter should span several pages, got {fragmentainers.Count} fragmentainers");
+            Assert.Empty(WordsIn(fragmentainers[1].Root));
+
+            var chapterWords = fragmentainers
+                .SelectMany(f => WordsIn(f.Root))
+                .Select(TextOf)
+                .Where(t => t != "cover")
+                .ToList();
+
+            Assert.Equal(Enumerable.Range(1, wordCount).Select(i => $"w{i}"), chapterWords);
+
+            var firstWordSlot = fragmentainers.Single(f => WordsIn(f.Root).Any(w => TextOf(w) == "w1")).SlotIndex;
+            Assert.Equal(2, firstWordSlot);
+        }
+
+        // The showcase shape (paged_media_directional_breaks): several `break-before: recto` chapters that
+        // each run past one page, closed by a trailing `break-after: recto` section. The first chapter is
+        // the one that vanished (its heading and first five paragraphs), and every later chapter started on
+        // the wrong parity, so this pins where each heading lands as well as that no word is missing.
+        [Fact]
+        public async Task RectoChapters_EachSpanningSeveralPages_StartOnRightPagesAndLoseNothing()
+        {
+            const int paragraphsPerChapter = 8;
+            const int wordsPerParagraph = 60;
+
+            var body = new StringBuilder("<div style='height:60pt'>cover</div>");
+            var expected = new List<string> { "cover" };
+
+            for (var chapter = 1; chapter <= 3; chapter++)
+            {
+                body.Append($"<section style='break-before: recto'><h2 style='margin:0 0 14pt'>Chapter{chapter}</h2>");
+                expected.Add($"Chapter{chapter}");
+
+                for (var paragraph = 1; paragraph <= paragraphsPerChapter; paragraph++)
+                {
+                    var words = Enumerable.Range(1, wordsPerParagraph).Select(i => $"c{chapter}p{paragraph}w{i}").ToList();
+                    expected.AddRange(words);
+                    body.Append($"<p style='margin:0 0 9pt'>{string.Join(' ', words)}</p>");
+                }
+
+                body.Append("</section>");
+            }
+
+            body.Append("<section style='break-after: recto'><p style='margin:0'>colophon</p></section>");
+            expected.Add("colophon");
+
+            var html =
+                "<!DOCTYPE html><html><head><style>"
+                + "body { font-size: 10.5pt; line-height: 1.55; margin: 0; }"
+                + "</style></head><body>" + body + "</body></html>";
+
+            var (_, container) = await LayoutHarness.LayoutAsync(html, pageWidth: A5Width, pageHeight: PageHeight);
+            var fragmentainers = container.FragmentTree!.Fragmentainers;
+
+            Assert.Equal(Enumerable.Range(0, fragmentainers.Count), fragmentainers.Select(f => f.SlotIndex));
+
+            var actual = fragmentainers.SelectMany(f => WordsIn(f.Root)).Select(TextOf).ToList();
+            Assert.Equal(expected, actual);
+
+            foreach (var heading in new[] { "Chapter1", "Chapter2", "Chapter3" })
+            {
+                var slot = fragmentainers.Single(f => WordsIn(f.Root).Any(w => TextOf(w) == heading)).SlotIndex;
+                Assert.True(slot % 2 == 0, $"{heading} landed on slot {slot}, which is a left page");
+                Assert.True(PageRuleResolver.IsRightPage(slot + 1), $"{heading} landed on slot {slot}, not a right page");
+            }
+
+            // Each chapter really does span more than one page (otherwise the fixture reproduces nothing) ...
+            var lastChapterSlot = fragmentainers.Single(f => WordsIn(f.Root).Any(w => TextOf(w) == "Chapter3")).SlotIndex;
+            Assert.True(lastChapterSlot >= 6, $"the chapters should each span several pages, Chapter3 is on slot {lastChapterSlot}");
+
+            // ... and the trailing `break-after: recto` pads the document so the next page would be a right one.
+            Assert.True(PageRuleResolver.IsRightPage(fragmentainers[^1].SlotIndex + 2),
+                "the trailing break-after: recto should leave the following page on the right");
+        }
+
+        // The end-to-end check the two layout-level tests above stand in for: the rendered PDF carries the
+        // first chapter's text at all. Before the fix the chapter's whole first page was dropped, so the
+        // document had a page fewer and no glyphs for the heading.
+        [Fact]
+        public async Task LongChapterAfterARectoBreak_RendersItsFirstPage()
+        {
+            var paragraphs = string.Concat(Enumerable.Range(1, 8).Select(p =>
+                $"<p>{string.Join(' ', Enumerable.Range(1, 90).Select(i => $"p{p}w{i}"))}</p>"));
+
+            var pdf = await RenderAsync(
+                "<!DOCTYPE html><html><head><style>"
+                + "@page { size: A5; margin: 18mm; }"
+                + "body { font-size: 10.5pt; line-height: 1.55; margin: 0; }"
+                + "p { margin: 0 0 9pt; }"
+                + "section { break-before: recto; }"
+                + "</style></head><body>"
+                + "<div style='height:60pt'>cover</div>"
+                + $"<section><h2>Chapter1</h2>{paragraphs}</section>"
+                + "</body></html>");
+
+            var streams = ContentStreams(pdf);
+
+            // Slot 0 is the cover, slot 1 the reserved blank page, and the chapter runs on from slot 2.
+            Assert.True(pdf.PdfDocument.PageCount >= 4, $"expected the chapter to span several pages, got {pdf.PdfDocument.PageCount}");
+            Assert.Contains("Tj", streams[0]);
+            Assert.DoesNotContain("Tj", streams[1]);
+            Assert.Contains("Tj", streams[2]);
+            Assert.Contains("Tj", streams[3]);
+        }
+
         private static async Task<PeachPdfDocument> RenderAsync(string html)
         {
             var generator = new PdfGenerator();
@@ -549,6 +693,8 @@ namespace PeachPDF.Tests.Integration
 
             return streams;
         }
+
+        private static string TextOf(TextFragment word) => (word.Word.Text ?? "").Trim();
 
         private static List<TextFragment> WordsIn(BoxFragment fragment)
         {
