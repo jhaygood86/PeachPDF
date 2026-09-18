@@ -2293,8 +2293,9 @@ namespace PeachPDF.Html.Core.Fragmentation
                     {
                         if (lineClaims is null || !lineClaims.TryGetValue(line, out claims))
                         {
-                            var shiftedLineRect = Shifted(lineRect);
-                            claims = ClaimsLine(Displaced(shiftedLineRect, shift), slot.Index, region, isFixed);
+                            var ownRect = Displaced(Shifted(lineRect), shift);
+                            var aggregateRect = Displaced(Shifted(AggregateLineRect(line, snapshot, lineRect)), shift);
+                            claims = ClaimsLine(ownRect, aggregateRect, slot.Index, region, isFixed);
                             (lineClaims ??= [])[line] = claims;
                         }
                     }
@@ -2467,11 +2468,40 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// Whether the fragmentainer of pagination slot <paramref name="slotIndex"/> claims a line's worth
         /// of content at <paramref name="rect"/> - <paramref name="rect"/> being <c>box.Rectangles[line]</c>,
         /// the calling box's own portion of one physical line, per css-break-3 §4.1's line box being an
-        /// indivisible break unit. <see cref="ClaimsWord"/> is the same test asked of a single word's own
-        /// rectangle instead, for the one case a word has no owning line to ask this through (see
-        /// <see cref="CssRect.Line"/>'s remarks).
+        /// indivisible break unit. <paramref name="aggregateRect"/> is the union of <i>every</i> box's own
+        /// portion of that same physical line (see <see cref="AggregateLineRect"/>) - equal to
+        /// <paramref name="rect"/> whenever the calling box is the only one with content on the line, and
+        /// otherwise the wider rectangle the whole line actually occupies. <see cref="ClaimsWord"/> is the
+        /// same test asked of a single word's own rectangle instead, for the one case a word has no owning
+        /// line to ask this through (see <see cref="CssRect.Line"/>'s remarks) - it has no sibling content
+        /// to aggregate either, so it passes its own rectangle for both parameters.
         /// </summary>
         /// <remarks>
+        /// <para>
+        /// <b>Issue <see href="https://github.com/jhaygood86/PeachPDF/issues/1184">#1184</see>: the
+        /// monolithic tie-break below is asked of the whole line, not of this one box.</b> Two ordinary
+        /// sibling inline boxes - or an ordinary run of text beside a replaced element - can share one
+        /// physical line while having very different heights of their own (a huge <c>font-size</c> on one
+        /// span, an ordinary one on the next). Judged only on <paramref name="rect"/>, the oversized box
+        /// would be clipped to the band its own top starts in (the paragraph below), while an ordinary
+        /// sibling - never itself oversized - would be judged, and placed, purely on its own position,
+        /// which for baseline-aligned content can fall in a completely different band. That split one
+        /// physical line across two fragmentainers, contradicting §4.1's own rule that a line box breaks as
+        /// one unit. Asking <c>FitsNoFragmentainer</c> of <paramref name="aggregateRect"/> first - the
+        /// line's own extent, not this box's share of it - means every box sharing an oversized line agrees
+        /// on the one fragmentainer that claims all of it, the same way a single oversized box already did
+        /// when it was alone on its line (<see href="https://github.com/jhaygood86/PeachPDF/issues/484">#484</see>).
+        /// </para>
+        /// <para>
+        /// Deliberately not folded into the ordinary tie-break below: <paramref name="aggregateRect"/>'s
+        /// <c>FitsNoFragmentainer</c> question is asked and answered <i>before</i> anything reads
+        /// <paramref name="rect"/> at all, because a box whose own portion overlaps this fragmentainer not
+        /// at all (an ordinary sibling positioned entirely past the boundary the oversized box straddles)
+        /// would otherwise fail <c>region.Contains(rect)</c> before ever reaching a tie-break keyed on its
+        /// own dimensions - exactly the failure mode #1184 reports. Once the line is oversized, membership
+        /// is decided on <paramref name="aggregateRect"/> alone; <paramref name="rect"/> is not consulted at
+        /// all for that box on that line.
+        /// </para>
         /// <para>
         /// <b>Only a line layout could have moved belongs to one fragmentainer alone.</b> Where
         /// <c>CssRect.WouldStraddleFragmentainer</c> answered "no, it fits" — which it does for an overhang
@@ -2532,12 +2562,26 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// slot, so the one slot its own Y falls in would name a single page instead of all of them.
         /// </para>
         /// </remarks>
-        private bool ClaimsLine(RRect rect, int slotIndex, FragmentRegion region, bool isFixed) =>
-            region.Contains(rect)
-            && (isFixed
-                || container.SlotStartingAt(rect.Top) == slotIndex
-                || (HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(rect.Top))
-                    && !MonolithicContent.FitsNoFragmentainer(rect.Height, 0, 0, container)));
+        private bool ClaimsLine(RRect rect, RRect aggregateRect, int slotIndex, FragmentRegion region, bool isFixed)
+        {
+            // Fixed content repeats at unshifted document coordinates in every slot, so the one slot its
+            // own Y falls in would name a single page instead of all of them - exempt from both the
+            // ordinary tie-break and the line-aggregate one below, exactly as before #1184 (isFixed content
+            // never reached the aggregate question, since it is not subject to fragmentainer relocation at
+            // all).
+            if (isFixed) return region.Contains(rect);
+
+            if (MonolithicContent.FitsNoFragmentainer(aggregateRect.Height, 0, 0, container))
+            {
+                return region.Contains(aggregateRect)
+                    && container.SlotStartingAt(aggregateRect.Top) == slotIndex;
+            }
+
+            return region.Contains(rect)
+                && (container.SlotStartingAt(rect.Top) == slotIndex
+                    || (HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(rect.Top))
+                        && !MonolithicContent.FitsNoFragmentainer(rect.Height, 0, 0, container)));
+        }
 
         /// <summary>
         /// Whether the fragmentainer of pagination slot <paramref name="slotIndex"/> claims the word at
@@ -2545,10 +2589,52 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// own rectangle rather than its line's. Reached only for a word with no owning
         /// <see cref="CssRect.Line"/> to ask the line-based question through - in practice, an outside
         /// <c>::marker</c>'s own phantom word (see <see cref="CssRect.Line"/>'s remarks) - so this is
-        /// exactly this engine's pre-line-based-membership behavior, preserved for that one case.
+        /// exactly this engine's pre-line-based-membership behavior, preserved for that one case. There is
+        /// no sibling content to aggregate for a word with no line of its own, so <paramref name="rect"/>
+        /// stands in for both of <see cref="ClaimsLine"/>'s rectangle parameters.
         /// </summary>
         private bool ClaimsWord(RRect rect, int slotIndex, FragmentRegion region, bool isFixed) =>
-            ClaimsLine(rect, slotIndex, region, isFixed);
+            ClaimsLine(rect, rect, slotIndex, region, isFixed);
+
+        /// <summary>
+        /// The union of every box's own portion of physical line <paramref name="line"/> -
+        /// <c>RectanglesOf(box, snapshot)[line]</c> for every distinct box <see cref="CssLineBox.Words"/>
+        /// names an owner of - in the same (unshifted, undisplaced) coordinate space as
+        /// <paramref name="seed"/>, which is the calling box's own entry for this line and is included
+        /// whether or not the walk below happens to revisit it.
+        /// </summary>
+        /// <remarks>
+        /// Built from <see cref="CssLineBox.Words"/> rather than the line's own live
+        /// <see cref="CssLineBox.Rectangles"/> dictionary so it reads every box's portion through the same
+        /// snapshot-aware accessor (<see cref="RectanglesOf"/>) every other membership question in this
+        /// file uses - correct for a repeated table header/footer's own captured geometry, not only for the
+        /// live tree. A box that shares this physical line but has no entry of its own in a given snapshot
+        /// (not itself held by it) is simply skipped, the same "can only remove a claim, never invent one"
+        /// posture the rest of this file takes.
+        /// </remarks>
+        private static RRect AggregateLineRect(CssLineBox line, BoxGeometrySnapshot? snapshot, RRect seed)
+        {
+            double left = seed.Left, top = seed.Top, right = seed.Right, bottom = seed.Bottom;
+
+            HashSet<CssBox>? visited = null;
+
+            foreach (var word in line.Words)
+            {
+                var owner = word.OwnerBox;
+
+                visited ??= [];
+                if (!visited.Add(owner)) continue;
+
+                if (!RectanglesOf(owner, snapshot).TryGetValue(line, out var ownRect)) continue;
+
+                left = Math.Min(left, ownRect.Left);
+                top = Math.Min(top, ownRect.Top);
+                right = Math.Max(right, ownRect.Right);
+                bottom = Math.Max(bottom, ownRect.Bottom);
+            }
+
+            return RRect.FromLTRB(left, top, right, bottom);
+        }
 
         /// <summary>
         /// <paramref name="rect"/> where a displacement puts it — the rectangle every membership question
@@ -2843,6 +2929,22 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // a repeating header's own row, reached through the header's captured snapshot, still
                 // read its live Location - wherever the live box last happened to sit - rather than this
                 // page's own snapshotted position.
+                // Gated on !SharesAnOversizedLine(childBox) for a fifth (issue #1184): OwnGeometryTop is
+                // this child's OWN top, but a physical line is the monolithic break unit (css-break-3
+                // §4.1, ClaimsLine's own remarks), and once a line sharing this child's content cannot fit
+                // any single fragmentainer, membership is decided by the LINE's own top, not this child's -
+                // which can be a much later slot than the one the line as a whole is actually clipped to
+                // (an ordinary sibling's baseline-driven position beside an oversized replaced element or
+                // an oversized sibling span, say). Skipping this child here on the strength of its own,
+                // now-irrelevant top would drop it from every slot outright: it is never visited at the
+                // earlier slot the line is actually claimed by (this guard is exactly what would have
+                // skipped it), and by the time its own later slot comes around, ClaimsLine itself now
+                // correctly declines the claim there too. Cheap to ask: unlike ClaimsLine's own aggregate
+                // (which must be snapshot-aware to read a repeating header's own captured geometry
+                // correctly), this call site already requires snapshot is null, so the physical line's own
+                // live CssLineBox.Rectangles - already keyed by every box sharing it - can be read
+                // directly, with no walk of CssLineBox.Words needed (see SharesAnOversizedLine's own
+                // remarks on why that reads Rectangles directly rather than LineTop/LineBottom).
                 if (_currentPassIsFinal && !container.HasOutOfFlowBoxes && !_forcingUnprunedReferenceWalk
                     && snapshot is null
                     && childBox is not CssSpacingBox
@@ -2850,7 +2952,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                     && !_capturedInstanceOwnerAncestors.Contains(childBox)
                     && !_capturedInstanceOwners.Contains(childBox)
                     && !HoldsARowspanContinuation(childBox)
-                    && childBox.OwnGeometryTop() >= container.PageTopOf(slot.Index + 1))
+                    && childBox.OwnGeometryTop() >= container.PageTopOf(slot.Index + 1)
+                    && !SharesAnOversizedLine(childBox))
                 {
                     continue;
                 }
@@ -2871,6 +2974,48 @@ namespace PeachPDF.Html.Core.Fragmentation
             foreach (var child in box.Boxes)
             {
                 if (child is CssSpacingBox) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Whether any physical line <paramref name="box"/> has its own words on is, in aggregate across
+        /// every box sharing it, too tall to fit any single fragmentainer - see this method's own call
+        /// site for why the <see cref="ChildrenOf"/> skip-ahead optimization must not apply here.
+        /// </summary>
+        /// <remarks>
+        /// Reads <see cref="CssLineBox.Rectangles"/> directly - the line's own live per-box rectangles,
+        /// the exact same values <see cref="AggregateLineRect"/> would read through
+        /// <c>RectanglesOf(owner, snapshot)</c> for every box <see cref="CssLineBox.Words"/> names an
+        /// owner of, since <c>CssLineBox.AssignRectanglesToBoxes</c> copies each entry here into that
+        /// owner's own <see cref="CssBox.Rectangles"/> unchanged - rather than walking
+        /// <see cref="CssLineBox.Words"/> itself, which this call site (always <c>snapshot is null</c>,
+        /// see the caller) has no need to. <b>Deliberately not <see cref="CssLineBox.LineTop"/>/
+        /// <see cref="CssLineBox.LineBottom"/></b>, despite those properties computing what looks like the
+        /// same aggregate: <c>LineTop</c> prefers <see cref="CssLineBox.FlowTop"/> - the flow-placed top,
+        /// which sits <i>above</i> the ink for an ordinary positive leading but can sit <i>below</i> a
+        /// negative-leading box's own escaped ink (CSS 2.1 §10.8.1, issue #1054's own fixture family) -
+        /// where <see cref="AggregateLineRect"/> always uses the boxes' real rectangle tops. Using
+        /// <c>LineTop</c> here could then read a genuinely oversized line as short enough to skip, through
+        /// this one optimization's own path, reproducing the very stranding this method exists to prevent.
+        /// </remarks>
+        private bool SharesAnOversizedLine(CssBox box)
+        {
+            if (box.Rectangles.Count == 0) return false;
+
+            foreach (var line in box.Rectangles.Keys)
+            {
+                double top = double.MaxValue, bottom = double.MinValue;
+
+                foreach (var rect in line.Rectangles.Values)
+                {
+                    top = Math.Min(top, rect.Top);
+                    bottom = Math.Max(bottom, rect.Bottom);
+                }
+
+                if (bottom > top && MonolithicContent.FitsNoFragmentainer(bottom - top, 0, 0, container))
+                    return true;
             }
 
             return false;
