@@ -3134,6 +3134,138 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// The three-way result of preflighting an atomic inline-level box against what is left of the
+        /// current line (CSS 2.1 §9.4.2) - see <see cref="FitAtomicInlineOnLine"/>.
+        /// </summary>
+        private enum AtomicInlineLineFit
+        {
+            /// <summary>The box fits (or the block's own <c>white-space</c> forbids wrapping, or it is
+            /// already at the start of the line, where wrapping could never help) - lay it out where it
+            /// already sits.</summary>
+            Fits,
+
+            /// <summary>The box did not fit and the line was closed for it. <c>coordinates.CurrentX</c>
+            /// now names its position on the freshly-opened line, and the caller should re-resolve any
+            /// width of its own that can depend on the line's position (an inline-block's does; an
+            /// inline-table/-grid/-flex's does not, since their own layout settles it independently).</summary>
+            Wrapped,
+
+            /// <summary>line-clamp stopped the layout instead of wrapping the box onto a new line. The
+            /// caller must return immediately without laying the box out at all.</summary>
+            ClampedStop
+        }
+
+        /// <summary>
+        /// Preflights an atomic inline-level box's estimated outer (margin-box) width against what is
+        /// left of the current line and, if it does not fit, closes the line for it (CSS 2.1 §9.4.2) -
+        /// shared by inline-block (issue #1103) and, since issue #1105, by inline-table/inline-grid/
+        /// inline-flex, which previously reached <see cref="FlowAtomicBlockContentChild"/>/
+        /// <see cref="FlowInlineFlexChild"/> with no fit check of any kind and so never wrapped no matter
+        /// how far they overflowed the line.
+        /// </summary>
+        /// <param name="g">Graphics context, forwarded to <see cref="TryApplyLineClamp"/>.</param>
+        /// <param name="blockBox">The block establishing the inline formatting context <paramref name="b"/>
+        /// flows within - the box whose own <c>white-space</c>/line-clamp/text-indent govern the line.</param>
+        /// <param name="box">The box whose recursive <c>FlowBox</c> call is placing <paramref name="b"/> -
+        /// passed through to the float-intersection lookups, which query floats relative to it.</param>
+        /// <param name="b">The atomic inline-level box being preflighted.</param>
+        /// <param name="outerContentWidth">
+        /// The box's estimated outer content-box width (border/padding included, margin excluded) - for
+        /// this fit check ONLY, never a value later used to size the box itself. Inline-block passes its
+        /// already-resolved used width (the same value <see cref="FlowAtomicBlockContentChild"/> goes on
+        /// to apply); inline-table/inline-grid/inline-flex pass a declared width if they have a
+        /// non-percentage one, or otherwise their own (issue #1032-corrected) max-content width bounded by
+        /// the containing block - CSS Flexbox 1 §9.2's shrink-to-fit main size, and the same shrink-to-fit
+        /// idea CSS 2.1 §10.3.9 already applies to inline-block. All three settle their real used width
+        /// independently once their own layout actually runs; this estimate is discarded either way.
+        /// </param>
+        /// <param name="coordinates">The line-building state being advanced.</param>
+        /// <param name="lineSpacing">Passed through to <see cref="OpenNextLine"/> for the new line's leading.</param>
+        /// <param name="lineStartX">Passed through to <see cref="OpenNextLine"/> as the new line's left edge.</param>
+        /// <param name="leftSpacing"><paramref name="b"/>'s own margin+border+padding, re-applied after a wrap
+        /// re-establishes the line start from scratch.</param>
+        /// <param name="clonedTrailing">Room reserved for a <c>box-decoration-break: clone</c> ancestor's
+        /// re-inserted trailing border/padding, subtracted from the fit check the same way the ordinary
+        /// per-word wrap decision does.</param>
+        /// <param name="clonesDecorations">Whether <paramref name="b"/>'s container clones decorations across
+        /// breaks, so a wrap must re-apply the cloned leading inset too.</param>
+        /// <param name="isRtl">Whether <paramref name="blockBox"/> flows right-to-left, which flips which
+        /// side of the line the fit check and the reopened line's text-indent are measured from.</param>
+        private static async ValueTask<AtomicInlineLineFit> FitAtomicInlineOnLine(RGraphics g,
+            CssBox blockBox, CssBox box, CssBox b, double outerContentWidth,
+            CssLineBoxCoordinates coordinates, double lineSpacing, double lineStartX, double leftSpacing,
+            double clonedTrailing, bool clonesDecorations, bool isRtl)
+        {
+            var actualLimitRight = coordinates.Line.ContentRight;
+            var rightFloat = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates);
+            if (rightFloat is not null)
+            {
+                actualLimitRight = rightFloat.Location.X - rightFloat.ActualMarginLeft;
+            }
+
+            if (isRtl)
+            {
+                actualLimitRight -= GetLineTextIndent(blockBox,
+                    coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak);
+            }
+
+            var borderLeft = coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth;
+            var outerRight = borderLeft + outerContentWidth + b.ActualMarginRight + clonedTrailing;
+            var blockPermitsWrap = blockBox.WhiteSpace.Value is not (Whitespace.NoWrap or Whitespace.Pre);
+
+            if (!blockPermitsWrap || IsAtLineStart(coordinates) || outerRight <= actualLimitRight + 0.01)
+            {
+                return AtomicInlineLineFit.Fits;
+            }
+
+            if (TryApplyLineClamp(g, blockBox, coordinates, actualLimitRight, 0, clonedTrailing))
+            {
+                b.SuppressFragmentEmissionForCurrentLayout();
+                coordinates.ClampedStop = true;
+                return AtomicInlineLineFit.ClampedStop;
+            }
+
+            OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX,
+                coordinates.WordOrdinal, followsForcedBreak: false, isRtl);
+
+            var leftFloat = DomUtils.GetLastLeftIntersectingFloatBox(box, coordinates);
+            if (leftFloat is not null)
+            {
+                coordinates.CurrentX = leftFloat.ActualRight + leftFloat.ActualMarginRight;
+            }
+
+            coordinates.CurrentX += leftSpacing + (clonesDecorations
+                ? DomUtils.ClonedInlineStart(b.ParentBox, blockBox)
+                : 0);
+
+            return AtomicInlineLineFit.Wrapped;
+        }
+
+        /// <summary>
+        /// The estimated outer content-box width (border/padding included, margin excluded) to preflight
+        /// an inline-table/inline-grid/inline-flex against the remaining line measure via
+        /// <see cref="FitAtomicInlineOnLine"/> - never a value used to size the box itself, since all
+        /// three settle their real used width independently once their own layout (column/track algorithm,
+        /// or the flex algorithm) actually runs.
+        /// </summary>
+        /// <remarks>
+        /// A declared, non-percentage <c>width</c> is used as-is (CSS 2.1 §10.3.9 fixes a non-auto width
+        /// regardless of content, the same way it does for inline-block); otherwise this is the box's own
+        /// (issue #1032-corrected) max-content width bounded by the containing block - CSS Flexbox 1 §9.2's
+        /// shrink-to-fit main size for inline-flex, and the same shrink-to-fit idea CSS 2.1 §10.3.9 already
+        /// applies to inline-block's own auto-width case (<see cref="ResolveAtomicInlineBlockWidth"/>).
+        /// </remarks>
+        private static async ValueTask<double> GetAtomicInlineFitCheckWidth(RGraphics g, CssBox b)
+        {
+            if (CssValueParser.IsValidLength(b.Width) && !b.Width.EndsWith('%'))
+            {
+                return CssValueParser.ParseLength(b.Width, 0, b) + b.ActualBoxSizeIncludedWidth;
+            }
+
+            return await GetFitContentWidth(g, b, b.ContainingBlock.Size.Width);
+        }
+
+        /// <summary>
         /// Positions an inline-table/inline-grid, or an inline-block whose content needs an independent
         /// formatting context, at the current parent-line cursor. For an inline-block it also commits the
         /// already-resolved used width before child layout. The actual child layout and parent-line
@@ -4296,44 +4428,14 @@ namespace PeachPDF.Html.Core.Dom
                         resolvedInlineBlockWidth = await ResolveAtomicInlineBlockWidth(
                             g, b, coordinates.CurrentY);
 
-                        var actualLimitRight = coordinates.Line.ContentRight;
-                        var rightFloat = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates);
-                        if (rightFloat is not null)
+                        var fitResult = await FitAtomicInlineOnLine(g, blockBox, box, b,
+                            resolvedInlineBlockWidth.Value, coordinates, lineSpacing, lineStartX,
+                            leftSpacing, clonedTrailing, clonesDecorations, isRtl);
+
+                        if (fitResult == AtomicInlineLineFit.ClampedStop) return;
+
+                        if (fitResult == AtomicInlineLineFit.Wrapped)
                         {
-                            actualLimitRight = rightFloat.Location.X - rightFloat.ActualMarginLeft;
-                        }
-
-                        if (isRtl)
-                        {
-                            actualLimitRight -= GetLineTextIndent(blockBox,
-                                coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak);
-                        }
-
-                        var borderLeft = coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth;
-                        var outerRight = borderLeft + resolvedInlineBlockWidth.Value
-                            + b.ActualMarginRight + clonedTrailing;
-                        var blockPermitsWrap = blockBox.WhiteSpace.Value is not (Whitespace.NoWrap or Whitespace.Pre);
-                        if (blockPermitsWrap && !IsAtLineStart(coordinates) && outerRight > actualLimitRight + 0.01)
-                        {
-                            if (TryApplyLineClamp(g, blockBox, coordinates, actualLimitRight, 0, clonedTrailing))
-                            {
-                                b.SuppressFragmentEmissionForCurrentLayout();
-                                coordinates.ClampedStop = true;
-                                return;
-                            }
-
-                            OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX,
-                                coordinates.WordOrdinal, followsForcedBreak: false, isRtl);
-
-                            var leftFloat = DomUtils.GetLastLeftIntersectingFloatBox(box, coordinates);
-                            if (leftFloat is not null)
-                            {
-                                coordinates.CurrentX = leftFloat.ActualRight + leftFloat.ActualMarginRight;
-                            }
-
-                            coordinates.CurrentX += leftSpacing + (clonesDecorations
-                                ? DomUtils.ClonedInlineStart(b.ParentBox, blockBox)
-                                : 0);
                             childContentStartX = coordinates.CurrentX;
 
                             // The next line can belong to a fragmentainer with a different inline measure;
@@ -4341,6 +4443,23 @@ namespace PeachPDF.Html.Core.Dom
                             resolvedInlineBlockWidth = await ResolveAtomicInlineBlockWidth(
                                 g, b, coordinates.CurrentY);
                         }
+                    }
+                    else
+                    {
+                        // inline-table/inline-grid reach this branch unconditionally (see the comment
+                        // above) and, unlike inline-block, never had a fit check at all until issue #1105:
+                        // FlowAtomicBlockContentChild positioned them at coordinates.CurrentX no matter how
+                        // far that overhung the containing block's right edge. The estimate here is for
+                        // this check only - their own column/track layout settles the real used width once
+                        // FlowAtomicBlockContentChild's recursive LayoutContents call actually runs.
+                        var fitCheckWidth = await GetAtomicInlineFitCheckWidth(g, b);
+
+                        var fitResult = await FitAtomicInlineOnLine(g, blockBox, box, b, fitCheckWidth,
+                            coordinates, lineSpacing, lineStartX, leftSpacing, clonedTrailing,
+                            clonesDecorations, isRtl);
+
+                        if (fitResult == AtomicInlineLineFit.ClampedStop) return;
+                        if (fitResult == AtomicInlineLineFit.Wrapped) childContentStartX = coordinates.CurrentX;
                     }
 
                     await FlowAtomicBlockContentChild(g, b, coordinates, resolvedInlineBlockWidth);
@@ -4357,6 +4476,19 @@ namespace PeachPDF.Html.Core.Dom
                     // and advance word ordinals this box never had on the pass that placed it - and the
                     // ordinals have to mean the same thing on every pass for any of these guards to work.
                     if (!childOpensHere) continue;
+
+                    // inline-flex had no fit check of any kind before issue #1105 - FlowInlineFlexChild
+                    // positioned it unconditionally too. The estimate is its own CSS Flexbox 1 §9.2
+                    // shrink-to-fit main size; the flex algorithm settles the real used width once
+                    // FlowInlineFlexChild's own CssLayoutEngineFlex.PerformLayout call runs.
+                    var flexFitCheckWidth = await GetAtomicInlineFitCheckWidth(g, b);
+
+                    var flexFitResult = await FitAtomicInlineOnLine(g, blockBox, box, b, flexFitCheckWidth,
+                        coordinates, lineSpacing, lineStartX, leftSpacing, clonedTrailing, clonesDecorations,
+                        isRtl);
+
+                    if (flexFitResult == AtomicInlineLineFit.ClampedStop) return;
+                    if (flexFitResult == AtomicInlineLineFit.Wrapped) childContentStartX = coordinates.CurrentX;
 
                     await FlowInlineFlexChild(g, b, coordinates);
                 }
