@@ -317,6 +317,65 @@ namespace PeachPDF.Html.Core
                 : null;
         }
 
+        /// <summary>
+        /// Issue #1041's narrow residual on top of <see cref="ResolveForMaterializedPage"/>: probes
+        /// whether slot <paramref name="slotIndex"/> is eligible for a relayout-gated correction in the
+        /// one case that method itself always declines - substituting the materialized-number geometry
+        /// would change <see cref="PageBandGeometry.BandWidth"/> OR <see cref="PageBandGeometry.BandHeight"/>
+        /// (not both). Both changing at once stays out of scope entirely (returns <c>null</c>): nothing
+        /// here distinguishes "a relayout would fix this" from "a relayout would fix this along some
+        /// dimension but not verifiably both", and the caller (<see cref="HtmlContainerInt.TryApplyDimensionChangingPageCorrection"/>)
+        /// has no narrower way to validate a two-dimension change than it already does for one. Also
+        /// declines whenever this slot (grid-numbered or materialized-numbered) sits under an active
+        /// named page (<see cref="PageBandGeometry.ActiveName"/> non-null on either side) - a named-page
+        /// run already drives its own bounded-not-guaranteed convergence loop
+        /// (<see cref="HtmlContainerInt.PageAssignmentSignature"/>,
+        /// <c>.claude/accepted-gaps/named-page-run-convergence-loop-is-bounded-not-guaranteed.md</c>);
+        /// stacking a second, independent relayout mechanism on top of that one is materially riskier
+        /// than either alone and outside this issue's own repro shape (which is about <c>:first</c>/
+        /// <c>:left</c>/<c>:right</c>, not named pages). There is no separate "flagged fragile named-page
+        /// run" registry to consult beyond that <c>ActiveName</c> check - this IS how a named-page run is
+        /// told apart from the base grid today.
+        /// Pure/speculative like <see cref="ResolveForMaterializedPage"/> - does not touch <see cref="_pages"/>
+        /// and is safe to call before deciding whether to actually run the extra layout pass.
+        /// </summary>
+        internal PageBandGeometry? ProbeDimensionChangingCorrection(int slotIndex, int materializedPageNumber)
+        {
+            if (materializedPageNumber == slotIndex + 1) return null;
+            if (!HasVerticalMarginOverrides && !HasHorizontalMarginOverrides && !HasSizeOverrides &&
+                !HasVerticalBorderPaddingOverrides && !HasHorizontalBorderPaddingOverrides) return null;
+
+            var slotGeometry = GetPage(slotIndex);
+            if (slotGeometry.ActiveName is not null) return null;
+
+            var candidate = Compute(slotIndex, slotGeometry.Top, materializedPageNumber);
+            if (candidate.ActiveName is not null) return null;
+
+            var widthChanged = Math.Abs(candidate.BandWidth - slotGeometry.BandWidth) >= 0.01;
+            var heightChanged = Math.Abs(candidate.BandHeight - slotGeometry.BandHeight) >= 0.01;
+
+            // Exactly one, not zero (ResolveForMaterializedPage already handles that) and not both
+            // (still out of scope - see this method's own remarks).
+            return widthChanged ^ heightChanged ? candidate : null;
+        }
+
+        /// <summary>
+        /// Slot-index -> materialized-page-number overrides driving <see cref="HtmlContainerInt.TryApplyDimensionChangingPageCorrection"/>'s
+        /// one extra, speculative layout pass (issue #1041): while set, <see cref="Compute(int, double)"/>
+        /// resolves a slot present as a key here against that materialized number rather than its own
+        /// raw grid number (<c>pageIndex + 1</c>), so content laid out during that one pass actually
+        /// wraps/fragments against the corrected dimensions instead of merely having them baked in
+        /// after the fact. Deliberately NOT cleared by <see cref="Reset"/> - <c>Reset</c> runs at the
+        /// START of the very pass this exists to steer (<see cref="HtmlContainerInt"/>'s
+        /// <c>LayoutDocument</c>), so clearing it there would defeat the whole mechanism. The caller sets
+        /// this immediately before that one pass and clears it immediately after, in a <c>finally</c>,
+        /// regardless of outcome - every other layout pass in the document (including the fallback
+        /// restore pass <c>TryApplyDimensionChangingPageCorrection</c> runs when the corrected pass
+        /// doesn't validate) must see this <c>null</c> and resolve every slot against its plain grid
+        /// number exactly as before this feature existed.
+        /// </summary>
+        internal Dictionary<int, int>? MaterializedNumberOverrides { get; set; }
+
         /// <summary>The slot whose band contains document Y <paramref name="y"/> (clamped to slot 0
         /// for anything above the first band's top).</summary>
         internal int PageIndexOf(double y)
@@ -352,7 +411,11 @@ namespace PeachPDF.Html.Core
             }
         }
 
-        private PageBandGeometry Compute(int pageIndex, double top) => Compute(pageIndex, top, pageIndex + 1);
+        private PageBandGeometry Compute(int pageIndex, double top) => Compute(
+            pageIndex, top,
+            MaterializedNumberOverrides is { } overrides && overrides.TryGetValue(pageIndex, out var materialized)
+                ? materialized
+                : pageIndex + 1);
 
         /// <summary>
         /// <paramref name="ruleSelectionPageNumber"/> is the number fed to

@@ -1343,57 +1343,21 @@ namespace PeachPDF.Html.Core
             // containing block for layout that occurs between page breaks"). The pass(es) above laid
             // every box out against page 0's own measure - a box's width is resolved (CssBox.PerformLayoutImp
             // via CssLayoutEngine.GetBoxWidth) BEFORE its Location is assigned, so on the first pass no
-            // box's own page was yet known. Re-run layout so each auto-width box now keys its width off
-            // its own page via its previous-pass Location.Y (GetBoxWidth -> PageContentRightOf), and
-            // repeat until the box->page assignment stops changing.
-            //
-            // Two bugs used to make more than one re-pass necessary for cases that are now closed instead -
-            // a box starting a named page was measured against the page-geometry slot BEFORE its own
-            // registration invalidated it (CssBox._measureResolvedAgainst now catches this the same pass it
-            // happens, rather than leaving it for a later re-pass to paper over), and the keep-with-next
-            // pull below (CssBox.PlaceAndSizeBlockChild's own OffsetTop translation) used to relocate a run
-            // across a measure change without re-measuring it. With both closed, every fixture this file's
-            // own tests exercise (including WidthFromTheSpaceNotTheLocationTests, which pins the exact
-            // LayoutGeneration count) now converges on the loop's very first iteration - proof that one
-            // re-pass is enough *for those documents*, not a formal guarantee for every one. The cap stays
-            // at 3 as the documented, not-yet-needed fallback for a case neither fix covers (the small
-            // remaining scope: a named-page L/R feedback loop deep enough to need a second genuine re-pass)
-            // rather than trading a real safety margin for a claim this session cannot independently prove.
+            // box's own page was yet known. RunLayoutToSettledMeasure re-runs layout so each auto-width
+            // box now keys its width off its own page via its previous-pass Location.Y (GetBoxWidth ->
+            // PageContentRightOf), repeating until the box->page assignment stops changing - see that
+            // method's own remarks for the full reasoning (including why the cap stays at 3) and why
+            // TryApplyDimensionChangingPageCorrection's own speculative/fallback passes call it too
+            // rather than a bespoke single LayoutDocument call. Gated the same way it always was
+            // (UseVariableInlineMeasure false skips this ENTIRELY, unlike the correction passes' own
+            // unconditional calls below): a document with no per-page horizontal override has nothing
+            // for this to settle, and re-running LayoutDocument again anyway is observably not a no-op
+            // for some documents (e.g. named-page break suppression, repeated-header state) even when
+            // its own result would otherwise be discarded - see RunLayoutToSettledMeasure's own remarks.
             if (UseVariableInlineMeasure)
             {
-                // The base seed the "real" pass(es) above used - NOT the current Root.Size.Width, which
-                // GetBoxWidth has already replaced with page 0's own (seam-adjusted) measure.
-                var rootWidth = IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width));
-                var previous = PageAssignmentSignature();
-                for (var i = 0; i < 3; i++)
-                {
-                    Root.Size = new RSize(rootWidth, 0);
-                    Root.Location = Location;
-                    ActualSize = RSize.Empty;
-                    await LayoutDocument(g);
-
-                    var current = PageAssignmentSignature();
-                    if (current.SequenceEqual(previous)) break;
-                    previous = current;
-                }
-
-                // css-break-3 §5.4's two line minimums are decided here rather than inside the loop above.
-                // A break they move changes which page a box lands on, and every box's width is keyed off
-                // the page it landed on last time - so taken while the loop is still settling, the decision
-                // feeds back into the very thing the loop is trying to settle, and the loop stops
-                // converging (measured on windows-latest, whose font metrics put the fixture at a different
-                // boundary: a paragraph left wrapped to a neighbouring page's measure, which is a far more
-                // visible defect than the orphan it was avoiding).
-                //
-                // One final layout, entered once the assignment has settled, has no such feedback: every
-                // width in it comes from the settled assignment, and nothing re-runs afterwards to be
-                // disturbed by what the corrections move.
-                _pageWidthsSettled = true;
-
-                Root.Size = new RSize(rootWidth, 0);
-                Root.Location = Location;
-                ActualSize = RSize.Empty;
-                await LayoutDocument(g);
+                var reflowRootWidth = IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width));
+                await RunLayoutToSettledMeasure(g, reflowRootWidth);
             }
 
             // css-gcpm-3's float: footnote needs each page's footnote-area height fed back into that same
@@ -1500,6 +1464,12 @@ namespace PeachPDF.Html.Core
             // reflow loop, so the tree can never describe an intermediate invocation's geometry.
             var tree = _emitter?.Finish() ?? new FragmentTree([]);
 
+            // Issue #1041's narrow, relayout-gated residual on top of PageGeometryTable.ResolveForMaterializedPage's
+            // existing zero-relayout correction (LayoutMarginBoxes, below) - see
+            // TryApplyDimensionChangingPageCorrection's own remarks for the gate and the fallback-safety
+            // guarantee. A no-op (returns tree unchanged) for the overwhelming majority of documents.
+            tree = await TryApplyDimensionChangingPageCorrection(g, tree);
+
             // css-gcpm-3's content: element() needs the final page list/count (first/start/last/first-except
             // selection is page-index-based), so it runs here, after the tree above is built, rather than
             // as part of the emitter's own per-pass work.
@@ -1508,6 +1478,260 @@ namespace PeachPDF.Html.Core
             // Pure bookkeeping (the footnote convergence loop above already produced final geometry) - see
             // AttachFootnoteAreas's own remarks for why this runs here, alongside LayoutMarginBoxes.
             FragmentTree = AttachFootnoteAreas(treeWithMarginBoxes);
+        }
+
+        /// <summary>
+        /// Issue #1041's narrow, relayout-gated residual left after
+        /// <see cref="PageGeometryTable.ResolveForMaterializedPage"/>'s existing zero-relayout
+        /// correction (<see cref="LayoutMarginBoxes"/>, which this always runs before): a page-side
+        /// <c>:first</c>/<c>:left</c>/<c>:right</c> override that itself changes the slot's own content-box
+        /// WIDTH or HEIGHT (not both), combined with a content-empty gap earlier in the document that
+        /// shifted this slot's materialized page number off its raw grid number. Content already
+        /// wrapped/fragmented against the grid-numbered dimensions during the layout pass(es) above, so
+        /// simply substituting different dimensions into the fragment tree here (the way
+        /// <c>ResolveForMaterializedPage</c> safely does when the dimensions AGREE) would size or clip
+        /// content differently from what it actually is - unsafe without a genuine relayout.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Cheap in the overwhelming common case: the same override-flag short-circuit
+        /// <see cref="LayoutMarginBoxes"/> already uses, then one probe per fragmentainer
+        /// (<see cref="PageGeometryTable.ProbeDimensionChangingCorrection"/>) bounded by page count. Only
+        /// pays for an actual extra <see cref="LayoutDocument"/> pass when at least one slot probes
+        /// eligible.
+        /// </para>
+        /// <para>
+        /// When one or more slots ARE eligible: pins those slots' rule selection to their materialized
+        /// page number (<see cref="PageGeometryTable.MaterializedNumberOverrides"/>) and runs ONE more
+        /// full layout pass, then verifies ALL of: the content-emptiness signature (the ordered list of
+        /// <see cref="Fragments.FragmentainerFragment.SlotIndex"/> across <paramref name="tree"/> -
+        /// which slots survived, and in what order) matches what it was before the pass;
+        /// <see cref="PageAssignmentSignature"/> (every box's own page/name assignment) also matches; and
+        /// every gated slot's <see cref="PageBandGeometry.BandWidth"/>/
+        /// <see cref="PageBandGeometry.BandHeight"/> now actually equals what was
+        /// predicted. Content-emptiness and page-assignment matching despite the corrected pass's
+        /// different dimensions is exactly the evidence that the correction didn't itself perturb
+        /// pagination elsewhere - the oscillation risk a dimension change genuinely carries (a page that
+        /// got narrower could un-empty a slot, or vice versa).
+        /// </para>
+        /// <para>
+        /// If ANY of that disagrees, the corrected pass is discarded entirely and layout is run a THIRD
+        /// time with the override cleared - deterministically reproducing the original (declined) result,
+        /// since layout is a pure function of its inputs and nothing else changed. A wrong "corrected"
+        /// layout would be worse than the honest gap this leaves in place (see
+        /// <c>.claude/accepted-gaps/left-right-page-geometry-vs-materialized-numbering.md</c>) - there is
+        /// no partial application and no further retry: the cap is exactly one extra pass.
+        /// </para>
+        /// <para>
+        /// Deliberately out of scope, gated out by <see cref="PageGeometryTable.ProbeDimensionChangingCorrection"/>
+        /// itself: a slot where BOTH dimensions would change at once, and any slot under an active named
+        /// page (<see cref="PageBandGeometry.ActiveName"/>) - a named-page run already
+        /// drives its own bounded-not-guaranteed convergence loop
+        /// (<c>.claude/accepted-gaps/named-page-run-convergence-loop-is-bounded-not-guaranteed.md</c>);
+        /// stacking this mechanism on top of that one is out of scope for this issue.
+        /// </para>
+        /// <para>
+        /// Two more gates live here rather than in the probe, because both are about the SPECULATIVE
+        /// PASS'S validity rather than any one slot's own eligibility. First: a document using
+        /// <c>float: footnote</c> is declined outright (<see cref="HasFootnotes"/>). A footnote body is
+        /// wrapped by the separate footnote convergence loop above (<see cref="ResolveFootnotesForThisAttempt"/>)
+        /// against the PRE-correction width, into state (<see cref="FootnoteAreaHeightsBySlot"/>/the
+        /// per-slot call list) that lives outside <see cref="Root"/>'s own box tree - so neither the
+        /// content-emptiness signature nor <see cref="PageAssignmentSignature"/> would ever notice a
+        /// corrected pass leaving that state stale, and <see cref="AttachFootnoteAreas"/> (which runs
+        /// after this method, against the POST-correction geometry) would then size a footnote-area
+        /// divider for the new width around body text still wrapped for the old one. Re-resolving
+        /// footnotes as part of the speculative pass would need genuinely more machinery than this
+        /// narrow issue's own scope justifies, so the whole correction is declined instead whenever
+        /// footnotes are in play at all - not just on the page(s) actually gated.
+        /// </para>
+        /// <para>
+        /// Second: more than one slot probing eligible at once is declined entirely (no correction
+        /// applied to ANY of them), not attempted one at a time. With exactly one gated slot, that
+        /// slot's own <see cref="PageBandGeometry.Top"/> is unaffected by its own correction (a slot's
+        /// Top depends only on EARLIER slots, none of which changed), so the probe's prediction is
+        /// exactly what the real corrected pass will use. With two or more, an earlier gated slot's own
+        /// HEIGHT change would shift every later slot's real <see cref="PageBandGeometry.Top"/> away
+        /// from what an independently-run probe assumed for it - which could in principle select a
+        /// different named page at a later slot whose <see cref="PageBandGeometry.BandWidth"/>/
+        /// <see cref="PageBandGeometry.BandHeight"/> still happen to numerically match by coincidence,
+        /// past both this method's own per-slot dimension check and <see cref="PageAssignmentSignature"/>'s
+        /// page-index-and-name pairing. Restricting to exactly one eligible slot removes the scenario
+        /// structurally rather than trying to detect it after the fact.
+        /// </para>
+        /// </remarks>
+        private async ValueTask<FragmentTree> TryApplyDimensionChangingPageCorrection(RGraphics g, FragmentTree tree)
+        {
+            if (tree.Fragmentainers.Count == 0 || PageRules.Count == 0 || HasFootnotes)
+                return tree;
+
+            if (!PageGeometry.HasVerticalMarginOverrides && !PageGeometry.HasHorizontalMarginOverrides &&
+                !PageGeometry.HasSizeOverrides && !PageGeometry.HasVerticalBorderPaddingOverrides &&
+                !PageGeometry.HasHorizontalBorderPaddingOverrides)
+                return tree;
+
+            Dictionary<int, int>? overrides = null;
+            Dictionary<int, PageBandGeometry>? expected = null;
+            var probePageNumber = 0;
+
+            foreach (var fragmentainer in tree.Fragmentainers)
+            {
+                probePageNumber++;
+                var candidate = PageGeometry.ProbeDimensionChangingCorrection(fragmentainer.SlotIndex, probePageNumber);
+                if (candidate is not { } geometry) continue;
+
+                (overrides ??= [])[fragmentainer.SlotIndex] = probePageNumber;
+                (expected ??= [])[fragmentainer.SlotIndex] = geometry;
+            }
+
+            // The common case: no slot both disagrees on materialized number AND changes dimension -
+            // ResolveForMaterializedPage's own zero-relayout path (LayoutMarginBoxes) already covers
+            // everything there is to cover. More than one eligible slot at once is ALSO declined (see
+            // this method's own remarks) - not attempted for a subset of them.
+            if (overrides is not { Count: 1 })
+                return tree;
+
+            var beforeContentEmptiness = tree.Fragmentainers.Select(f => f.SlotIndex).ToList();
+            var beforePageAssignment = PageAssignmentSignature();
+            var rootWidth = IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width));
+
+            FragmentTree candidateTree;
+            PageGeometry.MaterializedNumberOverrides = overrides;
+            try
+            {
+                candidateTree = await RunLayoutPassForPageCorrection(g, rootWidth);
+            }
+            finally
+            {
+                // Cleared unconditionally - every pass after this one, including the fallback restore
+                // pass below, must resolve every slot against its plain grid number exactly as before
+                // this feature existed.
+                PageGeometry.MaterializedNumberOverrides = null;
+            }
+
+            var afterContentEmptiness = candidateTree.Fragmentainers.Select(f => f.SlotIndex).ToList();
+            var afterPageAssignment = PageAssignmentSignature();
+
+            var converged = afterContentEmptiness.SequenceEqual(beforeContentEmptiness)
+                && afterPageAssignment.SequenceEqual(beforePageAssignment);
+
+            if (converged)
+            {
+                // Belt-and-suspenders: given the signature agreement just above, Compute's own purity,
+                // and that only a gated slot's RULE SELECTION (never its Top, which only an earlier
+                // slot's own height could move, and no earlier slot is ever overridden) differs between
+                // this pass and the original, a gated slot's geometry canNOT actually disagree with
+                // what was predicted once both signatures already match - but this is exactly the kind
+                // of invariant a future change to either signature or to Compute could quietly break,
+                // and this issue's own fallback-safety requirement (never bake in a partially-converged
+                // result) is worth the extra check even though no known fixture reaches it.
+                foreach (var (slotIndex, expectedGeometry) in expected!)
+                {
+                    var actual = PageGeometry.GetPage(slotIndex);
+                    if (Math.Abs(actual.BandWidth - expectedGeometry.BandWidth) < 0.01 &&
+                        Math.Abs(actual.BandHeight - expectedGeometry.BandHeight) < 0.01)
+                        continue;
+
+                    converged = false;
+                    break;
+                }
+            }
+
+            if (converged)
+                return candidateTree;
+
+            // Fallback-safety: discard the corrected pass and reproduce the original, declined result
+            // exactly - one more full layout pass with the override cleared, deterministic because
+            // nothing else about the document changed since the pass that produced the ORIGINAL tree.
+            return await RunLayoutPassForPageCorrection(g, rootWidth);
+        }
+
+        /// <summary>
+        /// The shared tail of one speculative layout pass for
+        /// <see cref="TryApplyDimensionChangingPageCorrection"/> - mirrors the exact sequence
+        /// <see cref="PerformLayoutOnePass"/> itself runs after its own last <see cref="LayoutDocument"/>
+        /// call (settle the per-page measure, recompute flow flags, reserve a trailing directional
+        /// break, emit reserved blank slots, materialize the tree) so a speculative pass run here is
+        /// indistinguishable, to everything downstream, from an ordinary one. Uses
+        /// <see cref="RunLayoutToSettledMeasure"/> rather than a single bare <see cref="LayoutDocument"/>
+        /// call specifically so a speculative/fallback pass never bypasses <see cref="UseVariableInlineMeasure"/>'s
+        /// own bounded convergence loop - see that method's own remarks.
+        /// </summary>
+        private async ValueTask<FragmentTree> RunLayoutPassForPageCorrection(RGraphics g, double rootWidth)
+        {
+            await RunLayoutToSettledMeasure(g, rootWidth);
+
+            (HasFloatedBoxes, HasOutOfFlowBoxes, HasStackingHoistCandidates) =
+                ComputeFlowFlags(Root!, includeStackingHoistCandidates: true);
+
+            ReserveTrailingDirectionalBreak();
+            _emitter?.EmitReservedBlankSlots();
+
+            return _emitter?.Finish() ?? new FragmentTree([]);
+        }
+
+        /// <summary>
+        /// Runs one authentic layout attempt to a settled per-page measure: the same
+        /// <see cref="UseVariableInlineMeasure"/> bounded convergence loop (up to 3 iterations,
+        /// comparing <see cref="PageAssignmentSignature"/> pass over pass, then one final settle pass
+        /// with <see cref="_pageWidthsSettled"/> raised) when the document needs it, or a single plain
+        /// <see cref="LayoutDocument"/> call when it does not (<see cref="UseVariableInlineMeasure"/>
+        /// false - nothing here depends on a per-page measure at all).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="PerformLayoutOnePass"/>'s own call site guards this with the SAME
+        /// <see cref="UseVariableInlineMeasure"/> check externally, exactly as the inline version of
+        /// this logic always has - a document with no per-page horizontal override skips this whole
+        /// method there, rather than reaching its own "single plain call" branch, because re-running
+        /// <see cref="LayoutDocument"/> even once more is observably not a no-op for some documents
+        /// (named-page break suppression, repeated-header state) despite nothing here needing it to
+        /// happen. <see cref="TryApplyDimensionChangingPageCorrection"/>'s own speculative and
+        /// fallback-restore passes call this UNCONDITIONALLY instead (they always need at least one
+        /// fresh pass, to apply or clear <see cref="PageGeometryTable.MaterializedNumberOverrides"/>),
+        /// which is what actually exercises the "single plain call" branch below.
+        /// </para>
+        /// <para>
+        /// Sharing this one method between <see cref="PerformLayoutOnePass"/>'s own reflow and
+        /// <see cref="TryApplyDimensionChangingPageCorrection"/>'s passes means neither of the latter
+        /// two can silently diverge from what a genuine layout attempt does: a one-shot
+        /// <see cref="LayoutDocument"/> call in their place could bake in an auto-width box's
+        /// not-yet-converged width (the convergence loop exists precisely because one pass is not
+        /// always enough), or leave <see cref="_pageWidthsSettled"/> raised without the genuine
+        /// convergence <see cref="Dom.CssBox.OrphansAndWidowsMayMoveABreak"/> assumes it implies - both
+        /// invisible to <see cref="TryApplyDimensionChangingPageCorrection"/>'s own content-emptiness/
+        /// page-assignment/band-geometry checks, since none of them inspect a box's WIDTH directly or
+        /// which pass set <c>_pageWidthsSettled</c>.
+        /// </para>
+        /// </remarks>
+        private async ValueTask RunLayoutToSettledMeasure(RGraphics g, double rootWidth)
+        {
+            if (UseVariableInlineMeasure)
+            {
+                var previous = PageAssignmentSignature();
+                for (var i = 0; i < 3; i++)
+                {
+                    Root!.Size = new RSize(rootWidth, 0);
+                    Root.Location = Location;
+                    ActualSize = RSize.Empty;
+                    await LayoutDocument(g);
+
+                    var current = PageAssignmentSignature();
+                    if (current.SequenceEqual(previous)) break;
+                    previous = current;
+                }
+
+                // css-break-3 §5.4's two line minimums are decided only once the assignment above has
+                // settled, in the one final pass below - see PerformLayoutOnePass's own call site for
+                // why (taking one while the loop is still settling would feed back into the very thing
+                // it is trying to settle).
+                _pageWidthsSettled = true;
+            }
+
+            Root!.Size = new RSize(rootWidth, 0);
+            Root.Location = Location;
+            ActualSize = RSize.Empty;
+            await LayoutDocument(g);
         }
 
         /// <summary>
