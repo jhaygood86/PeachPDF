@@ -39,6 +39,16 @@ namespace PeachPDF.Html.Core.Dom
     internal static class CssLayoutEngine
     {
         /// <summary>
+        /// Slack, in layout units (points), a word may overshoot the line's limit by and still count as
+        /// fitting. The same idiom as the existing <c>+ 0.01</c> fit tests in this file (~0.0075pt,
+        /// comparable to Chrome's 1/64px <c>LayoutUnit</c>): a shrink-wrapped item is exactly its text's
+        /// natural width, and the commit pass re-accumulates that line's <c>CurrentX</c> word by word at
+        /// a shifted X, so the running sum can land one floating-point ULP past a limit the item was sized
+        /// to exactly - which a strict compare would read as overflow and wrap the last word.
+        /// </summary>
+        private const double LineFitTolerance = 0.01;
+
+        /// <summary>
         /// Measure image box size by the width\height set on the box and the actual rendered image size.<br/>
         /// If no image exists for the box error icon will be set.
         /// </summary>
@@ -624,7 +634,7 @@ namespace PeachPDF.Html.Core.Dom
                 // checked unconditionally, independent of column position, the same way FlowBox's own
                 // `overflows` is: a word that alone is too long for even an empty column must still get a
                 // real hyphenation attempt, not just an unavoidable-overflow pass-through.
-                var wordDoesNotFit = permitsOverflowWrap && inlineOffset + wordAdvance > effectiveWrapLimit;
+                var wordDoesNotFit = permitsOverflowWrap && inlineOffset + wordAdvance > effectiveWrapLimit + LineFitTolerance;
 
                 // hyphens:auto/manual: before giving up and wrapping the whole word, see if a cached
                 // candidate break point (from CssBox.ParseToWords - either an explicit soft hyphen or an
@@ -707,7 +717,7 @@ namespace PeachPDF.Html.Core.Dom
                         runExtent += runWidth + runWord.ActualWordSpacing;
                     }
 
-                    wrapsWholeNoWrapRun = inlineOffset + runExtent > effectiveWrapLimit;
+                    wrapsWholeNoWrapRun = inlineOffset + runExtent > effectiveWrapLimit + LineFitTolerance;
                 }
 
                 // A fragment split from what was one word - a per-codepoint-font run, or a
@@ -4262,7 +4272,7 @@ namespace PeachPDF.Html.Core.Dom
                         }
 
                         var overflows = b.WhiteSpace.Value != Whitespace.NoWrap && b.WhiteSpace.Value != Whitespace.Pre
-                                         && coordinates.CurrentX + word.Width + rightSpacing + clonedTrailing > actualLimitRight
+                                         && coordinates.CurrentX + word.Width + rightSpacing + clonedTrailing > actualLimitRight + LineFitTolerance
                                          && (b.WhiteSpace.Value != Whitespace.PreWrap || !word.IsSpaces);
 
                         // hyphens:auto/manual: before giving up and wrapping the whole word, see if a

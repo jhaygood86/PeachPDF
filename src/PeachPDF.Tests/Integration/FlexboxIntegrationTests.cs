@@ -1881,6 +1881,129 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(1, lineCount);
         }
 
+        // ─── Exact-fit text must not wrap its last word ─────────────────────────
+        //
+        // A shrink-wrapped flex item is exactly its text's natural width, with zero slack. The commit
+        // pass re-accumulates the line's CurrentX word by word at a (possibly shifted) X, so the
+        // running sum can land one floating-point ULP past the limit the item was sized to, and a
+        // strict `>` wrap test then split "16 / 9" into "16 /" + "9". BuildAndLayout pins
+        // PixelsPerPoint to 1.0, where the two sides happen to be bit-identical, which is why nothing
+        // caught it - these tests sweep the pixel scale, the margin and the font size so that both
+        // sides of the comparison see many different last bits.
+
+        private const int ExactFitSweepCount = 400;
+
+        private static string InvariantNumber(double value) =>
+            value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+
+        private static double SweepPixelsPerPoint(int i) => 1 + i * 0.00091;
+
+        private static string CenteredLabelHtml(int i)
+        {
+            var fontSize = 10.0 + i * 0.0137;
+            var left = (i % 17) * 3.3 + (i % 7) * 0.171;
+            return LayoutHarness.Wrap($$"""
+                <style>
+                .box { width: 97.5pt; margin-left: {{InvariantNumber(left)}}pt; border: 1px solid #999;
+                       font-size: {{InvariantNumber(fontSize)}}pt; display: flex; align-items: center;
+                       justify-content: center; aspect-ratio: 16/9; text-align: center; }
+                </style>
+                <div id='box' class='box'>16 / 9</div>
+                """);
+        }
+
+        private static string AbsposLabelHtml(int i)
+        {
+            var left = 6 + i % 13 * 1.37;
+            var fontSize = 9 + i * 0.0111;
+            return LayoutHarness.Wrap($$"""
+                <style>
+                .rel { position: relative; width: 240pt; height: 72pt; }
+                .abs { position: absolute; top: 6pt; left: {{InvariantNumber(left)}}pt; height: 48pt;
+                       aspect-ratio: 3/1; display: flex; align-items: center; justify-content: center;
+                       font-size: {{InvariantNumber(fontSize)}}pt; }
+                </style>
+                <div class='rel'><div id='box' class='abs'>abspos &rarr; 192px wide</div></div>
+                """);
+        }
+
+        private static string VerticalLabelHtml(int i)
+        {
+            var fontSize = 10.0 + i * 0.0137;
+            var top = (i % 17) * 3.3 + (i % 7) * 0.171;
+            return LayoutHarness.Wrap($$"""
+                <style>
+                .box { height: 97.5pt; margin-top: {{InvariantNumber(top)}}pt; border: 1px solid #999;
+                       font-size: {{InvariantNumber(fontSize)}}pt; display: flex; align-items: center;
+                       justify-content: center; aspect-ratio: 9/16; text-align: center;
+                       writing-mode: vertical-rl; }
+                </style>
+                <div id='box' class='box'>16 / 9</div>
+                """);
+        }
+
+        private static async Task<int> TotalLineCountAsync(string html, double pixelsPerPoint)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(html, pixelsPerPoint: pixelsPerPoint);
+            var box = FindById(root, "box")!;
+            return LayoutHarness.Descendants(box).Sum(b => b.LineBoxes.Count);
+        }
+
+        private static async Task AssertNoSweepCaseWrapsAsync(Func<int, string> htmlFor)
+        {
+            var wrapped = new List<string>();
+            for (var i = 0; i < ExactFitSweepCount; i++)
+            {
+                var lines = await TotalLineCountAsync(htmlFor(i), SweepPixelsPerPoint(i));
+                if (lines != 1)
+                {
+                    wrapped.Add($"i={i} (ppp {InvariantNumber(SweepPixelsPerPoint(i))}): {lines} lines");
+                }
+            }
+
+            Assert.True(wrapped.Count == 0,
+                $"{wrapped.Count}/{ExactFitSweepCount} exact-fit labels wrapped: {string.Join("; ", wrapped.Take(8))}");
+        }
+
+        [Theory]
+        [InlineData(10)]
+        [InlineData(11)]
+        [InlineData(42)]
+        public async Task CenteredAspectRatioLabel_PinnedLastBitCases_StaysOnOneLine(int i)
+        {
+            Assert.Equal(1, await TotalLineCountAsync(CenteredLabelHtml(i), SweepPixelsPerPoint(i)));
+        }
+
+        [Fact]
+        public async Task CenteredAspectRatioLabel_AcrossPixelScaleMarginAndFontSize_NeverWraps()
+        {
+            await AssertNoSweepCaseWrapsAsync(CenteredLabelHtml);
+        }
+
+        [Theory]
+        [InlineData(50)]
+        [InlineData(67)]
+        [InlineData(84)]
+        public async Task AbsolutelyPositionedAspectRatioLabel_PinnedLastBitCases_StaysOnOneLine(int i)
+        {
+            Assert.Equal(1, await TotalLineCountAsync(AbsposLabelHtml(i), SweepPixelsPerPoint(i)));
+        }
+
+        [Fact]
+        public async Task AbsolutelyPositionedAspectRatioLabel_AcrossPixelScaleLeftAndFontSize_NeverWraps()
+        {
+            await AssertNoSweepCaseWrapsAsync(AbsposLabelHtml);
+        }
+
+        [Fact]
+        public async Task VerticalWritingModeAspectRatioLabel_AcrossPixelScaleMarginAndFontSize_NeverWraps()
+        {
+            // The vertical-flow counterparts of the compare above (the column-breaking `wordDoesNotFit`
+            // and `wrapsWholeNoWrapRun` checks in CssLayoutEngine.CreateVerticalLineBoxes) carry the
+            // same exact-fit tolerance; the same shape turned on its side exercises them.
+            await AssertNoSweepCaseWrapsAsync(VerticalLabelHtml);
+        }
+
         [Fact]
         public async Task RepeatingTableHeaderProxy_InsideAFlexItem_ReflectsTheItemsFinalPosition()
         {
