@@ -8,10 +8,13 @@ namespace PeachPDF.Tests.Integration
     /// Issue #1118: <c>text-underline-offset</c>
     /// (<see href="https://www.w3.org/TR/css-text-decor-4/#underline-offset">css-text-decor-4 §2.8</see>)
     /// and <c>text-underline-position</c>
-    /// (<see href="https://www.w3.org/TR/css-text-decor-3/#text-underline-position-property">css-text-decor-3
-    /// §2.5</see>, scoped here to <c>auto | from-font | under</c> - <c>left</c>/<c>right</c> are not
-    /// implemented, see docs/html-css-support.md) were previously unimplemented and silently dropped at
-    /// parse time. Neither affects <c>overline</c>/<c>line-through</c>, only <c>underline</c>.
+    /// (<see href="https://www.w3.org/TR/css-text-decor-4/#text-underline-position-property">css-text-decor-4
+    /// §2.5</see> - <c>from-font</c> does not exist in css-text-decor-3 at all, so the full compound
+    /// grammar this covers, <c>auto | [ from-font | under ] || [ left | right ]</c>, is a level-4
+    /// addition) were previously unimplemented and silently dropped at parse time; this class covers the
+    /// <c>auto</c>/<c>from-font</c>/<c>under</c> half - see <c>TextUnderlinePositionSideTests</c> for the
+    /// <c>left</c>/<c>right</c> half (issue #1146). Neither affects <c>overline</c>/<c>line-through</c>,
+    /// only <c>underline</c>.
     /// </summary>
     public class TextUnderlineOffsetPositionTests
     {

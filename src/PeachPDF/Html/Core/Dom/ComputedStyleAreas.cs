@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Entities;
 
 namespace PeachPDF.Html.Core.Dom
@@ -66,5 +67,21 @@ namespace PeachPDF.Html.Core.Dom
     internal sealed partial record DisplayPositioningArea
     {
         public string? RunningElementName { get; init; }
+    }
+
+    /// <summary>
+    /// The one field with no <c>css-properties.json</c> propertyPath of its own - not a real CSS
+    /// property, a PeachPDF-internal companion to <c>TextUnderlinePosition</c> carrying the
+    /// <c>left</c>/<c>right</c> half of css-text-decor-4 §2.5's compound <c>text-underline-position</c>
+    /// grammar (issue #1146; see <see cref="CssBox.TextUnderlineSide"/>). Set together with
+    /// <c>TextUnderlinePosition</c> by that same property's <c>customSetter</c>, so the two halves of one
+    /// declaration always change together - there is no independent <c>text-underline-side</c> property
+    /// for the cascade's own defaulting loop to ever reassert on its own. Every other <see cref="TextArea"/>
+    /// field (including <c>TextUnderlinePosition</c> itself) is generated - see <c>ComputedStyleAreas.g.cs</c>.
+    /// </summary>
+    internal sealed partial record TextArea
+    {
+        public CssProperty<TextUnderlineSide> TextUnderlineSide { get; init; } =
+            CssProperty<TextUnderlineSide>.FromValue(Keywords.Auto, CSS.TextUnderlineSide.Auto);
     }
 }

@@ -548,14 +548,17 @@ would double-apply the same shift.
 
 ## What's still out of scope
 
-- **`text-decoration-skip-ink` and the atomic-inline exclusion are horizontal-only**
+- **The atomic-inline exclusion (and an upright run's skip-ink) are horizontal-only**
   ([#1145](https://github.com/jhaygood86/PeachPDF/issues/1145)) — the geometry orientation bug this
   entry used to describe (`text-decoration` drawn as a short horizontal stroke across the start of a
   column) was fixed by [#1075](https://github.com/jhaygood86/PeachPDF/issues/1075): an underline/
   overline/line-through now runs the correct physical axis, on the correct side, under a true vertical
-  writing mode. What #1075 left out of scope is narrower: the two decoration subtractions (skip-ink,
-  the atomic-inline exclusion) are still x-axis-shaped band math and stay gated off under a vertical
-  mode so they cannot delete a decoration instead of merely failing to break it — see
+  writing mode. #1145 then closed `text-decoration-skip-ink` for a **rotated** run (one ordinary
+  horizontal glyph run reoriented as a whole, so the ink band reduces to something the existing
+  x-axis-shaped math can measure once mapped into that run's own pre-rotation frame). What remains out
+  of scope: an **upright** run's ink (no single natural horizontal layout to reduce to) and the
+  atomic-inline exclusion, which stays gated off under a vertical mode so it cannot delete a decoration
+  instead of merely failing to break it — see
   [text-decoration-skip-ink-and-atomic-inline-exclusion-are-horizontal-only.md](text-decoration-skip-ink-and-atomic-inline-exclusion-are-horizontal-only.md),
   which also records why that guard must not be removed as dead code.
 - **A float's own starting position inside a vertical box's block-level content is physically meaningless

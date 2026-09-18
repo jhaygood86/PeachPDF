@@ -11375,11 +11375,12 @@ await SaveShowcaseAsync("text_underline_offset_position", "Text &amp; Fonts", "t
 var verticalDecorationHtml =
     "<html><head><style>" +
     "body { font-family: serif; margin: 24px; color: #1a1a1a; }" +
-    "h2 { font-size: 20px; margin: 0 0 4px; font-family: sans-serif; }" +
+    "h2 { font-size: 20px; margin: 24px 0 4px; font-family: sans-serif; }" +
     ".note { color: #555; font-size: 12px; margin: 0 0 20px; max-width: 640px; font-family: sans-serif; }" +
     ".row { display: flex; gap: 40px; align-items: flex-start; }" +
     ".column { writing-mode: vertical-rl; height: 220px; font-size: 22px; }" +
     ".column.lr { writing-mode: vertical-lr; }" +
+    ".column.big { font-size: 40px; font-weight: bold; }" +
     "</style></head><body>" +
     "<h2>Vertical writing mode: text-decoration</h2>" +
     "<p class=\"note\">An underline/overline/line-through on vertical text now runs down the column, on " +
@@ -11391,13 +11392,68 @@ var verticalDecorationHtml =
     "<div class=\"column\" style=\"text-decoration:overline double\">Double overline (vertical-rl)</div>" +
     "<div class=\"column lr\" style=\"text-decoration:underline\">Underline (vertical-lr)</div>" +
     "</div>" +
+    "<h2>text-decoration-skip-ink: rotated run now breaks around ink (issue #1145)</h2>" +
+    "<p class=\"note\">Latin text is a rotated run under the default (mixed) text-orientation - one " +
+    "ordinary horizontal glyph run reoriented as a whole - so its ink can now be measured and skipped, " +
+    "same as under a horizontal writing mode. An upright run (forced here via text-orientation:upright) " +
+    "has no single natural horizontal layout to reduce to and still draws unbroken - the honestly-partial " +
+    "half of this issue.</p>" +
+    "<div class=\"row\">" +
+    "<div class=\"column\" style=\"text-decoration:underline\">gypsy jog (rotated)</div>" +
+    "<div class=\"column\" style=\"text-decoration:underline; text-orientation:upright\">gypsy jog (upright)</div>" +
+    "</div>" +
+    "<h2>text-underline-position: left/right (issue #1146)</h2>" +
+    "<p class=\"note\">left/right pin the underline to a literal physical edge instead of the writing " +
+    "mode's own default under/over mapping. The third column combines underline+overline with a side " +
+    "that would put the underline where the overline normally sits - per css-text-decor-4 &sect;2.5, the " +
+    "overline switches to the opposite edge instead of overlapping it.</p>" +
+    "<div class=\"row\">" +
+    "<div class=\"column big\" style=\"text-decoration:underline; text-underline-position:left\">Left</div>" +
+    "<div class=\"column big\" style=\"text-decoration:underline; text-underline-position:right\">Right</div>" +
+    "<div class=\"column big\" style=\"text-decoration:underline overline; text-underline-position:right\">Switch</div>" +
+    "</div>" +
     "</body></html>";
 
 await SaveShowcaseAsync("vertical_writing_mode_decoration", "Text &amp; Fonts", "Vertical Writing Mode: text-decoration",
     "Under a true vertical writing mode (vertical-rl/vertical-lr), a text-decoration line now runs " +
     "along the column's own extent on the correct physical side of the glyphs, instead of being drawn " +
-    "as a short horizontal stroke across its top.",
+    "as a short horizontal stroke across its top. Also covers text-decoration-skip-ink now applying to " +
+    "a rotated run (issue #1145) and text-underline-position: left/right pinning the underline to a " +
+    "literal physical edge, switching a same-line overline to the opposite edge when they would " +
+    "otherwise collide (issue #1146).",
     verticalDecorationHtml, pdfConfig);
+
+// ── Vertical writing mode: background-clip: text (issue #1123) ──────────────────────
+var verticalBackgroundClipTextHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 20px; max-width: 640px; }" +
+    ".row { display: flex; gap: 40px; align-items: flex-start; }" +
+    ".col { writing-mode: vertical-rl; height: 220px; font-size: 44px; font-weight: bold; " +
+    "background: linear-gradient(to bottom, #e91e63, #3f51b5); background-clip: text; " +
+    "-webkit-background-clip: text; color: transparent; }" +
+    ".col.upright { text-orientation: upright; }" +
+    ".col.lr { writing-mode: vertical-lr; }" +
+    "</style></head><body>" +
+    "<h2>background-clip: text under a vertical writing mode</h2>" +
+    "<p class=\"note\">A gradient background now clips to the actual glyph-outline union under " +
+    "vertical-rl/vertical-lr, matching the horizontal case, instead of falling back to a plain " +
+    "border-box fill. The rotated column builds one outline per whole word, transformed into its " +
+    "physical footprint; the upright column builds one outline per character, translated to its own " +
+    "cell.</p>" +
+    "<div class=\"row\">" +
+    "<div class=\"col\">PEACH</div>" +
+    "<div class=\"col upright\">PEACH</div>" +
+    "<div class=\"col lr\">PEACH</div>" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("vertical_writing_mode_background_clip_text", "Text &amp; Fonts", "Vertical Writing Mode: background-clip: text",
+    "background-clip: text now clips to the real glyph-outline union under a true vertical writing " +
+    "mode (vertical-rl/vertical-lr), for both a rotated (sideways) run and an upright run, instead of " +
+    "falling back to a plain border-box fill (issue #1123).",
+    verticalBackgroundClipTextHtml, pdfConfig);
 
 const string declarativeApiSource =
     """"

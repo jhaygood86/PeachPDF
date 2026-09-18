@@ -6,6 +6,7 @@ using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -215,6 +216,28 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>
+        /// The style/font/baseline/shaping facts a word needs before either a glyph-outline union
+        /// (<see cref="BuildTextClipPath"/>'s <c>CollectVerticalWords</c>) or an ink-crossing measurement
+        /// (<see cref="AddInkExclusions"/>) can proceed - the exact same resolution
+        /// <see cref="DrawWordGlyphs"/> uses to paint the word, so a fallback face or a synthesized
+        /// small-caps run is measured/outlined against the same font and baseline shift it is actually
+        /// painted with, not the box's own <c>ActualFont</c>.
+        /// </summary>
+        private readonly record struct WordFontContext(CssBox StyleSource, RFont Font, double BaselineAdjust, TextShapingFeatures Features);
+
+        /// <summary>See <see cref="WordFontContext"/>.</summary>
+        /// <param name="word">the word to resolve</param>
+        /// <param name="owner">the box whose style the word falls back to when it has no <c>::first-line</c> override of its own</param>
+        private static WordFontContext ResolveWordFontContext(CssRect word, CssBox owner)
+        {
+            var styleSource = word.FirstLineStyle ?? owner;
+            var font = CssBox.ResolveWordFont(word, styleSource);
+            var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
+            var features = styleSource.ResolveWordShapingFeatures(word);
+            return new WordFontContext(styleSource, font, baselineAdjust, features);
+        }
+
+        /// <summary>
         /// Builds the union of every laid-out word's glyph outline reachable from <paramref name="fragment"/>'s
         /// own subtree - this box's own words plus descendants', stopping at an atomic inline - for a
         /// <c>background-clip: text</c> layer (issue #1117). Membership mirrors
@@ -228,8 +251,8 @@ namespace PeachPDF.Html.Core.Paint
         /// An empty (non-null) path when the subtree has no clippable words at all - correctly clips
         /// the layer to nothing. Null when any reached <i>word</i> - <see cref="RGraphics.GetTextOutline"/>'s
         /// own granularity - produced no usable glyph outline at all (every glyph in it failed: a
-        /// CID-keyed CFF or otherwise outline-less font) or the word's own box is set to a vertical
-        /// writing mode (<see cref="IsHorizontalWritingMode"/>) - <c>PaintBackground</c>'s local
+        /// CID-keyed CFF or otherwise outline-less font) or the word's own box is set to
+        /// <c>writing-mode: sideways-rl</c>/<c>sideways-lr</c> - <c>PaintBackground</c>'s local
         /// <c>ResolveClip</c>'s cue to fall back to the box's ordinary <c>border-box</c> clip instead of
         /// a shape with glyphs missing from it. A word whose glyphs only *partially* decode (e.g. one
         /// character using an escape/seac operator
@@ -240,19 +263,40 @@ namespace PeachPDF.Html.Core.Paint
         /// (real-world non-CID CFF fonts essentially never use the legacy seac form on ordinary text
         /// glyphs), not separately tracked as an accepted gap.
         /// </returns>
+        /// <remarks>
+        /// A <c>vertical-rl</c>/<c>vertical-lr</c> box (<see cref="IsVerticalDecorationGeometry"/>) is fully
+        /// supported (issue #1123): an upright run's outline is built character-by-character, translating
+        /// each character's own outline to the same cell <see cref="EnumerateUprightGlyphPlacements"/>
+        /// already resolves for paint (so the two can never disagree on where a character sits), while a
+        /// rotated/sideways run's outline is built once for the whole word in its natural (pre-rotation)
+        /// frame and then transformed by the same <see cref="SidewaysRotation"/> matrix
+        /// <see cref="DrawWordGlyphs"/> paints it through. <c>writing-mode: sideways-rl</c>/<c>sideways-lr</c>
+        /// - a different, out-of-scope writing-mode value entirely (<see cref="IsHorizontalWritingMode"/>'s
+        /// own remarks) - stays on the unsupported/fallback path exactly as before this issue.
+        /// </remarks>
         private static RGraphicsPath? BuildTextClipPath(RGraphics g, BoxFragment fragment)
         {
             RGraphicsPath? union = null;
             var anyUnsupportedRun = false;
 
-            void CollectWords(BoxFragment f)
+            void AddOutline(RGraphicsPath outline)
             {
-                if (!IsHorizontalWritingMode(f.Box))
+                if (union is null)
                 {
-                    anyUnsupportedRun = true;
-                    return;
+                    union = g.GetGraphicsPath();
+                    // Matches GetTextOutline's own per-glyph path (GraphicsAdapter.GetTextOutline
+                    // sets this on each outline it builds) - required for a glyph with a nested
+                    // counter (the hole in "e"/"o"/"a"/...) to fill correctly regardless of its
+                    // contours' winding direction, rather than an even-odd default that happens to
+                    // agree only for the simplest single-nested-contour case.
+                    union.FillMode = RFillMode.Nonzero;
                 }
+                union.AddPath(outline);
+                outline.Dispose();
+            }
 
+            void CollectHorizontalWords(BoxFragment f)
+            {
                 foreach (var wordFragment in f.Words)
                 {
                     var word = wordFragment.Word;
@@ -278,19 +322,100 @@ namespace PeachPDF.Html.Core.Paint
                         continue;
                     }
 
-                    if (union is null)
-                    {
-                        union = g.GetGraphicsPath();
-                        // Matches GetTextOutline's own per-glyph path (GraphicsAdapter.GetTextOutline
-                        // sets this on each outline it builds) - required for a glyph with a nested
-                        // counter (the hole in "e"/"o"/"a"/...) to fill correctly regardless of its
-                        // contours' winding direction, rather than an even-odd default that happens to
-                        // agree only for the simplest single-nested-contour case.
-                        union.FillMode = RFillMode.Nonzero;
-                    }
-                    union.AddPath(outline);
-                    outline.Dispose();
+                    AddOutline(outline);
                 }
+            }
+
+            // An upright run stacks each character down the column (see PaintUprightVerticalRun) - its
+            // outline is unioned the same way, one GetTextOutline call per character, translated to that
+            // character's own EnumerateUprightGlyphPlacements cell rather than the word's as a whole (no
+            // single natural horizontal layout exists to reuse for it, unlike a rotated run below).
+            //
+            // A font with real vhea/vmtx or VORG metrics (RFont.HasVerticalMetrics/HasVerticalOrigin) is
+            // deliberately NOT unioned: PaintUprightVerticalRun clips each such character to its own
+            // reserved cell precisely because a real vmtx advance is routinely narrower than the font's
+            // line height (see that method's own remarks), so what is actually painted is smaller than
+            // GetTextOutline's raw per-character result. RGraphicsPath has no path-intersection primitive
+            // to reproduce that per-cell clip in the union geometry itself, so unioning the raw outline
+            // here would make background-clip: text reveal background color in a sliver where no glyph
+            // ink is actually painted - worse than the existing "unsupported run" fallback to border-box,
+            // which this reuses rather than shipping a shape wider than what is drawn.
+            void CollectUprightWord(BoxFragment f, CssRect word, RRect rect, string text, CssBox styleSource, RFont font, double baselineAdjust, TextShapingFeatures features)
+            {
+                if (font.HasVerticalMetrics || font.HasVerticalOrigin)
+                {
+                    anyUnsupportedRun = true;
+                    return;
+                }
+
+                foreach (var placement in EnumerateUprightGlyphPlacements(g, text, font, rect, baselineAdjust, styleSource.ActualLetterSpacing, features))
+                {
+                    var baselineOrigin = new RPoint(placement.X, placement.Y + font.Ascent);
+                    var outline = g.GetTextOutline(placement.CharText, font, baselineOrigin, styleSource.ActualLetterSpacing, features);
+                    if (outline is null)
+                    {
+                        anyUnsupportedRun = true;
+                        continue;
+                    }
+
+                    AddOutline(outline);
+                }
+            }
+
+            // A rotated (sideways) run is one natural horizontal glyph run reoriented as a whole (see
+            // DrawWordGlyphs's own sideways branch) - so its outline is built once, in that same natural
+            // (pre-rotation) frame, then carried into the word's actual physical footprint by the exact
+            // rotation matrix paint uses, rather than rebuilt per character.
+            void CollectRotatedWord(RRect rect, string text, CssBox styleSource, RFont font, double baselineAdjust, TextShapingFeatures features)
+            {
+                var naturalBaselineOrigin = new RPoint(0, baselineAdjust + font.Ascent);
+                var outline = g.GetTextOutline(text, font, naturalBaselineOrigin, styleSource.ActualLetterSpacing, features);
+                if (outline is null)
+                {
+                    anyUnsupportedRun = true;
+                    return;
+                }
+
+                outline.Transform(SidewaysRotation(rect));
+                AddOutline(outline);
+            }
+
+            void CollectVerticalWords(BoxFragment f)
+            {
+                foreach (var wordFragment in f.Words)
+                {
+                    var word = wordFragment.Word;
+                    if (word.IsLineBreak || word.IsImage || word is CssRectLeader) continue;
+
+                    var text = word.FirstLineText ?? word.Text;
+                    if (string.IsNullOrEmpty(text)) continue;
+
+                    var ctx = ResolveWordFontContext(word, f.Box);
+
+                    if (IsUprightWordOrientation(f.Box, word))
+                        CollectUprightWord(f, word, wordFragment.Rect, text, ctx.StyleSource, ctx.Font, ctx.BaselineAdjust, ctx.Features);
+                    else
+                        CollectRotatedWord(wordFragment.Rect, text, ctx.StyleSource, ctx.Font, ctx.BaselineAdjust, ctx.Features);
+                }
+            }
+
+            void CollectWords(BoxFragment f)
+            {
+                if (IsVerticalDecorationGeometry(f.Box))
+                {
+                    CollectVerticalWords(f);
+                    return;
+                }
+
+                if (!IsHorizontalWritingMode(f.Box))
+                {
+                    // writing-mode: sideways-rl/-lr - a different, out-of-scope writing-mode value
+                    // (see this method's own remarks and IsHorizontalWritingMode).
+                    anyUnsupportedRun = true;
+                    return;
+                }
+
+                CollectHorizontalWords(f);
             }
 
             // The out-of-flow/atomic-inline skip below is a fact about a *descendant*, per
@@ -869,22 +994,28 @@ namespace PeachPDF.Html.Core.Paint
 
             var span = new DecorationInterval(spanStart, spanEnd);
 
-            // Both subtractions are inline-axis-band reasoning that only understands a horizontal band
-            // today (an atomic inline's margin box measured left to right, a band swept horizontally
-            // across glyph ink), so both stay confined to a horizontal writing mode - extending either
-            // to a vertical inline axis is its own, separate piece of work (see
-            // .claude/accepted-gaps/). This uses the same horizontal-only test as before #1075 (sideways-*
-            // included), since neither subtraction is about geometry orientation - it's about whether the
-            // ink/exclusion band math itself understands the axis it would need to.
+            // The atomic-inline exclusion is inline-axis-band reasoning that only understands a
+            // horizontal band today (a margin box measured left to right) - and, separately,
+            // CssLayoutEngine's vertical path records no per-line rectangle for an atomic inline at all,
+            // so there is no layout fact to exclude around even if the band math were made axis-aware
+            // (see .claude/accepted-gaps/text-decoration-skip-ink-and-atomic-inline-exclusion-are-horizontal-only.md).
+            // This stays confined to a horizontal writing mode, unchanged since before #1075 (sideways-*
+            // included) - do not remove this guard as apparent dead code without first making both the
+            // band math AND vertical layout's own line-box recording axis-aware.
             var horizontal = IsHorizontalWritingMode(box);
 
             // The atomic inlines to break around are the same for every keyword: they are a fact about
             // the line's content, not about where a particular line sits on it.
             var boxExclusions = lineBox is null || !horizontal ? null : content?.ExclusionsFor(lineBox);
 
-            // Ink, by contrast, differs per keyword - an underline and an overline cross different parts
-            // of the same glyphs - so it is measured inside the loop, against that line's own band.
-            var inkWords = horizontal && SkipsInk(styleSource) ? content?.InkWordsOn(lineBox) : null;
+            // Ink-crossing exclusion, by contrast, IS reachable under a true vertical writing mode for a
+            // rotated (sideways) run: it is one ordinary horizontal glyph run reoriented as a whole (see
+            // DrawWordGlyphs's sideways branch), which GetInkCrossings can measure once AddInkExclusions
+            // maps the band into that run's own pre-rotation frame - see its own remarks. An upright run
+            // has no such natural horizontal layout to fall back on and stays unskipped (issue #1145).
+            // Ink differs per keyword - an underline and an overline cross different parts of the same
+            // glyphs - so it is measured inside the loop, against that line's own band.
+            var inkWords = (horizontal || isVertical) && SkipsInk(styleSource) ? content?.InkWordsOn(lineBox) : null;
 
             // Where an automatic underline hangs from. Only the underline needs it, but it is a fact about
             // the line rather than about a keyword, so it is resolved once rather than per keyword.
@@ -930,9 +1061,43 @@ namespace PeachPDF.Html.Core.Paint
 
             var offset = ResolveDecorationOffset(styleSource.TextUnderlineOffset, styleSource, g.PixelsPerPoint);
 
+            // css-text-decor-4 §2.5's left/right half of text-underline-position (issue #1146): pins the
+            // underline to a literal physical edge instead of the writing mode's own logical "under" side.
+            // Meaningful only under a true vertical writing mode - inert under horizontal-tb, where there
+            // is no physical left/right edge distinct from the line's own inline extent.
+            var underlineSide = isVertical ? styleSource.TextUnderlineSide.Value : TextUnderlineSide.Auto;
+            var pinnedUnderlineEdge = underlineSide switch
+            {
+                TextUnderlineSide.Left => rectangle.Left,
+                TextUnderlineSide.Right => rectangle.Right,
+                _ => (double?)null
+            };
+
+            // "If this causes the underline to be drawn on the 'over' side of the text, then an overline
+            // also switches sides and is drawn on the 'under' side" (§2.5) - so when the pinned edge above
+            // lands where the overline would otherwise draw, the overline moves to the opposite physical
+            // edge instead of overlapping it. Conditioned on an underline actually being one of this box's
+            // declared decoration lines: the note describes what happens when the underline "is drawn" -
+            // a box with only "overline" has no underline to collide with, so its overline must not be
+            // moved just because text-underline-position happens to name the conflicting side.
+            var overlineSwitchesSides = pinnedUnderlineEdge == overPos
+                && ContainsDecorationLineKeyword(textDecorationLine, Keywords.Underline);
+
             double ResolveUnderlineCross()
             {
                 var clearance = ResolveAutomaticUnderlineClearance(thickness, g.PixelsPerPoint);
+
+                if (pinnedUnderlineEdge is { } pinned)
+                {
+                    // Inset from the pinned edge toward the column's interior by the same clearance every
+                    // other vertical-mode underline keeps off its own edge - left's interior direction is
+                    // +X, right's is -X. text-underline-offset moves the line further from the text
+                    // instead - the opposite direction from clearance, mirroring the non-pinned formula
+                    // below's own clearance/offset sign relationship (ResolveDecorationOffset's remarks:
+                    // "a positive value moves the underline further from the text").
+                    var inwardSign = underlineSide == TextUnderlineSide.Left ? 1 : -1;
+                    return pinned + inwardSign * clearance - inwardSign * offset;
+                }
 
                 // No real vertical baseline runs along a column (a true vertical mode's glyphs are
                 // either upright and individually placed, or a rotated horizontal run - neither has one
@@ -950,7 +1115,7 @@ namespace PeachPDF.Html.Core.Paint
                     // OpenType's underlinePosition is itself negative-from-baseline by convention, so
                     // subtracting it moves the line down (away from the baseline) exactly as expected.
                     TextUnderlinePosition.FromFont => baseline - font.UnderlinePosition,
-                    // "Under" edge: below the line's own lowest descender, per css-text-decor-3 §2.5 -
+                    // "Under" edge: below the line's own lowest descender, per css-text-decor-4 §2.5 -
                     // rectangle already spans the full line content (ascent through descent), so its own
                     // bottom edge is that basis.
                     TextUnderlinePosition.Under => underPos,
@@ -963,15 +1128,28 @@ namespace PeachPDF.Html.Core.Paint
             // text-decoration-line may list several keywords (e.g. "underline overline"); draw each.
             // The block-end physical padding/border - bottom in horizontal-tb, and whichever physical
             // side is block-end for the vertical mode in play (left for vertical-rl, right for
-            // vertical-lr, per css-writing-modes-4 §6.4) - insets the same way across every writing mode.
-            double blockEndInset = 0;
+            // vertical-lr, per css-writing-modes-4 §6.4) - insets a keyword drawn there. Under a true
+            // vertical mode a keyword can now sit on either physical edge (an underline pinned via
+            // text-underline-position: left/right, or an overline that switched to avoid colliding with
+            // one - issue #1146), so the block-start side's own inset is resolved too; horizontal-tb has
+            // no such pinning, so it keeps exactly its pre-#1146 single block-end-based inset applied to
+            // every keyword uniformly.
+            double blockStartInset = 0, blockEndInset = 0;
             if (ownDecorationArea)
             {
-                blockEndInset = isVertical
-                    ? blockStartIsRight
+                if (isVertical)
+                {
+                    blockStartInset = blockStartIsRight
+                        ? box.ActualPaddingRight - box.ActualBorderRightWidth
+                        : box.ActualPaddingLeft - box.ActualBorderLeftWidth;
+                    blockEndInset = blockStartIsRight
                         ? box.ActualPaddingLeft - box.ActualBorderLeftWidth
-                        : box.ActualPaddingRight - box.ActualBorderRightWidth
-                    : box.ActualPaddingBottom - box.ActualBorderBottomWidth;
+                        : box.ActualPaddingRight - box.ActualBorderRightWidth;
+                }
+                else
+                {
+                    blockEndInset = box.ActualPaddingBottom - box.ActualBorderBottomWidth;
+                }
             }
 
             foreach (var line in textDecorationLine.Split(' ', StringSplitOptions.RemoveEmptyEntries))
@@ -980,13 +1158,32 @@ namespace PeachPDF.Html.Core.Paint
                 {
                     Keywords.Underline => ResolveUnderlineCross(),
                     Keywords.LineThrough => throughPos,
-                    Keywords.Overline => overPos,
+                    Keywords.Overline => overlineSwitchesSides ? underPos : overPos,
                     _ => double.NaN
                 };
 
                 if (double.IsNaN(cross)) continue;
 
-                cross -= underSign * blockEndInset;
+                // Which physical edge this keyword's line actually landed on, after any pinning/switching
+                // above - an unpinned underline is always at block-end ("under"), a non-switched overline
+                // always at block-start ("over"); a line-through has no edge of its own. pinnedUnderlineEdge
+                // is only ever non-null under a true vertical mode, so this is exactly the pre-#1146
+                // line == Overline test under horizontal-tb (where overlineSwitchesSides is always false) -
+                // needed unconditionally (not gated on isVertical) because StrokeDecorationSegment's
+                // double-style growSign relies on this exact keyword-based split for horizontal-tb too.
+                var isAtOverEdge = line switch
+                {
+                    Keywords.Overline => !overlineSwitchesSides,
+                    Keywords.Underline => pinnedUnderlineEdge is { } pinnedEdge && pinnedEdge == overPos,
+                    _ => false
+                };
+
+                // The inset itself, unlike growSign above, stays exactly at its pre-#1146 single
+                // block-end-based treatment under horizontal-tb (applied to every keyword uniformly,
+                // overline included) - only a true vertical mode's now-position-dependent keywords need
+                // the block-start side's own value at all.
+                var insetAtBlockStart = isVertical && isAtOverEdge;
+                cross += (insetAtBlockStart ? underSign : -underSign) * (insetAtBlockStart ? blockStartInset : blockEndInset);
 
                 var exclusions = boxExclusions;
 
@@ -995,14 +1192,14 @@ namespace PeachPDF.Html.Core.Paint
                 if (inkWords is not null && line is Keywords.Underline or Keywords.Overline)
                 {
                     List<DecorationInterval> combined = boxExclusions is null ? [] : [.. boxExclusions];
-                    AddInkExclusions(g, styleSource, inkWords, cross, thickness, combined);
+                    AddInkExclusions(g, styleSource, inkWords, cross, thickness, isVertical, combined);
                     exclusions = combined;
                 }
 
                 foreach (var segment in DecorationSegments.Subtract(span, exclusions ?? []))
                 {
                     StrokeDecorationSegment(g, pen, thickness, textDecorationActualColor, textDecorationStyle, line,
-                        segment.Start, segment.End, cross, isVertical, underSign);
+                        segment.Start, segment.End, cross, isVertical, underSign, isAtOverEdge);
                 }
             }
         }
@@ -1060,8 +1257,15 @@ namespace PeachPDF.Html.Core.Paint
         /// <param name="cross">the cross-axis position - physical Y normally, physical X under a true vertical mode</param>
         /// <param name="isVertical">whether the cross axis is physical X (a true vertical writing mode) rather than physical Y</param>
         /// <param name="underSign">+1 when increasing <paramref name="cross"/> moves toward "under" (horizontal-tb, vertical-lr); -1 when it moves toward "over" instead (vertical-rl)</param>
+        /// <param name="atBlockStart">
+        /// whether this segment's own keyword physically landed on the block-start ("over") edge rather
+        /// than block-end ("under") - horizontal-tb's overline always does, matching this parameter's
+        /// pre-#1146 behavior exactly; under a true vertical mode, text-underline-position: left/right can
+        /// pin an underline there instead, or move an overline off it to avoid colliding with a pinned
+        /// underline (<c>PaintDecoration</c>'s own <c>overlineSwitchesSides</c>) - see its remarks.
+        /// </param>
         private static void StrokeDecorationSegment(RGraphics g, RPen pen, double thickness, RColor color, string? style, string line,
-            double x1, double x2, double cross, bool isVertical, int underSign)
+            double x1, double x2, double cross, bool isVertical, int underSign, bool atBlockStart)
         {
             void Draw(double at)
             {
@@ -1076,9 +1280,12 @@ namespace PeachPDF.Html.Core.Paint
                     var strokeWidth = DoubleStrokeWidth(thickness, g.PixelsPerPoint);
                     var separation = 2 * strokeWidth;
 
-                    // Overline grows toward "over"; underline and line-through (and anything else that
-                    // reached here with a position of its own) grow toward "under".
-                    var growSign = line == Keywords.Overline ? -underSign : underSign;
+                    // A keyword at the block-start ("over") edge grows further toward "over"; one at
+                    // block-end ("under") - underline, line-through, or an overline that switched there
+                    // (issue #1146) - grows further toward "under" instead, so it continues outward past
+                    // wherever it actually ended up rather than growing back through the glyphs (or into a
+                    // pinned underline already occupying the edge it left).
+                    var growSign = atBlockStart ? -underSign : underSign;
 
                     // pen is a shared, per-color-cached RPen (RAdapter.GetPen) - the try/finally
                     // guarantees the temporary narrower width is undone even if a Draw call throws, so a
@@ -1230,9 +1437,9 @@ namespace PeachPDF.Html.Core.Paint
             box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr;
 
         /// <summary>
-        /// Appends the ink crossings of <paramref name="words"/> against a decoration line at
-        /// <paramref name="y"/> to <paramref name="into"/>, each already dilated by the clearance the
-        /// line keeps from the ink it skips.
+        /// Appends the ink crossings of <paramref name="words"/> against a decoration line whose
+        /// cross-axis position is <paramref name="cross"/> to <paramref name="into"/>, each already
+        /// dilated by the clearance the line keeps from the ink it skips.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -1246,9 +1453,26 @@ namespace PeachPDF.Html.Core.Paint
         /// around a descender than a hairline does. It is capped so unusually thick decorations do not
         /// erase disproportionate lengths of the line.
         /// </para>
+        /// <para>
+        /// <paramref name="isVertical"/> (issue #1145) picks which physical axis <paramref name="cross"/>
+        /// and each returned <see cref="DecorationInterval"/> are measured on, matching
+        /// <see cref="PaintDecoration"/>'s own convention - physical Y (inline axis) with <paramref name="cross"/>
+        /// itself on physical X under a true vertical writing mode, physical X with <paramref name="cross"/>
+        /// on physical Y otherwise. Under a true vertical mode only a <b>rotated</b> word - one ordinary
+        /// horizontal glyph run reoriented as a whole by <see cref="SidewaysRotation"/>, exactly as
+        /// <see cref="DrawWordGlyphs"/> paints it - reduces to something <see cref="RGraphics.GetInkCrossings"/>
+        /// can measure at all: it is measured in that same pre-rotation ("natural") frame, against a band
+        /// built by mapping <paramref name="cross"/> through the word's own <see cref="SidewaysRotation"/>
+        /// inverse, and the resulting natural-frame crossings are mapped back to physical Y the same way
+        /// (<c>physicalY = rect.Y + naturalX</c> - <see cref="SidewaysRotation"/>'s own derivation). An
+        /// <b>upright</b> word - stacked character-by-character down the column, with no single natural
+        /// horizontal layout to reduce to - has no equivalent reduction and is left unskipped, same as
+        /// before this issue (tracked in
+        /// .claude/accepted-gaps/text-decoration-skip-ink-and-atomic-inline-exclusion-are-horizontal-only.md).
+        /// </para>
         /// </remarks>
         private static void AddInkExclusions(RGraphics g, CssBox styleSource, IReadOnlyList<DecorationWord> words,
-            double y, double thickness, List<DecorationInterval> into)
+            double cross, double thickness, bool isVertical, List<DecorationInterval> into)
         {
             var half = thickness / 2;
             var maximumClearance = MaximumInkSkipClearanceCssPixels * Length.PointsPerPx * g.PixelsPerPoint;
@@ -1273,22 +1497,55 @@ namespace PeachPDF.Html.Core.Paint
                 // face or a synthesized small-caps run has its own font and its own baseline shift, and
                 // measuring ink against the box's own font instead would name the wrong glyphs at the
                 // wrong height. See FragmentPainter.Text.cs.
-                var wordStyle = word.FirstLineStyle ?? placed.Owner;
-                var font = CssBox.ResolveWordFont(word, wordStyle);
+                var (wordStyle, font, baselineAdjust, features) = ResolveWordFontContext(word, placed.Owner);
+
+                if (isVertical)
+                {
+                    // Upright text has no natural horizontal layout to measure ink against at all (see
+                    // EnumerateUprightGlyphPlacements's own remarks on why an upright run has no single
+                    // natural layout the way a rotated one does) - not yet reachable, so left unskipped.
+                    if (IsUprightWordOrientation(placed.Owner, word)) continue;
+
+                    var rect = placed.Rect;
+
+                    // The same natural (pre-rotation) origin DrawWordGlyphs's sideways branch hands
+                    // DrawString - see AddInkExclusions' own remarks and BuildTextClipPath's
+                    // CollectRotatedWord for the identical derivation used to build this word's outline.
+                    var naturalOrigin = new RPoint(0, baselineAdjust);
+
+                    // SidewaysRotation maps natural (x, y) to physical (rect.Right - y, rect.Y + x) - so
+                    // the natural Y that corresponds to this decoration's physical cross position is
+                    // rect.Right - cross, and the band around it inverts the same way a physical band
+                    // would (± half the line's own thickness).
+                    var naturalCenter = rect.Right - cross;
+
+                    var crossings = g.GetInkCrossings(text, font, naturalOrigin,
+                        naturalCenter - half, naturalCenter + half, wordStyle.ActualLetterSpacing, features);
+
+                    if (crossings is null) continue;
+
+                    foreach (var crossing in crossings)
+                    {
+                        var physicalStart = rect.Y + crossing.Start;
+                        var physicalEnd = rect.Y + crossing.End;
+                        into.Add(new DecorationInterval(physicalStart, physicalEnd).Dilated(clearance));
+                    }
+
+                    continue;
+                }
 
                 // The word's own draw origin, not its baseline: DrawWordGlyphs hands DrawString exactly
                 // this point, and GetInkCrossings places the baseline from the font's own metrics the way
                 // the text-drawing path does. Deriving a baseline here instead would use RFont.Ascent,
                 // which is rounded to a whole unit - half the height of a default-thickness band.
-                var origin = new RPoint(placed.Rect.X, placed.Rect.Y + (wordStyle.ActualFont.Ascent - font.Ascent));
+                var origin = new RPoint(placed.Rect.X, placed.Rect.Y + baselineAdjust);
 
-                var crossings = g.GetInkCrossings(text, font, origin,
-                    y - half, y + half, wordStyle.ActualLetterSpacing,
-                    wordStyle.ResolveWordShapingFeatures(word));
+                var horizontalCrossings = g.GetInkCrossings(text, font, origin,
+                    cross - half, cross + half, wordStyle.ActualLetterSpacing, features);
 
-                if (crossings is null) continue;
+                if (horizontalCrossings is null) continue;
 
-                foreach (var crossing in crossings)
+                foreach (var crossing in horizontalCrossings)
                 {
                     into.Add(new DecorationInterval(crossing.Start, crossing.End).Dilated(clearance));
                 }

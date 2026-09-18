@@ -114,6 +114,12 @@ namespace PeachPDF.CSS
                 {Keywords.FromFont, TextUnderlinePosition.FromFont},
                 {Keywords.Under, TextUnderlinePosition.Under}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, TextUnderlineSide> TextUnderlineSides =
+            new Dictionary<string, TextUnderlineSide>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Left, TextUnderlineSide.Left},
+                {Keywords.Right, TextUnderlineSide.Right}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, VerticalAlignment> VerticalAlignments =
             new Dictionary<string, VerticalAlignment>(StringComparer.OrdinalIgnoreCase)
             {

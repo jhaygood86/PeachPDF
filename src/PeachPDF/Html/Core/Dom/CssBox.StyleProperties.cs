@@ -176,6 +176,26 @@ namespace PeachPDF.Html.Core.Dom
 
         #region Line-height, vertical-align, text-*
 
+        /// <summary>
+        /// The <c>left</c>/<c>right</c> half of css-text-decor-4 §2.5's compound
+        /// <c>text-underline-position</c> grammar (issue #1146) - a PeachPDF-internal companion to
+        /// <see cref="TextUnderlinePosition"/> with no <c>css-properties.json</c> propertyPath of its
+        /// own, set together with it by that same property's <c>customSetter</c>
+        /// (<see cref="TextUnderlinePositionGrammar"/>). Meaningful only under a true vertical writing
+        /// mode - see <c>FragmentPainter.Decorations.cs</c>'s <c>ResolveUnderlineCross</c>; inert under
+        /// <c>horizontal-tb</c>.
+        /// </summary>
+        public CssProperty<TextUnderlineSide> TextUnderlineSide
+        {
+            get => _computedStyle.Text.TextUnderlineSide;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.TextUnderlineSide, value, static (a, v) => a with { TextUnderlineSide = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
+        }
+
         /// <summary>Gets the line height. Recomputed fresh every call, not cached.</summary>
         public double ActualLineHeight => DerivedStyle.ActualLineHeight;
 
