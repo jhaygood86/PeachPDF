@@ -756,7 +756,62 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 XObjects = xObjects;
                 Item = item;
                 XObject = xObject;
-                XObjectMD5 = ComputeMD5(xObject.Stream.Value);
+                XObjectMD5 = ComputeIdentity(xObject);
+            }
+
+            /// <summary>
+            /// Computes an identity signature for an image XObject covering everything that affects how it
+            /// actually renders: the content-stream bytes plus the dictionary attributes that give those
+            /// bytes meaning (/ColorSpace, /Width, /Height, /BitsPerComponent, /Decode, /Interpolate - the
+            /// same attribute <see cref="Pdf.Advanced.PdfImageTable"/>'s own embed-time selector already
+            /// treats as part of an image's identity) and any /SMask (recursively, since the mask is itself
+            /// an image XObject that can differ the same way). Two images are safe to consolidate only when
+            /// this whole signature matches - matching content stream bytes alone is not enough, since e.g.
+            /// the same base color stream with and without an /SMask must not be merged, or one page
+            /// silently loses (or gains) transparency.
+            /// </summary>
+            private static string ComputeIdentity(PdfDictionary xObject)
+            {
+                var sb = new StringBuilder();
+                sb.Append(ComputeMD5(xObject.Stream?.Value ?? []));
+                sb.Append('|').Append(DescribeItem(xObject.Elements["/ColorSpace"]));
+                sb.Append('|').Append(DescribeItem(xObject.Elements["/Width"]));
+                sb.Append('|').Append(DescribeItem(xObject.Elements["/Height"]));
+                sb.Append('|').Append(DescribeItem(xObject.Elements["/BitsPerComponent"]));
+                sb.Append('|').Append(DescribeItem(xObject.Elements["/Decode"]));
+                sb.Append('|').Append(DescribeItem(xObject.Elements["/Interpolate"]));
+
+                var softMask = xObject.Elements.GetDictionary("/SMask");
+                sb.Append('|').Append(softMask != null ? ComputeIdentity(softMask) : "«none»");
+
+                return sb.ToString();
+            }
+
+            /// <summary>
+            /// Renders an arbitrary dictionary-value PdfItem (a /ColorSpace name, an /Indexed or /ICCBased
+            /// array, a plain scalar, or an indirect reference to any of these) into a string that differs
+            /// whenever the referenced content differs. Dereferences through PdfReference and recurses into
+            /// array elements and referenced streams so two distinct objects that describe the same content
+            /// (e.g. two indirect but byte-identical ICC profiles) still compare equal, rather than being
+            /// compared by object identity.
+            /// </summary>
+            private static string DescribeItem(PdfItem item)
+            {
+                switch (item)
+                {
+                    case null:
+                        return "«null»";
+                    case PdfReference reference:
+                        return DescribeItem(reference.Value);
+                    case PdfArray array:
+                        return "[" + string.Join(",", array.Select(DescribeItem)) + "]";
+                    case PdfDictionary dict:
+                        // A referenced stream object (e.g. an /ICCBased profile) - its bytes are what
+                        // matters for identity, not which object number holds them.
+                        return dict.Stream != null ? ComputeMD5(dict.Stream.Value) : "«dict»";
+                    default:
+                        return item.ToString() ?? "«null»";
+                }
             }
 
             /// <summary>
