@@ -755,7 +755,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains(fragments, f => ReferenceEquals(f.Box, heading));
         }
 
-        // ── a multi-line heading can be claimed twice, independent of any table (#1047) ────────────────
+        // ── a multi-line heading no longer gets claimed twice, independent of any table (#1047) ────────
         //
         // Both tests below - and the ledger they exercise (HtmlContainerInt.VerifyWordClaims,
         // FragmentEmitter's own word-claim tracker) - only exist in a DEBUG build (see those types' own
@@ -766,88 +766,97 @@ namespace PeachPDF.Tests.Integration
 #if DEBUG
 
         /// <summary>
-        /// Confirms issue #1047's own mechanism, found by extending this file's own
-        /// <c>ClaimsEveryWordExactlyOnce</c> pattern into <see cref="Fragmentation.FragmentEmitter"/>'s
-        /// DEBUG-only, throw-on-first-conflict word-claim ledger — precise enough to localize the
-        /// double-claim to the exact call path that produces it, rather than only detecting the symptom
-        /// after the fact the way the finished-tree walk in <c>PulledRun_ClaimsEveryWordExactlyOnce</c>/
-        /// <c>UnreachedWordClaimTests</c> does.
+        /// The mechanism issue #1047 traced through <see cref="Fragmentation.FragmentEmitter"/>'s
+        /// DEBUG-only, throw-on-first-conflict word-claim ledger, now fixed on both ends. Kept as a
+        /// positive assertion — via the same ledger that once threw for this fixture — rather than deleted,
+        /// so a regression here is localized to the exact call path that produces it instead of only being
+        /// noticed by the finished-tree walk <c>PulledRun_ClaimsEveryWordExactlyOnce</c>/
+        /// <c>UnreachedWordClaimTests</c> already cover.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>The confirmed mechanism</b> — and it is <i>not</i> the cross-pass <c>InvalidateFrom</c>/
-        /// stale-slot race the issue itself speculated about; see "ruled out" below. <c>heading</c>'s three
-        /// lines do not all fit in the room <c>filler</c> leaves on the page it starts on, so its first
-        /// line-breaking attempt keeps 0 lines and asks for a break before itself. <c>alpha</c> (the
-        /// sibling right after it) keeps too few lines to satisfy its own default <c>orphans</c> minimum
-        /// too, and because the UA print stylesheet chains a heading to what follows it
-        /// (<c>h1</c>–<c>h6</c> { break-after: avoid }), <c>CssBox.LayoutBlockChildren</c>'s own
-        /// keep-with-next pull fires — <c>TryRestartAt</c>, a same-pass restart entirely separate from
-        /// <c>CssBox.DriveBlockChildPass</c>'s own <c>break-inside:avoid</c> self-relocation retry.
-        /// It repositions <c>heading</c> to the next page's own top and re-enters <c>card</c>'s child loop
-        /// at it (<c>Boxes[resumeFrom].ResumeAt(null, restart.Top)</c>), but the pass's own active
-        /// fragmentainer context does not advance to that page first: re-measured against the OLD, already
-        /// exhausted band, <c>heading</c> keeps 0 lines a <i>second</i> time, so the whole thing only
-        /// resolves on the pass after next. By then, <c>card</c>'s own reported height
-        /// (<c>ActualBottom - Location.Y</c>) already includes the gap between its own <c>Location.Y</c>
-        /// (still the earlier page — nothing above re-placed <c>card</c> itself) and where its content
-        /// actually starts. That inflated height is what makes <c>CssBox.CanBeLaidOutAgain</c>'s own
-        /// fits-the-destination check fail for <c>card</c>'s own, later <c>break-inside:avoid</c>
-        /// self-relocation, forcing the box onto the older, gap-carrying <c>TranslateForEarlyBreak</c> path
-        /// (a raw <c>OffsetTop</c> coordinate shift, not a re-layout) instead of the "laid out again" path
-        /// <see cref="RelocatedBox_HasNoInteriorGap"/> exists to verify. The blind shift lands the LAST
-        /// line ("Beta two") straddling the very next fragmentainer boundary by a few points — exactly the
-        /// shape <c>FragmentEmitter.ClaimsLine</c>'s own <c>FallsPast</c> tie-break exists for, and it duly
-        /// grants the line a second claim on the next slot on top of its ordinary one — a live case that
-        /// arm's own doc comment did not expect ("no live case ... reaches the extra claim at all" [sic],
-        /// written when the only known source of it — flex/grid measurement passes — had already been
-        /// closed at the source).
+        /// <b>The confirmed mechanism</b> — and it was <i>not</i> the cross-pass <c>InvalidateFrom</c>/
+        /// stale-slot race the issue itself speculated about (the ledger's exception, back when this threw,
+        /// named both claims as coming from the SAME <c>EmitPass</c> call, and <c>InvalidateFrom</c>'s own
+        /// release never fired for this repro at all). <c>heading</c>'s three lines do not all fit in the
+        /// room <c>filler</c> leaves on the page it starts on, so its first line-breaking attempt keeps 0
+        /// lines and asks for a break before itself. <c>alpha</c> (the sibling right after it) keeps too
+        /// few lines to satisfy its own default <c>orphans</c> minimum too, and because the UA print
+        /// stylesheet chains a heading to what follows it (<c>h1</c>–<c>h6</c> { break-after: avoid }),
+        /// <c>CssBox.LayoutBlockChildren</c>'s own keep-with-next pull fires — <c>TryRestartAt</c>, a
+        /// same-pass restart entirely separate from <c>CssBox.DriveBlockChildPass</c>'s own
+        /// <c>break-inside:avoid</c> self-relocation retry. It repositions <c>heading</c> to the next
+        /// page's own top and re-enters <c>card</c>'s child loop at it. <c>TryRestartAt</c> used to leave
+        /// the pass's own active fragmentainer context pointed at the OLD, already exhausted band, so
+        /// <c>heading</c> kept 0 lines a <i>second</i> time and the whole thing only resolved on the pass
+        /// after next; it now steps <see cref="Fragmentation.FragmentainerContext.StepOverTo"/> to the
+        /// destination slot <c>EarlyBreak.Slot</c> already names before re-entering the head, the same way
+        /// every other mechanism that places content past the fragmentainer being filled already does (see
+        /// that method's own remarks) — closing the extra pass this used to cost. That alone was not enough
+        /// to stop this test's own ledger from throwing; see the next paragraph.
         /// </para>
         /// <para>
-        /// <b>Ruled out</b>: the exception <see cref="Fragmentation.FragmentEmitter"/>'s ledger throws
-        /// names both claims as coming from the SAME <c>EmitPass(fromSlot=1, throughSlot=2)</c> call —
-        /// <c>EmitSlot(slot=1)</c> then <c>EmitSlot(slot=2)</c>, back to back — never from a later
-        /// <c>CatchUpStaleSlotsBehind</c>/<c>Finish</c> replay reopening a stale slot.
-        /// <c>InvalidateFrom</c>'s own release of the ledger (added alongside the tracker specifically to
-        /// test this) never fires at all for this repro, which is direct evidence against the issue's own
-        /// original theory of a stale-slot un-freeze race.
+        /// <b>A second, independent defect compounded the first, and closing only the one above is not
+        /// enough on its own.</b> <c>CssBox.CanBeLaidOutAgain</c>'s destination-fit check measures a box's
+        /// own raw <c>ActualBottom - Location.Y</c> — which, for a <c>break-inside:avoid</c> box whose own
+        /// first in-flow child was just relocated by the very restart above without the box's own
+        /// <c>Location.Y</c> moving too, still overstates how much room a fresh, gap-free re-layout would
+        /// actually need. That can still make the check answer "does not fit" for a destination band the
+        /// content genuinely fits, forcing the older, gap-carrying <c>TranslateForEarlyBreak</c> path (a raw
+        /// <c>OffsetTop</c> shift, not a re-layout) — which can still land a line past a fragmentainer
+        /// boundary by more than a rounding tolerance. Left alone, <c>FragmentEmitter.ClaimsLine</c>'s
+        /// <c>FallsPast</c> tie-break granted a live line straddling that way a second, conflicting claim on
+        /// the next slot on top of its ordinary one — a case that arm's own doc comment did not expect ("no
+        /// live case ... reaches the extra claim at all" [sic], written when the only known source — flex/
+        /// grid measurement passes — had already been closed at the source). <c>ClaimsLine</c> no longer
+        /// grants that second claim at all for ordinary (non-monolithic) content: a line belongs to the one
+        /// pagination slot its own top starts in, full stop, and a defect that leaves it further from that
+        /// slot's band than intended (this one, and three other independently-diagnosed shapes — a table
+        /// rowspan continuation, a multi-column no-progress backstop, a flex/grid wrapping column) is a
+        /// defect to fix at the defect, never a reason to paint the same line twice. See
+        /// <c>FragmentEmitter.ClaimsLine</c>'s own remarks for the rest of that reasoning.
         /// </para>
         /// <para>
-        /// The band this fixture reproduces in ([84, 96] and, one page-height-equivalent later,
-        /// [244, 256], swept in 0.25pt filler-height steps) is not the issue's own originally-reported
-        /// [212.75, 216.5]/[335.75, 336.5] — both PR-0 (the line-box-is-the-fragmentainer-unit change) and
-        /// #1184 landed in this area of the engine since the issue was filed and moved where this exact
-        /// fixture's filler height needs to land, per this file's own convention of re-sweeping rather than
-        /// trusting an old pinned band when a fixture stops reproducing (see this file's other
-        /// pinned-offset theories). 90pt sits comfortably inside the confirmed band.
+        /// <b>Fixing the cursor is not fixing the geometry.</b> The residual translate-relaxation fallback
+        /// above is a real, pre-existing imprecision this PR leaves in place (tracked for a follow-up,
+        /// separate from #1047's own double-claim): a <c>break-inside:avoid</c> box whose destination-fit
+        /// check reads a phantom-gap-inflated extent can still fall back to translating rather than being
+        /// laid out again cleanly. That translate is itself a §5.3-sanctioned relaxation (an unsatisfiable
+        /// <c>avoid</c> may move the box anyway, maximizing what lands on one page) applied to an overstated
+        /// "does not fit" answer — CSS already tolerates the relaxation outcome; what is tracked separately
+        /// is that the check reaches it more often than the content's real footprint warrants. Every word
+        /// still lands on exactly one page (this test's own assertion) and on the correct, destination page
+        /// (<see cref="PulledRun_MovesTogetherToTheDestinationBandTop"/>'s own invariant, asserted below
+        /// too) — #1047 was about the former, not the latter.
         /// </para>
         /// <para>
-        /// This documents CURRENT, uncorrected behavior via <see cref="Assert.ThrowsAsync{T}(Func{Task})"/>
-        /// rather than being skipped, matching this repo's convention of proving a confirmed bug with a
-        /// test rather than silencing it: once a follow-up PR fixes the underlying defect (the strongest
-        /// candidate is <c>TryRestartAt</c>'s same-pass restart not accounting for the fragmentainer
-        /// context it is restarting into), this assertion starts failing — which is the point. Replace it
-        /// then with a positive <c>ClaimsEveryWordExactlyOnce</c>-style assertion, per this file's own
-        /// existing pattern.
+        /// The band this fixture is confirmed to exercise ([84, 96] and, one page-height-equivalent later,
+        /// [244, 256], swept in 0.25pt filler-height steps in
+        /// <see cref="MultiLineHeadingRelocatedByBreakInsideAvoid_ClaimsEveryWordExactlyOnce_AcrossTheConfirmedBand"/>)
+        /// is not the issue's own originally-reported [212.75, 216.5]/[335.75, 336.5] — both PR-0 (the
+        /// line-box-is-the-fragmentainer-unit change) and #1184 landed in this area of the engine since the
+        /// issue was filed and moved where this exact fixture's filler height needs to land, per this
+        /// file's own convention of re-sweeping rather than trusting an old pinned band when a fixture stops
+        /// reproducing (see this file's other pinned-offset theories). 90pt sits comfortably inside the
+        /// confirmed band.
         /// </para>
         /// </remarks>
         [Fact]
-        public async Task MultiLineHeadingRelocatedByBreakInsideAvoid_IsClaimedOnlyOnce_Reproduces1047()
+        public async Task MultiLineHeadingRelocatedByBreakInsideAvoid_ClaimsEveryWordExactlyOnce_Issue1047()
         {
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                LayoutHarness.LayoutAsync(
-                    Issue1047Document(90), pageHeight: PageHeight, margin: Margin, prepare: EnableWordClaimLedger));
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                Issue1047Document(90), pageHeight: PageHeight, margin: Margin, prepare: EnableWordClaimLedger);
 
-            Assert.Contains("Fragment double-claim (issue #1047)", ex.Message);
+            AssertEveryWordClaimedExactlyOnce(container);
+            AssertHeadingAndCardShareAPage(root, container);
         }
 
         /// <summary>
         /// Sweeps the band this fixture is confirmed to reproduce in (see the remarks on
-        /// <see cref="MultiLineHeadingRelocatedByBreakInsideAvoid_IsClaimedOnlyOnce_Reproduces1047"/>), so a
-        /// future, unrelated change to the layout engine that shifts it again is caught here — as a change
-        /// in which offsets throw — rather than leaving that single-point test silently passing for the
-        /// wrong reason (e.g. a different exception entirely, or none at all because the band moved off
-        /// 90pt).
+        /// <see cref="MultiLineHeadingRelocatedByBreakInsideAvoid_ClaimsEveryWordExactlyOnce_Issue1047"/>),
+        /// so a future, unrelated change to the layout engine that shifts it again is caught here — as a
+        /// change in which offsets fail — rather than leaving that single-point test silently passing for
+        /// the wrong reason (e.g. the band having moved off 90pt entirely).
         /// </summary>
         [Theory]
         [InlineData(84)]
@@ -856,14 +865,37 @@ namespace PeachPDF.Tests.Integration
         [InlineData(244)]
         [InlineData(250)]
         [InlineData(256)]
-        public async Task MultiLineHeadingRelocatedByBreakInsideAvoid_ReproducesAcrossTheConfirmedBand(double fillerHeight)
+        public async Task MultiLineHeadingRelocatedByBreakInsideAvoid_ClaimsEveryWordExactlyOnce_AcrossTheConfirmedBand(
+            double fillerHeight)
         {
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                LayoutHarness.LayoutAsync(
-                    Issue1047Document(fillerHeight), pageHeight: PageHeight, margin: Margin,
-                    prepare: EnableWordClaimLedger));
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                Issue1047Document(fillerHeight), pageHeight: PageHeight, margin: Margin,
+                prepare: EnableWordClaimLedger);
 
-            Assert.Contains("Fragment double-claim (issue #1047)", ex.Message);
+            AssertEveryWordClaimedExactlyOnce(container);
+            AssertHeadingAndCardShareAPage(root, container);
+        }
+
+        private static void AssertEveryWordClaimedExactlyOnce(HtmlContainerInt container)
+        {
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.NotEmpty(claimed);
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+        }
+
+        private static void AssertHeadingAndCardShareAPage(CssBox root, HtmlContainerInt container)
+        {
+            var heading = LayoutHarness.FindById(root, "heading")!;
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.Equal(
+                container.PageIndexOf(heading.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
+                container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
         }
 
         /// <summary>

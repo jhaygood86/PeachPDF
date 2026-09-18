@@ -753,6 +753,26 @@ namespace PeachPDF.Html.Core.Fragmentation
         private bool _currentPassIsFinal;
 
         /// <summary>
+        /// The <c>fromSlot</c> of the <see cref="EmitPass"/> call currently sweeping several slots in one
+        /// ascending loop, or <see langword="null"/> outside of one (an isolated single-slot
+        /// <see cref="EmitSlot"/> call from <see cref="CatchUpStaleSlotsBehind"/>, <see cref="Finish"/>'s
+        /// replay, or <see cref="EmitReservedBlankSlots"/>). Read by <see cref="ClaimsLine"/>'s own
+        /// straddle tie-break (<see href="https://github.com/jhaygood86/PeachPDF/issues/1047">#1047</see>):
+        /// that tie-break exists to rescue a line whose nominal slot (<c>SlotStartingAt(rect.Top)</c>) is
+        /// unreachable because it was already frozen by an earlier, separate emission (issue #1054's
+        /// negative-leading escape past an already-closed page) — not to grant a bonus claim on top of one
+        /// the current sweep's own ordinary test already gave the line, or will once its own turn comes.
+        /// A nominal slot at or after this sweep's own <c>fromSlot</c> means exactly that: some slot in
+        /// *this* sweep can (or already did) answer for it through the ordinary test, so the nominal slot
+        /// is merely disagreeing with the slot being asked about, not unreachable — only a nominal slot
+        /// strictly before <c>fromSlot</c> was genuinely closed out before this sweep began. Set and cleared
+        /// around <see cref="EmitPass"/>'s own body rather than threaded as a parameter through every
+        /// <see cref="BuildDraft"/>/<see cref="ChildrenOf"/> call in between, the same way
+        /// <see cref="_pruningSuspended"/>/<see cref="_currentPassIsFinal"/> already are.
+        /// </summary>
+        private int? _currentPassFromSlot;
+
+        /// <summary>
         /// <see cref="_frozen"/> as it stood before the slot currently being emitted began, so the
         /// verification build can be run against the same starting state the pruned one saw. Only
         /// maintained when <see cref="VerifyPruningAgainstFullWalk"/> is on.
@@ -1428,6 +1448,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // call's own return: CatchUpStaleSlotsBehind and Finish's replay both call BuildDraft too, and
             // neither may benefit from a flag this call alone earned.
             _currentPassIsFinal = outgoing is null;
+            _currentPassFromSlot = fromSlot;
 
             try
             {
@@ -1452,6 +1473,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             finally
             {
                 _currentPassIsFinal = false;
+                _currentPassFromSlot = null;
             }
 
             CommitRemainingObservations(reachesPastEverythingSoFar);
@@ -2663,82 +2685,69 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// when it was alone on its line (<see href="https://github.com/jhaygood86/PeachPDF/issues/484">#484</see>).
         /// </para>
         /// <para>
-        /// Deliberately not folded into the ordinary tie-break below: <paramref name="aggregateRect"/>'s
-        /// <c>FitsNoFragmentainer</c> question is asked and answered <i>before</i> anything reads
-        /// <paramref name="rect"/> at all, because a box whose own portion overlaps this fragmentainer not
-        /// at all (an ordinary sibling positioned entirely past the boundary the oversized box straddles)
-        /// would otherwise fail <c>region.Contains(rect)</c> before ever reaching a tie-break keyed on its
-        /// own dimensions - exactly the failure mode #1184 reports. Once the line is oversized, membership
-        /// is decided on <paramref name="aggregateRect"/> alone; <paramref name="rect"/> is not consulted at
-        /// all for that box on that line.
+        /// Deliberately not folded into <see cref="HtmlContainerInt.SlotStartingAt"/>'s ordinary test below:
+        /// <paramref name="aggregateRect"/>'s <c>FitsNoFragmentainer</c> question is asked and answered
+        /// <i>before</i> anything reads <paramref name="rect"/> at all, because a box whose own portion
+        /// overlaps this fragmentainer not at all (an ordinary sibling positioned entirely past the boundary
+        /// the oversized box straddles) would otherwise fail <c>region.Contains(rect)</c> before ever
+        /// reaching a test keyed on its own dimensions - exactly the failure mode #1184 reports. Once the
+        /// line is oversized, membership is decided on <paramref name="aggregateRect"/> alone;
+        /// <paramref name="rect"/> is not consulted at all for that box on that line.
         /// </para>
         /// <para>
-        /// <b>Only a line layout could have moved belongs to one fragmentainer alone.</b> Where
-        /// <c>CssRect.WouldStraddleFragmentainer</c> answered "no, it fits" — which it does for an overhang
-        /// of up to <see cref="HtmlContainerInt.PageBoundaryEpsilon"/> — §4.1 has made the line the unit and
-        /// the line is wholly the earlier band's, whatever <see cref="FragmentRegion.Contains"/>'s much finer
-        /// <see cref="BandOverlapEpsilon"/> says about the sliver hanging past the boundary. Asking
-        /// <see cref="HtmlContainerInt.SlotStartingAt"/> — the convention layout used
-        /// (<c>BandStartingAt(Top)</c>) — settles both with one tolerance rather than two that agree over
-        /// most of their range, and stops the page's last line being drawn again above the next page's
-        /// content top (<see href="https://github.com/jhaygood86/PeachPDF/issues/446">#446</see>).
+        /// <b>The <c>FallsPast</c> tie-break below is a rescue for a line whose nominal slot is
+        /// unreachable, never a bonus claim on top of one already rightfully made
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1047">#1047</see>).</b> It exists for
+        /// issue #1054: a negative <c>line-height</c> can let a line's ink escape above
+        /// <see cref="HtmlContainerInt.SlotStartingAt"/>'s own idea of where the line starts, so far that
+        /// <paramref name="rect"/>'s nominal slot is one an earlier, already-frozen
+        /// <see cref="EmitPass"/> closed out before this line was even laid out - unreachable, not merely
+        /// disagreeing, so the ordinary test at <paramref name="slotIndex"/> == that nominal slot can never
+        /// fire and the line would otherwise be claimed by no one at all. Granting the *actually correct*
+        /// slot (the one this whole call is being asked about) a claim via <see cref="HtmlContainerInt.FallsPast"/>
+        /// is the fix for that - but nothing about <c>FallsPast</c> on its own can tell that rescue apart
+        /// from the shape <see href="https://github.com/jhaygood86/PeachPDF/issues/1200">issue #1200</see>'s
+        /// per-slot word-claim ledger found: a live line that <i>already</i> received its rightful claim from
+        /// the ordinary test at an earlier slot in the very same multi-slot <see cref="EmitPass"/> sweep, and
+        /// then falls past its own band for an unrelated reason (<c>CssBox.TryRestartAt</c>'s keep-with-next
+        /// restart leaving an enclosing <c>break-inside:avoid</c> box's <c>CanBeLaidOutAgain</c> measuring a
+        /// phantom gap and falling back to <c>TranslateForEarlyBreak</c>'s blind shift, among three further
+        /// independently-diagnosed shapes - a table rowspan continuation, a multi-column no-progress
+        /// backstop, a flex/grid wrapping column). <see cref="_currentPassFromSlot"/> is what tells the two
+        /// apart: the nominal slot is genuinely unreachable only when it lies strictly before the current
+        /// sweep's own <c>fromSlot</c> - anything this sweep's own ordinary test could still (or already)
+        /// answer for lies at or after <c>fromSlot</c> by construction, so a nominal slot in that range means
+        /// some slot in *this* sweep either already claimed the line correctly or will when its own turn
+        /// comes, and a claim here would be the bonus #1047's shape grants rather than a rescue. #1054's own
+        /// nominal slot is always strictly behind the single-slot sweep that rescues it (closed out by a
+        /// wholly separate, earlier pass), so this comparison allows it while excluding #1047's shape - a
+        /// later slot in a sweep whose own <c>fromSlot</c> already, correctly, claimed the line. Every one of
+        /// those four defects is worth fixing at the place that leaves a line further from its band than it
+        /// should be; none of them makes "this line already fell past its own band" reason enough for a
+        /// second fragmentainer to draw it too.
         /// </para>
         /// <para>
-        /// <b>A line layout never had the chance to move used to be a second reason the tie-break was
-        /// conditional; one of its two cases is now historical.</b> A flex or grid item's content used to be
-        /// laid out under <see cref="HtmlContainerInt.SuppressWordPageBreaks"/> and never revisited when
-        /// <c>AssignLocations</c> translated it, which could leave a line overhanging by many points with no
-        /// fragmentainer of its own to be whole in — both bands had to keep it, or the tie-break deleted it
-        /// outright (measured at 45 words, one line per break, on a four-page flex document,
-        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/477">#477</see>). <c>CssLayoutEngineGrid</c>
-        /// and <c>CssLayoutEngineFlex</c> now commit their items'/lines' content live once it sits at its
-        /// final position, so that path's straddle check runs for real and this arm has nothing left to do
-        /// for it — kept in mind here only so a future regression in that commit-live behavior is recognized
-        /// as reopening this case, not treated as new.
-        /// </para>
-        /// <para>
-        /// <b>The one case left: <c>MonolithicContent.FitsNoFragmentainer</c> keeps anything taller than the
-        /// band exactly where it is</b> — layout never asks it to move, because moving would only repeat the
-        /// question on the next fragmentainer. That content is <i>clipped</i> to the first fragmentainer it
-        /// starts in, not repeated in every later one it geometrically overlaps
-        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/484">#484</see>): the extra claim is
-        /// gated on <c>!MonolithicContent.FitsNoFragmentainer</c> as well as
-        /// <see cref="HtmlContainerInt.FallsPast"/>, so it survives only for content that could, in
-        /// principle, have fit some fragmentainer and simply wasn't asked to move there — a case
-        /// <see cref="HtmlContainerInt.FallsPast"/> alone cannot distinguish, since it only sees that a word's
-        /// bottom has overhung the band its own top started in, not <i>why</i>. With the flex/grid case above
-        /// now closed at the source, that leaves no live case that reaches the extra claim at all — the arm
-        /// stays rather than being deleted outright, both to keep the "can only remove a claim, never invent
-        /// one" shape intact for whatever reaches it next, and because <see cref="HtmlContainerInt.FallsPast"/>
-        /// is deliberately a looser test than layout's own here: the emitter drops
-        /// <c>MonolithicContent.ClonedBlockInsets</c>' bottom inset, and asks the page band even inside a
-        /// column, where layout asks the column's. That looseness only ever makes <c>FallsPast</c> fire more
-        /// readily than layout's own straddle check would, never less — safe on its own because it is
-        /// intersected with the region test, and now additionally intersected with the "could this ever fit
-        /// anywhere" question so it cannot grant a claim <c>FitsNoFragmentainer</c> says should be clipped
-        /// instead.
-        /// </para>
-        /// <para>
-        /// It is a <i>tie-break on top of</i> the region test rather than a replacement for it, and that is
-        /// deliberate: the region is also the inline-axis test that tells one multi-column column from
-        /// another, which no page-grid slot index can speak to, and <see cref="PageGeometryTable.PageIndexOf"/>
-        /// clamps everything above the first band's top into slot 0 — so asked alone it would hand slot 0
-        /// every word a pass has not positioned yet, which is <see href="https://github.com/jhaygood86/PeachPDF/issues/433">#433</see>
+        /// <see cref="FragmentRegion.Contains"/> and <see cref="HtmlContainerInt.SlotStartingAt"/> are
+        /// intersected rather than either standing alone, and that remains deliberate: the region is also
+        /// the inline-axis test that tells one multi-column column from another, which no page-grid slot
+        /// index can speak to, and <see cref="PageGeometryTable.PageIndexOf"/> clamps everything above the
+        /// first band's top into slot 0 — so asked alone it would hand slot 0 every word a pass has not
+        /// positioned yet, which is <see href="https://github.com/jhaygood86/PeachPDF/issues/433">#433</see>
         /// arriving by another route (measured: 404 boxes frozen into the first slot's first emission where
-        /// 100 belong there). Intersecting the two can only ever <i>remove</i> a claim, never invent one.
+        /// 100 belong there). Intersecting the two can only ever <i>remove</i> a claim, never invent one -
+        /// the tie-break is the one narrow, explicitly-gated exception to that.
         /// </para>
         /// <para>
-        /// Fixed content is exempt from the tie-break. It repeats at unshifted document coordinates in every
-        /// slot, so the one slot its own Y falls in would name a single page instead of all of them.
+        /// Fixed content is exempt from every test below. It repeats at unshifted document coordinates in
+        /// every slot, so the one slot its own Y falls in would name a single page instead of all of them.
         /// </para>
         /// </remarks>
         private bool ClaimsLine(RRect rect, RRect aggregateRect, int slotIndex, FragmentRegion region, bool isFixed)
         {
             // Fixed content repeats at unshifted document coordinates in every slot, so the one slot its
-            // own Y falls in would name a single page instead of all of them - exempt from both the
-            // ordinary tie-break and the line-aggregate one below, exactly as before #1184 (isFixed content
-            // never reached the aggregate question, since it is not subject to fragmentainer relocation at
-            // all).
+            // own Y falls in would name a single page instead of all of them - exempt from every test below,
+            // exactly as before #1184 (isFixed content never reached the aggregate question, since it is
+            // not subject to fragmentainer relocation at all).
             if (isFixed) return region.Contains(rect);
 
             if (MonolithicContent.FitsNoFragmentainer(aggregateRect.Height, 0, 0, container))
@@ -2747,10 +2756,21 @@ namespace PeachPDF.Html.Core.Fragmentation
                     && container.SlotStartingAt(aggregateRect.Top) == slotIndex;
             }
 
-            return region.Contains(rect)
-                && (container.SlotStartingAt(rect.Top) == slotIndex
-                    || (HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(rect.Top))
-                        && !MonolithicContent.FitsNoFragmentainer(rect.Height, 0, 0, container)));
+            if (!region.Contains(rect)) return false;
+
+            var nominalSlot = container.SlotStartingAt(rect.Top);
+
+            if (nominalSlot == slotIndex) return true;
+
+            // The #1054 rescue only, never a #1047-shaped bonus claim - see this method's own remarks.
+            // The nominal slot is genuinely unreachable (rather than merely a slot this same sweep already
+            // claimed it at, or will) only when it lies strictly before the sweep's own fromSlot. Outside of
+            // a multi-slot EmitPass sweep, _currentPassFromSlot is null and the comparison is skipped,
+            // preserving the tie-break for a lone CatchUpStaleSlotsBehind/Finish-replay/
+            // EmitReservedBlankSlots re-emission exactly as before.
+            return (_currentPassFromSlot is not { } fromSlot || nominalSlot < fromSlot)
+                && HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(rect.Top))
+                && !MonolithicContent.FitsNoFragmentainer(rect.Height, 0, 0, container);
         }
 
         /// <summary>
