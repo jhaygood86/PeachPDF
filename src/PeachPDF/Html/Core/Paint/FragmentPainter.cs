@@ -602,13 +602,31 @@ namespace PeachPDF.Html.Core.Paint
                 // built from. Building it from the unbroken strip and then clipping it to this line
                 // makes the path and clip disagree by exactly that spill: the real outside edge is
                 // clipped away while an edge inside the slice can remain visible. Resolve the
-                // outline against the slice itself instead. The physical-edge flags still keep the
-                // two inline break sides open and limit rounded corners to the box's true ends.
+                // outline against the slice itself instead. The physical-edge flags below decide
+                // which of this rectangle's edges are real ones to expand outward from.
                 var outlineRect = geometry.NeedsClip ? geometry.ClipRect : rectForBorders;
+
+                // CSS Basic User Interface 4 §4 recommends a fragmented outline be a fully connected
+                // shape rather than one left open at every wrap - unlike border/background, which
+                // box-decoration-break's `slice` (css-break-3 §6.2, which does not govern outline at
+                // all) deliberately keeps those same inline-axis edges open, matching how a wrapped
+                // inline actually looks in every UA. Close them for the outline only - geometry's own
+                // HasLeftEdge/HasRightEdge above already painted the border/background with the real,
+                // open flags, so this doesn't touch that. This is Chromium's own "closed rect per
+                // line" shape - the simpler of the two connected shapes real engines produce, and the
+                // one CSS UI 4 leaves room for (Firefox instead builds one connected/minimum-outline
+                // polygon around every fragment). Scoped to a horizontal inline axis - which also
+                // covers sideways-rl/-lr, whose own line boxes are laid out exactly like
+                // horizontal-tb's, see IsVerticalDecorationGeometry - a genuinely vertical
+                // (vertical-rl/vertical-lr) box's wrapped inline outline is left exactly as it was:
+                // its own inline-axis border/padding isn't even reserved at a line wrap yet either
+                // (issue #769), so closing only the outline there would produce a ring that doesn't
+                // match its own box's inline extent.
+                var closesAtLineWrap = !IsVerticalDecorationGeometry(box);
                 (outlinePaints ??= []).Add((
                     outlineRect,
-                    geometry.HasLeftEdge,
-                    geometry.HasRightEdge,
+                    geometry.HasLeftEdge || closesAtLineWrap,
+                    geometry.HasRightEdge || closesAtLineWrap,
                     geometry.HasTopEdge,
                     geometry.HasBottomEdge));
             }
