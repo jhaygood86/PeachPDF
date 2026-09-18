@@ -203,6 +203,239 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task AtomicInlineFitCheck_NarrowedByARightFloat_StillWraps()
+        {
+            // FitAtomicInlineOnLine's own actualLimitRight has to come from an intersecting right float
+            // when one is present, the same way the ordinary per-word wrap check already does - not from
+            // the line's own full ContentRight, which would let the atomic box overhang into the float.
+            var (root, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body style="margin:0">
+                <div id="row" style="width:220pt">
+                <span style="float:right;width:150pt;height:20pt;"></span>
+                XX <span id="atomic" style="display:inline-block;width:80pt;padding:10pt;"><div>Y</div></span>
+                </div>
+                </body></html>
+                """);
+
+            var row = FindById(root, "row")!;
+            var atomic = FindById(root, "atomic")!;
+            var xxWord = FindWord(root, "XX");
+
+            Assert.True(atomic.Location.Y > xxWord.Top + 1,
+                $"a 100pt-wide atomic inline-block cannot share a line narrowed to 70pt by a 150pt right "
+                + $"float, and must wrap (XX.Top={xxWord.Top}, atomic.Y={atomic.Location.Y})");
+            Assert.True(atomic.Location.X + atomic.ActualBoxSizingWidth <= row.ClientRight + 1,
+                "the wrapped atomic inline must stay inside the containing block");
+        }
+
+        [Fact]
+        public async Task AtomicInlineFitCheck_UnderRtl_StillWraps()
+        {
+            // FitAtomicInlineOnLine's actualLimitRight is adjusted for the first line's text-indent under
+            // direction:rtl the same way the ordinary per-word wrap check already is.
+            var (root, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body style="margin:0">
+                <div id="row" style="width:150pt;direction:rtl">
+                some short text <span id="atomic" style="display:inline-block;width:120pt;padding:10pt;"><div>Y</div></span>
+                </div>
+                </body></html>
+                """);
+
+            var row = FindById(root, "row")!;
+            var atomic = FindById(root, "atomic")!;
+            var textWord = FindWord(root, "text");
+
+            Assert.True(atomic.Location.Y > textWord.Top + 1,
+                $"a 140pt-wide atomic inline-block cannot share a 150pt RTL line with preceding text and "
+                + $"must wrap (text.Top={textWord.Top}, atomic.Y={atomic.Location.Y})");
+            Assert.True(atomic.Location.X >= row.Location.X - 1,
+                "the wrapped atomic inline must stay inside the containing block under RTL too");
+        }
+
+        [Fact]
+        public async Task AtomicInlineThatWraps_StartsAfterALeftFloatStillActiveOnTheNewLine()
+        {
+            // Once FitAtomicInlineOnLine decides to wrap, the cursor on the freshly-opened line has to
+            // account for a left float that is still active there - not fall back to the block's own
+            // content-left edge, which would place the box on top of the float.
+            var (root, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body style="margin:0">
+                <div id="row" style="width:220pt">
+                <span style="float:left;width:50pt;height:100pt;"></span>
+                Hi <span id="atomic" style="display:inline-block;width:200pt;padding:10pt;"><div>Y</div></span>
+                </div>
+                </body></html>
+                """);
+
+            var row = FindById(root, "row")!;
+            var atomic = FindById(root, "atomic")!;
+            var hiWord = FindWord(root, "Hi");
+
+            Assert.True(atomic.Location.Y > hiWord.Top + 1,
+                $"a 220pt-wide atomic inline-block cannot share a line narrowed to 170pt by a 50pt left "
+                + $"float, and must wrap (Hi.Top={hiWord.Top}, atomic.Y={atomic.Location.Y})");
+            Assert.True(atomic.Location.X >= row.Location.X + 49,
+                $"the wrapped atomic inline must start after the still-active 50pt left float, not at the "
+                + $"row's own content edge (row.X={row.Location.X}, atomic.X={atomic.Location.X})");
+        }
+
+        [Theory]
+        [InlineData("inline-table")]
+        [InlineData("inline-flex")]
+        public async Task AutoWidthAtomicInlineFitCheck_IsFlooredByMinWidth_AndStillWraps(string display)
+        {
+            // ResolveAtomicInlineBlockWidth's auto-width branch floors its shrink-to-fit result by an
+            // explicit min-width, exactly as it already does for inline-block. The fit check this
+            // helper feeds has to see that same floored width when reused for inline-table/inline-flex,
+            // or a box whose min-width alone would overflow the line can be preflighted as "fits" from
+            // its tiny fit-content width alone and never wrap: the single-letter content here has a
+            // fit-content width nowhere near 140pt, so only the min-width floor makes this wrap at all.
+            var innerContent = display == "inline-table"
+                ? "<span style='display:table-row'><span style='display:table-cell'>A</span></span>"
+                : "<div>A</div>";
+
+            var (root, _) = await BuildAndLayout($"""
+                <!DOCTYPE html><html><body style="margin:0">
+                <div id="row" style="width:150pt">
+                Hi <span id="atomic" style="display:{display};min-width:140pt">{innerContent}</span>
+                </div>
+                </body></html>
+                """);
+
+            var row = FindById(root, "row")!;
+            var atomic = FindById(root, "atomic")!;
+            var hiWord = FindWord(root, "Hi");
+
+            Assert.True(atomic.Location.Y > hiWord.Top + 1,
+                $"a '{display}' floored to 140pt by min-width cannot share a 150pt line with preceding "
+                + $"text and must wrap (Hi.Top={hiWord.Top}, atomic.Y={atomic.Location.Y}) - a fit check "
+                + "that ignored min-width would see only the single letter's tiny fit-content width and "
+                + "wrongly report it as fitting");
+            Assert.True(atomic.Location.X <= row.Location.X + 1,
+                $"the wrapped '{display}' must return to the line start (row.X={row.Location.X}, "
+                + $"atomic.X={atomic.Location.X})");
+        }
+
+        [Theory]
+        [InlineData("inline-table")]
+        [InlineData("inline-grid")]
+        [InlineData("inline-flex")]
+        public async Task PercentageWidthAtomicInline_FitCheckMatchesItsRealResolvedWidth(string display)
+        {
+            // ResolveAtomicInlineBlockWidth's declared-width branch resolves a percentage (or calc())
+            // width via GetBoxWidth against the real containing-block basis, the same way it already did
+            // for inline-block - a narrower, independent reimplementation used to treat ANY percentage
+            // width as if it were auto, estimating from fit-content/max-content instead and potentially
+            // disagreeing about whether the box fits. 60% of a 200pt container is 120pt; combined with
+            // the preceding text that must overflow a 200pt line and force the wrap.
+            var innerContent = display == "inline-table"
+                ? "<span style='display:table-row'><span style='display:table-cell'>A</span></span>"
+                : "<div>A</div>";
+
+            var (root, _) = await BuildAndLayout($"""
+                <!DOCTYPE html><html><body style="margin:0">
+                <div id="row" style="width:200pt">
+                A moderately long run of preceding text <span id="atomic" style="display:{display};width:60%">{innerContent}</span>
+                </div>
+                </body></html>
+                """);
+
+            var row = FindById(root, "row")!;
+            var atomic = FindById(root, "atomic")!;
+            var textWord = FindWord(root, "text");
+
+            Assert.True(atomic.Location.Y > textWord.Top + 1,
+                $"a 120pt-wide (60% of 200pt) '{display}' cannot share a line with text that already "
+                + $"overflows the 200pt container, and must wrap (text.Top={textWord.Top}, "
+                + $"atomic.Y={atomic.Location.Y})");
+
+            // The real, laid-out width - settled by each engine's own layout, independently of the fit
+            // check - must actually BE the 120pt the percentage resolves to, confirming the fit check
+            // above was deciding against the box's real size rather than an unrelated estimate.
+            var atomicWidth = atomic.ActualRight - atomic.Location.X;
+            Assert.Equal(120, atomicWidth, 1);
+            Assert.True(atomic.Location.X + atomicWidth <= row.ClientRight + 1,
+                $"the wrapped '{display}' must stay inside the containing block (right edge "
+                + $"{atomic.Location.X + atomicWidth} vs row.ClientRight {row.ClientRight})");
+        }
+
+        [Theory]
+        [InlineData("inline-table")]
+        [InlineData("inline-grid")]
+        [InlineData("inline-flex")]
+        public async Task FixedWidthAtomicInlines_WrapAsWholeBoxes(string display)
+        {
+            // issue #1105: inline-table/inline-grid reached FlowAtomicBlockContentChild through the SAME
+            // branch as inline-block, immediately above, but never ran the fit-check-and-OpenNextLine
+            // sequence guarding it - and inline-flex had no fit check of any kind before
+            // FlowInlineFlexChild. All three stayed on the overflowing line unconditionally instead of
+            // moving onto a line of their own the way inline-block already does (CSS 2.1 §9.4.2).
+            var innerContent = display == "inline-table"
+                ? "<span style='display:table-row'><span style='display:table-cell'>{0}</span></span>"
+                : "<div>{0}</div>";
+
+            string Item(string id, string letter) =>
+                $"<span id='{id}' style='display:{display};width:80pt;padding:10pt;margin:0 5pt 12pt 0;vertical-align:top'>"
+                + string.Format(innerContent, letter) + "</span>";
+
+            var (root, _) = await BuildAndLayout($"""
+                <!DOCTYPE html><html><body style="margin:0">
+                <div id="row" style="width:220pt">{Item("a", "A")}{Item("b", "B")}{Item("c", "C")}</div>
+                </body></html>
+                """);
+
+            var row = FindById(root, "row")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            var c = FindById(root, "c")!;
+
+            Assert.Equal(a.Location.Y, b.Location.Y, 1);
+            Assert.True(c.Location.Y > b.Location.Y + 1,
+                $"third 105pt margin box ('{display}') must wrap below the first two (b.Y={b.Location.Y}, c.Y={c.Location.Y})");
+            Assert.True(c.Location.X <= a.Location.X + 1,
+                $"wrapped '{display}' must return to the line start, not continue overhanging (a.X={a.Location.X}, c.X={c.Location.X})");
+            Assert.True(c.Location.X + c.ActualBoxSizingWidth + c.ActualMarginRight <= row.ClientRight + 1,
+                $"wrapped '{display}' must stay inside the containing block (right edge {c.Location.X + c.ActualBoxSizingWidth + c.ActualMarginRight} vs row.ClientRight {row.ClientRight})");
+        }
+
+        [Theory]
+        [InlineData("inline-table")]
+        [InlineData("inline-grid")]
+        [InlineData("inline-flex")]
+        public async Task AutoWidthAtomicInlineWiderThanItsContainer_StillWrapsOntoItsOwnLine(string display)
+        {
+            // The auto-width case, distinct from the declared-width one immediately above: before #1105
+            // these three settled their real used width only once their own layout ran, well after the
+            // fit check would need it. The estimate FitAtomicInlineOnLine now uses for them
+            // (CssBox.GetMinMaxWidth's own, issue #1032-corrected, max-content result, bounded by the
+            // containing block) has to actually drive the wrap decision on its own, not merely a declared
+            // width. flex-wrap:nowrap on the inline-flex keeps its own row from wrapping internally, so
+            // its max-content estimate reflects the whole unbreakable token instead of a narrower
+            // per-line figure (CSS Flexbox 1 §9.2's shrink-to-fit main size).
+            const string unbreakableToken =
+                "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW";
+            var innerMarkup = display == "inline-table"
+                ? $"<span style='display:table-row'><span style='display:table-cell'>{unbreakableToken}</span></span>"
+                : $"<div>{unbreakableToken}</div>";
+            var flexWrap = display == "inline-flex" ? "flex-wrap:nowrap;" : "";
+
+            var (root, _) = await BuildAndLayout($"""
+                <!DOCTYPE html><html><body style="margin:0">
+                <div id="container" style="width:100pt">Hi <span id="atomic" style="display:{display};{flexWrap}">{innerMarkup}</span></div>
+                </body></html>
+                """);
+
+            var container = FindById(root, "container")!;
+            var atomic = FindById(root, "atomic")!;
+            var hiWord = FindWord(root, "Hi");
+
+            Assert.True(atomic.Location.Y > hiWord.Top + 1,
+                $"an auto-width '{display}' whose content is wider than its container must still move onto a new line rather than share the overflowing one (Hi.Top={hiWord.Top}, atomic.Y={atomic.Location.Y})");
+            Assert.True(System.Math.Abs(atomic.Location.X - container.Location.X) < 5,
+                $"the wrapped '{display}' must start back at the container's own line start, not stay wherever it was on the old line (container.X={container.Location.X}, atomic.X={atomic.Location.X})");
+        }
+
+        [Fact]
         public async Task AtomicInlineWrapAtLineClamp_StopsBeforeLayingOutTheHiddenBox()
         {
             var (root, container) = await BuildAndLayout("""

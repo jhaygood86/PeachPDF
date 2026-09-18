@@ -382,6 +382,80 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(control, await ColumnContainerWidthAsync("grid", "span", display), 3);
         }
 
+        [Theory]
+        [InlineData("inline-block")]
+        [InlineData("inline-table")]
+        [InlineData("inline-grid")]
+        public async Task AnAtomicInlineWithBlockContent_IsMeasuredAsOneUnit_NotDiscarded(string display)
+        {
+            // issue #1032: a block-level child inside an atomic inline-level box used to reset the flat
+            // walk's single running total, and the block-boundary epilogue restored it with Math.Max
+            // instead of adding it back onto the line the atomic box sits on - discarding "AB " and
+            // measuring the span's own content alone (19.7930pt instead of 32.9883pt at this fixture's
+            // font). The fix isolates the atomic box via its own top-level GetMinMaxWidth call, exactly
+            // as a flex ROW's items already are, and ADDS the result to the line.
+            Assert.Equal(
+                await FloatWidthAsync("AB") + await SpaceWidthAsync() + await FloatWidthAsync("CD"),
+                await FloatWidthAsync($"AB <span style='display:{display}'><div>CD</div></span>"), 3);
+        }
+
+        [Theory]
+        [InlineData("inline-block")]
+        [InlineData("inline-table")]
+        [InlineData("inline-grid")]
+        public async Task AnAtomicInlineWithWrappingBlockContent_MeasuresItsWholeLine(string display)
+        {
+            // Same bug, with more than one word inside the block child, so the discard is not masked by
+            // there being only a single word to lose.
+            Assert.Equal(
+                await FloatWidthAsync("AB") + await SpaceWidthAsync() + await FloatWidthAsync("CD EF GH"),
+                await FloatWidthAsync($"AB <span style='display:{display}'><div>CD EF GH</div></span>"),
+                3);
+        }
+
+        [Theory]
+        [InlineData("inline-block")]
+        [InlineData("inline-table")]
+        [InlineData("inline-grid")]
+        public async Task AnAtomicInlineWithTwoBlockChildren_MeasuresTheWidestLine_NotTheirSum(string display)
+        {
+            // Two block-level children inside the atomic box stack and compete for "widest line wins" -
+            // exactly as ordinary block siblings do anywhere else - rather than summing together. Before
+            // the fix this measured 32.9883pt (max("AB ", "CD") from the discard bug, with "EF GH" lost
+            // entirely) instead of "AB " plus the wider of the two lines.
+            Assert.Equal(
+                await FloatWidthAsync("AB") + await SpaceWidthAsync() + await FloatWidthAsync("EF GH"),
+                await FloatWidthAsync(
+                    $"AB <span style='display:{display}'><div>CD</div><div>EF GH</div></span>"), 3);
+        }
+
+        [Fact]
+        public async Task AnAtomicInlinesBlockContentPadding_IsNotDoubleCounted()
+        {
+            // The trap the issue calls out by name: paddingSum is a separate running total from maxSum,
+            // so isolating the atomic box must fold its content's padding in exactly once. Before the
+            // fix this measured 39.7930pt = max(13.1953, 19.7930) + 20 - the padding added on top of a
+            // measurement that had already discarded the content it belongs to.
+            Assert.Equal(
+                await FloatWidthAsync("AB") + await SpaceWidthAsync() + 20 + await FloatWidthAsync("CD"),
+                await FloatWidthAsync(
+                    "AB <span style='display:inline-block'><div style='padding-left:20pt'>CD</div></span>"),
+                3);
+        }
+
+        [Fact]
+        public async Task AnInlineFlexColumnWithBlockContent_IsMeasuredAsOneUnit()
+        {
+            // Not in the original issue: the fix generalizes to inline-flex when it is NOT a flex row
+            // (flex-direction: column/column-reverse) - a flex ROW's items are already isolated the same
+            // way by the IsFlexRow branch this fix is modeled on, but a flex COLUMN reaches the walk
+            // through the ordinary recursive path and was subject to the same discard bug.
+            Assert.Equal(
+                await FloatWidthAsync("AB") + await SpaceWidthAsync() + await FloatWidthAsync("CD"),
+                await FloatWidthAsync(
+                    "AB <span style='display:inline-flex;flex-direction:column'><div>CD</div></span>"), 3);
+        }
+
         [Fact]
         public async Task AFloat_AddsToTheLineItSitsBeside()
         {

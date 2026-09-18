@@ -617,11 +617,14 @@ Two knock-on gaps remain:
 
 - An `inline-block` laid out as an independent formatting context (because it holds block-level
   content or wraps its own inline content) moves whole to the next line when its margin box does not
-  fit, and a declared content-box `width` correctly grows by its padding and border. The approximated
-  one-line path described above can still discover that the box's declared width does not fit only
-  after flowing some of its content, rather than moving the opaque box as a unit. Engine-backed
-  atomic displays (`inline-flex`, `inline-grid`, and `inline-table`) likewise do not yet preflight
-  their final used width against the remaining line measure.
+  fit, and a declared content-box `width` correctly grows by its padding and border. `inline-table`,
+  `inline-grid`, and `inline-flex` get the same treatment: each preflights an estimated used width
+  (a declared, non-percentage `width` as-is, or otherwise its own max-content width bounded by the
+  containing block) against what is left of the line and, if it does not fit, closes the line for it,
+  the same way an ordinary word wraps ([CSS 2.1 §9.4.2](https://www.w3.org/TR/CSS21/visuren.html#inline-formatting)).
+  The approximated one-line path described above is the one shape this does not yet cover: it can
+  still discover that the box's declared width does not fit only after flowing some of its content,
+  rather than moving the opaque box as a unit.
 - A declared `height`/`min-height` taller than the box's natural content grows correctly from
   whichever edge `vertical-align` anchors, with one narrower exception: the default
   `vertical-align: baseline` on an **empty box, or one whose `overflow` isn't `visible`** — both have
