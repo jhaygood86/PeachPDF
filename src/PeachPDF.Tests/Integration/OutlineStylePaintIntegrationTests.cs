@@ -723,32 +723,82 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task OutlineOnAWrappingInlineElement_OnlyPaintsTheEdgesEachLineOwns()
+        public async Task OutlineOnAWrappingInlineElement_ClosesEveryLineAsItsOwnCompleteRing()
         {
-            // A span forced onto three lines - mirrors BoxDecorationBreakPaintIntegrationTests' own
-            // "Slice_WrappingInline_DrawsNoBorderAtABreak", since outline is gated by the exact same
-            // per-line HasLeftEdge/HasRightEdge flags FragmentPainter already computes for border.
+            // A span forced onto three lines (issue #1163). CSS Basic User Interface 4 §4 recommends a
+            // fragmented outline be a fully connected shape rather than one left open at every wrap -
+            // unlike border/background, which box-decoration-break's `slice` deliberately keeps open at
+            // a line wrap (mirrors BoxDecorationBreakPaintIntegrationTests' own
+            // "Slice_WrappingInline_DrawsNoBorderAtABreak", which is unaffected by this: outline paint
+            // entries now force their own inline-axis edges closed, independent of the geometry border
+            // still reads unmodified). Every line - including the two interior ones - now closes both
+            // inline-axis edges, so each paints as one complete solid ring rather than three separate
+            // side polygons.
             var html = LayoutHarness.Wrap(
                 "<div style='width:200pt;font:10pt Arial'>" +
                 "<span id='s' style='outline:2pt solid #00f'>Alpha<br>Beta<br>Gamma</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+            var rects = FragmentPaintHarness.FragmentOf(container, span).Lines.Select(line => line.Rect).ToList();
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            var blue = RColor.FromArgb(0, 0, 255);
+            var rings = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(p => !p.Stroked && p.Color == blue)
+                .ToList();
+
+            // Every line paints a complete ring now, so none of the four sides are drawn as their own
+            // separate polygon the way an open edge set would need.
+            Assert.Equal(3, rings.Count);
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>(), p => p.Color == blue);
+
+            for (var i = 0; i < rings.Count; i++)
+            {
+                Assert.Equal(rects[i].Left - 2, rings[i].Bounds.Left, 1);
+                Assert.Equal(rects[i].Right + 2, rings[i].Bounds.Right, 1);
+            }
+        }
+
+        [Fact]
+        public async Task OutlineAndBorderOnAWrappingInlineElement_OutlineClosesEveryLine_BorderStaysOpenAtWraps()
+        {
+            // Proves the outline fix (issue #1163) is genuinely outline-specific, not a change to the
+            // shared HasLeftEdge/HasRightEdge geometry border/background also read: the very same span,
+            // painted in one pass, must show its border still open at both interior wrap points (the
+            // pre-existing, correct box-decoration-break `slice` behavior css-break-3 §6.2 requires)
+            // while its outline closes every one of the three lines into its own complete ring.
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'>" +
+                "<span id='s' style='border:2pt solid #f00;outline:2pt solid #00f'>Alpha<br>Beta<br>Gamma</span></div>");
             var (root, container) = await LayoutHarness.LayoutAsync(html);
             var span = LayoutHarness.FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, span, g);
 
+            var red = RColor.FromArgb(255, 0, 0);
             var blue = RColor.FromArgb(0, 0, 255);
-            var vertical = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
-                .Where(p => p.Color == blue && IsVerticalEdge(p.Points))
-                .ToList();
 
-            // The leading edge draws once (first line) and the trailing edge once (last line) - never
-            // at either of the two internal wrap points.
-            Assert.Equal(2, vertical.Count);
+            // Border: still open at both wrap points - only the true leading and trailing edges draw
+            // their own separate vertical side polygon.
+            var borderVerticalSides = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
+                .Where(p => p.Color == red && IsVerticalEdge(p.Points))
+                .ToList();
+            Assert.Equal(2, borderVerticalSides.Count);
+
+            // Outline: every line now closes into its own complete ring instead - never a separate side
+            // polygon the way an open edge set would produce.
+            var outlineRings = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(p => !p.Stroked && p.Color == blue)
+                .ToList();
+            Assert.Equal(3, outlineRings.Count);
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>(), p => p.Color == blue);
         }
 
         [Fact]
-        public async Task RoundedOutlineOnAWrappingInlineElement_UsesEachFragmentAsItsBase()
+        public async Task RoundedOutlineOnAWrappingInlineElement_ClosesEachFragmentAsACompleteRoundedRing()
         {
             var html = LayoutHarness.Wrap(
                 "<div style='width:200pt;font:10pt Arial'>" +
@@ -767,31 +817,43 @@ namespace PeachPDF.Tests.Integration
 
             // A sliced background/border still resolves against the unbroken horizontal strip, but an
             // outline cannot: its outward spill would disagree with the fragment clip. Each path is
-            // instead based on its own fragment, with only the true first/last inline edges expanded.
-            // No clip is needed because the physical-edge flags leave both break sides open.
+            // instead based on its own fragment - and (issue #1163) every one of its four sides now
+            // expands, not just the box's true first/last inline edges, closing every line into its own
+            // complete rounded ring (Chromium's own "closed rect per line" shape). No clip is needed
+            // because painting resolves against each line's own slice, not the unbroken strip.
             Assert.All(
                 g.Log.Select((entry, index) => (entry, index))
                     .Where(item => item.entry is TestRecordingGraphics.DrawPathCall path &&
                                    path.Color == RColor.FromArgb(0, 0, 255)),
                 item => Assert.IsNotType<TestRecordingGraphics.PushClipCall>(g.Log[item.index - 1]));
 
+            // Every line now goes through the same complete-ring drawer a rounded, unwrapped outline
+            // already uses (matching RoundedSolidOutline_ExpandsTheBorderRadiusWithItsOffsetAndWidth
+            // above): one Stroked path traced along the ring's centerline, so TestRecordingGraphics'
+            // own point-derived Bounds sit half a stroke width short of the true outer edge - reach is
+            // offset (0) + width (2) / 2, not the full declared width.
+            Assert.All(bluePaths, p => Assert.True(p.Stroked));
+            const double reach = 1;
             for (var i = 0; i < bluePaths.Count; i++)
             {
-                Assert.Equal(rects[i].Top - 2, bluePaths[i].Bounds.Top, 1);
-                Assert.Equal(rects[i].Bottom + 2, bluePaths[i].Bounds.Bottom, 1);
+                Assert.Equal(rects[i].Top - reach, bluePaths[i].Bounds.Top, 1);
+                Assert.Equal(rects[i].Bottom + reach, bluePaths[i].Bounds.Bottom, 1);
+                Assert.Equal(rects[i].Left - reach, bluePaths[i].Bounds.Left, 1);
+                Assert.Equal(rects[i].Right + reach, bluePaths[i].Bounds.Right, 1);
             }
-
-            Assert.Equal(rects[0].Left - 2, bluePaths[0].Bounds.Left, 1);
-            Assert.Equal(rects[0].Right, bluePaths[0].Bounds.Right, 1);
-            Assert.Equal(rects[1].Left, bluePaths[1].Bounds.Left, 1);
-            Assert.Equal(rects[1].Right, bluePaths[1].Bounds.Right, 1);
-            Assert.Equal(rects[2].Left, bluePaths[2].Bounds.Left, 1);
-            Assert.Equal(rects[2].Right + 2, bluePaths[2].Bounds.Right, 1);
         }
 
         [Fact]
-        public async Task RoundedOutlineOnAWrappingInlineElement_LargeNegativeOffsetOutsideFragmentsPaintsNothing()
+        public async Task RoundedOutlineOnAWrappingInlineElement_LargeNegativeOffsetClampsToAtLeastTwiceTheOutlineWidthPerLine()
         {
+            // Every line's outline is now a fully closed ring on all four sides (issue #1163), so the
+            // same "never shrink past 2x the outline width" floor
+            // OutlineOffset_LargeNegative_KeepsOutsideShapeAtLeastTwiceTheOutlineWidth already proves for
+            // an unbroken box applies independently to each line here too. Before this change, an
+            // interior line had no adjustable inline-axis edge at all to clamp against, so the same
+            // large negative offset could inflate its rect past zero width with nothing to stop it,
+            // and painting was skipped entirely - that degenerate case can no longer happen once every
+            // line always has both inline-axis edges to clamp.
             var html = LayoutHarness.Wrap(
                 "<div style='width:200pt;font:10pt Arial'>" +
                 "<span id='s' style='border-radius:6pt;outline:4pt solid #00f;outline-offset:-20pt'>" +
@@ -802,13 +864,60 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, span, g);
 
-            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                path => path.Color == RColor.FromArgb(0, 0, 255));
+            var rings = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(path => path.Color == RColor.FromArgb(0, 0, 255))
+                .ToList();
+            Assert.Equal(3, rings.Count);
+            Assert.All(rings, ring =>
+            {
+                Assert.Equal(8, ring.Bounds.Width, 1);
+                Assert.Equal(8, ring.Bounds.Height, 1);
+            });
 
             var pdf = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
             using var stream = new MemoryStream();
             pdf.Save(stream);
             Assert.True(stream.Length > 0);
+        }
+
+        [Fact]
+        public async Task OutlineOnABlockSpanningAPageBreak_StaysOpenAtTheBreak()
+        {
+            // Mirrors BoxDecorationBreakPaintIntegrationTests' own
+            // "Slice_InlineSpanningAPageBreak_DrawsNoBorderAtThePageBreakEither" - three lines land on
+            // page 0 and the fourth on page 1 - but puts the outline directly on the block-level box
+            // whose own content forces the split, rather than on a nested wrapping inline. Issue #1163's
+            // fix only ever forces HasLeftEdge/HasRightEdge closed on an outline's own paint entries; it
+            // never touches HasTopEdge/HasBottomEdge, which is what a page break actually gates. So the
+            // block-axis edge the break cuts through must stay open on both sides of it, exactly as
+            // before this change - a fully closed ring (the line-wrap fix's own shape) must never appear
+            // at a page break.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<div id='b' style='width:200pt;font:10pt Arial;line-height:30pt;" +
+                                   "outline:2pt solid #00f'>Alpha<br>Beta<br>Gamma<br>Delta</div>"),
+                pageHeight: 80, margin: 0);
+
+            var div = LayoutHarness.FindById(root, "b")!;
+            Assert.True(container.FragmentTree!.Fragmentainers.Count >= 2);
+
+            var blue = RColor.FromArgb(0, 0, 255);
+            var horizontal = 0;
+
+            for (var page = 0; page < container.FragmentTree.Fragmentainers.Count; page++)
+            {
+                var g = new TestRecordingGraphics();
+                FragmentPaintHarness.PaintBox(container, div, g, page);
+
+                // No fully closed ring appears on either page.
+                Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(), p => p.Color == blue);
+
+                horizontal += g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
+                    .Count(p => p.Color == blue && !IsVerticalEdge(p.Points));
+            }
+
+            // Only the box's own true top (page 0) and true bottom (page 1) horizontal edges paint -
+            // never the page break itself, on either side of it.
+            Assert.Equal(2, horizontal);
         }
 
         [Fact]

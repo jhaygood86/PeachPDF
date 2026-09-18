@@ -568,7 +568,13 @@ would double-apply the same shift.
   its block-axis (physical top/bottom) padding/border is applied once per column it spans rather than once
   total — `CreateVerticalLineBoxes` never sets `CssBox.FirstHostingLineBox`/`LastHostingLineBox`, the
   bookkeeping `CssLineBox.UpdateRectangle` needs to gate leading/trailing inset correctly, so a
-  bordered/padded `<span>` inside vertical text paints with the wrong decoration box.
+  bordered/padded `<span>` inside vertical text paints with the wrong decoration box. For the same
+  reason, issue #1163's fix closing a wrapped inline's outline into a complete ring on every line is
+  scoped to `horizontal-tb` (and `sideways-rl`/`sideways-lr`, whose line boxes are laid out the same
+  way) only — a `vertical-rl`/`vertical-lr` wrapped inline's outline keeps its pre-#1163 open-edge
+  geometry until this gap closes, since closing only the outline while the inline axis itself still
+  has no reserved inset would produce a ring that disagrees with the box's own (not yet correct)
+  extent.
 - **Atomic inline-level content (`inline-block`/`inline-table`) is flattened, not treated as one atomic
   unit** ([#771](https://github.com/jhaygood86/PeachPDF/issues/771)). `MeasureAndCollectWordsInDocumentOrder`
   recurses into every descendant box with no formatting-context check, so a nested inline-block's own words

@@ -6106,11 +6106,11 @@ var outlineHtml = "<!DOCTYPE html><html><head>" + OutlineCss + "</head><body>" +
     ) +
 
     "<h2>wrapped inline outline</h2>" +
-    "<p class=\"intro\">A sliced inline outline keeps its rounded corners at the element's real start and end, spills outside each line vertically, and stops exactly at internal line breaks. The other samples show the equivalent border geometry alone and together with the outline.</p>" +
+    "<p class=\"intro\">An outline on an inline element that wraps across lines closes every line into its own complete, independently rounded ring - Chromium's own \"closed rect per line\" shape for a fragmented outline. Border keeps the older sliced geometry instead: it stays open at internal line breaks, as box-decoration-break's slice value (which does not govern outline at all) requires.</p>" +
     "<div style=\"display:flex; gap:36px; margin:12px; font-size:12pt; line-height:2\">" +
-    "<div style=\"width:180px\"><div class=\"desc\">outline</div>" +
+    "<div style=\"width:180px\"><div class=\"desc\">outline (closes every line)</div>" +
     "<span style=\"border-radius:12px; outline:6px solid #4a90d9\">Alpha<br>Beta<br>Gamma</span></div>" +
-    "<div style=\"width:180px\"><div class=\"desc\">border</div>" +
+    "<div style=\"width:180px\"><div class=\"desc\">border (stays open at wraps)</div>" +
     "<span style=\"border-radius:12px; border:6px solid #d94a4a\">Alpha<br>Beta<br>Gamma</span></div>" +
     "<div style=\"width:180px\"><div class=\"desc\">border + outline</div>" +
     "<span style=\"border-radius:12px; border:6px solid #d94a4a; outline:6px solid #4a90d9\">Alpha<br>Beta<br>Gamma</span></div></div>" +
