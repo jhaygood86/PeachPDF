@@ -23,12 +23,16 @@ open, exactly as `box-decoration-break: slice` requires for those properties.
 A page or column break is a different axis and is unaffected: a block-axis edge cut by a page or
 column break still stays open on both sides of it, and the union never spans two fragmentainers.
 
-Two limitations to be aware of. The patterned and bevelled styles — `dotted`, `dashed`, `groove`,
-`ridge`, `inset`, `outset` — keep a closed ring per line, since a dash fit and a per-side bevel colour
-are not defined for a merged region's concave corners. And the union covers the inline's own line
-rectangles only, not the border boxes of atomic-inline descendants (an `<img>` or `inline-block`
-inside the outlined inline), so an unusually tall descendant does not push the outline outward the
-way it does in Chromium.
+Every `outline-style` follows that shape, including the patterned and bevelled ones. `dotted` and
+`dashed` fit their pattern along each straight edge of the merged contour, so a dash lands on every
+corner it turns, including the concave ones a merge introduces; `groove`, `ridge`, `inset` and
+`outset` take each edge's light or dark face from the direction that edge runs in rather than from
+which side of a box it is — the only rule still well defined once the lines have merged and a "side"
+no longer is. Both match Chromium, which paints all of these styles over the same merged region.
+
+One limitation to be aware of: the union covers the inline's own line rectangles only, not the border
+boxes of atomic-inline descendants (an `<img>` or `inline-block` inside the outlined inline), so an
+unusually tall descendant does not push the outline outward the way it does in Chromium.
 
 Scoped to `horizontal-tb` (and `sideways-rl`/`sideways-lr`, whose line boxes lay out the same way) —
 a `vertical-rl`/`vertical-lr` wrapped inline's outline keeps its previous geometry, tracked alongside

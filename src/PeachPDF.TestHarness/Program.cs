@@ -6112,7 +6112,8 @@ var outlineHtml = "<!DOCTYPE html><html><head>" + OutlineCss + "</head><body>" +
     ) +
 
     "<h2>wrapped inline outline</h2>" +
-    "<p class=\"intro\">An outline on an inline element that wraps across lines is drawn as one connected shape around all of them, matching Chromium: each line's rectangle is expanded by outline-offset, the rectangles are unioned, and the outline traces the boundary of the region they cover - running around its concave corners rather than closing across each wrap. Whether the lines merge into one piece depends only on whether those expanded rectangles <b>touch</b>; a border is not a special case, it just makes each line's box taller, and line spacing or outline-offset each cause the overlap on their own. Border itself keeps the sliced geometry either way, staying open at internal line breaks as box-decoration-break's slice value (which does not govern outline at all) requires, and the patterned and bevelled styles keep a closed ring per line, since a dash fit and a per-side bevel colour are not defined for a merged region's concave corners.</p>" +
+    "<p class=\"intro\">An outline on an inline element that wraps across lines is drawn as one connected shape around all of them, matching Chromium: each line's rectangle is expanded by outline-offset, the rectangles are unioned, and the outline traces the boundary of the region they cover - running around its concave corners rather than closing across each wrap. Whether the lines merge into one piece depends only on whether those expanded rectangles <b>touch</b>; a border is not a special case, it just makes each line's box taller, and line spacing or outline-offset each cause the overlap on their own. Border itself keeps the sliced geometry either way, staying open at internal line breaks as box-decoration-break's slice value (which does not govern outline at all) requires. Every outline style follows the merged shape: a dash pattern is fitted along each of its edges, and a bevel takes each edge's light or dark face from the direction that edge runs in - the rule that still works once the lines have merged and a per-side one no longer does.</p>" +
+
     "<div style=\"display:flex; gap:26px; margin:12px; font-size:12pt; line-height:1.3\">" +
     "<div style=\"width:150px; line-height:1.3\"><div class=\"desc\">lines apart - separate pieces</div>" +
     "<div class=\"css\">line-height: 2</div>" +
@@ -6125,10 +6126,22 @@ var outlineHtml = "<!DOCTYPE html><html><head>" + OutlineCss + "</head><body>" +
     "<span style=\"border-radius:12px; outline:6px solid #4a90d9; outline-offset:8px; line-height:2\">Alpha<br>Beta<br>Gamma</span></div>" +
     "<div style=\"width:150px; line-height:1.3\"><div class=\"desc\">border + outline: outline merges, border stays open</div>" +
     "<div class=\"css\">border: 6px; outline: 6px</div>" +
-    "<span style=\"border-radius:12px; border:6px solid #d94a4a; outline:6px solid #4a90d9; line-height:2\">Alpha<br>Beta<br>Gamma</span></div>" +
-    "<div style=\"width:150px; line-height:1.3\"><div class=\"desc\">dashed keeps a ring per line</div>" +
+    "<span style=\"border-radius:12px; border:6px solid #d94a4a; outline:6px solid #4a90d9; line-height:2\">Alpha<br>Beta<br>Gamma</span></div></div>" +
+
+    "<p class=\"intro\">The patterned and bevelled styles follow that same merged shape rather than restarting at each line: the dashes turn the step between two lines, and the bevel keeps one light source across the whole shape instead of relighting every line.</p>" +
+    "<div style=\"display:flex; gap:26px; margin:12px; font-size:12pt; line-height:1.3\">" +
+    "<div style=\"width:150px; line-height:1.3\"><div class=\"desc\">dashed follows the merged shape too</div>" +
     "<div class=\"css\">outline: 6px dashed</div>" +
-    "<span style=\"border-radius:12px; border:6px solid #d94a4a; outline:6px dashed #4a90d9; line-height:2\">Alpha<br>Beta<br>Gamma</span></div></div>" +
+    "<span style=\"border-radius:12px; border:6px solid #d94a4a; outline:6px dashed #4a90d9; line-height:2\">Alpha<br>Beta<br>Gamma</span></div>" +
+    "<div style=\"width:150px; line-height:1.3\"><div class=\"desc\">dotted turns the step's corners</div>" +
+    "<div class=\"css\">outline: 6px dotted</div>" +
+    "<span style=\"border:6px solid #d94a4a; outline:6px dotted #4a90d9; line-height:2\">Alpha<br>Beta<br>Gamma</span></div>" +
+    "<div style=\"width:150px; line-height:1.3\"><div class=\"desc\">bevel lit per edge direction, not per line</div>" +
+    "<div class=\"css\">outline: 8px groove</div>" +
+    "<span style=\"border-radius:12px; border:6px solid #d94a4a; outline:8px groove #4a90d9; line-height:2\">Alpha<br>Beta<br>Gamma</span></div>" +
+    "<div style=\"width:150px; line-height:1.3\"><div class=\"desc\">rounded corners shaded from the edges they join</div>" +
+    "<div class=\"css\">border-radius: 12px; outline: 8px inset</div>" +
+    "<span style=\"border-radius:12px; border:6px solid #d94a4a; outline:8px inset #4a90d9; line-height:2\">Alpha<br>Beta<br>Gamma</span></div></div>" +
 
     "<h2>border + outline together</h2>" +
     "<p class=\"intro\">The red border occupies the box edge; the blue outline is a separate ring outside it. Rounded samples show both contours following the same border-radius.</p>" +

@@ -1010,30 +1010,425 @@ namespace PeachPDF.Tests.Integration
         [Theory]
         [InlineData("dotted")]
         [InlineData("dashed")]
-        [InlineData("groove")]
-        [InlineData("ridge")]
-        [InlineData("inset")]
-        [InlineData("outset")]
-        public async Task PatternedOutlineOnAWrappingInlineElement_FallsBackToARingPerLine(string style)
+        public async Task RoundedPatternedOutlineOnAWrappingInlineElement_FitsOnePatternToTheWholeContour(
+            string style)
         {
-            // Only the styles whose appearance is decided purely by which area is filled can be painted
-            // over a unioned contour. A dash pattern has to be fitted along each side, and a bevel needs
-            // a per-side light/dark colour, and neither survives the concave corners a union introduces
-            // - so these keep the pre-existing ring-per-fragment shape rather than being drawn wrongly.
+            // A rounded union has no straight edge to fit a pattern along - a corner arc is part of the
+            // run, not a break in it - so the whole closed contour is fitted at once and stroked as a
+            // single path. That is a different code path from the square-cornered per-edge fit, and the
+            // observable difference is exactly this: one stroked path carrying one dash array, instead
+            // of one DrawLine per edge.
             var html = LayoutHarness.Wrap(
                 "<div style='width:200pt;font:10pt Arial'>" +
-                $"<span id='s' style='outline:3pt {style} #00f'>Alpha<br>Beta<br>Gamma</span></div>");
+                "<span id='s' style='border-radius:8pt;" +
+                $"outline:3pt {style} #00f'>Alpha<br>Alpha<br>Alpha</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+            var rects = FragmentPaintHarness.FragmentOf(container, span).Lines.Select(l => l.Rect).ToList();
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            // Not one DrawLine per edge: the rounded contour is stroked whole.
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+
+            var contour = Assert.Single(
+                g.Log.OfType<TestRecordingGraphics.DrawPathCall>(), p => p.Stroked);
+
+            // Fitted, not a canned dash style, and a dotted dot is a zero-length dash under a round cap.
+            Assert.NotNull(contour.DashPattern);
+            Assert.Equal(2, contour.DashPattern!.Count);
+            if (style == "dotted")
+            {
+                Assert.Equal(0, contour.DashPattern[0]);
+                Assert.Equal(RLineCap.Round, contour.LineCap);
+            }
+            else
+            {
+                Assert.Equal(6, contour.DashPattern[0], 1); // dashed = 2x the outline width
+                Assert.Equal(RLineCap.Butt, contour.LineCap);
+            }
+
+            // The one path is the whole union's boundary, not a single line's ring.
+            var unionWidth = rects.Max(r => r.Right) - rects.Min(r => r.Left);
+            var unionHeight = rects.Max(r => r.Bottom) - rects.Min(r => r.Top);
+            Assert.True(contour.Bounds.Width >= unionWidth, "the contour should span the whole union");
+            Assert.True(contour.Bounds.Height >= unionHeight, "the contour should span the whole union");
+        }
+
+        [Fact]
+        public async Task PatternedOutlineOnAnEdgeTooShortToCarryADash_StrokesThatEdgeSolid()
+        {
+            // A pattern is fitted per straight edge, so a short edge is fitted on its own terms - and
+            // one shorter than a single dash plus its gap has no fitting to apply. The fallback is a
+            // solid stroke over that edge rather than no stroke at all, which would leave a visible
+            // hole in the contour. A staircase's step is where such an edge actually occurs: the step's
+            // own risers are only as tall as the difference between two lines' widths is wide.
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'>" +
+                "<span id='s' style='outline:12pt dashed #00f'>Alpha alpha<br>Be</span></div>");
             var (root, container) = await LayoutHarness.LayoutAsync(html);
             var span = LayoutHarness.FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, span, g);
 
-            // Three lines' worth of edges paint, not one connected shape's.
-            var drawn = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().Count() +
-                        g.Log.OfType<TestRecordingGraphics.DrawLineCall>().Count() +
-                        g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Count();
-            Assert.True(drawn >= 3, $"expected a per-line fallback for '{style}', saw {drawn} draw calls");
+            var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
+            Assert.NotEmpty(lines);
+
+            // The step's short edges cannot carry a 24pt dash, so they fall back to solid, while the
+            // long edges of the same contour still carry their fitted pattern.
+            Assert.Contains(lines, l => l.DashPattern is null && l.DashStyle == RDashStyle.Solid);
+            Assert.Contains(lines, l => l.DashPattern is not null);
+        }
+
+        [Theory]
+        [InlineData("dotted")]
+        [InlineData("dashed")]
+        public async Task PatternedOutlineOnUnevenLines_StrokesTheStaircaseTheUnionMakes(string style)
+        {
+            // Lines of differing width union into a staircase rather than a rectangle, which is the
+            // shape this feature exists for: the step between two lines is a concave corner, a thing a
+            // per-side dash pattern has no notion of. Two long lines over one short one make a single
+            // step, so the region is an L - six edges, one connected run, against the twelve three
+            // independent rings would stroke.
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'>" +
+                $"<span id='s' style='outline:3pt {style} #00f'>Alpha alpha<br>Alpha alpha<br>Be</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+            var rects = FragmentPaintHarness.FragmentOf(container, span).Lines.Select(l => l.Rect).ToList();
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
+            Assert.Equal(6, lines.Count);
+            Assert.All(lines, line => Assert.NotNull(line.DashPattern));
+
+            // The step's two edges are interior to neither line: one horizontal edge sits at the short
+            // line's own top, which only exists because the wider lines above it end there.
+            var stepY = rects[2].Top;
+            Assert.Contains(
+                lines.Where(l => Math.Abs(l.Y1 - l.Y2) < 0.01),
+                line => Math.Abs(line.Y1 - stepY) < rects[0].Height);
+
+            // Exactly one horizontal edge spans the widest line; the short line contributes its own,
+            // shorter one. Three rings would instead produce three full-width horizontals.
+            var full = lines
+                .Where(l => Math.Abs(l.Y1 - l.Y2) < 0.01)
+                .Count(l => Math.Abs(l.X2 - l.X1) >= rects.Max(r => r.Width));
+            Assert.Equal(1, full);
+        }
+
+        [Theory]
+        [InlineData("dotted")]
+        [InlineData("dashed")]
+        public async Task PatternedOutlineOnAWrappingInlineElement_StrokesTheUnionsEdgesNotEachLines(
+            string style)
+        {
+            // A patterned outline is fitted per straight edge, so the proof that it followed the union
+            // rather than each line is which edges exist to be stroked. Three stacked lines of equal
+            // width merge into a single rectangle, whose boundary has exactly four edges - where three
+            // separate rings would have twelve.
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'>" +
+                $"<span id='s' style='outline:3pt {style} #00f'>Alpha<br>Alpha<br>Alpha</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+            var rects = FragmentPaintHarness.FragmentOf(container, span).Lines.Select(l => l.Rect).ToList();
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
+            Assert.Equal(4, lines.Count);
+
+            // Every stroke carries a fitted pattern - the whole point of these styles.
+            Assert.All(lines, line => Assert.NotNull(line.DashPattern));
+
+            // The two horizontal edges span the union's full width, which is the widest line's. Were
+            // these each line's own edges, the narrower lines would produce shorter strokes.
+            var horizontal = lines.Where(l => Math.Abs(l.Y1 - l.Y2) < 0.01).ToList();
+            Assert.Equal(2, horizontal.Count);
+            Assert.All(horizontal, line =>
+                Assert.True(
+                    Math.Abs(line.X2 - line.X1) >= rects.Max(r => r.Width),
+                    "a horizontal edge should span the whole union, not one line"));
+
+            // The two vertical edges run the full height of the merged run, past both interior line
+            // boundaries - impossible for a per-line ring, whose verticals are one line tall.
+            var vertical = lines.Where(l => Math.Abs(l.X1 - l.X2) < 0.01).ToList();
+            Assert.Equal(2, vertical.Count);
+            var runHeight = rects.Max(r => r.Bottom) - rects.Min(r => r.Top);
+            Assert.All(vertical, line =>
+                Assert.True(
+                    Math.Abs(line.Y2 - line.Y1) >= runHeight,
+                    "a vertical edge should run the whole union, not one line"));
+        }
+
+        [Theory]
+        [InlineData("groove")]
+        [InlineData("ridge")]
+        [InlineData("inset")]
+        [InlineData("outset")]
+        public async Task BevelledOutlineOnAWrappingInlineElement_ShadesByTravelDirectionOverTheUnion(
+            string style)
+        {
+            // A bevel's two faces are chosen from the direction each boundary edge travels in, so a
+            // correctly unioned bevel paints in exactly two colours - and each shade is laid down in a
+            // single fill covering every edge that resolves to it.
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'>" +
+                $"<span id='s' style='outline:6pt {style} #36c'>Alpha<br>Beta<br>Gamma</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+            var rects = FragmentPaintHarness.FragmentOf(container, span).Lines.Select(l => l.Rect).ToList();
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            var paths = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+            Assert.NotEmpty(paths);
+
+            // Exactly two shades - a lit face and a shaded one. One would be a flat frame, meaning the
+            // direction rule never fired; more would mean a per-side colour leaked in.
+            var shades = paths.Select(p => p.Color).Distinct().ToList();
+            Assert.Equal(2, shades.Count);
+            Assert.DoesNotContain(RColor.FromArgb(0x33, 0x66, 0xcc), shades);
+
+            // One fill per shade - two for a single-pass bevel, twice that for groove/ridge's two
+            // passes. A fill per EDGE instead would abut two same-shade faces along each mitre, and two
+            // abutting antialiased fills leave a pale seam down the join.
+            var passes = style is "groove" or "ridge" ? 2 : 1;
+            Assert.Equal(2 * passes, paths.Count);
+            Assert.Equal(
+                paths.Count, g.Log.OfType<TestRecordingGraphics.PushClipCall>().Count());
+
+            // Each shade's clip carries one quad per edge it owns. These three lines are of differing
+            // widths, so the union is a staircase of six edges, splitting three apiece between the two
+            // shades - and a clip per EDGE would instead give six single-quad clips.
+            Assert.All(
+                g.ClipPaths.TakeLast(2 * passes),
+                clip => Assert.Equal(3, clip.SubpathStarts.Count));
+
+            // Each fill is the whole union's band - it is the clip, not the geometry, that selects the
+            // edges - so every path reaches the union's full extent rather than one line's.
+            var unionWidth = rects.Max(r => r.Right) - rects.Min(r => r.Left);
+            var unionHeight = rects.Max(r => r.Bottom) - rects.Min(r => r.Top);
+            Assert.All(paths, path =>
+            {
+                Assert.True(path.Bounds.Width >= unionWidth, "a bevel face should span the union");
+                Assert.True(path.Bounds.Height >= unionHeight, "a bevel face should span the union");
+            });
+        }
+
+        [Theory]
+        [InlineData("groove")]
+        [InlineData("ridge")]
+        [InlineData("inset")]
+        [InlineData("outset")]
+        public async Task RoundedBevelledOutlineOnAWrappingInlineElement_ShadesTheWholeBandIncludingItsArcs(
+            string style)
+        {
+            // A rounded corner's arc has no single direction of travel, so it has no shade of its own -
+            // and a bevel that derived its clips from the rounded path would find nothing to give the
+            // arcs and leave them unpainted, which is a hole in the band rather than a subtle flaw. The
+            // clips instead come from the region's own right-angled corners, whose mitres split each arc
+            // down the 45-degree diagonal between the two edges it joins - and each mitre reaches far
+            // enough along that diagonal to hold the arc, which bulges away from the straight run the
+            // rest of the edge follows.
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'>" +
+                $"<span id='s' style='border-radius:8pt;outline:6pt {style} #36c'>" +
+                "Alpha<br>Beta<br>Gamma</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+            var rects = FragmentPaintHarness.FragmentOf(container, span).Lines.Select(l => l.Rect).ToList();
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            var paths = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+            var passes = style is "groove" or "ridge" ? 2 : 1;
+            Assert.Equal(2 * passes, paths.Count);
+            Assert.Equal(2, paths.Select(p => p.Color).Distinct().Count());
+
+            // The band really is rounded - a square one would reach its own corners.
+            var band = paths[0];
+            Assert.DoesNotContain(
+                band.Points,
+                p => Math.Abs(p.X - (rects.Min(r => r.Left) - 6)) < 0.5
+                     && Math.Abs(p.Y - (rects.Min(r => r.Top) - 6)) < 0.5);
+
+            // And the clips of one pass cover it: every point the band actually passes through - the
+            // arcs included, flattened through their control points - falls inside one clip quad or
+            // the other. Asserting only the clips' outer extent would not show this, because the
+            // straight edges' own quads already reach that extent whether or not anything covers the
+            // arcs between them.
+            var clips = g.ClipPaths.TakeLast(2).SelectMany(Quads).ToList();
+
+            Assert.All(Flatten(band), point =>
+                Assert.True(
+                    clips.Any(quad => ContainsPoint(quad, point)),
+                    $"({point.X:0.##}, {point.Y:0.##}) of the band is inside no clip, so that part of "
+                    + "the band - an arc, if the mitres are only as deep as the straight run - goes "
+                    + "unpainted"));
+        }
+
+        [Theory]
+        [InlineData("groove")]
+        [InlineData("ridge")]
+        [InlineData("inset")]
+        [InlineData("outset")]
+        public async Task BevelledOutlineOnAWrappingInlineElement_KeepsEachClipConvex(string style)
+        {
+            // Each clip subpath is the territory of one boundary edge, bounded by the 45-degree mitre
+            // it shares with the neighbour at either end. Both mitres are cut from the edge's own line,
+            // so nothing stops them from crossing - and once they have, the far side of the crossing is
+            // territory turned inside out, which draws as a bowtie whose waist cancels under nonzero
+            // winding. The band is unpainted along that waist: not a rounding-sized flaw but a clean
+            // diagonal slash, and it appears on any edge shorter than twice the mitre's reach, which
+            // the short steps of a wrapped inline's staircase routinely are.
+            //
+            // A coverage test cannot see this, because a ray cast from a point in the cancelled waist
+            // still crosses the bowtie's outline an odd number of times. So assert the shape itself:
+            // every subpath of every clip has to be a simple polygon.
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'>" +
+                $"<span id='s' style='border-radius:8pt;outline:6pt {style} #36c'>" +
+                "Alpha<br>Beta<br>Gamma</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            var quads = g.ClipPaths.SelectMany(Quads).ToList();
+            Assert.NotEmpty(quads);
+
+            Assert.All(quads, quad =>
+                Assert.False(
+                    SelfIntersects(quad),
+                    "a bevel clip's mitres crossed, folding its edge's territory into a bowtie whose "
+                    + "waist cancels under nonzero winding and leaves a diagonal slash of the band "
+                    + "unpainted"));
+        }
+
+        /// <summary>
+        /// Whether any two non-adjacent sides of the closed polygon <paramref name="polygon"/> cross.
+        /// </summary>
+        private static bool SelfIntersects(IReadOnlyList<RPoint> polygon)
+        {
+            var n = polygon.Count;
+
+            for (var i = 0; i < n; i++)
+            for (var j = i + 1; j < n; j++)
+            {
+                // Sides sharing an endpoint touch there by construction.
+                if (j == i + 1 || (i == 0 && j == n - 1)) continue;
+
+                if (SegmentsCross(
+                        polygon[i], polygon[(i + 1) % n], polygon[j], polygon[(j + 1) % n]))
+                    return true;
+            }
+
+            return false;
+
+            static bool SegmentsCross(RPoint a, RPoint b, RPoint c, RPoint d) =>
+                Side(a, b, c) * Side(a, b, d) < 0 && Side(c, d, a) * Side(c, d, b) < 0;
+
+            static int Side(RPoint a, RPoint b, RPoint p)
+            {
+                var cross = (b.X - a.X) * (p.Y - a.Y) - (b.Y - a.Y) * (p.X - a.X);
+                return Math.Abs(cross) < 1e-9 ? 0 : Math.Sign(cross);
+            }
+        }
+
+        /// <summary>
+        /// The points <paramref name="path"/> passes through: its straight vertices, plus each Bézier
+        /// sampled along its length. The two control points of a curve are not on it - they are what
+        /// it bends towards - so a test asking where the shape is has to evaluate the curve rather
+        /// than assert against them.
+        /// </summary>
+        private static IEnumerable<RPoint> Flatten(TestRecordingGraphics.DrawPathCall path)
+        {
+            for (var i = 0; i < path.Points.Count; i++)
+            {
+                if (path.BezierControlPoints.Contains(i))
+                {
+                    // i and i + 1 are the control points, i + 2 the curve's end, i - 1 its start.
+                    if (path.BezierControlPoints.Contains(i - 1)) continue;
+
+                    var p0 = path.Points[i - 1];
+                    var p1 = path.Points[i];
+                    var p2 = path.Points[i + 1];
+                    var p3 = path.Points[i + 2];
+
+                    for (var step = 1; step < 8; step++)
+                    {
+                        var t = step / 8.0;
+                        var u = 1 - t;
+                        yield return new RPoint(
+                            u * u * u * p0.X + 3 * u * u * t * p1.X + 3 * u * t * t * p2.X + t * t * t * p3.X,
+                            u * u * u * p0.Y + 3 * u * u * t * p1.Y + 3 * u * t * t * p2.Y + t * t * t * p3.Y);
+                    }
+
+                    continue;
+                }
+
+                yield return path.Points[i];
+            }
+        }
+
+        /// <summary>
+        /// <paramref name="path"/> split into its subpaths - for a bevel clip, the one quad it holds
+        /// per boundary edge of that shade.
+        /// </summary>
+        private static IEnumerable<IReadOnlyList<RPoint>> Quads(TestGraphicsPath path)
+        {
+            for (var i = 0; i < path.SubpathStarts.Count; i++)
+            {
+                var start = path.SubpathStarts[i];
+                var end = i + 1 < path.SubpathStarts.Count
+                    ? path.SubpathStarts[i + 1]
+                    : path.Points.Count;
+                yield return path.Points.GetRange(start, end - start);
+            }
+        }
+
+        /// <summary>
+        /// Whether <paramref name="point"/> lies within <paramref name="polygon"/>, by the winding of a
+        /// ray cast from it. Tolerant by a hair on the boundary, since a point the clip is meant to
+        /// carry exactly - an arc's end, which sits on the mitre it is cut by - would otherwise land
+        /// either side of the edge on rounding alone.
+        /// </summary>
+        private static bool ContainsPoint(IReadOnlyList<RPoint> polygon, RPoint point)
+        {
+            const double tolerance = 0.01;
+            var inside = false;
+
+            for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+            {
+                var a = polygon[i];
+                var b = polygon[j];
+
+                // On the edge itself, within tolerance.
+                var cross = (b.X - a.X) * (point.Y - a.Y) - (b.Y - a.Y) * (point.X - a.X);
+                var length = Math.Sqrt((b.X - a.X) * (b.X - a.X) + (b.Y - a.Y) * (b.Y - a.Y));
+                if (length > 0 && Math.Abs(cross) / length <= tolerance
+                    && point.X >= Math.Min(a.X, b.X) - tolerance
+                    && point.X <= Math.Max(a.X, b.X) + tolerance
+                    && point.Y >= Math.Min(a.Y, b.Y) - tolerance
+                    && point.Y <= Math.Max(a.Y, b.Y) + tolerance)
+                    return true;
+
+                if (a.Y > point.Y != b.Y > point.Y
+                    && point.X < (b.X - a.X) * (point.Y - a.Y) / (b.Y - a.Y) + a.X)
+                    inside = !inside;
+            }
+
+            return inside;
         }
 
         [Fact]

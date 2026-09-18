@@ -55,11 +55,10 @@ namespace PeachPDF.Html.Core.Handlers
         /// outlined at all.
         /// </para>
         /// <para>
-        /// Only <c>solid</c>, <c>double</c> and <c>auto</c> take this path. The remaining styles fall
-        /// back to <see cref="DrawOutline"/> per rectangle, because their appearance is defined per
-        /// side - a dash pattern fitted to a side's length, a bevel lit from a side's direction - and
-        /// a unioned contour has neither four sides nor only convex corners to define those against.
-        /// See <see cref="SupportsRegionOutline"/>.
+        /// Every style takes this path. The patterned and bevelled ones are defined per side on an
+        /// ordinary box - a dash pattern fitted to a side's length, a bevel lit from a side's
+        /// direction - which a unioned contour has no equivalent of, so they are resolved against the
+        /// boundary itself instead: see <see cref="OutlineRegionPainter"/>.
         /// </para>
         /// </remarks>
         /// <param name="g">the device to draw into</param>
@@ -112,10 +111,10 @@ namespace PeachPDF.Html.Core.Handlers
 
         /// <summary>
         /// Whether <paramref name="box"/>'s outline style is one <see cref="DrawRegionOutline"/> can
-        /// draw. The rest keep the per-fragment ring <see cref="DrawOutline"/> produces.
+        /// draw. Every style that paints at all can be; the rest paint nothing either way.
         /// </summary>
         internal static bool SupportsRegionOutline(CssBox box) =>
-            box.OutlineStyle.Value is OutlineStyle.Solid or OutlineStyle.Double or OutlineStyle.Auto;
+            box.OutlineStyle.Value is not (OutlineStyle.None or OutlineStyle.Hidden);
 
         /// <summary>
         /// Draws the box's outline, if any, around <paramref name="rect"/> (the same border-box

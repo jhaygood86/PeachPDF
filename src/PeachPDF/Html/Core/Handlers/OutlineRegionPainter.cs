@@ -32,7 +32,7 @@ namespace PeachPDF.Html.Core.Handlers
     /// would punch a hole instead.
     /// </para>
     /// </remarks>
-    internal static class OutlineRegionPainter
+    internal static partial class OutlineRegionPainter
     {
         /// <summary>
         /// Fills <paramref name="contours"/>' boundary band, <paramref name="width"/> thick, with
@@ -41,9 +41,9 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="g">the device to draw into</param>
         /// <param name="contours">the contours bounding the region the outline surrounds</param>
         /// <param name="style">
-        /// the outline's style - only <see cref="LineStyle.Solid"/> and <see cref="LineStyle.Double"/>
-        /// are supported, the two whose appearance is fully determined by which area is filled and so
-        /// needs nothing of the per-side machinery a single rectangle's edges get
+        /// the outline's style. <see cref="LineStyle.Solid"/> and <see cref="LineStyle.Double"/> are
+        /// decided by filled area alone; the patterned and bevelled styles are resolved per boundary
+        /// segment - see <see cref="PaintPatternedRegion"/> and <see cref="PaintBevelledRegion"/>.
         /// </param>
         /// <param name="color">the outline's color</param>
         /// <param name="width">the outline's width</param>
@@ -60,6 +60,18 @@ namespace PeachPDF.Html.Core.Handlers
             LineStyle style, RColor color, double width, BorderRadii? radii, double offset)
         {
             if (contours.Count == 0 || width <= 0) return;
+
+            if (style is LineStyle.Dotted or LineStyle.Dashed)
+            {
+                PaintPatternedRegion(g, contours, style, color, width, radii, offset);
+                return;
+            }
+
+            if (style is LineStyle.Inset or LineStyle.Outset or LineStyle.Groove or LineStyle.Ridge)
+            {
+                PaintBevelledRegion(g, contours, style, color, width, radii, offset);
+                return;
+            }
 
             var brush = g.GetSolidBrush(color);
 
@@ -87,11 +99,24 @@ namespace PeachPDF.Html.Core.Handlers
             RGraphics g, RBrush brush, IReadOnlyList<RectilinearRegion.Contour> contours,
             double fromInset, double toInset, double width, BorderRadii? radii, double offset)
         {
+            using var path = BuildBandPath(g, contours, fromInset, toInset, width, radii, offset);
+            g.DrawPath(brush, path);
+        }
+
+        /// <summary>
+        /// The band between <paramref name="fromInset"/> and <paramref name="toInset"/>, as a path the
+        /// caller owns - so a caller painting the same band several times under different clips builds
+        /// its geometry once instead of once per fill.
+        /// </summary>
+        private static RGraphicsPath BuildBandPath(
+            RGraphics g, IReadOnlyList<RectilinearRegion.Contour> contours,
+            double fromInset, double toInset, double width, BorderRadii? radii, double offset)
+        {
             // Paths bypass the adapter's coordinate scaling, unlike polygons and lines, so normalize
             // layout-space coordinates here (issue #812).
             var pixelsPerPoint = g.PixelsPerPoint;
 
-            using var path = g.GetGraphicsPath();
+            var path = g.GetGraphicsPath();
             path.FillMode = RFillMode.Nonzero;
 
             foreach (var contour in contours)
@@ -100,7 +125,7 @@ namespace PeachPDF.Html.Core.Handlers
                 AddContour(path, contour, toInset, width, radii, offset, pixelsPerPoint, reverse: true);
             }
 
-            g.DrawPath(brush, path);
+            return path;
         }
 
         /// <summary>
@@ -119,9 +144,34 @@ namespace PeachPDF.Html.Core.Handlers
             double inset, double width, BorderRadii? radii, double offset,
             double pixelsPerPoint, bool reverse)
         {
+            var segments = BuildContourSegments(contour, inset, width, radii, offset);
+            EmitSegments(path, segments, pixelsPerPoint, reverse);
+        }
+
+        /// <summary>
+        /// <paramref name="contour"/>, inset by <paramref name="inset"/> and with its corners rounded,
+        /// as the run of straight and curved segments that traces it.
+        /// </summary>
+        private static List<PathSegment> BuildContourSegments(
+            RectilinearRegion.Contour contour,
+            double inset, double width, BorderRadii? radii, double offset)
+        {
+            var (points, corners) = BuildContourCorners(contour, inset, width, radii, offset);
+            return corners.Length == 0 ? [] : BuildSegments(points, corners);
+        }
+
+        /// <summary>
+        /// <paramref name="contour"/>'s right-angled corner points once inset by
+        /// <paramref name="inset"/>, each paired with how far its arc reaches back along the two edges
+        /// meeting there.
+        /// </summary>
+        private static (IReadOnlyList<RPoint> Points, Corner[] Corners) BuildContourCorners(
+            RectilinearRegion.Contour contour,
+            double inset, double width, BorderRadii? radii, double offset)
+        {
             var points = RectilinearRegion.Shrink(contour, inset).Points;
             var count = points.Count;
-            if (count < 3) return;
+            if (count < 3) return (points, []);
 
             var corners = new Corner[count];
             for (var i = 0; i < count; i++)
@@ -144,8 +194,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             FitRadiiToEdges(points, corners);
 
-            var segments = BuildSegments(points, corners);
-            EmitSegments(path, segments, pixelsPerPoint, reverse);
+            return (points, corners);
         }
 
         /// <summary>
