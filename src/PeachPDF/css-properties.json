@@ -608,7 +608,7 @@
     },
     {
       "name": "border-image-repeat",
-      "comment": "CSS Backgrounds and Borders 3 <13>: [stretch | repeat | round | space]{1,2}. 'space' is missing from Map.BorderRepeatModes/the BorderRepeat enum entirely (a pre-existing CSS-OM gap, not introduced here - see the accepted-gap note), so it is never a value BorderImageLayerResolver.ResolveRepeat actually sees. Stored as the raw declared string for the same reason border-image-slice is.",
+      "comment": "CSS Backgrounds and Borders 3 <13>: [stretch | repeat | round | space]{1,2}. All four keywords are recognized (Map.BorderRepeatModes/the BorderRepeat enum). Stored as the raw declared string for the same reason border-image-slice is.",
       "inherited": false,
       "initialValue": "stretch",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BorderImageRepeatProperty.TheConverter.Convert" },

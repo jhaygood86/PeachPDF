@@ -270,6 +270,48 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         }
 
         [Fact]
+        public void BorderImageRepeatSpaceLegal()
+        {
+            var snippet = "border-image-repeat:   space";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("border-image-repeat", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<BorderImageRepeatProperty>(property);
+            var concrete = (BorderImageRepeatProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("space", concrete.Value);
+        }
+
+        [Fact]
+        public void BorderImageRepeatRoundSpaceLegal()
+        {
+            var snippet = "border-image-repeat: round space";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("border-image-repeat", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<BorderImageRepeatProperty>(property);
+            var concrete = (BorderImageRepeatProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("round space", concrete.Value);
+        }
+
+        [Fact]
+        public void BorderImageRepeatSpaceRoundLegal()
+        {
+            var snippet = "border-image-repeat: space round";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("border-image-repeat", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<BorderImageRepeatProperty>(property);
+            var concrete = (BorderImageRepeatProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("space round", concrete.Value);
+        }
+
+        [Fact]
         public void BorderImageRepeatNoRepeatIllegal()
         {
             var snippet = "border-image-repeat: no-repeat";

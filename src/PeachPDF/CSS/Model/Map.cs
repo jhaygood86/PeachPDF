@@ -543,7 +543,8 @@ namespace PeachPDF.CSS
             {
                 {Keywords.Stretch, BorderRepeat.Stretch},
                 {Keywords.Repeat, BorderRepeat.Repeat},
-                {Keywords.Round, BorderRepeat.Round}
+                {Keywords.Round, BorderRepeat.Round},
+                {Keywords.Space, BorderRepeat.Space}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, string> DefaultFontFamilies =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

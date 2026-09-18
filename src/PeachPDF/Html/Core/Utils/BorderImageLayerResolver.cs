@@ -144,9 +144,8 @@ namespace PeachPDF.Html.Core.Utils
 
         /// <summary>
         /// Resolves a <c>border-image-repeat</c> value (CSS Backgrounds and Borders 3 §13:
-        /// <c>[stretch | repeat | round | space]{1,2}</c> - though <c>space</c> can never actually reach
-        /// here, see the accepted-gap note) into its horizontal (first component) and vertical (second, or
-        /// the first again if only one was declared) keyword.
+        /// <c>[stretch | repeat | round | space]{1,2}</c>) into its horizontal (first component) and
+        /// vertical (second, or the first again if only one was declared) keyword.
         /// </summary>
         internal static (BorderRepeat Horizontal, BorderRepeat Vertical) ResolveRepeat(string repeatValue)
         {
@@ -156,6 +155,11 @@ namespace PeachPDF.Html.Core.Utils
             return (horizontal, vertical);
         }
 
+        /// <summary>
+        /// Defensively degrades a component this repo's own <see cref="BorderImageRepeatProperty"/>
+        /// converter should already have rejected (so <see cref="Map.BorderRepeatModes"/> never actually
+        /// misses) to <see cref="BorderRepeat.Stretch"/>, rather than throwing, if one ever reaches here.
+        /// </summary>
         private static BorderRepeat ParseRepeatKeyword(string? component) =>
             component is not null && Map.BorderRepeatModes.TryGetValue(component, out var mode)
                 ? mode

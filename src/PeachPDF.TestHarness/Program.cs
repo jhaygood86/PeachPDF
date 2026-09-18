@@ -744,6 +744,15 @@ var borderImageHtml = "<!DOCTYPE html><html><head>" + BorderImageCss + "</head><
     $"<div class=\"card\" style=\"border:12pt solid transparent;border-image-source:url({borderImageFrameDataUri});border-image-slice:2 fill;border-image-width:12pt\"></div></div>" +
     "</div>" +
 
+    "<h2>1b — round and space</h2>" +
+    "<p style=\"font-size:8pt;color:#666;margin:0 0 6px\">round resizes each edge/center tile so a whole number of them fit exactly, with no partial tile at the corner; space keeps every tile at its natural size and inserts equal gaps between them so the first and last still touch the edges — both shown here against a card width the plain 12pt tile size (repeat, above) does not divide evenly.</p>" +
+    "<div class=\"row\">" +
+    "<div class=\"col\"><div class=\"label\">round</div>" +
+    $"<div class=\"card\" style=\"width:130px;border:12pt solid transparent;border-image-source:url({borderImageFrameDataUri});border-image-slice:2 fill;border-image-width:12pt;border-image-repeat:round\"></div></div>" +
+    "<div class=\"col\"><div class=\"label\">space</div>" +
+    $"<div class=\"card\" style=\"width:130px;border:12pt solid transparent;border-image-source:url({borderImageFrameDataUri});border-image-slice:2 fill;border-image-width:12pt;border-image-repeat:space\"></div></div>" +
+    "</div>" +
+
     "<h2>2 — border-image-outset</h2>" +
     "<p style=\"font-size:8pt;color:#666;margin:0 0 6px\">The painted frame extends past the border box without affecting layout - the dashed guide shows the untouched border box underneath.</p>" +
     "<div class=\"row\">" +
@@ -765,7 +774,7 @@ var borderImageHtml = "<!DOCTYPE html><html><head>" + BorderImageCss + "</head><
     "</body></html>";
 
 await SaveShowcaseAsync("border_image", "Backgrounds & Borders", "Border Image",
-    "border-image: the standard 9-slice algorithm (corners scaled, edges stretched/tiled per border-image-repeat, an optional filled center) from a raster texture or any CSS <image> including gradients, plus border-image-outset extending the painted frame past the border box.",
+    "border-image: the standard 9-slice algorithm (corners scaled, edges stretched/tiled per border-image-repeat — stretch, repeat, round or space — with an optional filled center) from a raster texture or any CSS <image> including gradients, plus border-image-outset extending the painted frame past the border box.",
     borderImageHtml, pdfConfig);
 
 // --- box-decoration-break showcase ---

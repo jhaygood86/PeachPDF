@@ -4,6 +4,7 @@ namespace PeachPDF.CSS
     {
         Stretch,
         Repeat,
-        Round
+        Round,
+        Space
     }
 }
