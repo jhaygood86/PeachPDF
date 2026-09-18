@@ -269,6 +269,75 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Null(box.RunningElementName);
         }
 
+        // ─── text-underline-position (issue #1146: the left/right compound grammar) ──────────────
+
+        [Theory]
+        [InlineData("auto", "Auto", "Auto")]
+        [InlineData("from-font", "FromFont", "Auto")]
+        [InlineData("under", "Under", "Auto")]
+        [InlineData("left", "Auto", "Left")]
+        [InlineData("right", "Auto", "Right")]
+        [InlineData("under left", "Under", "Left")]
+        [InlineData("left under", "Under", "Left")]
+        [InlineData("from-font right", "FromFont", "Right")]
+        [InlineData("right from-font", "FromFont", "Right")]
+        public async Task SetPropertyValue_TextUnderlinePosition_ValidCombinations_SetBothFields(
+            string value, string expectedPosition, string expectedSide)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "text-underline-position", value);
+
+            Assert.Equal(expectedPosition, box.TextUnderlinePosition.Value.ToString());
+            Assert.Equal(expectedSide, box.TextUnderlineSide.Value.ToString());
+        }
+
+        [Theory]
+        [InlineData("auto left")]
+        [InlineData("left right")]
+        [InlineData("under from-font")]
+        [InlineData("under under")]
+        [InlineData("left left")]
+        [InlineData("potato")]
+        [InlineData("under left right")]
+        [InlineData("")]
+        public async Task SetPropertyValue_TextUnderlinePosition_InvalidCombinations_AreRejected(string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("text-underline-position: under left;");
+
+            CssUtils.SetPropertyValue(parser, box, "text-underline-position", value);
+
+            // Rejected outright - the property keeps whatever it already had, exactly like every other
+            // invalid-value test in this file (e.g. SetPropertyValue_InvalidWidth_IsIgnored).
+            Assert.Equal(TextUnderlinePosition.Under, box.TextUnderlinePosition.Value);
+            Assert.Equal(TextUnderlineSide.Left, box.TextUnderlineSide.Value);
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_TextUnderlinePosition_ReapplyingAuto_ClearsThePreviousSide()
+        {
+            // Mirrors SetPropertyValue_Position_PlainKeywordAfterRunning_ClearsRunningElementName: a
+            // fresh declaration for the SAME property fully replaces its value, including the
+            // no-JSON-entry-of-its-own TextUnderlineSide companion field.
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "text-underline-position", "under left");
+            CssUtils.SetPropertyValue(parser, box, "text-underline-position", "auto");
+
+            Assert.Equal(TextUnderlinePosition.Auto, box.TextUnderlinePosition.Value);
+            Assert.Equal(TextUnderlineSide.Auto, box.TextUnderlineSide.Value);
+        }
+
+        [Fact]
+        public async Task GetPropertyValue_TextUnderlinePosition_RoundTripsTheFullCombination()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "text-underline-position", "left under");
+
+            Assert.Equal("under left", CssUtils.GetPropertyValue(box, "text-underline-position"));
+        }
+
         [Fact]
         public async Task NumericFontWeight_700OrAbove_ResolvesToBoldFont()
         {

@@ -216,16 +216,7 @@ namespace PeachPDF.Html.Core.Paint
 
             if (box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr)
             {
-                // text-orientation decides per this box (upright/sideways force one answer for
-                // every word) or per fragment (mixed, the default - CssBox.AddWord/
-                // EmitPerCodepointFragments already split the word into maximal same-orientation
-                // runs, so word.IsUprightOrientation is a real per-fragment fact here, not a guess).
-                var isUpright = box.TextOrientation.Value switch
-                {
-                    TextOrientation.Upright => true,
-                    TextOrientation.Sideways => false,
-                    _ => word.IsUprightOrientation
-                };
+                var isUpright = IsUprightWordOrientation(box, word);
 
                 if (isUpright)
                 {
@@ -251,6 +242,26 @@ namespace PeachPDF.Html.Core.Paint
                 g.DrawString(text, font, styleSource.ActualColor, wordPoint, textSize, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
             }
         }
+
+        /// <summary>
+        /// Whether <paramref name="word"/> paints upright (stacked top-to-bottom, one reading orientation
+        /// per character) rather than rotated 90° as one horizontal run - <paramref name="box"/>'s own
+        /// <c>text-orientation</c> forces one answer for every word (<c>upright</c>/<c>sideways</c>), and
+        /// its default (<c>mixed</c>) defers to <paramref name="word"/>'s own per-fragment classification
+        /// (<see cref="CssRect.IsUprightOrientation"/> - <c>CssBox.AddWord</c>/<c>EmitPerCodepointFragments</c>
+        /// already split a word into maximal same-orientation runs, so this is a real per-fragment fact
+        /// here, not a guess). Shared by <see cref="DrawWordGlyphs"/> (which orientation to paint) and
+        /// <see cref="BuildTextClipPath"/> (which glyph-outline geometry a <c>background-clip: text</c>
+        /// layer under a vertical writing mode has to build, issue #1123) so the two can never disagree
+        /// about which run is upright.
+        /// </summary>
+        private static bool IsUprightWordOrientation(CssBox box, CssRect word) =>
+            box.TextOrientation.Value switch
+            {
+                TextOrientation.Upright => true,
+                TextOrientation.Sideways => false,
+                _ => word.IsUprightOrientation
+            };
 
         /// <summary>
         /// Paints an upright (unrotated) run within a vertical writing mode - one or more codepoints
@@ -326,7 +337,6 @@ namespace PeachPDF.Html.Core.Paint
         /// </remarks>
         private static void PaintUprightVerticalRun(RGraphics g, string text, RFont font, CssBox styleSource, RRect rect, double baselineAdjust, TextShapingFeatures wordFeatures, string? logicalText = null)
         {
-            double offset = 0;
             var hasVerticalMetrics = font.HasVerticalMetrics;
             var hasVerticalOrigin = font.HasVerticalOrigin;
 
@@ -341,13 +351,8 @@ namespace PeachPDF.Html.Core.Paint
                 : null;
 
             var index = 0;
-            foreach (var (charText, rune, charSize) in CssLayoutEngine.MeasureUprightRunCharacters(g, text, font, wordFeatures))
+            foreach (var placement in EnumerateUprightGlyphPlacements(g, text, font, rect, baselineAdjust, styleSource.ActualLetterSpacing, wordFeatures))
             {
-                var x = rect.X + Math.Max(0, (rect.Width - charSize.Width) / 2);
-                var y = rect.Y + offset + baselineAdjust;
-                if (hasVerticalOrigin)
-                    y += font.GetVerticalOriginY(rune) - font.Ascent;
-                var advance = hasVerticalMetrics ? font.GetVerticalAdvance(rune) : font.Height;
                 var charLogicalText = logicalRunes != null ? logicalRunes[index].ToString() : null;
 
                 // A VORG-shifted anchor can push the painted span past the reserved cell even when the
@@ -356,21 +361,67 @@ namespace PeachPDF.Html.Core.Paint
                 // real data source is active, not just when HasVerticalMetrics narrowed the advance.
                 if (hasVerticalMetrics || hasVerticalOrigin)
                 {
-                    g.PushClip(new RRect(rect.X, rect.Y + offset, rect.Width, advance));
-                    g.DrawString(charText, font, styleSource.ActualColor, new RPoint(x, y), charSize,
+                    g.PushClip(new RRect(rect.X, placement.CellTop, rect.Width, placement.Advance));
+                    g.DrawString(placement.CharText, font, styleSource.ActualColor, new RPoint(placement.X, placement.Y), placement.CharSize,
                         styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, charLogicalText);
                     g.PopClip();
                 }
                 else
                 {
-                    g.DrawString(charText, font, styleSource.ActualColor, new RPoint(x, y), charSize,
+                    g.DrawString(placement.CharText, font, styleSource.ActualColor, new RPoint(placement.X, placement.Y), placement.CharSize,
                         styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, charLogicalText);
                 }
 
-                offset += advance + styleSource.ActualLetterSpacing;
                 index++;
             }
         }
+
+        /// <summary>
+        /// Where each character of an upright vertical run (see <see cref="PaintUprightVerticalRun"/>)
+        /// lands - the per-character position/advance math both that paint path and
+        /// <see cref="BuildTextClipPath"/>'s glyph-outline union (issue #1123) need, extracted here once so
+        /// the two can never drift apart on where a character's cell actually sits.
+        /// </summary>
+        /// <param name="g">the device used to measure each character</param>
+        /// <param name="text">the run's text - each returned placement is one Unicode scalar of it</param>
+        /// <param name="font">the run's resolved font</param>
+        /// <param name="rect">the run's own physical footprint - the column it stacks down</param>
+        /// <param name="baselineAdjust">the ascent correction <see cref="DrawWordGlyphs"/> already resolved for this run's font</param>
+        /// <param name="letterSpacing">extra advance added between characters</param>
+        /// <param name="wordFeatures">which GSUB features to shape each character with</param>
+        /// <returns>
+        /// one <see cref="UprightGlyphPlacement"/> per character, in reading order (top to bottom). <c>X</c>/
+        /// <c>Y</c> is where that character is drawn from (already centered across the column and shifted by
+        /// <paramref name="baselineAdjust"/>, plus a real <c>VORG</c> origin's own offset when the font
+        /// carries one); <c>CellTop</c>/<c>Advance</c> is that character's own reserved cell - unshifted,
+        /// unlike <c>Y</c> - which is what the clip a real <c>vmtx</c>/<c>VORG</c> font needs is measured
+        /// against, not the shifted draw position.
+        /// </returns>
+        private static IEnumerable<UprightGlyphPlacement> EnumerateUprightGlyphPlacements(
+            RGraphics g, string text, RFont font, RRect rect, double baselineAdjust, double letterSpacing, TextShapingFeatures wordFeatures)
+        {
+            var hasVerticalMetrics = font.HasVerticalMetrics;
+            var hasVerticalOrigin = font.HasVerticalOrigin;
+            double offset = 0;
+
+            foreach (var (charText, rune, charSize) in CssLayoutEngine.MeasureUprightRunCharacters(g, text, font, wordFeatures))
+            {
+                var cellTop = rect.Y + offset;
+                var x = rect.X + Math.Max(0, (rect.Width - charSize.Width) / 2);
+                var y = cellTop + baselineAdjust;
+                if (hasVerticalOrigin)
+                    y += font.GetVerticalOriginY(rune) - font.Ascent;
+
+                var advance = hasVerticalMetrics ? font.GetVerticalAdvance(rune) : font.Height;
+
+                yield return new UprightGlyphPlacement(charText, x, y, charSize, cellTop, advance);
+
+                offset += advance + letterSpacing;
+            }
+        }
+
+        /// <summary>One character's resolved position within an upright vertical run - see <see cref="EnumerateUprightGlyphPlacements"/>.</summary>
+        private readonly record struct UprightGlyphPlacement(string CharText, double X, double Y, RSize CharSize, double CellTop, double Advance);
 
         /// <summary>
         /// The matrix that rotates a glyph run 90° clockwise from its natural (horizontal) orientation so

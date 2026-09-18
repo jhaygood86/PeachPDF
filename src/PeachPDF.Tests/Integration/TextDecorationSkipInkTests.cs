@@ -316,16 +316,17 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task VerticalWritingMode_NeverMeasuresInk()
+        public async Task VerticalWritingMode_UprightRun_StillNeverMeasuresInk()
         {
-            // Every coordinate in AddInkExclusions is an x-range, and under vertical-rl the x-axis is
-            // the column's thickness rather than the line's own extent - so a crossing subtracted there
-            // would delete the decoration instead of breaking it. The guard is in WantsInkFrom/
-            // PaintDecoration, and what pins it is that no ink is even asked for: an implementation that
-            // measured and then discarded would still be one refactor away from subtracting.
+            // An upright run (issue #1145's honestly-partial scope) stacks each character down the
+            // column with no single natural horizontal layout to reduce to (see
+            // EnumerateUprightGlyphPlacements' own remarks) - so, unlike a rotated run below, it still
+            // has nothing GetInkCrossings can measure against, and this half of the accepted gap
+            // (.claude/accepted-gaps/text-decoration-skip-ink-and-atomic-inline-exclusion-are-horizontal-only.md)
+            // remains exactly as before. text-orientation:upright forces this regardless of script.
             var (root, container) = await LayoutAsync(
-                $"<div id='d' style=\"writing-mode:vertical-rl; height:300pt; font:20pt '{Family}'; "
-                + "text-decoration:underline\">gy</div>");
+                $"<div id='d' style=\"writing-mode:vertical-rl; text-orientation:upright; height:300pt; "
+                + $"font:20pt '{Family}'; text-decoration:underline\">gy</div>");
             var d = LayoutHarness.FindById(root, "d")!;
 
             using var g = new InkAwareRecordingGraphics(Adapter(container));
@@ -333,6 +334,40 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(0, g.InkQueryCount);
             Assert.NotEmpty(Lines(g));
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalWritingMode_RotatedRun_MeasuresInkInTheNaturalPreRotationFrame_AndBreaksTheLine(string writingMode)
+        {
+            // Issue #1145: a rotated (sideways) run is one ordinary horizontal glyph run reoriented as a
+            // whole (DrawWordGlyphs' sideways branch), so AddInkExclusions can measure it once it maps
+            // the band into that run's own pre-rotation frame - the mixed (default) text-orientation
+            // classifies Latin "gy" as rotated, not upright, so this is the same fixture the old
+            // "never measures ink" test used before this issue.
+            //
+            // Scripted rather than real ink, unlike the horizontal Underline_Auto_BreaksAroundDescenders
+            // above: a true vertical mode's underline position is only a rect-relative approximation (no
+            // real vertical baseline exists to measure from - see ResolveUnderlineCross's own remarks),
+            // so unlike the horizontal case's real-baseline-derived position, it does not reliably land
+            // on a real font's actual descender ink. Scripted ink (this file's own
+            // Overline_MeasuresItsOwnBand_AndBreaksWhereInkCrossesIt precedent, for the analogous reason)
+            // is what makes the wiring itself testable independent of that approximation.
+            var (root, container) = await LayoutAsync(
+                $"<div id='d' style=\"writing-mode:{writingMode}; height:300pt; font:20pt '{Family}'; "
+                + "text-decoration:underline; text-decoration-skip-ink:all\">gy</div>");
+            var d = LayoutHarness.FindById(root, "d")!;
+
+            using var g = new InkAwareRecordingGraphics(Adapter(container))
+            {
+                ScriptedInk = q => [new RInkSpan(q.BaselineOrigin.X + 5, q.BaselineOrigin.X + 15)]
+            };
+            FragmentPaintHarness.PaintBox(container, d, g);
+
+            Assert.True(g.InkQueryCount > 0, "a rotated vertical run should now have its ink measured");
+            Assert.True(Lines(g).Count >= 2,
+                $"an underline crossing scripted ink should be drawn as several segments, got {Lines(g).Count}");
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Fragments;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
@@ -121,13 +122,14 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task VerticalWritingMode_FallsBackToPlainBorderBoxRectangle()
+        public async Task SidewaysWritingMode_FallsBackToPlainBorderBoxRectangle()
         {
-            // A box set to a vertical writing-mode (accepted gap - see
-            // .claude/accepted-gaps/background-clip-text-vertical-writing-mode.md) falls back the same
-            // way an outline-less font does: BuildTextClipPath never even calls GetTextOutline for it.
+            // writing-mode: sideways-rl/-lr is a different, genuinely out-of-scope value (see
+            // IsHorizontalWritingMode's own remarks) - unlike vertical-rl/-lr (issue #1123, see the
+            // VerticalRl_*/VerticalLr_* tests below), it still falls back exactly like an outline-less
+            // font does: BuildTextClipPath never even calls GetTextOutline for it.
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
-                "<h1 id='box' style='margin:0;font-size:40pt;writing-mode:vertical-rl;" +
+                "<h1 id='box' style='margin:0;font-size:40pt;writing-mode:sideways-rl;" +
                 "background-color:red;background-clip:text;color:transparent;'>Hi</h1>"));
 
             var box = LayoutHarness.FindById(root, "box");
@@ -140,6 +142,179 @@ namespace PeachPDF.Tests.Integration
             Assert.Empty(recording.GetTextOutlineCalls);
             Assert.Empty(recording.DrawnPaths);
             Assert.Single(recording.Log, op => op.Kind == PaintOpKind.FillRect);
+        }
+
+        /// <summary>
+        /// A stand-in outline whose points sit far from the word's own physical footprint (near the
+        /// coordinate origin) - so a test can tell whether <see cref="FragmentPainter.SidewaysRotation"/>
+        /// (via <see cref="RGraphicsPath.Transform"/>) actually ran: an untransformed (bugged) union
+        /// would still contain these origin-relative points, while a correctly transformed one lands
+        /// inside the word's real fragment rectangle instead.
+        /// </summary>
+        private static RGraphicsPath OriginRelativeOutline(RGraphics g, double width, double height)
+        {
+            // Both dimensions are non-negative - matching where a natural, pre-rotation glyph box
+            // actually sits (DrawString's own "point" argument is its top-left, not its center), so a
+            // correctly transformed shape lands fully inside the word's own physical footprint below.
+            var path = g.GetGraphicsPath();
+            path.Start(0, 0);
+            path.LineTo(width, 0);
+            path.LineTo(width, height);
+            path.CloseFigure();
+            return path;
+        }
+
+        [Fact]
+        public async Task UprightRun_WithRealVerticalMetrics_FallsBackToPlainBorderBoxRectangle()
+        {
+            // Issue #1194 (found during #1123's own review): a font with real vhea/vmtx metrics makes
+            // PaintUprightVerticalRun clip each character to its own reserved cell (a real vmtx advance
+            // is routinely narrower than the font's line height) - RGraphicsPath has no path-intersection
+            // primitive to reproduce that clip in the union geometry, so this falls back rather than
+            // shipping a clip shape wider than what paint actually draws. BundledFonts.Cjk genuinely
+            // carries real vhea/vmtx data (see TextOrientationIntegrationTests's own use of it).
+            var html = "<!DOCTYPE html><html><head><style>" +
+                "body { font-family: 'CJK'; margin: 0 }" +
+                "</style></head><body>" +
+                "<h1 id='box' style='font-size:40pt;writing-mode:vertical-rl;text-orientation:upright;" +
+                "background-color:red;background-clip:text;color:transparent;'>テキ</h1>" +
+                "</body></html>";
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html,
+                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Cjk, "CJK"));
+            var box = LayoutHarness.FindById(root, "box");
+            Assert.NotNull(box);
+            Assert.True(box!.ActualFont.HasVerticalMetrics, "the bundled CJK test font should carry real vhea/vmtx metrics");
+
+            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            recording.GetTextOutlineOverride = (text, _, origin, _, _) => FakeOutline(recording, text, origin);
+
+            FragmentPaintHarness.PaintBox(container, box, recording);
+
+            Assert.Empty(recording.GetTextOutlineCalls);
+            Assert.Empty(recording.DrawnPaths);
+            Assert.Single(recording.Log, op => op.Kind == PaintOpKind.FillRect);
+        }
+
+        [Theory]
+        [InlineData("upright")]
+        [InlineData("mixed")]
+        public async Task VerticalRl_UnsupportedFont_FallsBackToPlainBorderBoxRectangle(string textOrientation)
+        {
+            // GetTextOutline returning null for every run - a CID-keyed CFF or bitmap font - must fall
+            // back the same way it does under horizontal-tb, whether the run is upright (character-by-
+            // character) or rotated (mixed's default for Latin text) under a true vertical writing mode.
+            var orientationStyle = textOrientation == "mixed" ? "" : $"text-orientation:{textOrientation};";
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<h1 id='box' style='margin:0;font-size:40pt;writing-mode:vertical-rl;{orientationStyle}" +
+                "background-color:red;background-clip:text;color:transparent;'>Hi</h1>"));
+
+            var box = LayoutHarness.FindById(root, "box");
+            Assert.NotNull(box);
+
+            var recording = new RecordingGraphics(new PdfSharpAdapter())
+            {
+                GetTextOutlineOverride = (_, _, _, _, _) => null
+            };
+
+            FragmentPaintHarness.PaintBox(container, box!, recording);
+
+            Assert.Empty(recording.DrawnPaths);
+            Assert.Single(recording.Log, op => op.Kind == PaintOpKind.FillRect);
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task UprightRun_BuildsOnePerCharacterOutline_TranslatedToItsOwnCell(string writingMode)
+        {
+            // text-orientation:upright forces every word upright (DrawWordGlyphs/IsUprightWordOrientation),
+            // so "Hi" - ordinarily a rotated run under the mixed default - is unambiguously upright here.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<h1 id='box' style='margin:0;font-size:40pt;writing-mode:{writingMode};text-orientation:upright;" +
+                "background-color:red;background-clip:text;color:transparent;'>Hi</h1>"));
+
+            var box = LayoutHarness.FindById(root, "box");
+            Assert.NotNull(box);
+
+            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            recording.GetTextOutlineOverride = (text, _, origin, _, _) => FakeOutline(recording, text, origin);
+
+            FragmentPaintHarness.PaintBox(container, box!, recording);
+
+            // One GetTextOutline call per character - not one for the whole word - each at its own
+            // distinct baseline origin (EnumerateUprightGlyphPlacements' per-character cell), and every
+            // one actually reached the final union.
+            Assert.Equal(2, recording.GetTextOutlineCalls.Count);
+            Assert.All(recording.GetTextOutlineCalls, c => Assert.Equal(1, c.Text.Length));
+            Assert.NotEqual(recording.GetTextOutlineCalls[0].BaselineOrigin, recording.GetTextOutlineCalls[1].BaselineOrigin);
+
+            Assert.Single(recording.DrawnPaths);
+            Assert.Equal(2, recording.DrawnPaths[0].UnionedPathCount);
+            Assert.DoesNotContain(recording.Log, op => op.Kind == PaintOpKind.FillRect);
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task RotatedRun_BuildsOneWholeWordOutline_TransformedIntoItsPhysicalFootprint(string writingMode)
+        {
+            // The mixed (default) text-orientation classifies Latin letters as rotated, not upright.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<h1 id='box' style='margin:0;font-size:40pt;writing-mode:{writingMode};" +
+                "background-color:red;background-clip:text;color:transparent;'>Hi</h1>"));
+
+            var box = LayoutHarness.FindById(root, "box");
+            Assert.NotNull(box);
+
+            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            recording.GetTextOutlineOverride = (_, _, _, _, _) => OriginRelativeOutline(recording, 20, 10);
+
+            FragmentPaintHarness.PaintBox(container, box!, recording);
+
+            // One call for the whole word (unlike the upright case above), in the natural (pre-rotation)
+            // frame - baseline origin's X is 0, matching DrawWordGlyphs' own sideways-branch DrawString
+            // point before SidewaysRotation's PushTransform is applied.
+            var call = Assert.Single(recording.GetTextOutlineCalls);
+            Assert.Equal("Hi", call.Text);
+            Assert.Equal(0, call.BaselineOrigin.X, 3);
+
+            Assert.Single(recording.DrawnPaths);
+            var union = recording.DrawnPaths[0];
+            Assert.NotEmpty(union.Points);
+
+            // A no-op Transform would leave the origin-relative stand-in's points near (0, 0)/negative Y
+            // (see OriginRelativeOutline); a real one lands them inside the word's own physical fragment
+            // rect instead - the whole point of this test (CLAUDE.md's "a paint feature needs more than
+            // a parser test" convention). "Hi" sits on a descendant fragment (h1's own direct text is
+            // wrapped in an anonymous inline box), not the h1's own fragment directly - the same subtree
+            // BuildTextClipPath itself walks via Collect's recursion into fragment.Children.
+            var wordRect = FindWordRect(FragmentPaintHarness.FragmentOf(container, box!));
+            Assert.All(union.Points, p =>
+            {
+                Assert.InRange(p.X, wordRect.Left - 1, wordRect.Right + 1);
+                Assert.InRange(p.Y, wordRect.Top - 1, wordRect.Bottom + 1);
+            });
+        }
+
+        private static RRect FindWordRect(BoxFragment fragment)
+        {
+            var found = FindWordRectOrNull(fragment);
+            Assert.True(found.HasValue, "expected a descendant fragment carrying at least one word");
+            return found!.Value;
+        }
+
+        private static RRect? FindWordRectOrNull(BoxFragment fragment)
+        {
+            if (fragment.Words.Count > 0) return fragment.Words[0].Rect;
+
+            foreach (var child in fragment.Children)
+            {
+                var found = FindWordRectOrNull(child);
+                if (found is { } rect) return rect;
+            }
+
+            return null;
         }
 
         [Fact]

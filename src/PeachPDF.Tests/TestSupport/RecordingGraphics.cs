@@ -299,7 +299,22 @@ namespace PeachPDF.Tests.TestSupport
         }
         public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) => Points.Add((x, y));
         public override void CloseFigure() => Closed = true;
-        public override void Transform(RMatrix matrix) { }
+
+        /// <summary>
+        /// Actually applies <paramref name="matrix"/> to every recorded point, in the same convention
+        /// <see cref="RMatrix"/> documents (<c>x' = x*M11 + y*M21 + OffsetX</c>, <c>y' = x*M12 + y*M22 +
+        /// OffsetY</c>) - not a no-op, so a test built on this mock can tell a real transform (e.g. a
+        /// rotated vertical-writing-mode glyph run's outline, <c>background-clip: text</c> issue #1123)
+        /// from one that silently never ran.
+        /// </summary>
+        public override void Transform(RMatrix matrix)
+        {
+            for (var i = 0; i < Points.Count; i++)
+            {
+                var (x, y) = Points[i];
+                Points[i] = (x * matrix.M11 + y * matrix.M21 + matrix.OffsetX, x * matrix.M12 + y * matrix.M22 + matrix.OffsetY);
+            }
+        }
 
         /// <summary>Merges <paramref name="path"/>'s recorded points into this one, mirroring the real
         /// <c>GraphicsPathAdapter.AddPath</c>'s union semantics (see its own remarks) closely enough
