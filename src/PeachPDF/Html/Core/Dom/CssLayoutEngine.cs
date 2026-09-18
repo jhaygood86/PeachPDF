@@ -1509,10 +1509,13 @@ namespace PeachPDF.Html.Core.Dom
             // populated. CSS 2.1 §10.3.4 defers a replaced element's width to §10.3.2 - never to "fills
             // the containing block" like the non-replaced-box branch just below - so a declared definite
             // width is read directly here rather than through either branch (issue #1176). Read from
-            // `box.Width` itself, not `box.FirstWord.Width`: FlowBox resolves this same auto-margin
-            // question (via leftSpacing) before it calls this box's own MeasureWordsSize, so the word's
-            // width is not populated yet at this point in the flow - only an intrinsically-sized (no
-            // declared length) replaced element still has to fall back to it, best-effort.
+            // `box.Width` itself, not `box.FirstWord.Width`, whenever a declared width exists: FlowBox
+            // resolves this same auto-margin question (via leftSpacing) before its own ordinary
+            // MeasureWordsSize call for this box, later in the same loop iteration. An intrinsically-sized
+            // (no declared length) replaced element still has to fall back to `box.FirstWord.Width`, but
+            // FlowBox pre-measures this box (see its own `IsReplacedBlockWrapper` check right before
+            // computing leftSpacing) before reaching this method, so the fallback reads a fully-resolved
+            // value too, not a stale one (issue #1178).
             if (box.ParentBox is { IsReplacedBlockWrapper: true })
             {
                 var replacedContentWidth = CssValueParser.IsValidLength(box.Width)
@@ -3661,6 +3664,23 @@ namespace PeachPDF.Html.Core.Dom
                 if (preShiftedForAtomicInset)
                 {
                     coordinates.CurrentY += atomicTopInset;
+                }
+
+                // A display:block replaced element's (img/svg) synthetic wrapper (IsReplacedBlockWrapper)
+                // makes b its own inline "word" - when b has no declared width, ResolveAutoHorizontalMargin's
+                // fallback reads b.FirstWord.Width (see its own remarks), but that word is only populated by
+                // the ordinary `await b.MeasureWordsSize(g)` call further down this same loop iteration - too
+                // late for the ActualMarginLeft/Right read leftSpacing performs right below (issue #1178).
+                // Measure it here instead. Scoped to the undeclared-width case specifically (rather than
+                // every IsReplacedBlockWrapper child) because a declared width never reaches FirstWord.Width
+                // in ResolveAutoHorizontalMargin at all - pre-measuring for that case would just rerun
+                // MeasureWordsSize's cheap-but-not-free size computation twice for no benefit. MeasureWordsSize
+                // is safe to call twice per iteration (its image-load/SVG-prefetch guard is `_wordsSizeMeasured`,
+                // but the actual size computation below that guard always reruns), so the ordinary call later
+                // in this same iteration is left in place unchanged.
+                if (b.ParentBox is { IsReplacedBlockWrapper: true } && !CssValueParser.IsValidLength(b.Width))
+                {
+                    await b.MeasureWordsSize(g);
                 }
 
                 var leftSpacing = (b.Position.Value != PositionMode.Absolute && b.Position.Value != PositionMode.Fixed) ? b.ActualMarginLeft + b.ActualBorderLeftWidth + b.ActualPaddingLeft : 0;
