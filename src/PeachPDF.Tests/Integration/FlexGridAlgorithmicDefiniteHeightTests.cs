@@ -68,6 +68,30 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(150.0, child.ActualBoxSizingHeight, 1);
         }
 
+        /// <summary>
+        /// The auto-height (indefinite main size) counterpart of
+        /// <see cref="ColumnFlexItemMainSize_PercentageHeightChildResolves"/>: a column-direction flex
+        /// container with no explicit <c>height</c> (and no <c>aspect-ratio</c>) takes the
+        /// <c>mainSizeIndefinite</c> branch of <c>CssLayoutEngineFlex.Layout</c> instead of
+        /// <c>ResolveFlexibleLengths</c>, but a column item's resolved main size (height) is just as much
+        /// CSS Flexbox 1 §9.7's "definite once resolved" as it is in the definite-container case — so
+        /// <see cref="CssBox.AlgorithmicDefiniteHeight"/> must be recorded there too.
+        /// </summary>
+        [Fact]
+        public async Task ColumnFlexItemInAutoHeightContainer_PercentageHeightChildResolves()
+        {
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div style='display:flex;flex-direction:column'>" +
+                "<div id='item' style='flex:1;min-height:100pt'><div id='child' style='height:50%'>x</div></div></div>"));
+
+            var item = FindById(root, "item")!;
+            var child = FindById(root, "child")!;
+
+            Assert.Equal(100.0, item.AlgorithmicDefiniteHeight!.Value, 1);
+            Assert.Equal(100.0, item.ActualBoxSizingHeight, 1);
+            Assert.Equal(50.0, child.ActualBoxSizingHeight, 1);
+        }
+
         [Fact]
         public async Task GridItemStretchedByDefaultAlignSelf_PercentageHeightChildResolves()
         {
