@@ -105,11 +105,10 @@ type, a non-zero image margin, positive leading, and the wrapper case.
 
 ## Deliberately not done
 
-- **Negative leading overflows downwards only** — see
-  [`../accepted-gaps/negative-leading-does-not-lift-ink-out-of-its-line-box.md`](../accepted-gaps/negative-leading-does-not-lift-ink-out-of-its-line-box.md).
-  The floor is line-wide, so the shared baseline is preserved exactly; only the whole line's ink
-  moves. Without it, a line landing at a page's content top has its words claimed by the page above —
-  or by neither, and they vanish.
+- **Negative leading overflowed downwards only**, floored line-wide so the shared baseline was
+  preserved exactly. Since closed (issue #1054): fragmentainer membership is now decided per line
+  box rather than per word, which removes the reason the floor existed, and the floor is gone — see
+  `.claude/migration-notes/2026-09-17-negative-leading-can-now-overflow-a-line-box-upward.md`.
 - **`MaxBottom` is still not recomputed after `ApplyVerticalAlignment`**, so `vertical-align` still
   does not feed back into the block's height. Pre-existing and untouched.
 
