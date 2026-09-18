@@ -55,14 +55,44 @@ preferred because it has *zero* plausible false-positive surface, not merely a s
   height in both bands, vs. up to `+16` before).
 - Replaced the throwaway instrumentation with a permanent assertion,
   `MultiLineHeadingRelocatedByBreakInsideAvoid_FitsWithinDestinationPage`
-  (`EarlyBreakLayoutIntegrationTests.cs`), swept across the same six confirmed-band filler heights the
-  sibling word-claim tests already use.
-- Full `net8.0` suite: 12,504 passed, 0 failed, 9 pre-existing platform skips (unchanged from before this
-  change) — including `EarlyBreakLayoutIntegrationTests`, `BandMembershipToleranceTests`, and
-  `MonolithicContentLayoutIntegrationTests` specifically, per this repo's own warning that this
-  measurement is shared by every `break-inside:avoid`/monolithic/orphans-widows mover.
+  (`EarlyBreakLayoutIntegrationTests.cs`), swept across a confirmed-band sample of filler heights.
+- Full `net8.0` suite: 12,529+ passed (count drifts upward as unrelated PRs land concurrently on `main`),
+  0 failed, 9 pre-existing platform skips — including `EarlyBreakLayoutIntegrationTests`,
+  `BandMembershipToleranceTests`, and `MonolithicContentLayoutIntegrationTests` specifically, per this
+  repo's own warning that this measurement is shared by every `break-inside:avoid`/monolithic/
+  orphans-widows mover.
 - Diff coverage: 100% on the 5 changed/added production lines (field reset, the two `FitsInFragmentainer`/
-  `EffectiveContentTop` lines, and the `TryRestartAt` guard + assignment), read directly off the
-  `coverlet` Cobertura output line-by-line (the `diff-cover` CLI itself was not available in this
-  environment).
+  `EffectiveContentTop` lines, and the `TryRestartAt` guard + assignment), verified with `diff-cover`
+  itself (`python -m pip install diff-cover`) against the exact multi-framework Cobertura report set
+  `test.yml` produces (net8.0/net10.0/net11.0 + CLI + source-generator tests merged).
 - `dotnet build PeachPDF.slnx -t:Rebuild`, both Debug and Release: 0 warnings.
+
+## Two CI-only failures found and fixed after this landed locally, worth knowing before repeating them
+
+**#1: a DEBUG-only test region is invisible to a diff-coverage gate that builds Release.** The first
+version of `MultiLineHeadingRelocatedByBreakInsideAvoid_FitsWithinDestinationPage` was declared inside
+this file's existing `#if DEBUG` region (alongside the word-claim-ledger tests it was modeled on), even
+though it does not use the ledger at all. `test.yml`'s coverage job builds `--configuration Release`,
+which undefines `DEBUG` and strips that whole region out of the compiled assembly — so the one branch
+that exercises `TryRestartAt` relocating a box's own first in-flow child (`_firstChildRestartedTop`'s
+assignment) was never hit there, failing the 90% gate on that single line despite every local
+`dotnet test --framework net8.0` (always Debug) run showing 100%. Fix: moved the test, and the
+`Issue1047Document` fixture the pinned-font variant is modeled on, outside the guard. **A new test that
+exercises production code the diff-coverage gate needs covered must never be placed inside an existing
+`#if DEBUG` region without checking whether that region's own tests are what's supplying the coverage —
+they silently aren't, in Release.**
+
+**#2: an un-pinned font fixture reproduced on Windows but not on Linux/macOS CI** — exactly the class of
+flakiness `feedback_font_metric_changes_break_unpinned_ci_fixtures` (project memory) already warns about,
+now confirmed for this exact mechanism. `Issue1047Document`'s heading text wraps against whatever font the
+running platform resolves the UA default to; at the filler heights that reproduce the restart on Windows,
+Linux/macOS wrapped the same markup differently, so `TryRestartAt` never relocated `card`'s own first
+in-flow child there at all — the test still *passed* (nothing to overflow if nothing moved), but the
+coverage line stayed cold, reproducing failure #1's exact symptom for a different reason on a second CI
+run. Fixed by adding `PinnedFontIssue1047Document` (using the same pinned "Early Break Fixture" bundled
+font `ResumedParagraphDocument` already established as this file's idiom for exactly this problem) and
+re-sweeping its own reproduction band with temporary `AsyncLocal`-based instrumentation reading back from
+`TryRestartAt` (not kept) rather than assuming the Windows-only band would port. `Issue1047Document`
+itself was deliberately left un-pinned — it only backs the pre-existing DEBUG-only ledger tests, which run
+locally rather than in CI's Release job, so pinning it would have meant re-sweeping and re-documenting
+their own already-verified bands for no benefit to them.
