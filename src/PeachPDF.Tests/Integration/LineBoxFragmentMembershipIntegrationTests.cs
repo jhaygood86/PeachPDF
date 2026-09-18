@@ -155,6 +155,15 @@ namespace PeachPDF.Tests.Integration
         /// any fragmentainer is judged monolithic on its own dimensions, and ordinary text sharing its line
         /// is judged on its own, ordinary ones, rather than being dragged into the replaced element's
         /// "stays exactly where it is" treatment (issue #484) and lost.
+        /// <para>
+        /// This does <b>not</b> claim two ordinary (non-replaced) sibling inline boxes sharing a line are
+        /// unified the same way - being box-keyed by construction, they aren't: a plain text span whose own
+        /// font-size alone makes its <c>Rectangles[line]</c> taller than any fragmentainer can still land
+        /// on a different page than an ordinary sibling on the same physical line. Confirmed pre-existing
+        /// (unchanged by this PR, reproducible identically on `main` beforehand) and tracked separately -
+        /// see <c>.claude/accepted-gaps/sibling-inline-boxes-can-split-across-pages-when-one-is-monolithic.md</c>
+        /// (issue #1184).
+        /// </para>
         /// </summary>
         [Fact]
         public async Task AnOversizedReplacedElementNearAPageBoundary_DoesNotStrandTheOrdinaryTextBesideIt()

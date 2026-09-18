@@ -2300,11 +2300,16 @@ namespace PeachPDF.Html.Core.Fragmentation
                     }
                     else
                     {
-                        // No line owns this word - an outside ::marker's own phantom word is the one case
-                        // this reaches (CssBoxMarker.PerformLayoutImp positions it directly rather than
-                        // flowing it onto any of its owner's line boxes; see CssRect.Line's remarks) - fall
-                        // back to the word's own rectangle exactly as before this box gained line-based
-                        // membership.
+                        // Two cases reach here, neither of them a line's worth of real content losing the
+                        // per-line grouping this PR establishes: an outside ::marker's own phantom word
+                        // (CssBoxMarker.PerformLayoutImp positions it directly rather than flowing it onto
+                        // any of its owner's line boxes - see CssRect.Line's remarks), and a trailing
+                        // forced break's own line, which DropATrailingForcedBreaksOwnLine removes from
+                        // blockBox.LineBoxes before this box ever gets a Rectangles[line] entry for it -
+                        // the break word itself is left in box.Words with a Line that no longer names a
+                        // line the block still has, and it carries no ink (CssRect.IsLineBreak) for the
+                        // fragmentainer choice to matter to. Either way, fall back to the word's own
+                        // rectangle exactly as before this box gained line-based membership.
                         claims = ClaimsWord(Displaced(shiftedRect, shift), slot.Index, region, isFixed);
                     }
 

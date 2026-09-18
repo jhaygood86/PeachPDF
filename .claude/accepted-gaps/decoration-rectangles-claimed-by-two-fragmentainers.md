@@ -24,3 +24,11 @@ from coordinates — #400's move, one level down. It is not a tolerance problem,
 a better epsilon. See also
 [fragmentation-which-drafts-exist-decides-whether-a-frozen-slot-is-emitted-again.md](../invariants/fragmentation-which-drafts-exist-decides-whether-a-frozen-slot-is-emitted-again.md)
 for why a change here cannot be judged by the suite alone.
+
+**Issue #1054 widens how often this shows up, without changing what it is.** `box.Rectangles[line]` is
+the same rectangle both this `Lines` arm and `FragmentEmitter.ClaimsLine` (the word-membership fix for
+#1054) read. Before #1054, a negative `line-height`'s half-leading was floored at the line's own top, so
+that rectangle could only extend *downward* past its nominal position. With the floor gone, it can extend
+*upward* too — so a negative-leading line near the top of a page now produces a decoration rectangle more
+likely to straddle the boundary above it, which this gap's raw-overlap rule still resolves by claiming it
+on both pages rather than one. The underlying defect and its fix are unchanged; only its incidence went up.
