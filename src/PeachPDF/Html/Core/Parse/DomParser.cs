@@ -163,6 +163,13 @@ namespace PeachPDF.Html.Core.Parse
 
             CorrectInlineBoxesParent(root);
 
+            // Must run after every pass above that can still split or re-shape an inline formatting
+            // context (CorrectBlockInsideInline, the second CorrectInlineBoxesParent) - otherwise a run
+            // this pass joins across could be split apart again afterward, or a run it left alone could
+            // still be merged into one it never saw. Before CorrectAnonymousTables, which only reshapes
+            // table structure and has no bearing on inline text adjacency.
+            CollapseWhitespaceAcrossInlineBoundaries(root);
+
             CorrectAnonymousTables(root);
 
             // Last, deliberately: a float:footnote box must first ride through every correction pass
@@ -416,6 +423,7 @@ namespace PeachPDF.Html.Core.Parse
             CorrectAbsolutelyPositionedInlineElements(root);
             CorrectBlockInsideInline(root);
             CorrectInlineBoxesParent(root);
+            CollapseWhitespaceAcrossInlineBoundaries(root);
             CorrectAnonymousTables(root);
 
             return root;
@@ -2854,6 +2862,162 @@ namespace PeachPDF.Html.Core.Parse
         /// </remarks>
         private static bool JoinsTheInlineRun(CssBox box) => box.IsInline && !CssBox.IsOutsideMarker(box);
 
+        /// <summary>
+        /// Collapses a collapsible white space run that continues across an inline element boundary with
+        /// nothing but the boundary itself between the two halves - <a
+        /// href="https://www.w3.org/TR/css-text-3/#white-space-phase-1">css-text-3 §4.1.1 phase I</a>: "any
+        /// collapsible space immediately following another collapsible space - even one outside the
+        /// boundary of the inline containing that space, provided both spaces are within the same inline
+        /// formatting context - is collapsed to zero advance width." <c>CssBox.AppendWordsFromText</c>
+        /// (via <see cref="CssBox.ParseToWords"/>) only collapses a run WITHIN one text-owning box's own
+        /// string; this DOM-normalization-time pass adds the missing "across boxes" half. It runs once
+        /// per document, in source order, and only ever removes text a later box already renders nothing
+        /// new for - it changes no geometry itself.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Recurses over the whole tree, but only actually walks a sibling list at a box that is itself an
+        /// inline formatting context root - a block container (<c>!IsInline</c>) or an <c>inline-block</c>
+        /// (the one atomic inline-level box whose own content is ordinary inline flow rather than a
+        /// different engine's items). A plain non-atomic inline's (<c>&lt;span&gt;</c>, <c>&lt;b&gt;</c>,
+        /// …) children are reached by <see cref="CollapseSiblingRun"/> flattening straight through it from
+        /// its own IFC root, not by a separate call rooted at the inline box itself - re-entering there
+        /// too would only redo already-settled work (harmless, since a leading run already stripped stays
+        /// stripped, but wasted).
+        /// </para>
+        /// <para>
+        /// Deliberately DOM-shape-based, not geometry-based: <see cref="CssLayoutEngine.FlowBox"/>'s own
+        /// line-start collapse (css-text-3 phase II) decides a completely different question - whether a
+        /// space is the first thing on a laid-out LINE, which depends on where lines happen to wrap - and
+        /// runs at layout time, per pass, per fragmentainer. This pass runs once, before any layout, and
+        /// only removes a run that is collapsible regardless of where line breaks land, so the two never
+        /// fight over the same removal.
+        /// </para>
+        /// </remarks>
+        private static void CollapseWhitespaceAcrossInlineBoundaries(CssBox box)
+        {
+            // Inline <svg>/<math> are foreign content: their descendants are read directly by
+            // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree
+            // normalization must not descend into (and restructure/retext) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg or CssBoxMath) return;
+
+            if ((!box.IsInline || box.DerivedStyle.ActualDisplay == Keywords.InlineBlock) && box.Boxes.Count > 0)
+            {
+                CollapseSiblingRun(box.Boxes);
+            }
+
+            foreach (var childBox in box.Boxes)
+            {
+                CollapseWhitespaceAcrossInlineBoundaries(childBox);
+            }
+        }
+
+        /// <summary>
+        /// Threads "does a collapsible run already extend into the next sibling" across one inline
+        /// formatting context root's own direct children, in source order.
+        /// </summary>
+        private static void CollapseSiblingRun(List<CssBox> boxes)
+        {
+            var pending = false;
+            foreach (var box in boxes)
+            {
+                pending = CollapseWhitespaceRun(box, pending);
+            }
+        }
+
+        /// <summary>
+        /// Applies <paramref name="pending"/> - whether a collapsible run is already open coming into
+        /// <paramref name="box"/> - and returns whether a (possibly new, possibly the same) collapsible run
+        /// is open leaving it, for the next sibling <see cref="CollapseSiblingRun"/> visits.
+        /// </summary>
+        private static bool CollapseWhitespaceRun(CssBox box, bool pending)
+        {
+            // display:none generates no box in the rendered flow at all (CorrectTextBoxes' own identical
+            // reasoning) - neither a boundary nor content, so whatever was pending before it still is.
+            if (box.DerivedStyle.ActualDisplay == Keywords.None) return pending;
+
+            // An outside ::marker sits beside its list item, never inside this flow (see
+            // JoinsTheInlineRun's own remarks) - transparent to it either way.
+            if (CssBox.IsOutsideMarker(box)) return pending;
+
+            // Out-of-flow content contributes nothing to this containing block's own inline flow
+            // (css-text-3 §1.5 ignores it for white space adjacency purposes - the same reasoning
+            // CssBox.GetMinMaxSumWords' float branch already leans on for the space before a float).
+            if (box.IsFloated || box.Position.Value is PositionMode.Absolute or PositionMode.Fixed)
+                return pending;
+
+            // An atomic inline (an image, inline-block, inline-table/-flex/-grid, iframe, math, form
+            // field) or a genuinely block-level box is real content standing between the two runs - not
+            // "outside the boundary of the inline containing that space" in the phase I sense at all, so
+            // it both consumes any pending run and can never itself open a new one.
+            //
+            // A <br> is the same: it is a forced line break, not an inert inline boundary like a
+            // content-less <span> - the white space around it is governed by phase II's line-start
+            // removal at layout time (CollapsibleWhitespaceAfterForcedBreak_DoesNotIndentTheLineItOpens),
+            // not by this DOM-time pass. Treating it as transparent would let a trailing run BEFORE it
+            // merge with a leading run AFTER it straight through the break, which is a different rule
+            // than the one this pass implements.
+            if (DomUtils.IsAtomicInline(box) || !box.IsInline || box.IsBrElement) return false;
+
+            if (box.Text is not null)
+            {
+                // A content:'' generated box (kept by CorrectTextBoxes for its border/background) is real
+                // in DOM terms but carries zero characters either way - transparent, like display:none.
+                if (box.Text.Length == 0) return pending;
+
+                // white-space: pre/pre-wrap text is never collapsible, in either direction: it neither
+                // continues a run arriving from an earlier sibling (a pending run is simply dropped, not
+                // carried through unaltered content) nor opens one for the next.
+                if (box.WhiteSpace.Value is Whitespace.Pre or Whitespace.PreWrap) return false;
+
+                if (pending && StripLeadingCollapsibleWhitespace(box))
+                {
+                    // The whole run continues unbroken: box's entire (now-removed) text was itself
+                    // nothing but the collapsible run merging in - e.g. a chain of several empty/
+                    // whitespace-only inlines in a row. The next sibling still has a run open on it.
+                    return true;
+                }
+
+                return box.Text.Length > 0 && HtmlUtils.IsCollapsibleWhitespace(box.Text[^1]);
+            }
+
+            // A plain (non-atomic) inline box with its own children - a <span>/<b>/etc., including a
+            // content-less one with no children at all - is transparent: flatten straight through it in
+            // document order, the same "outside the boundary of the inline containing that space" case
+            // the spec text itself calls out.
+            foreach (var childBox in box.Boxes)
+            {
+                pending = CollapseWhitespaceRun(childBox, pending);
+            }
+
+            return pending;
+        }
+
+        /// <summary>
+        /// Removes <paramref name="box"/>'s leading run of collapsible white space (if it has one) in
+        /// place, keeping every per-character array <see cref="CssBidiParagraphResolver.AssignBidiLevels"/>
+        /// populated alongside <see cref="CssBox.Text"/> aligned with the shortened string, then re-derives
+        /// <see cref="CssBox.Words"/> from it exactly as <see cref="CssBox.ParseToWords"/> always has.
+        /// </summary>
+        /// <returns>true if the removal consumed the box's entire text (it was nothing but the run).</returns>
+        private static bool StripLeadingCollapsibleWhitespace(CssBox box)
+        {
+            var text = box.Text!;
+            var count = 0;
+            while (count < text.Length && HtmlUtils.IsCollapsibleWhitespace(text[count]))
+                count++;
+
+            if (count == 0) return false;
+
+            box.BidiLevels = box.BidiLevels?[count..];
+            box.CharScripts = box.CharScripts?[count..];
+            box.JoiningForms = box.JoiningForms?[count..];
+            box.UseCategories = box.UseCategories?[count..];
+            box.Text = text[count..];
+            box.ParseToWords();
+
+            return box.Text.Length == 0;
+        }
 
         private static void CorrectAbsolutelyPositionedInlineElements(CssBox box)
         {
