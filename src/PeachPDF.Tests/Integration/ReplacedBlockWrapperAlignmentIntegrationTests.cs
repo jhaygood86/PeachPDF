@@ -1,4 +1,5 @@
 using PeachPDF.Tests.TestSupport;
+using System;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -12,7 +13,8 @@ namespace PeachPDF.Tests.Integration
     /// scopes both to a block's inline-level content only. Only the wrapped element's own
     /// <c>margin-left</c>/<c>margin-right: auto</c> (<see href="https://www.w3.org/TR/CSS21/visudet.html#blockwidth">CSS 2.1 §10.3.3</see>,
     /// via <see href="https://www.w3.org/TR/CSS21/visudet.html#block-replaced-width">§10.3.4</see> for a
-    /// replaced element) may move it (issue #1176).
+    /// replaced element) may move it, whether it has a declared width (issue #1176) or relies on its
+    /// intrinsic size (issue #1178).
     /// </summary>
     public class ReplacedBlockWrapperAlignmentIntegrationTests
     {
@@ -96,6 +98,73 @@ namespace PeachPDF.Tests.Integration
             var img = LayoutHarness.FindById(root, "img")!;
 
             Assert.Equal(wrap.Location.X + (400 - 100) / 2.0, img.FirstWord.Left, 3);
+        }
+
+        [Fact]
+        public async Task BlockImage_WithAutoMarginsAndNoDeclaredWidth_CentersUsingIntrinsicSize()
+        {
+            // No declared width/height: ResolveAutoHorizontalMargin's IsReplacedBlockWrapper branch falls
+            // back to box.FirstWord.Width. FlowBox used to read that via leftSpacing before this same
+            // child's own MeasureWordsSize call populated it, so the fallback saw a stale/zero width
+            // (issue #1178). A 40x20px image lays out at 30x15pt (Length.PointsPerPx == 0.75).
+            var pngBytes = RasterPngFixture.MakeSolidRgbaPngBytes(40, 20, 255, 0, 0);
+            var dataUri = "data:image/png;base64," + Convert.ToBase64String(pngBytes);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='wrap' style='width:400pt'>"
+                + $"<img id='img' style='display:block;margin-left:auto;margin-right:auto' src='{dataUri}' />"
+                + "</div>"));
+
+            var wrap = LayoutHarness.FindById(root, "wrap")!;
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(wrap.Location.X + (400 - 30) / 2.0, img.FirstWord.Left, 3);
+        }
+
+        [Fact]
+        public async Task BlockImage_WithAutoMarginsNoDeclaredWidthAndMaxWidth_CentersUsingTheClampedIntrinsicWidth()
+        {
+            // The fallback branch's own max-width/min-width clamp (CSS 2.1 §10.4), mirroring
+            // BlockImage_WithAutoMarginsAndMaxWidth_CentersUsingTheClampedWidth for the declared-width
+            // case - max-width here (10pt) is narrower than the 30pt intrinsic width.
+            var pngBytes = RasterPngFixture.MakeSolidRgbaPngBytes(40, 20, 255, 0, 0);
+            var dataUri = "data:image/png;base64," + Convert.ToBase64String(pngBytes);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='wrap' style='width:400pt'>"
+                + "<img id='img' style='display:block;max-width:10pt;margin-left:auto;margin-right:auto' "
+                + $"src='{dataUri}' />"
+                + "</div>"));
+
+            var wrap = LayoutHarness.FindById(root, "wrap")!;
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(wrap.Location.X + (400 - 10) / 2.0, img.FirstWord.Left, 3);
+        }
+
+        [Fact]
+        public async Task BlockSvg_WithAutoMarginsAndNoDeclaredWidth_CentersUsingIntrinsicSize()
+        {
+            // Same undeclared-width fallback as BlockImage_WithAutoMarginsAndNoDeclaredWidth_..., but for
+            // an inline <svg> (CssBoxSvg) rather than <img> (CssBoxImage) - IsReplacedBlockWrapper wraps
+            // both box kinds identically (DomParser.CorrectReplacedElementBoxes), and both override
+            // MeasureWordsSize with the same _wordsSizeMeasured-guarded shape this fix relies on. The
+            // SVG's own width/height attributes feed SvgIntrinsicSize.Resolve (the element's intrinsic
+            // size), not CssBox.Width (the CSS property ResolveAutoHorizontalMargin's declared-width
+            // branch reads) - no CSS width is declared on the <svg> here, so this is still the intrinsic-
+            // size fallback path. 160x80 SVG user units lay out at 120x60pt (Length.PointsPerPx == 0.75).
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='wrap' style='width:400pt'>"
+                + "<svg id='img' style='display:block;margin-left:auto;margin-right:auto' "
+                + "width='160' height='80' viewBox='0 0 160 80' xmlns='http://www.w3.org/2000/svg'>"
+                + "<rect width='160' height='80' fill='red' />"
+                + "</svg>"
+                + "</div>"));
+
+            var wrap = LayoutHarness.FindById(root, "wrap")!;
+            var img = LayoutHarness.FindById(root, "img")!;
+
+            Assert.Equal(wrap.Location.X + (400 - 120) / 2.0, img.FirstWord.Left, 3);
         }
 
         [Fact]
