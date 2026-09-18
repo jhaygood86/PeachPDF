@@ -6270,7 +6270,7 @@ namespace PeachPDF.Html.Core.Dom
             // directly (a <span> around an anonymous text box, an inline-block around its label) still has
             // to move with the content it wraps, or its background and border part company with the words
             // inside it. Null means the baseline does not govern this box at all.
-            (double FlowTop, double Delta)? BaselineShiftOf(CssBox box)
+            double? BaselineShiftOf(CssBox box)
             {
                 if (lineBox.BaselineY is not { } baselineY) return null;
 
@@ -6291,15 +6291,11 @@ namespace PeachPDF.Html.Core.Dom
                     if (!lineBox.Rectangles.TryGetValue(atomic, out var atomicRect)) continue;
                     if (AtomicInlineBaselineOf(atomic, lineBox, atomicRect) is not { } atomicBaseline) continue;
 
-                    var flowTop = lineBox.Rectangles.TryGetValue(box, out var ownRect)
-                        ? ownRect.Top
-                        : atomicRect.Top;
-
-                    return (flowTop, baselineY - atomicBaseline);
+                    return baselineY - atomicBaseline;
                 }
 
                 if (FirstNonReplacedWordOf(box, lineBox) is { } word)
-                    return (word.Top, baselineY - (word.FirstLineStyle ?? word.OwnerBox).ActualFont.Ascent - word.Top);
+                    return baselineY - (word.FirstLineStyle ?? word.OwnerBox).ActualFont.Ascent - word.Top;
 
                 // Replaced content aligns its bottom margin edge with the shared baseline. Use the
                 // replaced word's owner even while visiting an inline ancestor around it: both the
@@ -6308,8 +6304,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (FirstReplacedWordOf(box, lineBox) is { } replaced
                     && lineBox.Rectangles.TryGetValue(replaced.OwnerBox, out var replacedRect))
                 {
-                    return (replacedRect.Top,
-                        baselineY - (replacedRect.Bottom + replaced.OwnerBox.ActualMarginBottom));
+                    return baselineY - (replacedRect.Bottom + replaced.OwnerBox.ActualMarginBottom);
                 }
 
                 return null;
@@ -6367,7 +6362,7 @@ namespace PeachPDF.Html.Core.Dom
             // could.
             foreach (var box in boxes)
             {
-                baselineDeltas[box] = BaselineShiftOf(box)?.Delta ?? 0;
+                baselineDeltas[box] = BaselineShiftOf(box) ?? 0;
             }
 
             foreach (var box in boxes)
