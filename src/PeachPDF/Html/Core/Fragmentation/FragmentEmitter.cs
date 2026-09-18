@@ -536,6 +536,144 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private int _lastEmittedSlot = -1;
 
+#if DEBUG
+        /// <summary>
+        /// Diagnostic-only invariant check for issue
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/1047">#1047</see>: which fragmentainer
+        /// slot currently owns each word this emitter has frozen into <see cref="_emitted"/>, and which
+        /// call site froze it there. Kept in lockstep with <see cref="_emitted"/> itself by
+        /// <see cref="ClaimWordsFor"/>/<see cref="ReleaseWordClaims"/> - every write that adds or replaces a
+        /// slot's draft claims that draft's words here, and every write that removes a slot (a rebuild in
+        /// <see cref="EmitSlot"/>, or <see cref="InvalidateFrom"/> un-freezing it) releases them first - so a
+        /// word claimed by two slots AT ONCE throws immediately, naming both the slot and the call site that
+        /// froze it each time. This is a narrower, faster restatement of the same invariant
+        /// <c>UnreachedWordClaimTests</c>/<c>EarlyBreakLayoutIntegrationTests</c> check by walking the
+        /// <i>finished</i> <see cref="FragmentTree"/> after the fact — this version fires the instant the
+        /// second, conflicting freeze happens, which is what makes it useful for localizing the exact call
+        /// path rather than only confirming the symptom exists (see
+        /// <c>.claude/invariants/fragmentation-a-pass-output-is-not-final-and-three-mechanisms-retract-work.md</c>'s
+        /// closing line, "every word claimed exactly once"). Compiled out of Release builds entirely - the
+        /// same cost/audience tradeoff as the <c>Console.WriteLine</c> pass-start trace in
+        /// <c>CssBox.DriveBlockChildPass</c>, a debugging aid rather than a production guard.
+        /// <para>
+        /// Gated additionally, even in DEBUG, on <see cref="HtmlContainerInt.VerifyWordClaims"/> (default
+        /// off) - EVERY read and write below checks it first. Not because the ledger itself is expensive
+        /// (it costs one dictionary lookup per word, the same order as building the draft it walks), but
+        /// because turning it on for the whole existing suite while building this diagnostic found the
+        /// same <c>ClaimsLine</c>/<c>FallsPast</c> straddle tie-break already disagreeing in a handful of
+        /// OTHER, unrelated fixtures it was never meant to adjudicate (table rowspan continuations, a
+        /// multi-column child kept by the no-progress backstop, a flex/grid wrapping column) - each a real,
+        /// separate finding, not a flaw in the ledger, but well outside issue #1047's own scope to fix
+        /// here. Opt-in keeps this diagnostic precise for the shape #1047 is about without either turning
+        /// those fixtures into unplanned bug reports or trying to special-case every one of them away.
+        /// </para>
+        /// </summary>
+        private readonly Dictionary<CssRect, (int Slot, string Site)> _wordClaimSite =
+            new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// Releases every word in <paramref name="root"/>'s subtree that is currently claimed for
+        /// <paramref name="slot"/> - the other half of <see cref="ClaimWordsFor"/>, called wherever
+        /// <see cref="_emitted"/> loses the entry that claimed them, so the ledger never outlives the freeze
+        /// it describes. A no-op for a word claimed by some OTHER slot (nothing to release) or not claimed
+        /// at all.
+        /// </summary>
+        private void ReleaseWordClaims(int slot, Draft root)
+        {
+            foreach (var word in WordsOf(root))
+            {
+                if (_wordClaimSite.TryGetValue(word, out var owner) && owner.Slot == slot)
+                {
+                    _wordClaimSite.Remove(word);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Claims every word in <paramref name="root"/>'s subtree for <paramref name="slot"/>, throwing the
+        /// instant one is already claimed by a DIFFERENT slot whose claim was never released first.
+        /// <paramref name="site"/> names the call path making this claim, so the exception's message can
+        /// name both the call path that froze the word first and the one that froze it again.
+        /// </summary>
+        private void ClaimWordsFor(int slot, Draft root, string site)
+        {
+            foreach (var word in WordsOf(root))
+            {
+                if (_wordClaimSite.TryGetValue(word, out var owner) && owner.Slot != slot)
+                {
+                    throw new InvalidOperationException(
+                        $"Fragment double-claim (issue #1047): word '{word.Text}' owned by {word.OwnerBox} " +
+                        $"(current document Y={word.Top:F2}) was frozen at slot {owner.Slot} via " +
+                        $"[{owner.Site}], and is now ALSO being frozen at slot {slot} via [{site}] - slot " +
+                        $"{owner.Slot}'s claim was never released before this one was made. Every word must " +
+                        "be claimed by exactly one fragmentainer slot at a time - see the invariant "
+                        + "'every word claimed exactly once' in "
+                        + "fragmentation-a-pass-output-is-not-final-and-three-mechanisms-retract-work.md.");
+                }
+
+                _wordClaimSite[word] = (slot, site);
+            }
+        }
+
+        /// <summary>
+        /// Every word <paramref name="draft"/>'s subtree holds, depth-first - excluding a draft this
+        /// invariant does not apply to, because it is one of several kinds this same
+        /// <c>FragmentEmitter.ClaimsLine</c> straddle tie-break is already known (from this very
+        /// instrumentation - see the type's own remarks) to grant more than one slot deliberately, or
+        /// where "more than one slot" is by design rather than by the tie-break at all:
+        /// <list type="bullet">
+        /// <item>a repeating <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>'s own detached source content
+        /// (<see cref="CssBox.IsInDetachedRepeatingGroup"/>) - the same source word is walked and given a
+        /// fresh, page-local <see cref="TextFragment"/> once per page the group repeats onto, with
+        /// <see cref="CapturedInstance"/>/<see cref="CssProxyBox"/> owning the "which page(s)" question;</item>
+        /// <item><c>position: fixed</c> content (<see cref="CssBox.IsFixed"/>) - CSS Position 3 repeats it
+        /// at unshifted document coordinates on every page by definition, which is exactly what
+        /// <see cref="ClaimsLine"/>'s own <c>isFixed</c> exemption already carves out of the ordinary
+        /// one-slot tie-break;</item>
+        /// <item>a captured instance's own draft (<c>Key.Instance != 0</c>, a multi-column column or a
+        /// repeating-group page) - a box continuing from one captured instance into the next is
+        /// deliberately re-walked from that instance's own <see cref="BoxGeometrySnapshot"/>, and this
+        /// invariant's per-slot scope was never validated against that nesting;</item>
+        /// <item>a monolithic draft (<see cref="Draft.IsMonolithic"/>) - <c>MonolithicContent</c>'s own
+        /// "clip to the first fragmentainer, do not repeat" rule and this ledger's own straddle handling
+        /// were not designed together, and this instrumentation found live cases (table rowspan
+        /// continuations, a scroll container spanning several pages, a multi-column child's own kept
+        /// content) where they currently disagree - each a real finding on its own, but a materially
+        /// different shape from issue #1047's, and out of this diagnostic's scope.</item>
+        /// </list>
+        /// Excluding these keeps this ledger a precise, false-positive-free statement of issue #1047's own
+        /// mechanism; each excluded case is worth its own, separate follow-up.
+        /// </summary>
+        private static IEnumerable<CssRect> WordsOf(Draft draft) => WordsOf(draft, underCapturedOrMonolithic: false);
+
+        private static IEnumerable<CssRect> WordsOf(Draft draft, bool underCapturedOrMonolithic)
+        {
+            // Inherited rather than re-tested per level: a descendant's own draft is not itself the
+            // captured instance or the monolithic subtree root, but it is just as much a live case this
+            // instrumentation found the FallsPast tie-break disagreeing with as the root is - excluding
+            // only the root and still walking into an excluded subtree's ordinary-looking children would
+            // silently let their words back into the ledger.
+            var excluded = underCapturedOrMonolithic || draft.Key.Instance != 0 || draft.IsMonolithic;
+
+            if (!excluded)
+            {
+                foreach (var word in draft.Words)
+                {
+                    if (!word.Word.OwnerBox.IsInDetachedRepeatingGroup && !word.Word.OwnerBox.IsFixed)
+                        yield return word.Word;
+                }
+            }
+
+            foreach (var child in draft.Children)
+            {
+                foreach (var word in WordsOf(child, excluded))
+                {
+                    yield return word;
+                }
+            }
+        }
+#endif
+
         /// <summary>
         /// Differential self-check: build every slot's draft tree <i>twice</i> — once with pruning
         /// allowed and once with it forced off — and throw unless the two are identical. Off unless
@@ -1306,7 +1444,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // pass) the way a settled box's own geometry can be.
                 for (var slot = fromSlot; slot <= throughSlot && slot < MaxSlots; slot++)
                 {
-                    EmitSlot(slot, mayWrite: true, mayVerify: true);
+                    EmitSlot(slot, mayWrite: true, mayVerify: true,
+                        site: $"EmitPass(fromSlot={fromSlot}, throughSlot={throughSlot})");
                     CommitGeometricallySettledObservations(slot);
                 }
             }
@@ -1339,7 +1478,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 // Runs once every pass is over, so a subtree observed empty here could never be
                 // un-observed by a later layout - nothing may be concluded from it.
-                EmitSlot(slot, mayWrite: false);
+                EmitSlot(slot, mayWrite: false, site: "EmitReservedBlankSlots");
             }
 
             CommitRemainingObservations(commit: false);
@@ -1390,6 +1529,18 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             for (var slot = fromSlot; slot <= _lastEmittedSlot; slot++)
             {
+#if DEBUG
+                // Release this slot's claims the moment it is un-frozen, not only when (and if) something
+                // later rebuilds it: a stale slot that is never rebuilt before Finish() reads _emitted
+                // must not go on "owning" words some other slot's own later freeze legitimately claims -
+                // that gap is exactly issue #1047's own suspected shape (a relocation's un-freeze losing a
+                // race with the freeze that supersedes it).
+                if (container.VerifyWordClaims && _emitted.TryGetValue(slot, out var removed))
+                {
+                    ReleaseWordClaims(slot, removed.Root);
+                }
+#endif
+
                 if (_emitted.Remove(slot)) _stale.Add(slot);
             }
         }
@@ -1436,7 +1587,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                     // own contiguous range, _stale can (and here does) skip slots in between that this
                     // call never re-walks, so an earlier stale slot has no guarantee that everything above
                     // it - within this specific call - has already been confirmed.
-                    EmitSlot(stale, mayWrite: true);
+                    EmitSlot(stale, mayWrite: true, site: $"CatchUpStaleSlotsBehind(slot={slot})");
 
                     // Always false, never stale >= _lastEmittedSlot: that comparison assumes nothing has
                     // been laid out past _lastEmittedSlot yet, which is exactly what a §4.3 mover
@@ -1482,7 +1633,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // FragmentEmitter._forcingUnprunedReferenceWalk.
             foreach (var slot in new List<int>(_stale))
             {
-                EmitSlot(slot, mayWrite: false);
+                EmitSlot(slot, mayWrite: false, site: "Finish replay");
             }
 
             CommitRemainingObservations(commit: false);
@@ -1609,12 +1760,17 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// passes true here — <see cref="VerifyAgainstTheFullWalk"/>'s before/after frozen-state
         /// comparison assumes an ordinary, in-order pass.
         /// </param>
+        /// <param name="site">
+        /// Diagnostic-only (see the DEBUG-only word-claim ledger this type keeps, compiled out of Release
+        /// builds): names the call path making this freeze, so a double-claim exception can name both
+        /// sides.
+        /// </param>
         /// <remarks>
         /// Leaves any observation this slot's walk found pending in <see cref="_emptySincePass"/> - the
         /// caller commits or discards it via <see cref="CommitRemainingObservations"/> once it knows
         /// whether this slot (or the range it belongs to) actually reached the layout frontier.
         /// </remarks>
-        private void EmitSlot(int index, bool mayWrite, bool mayVerify = false)
+        private void EmitSlot(int index, bool mayWrite, bool mayVerify = false, string site = "EmitSlot")
         {
             var bandTop = container.PageTopOf(index);
 
@@ -1660,6 +1816,20 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             var draft = built ?? EmptyRootDraft(root, slot);
+
+#if DEBUG
+            if (container.VerifyWordClaims)
+            {
+                // Release this slot's OLD claims before asking for its new ones - a rebuild of the same
+                // slot (see the comment below) must not read as a conflict with itself.
+                if (_emitted.TryGetValue(index, out var previouslyFrozen))
+                {
+                    ReleaseWordClaims(index, previouslyFrozen.Root);
+                }
+
+                ClaimWordsFor(index, draft, $"{site} -> EmitSlot(slot={index})");
+            }
+#endif
 
             // A slot can legitimately be emitted twice: the driver's no-progress backstop lays the
             // remainder out again monolithically, over the same slot the failed pass had already frozen,
