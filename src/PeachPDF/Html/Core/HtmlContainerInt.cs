@@ -3050,7 +3050,7 @@ namespace PeachPDF.Html.Core
         /// page-size/orientation document, e.g. a landscape page for a wide table) - either changes the
         /// page's own content-box width the same way, so both gate the same reflow. When false,
         /// <see cref="PageContentRightOf"/> returns the base measure and
-        /// <see cref="CssLayoutEngine.GetBoxWidth"/> runs its exact historical single-width arithmetic —
+        /// <see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/> runs its exact historical single-width arithmetic —
         /// zero change for the overwhelmingly common case.
         /// </summary>
         internal bool UseVariableInlineMeasure =>

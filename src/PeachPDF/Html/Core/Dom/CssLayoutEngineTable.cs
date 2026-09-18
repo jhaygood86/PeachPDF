@@ -138,11 +138,11 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// The row grid's own natural (content-driven) row-axis far edge, in the same border-box basis as
-        /// <see cref="CssLayoutEngine.GetBoxHeight"/>'s resolved table height - set once, at the point
-        /// <c>LayoutBodyRows</c>' Step 7 computes <c>gridBorderBoxBottom</c>, and read back by
-        /// <see cref="TryComputeRowHeightRedistribution"/> once this pass returns. Meaningless (left at 0)
-        /// for a vertical table, which this engine does not extend row-height redistribution to - see the
-        /// writing-mode remarks at the top of this file.
+        /// <see cref="CssLayoutEngine.GetBoxHeight"/>'s resolved table height for a horizontal-tb table, or
+        /// <see cref="CssLayoutEngine.GetBoxWidth(CssBox)"/>'s resolved table width for a vertical one -
+        /// set once, at the point <c>LayoutBodyRows</c>' Step 7 computes <c>gridBorderBoxBottom</c> (itself
+        /// already row-axis-generic: physical X for a vertical table, physical Y otherwise), and read back
+        /// by <see cref="TryComputeRowHeightRedistribution"/> once this pass returns.
         /// </summary>
         private double _naturalGridFarEdge;
 
@@ -492,7 +492,7 @@ namespace PeachPDF.Html.Core.Dom
                 // Gated on resume/PendingBreakToken being null: only a table that completed entirely
                 // within this first top-level (natural) pass is redistributed. A table whose row loop
                 // itself had to stop mid-cell on the NATURAL pass (a real continuation into a later
-                // top-level pass) is left alone - its total natural height across every pass isn't known
+                // top-level pass) is left alone - its total natural extent across every pass isn't known
                 // until the LAST of those passes completes, and by then earlier rows are already
                 // committed/painted and cannot be redone. RowHeightRedistribution being null guards
                 // against ever starting a second redo: the redo pass's own floors are exact, so it should
@@ -2037,36 +2037,41 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="CssBox.RowHeightRedistribution"/>, read by <see cref="RowHeightFloor"/>.
         /// </param>
         /// <returns>
-        /// False (with <paramref name="floors"/> null) when the table has no explicit height/min-height,
-        /// when its rows already meet or exceed it, or for a vertical table - this engine does not extend
-        /// row-height redistribution to a vertical table's own row axis (physical X, not the physical-Y
-        /// axis <c>height</c> resolves); see the writing-mode remarks at the top of this file.
+        /// False (with <paramref name="floors"/> null) when the table has no explicit
+        /// height/min-height (width/min-width, for a vertical table) or when its rows already meet or
+        /// exceed it.
         /// </returns>
         private bool TryComputeRowHeightRedistribution(out IReadOnlyDictionary<CssBox, double>? floors)
         {
             floors = null;
 
-            if (_isVertical) return false;
-
-            // min-height's initial value is the literal string "0" (unlike height's "auto"), so
-            // IsValidLength alone is true for it on every table whether or not an author ever wrote it -
-            // see RowHeightFloor's own remarks on the identical trap. Excluded here purely to skip the
-            // GetBoxHeight call on the overwhelmingly common table with no explicit height at all; unlike
-            // a row, a table safely went through PerformLayoutPrologue, so GetBoxHeight(_tableBox) itself
-            // would still resolve correctly either way - the surplus check below is the real gate.
-            var hasExplicitHeight = CssValueParser.IsValidLength(_tableBox.Height);
-            var hasExplicitMinHeight = _tableBox.MinHeight != "0" && CssValueParser.IsValidLength(_tableBox.MinHeight);
-            if (!hasExplicitHeight && !hasExplicitMinHeight) return false;
+            // height/width's initial value is "auto", but min-height/min-width's is the literal string
+            // "0" (unlike height's "auto"), so IsValidLength alone is true for it on every table whether
+            // or not an author ever wrote it - see RowHeightFloor's own remarks on the identical trap.
+            // Excluded here purely to skip the GetBoxHeight/GetBoxWidth call on the overwhelmingly common
+            // table with no explicit size at all; unlike a row, a table safely went through
+            // PerformLayoutPrologue, so calling either resolver on _tableBox itself would still resolve
+            // correctly either way - the surplus check below is the real gate.
+            var sizeProperty = _isVertical ? _tableBox.Width : _tableBox.Height;
+            var minSizeProperty = _isVertical ? _tableBox.MinWidth : _tableBox.MinHeight;
+            var hasExplicitSize = CssValueParser.IsValidLength(sizeProperty);
+            var hasExplicitMinSize = minSizeProperty != "0" && CssValueParser.IsValidLength(minSizeProperty);
+            if (!hasExplicitSize && !hasExplicitMinSize) return false;
 
             // The same number ApplyHeight's own generic epilogue call would already assign to
-            // _tableBox.ActualBottom for a non-shrinking table box - see its own remarks on the
-            // "maximum of specified and content" carve-out this mirrors, applied here one layer earlier so
-            // the extra height actually reaches row/cell/border geometry instead of only this bookkeeping
-            // field.
-            var desiredFarEdge = _tableBox.Location.Y + (CssLayoutEngine.GetBoxHeight(_tableBox) ?? 0);
+            // _tableBox.ActualBottom/ActualRight for a non-shrinking table box - see its own remarks on
+            // the "maximum of specified and content" carve-out this mirrors, applied here one layer
+            // earlier so the extra size actually reaches row/cell/border geometry instead of only this
+            // bookkeeping field.
+            var resolvedSize =
+                (_isVertical ? CssLayoutEngine.GetBoxWidth(_tableBox) : CssLayoutEngine.GetBoxHeight(_tableBox))
+                ?? 0;
+
+            var rowAxisStart = _isVertical ? _tableBox.Location.X : _tableBox.Location.Y;
+            var desiredFarEdge = rowAxisStart + resolvedSize;
             var surplus = desiredFarEdge - _naturalGridFarEdge;
 
-            // Also covers the ordinary case of a min-height smaller than content, and a plain height this
+            // Also covers the ordinary case of a min-size smaller than content, and a plain size this
             // pass's own content already exceeded - nothing to redistribute either way.
             if (surplus <= 0 || _bodyRows.Count == 0) return false;
 
@@ -2076,7 +2081,9 @@ namespace PeachPDF.Html.Core.Dom
             for (var i = 0; i < _bodyRows.Count; i++)
             {
                 var row = _bodyRows[i];
-                naturalHeights[i] = Math.Max(0, row.ActualBottom - row.Location.Y);
+                naturalHeights[i] = Math.Max(0, _isVertical
+                    ? row.ActualRight - row.Location.X
+                    : row.ActualBottom - row.Location.Y);
                 totalNatural += naturalHeights[i];
             }
 
@@ -5819,12 +5826,12 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// The minimum row-axis extent (physical Y — this engine does not extend the row-height concept
-        /// to a vertical table's own row axis, physical X; see the writing-mode remarks at the top of
-        /// this file) <paramref name="row"/> must reach: its own explicit CSS 2.1 §17.5.3
-        /// <c>height</c>/<c>min-height</c>, and/or the per-row share <see cref="PerformLayout"/>'s own
-        /// measurement pass computed when the table's explicit height exceeded the rows' natural total.
-        /// Zero when neither applies, or always for a vertical table.
+        /// The minimum row-axis extent (physical Y for a horizontal-tb table, physical X for a vertical
+        /// one - see the writing-mode remarks at the top of this file) <paramref name="row"/> must reach:
+        /// its own explicit CSS 2.1 §17.5.3 <c>height</c>/<c>min-height</c> (<c>width</c>/<c>min-width</c>
+        /// for a vertical table), and/or the per-row share <see cref="PerformLayout"/>'s own measurement
+        /// pass computed when the table's explicit size exceeded the rows' natural total. Zero when
+        /// neither applies.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -5851,7 +5858,12 @@ namespace PeachPDF.Html.Core.Dom
         /// explicit height at all, shifting page-break decisions in tests calibrated to exact geometry).
         /// <c>row.Height</c> is safe on its own - a genuine <c>IsValidLength</c> there always takes
         /// <c>GetBoxHeight</c>'s direct-parse branch, which never reads <c>ActualBoxSizingHeight</c> - so
-        /// only <c>MinHeight</c> needs the extra "not just the default" check.
+        /// only <c>MinHeight</c> needs the extra "not just the default" check. The same trap exists for
+        /// <c>min-width</c> on a vertical table's row (also initial-valued <c>"0"</c>), guarded the same
+        /// way below - though <see cref="CssLayoutEngine.GetBoxWidth(CssBox)"/> itself has no unsafe
+        /// baseline to fall through to in the first place (it returns null rather than reading any
+        /// stale/reused field), so that guard is purely for symmetry and to skip the unneeded call, not a
+        /// correctness requirement the way the height side's is.
         /// </para>
         /// <para>
         /// Not airtight against a redundant zero-valued <c>calc()</c> (<c>min-height: calc(0px + 0px)</c>):
@@ -5864,13 +5876,14 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private double RowHeightFloor(CssBox row)
         {
-            if (_isVertical) return 0;
+            var sizeProperty = _isVertical ? row.Width : row.Height;
+            var minSizeProperty = _isVertical ? row.MinWidth : row.MinHeight;
 
-            var hasExplicitHeight = CssValueParser.IsValidLength(row.Height);
-            var hasExplicitMinHeight = row.MinHeight != "0" && CssValueParser.IsValidLength(row.MinHeight);
+            var hasExplicitSize = CssValueParser.IsValidLength(sizeProperty);
+            var hasExplicitMinSize = minSizeProperty != "0" && CssValueParser.IsValidLength(minSizeProperty);
 
-            var floor = hasExplicitHeight || hasExplicitMinHeight
-                ? CssLayoutEngine.GetBoxHeight(row) ?? 0
+            var floor = hasExplicitSize || hasExplicitMinSize
+                ? (_isVertical ? CssLayoutEngine.GetBoxWidth(row) : CssLayoutEngine.GetBoxHeight(row)) ?? 0
                 : 0;
 
             if (_tableBox.RowHeightRedistribution is { } redistribution

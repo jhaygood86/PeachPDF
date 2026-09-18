@@ -2662,7 +2662,7 @@ namespace PeachPDF.Html.Core.Dom
         /// against the *previous* page's geometry, and two fresh lookups taken any time after that
         /// registration agree with each other and hide the staleness completely. <see cref="double.NaN"/>
         /// (via <see cref="double.IsNaN"/>) marks "not yet resolved this layout" / "not resolved via
-        /// <see cref="CssLayoutEngine.GetBoxWidth"/> at all" (a table/flex/grid box sizes itself through its
+        /// <see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/> at all" (a table/flex/grid box sizes itself through its
         /// own engine instead), for which the guard this field feeds is simply inapplicable.
         /// </summary>
         private double _measureResolvedAgainst = double.NaN;
@@ -4824,7 +4824,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Deliberately gated on <paramref name="resolvedBlockExtent"/> (the child's own already-resolved
         /// border-box width) rather than a <c>Width</c> style token the way <see cref="IsMarginCollapseThrough"/>
         /// gates on <c>Height == auto</c>: unlike a horizontal box's auto HEIGHT (always content-driven/
-        /// shrink-to-fit in this engine), a vertical child's auto WIDTH (<see cref="CssLayoutEngine.GetBoxWidth"/>)
+        /// shrink-to-fit in this engine), a vertical child's auto WIDTH (<see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/>)
         /// STRETCHES to fill the available block-axis space instead of shrinking - so "Width == auto" is
         /// not itself evidence of zero block-axis extent here. Border/padding/min-width are all
         /// non-negative and already folded into <paramref name="resolvedBlockExtent"/> by GetBoxWidth, so
@@ -5435,7 +5435,7 @@ namespace PeachPDF.Html.Core.Dom
         /// second fresh lookup at the original Y - see <see cref="_measureResolvedAgainst"/>'s own remarks
         /// for why two fresh lookups can't see this box's own named-page registration invalidating the
         /// very slot its width was just resolved against. Always false for a box whose width didn't come
-        /// from <see cref="ResolveOwnInlineSize"/>'s <see cref="CssLayoutEngine.GetBoxWidth"/> branch at
+        /// from <see cref="ResolveOwnInlineSize"/>'s <see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/> branch at
         /// all (a table/flex/grid box, or one this method has not yet run for this layout).
         /// </remarks>
         private bool InlineSizeCameFromAnotherPagesMeasure() =>
