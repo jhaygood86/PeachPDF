@@ -14,7 +14,7 @@ namespace PeachPDF.Html.Core.Handlers
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This is what CSS Basic User Interface 4 §4 asks for when it says a fragmented box's outline
+    /// This is what CSS Basic User Interface 4 §3.1 asks for when it says a fragmented box's outline
     /// "should" be drawn as a single connected shape, and what Chromium does: it unions every one of a
     /// box's outline rectangles and takes the boundary of the result, so wherever consecutive
     /// rectangles touch, the edges between them are interior to the region and simply are not part of
@@ -77,7 +77,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             if (style == LineStyle.Double)
             {
-                // CSS Backgrounds and Borders 3 §4.3: two lines with a gap, together totalling the
+                // CSS Backgrounds and Borders 3 §3.2: two lines with a gap, together totalling the
                 // declared width. Splitting it in equal thirds is what this renderer does for every
                 // other `double` edge - see BoxEdgesDrawHandler.
                 var third = width / 3;
@@ -230,7 +230,7 @@ namespace PeachPDF.Html.Core.Handlers
 
         /// <summary>
         /// Shrinks any pair of radii that would otherwise overrun the edge between them, scaling both
-        /// by the same factor so the corners stay in proportion (CSS Backgrounds and Borders 3 §5.1).
+        /// by the same factor so the corners stay in proportion (CSS Backgrounds and Borders 3 §4.5).
         /// </summary>
         private static void FitRadiiToEdges(IReadOnlyList<RPoint> points, Corner[] corners)
         {

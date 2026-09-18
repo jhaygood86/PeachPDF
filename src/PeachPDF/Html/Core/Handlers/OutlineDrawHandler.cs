@@ -10,7 +10,7 @@ namespace PeachPDF.Html.Core.Handlers
 {
     /// <summary>
     /// Paints CSS <c>outline</c> - a ring drawn outside the border edge, offset by
-    /// <c>outline-offset</c>, that never affects box sizing (CSS Basic User Interface 4 §4). Structured
+    /// <c>outline-offset</c>, that never affects box sizing (CSS Basic User Interface 4 §3.5). Structured
     /// as a uniform border around the rectangle inflated by <c>outline-offset + outline-width</c>, so
     /// every ordinary outline style delegates to the same neutral <see cref="BoxEdgesDrawHandler"/>
     /// used by uniform borders. This handler only resolves outline-specific behavior before handing it off:
@@ -46,7 +46,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         /// <remarks>
         /// <para>
-        /// CSS Basic User Interface 4 §4 says a fragmented box's outline "should" be drawn as one
+        /// CSS Basic User Interface 4 §3.1 says a fragmented box's outline "should" be drawn as one
         /// connected shape rather than left open, or closed separately, at each fragment. Chromium
         /// achieves that by unioning the fragments' rectangles and outlining the boundary of the
         /// result, which is what this reproduces: where consecutive fragments touch - which a border on
@@ -196,7 +196,7 @@ namespace PeachPDF.Html.Core.Handlers
             double width;
             if (style == OutlineStyle.Auto)
             {
-                // CSS-UI-4 §4: "The outline-width property is ignored when outline-style is auto."
+                // CSS-UI-4 §3.3: "The outline-width property is ignored when outline-style is auto."
                 // That sentence is normative and unconditional - the neighbouring "User agents may treat
                 // auto as solid" licenses the *style*, not the width - so the declared width never
                 // reaches the ring, not even a declared zero (Chrome paints `outline: 0 auto` too).
