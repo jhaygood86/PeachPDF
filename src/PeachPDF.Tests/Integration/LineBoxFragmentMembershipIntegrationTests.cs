@@ -146,27 +146,23 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// The open design question the plan for this change left explicit: whether
+        /// The open design question the plan for issue #1054 left explicit: whether
         /// <c>FragmentEmitter</c>'s monolithic tie-break (<c>FallsPast</c>/<c>MonolithicContent.FitsNoFragmentainer</c>)
         /// should be sized against a whole physical line (every box sharing it) or against each box's own
-        /// portion of that line. Resolved here in favor of staying box-keyed: <c>ClaimsLine</c> is asked
-        /// once per <c>(box, line)</c> pair using that box's own <c>Rectangles[line]</c> - never a rectangle
-        /// aggregated across sibling boxes on the same physical line - so a replaced element too tall for
-        /// any fragmentainer is judged monolithic on its own dimensions, and ordinary text sharing its line
-        /// is judged on its own, ordinary ones, rather than being dragged into the replaced element's
-        /// "stays exactly where it is" treatment (issue #484) and lost.
-        /// <para>
-        /// This does <b>not</b> claim two ordinary (non-replaced) sibling inline boxes sharing a line are
-        /// unified the same way - being box-keyed by construction, they aren't: a plain text span whose own
-        /// font-size alone makes its <c>Rectangles[line]</c> taller than any fragmentainer can still land
-        /// on a different page than an ordinary sibling on the same physical line. Confirmed pre-existing
-        /// (unchanged by this PR, reproducible identically on `main` beforehand) and tracked separately -
-        /// see <c>.claude/accepted-gaps/sibling-inline-boxes-can-split-across-pages-when-one-is-monolithic.md</c>
-        /// (issue #1184).
-        /// </para>
+        /// portion of that line. #1054 itself stayed box-keyed and left this open as issue #1184; that issue
+        /// is what resolves it in favor of the aggregate: <c>ClaimsLine</c> now asks <c>FitsNoFragmentainer</c>
+        /// of the union of every box's own <c>Rectangles[line]</c> sharing the physical line
+        /// (<c>FragmentEmitter.AggregateLineRect</c>), not just the calling box's own share. A replaced
+        /// element too tall for any fragmentainer is still judged monolithic - that verdict is unchanged
+        /// when it is alone on its line - but ordinary text sharing that same physical line is no longer
+        /// judged on its own, different position: it is pulled along with the line's own single verdict,
+        /// so the whole line - replaced content and the ordinary text beside it alike - lands in the one
+        /// fragmentainer the line's own top starts in, per
+        /// <see href="https://www.w3.org/TR/css-break-3/#possible-breaks">css-break-3 §4.1</see>'s line box
+        /// being a monolithic break unit.
         /// </summary>
         [Fact]
-        public async Task AnOversizedReplacedElementNearAPageBoundary_DoesNotStrandTheOrdinaryTextBesideIt()
+        public async Task AnOversizedReplacedElementNearAPageBoundary_PullsTheOrdinaryTextBesideItOntoItsOwnPage()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(
@@ -185,18 +181,113 @@ namespace PeachPDF.Tests.Integration
             // geometrically overlaps (issue #484).
             Assert.True(imageWord.Height > container.PageBottomOf(0) - container.PageTopOf(0),
                 $"fixture needs an image taller than a whole page; height={imageWord.Height}");
-            Assert.Single(SlotsClaiming(container, imageWord));
+            var imageSlots = SlotsClaiming(container, imageWord);
+            Assert.Single(imageSlots);
 
             var textWords = LayoutHarness.Descendants(p).SelectMany(b => b.Words)
                 .Where(w => !ReferenceEquals(w, imageWord))
                 .ToList();
             Assert.NotEmpty(textWords);
 
-            // The ordinary text sharing the line with that oversized image is judged on its own dimensions
-            // and claimed normally - not silently dropped by being aggregated with the image's own
-            // "too tall for any fragmentainer" verdict.
-            Assert.All(textWords, w => Assert.True(SlotsClaiming(container, w).Count == 1,
-                $"'{w.Text}' should be claimed by exactly one page, not stranded alongside the oversized image"));
+            // The ordinary text sharing the physical line with that oversized image now lands on the same
+            // single page the image itself is clipped to (issue #1184), rather than being judged, and
+            // placed, on its own baseline-driven position.
+            Assert.All(textWords, w => Assert.Equal(imageSlots, SlotsClaiming(container, w)));
+        }
+
+        /// <summary>
+        /// The exact reproduction from issue #1184: two ordinary (neither one replaced) sibling
+        /// <c>&lt;span&gt;</c>s share one physical line. The first's own font-size alone makes its own
+        /// portion of the line taller than any page; the second is perfectly ordinary. Before the fix, the
+        /// oversized span was clipped to the first fragmentainer it started in (issue #484) while the
+        /// ordinary sibling was judged, and claimed, on its own - different - position, splitting one
+        /// physical line across two pages in violation of
+        /// <see href="https://www.w3.org/TR/css-break-3/#possible-breaks">css-break-3 §4.1</see>.
+        /// </summary>
+        [Fact]
+        public async Task TwoOrdinarySiblingSpans_OneOversized_LandOnTheSamePage()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:700pt'></div>" +
+                    "<p style='margin:0'>" +
+                    "<span id='big' style='font-size:900pt;line-height:1'>A</span>" +
+                    "<span id='small' style='font-size:10pt'>b</span>" +
+                    "</p>"),
+                pageHeight: 842, margin: 0);
+
+            var big = LayoutHarness.FindById(root, "big")!;
+            var small = LayoutHarness.FindById(root, "small")!;
+
+            var bigWord = LayoutHarness.Descendants(big).SelectMany(b => b.Words).Single();
+            var smallWord = LayoutHarness.Descendants(small).SelectMany(b => b.Words).Single();
+
+            Assert.True(bigWord.Height > container.PageBottomOf(0) - container.PageTopOf(0),
+                $"fixture needs a span taller than a whole page; height={bigWord.Height}");
+
+            var bigSlots = SlotsClaiming(container, bigWord);
+            var smallSlots = SlotsClaiming(container, smallWord);
+
+            Assert.Single(bigSlots);
+            Assert.Equal(bigSlots, smallSlots);
+        }
+
+        /// <summary>
+        /// The same shape with a third sibling, to confirm the aggregate is genuinely computed over every
+        /// box sharing the line rather than only a pair.
+        /// </summary>
+        [Fact]
+        public async Task ThreeOrdinarySiblingSpans_OneOversized_AllLandOnTheSamePage()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:700pt'></div>" +
+                    "<p style='margin:0'>" +
+                    "<span id='before' style='font-size:10pt'>before</span>" +
+                    "<span id='big' style='font-size:900pt;line-height:1'>A</span>" +
+                    "<span id='after' style='font-size:10pt'>after</span>" +
+                    "</p>"),
+                pageHeight: 842, margin: 0);
+
+            var before = LayoutHarness.FindById(root, "before")!;
+            var big = LayoutHarness.FindById(root, "big")!;
+            var after = LayoutHarness.FindById(root, "after")!;
+
+            var beforeWord = LayoutHarness.Descendants(before).SelectMany(b => b.Words).Single();
+            var bigWord = LayoutHarness.Descendants(big).SelectMany(b => b.Words).Single();
+            var afterWord = LayoutHarness.Descendants(after).SelectMany(b => b.Words).Single();
+
+            Assert.True(bigWord.Height > container.PageBottomOf(0) - container.PageTopOf(0),
+                $"fixture needs a span taller than a whole page; height={bigWord.Height}");
+
+            var bigSlots = SlotsClaiming(container, bigWord);
+            Assert.Single(bigSlots);
+            Assert.Equal(bigSlots, SlotsClaiming(container, beforeWord));
+            Assert.Equal(bigSlots, SlotsClaiming(container, afterWord));
+        }
+
+        /// <summary>
+        /// Regression guard for issue #484 in its original, single-box shape: an oversized span with no
+        /// sibling content at all on its line is unaffected by #1184's aggregation - the aggregate over
+        /// "every box sharing the line" degenerates to this box's own rectangle when it is the only one
+        /// there, so it is still clipped to the first fragmentainer it starts in and nowhere else.
+        /// </summary>
+        [Fact]
+        public async Task AnOversizedSpanAloneOnItsLine_IsStillClippedToItsFirstPageOnly()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:700pt'></div>" +
+                    "<p style='margin:0'><span id='big' style='font-size:900pt;line-height:1'>A</span></p>"),
+                pageHeight: 842, margin: 0);
+
+            var big = LayoutHarness.FindById(root, "big")!;
+            var bigWord = LayoutHarness.Descendants(big).SelectMany(b => b.Words).Single();
+
+            Assert.True(bigWord.Height > container.PageBottomOf(0) - container.PageTopOf(0),
+                $"fixture needs a span taller than a whole page; height={bigWord.Height}");
+
+            Assert.Single(SlotsClaiming(container, bigWord));
         }
 
         private static List<int> SlotsClaiming(HtmlContainerInt container, CssRect word) =>
