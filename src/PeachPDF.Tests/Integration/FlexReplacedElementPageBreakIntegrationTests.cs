@@ -181,6 +181,11 @@ namespace PeachPDF.Tests.Integration
             // tests cover (a table-cell-relocation post-check moving an already-committed subtree
             // wholesale, multi-line/column-direction/wrapped containers), so only this test's own
             // expectation changes.
+            //
+            // font-size:16pt/line-height:16pt is negative leading for Arial (whose own content area
+            // is taller than 16pt), so the relocated line's ink does not sit flush with the new
+            // page's content top either - it escapes half a leading above it too (CSS 2.1 §10.8.1,
+            // issue #1054), the same as it would for an ordinary block's first line.
             const string html = """
                 <!DOCTYPE html><html><head><style>
                 body { margin: 0; }
@@ -199,11 +204,16 @@ namespace PeachPDF.Tests.Integration
             var word = FindFirstWord(item);
             Assert.NotNull(word);
 
+            var font = item.ActualFont;
+            var halfLeading = (item.ActualLineHeight - font.Height) / 2;
+            Assert.True(halfLeading < 0, $"fixture needs negative leading; half-leading={halfLeading}");
+
             // 830pt + 16pt line-height = 846pt, past the 842pt page boundary - the line does not fit
             // in what is left of page 0, so it starts page 1's content instead of straddling the
-            // boundary or staying at the item's own (page-0) Location.Y.
-            Assert.True(Math.Abs(word!.Top - PageHeight) < 1.0,
-                $"Word position (Top={word.Top:F1}) should have moved to the next page's content top ({PageHeight:F1})");
+            // boundary or staying at the item's own (page-0) Location.Y. Its ink then escapes the
+            // negative half-leading above that content top, exactly as HalfLeadingOffsetOf places it
+            // for any other line.
+            Assert.Equal(PageHeight + halfLeading, word!.Top, 1);
         }
 
         // --- Helpers ---

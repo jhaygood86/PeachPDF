@@ -68,13 +68,15 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task ALineHeightShorterThanTheFont_KeepsItsInkInsideItsLineBox()
+        public async Task ALineHeightShorterThanTheFont_LetsItsInkEscapeAboveTheLineBox()
         {
-            // The one place this deliberately parts company with Chrome, which lets the glyphs overflow
-            // the line box on BOTH sides when the leading is negative (its 10pt/5pt line is 7px tall with
-            // its content area starting 5px ABOVE the line). This engine decides which fragmentainer a
-            // word belongs to from the word's own rectangle, so ink that leaves its line box leaves the
-            // page the line was placed on - see the accepted-gap note. The line's own height is still the
+            // Matches Chrome, which lets the glyphs overflow the line box on BOTH sides when the
+            // leading is negative (its 10pt/5pt line is 7px tall with its content area starting 5px
+            // ABOVE the line) - CSS 2.1 §10.8.1. This used to be floored at the line's own top because
+            // Fragmentation.FragmentEmitter decided which fragmentainer a word belonged to from the
+            // word's own rectangle, and upward-escaping ink would escape the fragmentainer the line
+            // was placed in (issue #1054). The emitter now resolves a word's fragmentainer through the
+            // line that owns it instead, so the floor is gone. The line's own height is still the
             // declared line-height either way, which is what governs where the next line goes.
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 "<div id='d' style='font:10pt Arial;line-height:5pt'>x</div>"));
@@ -82,12 +84,16 @@ namespace PeachPDF.Tests.Integration
             var block = LayoutHarness.FindById(root, "d")!;
             var line = Assert.Single(block.LineBoxes);
             var word = WordOf(line, "x");
+            var font = word.OwnerBox.ActualFont;
 
-            Assert.True(word.OwnerBox.ActualFont.Height > 5,
-                $"fixture needs negative leading; font height={word.OwnerBox.ActualFont.Height}");
+            Assert.True(font.Height > 5, $"fixture needs negative leading; font height={font.Height}");
+
+            var halfLeading = (5 - font.Height) / 2;
 
             Assert.Equal(5, line.BaselineExtent!.Value.Height, 3);
-            Assert.Equal(line.LineTop, word.Top, 3);
+            Assert.Equal(line.LineTop + halfLeading, word.Top, 3);
+            Assert.True(word.Top < line.LineTop - 1,
+                $"negative leading must lift the ink above the line top ({line.LineTop}), was {word.Top}");
         }
 
         [Fact]
@@ -116,20 +122,29 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task LineHeightNormal_LeavesItsInkWhereTheFlowPutIt()
+        public async Task LineHeightNormal_LeavesItsInkNearWhereTheFlowPutIt()
         {
-            // The guard that the half-leading is not a gratuitous shift: `line-height: normal` resolves
-            // from the font's own ascent + descent + gap, so the leading is ~0 and an ordinary paragraph
-            // must not move at all. This is what keeps the change confined to lines that actually mix
-            // sizes or declare a line-height.
+            // The guard that the half-leading is not a gratuitous shift: `line-height: normal`
+            // resolves from the font's own ascent+descent+line-gap (RFont.NormalLineHeight), a metric
+            // derived independently of the ascent+descent pair the glyph content area itself uses
+            // (RFont.Height) - so the two are usually close but not always bit-for-bit equal, and
+            // Arial's own "normal" leading is a small negative fraction of a point rather than exactly
+            // zero. Assert the shift equals the font's own half-leading rather than assuming it is
+            // exactly zero, so an ordinary paragraph is confirmed to move by the same formula every
+            // other line uses, not floored to a value the font's real metrics don't produce.
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 "<div id='d' style='font:10pt Arial'>x</div>"));
 
             var block = LayoutHarness.FindById(root, "d")!;
             var line = Assert.Single(block.LineBoxes);
             var word = WordOf(line, "x");
+            var font = word.OwnerBox.ActualFont;
 
-            Assert.Equal(line.LineTop, word.Top, 1);
+            var halfLeading = (word.OwnerBox.ActualLineHeight - font.Height) / 2;
+
+            Assert.True(Math.Abs(halfLeading) < 0.5,
+                $"fixture expects 'normal' leading to be near zero; half-leading={halfLeading}");
+            Assert.Equal(line.LineTop + halfLeading, word.Top, 3);
         }
 
         [Fact]
