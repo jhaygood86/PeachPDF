@@ -8,6 +8,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -592,6 +593,265 @@ namespace PeachPDF.Tests.Integration
                 $"{container.FloatScanBoxVisits} visits across {container.FloatScanCalls} calls ({perCall:F1} each)");
         }
 
+        [Fact]
+        public async Task FloatAmidInlineContent_SharesOneLineWithTextBeforeAndAfter()
+        {
+            // The accepted-gap's own repro (issue #1038): a float that FOLLOWS some inline content and
+            // PRECEDES more of it shares one line with both halves, rather than splitting the run into
+            // two separate anonymous blocks with the float shoved between them as an ordinary block-level
+            // sibling - which used to draw "XY" and the float on top of each other and push the trailing
+            // text to a second line entirely.
+            var html = Wrap(@"
+                <div style='width:300pt; font:16px monospace;'>XY <span id='float' style='float:left'>ZZZZ</span> more words</div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var floatBox = FindById(root, "float")!;
+            var words = CollectAllWords(root);
+            var xy = words.First(w => w.Text == "XY");
+            var more = words.First(w => w.Text is { } t && t.StartsWith("more"));
+
+            Assert.True(floatBox.IsFloated);
+
+            // All three share the line's own top - the float via CSS 2.1 §9.5.1 rule 6, "more" because
+            // it is genuinely on the SAME line as "XY" rather than pushed onto a line of its own.
+            var lineTop = xy.Line!.LineTop;
+            Assert.Equal(lineTop, more.Line!.LineTop, 3);
+            Assert.True(floatBox.Location.Y <= lineTop + 0.001,
+                $"the float belongs on the shared line (top {lineTop}), was at Y={floatBox.Location.Y}");
+
+            // "more" starts right after the float's right edge - on the same line as "XY", not back at
+            // the container's left edge on a line of its own.
+            var floatRightEdge = floatBox.ActualRight + floatBox.ActualMarginRight;
+            Assert.True(more.Rectangle.Left >= floatRightEdge - 0.5,
+                $"'more' (X={more.Rectangle.Left}) should start at or after the float's right edge ({floatRightEdge})");
+            Assert.True(more.Rectangle.Left < floatRightEdge + 20,
+                $"'more' (X={more.Rectangle.Left}) should start immediately after the float, not further along the line");
+        }
+
+        [Fact]
+        public async Task FloatWithLeftInsetAmidInlineContent_DoesNotLeakItsOwnInsetIntoTheNextSiblingsCursor()
+        {
+            // Regression guard for a bug the post-#1038 review pass found: CssLayoutEngine.FlowBox's
+            // per-child prologue computes leftSpacing from a child's OWN margin/border/padding-left for
+            // anything that isn't position:absolute/fixed, and (when the child opens the line) adds it
+            // straight onto coordinates.CurrentX before the float-dispatch branch runs. FlowFloatChild/
+            // FloatBox never read CurrentX for the float's own placement - a float's real position comes
+            // from blockBox.ClientLeft/ActualMarginLeft plus FloatBox's own left/right scan - so that add
+            // is dead for the float's OWN iteration, but the float branch `continue`s without ever
+            // resetting CurrentX again, so the polluted value survives into the NEXT sibling's iteration.
+            // When the float is the first FLOAT on its line (nothing for GetIntersectingInlineFloat's
+            // point-collision check to re-anchor against yet), that leaked value can make the check
+            // wrongly conclude the cursor already passed the float, so the sibling after it is not
+            // re-anchored to the float's true right edge (CSS 2.1 §9.5.1 rule 6) and instead trails
+            // further along the line than it should - extra, spec-incorrect whitespace before it. The
+            // exact numeric trigger condition depends on FloatBox's own placement scan as well as the
+            // preceding run's advance, not just the float's declared insets in isolation - this fixture's
+            // own numbers are simply a case that was empirically confirmed (by toggling the fix) to
+            // reproduce the defect, not a derived formula.
+            var html = Wrap(@"
+                <div style='width:300pt; font:16px monospace;'>XY <span id='float' style='float:left;
+                    width:10pt; height:18pt; margin-left:20pt; border-left:10pt solid black;
+                    padding-left:15pt;'></span> more words</div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var floatBox = FindById(root, "float")!;
+            var words = CollectAllWords(root);
+            var more = words.First(w => w.Text is { } t && t.StartsWith("more"));
+
+            Assert.True(floatBox.IsFloated);
+
+            // "more" must start EXACTLY at the float's true right edge: the intervening space collapses
+            // away at the out-of-flow boundary the same way it does before the float (css-text-3 §1.5),
+            // so there is no legitimate gap here for a loose tolerance to hide behind. Confirmed to fail
+            // without the fix (measured 9.79pt too far right for this fixture's own numbers) and pass
+            // with it, by toggling CssLayoutEngine.cs's `excludedFromLineSpacing` guard locally and
+            // re-running this test both ways.
+            var floatRightEdge = floatBox.ActualRight + floatBox.ActualMarginRight;
+            Assert.Equal(floatRightEdge, more.Rectangle.Left, 1);
+        }
+
+        [Fact]
+        public async Task TwoAdjacentFloats_WithNoInlineContentBetweenThem_StillPlacedSideBySide()
+        {
+            // Regression guard: a box whose only children are floats (nothing genuinely inline anywhere
+            // in it) must keep working exactly as before the #1038 fix - the "vacuously true" case
+            // DomUtils.ContainsInlinesOnly's own remarks call out, and the shape FloatsShareTheLine already
+            // documents as "floats sitting side by side with no inline content between them".
+            var html = Wrap(@"
+                <div style='width:300pt;'>
+                    <div id='a' style='float:left; width:40pt; height:20pt;'></div>
+                    <div id='b' style='float:left; width:40pt; height:20pt;'></div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.Equal(a.Location.Y, b.Location.Y, 1);
+            Assert.True(b.Location.X >= a.ActualRight - 0.5,
+                $"the second float (X={b.Location.X}) should sit beside the first (right edge={a.ActualRight})");
+        }
+
+        [Fact]
+        public async Task FloatAmidInlineContent_TextOnBothSidesWrapsAroundIt()
+        {
+            // A variant of the shared-line test using real inline elements (not bare text runs) on both
+            // sides, and a float wide enough that the trailing text has to wrap beneath it on a narrow
+            // container - confirming the float still narrows the SAME inline formatting context's later
+            // lines exactly as a preceding floated sibling already did before #1038 (see
+            // CssLineBoxCoordinates.InlineFloats / CssLayoutEngine.FlowBox's LeftFloatAt).
+            const string longTail = "this trailing run of words must wrap beneath the floated box";
+            var html = Wrap($@"
+                <div style='width:150pt; font:16px monospace;'>
+                    <span id='before'>Before</span>
+                    <span id='float' style='float:left; width:60pt; height:18pt;'></span>
+                    <span id='after'>{longTail}</span>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var floatBox = FindById(root, "float")!;
+            var after = FindById(root, "after")!;
+
+            Assert.True(floatBox.IsFloated);
+
+            var floatTop = floatBox.Location.Y;
+            var floatBottom = floatBox.ActualBottom;
+            var floatRightEdge = floatBox.ActualRight + floatBox.ActualMarginRight;
+
+            var afterWords = CollectAllWords(after);
+            Assert.NotEmpty(afterWords);
+
+            // Every word of "after" that falls within the float's vertical span must start at or past
+            // its right edge; at least one word must fall below it once the line has wrapped, confirming
+            // the trailing run genuinely continues around the float rather than overlapping it.
+            var wordsBesideFloat = afterWords.Where(w => w.Top < floatBottom && w.Top + w.Height > floatTop).ToList();
+            Assert.NotEmpty(wordsBesideFloat);
+            foreach (var word in wordsBesideFloat)
+            {
+                Assert.True(word.Rectangle.Left >= floatRightEdge - 0.5,
+                    $"word '{word.Text}' at X={word.Rectangle.Left} overlaps the float (right edge {floatRightEdge})");
+            }
+
+            // Words must genuinely advance one after another beside the float, not all pile up at its
+            // right edge - and at least one must eventually drop below it once the line wraps past the
+            // float's own height, confirming the trailing run really continues around the float.
+            Assert.True(wordsBesideFloat.Zip(wordsBesideFloat.Skip(1), (a, b) => b.Rectangle.Left > a.Rectangle.Left || b.Top > a.Top).All(x => x),
+                "words beside the float should advance across the line rather than stacking at its edge");
+            Assert.Contains(afterWords, w => w.Top >= floatBottom - 0.5);
+        }
+
+        [Fact]
+        public async Task FloatRightAmidInlineContent_SharesLineAndCapsWhereLaterWordsMayReach()
+        {
+            // The float:right counterpart of the left-float test above, exercising
+            // CssLayoutEngine.GetIntersectingInlineFloat's Floating.Right branch (a lookahead cap,
+            // independent of the cursor's current position - see that method's own remarks, mirroring
+            // DomUtils.GetLastRightIntersectingFloatBox's identical asymmetry with the left-float case).
+            const string longTail = "this trailing run of words must wrap before it reaches the floated box";
+            var html = Wrap($@"
+                <div style='width:150pt; font:16px monospace;'>
+                    <span id='before'>Before</span>
+                    <span id='float' style='float:right; width:60pt; height:18pt;'></span>
+                    <span id='after'>{longTail}</span>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var floatBox = FindById(root, "float")!;
+            var after = FindById(root, "after")!;
+
+            Assert.True(floatBox.IsFloated);
+
+            var floatTop = floatBox.Location.Y;
+            var floatBottom = floatBox.ActualBottom;
+            var floatLeftEdge = floatBox.Location.X - floatBox.ActualMarginLeft;
+
+            var afterWords = CollectAllWords(after);
+            Assert.NotEmpty(afterWords);
+
+            var wordsBesideFloat = afterWords.Where(w => w.Top < floatBottom && w.Top + w.Height > floatTop).ToList();
+            Assert.NotEmpty(wordsBesideFloat);
+            foreach (var word in wordsBesideFloat)
+            {
+                Assert.True(word.Rectangle.Right <= floatLeftEdge + 0.5,
+                    $"word '{word.Text}' at right={word.Rectangle.Right} overlaps the float:right (left edge {floatLeftEdge})");
+            }
+
+            // The trailing run eventually continues below the float once the line has wrapped past its
+            // own height, confirming it genuinely continues around the float rather than stopping short.
+            Assert.Contains(afterWords, w => w.Top >= floatBottom - 0.5);
+        }
+
+        [Fact]
+        public async Task FloatAmidInlineContent_TallerThanOnePage_OverflowsWithoutCorruptingSurroundingContent()
+        {
+            // A float sharing a line with inline content (issue #1038) is placed through
+            // CssLayoutEngine.FlowFloatChild, which lays its own content out via
+            // CssBox.LayoutContentAtItsAssignedPosition - the same entry point an inline-block with real
+            // block content already uses (CssLayoutEngine.FlowAtomicBlockContentChild). Neither propagates
+            // a nested PendingBreakToken any further today, so a float whose own content cannot fit the
+            // remaining fragmentainer overflows the page it starts on rather than continuing onto a later
+            // one - see FlowFloatChild's own remarks and the #1038 migration note. This pins that as a
+            // SAFE, non-corrupting outcome (no exception, everything genuinely AFTER the float in the
+            // document still laid out and positioned) rather than as full pagination support, which this
+            // deliberately does not claim. A declared `height` alone (no content) never asks a pagination
+            // question at all - the same as any other monolithic box sized by CSS rather than by content
+            // - which is why this document still completes in one page; the accompanying resume test
+            // (FloatAmidInlineContent_SurroundingContentResumesAcrossAPageBoundary_WithNoWordLostOrDuplicated)
+            // is what actually exercises a multi-page document with a float present.
+            var html = LayoutHarness.Wrap(@"
+                <div style='width:300pt; font:16px monospace;'>
+                    Before <span id='float' style='float:left; width:50pt; height:2000pt;'></span> after text right here.
+                </div>
+                <p id='next' style='margin:0;'>Next paragraph after everything else in the document.</p>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: 200, margin: 10);
+
+            var floatBox = LayoutHarness.FindById(root, "float")!;
+            var next = LayoutHarness.FindById(root, "next")!;
+
+            Assert.True(floatBox.IsFloated);
+            Assert.True(container.FragmentTree!.Fragmentainers.Count >= 1, "layout must still produce output");
+
+            // The float's own height overflowing every page must not corrupt the document that follows
+            // it: "next" still gets a real, finite position at or after the float's own starting point.
+            Assert.True(double.IsFinite(next.Location.Y) && next.Location.Y >= 0,
+                $"'next' should still have a valid position, got Y={next.Location.Y}");
+            Assert.True(next.Location.Y >= floatBox.Location.Y,
+                "'next' comes after the float in source order and must not be placed above it");
+        }
+
+        [Fact]
+        public async Task FloatAmidInlineContent_SurroundingContentResumesAcrossAPageBoundary_WithNoWordLostOrDuplicated()
+        {
+            // The other half of #1038's pagination scope: a float that fits comfortably on the page it
+            // starts on must not stop the SURROUNDING inline content from pausing and resuming across a
+            // page boundary the ordinary way - this is genuinely the same InlineBreakToken/CreateLineBoxes
+            // machinery every other paginated paragraph already uses (the float itself never sets
+            // coordinates.Break; see FlowBox's own float branch), so nothing about the float's presence
+            // should make this pass any differently than a float-free paragraph long enough to paginate.
+            var words = string.Join(" ", Enumerable.Range(1, 200).Select(i => $"word{i}"));
+            var html = LayoutHarness.Wrap($@"
+                <div style='width:200pt; font:12px monospace;'>
+                    Start of the run <span id='float' style='float:left; width:30pt; height:20pt;'></span> {words} end of the run
+                </div>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 200, pageHeight: 150, margin: 10);
+
+            var floatBox = LayoutHarness.FindById(root, "float")!;
+            Assert.True(floatBox.IsFloated);
+            Assert.True(container.FragmentTree!.Fragmentainers.Count > 1,
+                "200 words at 12px monospace on a 150pt page should span more than one page");
+
+            var allWords = LayoutHarness.Descendants(root).SelectMany(b => b.Words)
+                .Where(w => !w.IsLineBreak).ToList();
+
+            // Every authored word survives layout exactly once - the resume must not drop, duplicate, or
+            // corrupt any of them just because a float sits earlier in the same inline formatting context.
+            Assert.Equal(allWords.Count, allWords.Distinct().Count());
+            Assert.Contains(allWords, w => w.Text == "word1");
+            Assert.Contains(allWords, w => w.Text == "word200");
+        }
+
         // ── Helpers ────────────────────────────────────────────────────────────
 
         /// <summary>
@@ -678,6 +938,22 @@ namespace PeachPDF.Tests.Integration
             List<CssRect> words = [];
             CollectWordsOverlappingVerticalSpan(box, top, bottom, words);
             return words;
+        }
+
+        private static List<CssRect> CollectAllWords(CssBox box)
+        {
+            List<CssRect> words = [];
+            CollectAllWords(box, words);
+            return words;
+        }
+
+        private static void CollectAllWords(CssBox box, List<CssRect> words)
+        {
+            words.AddRange(box.Words);
+            foreach (var child in box.Boxes)
+            {
+                CollectAllWords(child, words);
+            }
         }
 
         private static void CollectWordsOverlappingVerticalSpan(CssBox box, double top, double bottom, List<CssRect> words)

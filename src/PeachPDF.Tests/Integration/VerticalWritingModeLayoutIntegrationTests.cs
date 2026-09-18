@@ -1845,12 +1845,21 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task VerticalRl_Float_RoutesThroughLayoutVerticalBlockChildren_NotWordStream()
+        public async Task VerticalRl_Float_RoutesThroughLayoutOutOfFlowDescendants_NotWordStream()
         {
-            // Guards the routing assumption the whole float-avoidance design depends on: DomParser's
-            // anonymous-block correction always splits a floated sibling out of otherwise inline-only
-            // content before layout runs, so "wrapper" itself never reaches CreateVerticalLineBoxes - each
-            // text run around the float gets its own, independent CreateVerticalLineBoxes call instead.
+            // Guards the routing assumption CreateVerticalLineBoxes itself depends on, updated for issue
+            // #1038: a floated child no longer makes DomParser split it out into its own block-level
+            // sibling away from surrounding inline content (a browser generates no such wrapper either -
+            // see JoinsTheInlineRun's own remarks) - "wrapper" here genuinely reaches CreateVerticalLineBoxes
+            // with the float as a plain, direct child of its own inline content, exactly the same shape
+            // #1038 fixes for horizontal writing modes. CreateVerticalLineBoxes has its own, independent
+            // mechanism for this rather than FlowBox's line-sharing one (rule 6 placement beside the
+            // current line is horizontal-only, and out of this test's scope - see the vertical-writing-
+            // mode-layout accepted gap): MeasureAndCollectWordsInDocumentOrder pulls a float out of the
+            // word stream via IsOutOfFlow rather than folding it in or recursing into it, and
+            // LayoutOutOfFlowDescendants places it afterward through the ordinary CssBox.LayoutBlockChild
+            // entry point (CssLayoutEngine.FloatBox et al.) - so the float is still placed correctly and
+            // the surrounding text still flows into one set of line boxes, unbroken by its presence.
             var html = LayoutHarness.Wrap("""
                 <div id="wrapper" style="writing-mode: vertical-rl; width: 300px">
                   Some text.
@@ -1865,9 +1874,14 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(wrapper);
             Assert.NotNull(floatBox);
 
-            // wrapper itself holds no LineBoxes of its own (block-children dispatch, not inline-only).
-            Assert.Empty(wrapper!.LineBoxes);
-            Assert.True(wrapper.Boxes.Count > 1, "the float should have been split out into its own sibling");
+            // The float is a direct child of wrapper's own inline content now (no anonymous wrapper), so
+            // wrapper dispatches to CreateVerticalLineBoxes directly and genuinely holds line boxes of its
+            // own, carrying both text runs unbroken by the float sitting between them in source order.
+            Assert.NotEmpty(wrapper!.LineBoxes);
+            var words = wrapper.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            Assert.Contains(words, w => w.Text?.Contains("Some") == true);
+            Assert.Contains(words, w => w.Text?.Contains("More") == true);
+
             Assert.True(floatBox!.IsFloated);
             Assert.NotEqual(default, floatBox.Location);
         }
