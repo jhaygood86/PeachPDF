@@ -3158,7 +3158,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Resolves an atomic inline-level box's used border-box width under the ordinary CSS 2.1 §10.3.9
         /// width algorithm - a declared, non-auto <c>width</c> (length, percentage, or <c>calc()</c>,
-        /// via <see cref="GetBoxWidth"/>'s own already-correct resolution of all three against the
+        /// via <see cref="GetBoxWidth(RGraphics, CssBox, double?)"/>'s own already-correct resolution of all three against the
         /// containing block's real, page-aware basis) as-is, or otherwise shrink-to-fit, floored by both
         /// the box's own min-content width and an explicit <c>min-width</c> - without committing any
         /// placement geometry.

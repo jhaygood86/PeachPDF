@@ -745,6 +745,32 @@ namespace PeachPDF.Html.Core.Dom
         internal IReadOnlyDictionary<CssBox, double>? RowHeightRedistribution { get; set; }
 
         /// <summary>
+        /// Accumulates, across a table whose row loop must continue into a separate, later top-level
+        /// layout pass (its own <see cref="PendingBreakToken"/> still set when a pass of
+        /// <see cref="CssLayoutEngineTable.PerformLayout"/> returns), how much of the row axis (CSS 2.1
+        /// §17.5.3's row direction - physical height for horizontal-tb, physical width for
+        /// vertical-rl/vertical-lr) each earlier pass's own rows actually consumed. The chain's own first
+        /// pass measures its contribution from the table's true row-axis-start coordinate (folding in
+        /// whatever leading row-axis border, top caption, and border-spacing that pass alone lays out);
+        /// a later pass continuing it measures from wherever <i>that pass's own cursor</i> resumed instead
+        /// (the resumed fragmentainer's own content top), deliberately excluding the page-boundary gap
+        /// before it - that gap is not content, and folding it in would inflate the table's own measured
+        /// natural extent by however much whitespace sits at the foot of whichever page a pass stopped on.
+        /// See <see cref="CssLayoutEngineTable"/>'s own <c>ThisPassNaturalRowAxisContentLength</c> for the
+        /// exact per-pass formula.
+        /// </summary>
+        /// <remarks>
+        /// Null whenever no such continuation is in progress - every table without an explicit
+        /// height/min-height, every table whose row loop completes within one top-level pass (the
+        /// overwhelming common case, including an ordinary table spanning many pages entirely inside one
+        /// call to <c>LayoutBodyRows</c>), and a table's every pass once it has genuinely finished. Reset
+        /// to null only on a genuinely fresh top-level entry into <c>PerformLayout</c> (<c>resume is
+        /// null</c>), never on the redistribution-redo call that same invocation may make internally - the
+        /// redo needs to inherit whatever this invocation is in the middle of accumulating, not restart it.
+        /// </remarks>
+        internal double? NaturalRowAxisExtentCarry { get; set; }
+
+        /// <summary>
         /// The vertical line segments (in absolute document coordinates) to draw between adjacent
         /// columns of a multi-column container — one segment per gap per page-row actually used.
         /// Set by <see cref="CssLayoutEngineColumns"/>, painted by <see cref="FragmentPainter"/>.

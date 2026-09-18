@@ -147,6 +147,19 @@ namespace PeachPDF.Html.Core.Dom
         private double _naturalGridFarEdge;
 
         /// <summary>
+        /// The row-axis coordinate <b>this pass's own</b> row cursor began placing rows from - <c>startY</c>
+        /// for a fresh (non-continuation) pass, or the resumed fragmentainer's own content top
+        /// (<see cref="ResumedRowTop"/>) for a pass continuing an earlier one's row loop. Captured
+        /// immediately after the cursor is constructed in <see cref="LayoutCells"/>, before
+        /// <c>LayoutBodyRows</c> advances it. Together with <see cref="_naturalGridFarEdge"/>, this is what
+        /// lets <see cref="PerformLayout"/> measure <i>this pass's own</i> contribution to the row axis -
+        /// deliberately excluding the page-boundary gap before it, which is not content - for
+        /// <see cref="CssBox.NaturalRowAxisExtentCarry"/> to accumulate across a table whose row loop must
+        /// continue into a separate, later top-level pass.
+        /// </summary>
+        private double _rowAxisPassStart;
+
+        /// <summary>
         /// For each row kept in <see cref="_bodyRows"/>, its ordinal position among the table's rows in
         /// source order - counting <c>visibility: collapse</c> rows that <see cref="AssignBoxKinds"/>
         /// left out of <see cref="_bodyRows"/> (CSS 2.1 §17.6.1) too. A cell's <c>rowspan</c> counts rows
@@ -472,39 +485,84 @@ namespace PeachPDF.Html.Core.Dom
 
             try
             {
+                // A genuinely fresh top-level entry - not a continuation of an earlier top-level pass
+                // whose own row loop had not yet finished - starts with no carried extent. Reset here,
+                // once, rather than inside the redo below: the redo is not a fresh top-level entry (it is
+                // this same invocation's own second call, further down), so it must inherit whatever this
+                // invocation is in the middle of accumulating instead of restarting it.
+                if (resume is null)
+                {
+                    tableBox.NaturalRowAxisExtentCarry = null;
+                }
+
                 var table = new CssLayoutEngineTable(g, tableBox, resume);
                 await table.Layout(g);
 
-                // CSS 2.1 §17.5.3's table-height minimum can only be measured against REAL row geometry
-                // (unlike column width, a row's natural height is a genuine result of laying out content,
-                // not something a pre-pass can estimate) - so a table whose explicit height/min-height
-                // exceeds what its rows naturally reached is laid out again, this time with each row's own
-                // proportional share of the shortfall fed back in as a floor (see RowHeightFloor). This is
-                // a fifth reason this engine runs again over the same table, alongside the four
-                // fragmentation.a-table-is-laid-out-again-for-four-reasons invariant already names - and
-                // like the three "fresh" ones there, RestoreStructureFromAnyPreviousRun (at the top of
-                // Layout) undoes what this first pass just did before the redo starts from the markup
-                // again. Every downstream computation that already derives correctly from row geometry
-                // (rowspan band-closing, collapsed-border grid lines, captions, header/footer proxies,
-                // per-row page-break decisions) is therefore correct on the redo for free - it is the same
-                // code, now simply seeing taller rows - rather than needing a second, parallel patch.
-                //
-                // Gated on resume/PendingBreakToken being null: only a table that completed entirely
-                // within this first top-level (natural) pass is redistributed. A table whose row loop
-                // itself had to stop mid-cell on the NATURAL pass (a real continuation into a later
-                // top-level pass) is left alone - its total natural extent across every pass isn't known
-                // until the LAST of those passes completes, and by then earlier rows are already
-                // committed/painted and cannot be redone. RowHeightRedistribution being null guards
-                // against ever starting a second redo: the redo pass's own floors are exact, so it should
-                // already meet the target on an ordinary table - this is a safety net, not expected to
-                // matter in practice.
-                if (resume is null && tableBox.PendingBreakToken is null && tableBox.RowHeightRedistribution is null
-                    && table.TryComputeRowHeightRedistribution(out var rowHeightFloors))
+                if (tableBox.PendingBreakToken is not null)
                 {
-                    tableBox.RowHeightRedistribution = rowHeightFloors;
+                    // This pass's own row loop itself did not finish and must continue into a separate,
+                    // later top-level pass (issue #1132) - its total natural row-axis extent across every
+                    // pass isn't known until the LAST of them completes, so bank this pass's own
+                    // contribution (see ThisPassNaturalRowAxisContentLength's own remarks on why it is a
+                    // pure content length, not a coordinate) and defer redistribution entirely to
+                    // whichever later call actually finishes the table. Gated on RowHeightRedistribution
+                    // being null: once a floored redo is under way, ITS OWN row geometry already reflects
+                    // the applied floors, and a redo that itself needs to continue further (see the
+                    // redo's own remarks below) is a different, already-decided situation the carry has
+                    // nothing left to add to.
+                    if (tableBox.RowHeightRedistribution is null)
+                    {
+                        tableBox.NaturalRowAxisExtentCarry =
+                            (tableBox.NaturalRowAxisExtentCarry ?? 0) + table.ThisPassNaturalRowAxisContentLength();
+                    }
+                }
+                else
+                {
+                    // CSS 2.1 §17.5.3's table-height minimum can only be measured against REAL row
+                    // geometry (unlike column width, a row's natural height is a genuine result of laying
+                    // out content, not something a pre-pass can estimate) - so a table whose explicit
+                    // height/min-height exceeds what its rows naturally reached is laid out again, this
+                    // time with each row's own proportional share of the shortfall fed back in as a floor
+                    // (see RowHeightFloor). This is a fifth reason this engine runs again over the same
+                    // table, alongside the four fragmentation.a-table-is-laid-out-again-for-four-reasons
+                    // invariant already names - and like the three "fresh" ones there,
+                    // RestoreStructureFromAnyPreviousRun (at the top of Layout) undoes what this first
+                    // pass just did before the redo starts from the markup again (or, for a genuine
+                    // continuation's own final pass, from wherever its own resume point re-enters - see
+                    // the redo call itself below). Every downstream computation that already derives
+                    // correctly from row geometry (rowspan band-closing, collapsed-border grid lines,
+                    // captions, header/footer proxies, per-row page-break decisions) is therefore correct
+                    // on the redo for free - it is the same code, now simply seeing taller rows - rather
+                    // than needing a second, parallel patch.
+                    //
+                    // A table whose row loop reaches here (PendingBreakToken null) has genuinely
+                    // finished, but that is true in two different shapes: an ordinary table that
+                    // completed entirely within its first top-level (natural) pass (resume is null), or
+                    // the LAST of several top-level passes a genuine row-loop continuation needed
+                    // (resume non-null, but NaturalRowAxisExtentCarry is not null because an earlier pass
+                    // of this SAME invocation chain banked its own share above). Either shape may now be
+                    // redistributed - the second is exactly issue #1132's fix, reusing this same mechanism
+                    // rather than a parallel one. RowHeightRedistribution being null guards against ever
+                    // starting a second redo: the redo pass's own floors are exact, so it should already
+                    // meet the target on an ordinary table - this is a safety net, not expected to matter
+                    // in practice.
+                    var isFinalPassOfAGenuineRowLoopContinuation = tableBox.NaturalRowAxisExtentCarry is not null;
 
-                    var redo = new CssLayoutEngineTable(g, tableBox, resume: null);
-                    await redo.Layout(g);
+                    if ((resume is null || isFinalPassOfAGenuineRowLoopContinuation)
+                        && tableBox.RowHeightRedistribution is null
+                        && table.TryComputeRowHeightRedistribution(out var rowHeightFloors))
+                    {
+                        tableBox.RowHeightRedistribution = rowHeightFloors;
+
+                        // Reusing the SAME resume this call itself received - rather than always null -
+                        // is what keeps a continuation's redo scoped to only the rows THIS pass placed:
+                        // a non-null resume re-enters the row loop at exactly the row index the ORIGINAL
+                        // stop named, leaving every earlier, already-committed/painted row's own CssBox
+                        // instance completely untouched. The ordinary (resume null) case is unaffected -
+                        // passing null through is exactly what always ran here.
+                        var redo = new CssLayoutEngineTable(g, tableBox, resume);
+                        await redo.Layout(g);
+                    }
                 }
 
                 // Cleared once the table is genuinely, fully done - PendingBreakToken null after
@@ -518,10 +576,12 @@ namespace PeachPDF.Html.Core.Dom
                 // RowHeightFloor reads RowHeightRedistribution directly, with no dependency on how this
                 // call ends. Left set whenever PendingBreakToken is still non-null here, for exactly that
                 // reason; a table that never triggered redistribution at all leaves this a harmless
-                // null-to-null assignment.
+                // null-to-null assignment. NaturalRowAxisExtentCarry is cleared alongside it, for the same
+                // reason and on the same condition.
                 if (tableBox.PendingBreakToken is null)
                 {
                     tableBox.RowHeightRedistribution = null;
+                    tableBox.NaturalRowAxisExtentCarry = null;
                 }
             }
             catch (Exception ex)
@@ -2067,9 +2127,33 @@ namespace PeachPDF.Html.Core.Dom
                 (_isVertical ? CssLayoutEngine.GetBoxWidth(_tableBox) : CssLayoutEngine.GetBoxHeight(_tableBox))
                 ?? 0;
 
-            var rowAxisStart = _isVertical ? _tableBox.Location.X : _tableBox.Location.Y;
-            var desiredFarEdge = rowAxisStart + resolvedSize;
-            var surplus = desiredFarEdge - _naturalGridFarEdge;
+            double surplus;
+
+            if (_tableBox.NaturalRowAxisExtentCarry is { } carry)
+            {
+                // This is the final pass of a table whose own row loop needed to continue into one or
+                // more separate, later top-level passes (see PerformLayout's own remarks) - comparing
+                // resolvedSize against this pass's own _naturalGridFarEdge alone (the ordinary branch
+                // below) would silently count every page-boundary gap crossed along the way as if it
+                // were more row content, since a continuation's own cursor starts at the resumed page's
+                // content top, not at wherever the earlier pass's rows actually ended. Comparing against
+                // the pure row-axis CONTENT length banked by every earlier pass plus this pass's own -
+                // with the table's own trailing row-axis border AND the single trailing row-axis gap
+                // added back exactly once, by whichever pass turns out to be the final one - avoids that.
+                // See ThisPassNaturalRowAxisContentLength's own remarks for why no leading-border/caption/
+                // spacing term needs adding back here: the chain's own first pass already folds that
+                // leading offset into its own contribution.
+                var trailingRowAxisGap = VerticalSpacingAt(_grid?.RowCount ?? 0);
+                var totalNaturalContentLength =
+                    carry + ThisPassNaturalRowAxisContentLength() + TableRowAxisBorderEnd + trailingRowAxisGap;
+                surplus = resolvedSize - totalNaturalContentLength;
+            }
+            else
+            {
+                var rowAxisStart = _isVertical ? _tableBox.Location.X : _tableBox.Location.Y;
+                var desiredFarEdge = rowAxisStart + resolvedSize;
+                surplus = desiredFarEdge - _naturalGridFarEdge;
+            }
 
             // Also covers the ordinary case of a min-size smaller than content, and a plain size this
             // pass's own content already exceeded - nothing to redistribute either way.
@@ -2110,6 +2194,45 @@ namespace PeachPDF.Html.Core.Dom
 
             floors = computed;
             return true;
+        }
+
+        /// <summary>
+        /// This pass's own contribution to the table's row-axis extent, as a pure row-axis CONTENT
+        /// length - deliberately excluding two things <see cref="_naturalGridFarEdge"/> always bakes in
+        /// per pass, regardless of whether this pass turns out to be the table's true last one (so every
+        /// caller accumulating multiple passes' worth of this value must add both back exactly once
+        /// itself, not once per pass): the table's own trailing row-axis border, and the single trailing
+        /// row-axis gap <c>LayoutBodyRows</c>' Step 7 adds via <c>VerticalSpacingAt(_grid.RowCount)</c> -
+        /// which, for a non-collapsed table, is simply the flat <c>border-spacing</c> value regardless of
+        /// how many rows this particular pass actually placed. Also excludes the page-boundary gap before
+        /// this pass's own first row (which is not content at all - see <see cref="_rowAxisPassStart"/>'s
+        /// own remarks).
+        /// </summary>
+        /// <remarks>
+        /// The subtracted "start" differs by whether this pass is the chain's own first
+        /// (<c>!_continuesAPreviousPass</c>) or a later continuation of it. The chain's first pass is the
+        /// only one that ever lays out a leading row-axis border, a top caption, or the border-spacing
+        /// before the first row - <see cref="_rowAxisPassStart"/> (<c>startY</c> there) already includes
+        /// all of that, so subtracting the table's own true row-axis-start coordinate instead (not
+        /// <c>_rowAxisPassStart</c>) folds that whole leading offset INTO this pass's own contribution,
+        /// exactly matching what the ordinary single-pass formula below implicitly counts as content. A
+        /// later continuation's own pass never repeats any of that (no caption, no leading border, no
+        /// leading spacing - it resumes mid-grid), so its own <c>_rowAxisPassStart</c> (a resumed
+        /// fragmentainer's content top) is exactly its own content's start with nothing to fold in.
+        /// Getting this wrong (subtracting <c>_rowAxisPassStart</c> unconditionally, including on the
+        /// chain's first pass) systematically over-counts the surplus by the table's own leading
+        /// border/caption/spacing whenever a genuinely continued table also has a top caption or
+        /// non-default <c>border-spacing</c> - caught in post-change review, not by a test, since neither
+        /// fixture this PR added declares either.
+        /// </remarks>
+        private double ThisPassNaturalRowAxisContentLength()
+        {
+            var passOwnRowAxisStart = _continuesAPreviousPass
+                ? _rowAxisPassStart
+                : (_isVertical ? _tableBox.Location.X : _tableBox.Location.Y);
+            var trailingRowAxisGap = VerticalSpacingAt(_grid?.RowCount ?? 0);
+
+            return _naturalGridFarEdge - TableRowAxisBorderEnd - trailingRowAxisGap - passOwnRowAxisStart;
         }
 
         /// <summary>
@@ -3046,6 +3169,9 @@ namespace PeachPDF.Html.Core.Dom
                     startY, startX,
                     pageHeight < double.MaxValue - 1 ? container!.SlotStartingAt(_tableBox.ClientTop) : 0,
                     _isVertical);
+
+            // Captured here, before LayoutBodyRows advances the cursor - see this field's own remarks.
+            _rowAxisPassStart = cursor.CurrentY;
 
             // Reset page-break tracking so re-layout doesn't accumulate stale entries. A resumed pass is
             // not a re-layout: where the table's slice ended on the pages earlier passes filled is what
