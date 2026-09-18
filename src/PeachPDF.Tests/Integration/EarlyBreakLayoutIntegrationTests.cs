@@ -817,15 +817,22 @@ namespace PeachPDF.Tests.Integration
         /// <c>FragmentEmitter.ClaimsLine</c>'s own remarks for the rest of that reasoning.
         /// </para>
         /// <para>
-        /// <b>Fixing the cursor is not fixing the geometry.</b> The residual translate-relaxation fallback
-        /// above is a real, pre-existing imprecision this PR leaves in place (tracked for a follow-up,
-        /// separate from #1047's own double-claim): a <c>break-inside:avoid</c> box whose destination-fit
-        /// check reads a phantom-gap-inflated extent can still fall back to translating rather than being
-        /// laid out again cleanly. That translate is itself a §5.3-sanctioned relaxation (an unsatisfiable
-        /// <c>avoid</c> may move the box anyway, maximizing what lands on one page) applied to an overstated
-        /// "does not fit" answer — CSS already tolerates the relaxation outcome; what is tracked separately
-        /// is that the check reaches it more often than the content's real footprint warrants. Every word
-        /// still lands on exactly one page (this test's own assertion) and on the correct, destination page
+        /// <b>Fixing the cursor is not fixing the geometry — that took a separate, later fix.</b> When
+        /// #1047 first landed, the residual translate-relaxation fallback above was left in place as a
+        /// known imprecision: a <c>break-inside:avoid</c> box whose destination-fit check read a
+        /// phantom-gap-inflated extent could still fall back to translating rather than being laid out
+        /// again cleanly, which was confirmed (by temporary instrumentation, not kept) to overflow the
+        /// destination page's own content area by as much as a full line. That translate was itself a
+        /// §5.3-sanctioned relaxation (an unsatisfiable <c>avoid</c> may move the box anyway, maximizing
+        /// what lands on one page) applied to an overstated "does not fit" answer — CSS already tolerated
+        /// the relaxation outcome; the defect was that the check reached it more often than the content's
+        /// real footprint warranted. <c>CssBox.EffectiveContentTop</c> now closes this: <c>TryRestartAt</c>
+        /// records where it relocated this box's own first in-flow child
+        /// (<c>CssBox._firstChildRestartedTop</c>), and <c>FitsInFragmentainer</c> measures from that
+        /// instead of the box's own stale <c>Location.Y</c> when it is set — see
+        /// <see cref="MultiLineHeadingRelocatedByBreakInsideAvoid_FitsWithinDestinationPage"/> below, which
+        /// asserts the fit directly. Every word still lands on exactly one page (this test's own assertion)
+        /// and on the correct, destination page
         /// (<see cref="PulledRun_MovesTogetherToTheDestinationBandTop"/>'s own invariant, asserted below
         /// too) — #1047 was about the former, not the latter.
         /// </para>
@@ -953,6 +960,94 @@ namespace PeachPDF.Tests.Integration
                 + "<div>Beta two</div>"
                 + "</div>");
 #endif
+
+        /// <summary>
+        /// Same reduction as <see cref="Issue1047Document"/>, but with a pinned, bundled font
+        /// (<see cref="RegisterResumedParagraphFont"/>'s "Early Break Fixture") instead of whatever font
+        /// the running platform resolves the UA default to.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="MultiLineHeadingRelocatedByBreakInsideAvoid_FitsWithinDestinationPage"/> needs a
+        /// fixture whose line-wrapping is identical on every CI runner, not just the one this repo's own
+        /// contributors happen to develop on: an un-pinned system font can wrap
+        /// <c>Aaa Bbb Ccc Ddd Eee Fff</c> at <c>width:60pt</c> into a different number of lines per
+        /// platform (the same class of risk this repo has hit before with other un-pinned fixtures - see
+        /// <c>ResumedParagraphDocument</c>'s own use of the identical pinned-font idiom), which for this
+        /// exact shape decides whether <c>TryRestartAt</c> ever relocates <c>card</c>'s own first in-flow
+        /// child at all. <see cref="Issue1047Document"/> itself is deliberately left un-pinned: it only
+        /// backs the DEBUG-only ledger tests above, which this repo's own prescribed daily-driver command
+        /// already runs locally rather than in CI's Release coverage job, and changing its fixture would
+        /// mean re-sweeping and re-documenting those tests' own already-verified reproduction bands for no
+        /// benefit to them.
+        /// </remarks>
+        private static string PinnedFontIssue1047Document(double fillerHeight) =>
+            LayoutHarness.Wrap(
+                "<style>html { font-family: 'Early Break Fixture' }</style>"
+                + $"<div style='height:{fillerHeight}pt'>filler</div>"
+                + "<div id='card' style='break-inside:avoid;font-size:10pt;line-height:20pt'>"
+                + "<h2 id='heading' style='margin:0;width:60pt'>Aaa Bbb Ccc Ddd Eee Fff</h2>"
+                + "<div>Alpha one</div>"
+                + "<div>Beta two</div>"
+                + "</div>");
+
+        /// <summary>
+        /// The residual imprecision left in place when #1047 was fixed:
+        /// <c>CanBeLaidOutAgain</c>'s destination-fit check used to read this box's own raw
+        /// <c>ActualBottom - Location.Y</c>, which a same-pass keep-with-next restart
+        /// (<see cref="TryRestartAt"/>) could inflate by a "phantom gap" — the distance between this box's
+        /// own, still-stale top and its first in-flow child's already-relocated one — and wrongly answer
+        /// "does not fit", forcing the gap-carrying <see cref="TranslateForEarlyBreak"/> path instead of a
+        /// clean re-layout. Every point in this fixture's own confirmed band used to overflow its
+        /// destination page's own content area by as much as 16pt (a full line) before
+        /// <c>EffectiveContentTop</c> existed, confirmed by temporary instrumentation (not kept) reading
+        /// <c>card.ActualBottom</c> against <c>container.PageBottomOf</c>. Asserting the fit here, on the
+        /// exact fixture shape the phantom gap was found in, is what proves the destination-fit check
+        /// itself now answers correctly — not just that every word still lands somewhere on one page,
+        /// which the sibling tests above already covered even before this fix.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Deliberately declared outside the <c>#if DEBUG</c> region above and without
+        /// <c>EnableWordClaimLedger</c>: the mechanism this asserts (<c>TryRestartAt</c> relocating a box's
+        /// own first in-flow child) has to be exercised in a Release build too, or the production lines it
+        /// covers (<c>CssBox._firstChildRestartedTop</c>'s assignment) are only ever hit by a test region
+        /// CI's own coverage job — which builds Release — compiles out entirely, silently failing the
+        /// diff-coverage gate despite every framework-local run looking fully covered.
+        /// </para>
+        /// <para>
+        /// Uses <see cref="PinnedFontIssue1047Document"/>, not <see cref="Issue1047Document"/>: an earlier
+        /// version of this test used the un-pinned fixture, and passed on every framework locally
+        /// (Windows) while still failing CI's diff-coverage gate on Linux and macOS specifically - the
+        /// un-pinned font wrapped the heading differently there, so <c>TryRestartAt</c> never relocated
+        /// <c>card</c>'s own first in-flow child at the same filler heights that reproduce it on Windows.
+        /// The band below ([84, 99] and [245, 255], swept in 1pt/5pt steps with the pinned font) was
+        /// re-confirmed with temporary instrumentation reading an <c>AsyncLocal</c> marker back from
+        /// <c>TryRestartAt</c> itself (not kept) - not merely assumed portable from the Windows-only band
+        /// the un-pinned fixture's own sibling tests document.
+        /// </para>
+        /// </remarks>
+        [Theory]
+        [InlineData(86)]
+        [InlineData(92)]
+        [InlineData(98)]
+        [InlineData(246)]
+        [InlineData(250)]
+        [InlineData(254)]
+        public async Task MultiLineHeadingRelocatedByBreakInsideAvoid_FitsWithinDestinationPage(double fillerHeight)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                PinnedFontIssue1047Document(fillerHeight), pageHeight: PageHeight, margin: Margin,
+                configureAdapter: RegisterResumedParagraphFont);
+
+            var card = LayoutHarness.FindById(root, "card")!;
+            var page = container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+            var pageBottom = container.PageBottomOf(page);
+
+            Assert.True(
+                card.ActualBottom <= pageBottom + 0.01,
+                $"card.ActualBottom ({card.ActualBottom}) overflowed its destination page's own content " +
+                $"area (bottom {pageBottom}) by {card.ActualBottom - pageBottom}pt.");
+        }
 
         private static string TableAndHeadingCardDocument(double fillerHeight) =>
             LayoutHarness.Wrap(
