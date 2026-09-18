@@ -172,6 +172,12 @@ namespace PeachPDF.Adapters
         /// </summary>
         public double PixelsPerPoint { get; set; } = 1.0;
 
+        /// <summary>
+        /// Fonts here are built at <c>size / PixelsPerPoint</c> points (see <c>CreateFontInt</c>), so
+        /// <see cref="PixelsPerPoint"/> is part of a cached font's identity.
+        /// </summary>
+        internal override double FontSizeScale => PixelsPerPoint;
+
         public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
         {
             // BaseUri is normally never null, so every reference resolves to an absolute URI and loaders have
