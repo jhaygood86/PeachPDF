@@ -817,15 +817,22 @@ namespace PeachPDF.Tests.Integration
         /// <c>FragmentEmitter.ClaimsLine</c>'s own remarks for the rest of that reasoning.
         /// </para>
         /// <para>
-        /// <b>Fixing the cursor is not fixing the geometry.</b> The residual translate-relaxation fallback
-        /// above is a real, pre-existing imprecision this PR leaves in place (tracked for a follow-up,
-        /// separate from #1047's own double-claim): a <c>break-inside:avoid</c> box whose destination-fit
-        /// check reads a phantom-gap-inflated extent can still fall back to translating rather than being
-        /// laid out again cleanly. That translate is itself a §5.3-sanctioned relaxation (an unsatisfiable
-        /// <c>avoid</c> may move the box anyway, maximizing what lands on one page) applied to an overstated
-        /// "does not fit" answer — CSS already tolerates the relaxation outcome; what is tracked separately
-        /// is that the check reaches it more often than the content's real footprint warrants. Every word
-        /// still lands on exactly one page (this test's own assertion) and on the correct, destination page
+        /// <b>Fixing the cursor is not fixing the geometry — that took a separate, later fix.</b> When
+        /// #1047 first landed, the residual translate-relaxation fallback above was left in place as a
+        /// known imprecision: a <c>break-inside:avoid</c> box whose destination-fit check read a
+        /// phantom-gap-inflated extent could still fall back to translating rather than being laid out
+        /// again cleanly, which was confirmed (by temporary instrumentation, not kept) to overflow the
+        /// destination page's own content area by as much as a full line. That translate was itself a
+        /// §5.3-sanctioned relaxation (an unsatisfiable <c>avoid</c> may move the box anyway, maximizing
+        /// what lands on one page) applied to an overstated "does not fit" answer — CSS already tolerated
+        /// the relaxation outcome; the defect was that the check reached it more often than the content's
+        /// real footprint warranted. <c>CssBox.EffectiveContentTop</c> now closes this: <c>TryRestartAt</c>
+        /// records where it relocated this box's own first in-flow child
+        /// (<c>CssBox._firstChildRestartedTop</c>), and <c>FitsInFragmentainer</c> measures from that
+        /// instead of the box's own stale <c>Location.Y</c> when it is set — see
+        /// <see cref="MultiLineHeadingRelocatedByBreakInsideAvoid_FitsWithinDestinationPage"/> below, which
+        /// asserts the fit directly. Every word still lands on exactly one page (this test's own assertion)
+        /// and on the correct, destination page
         /// (<see cref="PulledRun_MovesTogetherToTheDestinationBandTop"/>'s own invariant, asserted below
         /// too) — #1047 was about the former, not the latter.
         /// </para>
@@ -874,6 +881,44 @@ namespace PeachPDF.Tests.Integration
 
             AssertEveryWordClaimedExactlyOnce(container);
             AssertHeadingAndCardShareAPage(root, container);
+        }
+
+        /// <summary>
+        /// The residual imprecision this fixture's own remarks flagged as a follow-up when #1047 landed:
+        /// <c>CanBeLaidOutAgain</c>'s destination-fit check used to read this box's own raw
+        /// <c>ActualBottom - Location.Y</c>, which a same-pass keep-with-next restart
+        /// (<see cref="TryRestartAt"/>) could inflate by a "phantom gap" — the distance between this box's
+        /// own, still-stale top and its first in-flow child's already-relocated one — and wrongly answer
+        /// "does not fit", forcing the gap-carrying <see cref="TranslateForEarlyBreak"/> path instead of a
+        /// clean re-layout. Swept across the same confirmed band as the sibling tests above: every point
+        /// used to overflow its destination page's own content area by as much as 16pt (a full line) before
+        /// <c>EffectiveContentTop</c> existed, confirmed by temporary instrumentation (not kept) reading
+        /// <c>card.ActualBottom</c> against <c>container.PageBottomOf</c>. Asserting the fit here, on the
+        /// exact fixture the phantom gap was found in, is what proves the destination-fit check itself now
+        /// answers correctly — not just that every word still lands somewhere on one page, which the
+        /// sibling tests above already covered even before this fix.
+        /// </summary>
+        [Theory]
+        [InlineData(84)]
+        [InlineData(90)]
+        [InlineData(96)]
+        [InlineData(244)]
+        [InlineData(250)]
+        [InlineData(256)]
+        public async Task MultiLineHeadingRelocatedByBreakInsideAvoid_FitsWithinDestinationPage(double fillerHeight)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                Issue1047Document(fillerHeight), pageHeight: PageHeight, margin: Margin,
+                prepare: EnableWordClaimLedger);
+
+            var card = LayoutHarness.FindById(root, "card")!;
+            var page = container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+            var pageBottom = container.PageBottomOf(page);
+
+            Assert.True(
+                card.ActualBottom <= pageBottom + 0.01,
+                $"card.ActualBottom ({card.ActualBottom}) overflowed its destination page's own content " +
+                $"area (bottom {pageBottom}) by {card.ActualBottom - pageBottom}pt.");
         }
 
         private static void AssertEveryWordClaimedExactlyOnce(HtmlContainerInt container)

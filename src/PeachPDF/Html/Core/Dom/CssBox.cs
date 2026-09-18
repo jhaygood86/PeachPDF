@@ -2717,6 +2717,23 @@ namespace PeachPDF.Html.Core.Dom
         private double? _earlyBreakRetryTop;
 
         /// <summary>
+        /// Where this box's own first in-flow child actually landed, when <see cref="TryRestartAt"/>
+        /// relocated it (a same-pass keep-with-next restart) without moving this box's own
+        /// <see cref="Location"/> to match — the "phantom gap" <see cref="FitsInFragmentainer"/> reads
+        /// through <see cref="EffectiveContentTop"/> instead of <see cref="Location"/>.
+        /// </summary>
+        /// <remarks>
+        /// Null whenever nothing has re-placed this box's first in-flow child this pass, which is the
+        /// overwhelmingly common case — <see cref="EffectiveContentTop"/> then falls back to
+        /// <see cref="Location"/>'s own <c>Y</c>, exactly as before this field existed. Set only at the
+        /// one place a restart can create the gap (<see cref="TryRestartAt"/>) and only when the box it
+        /// relocates is <i>this</i> box's own first in-flow child specifically — a later sibling
+        /// restarting leaves a real predecessor still sitting where this box's own top says content
+        /// begins, so no correction is needed there, and none is applied.
+        /// </remarks>
+        private double? _firstChildRestartedTop;
+
+        /// <summary>
         /// A <c>direction: rtl</c> vertical box's own block-level children, set by
         /// <see cref="LayoutVerticalBlockChildren"/> and consumed - then cleared - by
         /// <see cref="PerformLayoutEpilogue"/>, once this box's own height is truly final.
@@ -3557,6 +3574,7 @@ namespace PeachPDF.Html.Core.Dom
             // make one, at coordinates the previous pass had not settled.
             _earlyBreakTaken = false;
             _earlyBreakRetryTop = null;
+            _firstChildRestartedTop = null;
 
             return resume;
         }
@@ -4079,8 +4097,21 @@ namespace PeachPDF.Html.Core.Dom
             // whatever destination's own BandEndInset reserves (a repeating table <tfoot>, a page's
             // footnote area) - the room actually available there, not the band's nominal height.
             return MonolithicContent.FitsInBand(
-                ActualBottom - Location.Y, clonedStart, clonedEnd, destination.RemainingBlockSize);
+                ActualBottom - EffectiveContentTop, clonedStart, clonedEnd, destination.RemainingBlockSize);
         }
+
+        /// <summary>
+        /// The top <see cref="FitsInFragmentainer"/> measures this box's own extent from — ordinarily
+        /// <see cref="Location"/>'s own <c>Y</c>, the box's real top. Reads <see cref="_firstChildRestartedTop"/>
+        /// instead when a same-pass <see cref="TryRestartAt"/> restart has already moved this box's own
+        /// first in-flow child forward without moving this box's own <see cref="Location"/> to match: left
+        /// alone, the raw span from this box's stale top to its now-relocated content's bottom overstates
+        /// how much room a fresh re-layout at the destination would actually need — a "phantom gap" that
+        /// can make a <c>break-inside:avoid</c> box's own <see cref="CanBeLaidOutAgain"/> check wrongly
+        /// answer "does not fit" for a destination band the content genuinely fits, forcing the degraded,
+        /// gap-carrying <see cref="TranslateForEarlyBreak"/> path instead of a clean re-layout.
+        /// </summary>
+        private double EffectiveContentTop => _firstChildRestartedTop ?? Location.Y;
 
         /// <summary>
         /// Runs a layout engine that positions its own children, leaving breaking live for it.
@@ -5317,6 +5348,17 @@ namespace PeachPDF.Html.Core.Dom
             // See "The pass's own fragmentainer cursor has to move too" above (#1047): without this, the
             // head re-enters ResumeAt still measuring against the band this pass is leaving.
             HtmlContainer?.CurrentFragmentainer?.StepOverTo(restart.Slot);
+
+            // The restarted head is about to land at restart.Top, on this box's own account, without this
+            // box's own Location moving to match — a phantom gap between the two if the head is this
+            // box's own first in-flow child (nothing precedes it, so this box's top is the only thing that
+            // still claims content starts there). FitsInFragmentainer's EffectiveContentTop reads this back
+            // instead of Location so a later break-inside:avoid self-relocation of this box does not
+            // mistake that gap for real content height (see that field's own remarks).
+            if (ReferenceEquals(Boxes[resumeFrom], BreakPropagation.FirstInFlowChild(this)))
+            {
+                _firstChildRestartedTop = restart.Top;
+            }
 
             Boxes[resumeFrom].ResumeAt(null, restart.Top);
             return true;
