@@ -1,4 +1,4 @@
-﻿using PeachPDF.Adapters;
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -723,17 +723,15 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task OutlineOnAWrappingInlineElement_ClosesEveryLineAsItsOwnCompleteRing()
+        public async Task OutlineOnAWrappingInlineElement_PaintsOneConnectedShapeAcrossEveryLine()
         {
-            // A span forced onto three lines (issue #1163). CSS Basic User Interface 4 §4 recommends a
-            // fragmented outline be a fully connected shape rather than one left open at every wrap -
-            // unlike border/background, which box-decoration-break's `slice` deliberately keeps open at
-            // a line wrap (mirrors BoxDecorationBreakPaintIntegrationTests' own
-            // "Slice_WrappingInline_DrawsNoBorderAtABreak", which is unaffected by this: outline paint
-            // entries now force their own inline-axis edges closed, independent of the geometry border
-            // still reads unmodified). Every line - including the two interior ones - now closes both
-            // inline-axis edges, so each paints as one complete solid ring rather than three separate
-            // side polygons.
+            // A span forced onto three lines. CSS Basic User Interface 4 §4 recommends a fragmented
+            // outline be drawn as one fully connected shape rather than one left open - or closed
+            // separately - at every wrap, which is also what Chromium does: it unions every fragment's
+            // rectangle and traces the boundary of the region they cover. Here the three lines start at
+            // the same left edge and abut vertically, so that region is a single connected stepped
+            // polygon and exactly one path paints it - not three rings, and never a separate per-side
+            // polygon the way an open edge set would need.
             var html = LayoutHarness.Wrap(
                 "<div style='width:200pt;font:10pt Arial'>" +
                 "<span id='s' style='outline:2pt solid #00f'>Alpha<br>Beta<br>Gamma</span></div>");
@@ -745,30 +743,33 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, span, g);
 
             var blue = RColor.FromArgb(0, 0, 255);
-            var rings = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+            var shapes = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
                 .Where(p => !p.Stroked && p.Color == blue)
                 .ToList();
 
-            // Every line paints a complete ring now, so none of the four sides are drawn as their own
-            // separate polygon the way an open edge set would need.
-            Assert.Equal(3, rings.Count);
+            var shape = Assert.Single(shapes);
             Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>(), p => p.Color == blue);
 
-            for (var i = 0; i < rings.Count; i++)
-            {
-                Assert.Equal(rects[i].Left - 2, rings[i].Bounds.Left, 1);
-                Assert.Equal(rects[i].Right + 2, rings[i].Bounds.Right, 1);
-            }
+            // One connected contour, so the band is exactly two subpaths: the contour itself and the
+            // inset copy that hollows it out. Three separate rings would be six.
+            Assert.Equal(2, shape.SubpathStarts.Count);
+
+            // That one shape spans the whole union: the widest line sets its right edge and the first
+            // and last lines its top and bottom, each pushed out by the outline's full 2pt reach.
+            Assert.Equal(rects.Min(r => r.Left) - 2, shape.Bounds.Left, 1);
+            Assert.Equal(rects.Max(r => r.Right) + 2, shape.Bounds.Right, 1);
+            Assert.Equal(rects.Min(r => r.Top) - 2, shape.Bounds.Top, 1);
+            Assert.Equal(rects.Max(r => r.Bottom) + 2, shape.Bounds.Bottom, 1);
         }
 
         [Fact]
-        public async Task OutlineAndBorderOnAWrappingInlineElement_OutlineClosesEveryLine_BorderStaysOpenAtWraps()
+        public async Task OutlineAndBorderOnAWrappingInlineElement_OutlineUnionsEveryLine_BorderStaysOpenAtWraps()
         {
-            // Proves the outline fix (issue #1163) is genuinely outline-specific, not a change to the
-            // shared HasLeftEdge/HasRightEdge geometry border/background also read: the very same span,
+            // Proves the union is genuinely outline-specific, not a change to the shared
+            // HasLeftEdge/HasRightEdge geometry border and background also read: the very same span,
             // painted in one pass, must show its border still open at both interior wrap points (the
             // pre-existing, correct box-decoration-break `slice` behavior css-break-3 §6.2 requires)
-            // while its outline closes every one of the three lines into its own complete ring.
+            // while its outline becomes one connected shape around all three lines.
             var html = LayoutHarness.Wrap(
                 "<div style='width:200pt;font:10pt Arial'>" +
                 "<span id='s' style='border:2pt solid #f00;outline:2pt solid #00f'>Alpha<br>Beta<br>Gamma</span></div>");
@@ -788,17 +789,19 @@ namespace PeachPDF.Tests.Integration
                 .ToList();
             Assert.Equal(2, borderVerticalSides.Count);
 
-            // Outline: every line now closes into its own complete ring instead - never a separate side
-            // polygon the way an open edge set would produce.
-            var outlineRings = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+            // Outline: one connected shape over all three lines - two subpaths, the contour and the
+            // inset copy hollowing it out - never a separate side polygon the way an open edge set
+            // would produce, and never a ring per line.
+            var outlineShapes = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
                 .Where(p => !p.Stroked && p.Color == blue)
                 .ToList();
-            Assert.Equal(3, outlineRings.Count);
+            var outline = Assert.Single(outlineShapes);
+            Assert.Equal(2, outline.SubpathStarts.Count);
             Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>(), p => p.Color == blue);
         }
 
         [Fact]
-        public async Task RoundedOutlineOnAWrappingInlineElement_ClosesEachFragmentAsACompleteRoundedRing()
+        public async Task RoundedOutlineOnAWrappingInlineElement_PaintsOneConnectedRoundedShape()
         {
             var html = LayoutHarness.Wrap(
                 "<div style='width:200pt;font:10pt Arial'>" +
@@ -813,47 +816,37 @@ namespace PeachPDF.Tests.Integration
             var bluePaths = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
                 .Where(path => path.Color == RColor.FromArgb(0, 0, 255))
                 .ToList();
-            Assert.Equal(3, bluePaths.Count);
+            var shape = Assert.Single(bluePaths);
 
-            // A sliced background/border still resolves against the unbroken horizontal strip, but an
-            // outline cannot: its outward spill would disagree with the fragment clip. Each path is
-            // instead based on its own fragment - and (issue #1163) every one of its four sides now
-            // expands, not just the box's true first/last inline edges, closing every line into its own
-            // complete rounded ring (Chromium's own "closed rect per line" shape). No clip is needed
-            // because painting resolves against each line's own slice, not the unbroken strip.
+            // The union is filled, not stroked: a stepped contour and its inset copy bound a band of
+            // constant thickness, which a single centerline stroke cannot express once the contour has
+            // the concave corners a wrap introduces. No clip is needed either - the shape is built from
+            // the fragments' own rectangles, so nothing spills outside it to clip away.
+            Assert.False(shape.Stroked);
             Assert.All(
                 g.Log.Select((entry, index) => (entry, index))
                     .Where(item => item.entry is TestRecordingGraphics.DrawPathCall path &&
                                    path.Color == RColor.FromArgb(0, 0, 255)),
                 item => Assert.IsNotType<TestRecordingGraphics.PushClipCall>(g.Log[item.index - 1]));
 
-            // Every line now goes through the same complete-ring drawer a rounded, unwrapped outline
-            // already uses (matching RoundedSolidOutline_ExpandsTheBorderRadiusWithItsOffsetAndWidth
-            // above): one Stroked path traced along the ring's centerline, so TestRecordingGraphics'
-            // own point-derived Bounds sit half a stroke width short of the true outer edge - reach is
-            // offset (0) + width (2) / 2, not the full declared width.
-            Assert.All(bluePaths, p => Assert.True(p.Stroked));
-            const double reach = 1;
-            for (var i = 0; i < bluePaths.Count; i++)
-            {
-                Assert.Equal(rects[i].Top - reach, bluePaths[i].Bounds.Top, 1);
-                Assert.Equal(rects[i].Bottom + reach, bluePaths[i].Bounds.Bottom, 1);
-                Assert.Equal(rects[i].Left - reach, bluePaths[i].Bounds.Left, 1);
-                Assert.Equal(rects[i].Right + reach, bluePaths[i].Bounds.Right, 1);
-            }
+            // Being a filled band rather than a centerline stroke, the recorded bounds reach the true
+            // outer edge: the full offset (0) + width (2), not half of it.
+            const double reach = 2;
+            Assert.Equal(rects.Min(r => r.Top) - reach, shape.Bounds.Top, 1);
+            Assert.Equal(rects.Max(r => r.Bottom) + reach, shape.Bounds.Bottom, 1);
+            Assert.Equal(rects.Min(r => r.Left) - reach, shape.Bounds.Left, 1);
+            Assert.Equal(rects.Max(r => r.Right) + reach, shape.Bounds.Right, 1);
         }
 
         [Fact]
-        public async Task RoundedOutlineOnAWrappingInlineElement_LargeNegativeOffsetClampsToAtLeastTwiceTheOutlineWidthPerLine()
+        public async Task RoundedOutlineOnAWrappingInlineElement_LargeNegativeOffsetClampsEveryLineBeforeUnioning()
         {
-            // Every line's outline is now a fully closed ring on all four sides (issue #1163), so the
-            // same "never shrink past 2x the outline width" floor
-            // OutlineOffset_LargeNegative_KeepsOutsideShapeAtLeastTwiceTheOutlineWidth already proves for
-            // an unbroken box applies independently to each line here too. Before this change, an
-            // interior line had no adjustable inline-axis edge at all to clamp against, so the same
-            // large negative offset could inflate its rect past zero width with nothing to stop it,
-            // and painting was skipped entirely - that degenerate case can no longer happen once every
-            // line always has both inline-axis edges to clamp.
+            // The "never shrink past 2x the outline width"
+            // floor OutlineOffset_LargeNegative_KeepsOutsideShapeAtLeastTwiceTheOutlineWidth proves for
+            // an unbroken box is applied to each line's own rectangle first, and only the clamped
+            // rectangles are unioned - matching Chromium, which likewise clamps per fragment before
+            // building the region. Without that clamp an interior line's rectangle could be inflated
+            // past zero size with nothing to stop it.
             var html = LayoutHarness.Wrap(
                 "<div style='width:200pt;font:10pt Arial'>" +
                 "<span id='s' style='border-radius:6pt;outline:4pt solid #00f;outline-offset:-20pt'>" +
@@ -864,15 +857,20 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, span, g);
 
-            var rings = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+            var shapes = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
                 .Where(path => path.Color == RColor.FromArgb(0, 0, 255))
                 .ToList();
-            Assert.Equal(3, rings.Count);
-            Assert.All(rings, ring =>
+            var shape = Assert.Single(shapes);
+
+            // The clamp held per line - each contributed a 2 x 4pt = 8pt square rather than collapsing
+            // to nothing - and the three clamped squares, no longer touching once shrunk that far from
+            // their shared line edges, stayed three disjoint pieces of the region.
+            Assert.Equal(6, shape.SubpathStarts.Count);
+            foreach (var i in new[] { 0, 2, 4 })
             {
-                Assert.Equal(8, ring.Bounds.Width, 1);
-                Assert.Equal(8, ring.Bounds.Height, 1);
-            });
+                Assert.Equal(8, shape.SubpathBounds(i).Width, 1);
+                Assert.Equal(8, shape.SubpathBounds(i).Height, 1);
+            }
 
             var pdf = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
             using var stream = new MemoryStream();
@@ -886,12 +884,10 @@ namespace PeachPDF.Tests.Integration
             // Mirrors BoxDecorationBreakPaintIntegrationTests' own
             // "Slice_InlineSpanningAPageBreak_DrawsNoBorderAtThePageBreakEither" - three lines land on
             // page 0 and the fourth on page 1 - but puts the outline directly on the block-level box
-            // whose own content forces the split, rather than on a nested wrapping inline. Issue #1163's
-            // fix only ever forces HasLeftEdge/HasRightEdge closed on an outline's own paint entries; it
-            // never touches HasTopEdge/HasBottomEdge, which is what a page break actually gates. So the
-            // block-axis edge the break cuts through must stay open on both sides of it, exactly as
-            // before this change - a fully closed ring (the line-wrap fix's own shape) must never appear
-            // at a page break.
+            // whose own content forces the split, rather than on a nested wrapping inline. A page break
+            // is the one boundary the union must not cross: the rectangles it unions are always one
+            // fragmentainer's, so a box broken across pages gets its own shape per page and the
+            // block-axis edge the break cuts through stays open on both sides of it.
             var (root, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap("<div id='b' style='width:200pt;font:10pt Arial;line-height:30pt;" +
                                    "outline:2pt solid #00f'>Alpha<br>Beta<br>Gamma<br>Delta</div>"),
@@ -918,6 +914,162 @@ namespace PeachPDF.Tests.Integration
             // Only the box's own true top (page 0) and true bottom (page 1) horizontal edges paint -
             // never the page break itself, on either side of it.
             Assert.Equal(2, horizontal);
+        }
+
+        [Fact]
+        public async Task OutlineOnAWrappingInlineElement_LinesThatDoNotTouch_StayAsSeparateShapes()
+        {
+            // The union is a genuine region operation, not a "join everything" rule. A line box's
+            // rectangle is the inline's own box, not the whole line-height slot, so a line-height taller
+            // than the text leaves real vertical gaps between consecutive lines. The region is then
+            // three disjoint pieces and the band is six subpaths - three contours, each with its own
+            // inset copy - which is what keeps a widely-spaced wrapped outline looking as it always has.
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial;line-height:40pt'>" +
+                "<span id='s' style='outline:2pt solid #00f'>Alpha<br>Beta<br>Gamma</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            var blue = RColor.FromArgb(0, 0, 255);
+            var shape = Assert.Single(
+                g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                p => !p.Stroked && p.Color == blue);
+
+            Assert.Equal(6, shape.SubpathStarts.Count);
+
+            // The three pieces really are separate: each contour's bottom sits strictly above the next
+            // contour's top, so no two of them touch.
+            var contourBounds = new[] { shape.SubpathBounds(0), shape.SubpathBounds(2), shape.SubpathBounds(4) }
+                .OrderBy(r => r.Top)
+                .ToList();
+            for (var i = 1; i < contourBounds.Count; i++)
+                Assert.True(contourBounds[i - 1].Bottom < contourBounds[i].Top);
+        }
+
+        [Fact]
+        public async Task OutlineOnAWrappingInlineElement_OffsetIsAppliedPerLineBeforeUnioning()
+        {
+            // outline-offset is applied to each fragment's rectangle before the union, exactly as
+            // Chromium does. Starting from the widely-spaced lines above - three disjoint pieces - an
+            // offset large enough to close the gaps between them changes the region's topology to a
+            // single connected shape, which is only observable if the offset really is applied to the
+            // rectangles going into the union rather than to the finished union.
+            const string template =
+                "<div style='width:200pt;font:10pt Arial;line-height:40pt'>" +
+                "<span id='s' style='outline:2pt solid #00f;outline-offset:{0}'>Alpha<br>Beta<br>Gamma</span></div>";
+
+            Assert.Equal(6, await CountSubpaths(string.Format(template, "0")));
+            Assert.Equal(2, await CountSubpaths(string.Format(template, "20pt")));
+
+            static async Task<int> CountSubpaths(string body)
+            {
+                var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body));
+                var span = LayoutHarness.FindById(root, "s")!;
+
+                var g = new TestRecordingGraphics();
+                FragmentPaintHarness.PaintBox(container, span, g);
+
+                return g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                    .Single(p => !p.Stroked && p.Color == RColor.FromArgb(0, 0, 255))
+                    .SubpathStarts.Count;
+            }
+        }
+
+        [Fact]
+        public async Task DoubleOutlineOnAWrappingInlineElement_PaintsTwoConcentricConnectedBands()
+        {
+            // css-backgrounds-3 §4.3's two lines, drawn over the unioned contour rather than per line:
+            // two filled shapes, the inner one strictly inside the outer, each an equal third of the
+            // declared width with the middle third left as the gap between them.
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'>" +
+                "<span id='s' style='outline:6pt double #00f'>Alpha<br>Beta<br>Gamma</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+            var rects = FragmentPaintHarness.FragmentOf(container, span).Lines.Select(line => line.Rect).ToList();
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            var bands = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(p => !p.Stroked && p.Color == RColor.FromArgb(0, 0, 255))
+                .ToList();
+            Assert.Equal(2, bands.Count);
+
+            // The outer band starts at the outline's full 6pt reach; the inner one starts two thirds of
+            // the way in, so its outer edge sits 4pt short of the first.
+            Assert.Equal(rects.Min(r => r.Top) - 6, bands[0].Bounds.Top, 1);
+            Assert.Equal(rects.Min(r => r.Top) - 2, bands[1].Bounds.Top, 1);
+            Assert.Equal(rects.Max(r => r.Right) + 6, bands[0].Bounds.Right, 1);
+            Assert.Equal(rects.Max(r => r.Right) + 2, bands[1].Bounds.Right, 1);
+        }
+
+        [Theory]
+        [InlineData("dotted")]
+        [InlineData("dashed")]
+        [InlineData("groove")]
+        [InlineData("ridge")]
+        [InlineData("inset")]
+        [InlineData("outset")]
+        public async Task PatternedOutlineOnAWrappingInlineElement_FallsBackToARingPerLine(string style)
+        {
+            // Only the styles whose appearance is decided purely by which area is filled can be painted
+            // over a unioned contour. A dash pattern has to be fitted along each side, and a bevel needs
+            // a per-side light/dark colour, and neither survives the concave corners a union introduces
+            // - so these keep the pre-existing ring-per-fragment shape rather than being drawn wrongly.
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'>" +
+                $"<span id='s' style='outline:3pt {style} #00f'>Alpha<br>Beta<br>Gamma</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            // Three lines' worth of edges paint, not one connected shape's.
+            var drawn = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().Count() +
+                        g.Log.OfType<TestRecordingGraphics.DrawLineCall>().Count() +
+                        g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Count();
+            Assert.True(drawn >= 3, $"expected a per-line fallback for '{style}', saw {drawn} draw calls");
+        }
+
+        [Fact]
+        public async Task RoundedOutlineOnAWrappingInlineElement_PutsEachCornerRadiusOnItsOwnCorner()
+        {
+            // An asymmetric border-radius proves the union's corners are mapped individually rather
+            // than all treated alike: only the top-left corner is rounded here, so the shape's top-left
+            // must be cut away while its top-right stays a true right angle. The top edge belongs to the
+            // first line, so that right angle is at that line's own right edge - not the widest line's,
+            // which is further right but lower down.
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'>" +
+                "<span id='s' style='border-radius:20pt 0 0 0;outline:2pt solid #00f'>Alpha<br>Beta<br>Gamma</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+            var rects = FragmentPaintHarness.FragmentOf(container, span).Lines.Select(line => line.Rect).ToList();
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            var shape = Assert.Single(
+                g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                p => !p.Stroked && p.Color == RColor.FromArgb(0, 0, 255));
+
+            var outer = shape.Subpath(0);
+            var left = rects.Min(r => r.Left) - 2;
+            var top = rects.Min(r => r.Top) - 2;
+
+            // Top-right (the first line's own): square, so the contour reaches its exact corner point.
+            Assert.Contains(outer, p => Math.Abs(p.X - (rects[0].Right + 2)) < 0.5 && Math.Abs(p.Y - top) < 0.5);
+
+            // Top-left: rounded, so nothing reaches the corner itself - the contour instead leaves the
+            // top edge some way to its right and rejoins the left edge some way below it.
+            Assert.DoesNotContain(outer, p => Math.Abs(p.X - left) < 0.5 && Math.Abs(p.Y - top) < 0.5);
+            Assert.Contains(outer, p => p.X > left + 1 && Math.Abs(p.Y - top) < 0.5);
+            Assert.Contains(outer, p => Math.Abs(p.X - left) < 0.5 && p.Y > top + 1);
         }
 
         [Fact]

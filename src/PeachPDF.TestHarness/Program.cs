@@ -1,4 +1,4 @@
-﻿using PeachPDF;
+using PeachPDF;
 using PeachPDF.Layout;
 using PeachPDF.PdfSharpCore;
 using ScottPlot;
@@ -6112,14 +6112,23 @@ var outlineHtml = "<!DOCTYPE html><html><head>" + OutlineCss + "</head><body>" +
     ) +
 
     "<h2>wrapped inline outline</h2>" +
-    "<p class=\"intro\">An outline on an inline element that wraps across lines closes every line into its own complete, independently rounded ring - Chromium's own \"closed rect per line\" shape for a fragmented outline. Border keeps the older sliced geometry instead: it stays open at internal line breaks, as box-decoration-break's slice value (which does not govern outline at all) requires.</p>" +
-    "<div style=\"display:flex; gap:36px; margin:12px; font-size:12pt; line-height:2\">" +
-    "<div style=\"width:180px\"><div class=\"desc\">outline (closes every line)</div>" +
-    "<span style=\"border-radius:12px; outline:6px solid #4a90d9\">Alpha<br>Beta<br>Gamma</span></div>" +
-    "<div style=\"width:180px\"><div class=\"desc\">border (stays open at wraps)</div>" +
-    "<span style=\"border-radius:12px; border:6px solid #d94a4a\">Alpha<br>Beta<br>Gamma</span></div>" +
-    "<div style=\"width:180px\"><div class=\"desc\">border + outline</div>" +
-    "<span style=\"border-radius:12px; border:6px solid #d94a4a; outline:6px solid #4a90d9\">Alpha<br>Beta<br>Gamma</span></div></div>" +
+    "<p class=\"intro\">An outline on an inline element that wraps across lines is drawn as one connected shape around all of them, matching Chromium: each line's rectangle is expanded by outline-offset, the rectangles are unioned, and the outline traces the boundary of the region they cover - running around its concave corners rather than closing across each wrap. Whether the lines merge into one piece depends only on whether those expanded rectangles <b>touch</b>; a border is not a special case, it just makes each line's box taller, and line spacing or outline-offset each cause the overlap on their own. Border itself keeps the sliced geometry either way, staying open at internal line breaks as box-decoration-break's slice value (which does not govern outline at all) requires, and the patterned and bevelled styles keep a closed ring per line, since a dash fit and a per-side bevel colour are not defined for a merged region's concave corners.</p>" +
+    "<div style=\"display:flex; gap:26px; margin:12px; font-size:12pt; line-height:1.3\">" +
+    "<div style=\"width:150px; line-height:1.3\"><div class=\"desc\">lines apart - separate pieces</div>" +
+    "<div class=\"css\">line-height: 2</div>" +
+    "<span style=\"border-radius:12px; outline:6px solid #4a90d9; line-height:2\">Alpha<br>Beta<br>Gamma</span></div>" +
+    "<div style=\"width:150px; line-height:1.3\"><div class=\"desc\">closer lines touch - one shape, no border involved</div>" +
+    "<div class=\"css\">line-height: 1.2</div>" +
+    "<span style=\"border-radius:12px; outline:6px solid #4a90d9; line-height:1.2\">Alpha<br>Beta<br>Gamma</span></div>" +
+    "<div style=\"width:150px; line-height:1.3\"><div class=\"desc\">same wide spacing, merged by offset alone</div>" +
+    "<div class=\"css\">line-height: 2; outline-offset: 8px</div>" +
+    "<span style=\"border-radius:12px; outline:6px solid #4a90d9; outline-offset:8px; line-height:2\">Alpha<br>Beta<br>Gamma</span></div>" +
+    "<div style=\"width:150px; line-height:1.3\"><div class=\"desc\">border + outline: outline merges, border stays open</div>" +
+    "<div class=\"css\">border: 6px; outline: 6px</div>" +
+    "<span style=\"border-radius:12px; border:6px solid #d94a4a; outline:6px solid #4a90d9; line-height:2\">Alpha<br>Beta<br>Gamma</span></div>" +
+    "<div style=\"width:150px; line-height:1.3\"><div class=\"desc\">dashed keeps a ring per line</div>" +
+    "<div class=\"css\">outline: 6px dashed</div>" +
+    "<span style=\"border-radius:12px; border:6px solid #d94a4a; outline:6px dashed #4a90d9; line-height:2\">Alpha<br>Beta<br>Gamma</span></div></div>" +
 
     "<h2>border + outline together</h2>" +
     "<p class=\"intro\">The red border occupies the box edge; the blue outline is a separate ring outside it. Rounded samples show both contours following the same border-radius.</p>" +
