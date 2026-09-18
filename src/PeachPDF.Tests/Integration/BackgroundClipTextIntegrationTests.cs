@@ -164,20 +164,43 @@ namespace PeachPDF.Tests.Integration
             return path;
         }
 
+        /// <summary>
+        /// An oversized stand-in outline reaching well past <paramref name="cell"/> on every side - used
+        /// to prove <see cref="RGraphicsPath.ClipToRect"/> actually confines a character's glyph outline
+        /// to its own reserved cell rather than unioning it in raw (issue #1194).
+        /// </summary>
+        private static RGraphicsPath OversizedOutline(RGraphics g, RRect cell)
+        {
+            const double overflow = 30;
+            var path = g.GetGraphicsPath();
+            path.Start(cell.X - overflow, cell.Y - overflow);
+            path.LineTo(cell.Right + overflow, cell.Y - overflow);
+            path.LineTo(cell.Right + overflow, cell.Bottom + overflow);
+            path.LineTo(cell.X - overflow, cell.Bottom + overflow);
+            path.CloseFigure();
+            return path;
+        }
+
         [Fact]
-        public async Task UprightRun_WithRealVerticalMetrics_FallsBackToPlainBorderBoxRectangle()
+        public async Task UprightRun_WithRealVerticalMetrics_ClipsUnionToReservedCell()
         {
             // Issue #1194 (found during #1123's own review): a font with real vhea/vmtx metrics makes
-            // PaintUprightVerticalRun clip each character to its own reserved cell (a real vmtx advance
-            // is routinely narrower than the font's line height) - RGraphicsPath has no path-intersection
-            // primitive to reproduce that clip in the union geometry, so this falls back rather than
-            // shipping a clip shape wider than what paint actually draws. BundledFonts.Cjk genuinely
-            // carries real vhea/vmtx data (see TextOrientationIntegrationTests's own use of it).
+            // PaintUprightVerticalRun clip each character's PAINT to its own reserved cell (a real vmtx
+            // advance is routinely narrower than the font's line height) - CollectUprightWord now
+            // reproduces that same clip on the glyph-outline UNION via RGraphicsPath.ClipToRect, rather
+            // than falling back to border-box. BundledFonts.Cjk genuinely carries real vhea/vmtx data
+            // (see TextOrientationIntegrationTests's own use of it).
+            //
+            // A single-character upright run's own reserved cell is exactly its own word rect: layout
+            // (CssLayoutEngine.NaturalWordSize) already sized that rect from the same real vmtx advance
+            // EnumerateUprightGlyphPlacements resolves for paint, and with only one character there is no
+            // second cell sharing the rect. So an oversized stand-in outline reaching well past the word
+            // rect on every side must still come back clipped to it.
             var html = "<!DOCTYPE html><html><head><style>" +
                 "body { font-family: 'CJK'; margin: 0 }" +
                 "</style></head><body>" +
                 "<h1 id='box' style='font-size:40pt;writing-mode:vertical-rl;text-orientation:upright;" +
-                "background-color:red;background-clip:text;color:transparent;'>テキ</h1>" +
+                "background-color:red;background-clip:text;color:transparent;'>テ</h1>" +
                 "</body></html>";
 
             var (root, container) = await LayoutHarness.LayoutAsync(html,
@@ -186,14 +209,26 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(box);
             Assert.True(box!.ActualFont.HasVerticalMetrics, "the bundled CJK test font should carry real vhea/vmtx metrics");
 
+            var wordRect = FindWordRect(FragmentPaintHarness.FragmentOf(container, box));
+
             var recording = new RecordingGraphics(new PdfSharpAdapter());
-            recording.GetTextOutlineOverride = (text, _, origin, _, _) => FakeOutline(recording, text, origin);
+            recording.GetTextOutlineOverride = (_, _, _, _, _) => OversizedOutline(recording, wordRect);
 
             FragmentPaintHarness.PaintBox(container, box, recording);
 
-            Assert.Empty(recording.GetTextOutlineCalls);
-            Assert.Empty(recording.DrawnPaths);
-            Assert.Single(recording.Log, op => op.Kind == PaintOpKind.FillRect);
+            Assert.Single(recording.GetTextOutlineCalls);
+            Assert.Single(recording.DrawnPaths);
+            var union = recording.DrawnPaths[0];
+            Assert.NotEmpty(union.Points);
+
+            const double tolerance = 0.5;
+            Assert.All(union.Points, p =>
+            {
+                Assert.InRange(p.X, wordRect.Left - tolerance, wordRect.Right + tolerance);
+                Assert.InRange(p.Y, wordRect.Top - tolerance, wordRect.Bottom + tolerance);
+            });
+
+            Assert.DoesNotContain(recording.Log, op => op.Kind == PaintOpKind.FillRect);
         }
 
         [Theory]

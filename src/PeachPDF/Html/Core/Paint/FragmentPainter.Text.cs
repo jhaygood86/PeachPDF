@@ -379,8 +379,10 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>
         /// Where each character of an upright vertical run (see <see cref="PaintUprightVerticalRun"/>)
         /// lands - the per-character position/advance math both that paint path and
-        /// <see cref="BuildTextClipPath"/>'s glyph-outline union (issue #1123) need, extracted here once so
-        /// the two can never drift apart on where a character's cell actually sits.
+        /// <see cref="BuildTextClipPath"/>'s glyph-outline union (issue #1123, and its own per-cell
+        /// <see cref="RGraphicsPath.ClipToRect"/> call for a real-vertical-metrics font, issue #1194)
+        /// need, extracted here once so the two can never drift apart on where a character's cell
+        /// actually sits.
         /// </summary>
         /// <param name="g">the device used to measure each character</param>
         /// <param name="text">the run's text - each returned placement is one Unicode scalar of it</param>

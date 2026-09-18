@@ -25,12 +25,30 @@ namespace PeachPDF.Adapters
         /// <summary>
         /// The actual PdfSharp graphics path instance.
         /// </summary>
-        private readonly XGraphicsPath _graphicsPath = new XGraphicsPath();
+        private readonly XGraphicsPath _graphicsPath;
 
         /// <summary>
         /// the last point added to the path to begin next segment from
         /// </summary>
         private RPoint _lastPoint;
+
+        public GraphicsPathAdapter()
+        {
+            _graphicsPath = new XGraphicsPath();
+        }
+
+        /// <summary>Wraps an already-built <see cref="XGraphicsPath"/> - used by <see cref="ClipToRect"/> to
+        /// hand back its clipped result without another round-trip through the public path-building API.
+        /// <see cref="_lastPoint"/> is seeded from the wrapped path's own last point (not left at the
+        /// parameterless constructor's implicit (0,0)) so a caller that keeps building onto the returned
+        /// path - e.g. a further <see cref="LineTo"/> - continues from where the clipped geometry actually
+        /// ends, not from the origin.</summary>
+        private GraphicsPathAdapter(XGraphicsPath graphicsPath)
+        {
+            _graphicsPath = graphicsPath;
+            var points = graphicsPath._corePath.PathPointsSpan;
+            _lastPoint = points.Length > 0 ? new RPoint(points[^1].X, points[^1].Y) : new RPoint(0, 0);
+        }
 
         /// <summary>
         /// The actual PdfSharp graphics path instance.
@@ -106,6 +124,12 @@ namespace PeachPDF.Adapters
         {
             get => _graphicsPath.FillMode == XFillMode.Winding ? RFillMode.Nonzero : RFillMode.EvenOdd;
             set => _graphicsPath.FillMode = value == RFillMode.Nonzero ? XFillMode.Winding : XFillMode.Alternate;
+        }
+
+        public override RGraphicsPath ClipToRect(RRect rect)
+        {
+            var clippedXPath = _graphicsPath.ClipToRect(new XRect(rect.X, rect.Y, rect.Width, rect.Height));
+            return new GraphicsPathAdapter(clippedXPath);
         }
 
         public override void Dispose()

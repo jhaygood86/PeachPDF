@@ -197,6 +197,20 @@ namespace PeachPDF.Tests.TestSupport
         public override void AddPath(RGraphicsPath path) => Points.AddRange(((TestGraphicsPath)path).Points);
 
         public override RFillMode FillMode { get; set; }
+
+        /// <summary>Test-double approximation of <see cref="RGraphicsPath.ClipToRect"/>: since this
+        /// double records a flat point list rather than real subpath/contour structure, it can't
+        /// reproduce the real Sutherland-Hodgman clip - it just keeps whichever recorded points already
+        /// fall inside <paramref name="rect"/>, which is enough for tests that use this double and don't
+        /// assert on rectangle-clip geometry specifically (see <c>GraphicsPathAdapter.ClipToRect</c> for
+        /// the real implementation).</summary>
+        public override RGraphicsPath ClipToRect(RRect rect)
+        {
+            var clipped = new TestGraphicsPath { FillMode = FillMode };
+            clipped.Points.AddRange(Points.Where(p => p.X >= rect.Left && p.X <= rect.Right && p.Y >= rect.Top && p.Y <= rect.Bottom));
+            return clipped;
+        }
+
         public override void Dispose() { }
     }
 

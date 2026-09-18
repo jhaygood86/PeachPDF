@@ -331,22 +331,18 @@ namespace PeachPDF.Html.Core.Paint
             // character's own EnumerateUprightGlyphPlacements cell rather than the word's as a whole (no
             // single natural horizontal layout exists to reuse for it, unlike a rotated run below).
             //
-            // A font with real vhea/vmtx or VORG metrics (RFont.HasVerticalMetrics/HasVerticalOrigin) is
-            // deliberately NOT unioned: PaintUprightVerticalRun clips each such character to its own
-            // reserved cell precisely because a real vmtx advance is routinely narrower than the font's
-            // line height (see that method's own remarks), so what is actually painted is smaller than
-            // GetTextOutline's raw per-character result. RGraphicsPath has no path-intersection primitive
-            // to reproduce that per-cell clip in the union geometry itself, so unioning the raw outline
-            // here would make background-clip: text reveal background color in a sliver where no glyph
-            // ink is actually painted - worse than the existing "unsupported run" fallback to border-box,
-            // which this reuses rather than shipping a shape wider than what is drawn.
+            // A font with real vhea/vmtx or VORG metrics (RFont.HasVerticalMetrics/HasVerticalOrigin,
+            // issue #1194) needs one more step before a character's outline is unioned in:
+            // PaintUprightVerticalRun clips each such character's *paint* to its own reserved cell
+            // (rect.X, placement.CellTop, rect.Width, placement.Advance) precisely because a real vmtx
+            // advance is routinely narrower than the font's line height (see that method's own remarks),
+            // so what is actually painted is smaller than GetTextOutline's raw per-character result.
+            // RGraphicsPath.ClipToRect reproduces that same per-cell clip at the path level - the raw
+            // outline is intersected with the identical cell before it is added to the union, so the two
+            // can never disagree about which pixels are actually inked.
             void CollectUprightWord(BoxFragment f, CssRect word, RRect rect, string text, CssBox styleSource, RFont font, double baselineAdjust, TextShapingFeatures features)
             {
-                if (font.HasVerticalMetrics || font.HasVerticalOrigin)
-                {
-                    anyUnsupportedRun = true;
-                    return;
-                }
+                var needsCellClip = font.HasVerticalMetrics || font.HasVerticalOrigin;
 
                 foreach (var placement in EnumerateUprightGlyphPlacements(g, text, font, rect, baselineAdjust, styleSource.ActualLetterSpacing, features))
                 {
@@ -356,6 +352,14 @@ namespace PeachPDF.Html.Core.Paint
                     {
                         anyUnsupportedRun = true;
                         continue;
+                    }
+
+                    if (needsCellClip)
+                    {
+                        var cell = new RRect(rect.X, placement.CellTop, rect.Width, placement.Advance);
+                        var clipped = outline.ClipToRect(cell);
+                        outline.Dispose();
+                        outline = clipped;
                     }
 
                     AddOutline(outline);
