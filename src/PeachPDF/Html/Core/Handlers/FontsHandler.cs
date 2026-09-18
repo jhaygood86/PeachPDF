@@ -49,8 +49,17 @@ namespace PeachPDF.Html.Core.Handlers
         /// oblique angle (when any - see FontObliqueAngleResolver) is a rendering-only detail that
         /// doesn't affect face selection, but two requests differing only in it would otherwise
         /// incorrectly share one cached RFont and silently keep whichever angle was cached first.
+        /// <para>
+        /// The size level is keyed by (size, <see cref="RAdapter.LayoutUnitsPerPoint"/>), not size alone. A size here
+        /// is in layout units (points × pixels-per-point) while the font behind it is built at
+        /// <c>size / pixelsPerPoint</c> points, so the same numeric size is a different physical font
+        /// under a different scale. Keyed by size alone, a <see cref="PeachPDF.PdfGenerator"/> reused across
+        /// renders served a font built at the previous render's scale (a <c>ShrinkToFit</c> render leaves
+        /// its rescaled fonts behind): 10pt text came out as 9.819pt Tf, which re-wrapped and re-sized
+        /// whatever was laid out next.
+        /// </para>
         /// </summary>
-        private readonly Dictionary<string, Dictionary<double, Dictionary<(RFontStyle Style, int Weight, int Stretch, double? ObliqueSkewSinus), RFont?>>> _fontsCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Dictionary<(double Size, double Scale), Dictionary<(RFontStyle Style, int Weight, int Stretch, double? ObliqueSkewSinus), RFont?>>> _fontsCache = new(StringComparer.OrdinalIgnoreCase);
 
         #endregion
 
@@ -66,20 +75,22 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// Per-codepoint font cache: (family, size, style/weight/stretch/oblique, codepoint) → resolved
+        /// Per-codepoint font cache: (family, size, scale, style/weight/stretch/oblique, codepoint) → resolved
         /// font (or null when no face of that family covers the codepoint - cached too, so a repeated
         /// coverage miss isn't re-resolved). Separate from <see cref="_fontsCache"/> so the ordinary
-        /// codepoint-less path is completely unaffected.
+        /// codepoint-less path is completely unaffected. <c>Scale</c> is <see cref="RAdapter.LayoutUnitsPerPoint"/>;
+        /// see <see cref="_fontsCache"/> for why a size alone is not a font's identity.
         /// </summary>
-        private readonly Dictionary<(string Family, double Size, RFontStyle Style, int Weight, int Stretch, double? Oblique, int Codepoint), RFont?> _codepointFontsCache = new();
+        private readonly Dictionary<(string Family, double Size, double Scale, RFontStyle Style, int Weight, int Stretch, double? Oblique, int Codepoint), RFont?> _codepointFontsCache = new();
 
         /// <summary>
-        /// Last-resort system-fallback font cache: (size, style/weight/stretch/oblique, codepoint) →
+        /// Last-resort system-fallback font cache: (size, scale, style/weight/stretch/oblique, codepoint) →
         /// resolved font (or null when no registered family covers the codepoint at all). No
         /// <c>family</c> component - unlike <see cref="_codepointFontsCache"/> - since this path isn't
-        /// keyed by a declared family, it searches every one of them.
+        /// keyed by a declared family, it searches every one of them. <c>Scale</c> is
+        /// <see cref="RAdapter.LayoutUnitsPerPoint"/>; see <see cref="_fontsCache"/>.
         /// </summary>
-        private readonly Dictionary<(double Size, RFontStyle Style, int Weight, int Stretch, double? Oblique, int Codepoint), RFont?> _systemFallbackFontsCache = new();
+        private readonly Dictionary<(double Size, double Scale, RFontStyle Style, int Weight, int Stretch, double? Oblique, int Codepoint), RFont?> _systemFallbackFontsCache = new();
 
         public void ClearCache()
         {
@@ -150,6 +161,7 @@ namespace PeachPDF.Html.Core.Handlers
         {
             var (resolvedWeight, resolvedStretch) = ResolveWeightAndStretch(style, weight, stretch);
             var font = TryGetFont(family, size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus);
+            var sizeKey = (size, _adapter.LayoutUnitsPerPoint);
 
             if (font == null)
             {
@@ -161,7 +173,7 @@ namespace PeachPDF.Html.Core.Handlers
                         if (font == null)
                         {
                             font = CreateFont(mappedFamily, size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus);
-                            _fontsCache[mappedFamily][size][(style, resolvedWeight, resolvedStretch, obliqueSkewSinus)] = font;
+                            _fontsCache[mappedFamily][sizeKey][(style, resolvedWeight, resolvedStretch, obliqueSkewSinus)] = font;
                         }
                     }
                 }
@@ -171,7 +183,7 @@ namespace PeachPDF.Html.Core.Handlers
                     font = CreateFont(existingFontFamily.Name, size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus);
                 }
 
-                _fontsCache[family][size][(style, resolvedWeight, resolvedStretch, obliqueSkewSinus)] = font;
+                _fontsCache[family][sizeKey][(style, resolvedWeight, resolvedStretch, obliqueSkewSinus)] = font;
             }
 
             return font;
@@ -196,7 +208,7 @@ namespace PeachPDF.Html.Core.Handlers
                 ? family
                 : _fontsMapping.TryGetValue(family, out var mappedFamily) ? mappedFamily : family;
 
-            var key = (resolvedFamily.ToLowerInvariant(), size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint.Value);
+            var key = (resolvedFamily.ToLowerInvariant(), size, _adapter.LayoutUnitsPerPoint, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint.Value);
 
             if (_codepointFontsCache.TryGetValue(key, out var cached))
                 return cached;
@@ -216,7 +228,7 @@ namespace PeachPDF.Html.Core.Handlers
         {
             var (resolvedWeight, resolvedStretch) = ResolveWeightAndStretch(style, weight, stretch);
 
-            var key = (size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint.Value);
+            var key = (size, _adapter.LayoutUnitsPerPoint, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint.Value);
 
             if (_systemFallbackFontsCache.TryGetValue(key, out var cached))
                 return cached;
@@ -242,23 +254,24 @@ namespace PeachPDF.Html.Core.Handlers
         private RFont? TryGetFont(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus)
         {
             RFont? font = null;
+            var sizeKey = (size, _adapter.LayoutUnitsPerPoint);
 
             if (_fontsCache.TryGetValue(family, out var a))
             {
-                if (a.TryGetValue(size, out var b))
+                if (a.TryGetValue(sizeKey, out var b))
                 {
                     b.TryGetValue((style, weight, stretch, obliqueSkewSinus), out font);
                 }
                 else
                 {
-                    _fontsCache[family][size] = [];
+                    _fontsCache[family][sizeKey] = [];
                 }
             }
             else
             {
-                _fontsCache[family] = new Dictionary<double, Dictionary<(RFontStyle, int, int, double?), RFont?>>
+                _fontsCache[family] = new Dictionary<(double Size, double Scale), Dictionary<(RFontStyle, int, int, double?), RFont?>>
                 {
-                    [size] = new()
+                    [sizeKey] = new()
                 };
             }
             return font;

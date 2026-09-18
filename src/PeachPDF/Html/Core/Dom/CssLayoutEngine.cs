@@ -2937,7 +2937,16 @@ namespace PeachPDF.Html.Core.Dom
             // box's whole height, so it only means anything for a box this pass both opened and
             // finished. For one it merely walked through the deficit is the box's entire height, which
             // it would then add to the flow all over again.
-            if (opensHere && box.DerivedStyle.ActualDisplay is not Keywords.Inline
+            //
+            // And never for the flow root itself (box == blockBox): CreateLineBoxes flows every block,
+            // grid item, flex item and table cell holding inline content as FlowBox(blockBox, blockBox), so
+            // this exit runs for the root too. Its own declared height/min-height is applied by
+            // ApplyHeight/GetBoxHeight (min-height, max-height, the table cell's own maximum), and its
+            // startY is the CONTENT edge while ResolveAtomicInlineDeclaredHeight answers in border-box
+            // terms - so comparing them here counted the root's vertical padding and border twice (a
+            // padded one-line block came out P + max(content, declared) tall, since the caller adds the
+            // bottom padding and border to MaxBottom again). Only a NESTED atomic inline is compared.
+            if (box != blockBox && opensHere && box.DerivedStyle.ActualDisplay is not Keywords.Inline
                 && ResolveAtomicInlineDeclaredHeight(box) is { } declaredFlowHeight
                 && coordinates.MaxBottom - trueStartY < declaredFlowHeight)
             {
