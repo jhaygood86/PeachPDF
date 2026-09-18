@@ -3098,9 +3098,25 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Resolves an inline-block's used border-box width without committing placement geometry. This
-        /// lets the caller test the whole atomic box against the remaining line measure before
-        /// <c>line-clamp</c> decides whether the box exists in this layout at all.
+        /// Resolves an atomic inline-level box's used border-box width under the ordinary CSS 2.1 §10.3.9
+        /// width algorithm - a declared, non-auto <c>width</c> (length, percentage, or <c>calc()</c>,
+        /// via <see cref="GetBoxWidth"/>'s own already-correct resolution of all three against the
+        /// containing block's real, page-aware basis) as-is, or otherwise shrink-to-fit, floored by both
+        /// the box's own min-content width and an explicit <c>min-width</c> - without committing any
+        /// placement geometry.
+        /// <para>
+        /// For <c>inline-block</c> this IS the box's real used width, applied by the caller
+        /// (<see cref="PrepareAtomicBlockContentChild"/>) once the line fit check
+        /// (<see cref="FitAtomicInlineOnLine"/>) passes. For <c>inline-table</c>/<c>inline-grid</c>/
+        /// <c>inline-flex</c>, called with the very same box and blockTop, it is only an ESTIMATE for
+        /// that fit check - never a value used to size the box - since each of those settles its own
+        /// real used width independently once its own layout (column/track algorithm, or the flex
+        /// algorithm) actually runs. Sharing this one resolution rather than a second, narrower
+        /// reimplementation for the other three displays is what a fit check needs: an
+        /// <c>inline-table</c> with a percentage <c>width</c>'s wrap decision has to reflect the same
+        /// percentage/<c>calc()</c>/min-width-floored width its own layout will actually use, or the two
+        /// can disagree about whether it fits (issue #1105).
+        /// </para>
         /// </summary>
         private static async ValueTask<double> ResolveAtomicInlineBlockWidth(
             RGraphics g, CssBox b, double blockTop)
@@ -3171,13 +3187,13 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="b">The atomic inline-level box being preflighted.</param>
         /// <param name="outerContentWidth">
         /// The box's estimated outer content-box width (border/padding included, margin excluded) - for
-        /// this fit check ONLY, never a value later used to size the box itself. Inline-block passes its
-        /// already-resolved used width (the same value <see cref="FlowAtomicBlockContentChild"/> goes on
-        /// to apply); inline-table/inline-grid/inline-flex pass a declared width if they have a
-        /// non-percentage one, or otherwise their own (issue #1032-corrected) max-content width bounded by
-        /// the containing block - CSS Flexbox 1 §9.2's shrink-to-fit main size, and the same shrink-to-fit
-        /// idea CSS 2.1 §10.3.9 already applies to inline-block. All three settle their real used width
-        /// independently once their own layout actually runs; this estimate is discarded either way.
+        /// this fit check ONLY, never a value later used to size the box itself. All four displays resolve
+        /// this the same way, via <see cref="ResolveAtomicInlineBlockWidth"/> (see its own remarks for why
+        /// that one resolution is shared rather than reimplemented per display): a declared width (length,
+        /// percentage, or <c>calc()</c>) as-is, or otherwise shrink-to-fit floored by min-content and by an
+        /// explicit <c>min-width</c>. For inline-block this IS the value <see cref="FlowAtomicBlockContentChild"/>
+        /// goes on to apply; inline-table/inline-grid/inline-flex settle their real used width
+        /// independently once their own layout actually runs, so their estimate is discarded either way.
         /// </param>
         /// <param name="coordinates">The line-building state being advanced.</param>
         /// <param name="lineSpacing">Passed through to <see cref="OpenNextLine"/> for the new line's leading.</param>
@@ -3239,30 +3255,6 @@ namespace PeachPDF.Html.Core.Dom
                 : 0);
 
             return AtomicInlineLineFit.Wrapped;
-        }
-
-        /// <summary>
-        /// The estimated outer content-box width (border/padding included, margin excluded) to preflight
-        /// an inline-table/inline-grid/inline-flex against the remaining line measure via
-        /// <see cref="FitAtomicInlineOnLine"/> - never a value used to size the box itself, since all
-        /// three settle their real used width independently once their own layout (column/track algorithm,
-        /// or the flex algorithm) actually runs.
-        /// </summary>
-        /// <remarks>
-        /// A declared, non-percentage <c>width</c> is used as-is (CSS 2.1 §10.3.9 fixes a non-auto width
-        /// regardless of content, the same way it does for inline-block); otherwise this is the box's own
-        /// (issue #1032-corrected) max-content width bounded by the containing block - CSS Flexbox 1 §9.2's
-        /// shrink-to-fit main size for inline-flex, and the same shrink-to-fit idea CSS 2.1 §10.3.9 already
-        /// applies to inline-block's own auto-width case (<see cref="ResolveAtomicInlineBlockWidth"/>).
-        /// </remarks>
-        private static async ValueTask<double> GetAtomicInlineFitCheckWidth(RGraphics g, CssBox b)
-        {
-            if (CssValueParser.IsValidLength(b.Width) && !b.Width.EndsWith('%'))
-            {
-                return CssValueParser.ParseLength(b.Width, 0, b) + b.ActualBoxSizeIncludedWidth;
-            }
-
-            return await GetFitContentWidth(g, b, b.ContainingBlock.Size.Width);
         }
 
         /// <summary>
@@ -4449,17 +4441,34 @@ namespace PeachPDF.Html.Core.Dom
                         // inline-table/inline-grid reach this branch unconditionally (see the comment
                         // above) and, unlike inline-block, never had a fit check at all until issue #1105:
                         // FlowAtomicBlockContentChild positioned them at coordinates.CurrentX no matter how
-                        // far that overhung the containing block's right edge. The estimate here is for
-                        // this check only - their own column/track layout settles the real used width once
+                        // far that overhung the containing block's right edge. ResolveAtomicInlineBlockWidth
+                        // (see its own remarks) is reused here as an ESTIMATE for this check only - their
+                        // own column/track layout settles the real used width once
                         // FlowAtomicBlockContentChild's recursive LayoutContents call actually runs.
-                        var fitCheckWidth = await GetAtomicInlineFitCheckWidth(g, b);
+                        var fitCheckWidth = await ResolveAtomicInlineBlockWidth(g, b, coordinates.CurrentY);
 
                         var fitResult = await FitAtomicInlineOnLine(g, blockBox, box, b, fitCheckWidth,
                             coordinates, lineSpacing, lineStartX, leftSpacing, clonedTrailing,
                             clonesDecorations, isRtl);
 
                         if (fitResult == AtomicInlineLineFit.ClampedStop) return;
-                        if (fitResult == AtomicInlineLineFit.Wrapped) childContentStartX = coordinates.CurrentX;
+
+                        // No re-resolution after a Wrapped result, unlike inline-block below (whose
+                        // resolvedInlineBlockWidth IS the value actually applied, so a stale pre-wrap
+                        // estimate would mis-size the box itself). Here fitCheckWidth is discarded either
+                        // way: FlowAtomicBlockContentChild's PrepareAtomicBlockContentChild sets b.Location
+                        // from coordinates.CurrentX/CurrentY - already the post-wrap position by the time
+                        // it runs - and CssLayoutEngineTable/Grid.PerformLayout each derive their own
+                        // percentage/auto width fresh from that same b.Location/b.ContainingBlock when
+                        // THEY run (CssLayoutEngineTable.GetAvailableTableWidth keys off _tableBox.ClientTop;
+                        // CssLayoutEngineGrid.PerformLayout calls GetBoxWidth(g, _gridBox) with no blockTop
+                        // override, defaulting to _gridBox.Location.Y) - so neither can read a value cached
+                        // from before the wrap.
+
+                        // Unlike inline-block, childDeclaredContentWidth is always null for inline-table/
+                        // inline-grid (ResolveAtomicInlineDeclaredWidth only ever resolves one for
+                        // Keywords.InlineBlock), so childContentStartX has no consumer here - nothing to
+                        // update after a wrap.
                     }
 
                     await FlowAtomicBlockContentChild(g, b, coordinates, resolvedInlineBlockWidth);
@@ -4478,17 +4487,23 @@ namespace PeachPDF.Html.Core.Dom
                     if (!childOpensHere) continue;
 
                     // inline-flex had no fit check of any kind before issue #1105 - FlowInlineFlexChild
-                    // positioned it unconditionally too. The estimate is its own CSS Flexbox 1 §9.2
-                    // shrink-to-fit main size; the flex algorithm settles the real used width once
-                    // FlowInlineFlexChild's own CssLayoutEngineFlex.PerformLayout call runs.
-                    var flexFitCheckWidth = await GetAtomicInlineFitCheckWidth(g, b);
+                    // positioned it unconditionally too. ResolveAtomicInlineBlockWidth (see its own
+                    // remarks) is reused here as an ESTIMATE (CSS Flexbox 1 §9.2's shrink-to-fit main
+                    // size); the flex algorithm settles the real used width once FlowInlineFlexChild's own
+                    // CssLayoutEngineFlex.PerformLayout call runs. Unlike inline-block, childContentStartX
+                    // has no consumer for an inline-flex either - see the inline-table/inline-grid branch
+                    // above - so nothing to update after a wrap. No re-resolution after a Wrapped result
+                    // either, for the same reason given there: FlowInlineFlexChild positions b.Location
+                    // from the already-post-wrap coordinates BEFORE CssLayoutEngineFlex.PerformLayout runs,
+                    // and that engine's own GetBoxWidth(g, _flexBox) call (no blockTop override) derives
+                    // fresh from b.Location.Y at that point, never from this discarded estimate.
+                    var flexFitCheckWidth = await ResolveAtomicInlineBlockWidth(g, b, coordinates.CurrentY);
 
                     var flexFitResult = await FitAtomicInlineOnLine(g, blockBox, box, b, flexFitCheckWidth,
                         coordinates, lineSpacing, lineStartX, leftSpacing, clonedTrailing, clonesDecorations,
                         isRtl);
 
                     if (flexFitResult == AtomicInlineLineFit.ClampedStop) return;
-                    if (flexFitResult == AtomicInlineLineFit.Wrapped) childContentStartX = coordinates.CurrentX;
 
                     await FlowInlineFlexChild(g, b, coordinates);
                 }

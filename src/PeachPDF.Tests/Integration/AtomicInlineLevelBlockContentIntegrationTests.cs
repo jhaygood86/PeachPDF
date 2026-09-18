@@ -281,6 +281,86 @@ namespace PeachPDF.Tests.Integration
 
         [Theory]
         [InlineData("inline-table")]
+        [InlineData("inline-flex")]
+        public async Task AutoWidthAtomicInlineFitCheck_IsFlooredByMinWidth_AndStillWraps(string display)
+        {
+            // ResolveAtomicInlineBlockWidth's auto-width branch floors its shrink-to-fit result by an
+            // explicit min-width, exactly as it already does for inline-block. The fit check this
+            // helper feeds has to see that same floored width when reused for inline-table/inline-flex,
+            // or a box whose min-width alone would overflow the line can be preflighted as "fits" from
+            // its tiny fit-content width alone and never wrap: the single-letter content here has a
+            // fit-content width nowhere near 140pt, so only the min-width floor makes this wrap at all.
+            var innerContent = display == "inline-table"
+                ? "<span style='display:table-row'><span style='display:table-cell'>A</span></span>"
+                : "<div>A</div>";
+
+            var (root, _) = await BuildAndLayout($"""
+                <!DOCTYPE html><html><body style="margin:0">
+                <div id="row" style="width:150pt">
+                Hi <span id="atomic" style="display:{display};min-width:140pt">{innerContent}</span>
+                </div>
+                </body></html>
+                """);
+
+            var row = FindById(root, "row")!;
+            var atomic = FindById(root, "atomic")!;
+            var hiWord = FindWord(root, "Hi");
+
+            Assert.True(atomic.Location.Y > hiWord.Top + 1,
+                $"a '{display}' floored to 140pt by min-width cannot share a 150pt line with preceding "
+                + $"text and must wrap (Hi.Top={hiWord.Top}, atomic.Y={atomic.Location.Y}) - a fit check "
+                + "that ignored min-width would see only the single letter's tiny fit-content width and "
+                + "wrongly report it as fitting");
+            Assert.True(atomic.Location.X <= row.Location.X + 1,
+                $"the wrapped '{display}' must return to the line start (row.X={row.Location.X}, "
+                + $"atomic.X={atomic.Location.X})");
+        }
+
+        [Theory]
+        [InlineData("inline-table")]
+        [InlineData("inline-grid")]
+        [InlineData("inline-flex")]
+        public async Task PercentageWidthAtomicInline_FitCheckMatchesItsRealResolvedWidth(string display)
+        {
+            // ResolveAtomicInlineBlockWidth's declared-width branch resolves a percentage (or calc())
+            // width via GetBoxWidth against the real containing-block basis, the same way it already did
+            // for inline-block - a narrower, independent reimplementation used to treat ANY percentage
+            // width as if it were auto, estimating from fit-content/max-content instead and potentially
+            // disagreeing about whether the box fits. 60% of a 200pt container is 120pt; combined with
+            // the preceding text that must overflow a 200pt line and force the wrap.
+            var innerContent = display == "inline-table"
+                ? "<span style='display:table-row'><span style='display:table-cell'>A</span></span>"
+                : "<div>A</div>";
+
+            var (root, _) = await BuildAndLayout($"""
+                <!DOCTYPE html><html><body style="margin:0">
+                <div id="row" style="width:200pt">
+                A moderately long run of preceding text <span id="atomic" style="display:{display};width:60%">{innerContent}</span>
+                </div>
+                </body></html>
+                """);
+
+            var row = FindById(root, "row")!;
+            var atomic = FindById(root, "atomic")!;
+            var textWord = FindWord(root, "text");
+
+            Assert.True(atomic.Location.Y > textWord.Top + 1,
+                $"a 120pt-wide (60% of 200pt) '{display}' cannot share a line with text that already "
+                + $"overflows the 200pt container, and must wrap (text.Top={textWord.Top}, "
+                + $"atomic.Y={atomic.Location.Y})");
+
+            // The real, laid-out width - settled by each engine's own layout, independently of the fit
+            // check - must actually BE the 120pt the percentage resolves to, confirming the fit check
+            // above was deciding against the box's real size rather than an unrelated estimate.
+            var atomicWidth = atomic.ActualRight - atomic.Location.X;
+            Assert.Equal(120, atomicWidth, 1);
+            Assert.True(atomic.Location.X + atomicWidth <= row.ClientRight + 1,
+                $"the wrapped '{display}' must stay inside the containing block (right edge "
+                + $"{atomic.Location.X + atomicWidth} vs row.ClientRight {row.ClientRight})");
+        }
+
+        [Theory]
+        [InlineData("inline-table")]
         [InlineData("inline-grid")]
         [InlineData("inline-flex")]
         public async Task FixedWidthAtomicInlines_WrapAsWholeBoxes(string display)
