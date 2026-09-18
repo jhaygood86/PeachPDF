@@ -95,6 +95,31 @@ namespace PeachPDF.Html.Adapters
         public abstract RFillMode FillMode { get; set; }
 
         /// <summary>
+        /// Returns a new path holding this path's own filled area (per its own <see cref="FillMode"/>)
+        /// intersected with the axis-aligned rectangle <paramref name="rect"/> - the geometric
+        /// equivalent of the clip <see cref="RGraphics.PushClip(RRect)"/>/<see cref="RGraphics.PopClip"/>
+        /// would apply around this path at paint time, but expressed as path geometry a caller can union
+        /// into a larger clip shape instead (see <c>FragmentPainter.Decorations.cs</c>'s
+        /// <c>CollectUprightWord</c>, which needs each upright character's own glyph outline confined to
+        /// its own reserved cell - the same cell <c>PaintUprightVerticalRun</c> already clips *painting*
+        /// to for a font with real vertical metrics - before the outline is added to the
+        /// <c>background-clip: text</c> union).
+        /// </summary>
+        /// <remarks>
+        /// Deliberately narrower than a general polygon-boolean intersection between two arbitrary
+        /// paths: only the clip region is required to be an axis-aligned rectangle, which keeps a correct
+        /// implementation cheap (Sutherland-Hodgman against a convex clip window, which is exact for any
+        /// subject contour regardless of its own winding or convexity - see a concrete implementation's
+        /// own remarks) rather than requiring a general-purpose polygon-clipping library. A curve is
+        /// flattened to line segments as part of the clip (an axis-aligned rectangle clip of a cubic
+        /// Bézier is not itself expressible as a cubic Bézier in general), so the returned path's
+        /// fidelity is bounded by whatever flattening tolerance the concrete implementation chooses -
+        /// fine for a filled text-clip shape, where sub-point deviation is invisible, but not intended as
+        /// a general-purpose curve-preserving clip.
+        /// </remarks>
+        public abstract RGraphicsPath ClipToRect(RRect rect);
+
+        /// <summary>
         /// Release path resources.
         /// </summary>
         public abstract void Dispose();

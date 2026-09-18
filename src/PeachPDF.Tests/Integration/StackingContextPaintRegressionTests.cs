@@ -312,6 +312,7 @@ namespace PeachPDF.Tests.Integration
             public override void Transform(RMatrix matrix) { }
             public override void AddPath(RGraphicsPath path) { }
             public override RFillMode FillMode { get; set; }
+            public override RGraphicsPath ClipToRect(RRect rect) => this;
             public override void Dispose() { }
         }
     }

@@ -317,6 +317,113 @@ namespace PeachPDF.PdfSharpCore.Drawing
         }
 
         /// <summary>
+        /// Returns a new path holding this path's own contours, each flattened to line segments and
+        /// clipped to the axis-aligned rectangle [<paramref name="left"/>, <paramref name="top"/>] -
+        /// [<paramref name="right"/>, <paramref name="bottom"/>] via Sutherland-Hodgman against the
+        /// rectangle's own four half-planes. See <c>RGraphicsPath.ClipToRect</c> (the public entry
+        /// point this backs) for why a rectangle-only clip is sufficient here and why Sutherland-Hodgman
+        /// - normally associated with convex *subject* polygons - is exact regardless of this path's own
+        /// winding or convexity: clipping against a convex window never introduces a self-intersection a
+        /// general two-arbitrary-polygon boolean would have to resolve, so each closed contour can be
+        /// clipped independently and the results simply concatenated as disjoint subpaths, same fill mode.
+        /// </summary>
+        public CoreGraphicsPath ClipToRect(double left, double top, double right, double bottom)
+        {
+            var result = new CoreGraphicsPath();
+
+            foreach (var contour in EnumerateFlattenedContours())
+            {
+                var clipped = SutherlandHodgman.ClipToRect(contour, left, top, right, bottom);
+
+                // Fewer than 3 points can't enclose any area at all. That alone isn't sufficient,
+                // though: clipping against a degenerate (zero-width or zero-height) rectangle - or a
+                // subject edge that runs exactly along a clip boundary - can leave 3+ points that are
+                // all collinear (every vertex pinned to the same clip edge), which is still zero area.
+                // The shoelace-formula check below catches that case too, so a degenerate rectangle
+                // never fabricates a visible sliver of "clipped" geometry from nothing.
+                if (clipped.Count < 3 || IsNegligibleArea(clipped)) continue;
+
+                result.MoveTo(clipped[0].X, clipped[0].Y);
+                for (var i = 1; i < clipped.Count; i++)
+                    result.LineTo(clipped[i].X, clipped[i].Y, false);
+                result.CloseSubpath();
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="polygon"/> encloses effectively zero area (the shoelace formula,
+        /// halved and left unrounded - exact sign/magnitude isn't needed, only "is it indistinguishable
+        /// from a degenerate sliver or point"). <see cref="ClipToRect(double,double,double,double)"/>'s
+        /// own remarks explain why a point count above the 3-vertex minimum isn't sufficient on its own.
+        /// </summary>
+        private static bool IsNegligibleArea(List<XPoint> polygon)
+        {
+            double area = 0;
+            var n = polygon.Count;
+            for (var i = 0; i < n; i++)
+            {
+                var a = polygon[i];
+                var b = polygon[(i + 1) % n];
+                area += a.X * b.Y - b.X * a.Y;
+            }
+
+            return Math.Abs(area) < 1e-6;
+        }
+
+        /// <summary>
+        /// Walks this path's own point/type arrays and yields one flattened polygon (a closed,
+        /// line-segment-only point list) per subpath - a "Start" type begins a new one, a "Line" type
+        /// appends a vertex as-is, and a "Bezier" type (always 3 consecutive points: two control
+        /// points then the end point, per <see cref="BezierTo"/>) is subdivided into line segments by
+        /// <see cref="BezierFlattener.Flatten"/>. Every subpath built by this class' own drawing methods
+        /// (<c>AddRectangle</c>, <c>AddRoundedRectangle</c>, glyph outlines from
+        /// <c>GraphicsAdapter.GetTextOutline</c>, etc.) is geometrically closed by construction even when
+        /// the close-subpath flag was never explicitly set on it - the sole caller of this method
+        /// (<see cref="ClipToRect(double,double,double,double)"/>) only ever needs a *filled* area to
+        /// clip, so every yielded polygon is treated as implicitly closed regardless of that flag.
+        /// </summary>
+        private IEnumerable<List<XPoint>> EnumerateFlattenedContours()
+        {
+            List<XPoint>? current = null;
+            var i = 0;
+            while (i < _points.Count)
+            {
+                var baseType = (byte)(_types[i] & PathPointTypePathTypeMask);
+                if (baseType == PathPointTypeStart)
+                {
+                    if (current is { Count: > 0 }) yield return current;
+                    current = [_points[i]];
+                    i++;
+                }
+                else if (baseType == PathPointTypeBezier)
+                {
+                    // Malformed input (a Bezier type with no prior point to start the curve from) -
+                    // skip the segment defensively rather than throw, since a clip-shape utility
+                    // should degrade to "less clipped" on bad input, not crash the paint pass.
+                    if (current is null || current.Count == 0 || i + 2 >= _points.Count)
+                    {
+                        i++;
+                        continue;
+                    }
+
+                    var start = current[^1];
+                    BezierFlattener.Flatten(start, _points[i], _points[i + 1], _points[i + 2], current);
+                    i += 3;
+                }
+                else
+                {
+                    current ??= [];
+                    current.Add(_points[i]);
+                    i++;
+                }
+            }
+
+            if (current is { Count: > 0 }) yield return current;
+        }
+
+        /// <summary>
         /// Gets the path points in GDI+ style.
         /// </summary>
         public XPoint[] PathPoints { get { return _points.ToArray(); } }

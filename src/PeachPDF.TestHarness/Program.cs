@@ -11438,9 +11438,10 @@ await SaveShowcaseAsync("vertical_writing_mode_decoration", "Text &amp; Fonts", 
     "otherwise collide (issue #1146).",
     verticalDecorationHtml, pdfConfig);
 
-// ── Vertical writing mode: background-clip: text (issue #1123) ──────────────────────
+// ── Vertical writing mode: background-clip: text (issue #1123, #1194) ───────────────
 var verticalBackgroundClipTextHtml =
-    "<html><head><style>" +
+    $"<html><head><style>" +
+    $"@font-face {{ font-family: 'PeachPDF CJK Subset'; src: url(data:font/ttf;base64,{writingModeCjkFontB64}) format('truetype') }}" +
     "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
     "h2 { font-size: 20px; margin: 0 0 4px; }" +
     ".note { color: #555; font-size: 12px; margin: 0 0 20px; max-width: 640px; }" +
@@ -11450,24 +11451,30 @@ var verticalBackgroundClipTextHtml =
     "-webkit-background-clip: text; color: transparent; }" +
     ".col.upright { text-orientation: upright; }" +
     ".col.lr { writing-mode: vertical-lr; }" +
+    ".col.cjk { font-family: 'PeachPDF CJK Subset', sans-serif; }" +
     "</style></head><body>" +
     "<h2>background-clip: text under a vertical writing mode</h2>" +
     "<p class=\"note\">A gradient background now clips to the actual glyph-outline union under " +
     "vertical-rl/vertical-lr, matching the horizontal case, instead of falling back to a plain " +
     "border-box fill. The rotated column builds one outline per whole word, transformed into its " +
     "physical footprint; the upright column builds one outline per character, translated to its own " +
-    "cell.</p>" +
+    "cell. The CJK column's font carries real OpenType vertical metrics (vhea/vmtx) - each upright " +
+    "character's outline is additionally clipped to its own reserved cell before being unioned in " +
+    "(issue #1194), so the gradient hugs the glyph ink tightly instead of falling back to a plain " +
+    "border-box fill the way this exact combination used to.</p>" +
     "<div class=\"row\">" +
     "<div class=\"col\">PEACH</div>" +
     "<div class=\"col upright\">PEACH</div>" +
     "<div class=\"col lr\">PEACH</div>" +
+    "<div class=\"col upright cjk\">縦書きテキスト</div>" +
     "</div>" +
     "</body></html>";
 
 await SaveShowcaseAsync("vertical_writing_mode_background_clip_text", "Text &amp; Fonts", "Vertical Writing Mode: background-clip: text",
     "background-clip: text now clips to the real glyph-outline union under a true vertical writing " +
-    "mode (vertical-rl/vertical-lr), for both a rotated (sideways) run and an upright run, instead of " +
-    "falling back to a plain border-box fill (issue #1123).",
+    "mode (vertical-rl/vertical-lr), for both a rotated (sideways) run and an upright run - including " +
+    "one whose font carries real vhea/vmtx vertical metrics (issue #1194) - instead of falling back to " +
+    "a plain border-box fill (issue #1123).",
     verticalBackgroundClipTextHtml, pdfConfig);
 
 const string declarativeApiSource =
