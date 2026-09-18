@@ -1009,8 +1009,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <see cref="CommitRemainingObservations"/> at this pass's true end.
         /// </para>
         /// <para>
-        /// <b>Excludes a box that continues into the next pass</b> - the third thing found empirically, and
-        /// the one that dropped real text from a shipped release: a box named by the pass's outgoing
+        /// <b>Excludes a box that continues into the next pass</b> - found empirically too, and the one that
+        /// dropped real text from a shipped release: a box named by the pass's outgoing
         /// <see cref="BreakToken"/> chain (<see cref="_continuesInto"/>) has not reached its epilogue, so its
         /// height has not been applied and its <see cref="CssBox.ActualBottom"/> understates where its
         /// content will end by however much is still to come. A reserved blank slot (a directional break

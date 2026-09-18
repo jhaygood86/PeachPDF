@@ -22,6 +22,4 @@ the defect the parity walk was added to fix.
 
 **A test on the slot index does not catch it.** The slot was already correct; the page was lost downstream,
 when the emitter dropped an unreserved empty slot. Any test for a directional break has to assert
-`FragmentTree.Fragmentainers.Count` as well as where the box landed. Neither catches content that vanished *around* a page that survived, so also assert
-that every word survives (the ordered word list across the fragmentainers) - see
-[a box continuing into the next pass has no settled bottom](fragmentation-a-box-continuing-into-the-next-pass-has-no-settled-bottom.md).
+`FragmentTree.Fragmentainers.Count` as well as where the box landed.

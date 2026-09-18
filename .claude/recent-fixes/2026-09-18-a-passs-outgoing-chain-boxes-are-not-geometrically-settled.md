@@ -22,10 +22,14 @@ inside*:
 - `BuildDraft`'s `EmittedNothingAtOrBefore` then prunes the whole document from the recorded slot on, so the
   next pass's content (slot 2 onward) is never emitted.
 
-What exposed it: cd793233 (#1056) shifts words by half-leading, so the last line on a page now correctly
-straddles the page bottom and the pass ends with a break token *inside* the chapter. Before that the line
-fitted, the pass ended at a clean boundary, and nothing was continuing into a next pass. The straddle is
-right and stays - this fix does not touch half-leading or loosen the straddle test.
+Why this showcase started hitting it: cd793233 (#1056) shifts words by half-leading, so the last line of
+chapter 1's first page now correctly straddles the page bottom (0.28pt past it) and pass 0 ends with a break
+token *inside* the chapter. Before #1056 that one line happened to fit, so this particular document's first
+chapter page ended at a clean boundary and never reached the case. The case itself does not depend on
+half-leading: any `break-before: recto` chapter whose first page ends mid-block leaves `<html>`/`<body>`/the
+chapter in the outgoing chain beside the reserved blank slot, which is why the minimal document above lost
+text on v0.9.18 too. The straddle is right and stays - this fix does not touch half-leading or loosen the
+straddle test.
 
 ## The fix
 
