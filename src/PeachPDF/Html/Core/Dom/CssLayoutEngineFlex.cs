@@ -241,6 +241,15 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         double final = ClampMainAxis(item.Box, item.HypotheticalMainSize, mainSize);
                         item.FinalMainSize = final;
+
+                        // Same reasoning as the ResolveFlexibleLengths branch below: a column-direction
+                        // item's resolved main size (height) is definite once this algorithm has run,
+                        // even when the container's own main size was indefinite going in (auto-height
+                        // column flex container). Without this, a percentage-height descendant of this
+                        // item incorrectly sees an indefinite height and stays auto (issue #1167 covers
+                        // the ResolveFlexibleLengths path; this mirrors it for the mainSizeIndefinite one).
+                        if (!_mainAxisIsPhysicalX) item.Box.AlgorithmicDefiniteHeight = final;
+
                         if (Math.Abs(final - item.NaturalMainSize) > 0.5)
                             await ResizeItem(g, item, final);
                     }
