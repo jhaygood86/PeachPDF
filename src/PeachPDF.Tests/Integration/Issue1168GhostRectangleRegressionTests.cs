@@ -1,3 +1,4 @@
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -162,10 +163,49 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// Proves <see cref="FindGhostRectangles"/> has teeth before the five tests above are trusted to
+        /// rely on it: every one of them only asserts <c>Assert.Empty(FindGhostRectangles(...))</c>, which
+        /// passes vacuously if the detector's own logic is wrong (an inverted condition, the wrong
+        /// collection compared, <see cref="Descendants"/> skipping the box that matters) — exactly the
+        /// silent-false-negative failure mode a regression guard for a subtle, hard-to-reproduce bug must
+        /// not have. Manually engineers the shape a real abandoned layout attempt leaves behind: a
+        /// <see cref="CssLineBox"/> whose constructor registered it in its owner's <see cref="CssBox.LineBoxes"/>
+        /// (mirroring a real line being opened), removed from that list again (mirroring the owner moving
+        /// on to a fresh attempt), while a <see cref="CssBox.Rectangles"/> entry keyed by it survives
+        /// (mirroring the bug: nothing cleared the stale entry).
+        /// </summary>
+        [Fact]
+        public async Task FindGhostRectangles_DetectsAManuallyInjectedStaleEntry()
+        {
+            var (root, _) = await LayoutAsync(Wrap("<div id='box'>plain content</div>"));
+            var box = FindById(root, "box")!;
+
+            var orphanLine = new CssLineBox(box);
+            box.LineBoxes.Remove(orphanLine);
+            box.Rectangles[orphanLine] = new RRect(0, 0, 10, 10);
+
+            var ghosts = FindGhostRectangles(root);
+
+            var ghost = Assert.Single(ghosts);
+            Assert.Contains("id=box", ghost);
+        }
+
+        /// <summary>
         /// Walks the whole subtree and reports, for every box, any <see cref="CssBox.Rectangles"/> entry
         /// keyed by a <see cref="CssLineBox"/> that its own owner no longer lists among its current
         /// <see cref="CssBox.LineBoxes"/> — a stale entry left over from an abandoned layout attempt.
         /// </summary>
+        /// <remarks>
+        /// Load-bearing assumption, unenforced by the type system: a genuine re-flow always fully clears
+        /// (<c>LineBoxes.Clear()</c>) or otherwise fully removes a line from <see cref="CssBox.LineBoxes"/>
+        /// before that line's slot is reused or discarded — true today (<c>CssLayoutEngine.FlowBox</c>'s
+        /// <c>blockBox.LineBoxes.Clear()</c> at a fresh flow's start, and its targeted
+        /// <c>LineBoxes.Remove</c> calls for a discarded seed/trailing line) — rather than a future
+        /// partial-invalidation path mutating a line's content in place without ever removing it from
+        /// <see cref="CssBox.LineBoxes"/>. A change that introduced the latter would make a real ghost
+        /// invisible to this detector without failing the mutation test above, since that test injects an
+        /// already-removed line rather than exercising a partial-invalidation code path.
+        /// </remarks>
         private static List<string> FindGhostRectangles(CssBox root)
         {
             var ghosts = new List<string>();

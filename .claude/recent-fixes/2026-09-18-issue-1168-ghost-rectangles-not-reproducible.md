@@ -32,7 +32,7 @@ inside `CssLayoutEngine.FlowBox` re-runs `if (coordinates.ResumeOrdinal == 0) b.
 before re-flowing that box's content (`CssLayoutEngine.cs` ~L3824) - and because the same guard fires
 again for every descendant the recursive re-flow visits, a flip's whole abandoned subtree gets reset,
 not just the top box. `CssBox.RectanglesReset()` itself is not recursive (confirmed by reading it,
-`CssBox.cs` ~L8958-8967 - it only clears `this.Rectangles`), but the *call site* effectively is,
+`CssBox.cs` ~L8960-8967 - it only clears `this.Rectangles`), but the *call site* effectively is,
 because re-flowing a box's content necessarily re-visits every child through the same dispatch that
 holds the reset.
 
@@ -65,10 +65,13 @@ were already fixed by the time this investigation started. No code change was ma
 
 ## Evidence
 
-`src/PeachPDF.Tests/Integration/Issue1168GhostRectangleRegressionTests.cs`: 5 tests, all green -
+`src/PeachPDF.Tests/Integration/Issue1168GhostRectangleRegressionTests.cs`: 6 tests, all green -
 the issue's own inline-`style` repro, the stylesheet-rule equivalent, the confirmed flex verdict-flip
-(direct-child and nested-in-`<p>` shapes), and a widows page-break rewind. Each asserts both
-`Rectangles.Count` and a whole-subtree "no stale line-keyed rectangle" scan
+(direct-child and nested-in-`<p>` shapes), a widows page-break rewind, and a mutation test that
+manually injects a stale `Rectangles` entry (a removed-from-`LineBoxes` `CssLineBox`) and asserts the
+detector actually reports it - proving the other five tests' `Assert.Empty(FindGhostRectangles(...))`
+calls aren't passing vacuously against a broken detector. The five scenario tests assert both
+`Rectangles.Count` and the whole-subtree "no stale line-keyed rectangle" scan
 (`FindGhostRectangles`, checking every box's `Rectangles` keys are still present in their owning line's
 own `LineBoxes`). Full net8.0 suite green (12,381 passed, 9 pre-existing platform skips, 0 failures).
 Solution rebuild (`dotnet build PeachPDF.slnx -t:Rebuild`) 0 warnings. No production code changed, so
