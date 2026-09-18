@@ -586,6 +586,18 @@ namespace PeachPDF.Html.Core.Dom
             }
             catch (Exception ex)
             {
+                // Same reasoning as the TableContinuation reset in the constructor above: a run that dies
+                // part-way must leave no answer rather than the previous run's. Unlike TableContinuation,
+                // these two fields are not cleared unconditionally at the top of every attempt - they are
+                // meant to carry forward across the several top-level passes a genuine row-loop
+                // continuation needs (see the remarks above on NaturalRowAxisExtentCarry and
+                // RowHeightRedistribution) - so a throw here is the only place left to catch a pass that
+                // never reached its own normal reset. Left standing, either field could suppress or skew a
+                // later, unrelated redistribution attempt if this same CssBox is ever re-entered with a
+                // resume token a caller believes still describes an in-progress chain.
+                tableBox.RowHeightRedistribution = null;
+                tableBox.NaturalRowAxisExtentCarry = null;
+
                 if (tableBox.HtmlContainer is { } container)
                     throw container.RenderError(HtmlRenderErrorType.Layout, "Failed table layout", ex);
             }
