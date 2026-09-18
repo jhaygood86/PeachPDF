@@ -12,4 +12,4 @@ PDFs from a fresh one (or reordered a batch and saw sizes change) will see the r
 fresh one. Nothing to change in calling code.
 
 Confirmed against v0.9.18: `git show v0.9.18:src/PeachPDF/Html/Core/Handlers/FontsHandler.cs` keys `_fontsCache` by
-`double size` only, and `PdfGenerator.GeneratePdf` resets `PixelsPerPoint` without clearing it on a non-rescaling render.
+`double size` only, and `PdfGenerator` (`AddPdfPages`) resets `PixelsPerPoint` without clearing it on a non-rescaling render.

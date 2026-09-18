@@ -176,7 +176,7 @@ namespace PeachPDF.Adapters
         /// Fonts here are built at <c>size / PixelsPerPoint</c> points (see <c>CreateFontInt</c>), so
         /// <see cref="PixelsPerPoint"/> is part of a cached font's identity.
         /// </summary>
-        internal override double FontSizeScale => PixelsPerPoint;
+        internal override double LayoutUnitsPerPoint => PixelsPerPoint;
 
         public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
         {

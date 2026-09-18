@@ -2,7 +2,7 @@
 
 `RAdapter.GetFont(family, size, ...)` takes `size` in layout units (points × `PixelsPerPoint`); the font behind it is
 built at `size / PixelsPerPoint` points. Two requests with the same `size` under different scales are different fonts,
-so **every font cache must carry `RAdapter.FontSizeScale` in its key** — `FontsHandler._fontsCache` (its size level),
+so **every font cache must carry `RAdapter.LayoutUnitsPerPoint` in its key** — `FontsHandler._fontsCache` (its size level),
 `_codepointFontsCache` and `_systemFallbackFontsCache`. A new font cache keyed by size alone reintroduces the bug.
 
 The measured symptom is a reused `PdfGenerator` rendering 10pt text at 9.819pt `Tf` after an earlier `ShrinkToFit`

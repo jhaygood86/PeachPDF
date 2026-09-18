@@ -93,8 +93,10 @@ namespace PeachPDF.Tests.Adapters
             adapter.PixelsPerPoint = 1.25;
             var atOneAndAQuarter = adapter.GetSystemFallbackFontForCodepoint(10, RFontStyle.Regular, new Rune('A')) as FontAdapter;
 
-            // A host with no installed family covering 'A' answers null for both, which says nothing about
-            // the key - only a real answer at each scale can be compared.
+            // A host with no installed family covering 'A' answers null at both scales, which says nothing about
+            // the key - only a real answer at each scale can be compared. Whether a font is found must not
+            // depend on the scale, though, so that much is asserted on every host.
+            Assert.Equal(atOne is null, atOneAndAQuarter is null);
             if (atOne is null || atOneAndAQuarter is null) return;
 
             Assert.Equal(10, atOne.Font.Size, 6);

@@ -213,6 +213,39 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ANestedInlineBlockWithItsOwnPaddingAndHeightStillSizesItsLine()
+        {
+            // The case the root-only guard deliberately keeps: for a NESTED atomic inline the compare is
+            // border-box against border-box, so the line still reserves the box's padding + declared height.
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div id='line' style='font-size:10pt'>" +
+                "<span id='ib' style='display:inline-block;height:40pt;padding:5pt'>x</span></div>"));
+
+            var ib = HeightOf(FindById(root, "ib")!);
+
+            // content-box height 40 plus 5 + 5 padding.
+            Assert.Equal(50, ib, 2);
+            Assert.True(HeightOf(FindById(root, "line")!) >= 50,
+                $"the line must still reserve the 50pt inline-block, was {HeightOf(FindById(root, "line")!)}");
+        }
+
+        [Fact]
+        public async Task AWrappingInlineBlockThatIsItsOwnFlowRootCountsItsPaddingOnce()
+        {
+            // A wrapping inline-block is laid out as a box of its own, so it is a flow root too and hit the
+            // same double count: its bottom padding was added to a MaxBottom that already held the padding
+            // floor. Expectation relative to an unpadded block of the same width and text.
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div id='twin' style='width:30pt;font-size:10pt'>xx xx xx</div>" +
+                "<div style='font-size:10pt'>a <span id='ib' style='display:inline-block;width:30pt;padding:10pt;min-height:40pt'>xx xx xx</span></div>"));
+
+            var c = HeightOf(FindById(root, "twin")!);
+
+            // content-box min-height 40 plus 10 + 10 padding; the text (about three short lines) is shorter than 40.
+            Assert.Equal(System.Math.Max(c, 40) + 20, HeightOf(FindById(root, "ib")!), 2);
+        }
+
+        [Fact]
         public async Task ARepeatedLayoutReproducesThePaddedBlocksHeight()
         {
             var html = Wrap(

@@ -7,8 +7,9 @@
 `size / PixelsPerPoint` points. So the same numeric size is a *different physical font* under a different scale, and
 the cache could not tell them apart.
 
-A `PdfGenerator` is reused across sequential renders, and a `ShrinkToFit`/`ScaleToPageSize` render changes
-`PixelsPerPoint` (and clears the cache only on the render that rescales). The next render then asked for
+A `PdfGenerator` is reused across sequential renders, and each render sets `PixelsPerPoint` (`AddPdfPages` resets it to
+the base scale, a `ShrinkToFit`/`ScaleToPageSize` render then changes it, and the cache is cleared only on the render
+that rescales). The next render then asked for
 `size = 10` at scale 1 and was handed the font a previous render had built for `size = 10` at scale 1.0184: a 9.819pt
 font. Measured in the PDF's `Tf` operators: 10pt text at 9.819, 20pt at 19.638, 11pt at 10.801. Everything laid out
 after that measured against the wrong font.
@@ -25,7 +26,7 @@ Tf sizes of 8.144 / 8.959 / 16.289 and a 56.2pt item; a fresh generator gave 79.
 
 ## The fix
 
-`RAdapter.FontSizeScale` (1 by default, `PdfSharpAdapter.PixelsPerPoint` for the PDF adapter) is part of every font
+`RAdapter.LayoutUnitsPerPoint` (1 by default, `PdfSharpAdapter.PixelsPerPoint` for the PDF adapter) is part of every font
 cache key: the size level of `_fontsCache` is `(size, scale)`, and the per-codepoint and system-fallback caches carry
 the scale in their tuple keys. The same (size, scale) is still one instance, so the cache keeps doing its job for a
 generator that keeps rendering at one scale.
@@ -44,7 +45,7 @@ generator that keeps rendering at one scale.
 - `FontCacheScaleTests` (6): the same size at two scales is two fonts of the right physical size (10pt and 8pt at
   1.0 and 1.25); returning to a scale finds its own cached instance again; the mapped-family write path, the
   per-codepoint cache and the system-fallback cache are each keyed by scale; `ClearFontCache` still drops every
-  scale. With `FontSizeScale` neutralised to `1.0`, 4 of the 6 fail.
+  scale. With `LayoutUnitsPerPoint` neutralised to `1.0`, 4 of the 6 fail.
 - Related suites (Font, Adapters, ShrinkToFit, PixelsPerPoint, Rescale, PdfGenerator): 1125 passed.
 - TestHarness on this branch (together with the block-height fix in the same PR): `css_grid_intrinsic` items 79.5pt
   (Chrome 79.5), `css_grid` cells 31.2 / cards 60 / spanned 70.5 (Chrome 31.5 / 60 / 70.5), `css_grid_subgrid`
