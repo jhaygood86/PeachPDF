@@ -1009,6 +1009,18 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <see cref="CommitRemainingObservations"/> at this pass's true end.
         /// </para>
         /// <para>
+        /// <b>Excludes a box that continues into the next pass</b> - found empirically too, and the one that
+        /// dropped real text from a shipped release: a box named by the pass's outgoing
+        /// <see cref="BreakToken"/> chain (<see cref="_continuesInto"/>) has not reached its epilogue, so its
+        /// height has not been applied and its <see cref="CssBox.ActualBottom"/> understates where its
+        /// content will end by however much is still to come. A reserved blank slot (a directional break
+        /// stepping over a page) sits in the same sweep as the pass's real content, and an empty slot there
+        /// read <c>&lt;html&gt;</c>/<c>&lt;body&gt;</c>'s not-yet-applied bottom as "ended above this slot",
+        /// recorded them as emitted-nothing, and the pruning that observation feeds dropped every later
+        /// slot of the document. A stale <see cref="_continuesInto"/> mark can only make this exclusion
+        /// more conservative, never less, so it costs correctness nothing.
+        /// </para>
+        /// <para>
         /// <b>Requires <see cref="_frozen"/> membership too</b> - found empirically, not anticipated up
         /// front: <see cref="CssBox.ActualBottom"/> defaults to <c>0</c> for a box the layout frontier has
         /// not reached <i>at all</i> yet (<see cref="CssBox.NeverTouchedThisLayout"/>, the other half of the
@@ -1070,7 +1082,15 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // before it is even laid out. Only _frozen membership means ActualBottom reflects a real,
                 // laid-out position at all; box.NeverTouchedThisLayout is exactly the other half of
                 // MayBeObservedEmpty's caller-side gate this proof must not skip.
-                if (!_frozen.Contains(box) || box.ItemContentSizeEverPinned || box.ActualBottom > slotTop)
+                //
+                // A box the pass being emitted stops inside is not settled either: it continues into the
+                // next pass, so it has no final bottom yet - its height is only applied in its epilogue,
+                // on the pass that completes it, and until then ActualBottom is a stale intermediate value
+                // (a couple of dozen points for <html>/<body> of a document still ten pages from its end).
+                // The outgoing break chain was recorded in _continuesInto for every slot of this pass
+                // before the walk began, so membership here is exact.
+                if (!_frozen.Contains(box) || box.ItemContentSizeEverPinned || box.ActualBottom > slotTop
+                    || _continuesInto.Contains((new FragmentKey(box, 0), slotIndex)))
                     continue;
 
                 var scopeOwner = ScopeOwnerOf(box);
