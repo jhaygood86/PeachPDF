@@ -551,6 +551,22 @@ namespace PeachPDF.Html.Core
         /// </remarks>
         internal bool? VerifyFragmentPruningOverride { get; set; }
 
+#if DEBUG
+        /// <summary>
+        /// Test-only opt-in for <see cref="Fragmentation.FragmentEmitter"/>'s per-slot word-claim ledger
+        /// (issue #1047's own diagnostic - see that type's remarks on <c>_wordClaimSite</c>). Off by
+        /// default even in a DEBUG build: the ledger's own investigation found the same
+        /// <c>ClaimsLine</c>/<c>FallsPast</c> straddle tie-break it targets already disagreeing with a
+        /// handful of OTHER, unrelated fixtures (table rowspan continuations, a multi-column child kept by
+        /// the no-progress backstop, a flex/grid wrapping column) that this diagnostic was never meant to
+        /// adjudicate - each is a real, separate finding worth its own follow-up, not evidence against the
+        /// ledger itself. Scoping the check to opt-in keeps it precise and false-positive-free for the
+        /// ordinary block-flow shape #1047 is about, without either turning those other fixtures into
+        /// unplanned bug reports or trying to special-case every one of them away here.
+        /// </summary>
+        internal bool VerifyWordClaims { get; set; }
+#endif
+
         /// <summary>
         /// The top-left most location of the rendered html.<br/>
         /// This will offset the top-left corner of the rendered html.
