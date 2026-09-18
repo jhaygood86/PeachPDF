@@ -600,6 +600,57 @@ namespace PeachPDF.Tests.Integration
                 throw new InvalidOperationException("layout failed part-way through the row loop");
         }
 
+        /// <summary>
+        /// The same shape as <see cref="ARunThatDies_LeavesNoRecordFromThePreviousOne"/>, but for the two
+        /// fields issue #1116/#1132 added alongside <c>TableContinuation</c> for the same reason:
+        /// <see cref="CssBox.RowHeightRedistribution"/> and <see cref="CssBox.NaturalRowAxisExtentCarry"/>.
+        /// Unlike <c>TableContinuation</c>, neither is cleared unconditionally at the top of every attempt
+        /// - both are deliberately left set across the several top-level passes a genuine row-loop
+        /// continuation needs (see <c>PerformLayout</c>'s own remarks on each field) - so only a throw
+        /// partway through a later pass can leave either one holding a value an aborted run produced. A
+        /// caller that later re-enters this same <see cref="CssBox"/> with a resume token, believing it
+        /// continues the same in-progress chain, must not inherit either stale value.
+        /// </summary>
+        [Fact]
+        public async Task ARunThatDies_LeavesNoRedistributionStateFromThePreviousOne()
+        {
+            CssBox? root = null;
+            StoppingCell? stopping = null;
+
+            await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(RowsTable(3)), pageHeight: PageHeight, margin: Margin,
+                prepare: tree => { root = tree; stopping = StopRow(tree, 0); },
+                after: async (tree, container, g) =>
+                {
+                    var table = TableOf(tree);
+
+                    await RunEngine(g, container, table, resume: null);
+
+                    var continuation = table.TableContinuation;
+                    Assert.NotNull(continuation);
+                    Assert.NotNull(table.NaturalRowAxisExtentCarry);
+
+                    // Simulates the shape the bug report describes: a pass whose own genuine
+                    // redistribution work left RowHeightRedistribution set too, immediately before the
+                    // pass that continues it dies.
+                    table.RowHeightRedistribution = new Dictionary<CssBox, double> { [stopping!] = 4242d };
+
+                    // The row loop resumes at row 0 - the row StopRow moved the stopping cell into - so
+                    // replacing it with one that throws puts the exception exactly where a genuine
+                    // continuation's own re-entry would reach it.
+                    var row = BodyRowsOf(table)[0];
+                    var thrower = new ThrowingCell(row);
+                    row.Boxes.Remove(thrower);
+                    row.Boxes[0] = thrower;
+
+                    await Assert.ThrowsAnyAsync<Exception>(
+                        async () => await RunEngine(g, container, table, continuation));
+
+                    Assert.Null(table.RowHeightRedistribution);
+                    Assert.Null(table.NaturalRowAxisExtentCarry);
+                });
+        }
+
         // ─── A finished cell is not an unentered one ─────────────────────────────────────────────
 
         /// <summary>
