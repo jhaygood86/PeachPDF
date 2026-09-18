@@ -5262,6 +5262,24 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>_earlyBreakTaken</c> for every box on every entry to <see cref="PerformLayoutImp"/>, which a
         /// re-appended child gets from the same call the ordinary walk already makes.
         /// </para>
+        /// <para>
+        /// <b>The pass's own fragmentainer cursor has to move too, before the head is re-entered
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1047">#1047</see>).</b> The head is
+        /// re-measured against <see cref="HtmlContainerInt.CurrentFragmentainer"/>'s band — the same cursor
+        /// <c>FragmentainerContext.StepOverTo</c> is how every other mechanism that places content past the
+        /// fragmentainer being filled (a forced break, a §5.2 flush, a table row-loop band jump, a flex/grid
+        /// line relocation) keeps truthful, per that method's own remarks. Left unstepped here, the head
+        /// re-measures against the OLD, already-exhausted band it just left rather than the one
+        /// <see cref="EarlyBreak.Top"/> actually targets, so it can keep the same too-few lines a second
+        /// time. That phantom shortfall inflates this box's own reported height by the gap between its top
+        /// and where its content actually starts, which can go on to make this box's own, later
+        /// <c>break-inside:avoid</c> self-relocation (<see cref="CanBeLaidOutAgain"/>) wrongly conclude it
+        /// does not fit the destination either, forcing the degraded <see cref="TranslateForEarlyBreak"/>
+        /// path — whose blind coordinate shift can land a line straddling the very next fragmentainer
+        /// boundary, which <c>FragmentEmitter.ClaimsLine</c>'s own straddle tie-break then grants a second,
+        /// conflicting claim for. <see cref="EarlyBreak.Slot"/> is exactly the destination
+        /// <see cref="EarlyBreak.Top"/> was computed against, so stepping to it here needs no fresh lookup.
+        /// </para>
         /// </remarks>
         private bool TryRestartAt(EarlyBreak restart, int start, int raisedAt, ref HashSet<int>? restartedHeads, out int resumeFrom)
         {
@@ -5283,6 +5301,10 @@ namespace PeachPDF.Html.Core.Dom
             restartedHeads ??= [];
 
             if (!restartedHeads.Add(resumeFrom)) return false;
+
+            // See "The pass's own fragmentainer cursor has to move too" above (#1047): without this, the
+            // head re-enters ResumeAt still measuring against the band this pass is leaving.
+            HtmlContainer?.CurrentFragmentainer?.StepOverTo(restart.Slot);
 
             Boxes[resumeFrom].ResumeAt(null, restart.Top);
             return true;
