@@ -1329,7 +1329,25 @@ Known boundaries of per-page margins:
 }
 ```
 
-Per [css-page-3 §3.1](https://www.w3.org/TR/css-page-3/#painting), a page's layers paint bottom-to-top in a fixed order: **the page box's own background, then the document canvas** (the `<html>`/`<body>` fill described above), **then the document's content, then the page-margin boxes**. In practice this means the page background is the one thing an opaque canvas fill (or opaque page content) can completely cover — set a page background to give one page (`@page :first`) or a named page (`@page chapter { ... }`) its own tint or cover image, and leave `<html>`/`<body>` without a background of their own so it actually shows through. `background-origin`/`background-clip` have no effect — the page box has no border/padding of its own to distinguish a border-box/padding-box/content-box positioning or clip area, so a layer always positions/clips against the full physical sheet, the same area `background-attachment: fixed` already uses.
+Per [css-page-3 §3.1](https://www.w3.org/TR/css-page-3/#painting), a page's layers paint bottom-to-top in a fixed order: **the page box's own background, then the document canvas** (the `<html>`/`<body>` fill described above), **then the page box's own border, then the document's content, then the page-margin boxes**. In practice this means the page background is the one thing an opaque canvas fill (or opaque page content) can completely cover — set a page background to give one page (`@page :first`) or a named page (`@page chapter { ... }`) its own tint or cover image, and leave `<html>`/`<body>` without a background of their own so it actually shows through. `background-origin`/`background-clip` pick between the page box's own border-box, padding-box (the default), and content-box — see [Page-box border and padding](#page-box-border-and-padding) below — the same three areas an ordinary element's or a page-margin box's background already distinguishes; a page background never extends into the page's own margin area (background never extends into any box's margin), so `border-box` is the full sheet only when `margin` is `0`. `background-attachment: fixed` is unaffected by any of this — its own positioning area is always the full physical sheet, matching CSS Paged Media's page-anchored convention for fixed backgrounds.
+
+### Page-box border and padding
+
+Per [css-page-3 §3](https://www.w3.org/TR/css-page-3/#page-model), the page box has the same box model as any other: margin, then optionally border and padding, around the page area (the content area actual content flows into). `border-*` and `padding-*` are supported directly on `@page` (and per pseudo-selector/named-page rule, cascaded per-declaration the same way the page-box background above is):
+
+```css
+@page {
+  margin: 20mm;
+  border: 2pt solid #333;
+  padding: 10mm;
+}
+```
+
+This is **layout-affecting**: the resolved border width plus padding genuinely narrows the content area on every side, exactly as it does for an ordinary element — a document's main content, multi-column layout, footnote areas, and everything else that paginates against the page's content band all reflow into the smaller area. A page-margin box's own position is unaffected — its containing block already spans the full margin-to-margin extent regardless of how that extent subdivides into border/padding/content (css-page-3 §5.3.1's "available width"/height already includes the page box's own border/padding).
+
+`border-*-width` never accepts a percentage, matching ordinary elements. `padding-*` percentages resolve against the page box's own overall sheet dimensions — horizontal against the width, vertical against the height — the most direct reading of [css-page-3 §6](https://www.w3.org/TR/css-page-3/#page-margin-properties)'s wording in the absence of page-box-specific guidance.
+
+A per-page (`:first`/`:left`/`:right`/named-page) border/padding override behaves exactly like a per-page margin override (see [Known boundaries of per-page margins](#page-rule) above): it narrows only the pages that rule applies to, and — like an over-large margin override — an override that would leave no room at all for content on a page falls back to the base margin with no border/padding on that page, rather than stalling pagination.
 
 ### `size` property
 

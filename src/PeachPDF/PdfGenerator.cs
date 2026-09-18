@@ -892,6 +892,10 @@ namespace PeachPDF
                     geom.BandHeight);
 
                 var (mL, mT, mR, mB) = (geom.MarginLeftPt, geom.MarginTopPt, geom.MarginRightPt, geom.MarginBottomPt);
+                // The page box's own resolved border/padding (issue #1147) - all zero for a page with no
+                // @page border/padding declared, which is exactly the pre-#1147 behavior.
+                var (bL, bT, bR, bB) = (geom.BorderLeftPt, geom.BorderTopPt, geom.BorderRightPt, geom.BorderBottomPt);
+                var (pL, pT, pR, pB) = (geom.PaddingLeftPt, geom.PaddingTopPt, geom.PaddingRightPt, geom.PaddingBottomPt);
 
                 var page = document.PdfDocument.AddPage();
                 // This slot's own resolved physical sheet size, in true PDF points - already falls back
@@ -907,30 +911,61 @@ namespace PeachPDF
                 var sheetRect = new RRect(0, 0,
                     page.Width * _pdfSharpAdapter.PixelsPerPoint, page.Height * _pdfSharpAdapter.PixelsPerPoint);
 
+                // The page box's own border-box/padding-box/content-box rects (css-page-3 §3's box
+                // model), resolved in true PDF points then converted to px - the same border-box ->
+                // padding-box -> content-box shrink chain MarginBoxRenderer.PaintBackgroundAndBorder
+                // already uses for a page-MARGIN-box's own background/border, reused here via the same
+                // MarginBoxRenderer.Shrink primitive rather than re-deriving the arithmetic (issue
+                // #1147). border-box is the sheet minus this page's own margin only - background/border
+                // never extend into the margin area (margin never participates in background painting
+                // for ANY CSS box), unlike the canvas fill below, which deliberately does.
+                var sheetRectPt = new XRect(0, 0, geom.SheetWidthPt, geom.SheetHeightPt);
+                var borderBoxRectPt = MarginBoxRenderer.Shrink(sheetRectPt, mL, mT, mR, mB);
+                var paddingBoxRectPt = MarginBoxRenderer.Shrink(borderBoxRectPt, bL, bT, bR, bB);
+                var contentBoxRectPt = MarginBoxRenderer.Shrink(paddingBoxRectPt, pL, pT, pR, pB);
+
+                var borderBoxRect = Utils.Convert(borderBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
+                var paddingBoxRect = Utils.Convert(paddingBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
+                var contentBoxRect = Utils.Convert(contentBoxRectPt, _pdfSharpAdapter.PixelsPerPoint);
+
+                RRect ResolvePagePositioningRect(string value) => value switch
+                {
+                    Keywords.ContentBox => contentBoxRect,
+                    Keywords.BorderBox => borderBoxRect,
+                    // padding-box is the initial value (CSS Backgrounds 3 §3.9/§3.10) and what an
+                    // unrecognized/empty value falls back to - matching MarginBoxRenderer's own
+                    // ResolvePositioningRect for a page-margin box's background.
+                    _ => paddingBoxRect,
+                };
+
+                // Same "no real inheritance chain" em-basis convention MarginBoxRenderer.ResolveFontSizePt's
+                // own StyleDeclaration overload uses - falls back to DefaultFontResolver.FontSize, never
+                // null, so a gradient/border-width with no @page font-size resolves against the same
+                // page-box-appropriate basis a margin-box's own would, not the document root's own
+                // (possibly quite different) actual font-size. Shared between the page background
+                // (gradient em-sizing) and the page border (below) so both agree on the same basis.
+                var pageFontSizeStr = applicablePageStyle?.FontSize;
+                var pageEmSizePt = string.IsNullOrEmpty(pageFontSizeStr)
+                    ? DefaultFontResolver.FontSize
+                    : MarginBoxRenderer.ResolveFontSizePt(pageFontSizeStr);
+                var pageRemPt = container.HtmlContainerInt.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
+
                 // css-page-3 §3.1's page layer paint order is (bottommost first): page background,
                 // document canvas, page borders, document contents, page-margin boxes. This paints the
-                // @page box's own background - the new, bottommost layer - at the same full-sheet rect
-                // the canvas fill below already uses, one step earlier, so an opaque canvas background
-                // naturally occludes it (and a transparent/absent one lets it show through) with no
-                // extra precedence logic needed. The page box has no border/padding of its own
-                // (unimplemented), so background-origin/-clip are moot - always the full sheet.
+                // @page box's own background - the bottommost layer - one step before the canvas fill
+                // below, so an opaque canvas background naturally occludes it (and a transparent/absent
+                // one lets it show through) with no extra precedence logic needed. background-origin/
+                // -clip now (issue #1147) genuinely distinguish border-box/padding-box/content-box via
+                // this page's own resolved border/padding, mirroring how a page-margin box's own
+                // background already does.
                 if (container.HtmlContainerInt.Root is { } rootBoxForPageBackground && applicablePageStyle is not null)
                 {
                     using var pageBackgroundGraphics = new GraphicsAdapter(_pdfSharpAdapter, g, _pdfSharpAdapter.PixelsPerPoint);
-                    // Same "no real inheritance chain" em-basis convention MarginBoxRenderer.ResolveFontSizePt's
-                    // own StyleDeclaration overload uses - falls back to DefaultFontResolver.FontSize, never
-                    // null, so a gradient with no @page font-size resolves against the same page-box-
-                    // appropriate basis a margin-box background gradient would, not the document root's own
-                    // (possibly quite different) actual font-size.
-                    var pageFontSizeStr = applicablePageStyle.FontSize;
-                    var pageGradientEmSizePt = string.IsNullOrEmpty(pageFontSizeStr)
-                        ? DefaultFontResolver.FontSize
-                        : MarginBoxRenderer.ResolveFontSizePt(pageFontSizeStr);
 
                     await LayeredBackgroundPainter.PaintAsync(
                         pageBackgroundGraphics, applicablePageStyle, _pdfSharpAdapter, container.HtmlContainerInt,
-                        rootBoxForPageBackground, pageGradientEmSizePt,
-                        resolvePositioningRect: _ => sheetRect,
+                        rootBoxForPageBackground, pageEmSizePt,
+                        resolvePositioningRect: ResolvePagePositioningRect,
                         viewportRect: sheetRect,
                         pageBackgroundImageCache);
                 }
@@ -939,9 +974,26 @@ namespace PeachPDF
                 {
                     // Must paint before the content clip below is applied (page.304's IntersectClip),
                     // so the fill reaches the true full page bleed (including the margin-box area), not
-                    // just the content rect.
+                    // just the content rect. The canvas fill is a distinct paint step from the page box's
+                    // own background above - CSS2.1 §14.2's canvas propagation always fills the whole
+                    // sheet regardless of the page box's own border/padding, exactly as before #1147.
                     using var canvasGraphics = new GraphicsAdapter(_pdfSharpAdapter, g, _pdfSharpAdapter.PixelsPerPoint);
                     FragmentPainter.PaintCanvasBackground(canvasGraphics, canvasBackgroundBox, sheetRect);
+                }
+
+                // css-page-3 §3.1's third paint layer: the page box's OWN border (issue #1147) - a
+                // distinct layer from a page-MARGIN-box's own border (MarginBoxRenderer.PaintBorder,
+                // painted later alongside the rest of that margin box's own content), sitting between
+                // the document canvas and the document's own content. Painted at borderBoxRect (the
+                // sheet minus this page's own margin only) using the same non-mitred four-independent-
+                // edge approach a margin box's border already uses (PaintBorder itself) - a physical page
+                // never fragments/shares a corner with a neighboring page either.
+                if (applicablePageStyle is not null && (bL > 0 || bT > 0 || bR > 0 || bB > 0))
+                {
+                    using var pageBorderGraphics = new GraphicsAdapter(_pdfSharpAdapter, g, _pdfSharpAdapter.PixelsPerPoint);
+                    MarginBoxRenderer.PaintBorder(
+                        pageBorderGraphics, borderBoxRect, applicablePageStyle,
+                        pageEmSizePt, pageRemPt, _pdfSharpAdapter.PixelsPerPoint, _pdfSharpAdapter);
                 }
 
                 // Save state so the content transform can be undone for margin box rendering
@@ -958,8 +1010,13 @@ namespace PeachPDF
                 // equivalent content-area clip itself now (HtmlContainerInt.PageClipOverride, set below) -
                 // PaintFootnoteArea, which paints outside that wrapper, pushes its own.
 
-                var deltaX = mL - container.MarginLeft;
-                var deltaY = mT - container.MarginTop;
+                // Content is anchored at the base MarginLeft/MarginTop in layout space; this delta maps
+                // that anchor onto THIS page's own physical content-box origin - margin, and (since
+                // issue #1147) the page box's own border/padding too, all three of which sit between the
+                // sheet edge and the content that pagination itself already reserved this room for
+                // (geom.BandWidth/BandHeight).
+                var deltaX = mL + bL + pL - container.MarginLeft;
+                var deltaY = mT + bT + pT - container.MarginTop;
                 if (deltaX != 0 || deltaY != 0)
                     g.TranslateTransform(deltaX, deltaY);
 
@@ -1368,8 +1425,11 @@ namespace PeachPDF
                     // from the geometry table directly, so this can never disagree with what was
                     // actually painted. PDF rect y counts from the page bottom.
                     var slotGeom = fragmentainers[pageIndex].Geometry;
-                    var topPt = slotGeom.MarginTopPt + (link.Rectangle.Top * ppp - inner.PageTopOf(slot)) / ppp;
-                    var leftPt = slotGeom.MarginLeftPt + (link.Rectangle.Left * ppp - inner.MarginLeft) / ppp;
+                    // ContentTopPt/ContentLeftPt (margin + the page box's own border/padding, issue
+                    // #1147), not just MarginTopPt/MarginLeftPt - a link annotation's rect must land
+                    // where the content it overlays is actually painted.
+                    var topPt = slotGeom.ContentTopPt + (link.Rectangle.Top * ppp - inner.PageTopOf(slot)) / ppp;
+                    var leftPt = slotGeom.ContentLeftPt + (link.Rectangle.Left * ppp - inner.MarginLeft) / ppp;
                     // This page's own resolved height (already written into /MediaBox by the paint loop
                     // above) - reading it directly here, rather than threading a second value through,
                     // means this can never disagree with what was actually emitted for the page.
@@ -1449,8 +1509,10 @@ namespace PeachPDF
                 // materialized number - see HtmlContainerInt.LayoutMarginBoxes and issue #148) rather
                 // than re-deriving from the geometry table directly, matching HandleLinks' own fix.
                 var slotGeom = fragmentainers[pageIndex].Geometry;
-                var topPt = slotGeom.MarginTopPt + (pixelRect.Top - inner.PageTopOf(slot)) / ppp;
-                var leftPt = slotGeom.MarginLeftPt + (pixelRect.Left - inner.MarginLeft) / ppp;
+                // ContentTopPt/ContentLeftPt (margin + the page box's own border/padding, issue #1147) -
+                // matching HandleLinks' own fix.
+                var topPt = slotGeom.ContentTopPt + (pixelRect.Top - inner.PageTopOf(slot)) / ppp;
+                var leftPt = slotGeom.ContentLeftPt + (pixelRect.Left - inner.MarginLeft) / ppp;
                 var widthPt = pixelRect.Width / ppp;
                 var heightPt = pixelRect.Height / ppp;
 

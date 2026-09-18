@@ -140,8 +140,8 @@ namespace PeachPDF.Html.Core.Dom
         /// on a page margin shallower than the inset it wants grows back over the page the way a
         /// browser's print-footer overlay does.
         ///
-        /// Composed from <see cref="MarginExtent"/>, <see cref="BorderExtent"/> and
-        /// <see cref="PaddingExtent"/> (closing #943 - border is now part of this, resolved and
+        /// Composed from <see cref="MarginExtent"/>, <see cref="BorderExtent(MarginStyleRule,StyleDeclaration,double,bool)"/> and
+        /// <see cref="PaddingExtent(MarginStyleRule,StyleDeclaration,double,double,bool)"/> (closing #943 - border is now part of this, resolved and
         /// charged exactly like margin/padding already were) so <see cref="ApplyBoxModel"/> and
         /// <see cref="GetMarginBoxRect"/>'s own <c>Outer</c> pick it up with no further change.
         /// </summary>
@@ -183,8 +183,16 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal static (double Start, double End) PaddingExtent(
             MarginStyleRule rule, StyleDeclaration? pageStyle, double remPt, double basisPt, bool horizontal)
+            => PaddingExtent(rule.Style, pageStyle, remPt, basisPt, horizontal);
+
+        /// <summary>
+        /// The <see cref="StyleDeclaration"/>-based overload <see cref="PaddingExtent(MarginStyleRule,StyleDeclaration,double,double,bool)"/>
+        /// delegates to - see that overload's own remarks and <see cref="BorderExtent(StyleDeclaration,StyleDeclaration,double,bool)"/>'s
+        /// (issue #1147).
+        /// </summary>
+        internal static (double Start, double End) PaddingExtent(
+            StyleDeclaration style, StyleDeclaration? pageStyle, double remPt, double basisPt, bool horizontal)
         {
-            var style = rule.Style;
             var emPt = ResolveFontSizePt(style, pageStyle);
 
             double Len(string? value) => string.IsNullOrWhiteSpace(value)
@@ -198,7 +206,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// A margin box's own border width per axis (css-page-3 §5.1's whole box model - closes #943).
-        /// Unlike <see cref="MarginExtent"/>/<see cref="PaddingExtent"/>, <c>border-*-width</c> never
+        /// Unlike <see cref="MarginExtent"/>/<see cref="PaddingExtent(MarginStyleRule,StyleDeclaration,double,double,bool)"/>, <c>border-*-width</c> never
         /// accepts a percentage, so this needs no containing-block basis, only the box's own em (for a
         /// value like <c>0.1em</c>) via <see cref="ResolveBorderWidthPt"/>, which also treats
         /// <c>border-*-style: none</c>/<c>hidden</c> as zero width regardless of any declared
@@ -206,8 +214,18 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal static (double Start, double End) BorderExtent(
             MarginStyleRule rule, StyleDeclaration? pageStyle, double remPt, bool horizontal)
+            => BorderExtent(rule.Style, pageStyle, remPt, horizontal);
+
+        /// <summary>
+        /// The <see cref="StyleDeclaration"/>-based overload <see cref="BorderExtent(MarginStyleRule,StyleDeclaration,double,bool)"/>
+        /// delegates to - split out so a caller with no <see cref="MarginStyleRule"/> wrapper (the
+        /// <c>@page</c> box's own border, resolved from its per-declaration-merged page style rather
+        /// than a single margin-box rule - see <see cref="PageRuleResolver.ResolvePageBorderAndPadding"/>)
+        /// can reuse the identical box-model math instead of re-deriving it (issue #1147).
+        /// </summary>
+        internal static (double Start, double End) BorderExtent(
+            StyleDeclaration style, StyleDeclaration? pageStyle, double remPt, bool horizontal)
         {
-            var style = rule.Style;
             var emPt = ResolveFontSizePt(style, pageStyle);
 
             double Width(string? widthValue, string? styleValue) => ResolveBorderWidthPt(widthValue, styleValue, emPt, remPt);
@@ -325,9 +343,12 @@ namespace PeachPDF.Html.Core.Dom
         /// Shared box-model rect shrink - <see cref="ApplyBoxModel"/>/<see cref="ApplyMarginOnly"/>/
         /// <see cref="ApplyMarginAndBorder"/> differ only in which extents they resolve before calling
         /// this. <c>XRect</c> refuses a negative extent; a caller's own positive-size guard then skips
-        /// the box, which is what an over-padded/over-bordered box should do anyway.
+        /// the box, which is what an over-padded/over-bordered box should do anyway. Promoted to
+        /// internal so <c>PdfGenerator</c> can derive the page box's own border-box/padding-box/
+        /// content-box rects from the same primitive (issue #1147) instead of re-deriving the shrink
+        /// arithmetic a second time.
         /// </summary>
-        private static XRect Shrink(XRect rect, double left, double top, double right, double bottom)
+        internal static XRect Shrink(XRect rect, double left, double top, double right, double bottom)
         {
             if (left == 0 && right == 0 && top == 0 && bottom == 0)
                 return rect;
@@ -498,8 +519,11 @@ namespace PeachPDF.Html.Core.Dom
         /// explicit <c>currentcolor</c>) resolves against the box's own already-resolved text
         /// <c>color</c>, defaulting to black exactly as <see cref="BuildBrush"/> already does for text
         /// with no <c>color</c> of its own.
+        /// Internal (not private) so <c>PdfGenerator</c> can reuse it for the page box's own border - a
+        /// distinct paint layer from a page-<em>margin</em>-box's border (this method still paints those
+        /// too, via <see cref="PaintBackgroundAndBorder"/>) but identical box-model math (issue #1147).
         /// </summary>
-        private static void PaintBorder(RGraphics g, RRect borderBoxRect, StyleDeclaration style,
+        internal static void PaintBorder(RGraphics g, RRect borderBoxRect, StyleDeclaration style,
             double emPt, double remPt, double pixelsPerPoint, RAdapter adapter)
         {
             // borderBoxRect is already known positive-size here - the sole caller, PaintBackgroundAndBorder,

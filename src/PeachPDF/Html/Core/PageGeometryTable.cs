@@ -1,5 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
@@ -20,6 +21,21 @@ namespace PeachPDF.Html.Core
     /// fallback a second time. <see cref="ActiveName"/> is the named page active at this slot's own
     /// start (<c>null</c> for the un-named default) - exposed so <see cref="HtmlContainerInt.PageAssignmentSignature"/>
     /// can tell two slots with the same numeric index but different active geometry apart (issue #202).
+    /// <see cref="BorderLeftPt"/>/<see cref="BorderTopPt"/>/<see cref="BorderRightPt"/>/
+    /// <see cref="BorderBottomPt"/> and <see cref="PaddingLeftPt"/>/<see cref="PaddingTopPt"/>/
+    /// <see cref="PaddingRightPt"/>/<see cref="PaddingBottomPt"/> are the page box's own resolved
+    /// border/padding (css-page-3 §3's box model - closing issue #1147), in true PDF points, all
+    /// zero for a page with no <c>@page</c> border/padding declared (the pre-#1147 default). They sit
+    /// strictly INSIDE <see cref="MarginLeftPt"/>/etc - a page-margin box's own containing block
+    /// (<see cref="Dom.MarginBoxRenderer.MarginAreaWidth"/>/<see cref="Dom.MarginBoxRenderer.MarginAreaHeight"/>)
+    /// spans the margin-to-margin "available width"/height per css-page-3's own margin-box definition,
+    /// which already equals the full border-box regardless of how it subdivides into border/padding/
+    /// content - so margin-box geometry needs no change for this feature. <see cref="BandWidth"/>/
+    /// <see cref="BandHeight"/> already have border+padding subtracted (in addition to margin) -
+    /// everywhere that reads them for the actual content area needs no separate border/padding term of
+    /// its own; a caller that needs the CONTENT BOX's own offset from the sheet edge (not just its
+    /// size) uses <see cref="ContentLeftPt"/>/<see cref="ContentTopPt"/> below rather than re-summing
+    /// margin + border + padding at each call site.
     /// </summary>
     internal readonly record struct PageBandGeometry(
         int PageIndex,
@@ -30,9 +46,27 @@ namespace PeachPDF.Html.Core
         double MarginTopPt,
         double MarginRightPt,
         double MarginBottomPt,
+        double BorderLeftPt,
+        double BorderTopPt,
+        double BorderRightPt,
+        double BorderBottomPt,
+        double PaddingLeftPt,
+        double PaddingTopPt,
+        double PaddingRightPt,
+        double PaddingBottomPt,
         double SheetWidthPt,
         double SheetHeightPt,
-        string? ActiveName);
+        string? ActiveName)
+    {
+        /// <summary>The content box's own left edge, as an offset in true PDF points from the sheet's
+        /// own left edge - margin + border + padding (issue #1147). The single home for this sum, used
+        /// everywhere a caller needs the content box's POSITION rather than just its size (which
+        /// <see cref="BandWidth"/> already gives directly).</summary>
+        internal double ContentLeftPt => MarginLeftPt + BorderLeftPt + PaddingLeftPt;
+
+        /// <summary>The vertical analogue of <see cref="ContentLeftPt"/>.</summary>
+        internal double ContentTopPt => MarginTopPt + BorderTopPt + PaddingTopPt;
+    }
 
     /// <summary>
     /// The per-page geometry table behind CSS Paged Media's page-box model: when per-page
@@ -65,6 +99,8 @@ namespace PeachPDF.Html.Core
         private bool? _hasVerticalOverrides;
         private bool? _hasHorizontalOverrides;
         private bool? _hasSizeOverrides;
+        private bool? _hasVerticalBorderPaddingOverrides;
+        private bool? _hasHorizontalBorderPaddingOverrides;
 
         /// <summary>
         /// Whether any selector-carrying <c>@page</c> rule declares a top or bottom margin — the only
@@ -151,6 +187,56 @@ namespace PeachPDF.Html.Core
             return false;
         }
 
+        /// <summary>
+        /// Whether ANY <c>@page</c> rule - including the selector-less base rule, unlike
+        /// <see cref="HasVerticalMarginOverrides"/>/<see cref="HasHorizontalMarginOverrides"/> - declares
+        /// a top or bottom border/padding (issue #1147). The base rule counts here because, unlike
+        /// margin, there is no separate "baked into <see cref="HtmlContainerInt.MarginTop"/>" closed-form
+        /// fast path for border/padding: a document with border/padding on ONLY the base rule still needs
+        /// every slot resolved through <see cref="Compute(int, double)"/> to get a shrunk band, even
+        /// though that resolution is uniform across every slot. <see cref="HtmlContainerInt.UseVariablePageGeometry"/>
+        /// consults this alongside the existing vertical-margin/size flags.
+        /// </summary>
+        internal bool HasVerticalBorderPaddingOverrides
+        {
+            get
+            {
+                _hasVerticalBorderPaddingOverrides ??= ComputeHasBorderPaddingOverrides(vertical: true);
+                return _hasVerticalBorderPaddingOverrides.Value;
+            }
+        }
+
+        /// <summary>The horizontal analogue of <see cref="HasVerticalBorderPaddingOverrides"/>, consulted
+        /// by <see cref="HtmlContainerInt.UseVariableInlineMeasure"/> alongside the existing
+        /// horizontal-margin/size flags.</summary>
+        internal bool HasHorizontalBorderPaddingOverrides
+        {
+            get
+            {
+                _hasHorizontalBorderPaddingOverrides ??= ComputeHasBorderPaddingOverrides(vertical: false);
+                return _hasHorizontalBorderPaddingOverrides.Value;
+            }
+        }
+
+        private bool ComputeHasBorderPaddingOverrides(bool vertical)
+        {
+            foreach (var rule in container.PageRules)
+            {
+                var s = rule.Style;
+                var declared = vertical
+                    ? s.BorderTopWidth.Length > 0 || s.BorderTopStyle.Length > 0 ||
+                      s.BorderBottomWidth.Length > 0 || s.BorderBottomStyle.Length > 0 ||
+                      s.PaddingTop.Length > 0 || s.PaddingBottom.Length > 0
+                    : s.BorderLeftWidth.Length > 0 || s.BorderLeftStyle.Length > 0 ||
+                      s.BorderRightWidth.Length > 0 || s.BorderRightStyle.Length > 0 ||
+                      s.PaddingLeft.Length > 0 || s.PaddingRight.Length > 0;
+
+                if (declared) return true;
+            }
+
+            return false;
+        }
+
         /// <summary>Drops every cached slot and re-evaluates the override scan — called at the start
         /// of every layout pass (and via <c>Clear</c>/<c>SetHtml</c>) so a fresh pass never sees the
         /// previous pass's geometry.</summary>
@@ -160,6 +246,8 @@ namespace PeachPDF.Html.Core
             _hasVerticalOverrides = null;
             _hasHorizontalOverrides = null;
             _hasSizeOverrides = null;
+            _hasVerticalBorderPaddingOverrides = null;
+            _hasHorizontalBorderPaddingOverrides = null;
         }
 
         /// <summary>
@@ -218,7 +306,8 @@ namespace PeachPDF.Html.Core
         internal PageBandGeometry? ResolveForMaterializedPage(int slotIndex, int materializedPageNumber)
         {
             if (materializedPageNumber == slotIndex + 1) return null;
-            if (!HasVerticalMarginOverrides && !HasHorizontalMarginOverrides && !HasSizeOverrides) return null;
+            if (!HasVerticalMarginOverrides && !HasHorizontalMarginOverrides && !HasSizeOverrides &&
+                !HasVerticalBorderPaddingOverrides && !HasHorizontalBorderPaddingOverrides) return null;
 
             var slotGeometry = GetPage(slotIndex);
             var candidate = Compute(slotIndex, slotGeometry.Top, materializedPageNumber);
@@ -312,16 +401,39 @@ namespace PeachPDF.Html.Core
                 sheetPxHeight = baseSheetPxHeight;
             }
 
-            var bandHeight = sheetPxHeight - (mT + mB) * ppp;
+            // The page box's own border/padding (issue #1147), resolved against the per-declaration-
+            // merged page style (not SelectPageRule's single-winner `rule` above - see
+            // PageRuleResolver.ResolvePageBorderAndPadding's own remarks on why border/padding, as new
+            // properties, don't inherit margin/size's older, less spec-accurate single-rule selection),
+            // and against THIS slot's own resolved sheet size (sheetWidthPt/sheetHeightPt just above) -
+            // a named page whose own `size` differs must resolve its own padding percentages against its
+            // own sheet, not the document's base one. Skipped entirely (staying the all-zero default -
+            // exactly the pre-#1147 "no border/padding" behavior) when neither override flag is set, so
+            // a border/padding-free document never pays for SelectApplicablePageStyle's own rule scan.
+            var borderPadding = HasVerticalBorderPaddingOverrides || HasHorizontalBorderPaddingOverrides
+                ? PageRuleResolver.ResolvePageBorderAndPadding(
+                    PageRuleResolver.SelectApplicablePageStyle(container.PageRules, ruleSelectionPageNumber, activeName),
+                    sheetWidthPt, sheetHeightPt,
+                    container.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize)
+                : default;
+
+            var (bL, bT, bR, bB) = (borderPadding.BorderLeftPt, borderPadding.BorderTopPt, borderPadding.BorderRightPt, borderPadding.BorderBottomPt);
+            var (pL, pT, pR, pB) = (borderPadding.PaddingLeftPt, borderPadding.PaddingTopPt, borderPadding.PaddingRightPt, borderPadding.PaddingBottomPt);
+
+            var bandHeight = sheetPxHeight - (mT + mB + bT + bB + pT + pB) * ppp;
             if (bandHeight < 1.0)
             {
-                // Degenerate override (top+bottom margins consume the whole sheet): discard it for
-                // band purposes and fall back to the base document margins against the SAME resolved
-                // sheet (not just the base one - only the margins are discarded, per the class doc
-                // comment), so the pagination walk always advances and paint/clip stay consistent with
-                // the band actually used.
+                // Degenerate override (top+bottom margin/border/padding together consume the whole
+                // sheet): discard the whole vertical contribution - margin AND border/padding alike -
+                // and fall back to the base document margins with no border/padding, against the SAME
+                // resolved sheet (not just the base one), so the pagination walk always advances and
+                // paint/clip stay consistent with the band actually used. Border/padding are discarded
+                // here (not just margin, as before #1147) because painting a border/reserving padding
+                // this slot's own band no longer has room for would draw over content instead of beside
+                // it.
                 mT = baseTPt;
                 mB = baseBPt;
+                bT = bB = pT = pB = 0;
                 bandHeight = sheetPxHeight - (mT + mB) * ppp;
 
                 if (bandHeight < 1.0)
@@ -344,17 +456,26 @@ namespace PeachPDF.Html.Core
             // Uses local fallback margins rather than reassigning mL/mR - a degenerate left/right
             // override still reports its OWN resolved MarginLeftPt/MarginRightPt (e.g. for margin-box
             // painting), exactly as before this field existed; only the derived band width falls back.
+            // Border/padding, unlike margin, ARE reset to zero on the degenerate fallback below (see the
+            // vertical fallback's own remarks on why) - MarginLeftPt/MarginRightPt keep this asymmetry
+            // with BorderLeftPt/etc for the same reason they always have with mL/mR themselves.
             var sheetPxWidth = sheetWidthPt * ppp;
-            var bandWidth = sheetPxWidth - (mL + mR) * ppp;
+            var bandWidth = sheetPxWidth - (mL + mR + bL + bR + pL + pR) * ppp;
             if (bandWidth < 1.0)
             {
                 bandWidth = sheetPxWidth - (baseLPt + baseRPt) * ppp;
+                bL = bR = pL = pR = 0;
 
                 if (bandWidth < 1.0)
                     bandWidth = sheetPxWidth;
             }
 
-            return new PageBandGeometry(pageIndex, top, bandHeight, bandWidth, mL, mT, mR, mB, sheetWidthPt, sheetHeightPt, activeName);
+            return new PageBandGeometry(
+                pageIndex, top, bandHeight, bandWidth,
+                mL, mT, mR, mB,
+                bL, bT, bR, bB,
+                pL, pT, pR, pB,
+                sheetWidthPt, sheetHeightPt, activeName);
         }
     }
 }

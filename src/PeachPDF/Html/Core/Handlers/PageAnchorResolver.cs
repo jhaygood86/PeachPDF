@@ -55,7 +55,10 @@ namespace PeachPDF.Html.Core.Handlers
             var page = ResolvePixelYToPage(inner, slotToPage, maxMappedSlot, fallbackPageCount, pixelY);
 
             var geom = fragmentainers[page].Geometry;
-            var topPt = geom.MarginTopPt + (pixelY - geom.Top) / ppp;
+            // ContentTopPt (margin + the page box's own border/padding, issue #1147) rather than just
+            // MarginTopPt - a destination Y otherwise would land above where the content it targets is
+            // actually painted, on a page whose @page rule declares a border/padding of its own.
+            var topPt = geom.ContentTopPt + (pixelY - geom.Top) / ppp;
 
             return (page, topPt);
         }

@@ -3214,7 +3214,7 @@ await SaveShowcaseAsync("paged_media_margin_box_sizing", "Paged Media", "Margin 
     "Explicit width and height sizing of @page margin boxes.",
     marginBoxSizingHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
-// ── @page / margin-box background & border showcase (issue #1082, closes #943) ─────────────
+// ── @page / margin-box background & border showcase (issue #1082, closes #943 and #1147) ──
 var pageAndMarginBoxBackgroundHtml = """
     <!DOCTYPE html>
     <html>
@@ -3236,6 +3236,9 @@ var pageAndMarginBoxBackgroundHtml = """
     @page :first {
         background-image: linear-gradient(to bottom, #1a2a6c, #2c3e91);
         background-size: cover;
+        background-clip: content-box;
+        border: 3pt solid #1a2a6c;
+        padding: 10mm;
         @bottom-center { content: none; background-color: transparent; border-top: none; }
     }
     body { font: 11pt Arial; margin: 0; }
@@ -3258,7 +3261,10 @@ await SaveShowcaseAsync("paged_media_page_and_margin_box_background", "Paged Med
     "Page & Margin Box Background/Border",
     "css-page-3 §3.1's @page box background (a cover page tinted independently of the body pages via "
     + "@page :first, painted below the CSS2.1 canvas fill and the document's own content) plus a footer "
-    + "margin box with its own background-color and border-top.",
+    + "margin box with its own background-color and border-top. The cover page also gives the page box "
+    + "itself a border and padding (issue #1147), genuinely reserving layout space so the cover's own "
+    + "heading sits inset from the border rather than under it, with background-clip: content-box "
+    + "confining the cover gradient to inside the padding.",
     pageAndMarginBoxBackgroundHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Flexbox showcase ──────────────────────────────────────────────────
