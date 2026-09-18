@@ -3241,7 +3241,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="blockBox">The block establishing the inline formatting context <paramref name="b"/>
         /// flows within - the box whose own <c>white-space</c>/line-clamp/text-indent govern the line.</param>
         /// <param name="box">The box whose recursive <c>FlowBox</c> call is placing <paramref name="b"/> -
-        /// passed through to the float-intersection lookups, which query floats relative to it.</param>
+        /// passed through to <see cref="LeftFloatAt"/>/<see cref="RightFloatAt"/>, which query floats
+        /// relative to it - both a float preceding <paramref name="box"/> as an ordinary sibling AND one
+        /// living among <paramref name="box"/>'s own inline content (issue #1038), so an atomic inline-level
+        /// box sharing a line with an inline float wraps around it exactly as an ordinary word would.</param>
         /// <param name="b">The atomic inline-level box being preflighted.</param>
         /// <param name="outerContentWidth">
         /// The box's estimated outer content-box width (border/padding included, margin excluded) - for
@@ -3271,7 +3274,7 @@ namespace PeachPDF.Html.Core.Dom
             double clonedTrailing, bool clonesDecorations, bool isRtl)
         {
             var actualLimitRight = coordinates.Line.ContentRight;
-            var rightFloat = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates);
+            var rightFloat = RightFloatAt(coordinates, box);
             if (rightFloat is not null)
             {
                 actualLimitRight = rightFloat.Location.X - rightFloat.ActualMarginLeft;
@@ -3302,7 +3305,7 @@ namespace PeachPDF.Html.Core.Dom
             OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX,
                 coordinates.WordOrdinal, followsForcedBreak: false, isRtl);
 
-            var leftFloat = DomUtils.GetLastLeftIntersectingFloatBox(box, coordinates);
+            var leftFloat = LeftFloatAt(coordinates, box);
             if (leftFloat is not null)
             {
                 coordinates.CurrentX = leftFloat.ActualRight + leftFloat.ActualMarginRight;
@@ -3579,6 +3582,60 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return best;
+        }
+
+        /// <summary>
+        /// The more restrictive of the last LEFT float intersecting the line at <paramref name="reference"/>'s
+        /// position - combining <see cref="DomUtils.GetLastLeftIntersectingFloatBox"/> (a float preceding
+        /// <paramref name="reference"/> as a sibling of it, or of one of its ancestors) with
+        /// <see cref="GetIntersectingInlineFloat"/> (a float <see cref="FlowBox"/> placed directly among
+        /// <paramref name="reference"/>'s own inline content, issue #1038) - since neither one alone can
+        /// discover a float the other shape reaches. A document with no float in the #1038 shape leaves
+        /// <see cref="CssLineBoxCoordinates.InlineFloats"/> empty, so this returns exactly what the
+        /// ancestor-only lookup already did on its own.
+        /// </summary>
+        /// <remarks>
+        /// Shared rather than duplicated: originally a local function inside <see cref="FlowBox"/> (which
+        /// still calls it, passing its own <c>coordinates</c>/<c>box</c>), promoted to a standalone method
+        /// once <see cref="FitAtomicInlineOnLine"/> needed the identical combining logic for an atomic
+        /// inline-level box's own line-fit check (issue #1105) - a float living among the SAME box's
+        /// inline content must narrow that check's available width exactly as it narrows an ordinary
+        /// word's, and a plain <see cref="DomUtils.GetLastLeftIntersectingFloatBox"/> call there would miss
+        /// it precisely as this method's own remarks describe.
+        /// </remarks>
+        private static CssBox? LeftFloatAt(CssLineBoxCoordinates coordinates, CssBox reference)
+        {
+            var ancestorFloat = DomUtils.GetLastLeftIntersectingFloatBox(reference, coordinates);
+            var inlineFloat = GetIntersectingInlineFloat(coordinates, Floating.Left);
+
+            if (ancestorFloat is null) return inlineFloat;
+            if (inlineFloat is null) return ancestorFloat;
+
+            return inlineFloat.ActualRight + inlineFloat.ActualMarginRight
+                   > ancestorFloat.ActualRight + ancestorFloat.ActualMarginRight
+                ? inlineFloat
+                : ancestorFloat;
+        }
+
+        /// <summary>
+        /// The RIGHT-float counterpart of <see cref="LeftFloatAt"/> - see its own remarks for why this is
+        /// shared between <see cref="FlowBox"/> and <see cref="FitAtomicInlineOnLine"/> rather than
+        /// duplicated, and why the two sides combine <see cref="DomUtils.GetLastRightIntersectingFloatBox"/>
+        /// with <see cref="GetIntersectingInlineFloat"/> differently (narrowest reach wins here, matching
+        /// <see cref="DomUtils.GetLastRightIntersectingFloatBox"/>'s own lookahead convention).
+        /// </summary>
+        private static CssBox? RightFloatAt(CssLineBoxCoordinates coordinates, CssBox reference)
+        {
+            var ancestorFloat = DomUtils.GetLastRightIntersectingFloatBox(reference, coordinates);
+            var inlineFloat = GetIntersectingInlineFloat(coordinates, Floating.Right);
+
+            if (ancestorFloat is null) return inlineFloat;
+            if (inlineFloat is null) return ancestorFloat;
+
+            return inlineFloat.Location.X - inlineFloat.ActualMarginLeft
+                   < ancestorFloat.Location.X - ancestorFloat.ActualMarginLeft
+                ? inlineFloat
+                : ancestorFloat;
         }
 
         /// <summary>
@@ -3927,43 +3984,6 @@ namespace PeachPDF.Html.Core.Dom
                 boxes = [box];
             }
 
-            // CSS 2.1 §9.5/§9.5.1: a floated child living among box's own inline content (issue #1038)
-            // narrows this flow's lines exactly the way a preceding floated SIBLING already does, but
-            // DomUtils.GetLastLeftIntersectingFloatBox/GetLastRightIntersectingFloatBox can never discover
-            // it that way - both only look for a float preceding their own `reference` argument as a
-            // sibling of it (or of one of its ancestors), which a float living among `reference`'s own
-            // children never is. These two wrappers additionally consult
-            // CssLineBoxCoordinates.InlineFloats (which this loop's own float dispatch below populates),
-            // taking whichever of the two answers is more restrictive - a document with no float in this
-            // shape leaves InlineFloats empty and so gets exactly the original answer, unchanged.
-            CssBox? LeftFloatAt(CssBox reference)
-            {
-                var ancestorFloat = DomUtils.GetLastLeftIntersectingFloatBox(reference, coordinates);
-                var inlineFloat = GetIntersectingInlineFloat(coordinates, Floating.Left);
-
-                if (ancestorFloat is null) return inlineFloat;
-                if (inlineFloat is null) return ancestorFloat;
-
-                return inlineFloat.ActualRight + inlineFloat.ActualMarginRight
-                       > ancestorFloat.ActualRight + ancestorFloat.ActualMarginRight
-                    ? inlineFloat
-                    : ancestorFloat;
-            }
-
-            CssBox? RightFloatAt(CssBox reference)
-            {
-                var ancestorFloat = DomUtils.GetLastRightIntersectingFloatBox(reference, coordinates);
-                var inlineFloat = GetIntersectingInlineFloat(coordinates, Floating.Right);
-
-                if (ancestorFloat is null) return inlineFloat;
-                if (inlineFloat is null) return ancestorFloat;
-
-                return inlineFloat.Location.X - inlineFloat.ActualMarginLeft
-                       < ancestorFloat.Location.X - ancestorFloat.ActualMarginLeft
-                    ? inlineFloat
-                    : ancestorFloat;
-            }
-
             foreach (var b in boxes)
             {
                 // An "outside" ::marker (the CSS default) must not affect the layout of the rest of
@@ -4100,7 +4120,7 @@ namespace PeachPDF.Html.Core.Dom
                 // amount - re-applying the raw `leftSpacing` would put back exactly what `slice` suppresses.
                 var appliedLeftSpacing = childOpensHere || b.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone ? leftSpacing : 0;
 
-                var lastLeftIntersectingFloatBox = LeftFloatAt(box);
+                var lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, box);
 
                 if (lastLeftIntersectingFloatBox is not null)
                 {
@@ -4225,7 +4245,7 @@ namespace PeachPDF.Html.Core.Dom
                         GrowLineToItsExtent(word);
 
                         var actualLimitRight = coordinates.Line.ContentRight;
-                        var lastRightIntersectingFloatBox = RightFloatAt(box);
+                        var lastRightIntersectingFloatBox = RightFloatAt(coordinates, box);
 
                         if (lastRightIntersectingFloatBox is not null)
                         {
@@ -4357,7 +4377,7 @@ namespace PeachPDF.Html.Core.Dom
                             OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, wordOrdinal,
                                 word.IsLineBreak, isRtl);
 
-                            lastLeftIntersectingFloatBox = LeftFloatAt(b);
+                            lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, b);
 
                             if (lastLeftIntersectingFloatBox is not null)
                             {
@@ -4452,7 +4472,7 @@ namespace PeachPDF.Html.Core.Dom
                         if (wrapping && overflows && !word.IsLineBreak)
                         {
                             var emergencyLimitRight = coordinates.Line.ContentRight;
-                            var emergencyRightFloat = RightFloatAt(box);
+                            var emergencyRightFloat = RightFloatAt(coordinates, box);
                             if (emergencyRightFloat is not null)
                             {
                                 emergencyLimitRight = emergencyRightFloat.Location.X
@@ -4488,7 +4508,7 @@ namespace PeachPDF.Html.Core.Dom
                             UpdateTrailingTextState(word, coordinates.TrailingRegionalIndicatorCount,
                                 coordinates.TrailingGraphemeContext);
 
-                        lastLeftIntersectingFloatBox = LeftFloatAt(box);
+                        lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, box);
 
                         if (lastLeftIntersectingFloatBox is not null)
                         {
