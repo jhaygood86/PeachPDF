@@ -160,5 +160,95 @@ namespace PeachPDF.Tests.Html.Core
 
             Assert.Equal(new XSize(300, 300), size);
         }
+
+        // ── ResolvePageBorderAndPadding (issue #1147) ───────────────────────────
+
+        private static StyleDeclaration ParsePageStyle(string css) => ParsePageRule(css).Style;
+
+        [Fact]
+        public void ResolvePageBorderAndPadding_NullStyle_ReturnsAllZero()
+        {
+            var result = PageRuleResolver.ResolvePageBorderAndPadding(null, 595, 842, remPt: 12);
+
+            Assert.Equal(default, result);
+        }
+
+        [Fact]
+        public void ResolvePageBorderAndPadding_NoBorderOrPaddingDeclared_ReturnsAllZero()
+        {
+            var style = ParsePageStyle("@page { margin: 1in; }");
+
+            var result = PageRuleResolver.ResolvePageBorderAndPadding(style, 595, 842, remPt: 12);
+
+            Assert.Equal(default, result);
+        }
+
+        [Fact]
+        public void ResolvePageBorderAndPadding_UniformBorderAndPadding_ResolvesAllFourSides()
+        {
+            var style = ParsePageStyle("@page { border: 5pt solid black; padding: 10pt; }");
+
+            var result = PageRuleResolver.ResolvePageBorderAndPadding(style, 595, 842, remPt: 12);
+
+            Assert.Equal(5, result.BorderLeftPt);
+            Assert.Equal(5, result.BorderTopPt);
+            Assert.Equal(5, result.BorderRightPt);
+            Assert.Equal(5, result.BorderBottomPt);
+            Assert.Equal(10, result.PaddingLeftPt);
+            Assert.Equal(10, result.PaddingTopPt);
+            Assert.Equal(10, result.PaddingRightPt);
+            Assert.Equal(10, result.PaddingBottomPt);
+        }
+
+        [Fact]
+        public void ResolvePageBorderAndPadding_BorderWidthWithNoBorderStyle_ResolvesToZero()
+        {
+            // border-style's own initial value is `none` (CSS 2.1 §8.5.3), which forces width to zero
+            // regardless of a declared border-width - MarginBoxRenderer.ResolveBorderWidthPt's existing
+            // rule, reused as-is for the page box's own border.
+            var style = ParsePageStyle("@page { border-width: 5pt; }");
+
+            var result = PageRuleResolver.ResolvePageBorderAndPadding(style, 595, 842, remPt: 12);
+
+            Assert.Equal(0, result.BorderLeftPt);
+            Assert.Equal(0, result.BorderTopPt);
+        }
+
+        [Fact]
+        public void ResolvePageBorderAndPadding_PercentagePadding_ResolvesAgainstSheetWidthAndHeightPerAxis()
+        {
+            // css-page-3 §6's wording (written for page-margin-box properties, reused here absent
+            // page-box-specific guidance - see this method's own remarks): left/right percentages
+            // against the containing block's WIDTH, top/bottom against its HEIGHT - here, the page
+            // box's own overall sheet dimensions.
+            var style = ParsePageStyle("@page { padding-left: 10%; padding-top: 10%; }");
+
+            var result = PageRuleResolver.ResolvePageBorderAndPadding(style, sheetWidthPt: 600, sheetHeightPt: 800, remPt: 12);
+
+            Assert.Equal(60, result.PaddingLeftPt);
+            Assert.Equal(80, result.PaddingTopPt);
+        }
+
+        [Fact]
+        public void ResolvePageBorderAndPadding_NegativePadding_ClampsToZero()
+        {
+            // CSS 2.1 §8.4: padding may never be negative (unlike margin).
+            var style = ParsePageStyle("@page { padding: -5pt; }");
+
+            var result = PageRuleResolver.ResolvePageBorderAndPadding(style, 595, 842, remPt: 12);
+
+            Assert.Equal(0, result.PaddingLeftPt);
+            Assert.Equal(0, result.PaddingTopPt);
+        }
+
+        [Fact]
+        public void ResolvePageBorderAndPadding_EmBorderWidth_ResolvesAgainstTheStylesOwnFontSize()
+        {
+            var style = ParsePageStyle("@page { font-size: 20pt; border: 0.5em solid black; }");
+
+            var result = PageRuleResolver.ResolvePageBorderAndPadding(style, 595, 842, remPt: 12);
+
+            Assert.Equal(10, result.BorderLeftPt);
+        }
     }
 }

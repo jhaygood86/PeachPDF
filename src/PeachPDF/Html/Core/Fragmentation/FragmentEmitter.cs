@@ -3519,20 +3519,24 @@ namespace PeachPDF.Html.Core.Fragmentation
         private (double Dx, double Dy) ComputeFixedPageOffset(CssBox box, Slot slot)
         {
             var geometry = container.PageGeometry;
-            if (!geometry.HasSizeOverrides && !geometry.HasVerticalMarginOverrides && !geometry.HasHorizontalMarginOverrides)
+            if (!geometry.HasSizeOverrides && !geometry.HasVerticalMarginOverrides && !geometry.HasHorizontalMarginOverrides &&
+                !geometry.HasVerticalBorderPaddingOverrides && !geometry.HasHorizontalBorderPaddingOverrides)
                 return (0, 0);
 
             var ppp = (container.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             var geom = slot.Geometry;
-            var basisWidthPx = (geom.SheetWidthPt - geom.MarginLeftPt - geom.MarginRightPt) * ppp;
-            var basisHeightPx = (geom.SheetHeightPt - geom.MarginTopPt - geom.MarginBottomPt) * ppp;
+            // The page area (CSS 2.1 §10.1's initial containing block, css-page-3 §3's content area) -
+            // geom.BandWidth/BandHeight already have margin AND the page box's own border/padding
+            // (issue #1147) subtracted, so no separate re-derivation is needed here.
+            var basisWidthPx = geom.BandWidth;
+            var basisHeightPx = geom.BandHeight;
 
             // Same page-area origin CssBox's own canonical resolution uses (CSS 2.1 §10.1), taken from
-            // THIS slot's own resolved margins rather than the document's base ones - which is the whole
-            // reason this per-page correction exists.
-            var left = geom.MarginLeftPt * ppp + box.ActualMarginLeft
+            // THIS slot's own resolved margins (and, since #1147, border/padding) rather than the
+            // document's base ones - which is the whole reason this per-page correction exists.
+            var left = geom.ContentLeftPt * ppp + box.ActualMarginLeft
                        + CssBox.ResolveOffsetOrZero(box.Left, basisWidthPx, box);
-            var top = geom.MarginTopPt * ppp + box.ActualMarginTop
+            var top = geom.ContentTopPt * ppp + box.ActualMarginTop
                       + CssBox.ResolveOffsetOrZero(box.Top, basisHeightPx, box);
 
             return (left - box.Location.X, top - box.Location.Y);
@@ -3555,7 +3559,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         private (double DeltaWidth, double DeltaHeight) ComputeFixedSizeOverride(CssBox box, Slot slot)
         {
             var geometry = container.PageGeometry;
-            if (!geometry.HasSizeOverrides && !geometry.HasVerticalMarginOverrides && !geometry.HasHorizontalMarginOverrides)
+            if (!geometry.HasSizeOverrides && !geometry.HasVerticalMarginOverrides && !geometry.HasHorizontalMarginOverrides &&
+                !geometry.HasVerticalBorderPaddingOverrides && !geometry.HasHorizontalBorderPaddingOverrides)
                 return (0, 0);
 
             // Mirrors CssLayoutEngine.GetBoxWidth's own percentage-width gate exactly (a fixed box always
@@ -3569,10 +3574,11 @@ namespace PeachPDF.Html.Core.Fragmentation
                 && CssValueParser.IsValidLength(box.Height);
             if (!widthIsDefinite && !heightIsDefinite) return (0, 0);
 
-            var ppp = (container.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             var geom = slot.Geometry;
-            var basisWidthPx = (geom.SheetWidthPt - geom.MarginLeftPt - geom.MarginRightPt) * ppp;
-            var basisHeightPx = (geom.SheetHeightPt - geom.MarginTopPt - geom.MarginBottomPt) * ppp;
+            // Same page-area basis as ComputeFixedPageOffset - already margin- and (since #1147)
+            // border/padding-shrunk.
+            var basisWidthPx = geom.BandWidth;
+            var basisHeightPx = geom.BandHeight;
 
             var deltaWidth = 0.0;
             var deltaHeight = 0.0;

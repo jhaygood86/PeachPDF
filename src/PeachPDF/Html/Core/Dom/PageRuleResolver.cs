@@ -195,6 +195,44 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Resolves the page box's own border widths and padding, in true PDF points (css-page-3 §3:
+        /// "the page box has an area for content ... and surrounding margins, and optionally a border
+        /// and padding area between them, exactly as for a normal box" - closing issue #1147, the
+        /// border/padding counterpart of <see cref="ResolvePageMargins"/>/<see cref="ResolvePageSize"/>).
+        /// <paramref name="style"/> is the per-declaration-merged page-context style
+        /// (<see cref="SelectApplicablePageStyle"/>) - the same merge already used for the page box's
+        /// own <c>background</c> and font-property inheritance - rather than <see cref="SelectPageRule"/>'s
+        /// single-winner selection those two legacy page-level properties still use, since border/padding
+        /// are new properties with no back-compat reason to prefer the older, less spec-accurate
+        /// selection. Reuses <see cref="MarginBoxRenderer.BorderExtent(StyleDeclaration,StyleDeclaration,double,bool)"/>/
+        /// <see cref="MarginBoxRenderer.PaddingExtent(StyleDeclaration,StyleDeclaration,double,double,bool)"/>
+        /// directly (border-width never accepts a percentage; padding does) rather than re-deriving the
+        /// same box-model parsing a second time.
+        /// <para>
+        /// Percentage basis: css-page-3 has no page-box-specific wording for its own padding, but its
+        /// §6 (written for page-<em>margin</em>-box properties) resolves "the width of the containing
+        /// block" for left/right and "the height" for top/bottom - the most direct reading available
+        /// resolves a page box's own horizontal padding against <paramref name="sheetWidthPt"/> and a
+        /// vertical one against <paramref name="sheetHeightPt"/>, i.e. the page box's own overall
+        /// dimensions (there is no other candidate containing block for the page box itself).
+        /// </para>
+        /// </summary>
+        internal static PageBorderPaddingPt ResolvePageBorderAndPadding(
+            StyleDeclaration? style, double sheetWidthPt, double sheetHeightPt, double remPt)
+        {
+            if (style is null) return default;
+
+            var (borderLeft, borderRight) = MarginBoxRenderer.BorderExtent(style, null, remPt, horizontal: true);
+            var (borderTop, borderBottom) = MarginBoxRenderer.BorderExtent(style, null, remPt, horizontal: false);
+            var (paddingLeft, paddingRight) = MarginBoxRenderer.PaddingExtent(style, null, remPt, sheetWidthPt, horizontal: true);
+            var (paddingTop, paddingBottom) = MarginBoxRenderer.PaddingExtent(style, null, remPt, sheetHeightPt, horizontal: false);
+
+            return new PageBorderPaddingPt(
+                borderLeft, borderTop, borderRight, borderBottom,
+                paddingLeft, paddingTop, paddingRight, paddingBottom);
+        }
+
+        /// <summary>
         /// Copies every declared property from <paramref name="source"/> into <paramref name="target"/>,
         /// overwriting same-named properties already present - the shared per-declaration merge step for
         /// <see cref="SelectApplicableMarginRules"/> and <see cref="SelectApplicablePageStyle"/>, also reused
@@ -296,4 +334,16 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         internal static bool IsRightPage(int pageNumber) => pageNumber % 2 != 0;
     }
+
+    /// <summary>
+    /// The page box's own resolved border widths and padding, in true PDF points - the return type of
+    /// <see cref="PageRuleResolver.ResolvePageBorderAndPadding"/>, consumed by
+    /// <see cref="PageGeometryTable"/> to shrink a slot's content band and by <c>PdfGenerator</c> to
+    /// paint the page border and resolve <c>background-origin</c>/<c>-clip</c> (issue #1147). The
+    /// default value (all-zero) is exactly the pre-#1147 behavior - a page box with no border or padding
+    /// of its own.
+    /// </summary>
+    internal readonly record struct PageBorderPaddingPt(
+        double BorderLeftPt, double BorderTopPt, double BorderRightPt, double BorderBottomPt,
+        double PaddingLeftPt, double PaddingTopPt, double PaddingRightPt, double PaddingBottomPt);
 }

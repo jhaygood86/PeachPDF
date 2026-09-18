@@ -3040,7 +3040,8 @@ namespace PeachPDF.Html.Core
         /// historical arithmetic eliminates any float-drift risk for the overwhelmingly common case.
         /// </summary>
         private bool UseVariablePageGeometry =>
-            HasRealPageGrid && (PageGeometry.HasVerticalMarginOverrides || PageGeometry.HasSizeOverrides);
+            HasRealPageGrid && (PageGeometry.HasVerticalMarginOverrides || PageGeometry.HasSizeOverrides ||
+                                 PageGeometry.HasVerticalBorderPaddingOverrides);
 
         /// <summary>
         /// The horizontal analogue of <see cref="UseVariablePageGeometry"/>: whether layout should
@@ -3055,7 +3056,8 @@ namespace PeachPDF.Html.Core
         /// </summary>
         internal bool UseVariableInlineMeasure =>
             PageSize.Width > 0 && PageSize.Width < double.MaxValue - 1
-            && (PageGeometry.HasHorizontalMarginOverrides || PageGeometry.HasSizeOverrides);
+            && (PageGeometry.HasHorizontalMarginOverrides || PageGeometry.HasSizeOverrides ||
+                PageGeometry.HasHorizontalBorderPaddingOverrides);
 
         /// <summary>
         /// Whether the per-page reflow loop has settled which page each box is on, so a decision taken
