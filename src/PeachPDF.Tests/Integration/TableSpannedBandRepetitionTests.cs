@@ -288,7 +288,7 @@ namespace PeachPDF.Tests.Integration
         [InlineData(240)]
         public async Task AFixedBoxInsideASlicedRow_RepeatsAtItsOwnPositionOnEveryPage(double top)
         {
-            var (_, container) = await Paginate(
+            var (root, container) = await Paginate(
                 "<table style='width:150pt'><thead><tr><td>THEADWORD</td></tr></thead><tbody>"
                 + "<tr><td><div style='height:700pt;background:#ddd'>"
                 + $"<span style='position:fixed;top:{top}pt;left:10pt'>FIXWORD</span>"
@@ -313,9 +313,14 @@ namespace PeachPDF.Tests.Integration
 
             // ...and it really is that box's position, not some other page's strip leaking in: the ink
             // starts at the declared top - measured from the page AREA's top edge, the box's containing
-            // block - and within one line box of it.
+            // block - and within one line box of it. `line-height: normal` (the default here) can carry
+            // a small, font-metric-dependent, not-necessarily-zero half-leading either side of that top
+            // (issue #1054), so the lower bound is computed from the span's own resolved font rather
+            // than assumed to be exactly the declared top.
+            var fixWord = LayoutHarness.Descendants(root).First(b => b.Words.Any(w => w.Text == "FIXWORD"));
+            var halfLeading = (fixWord.ActualLineHeight - fixWord.ActualFont.Height) / 2;
             var declaredTop = Margin + top;
-            Assert.InRange(onFirstPage, declaredTop, declaredTop + drawn[0][0].Rect.Height);
+            Assert.InRange(onFirstPage, declaredTop + Math.Min(0, halfLeading), declaredTop + drawn[0][0].Rect.Height);
         }
 
         /// <summary>

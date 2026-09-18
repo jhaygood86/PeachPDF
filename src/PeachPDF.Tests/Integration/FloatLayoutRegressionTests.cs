@@ -446,8 +446,14 @@ namespace PeachPDF.Tests.Integration
             var badge = FindById(root, "badge")!;
             var word = FindFirstWord(root)!;
 
-            Assert.True(badge.Location.Y <= word.Rectangle.Top + 0.001,
-                $"the float belongs on the line it follows (top {word.Rectangle.Top}), was at Y={badge.Location.Y}");
+            // Compared against the line box's own top (word.Line.LineTop), not the word's ink position -
+            // a word sits half a leading below its line box (CSS 2.1 §10.8.1), which for `line-height:
+            // normal` is a small, font-metric-dependent, not-necessarily-zero amount (issue #1054), so
+            // comparing against the ink directly would make this assertion font-dependent for no reason
+            // relevant to the rule under test (CSS 2.1 §9.5.1 rule 6, about the LINE box).
+            var lineTop = word!.Line!.LineTop;
+            Assert.True(badge.Location.Y <= lineTop + 0.001,
+                $"the float belongs on the line it follows (top {lineTop}), was at Y={badge.Location.Y}");
         }
 
         [Fact]

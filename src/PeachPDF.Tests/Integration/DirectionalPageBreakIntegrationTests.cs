@@ -460,9 +460,14 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task DirectionalBreakInsideMulticol_DegradesToAColumnBreak_KnownBoundary()
         {
+            // A bundled font, not a system default: the fixture's own boundary is close enough that
+            // which fallback font the host resolves (Arial on Windows, Liberation/DejaVu on Linux/macOS)
+            // can change a word's exact metrics enough to shift which column claims it - unrelated to
+            // what this test is actually about (a directional break degrading to a column break).
             var (_, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(
-                    "<div style='column-count:2'>"
+                    $"<style>{BundledFonts.FontFaceRule(BundledFonts.Ttf, "TestFont", "font/truetype")}</style>" +
+                    "<div style='column-count:2;font-family:TestFont'>"
                     + "<div style='height:50pt'>first</div>"
                     + "<div style='height:50pt; break-before: right'>second</div>"
                     + "</div>"),
