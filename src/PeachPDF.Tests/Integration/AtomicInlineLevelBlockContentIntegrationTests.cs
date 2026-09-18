@@ -208,6 +208,16 @@ namespace PeachPDF.Tests.Integration
             // FitAtomicInlineOnLine's own actualLimitRight has to come from an intersecting right float
             // when one is present, the same way the ordinary per-word wrap check already does - not from
             // the line's own full ContentRight, which would let the atomic box overhang into the float.
+            //
+            // Doubles as a regression guard for issue #1038's own effect on this exact markup: widening
+            // DomUtils.ContainsInlinesOnly made the float/"XX"/atomic-inline-block all join ONE inline
+            // formatting context directly under `div#row` (no anonymous wrapper splitting the float from
+            // the rest, as there was before #1038), so the float is now `row`'s own CHILD rather than a
+            // preceding SIBLING of whatever box FitAtomicInlineOnLine is called with - exactly the shape
+            // DomUtils.GetLastRightIntersectingFloatBox alone can never discover (see LeftFloatAt/
+            // RightFloatAt's own remarks). Confirmed this test fails without CssLayoutEngine.cs routing
+            // FitAtomicInlineOnLine through RightFloatAt/LeftFloatAt instead of the raw DomUtils calls
+            // (toggled locally both ways during the #1038 rebase that surfaced this).
             var (root, _) = await BuildAndLayout("""
                 <!DOCTYPE html><html><body style="margin:0">
                 <div id="row" style="width:220pt">
@@ -258,6 +268,11 @@ namespace PeachPDF.Tests.Integration
             // Once FitAtomicInlineOnLine decides to wrap, the cursor on the freshly-opened line has to
             // account for a left float that is still active there - not fall back to the block's own
             // content-left edge, which would place the box on top of the float.
+            //
+            // Also a regression guard for issue #1038's rebase interaction - see the sibling right-float
+            // test's own remarks above for why this markup's float is `row`'s own child (not a preceding
+            // sibling of the box being wrapped) post-#1038, and why that requires FitAtomicInlineOnLine to
+            // go through LeftFloatAt rather than DomUtils.GetLastLeftIntersectingFloatBox alone.
             var (root, _) = await BuildAndLayout("""
                 <!DOCTYPE html><html><body style="margin:0">
                 <div id="row" style="width:220pt">

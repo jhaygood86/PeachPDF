@@ -148,6 +148,27 @@ already-tested machinery rather than duplicating it.
    advance, not on a simple closed-form threshold, so the fixture's specific values are empirically
    confirmed rather than derived.
 
+10. **Rebasing onto `main` surfaced a real gap introduced by combining this change with an unrelated
+    refactor that landed on `main` in the meantime.** Issue #1105's `FitAtomicInlineOnLine` (extracted
+    from what were three separately-duplicated inline-block/inline-table/inline-grid/inline-flex line-fit
+    checks) queries `DomUtils.GetLastRightIntersectingFloatBox`/`GetLastLeftIntersectingFloatBox`
+    directly - the ancestor-only lookups `LeftFloatAt`/`RightFloatAt`'s own remarks describe as unable to
+    discover a float #1038 placed directly among the SAME box's own inline content. Two PRE-EXISTING
+    tests (`AtomicInlineFitCheck_NarrowedByARightFloat_StillWraps`,
+    `AtomicInlineThatWraps_StartsAfterALeftFloatStillActiveOnTheNewLine`,
+    `AtomicInlineLevelBlockContentIntegrationTests.cs`) turned out to already cover exactly this shape -
+    their float sits as a direct child of the same `div` as the atomic inline-block being wrapped, which
+    #1038's own `ContainsInlinesOnly` widening puts in one inline formatting context with no anonymous
+    wrapper splitting them apart any more (there was one before #1038, which is why these tests originally
+    passed under the old box-tree shape - the float was an ordinary preceding SIBLING of the wrapper,
+    exactly what the raw `DomUtils` lookup can find). Confirmed both fail without the fix and pass with it
+    by toggling `FitAtomicInlineOnLine`'s two float lookups between the raw `DomUtils` calls and
+    `RightFloatAt`/`LeftFloatAt` locally. Fixed by promoting `LeftFloatAt`/`RightFloatAt` from local
+    functions inside `FlowBox` to shared `private static` methods (taking `coordinates`/`reference`
+    explicitly, since a local function's closure over `FlowBox`'s own `coordinates` isn't visible to a
+    separate top-level method) and pointing `FitAtomicInlineOnLine` at them instead of the raw calls - no
+    new test needed, since the two existing ones already exercise it precisely once routed correctly.
+
 ## Deliberately not done, and why it's safe
 
 **Full pagination of a float's own content.** If a float's own content is taller than fits the
