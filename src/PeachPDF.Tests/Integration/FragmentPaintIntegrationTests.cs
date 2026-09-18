@@ -1,6 +1,7 @@
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Tests.TestSupport;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -40,11 +41,19 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task PaintedText_LandsAtItsOwnFragmentsCoordinates()
         {
-            var (_, container) = await LayoutHarness.LayoutAsync(
+            var (root, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(
                     "<p style='margin:0;height:150pt'>PageOneMarker</p>"
                     + "<p style='margin:0;height:150pt;page-break-before:always'>PageTwoMarker</p>"),
                 pageHeight: 200, margin: 0);
+
+            // Each paragraph's single line sits half a leading below its own line box (CSS 2.1
+            // §10.8.1), which for `line-height: normal` can be a small, font-metric-dependent,
+            // not-necessarily-zero amount either side (issue #1054) - computed here from the actual
+            // resolved font rather than assumed to be exactly zero, so the lower bound below is exact
+            // regardless of which font the host resolves.
+            var p = LayoutHarness.Descendants(root).First(b => b.HtmlTag?.Name == "p");
+            var halfLeading = (p.ActualLineHeight - p.ActualFont.Height) / 2;
 
             for (var page = 0; page < 2; page++)
             {
@@ -64,7 +73,7 @@ namespace PeachPDF.Tests.Integration
                 }
 
                 // Page 1's content is 200pt down the document but paints near its own page top.
-                Assert.All(recording.DrawStringCalls, c => Assert.InRange(c.Point.Y, 0, 200));
+                Assert.All(recording.DrawStringCalls, c => Assert.InRange(c.Point.Y, Math.Min(0, halfLeading), 200));
             }
         }
 

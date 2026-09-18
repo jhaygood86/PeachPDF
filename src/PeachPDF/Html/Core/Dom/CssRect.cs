@@ -54,6 +54,26 @@ namespace PeachPDF.Html.Core.Dom
         public CssBox OwnerBox { get; }
 
         /// <summary>
+        /// The <see cref="CssLineBox"/> that owns this word, set in
+        /// <see cref="CssLineBox.ReportExistanceOf"/> at the same moment a word is placed - the
+        /// fragment-membership unit <see cref="Fragmentation.FragmentEmitter"/> resolves a word's
+        /// fragmentainer through, rather than the word's own rectangle, so that every word on one line is
+        /// claimed by the same fragmentainer even where its ink escapes the line box (a
+        /// <c>line-height</c> shorter than the font, CSS 2.1 §10.8.1). <c>CssLayoutEngine.FlowBox</c> (the
+        /// horizontal flow), <c>CreateVerticalLineBoxes</c> (vertical writing modes), and the
+        /// <c>text-overflow</c> ellipsis's synthesized word all call <see cref="CssLineBox.ReportExistanceOf"/>
+        /// and so all set this. Null only for a word laid out entirely outside ordinary line flow - in
+        /// practice, an <c>outside</c> <c>::marker</c>'s own phantom word, positioned directly by
+        /// <c>CssBoxMarker.PerformLayoutImp</c> rather than flowed onto any of its owner's line boxes -
+        /// which falls back to per-word membership. Can also point to a line the owner box no longer
+        /// carries in <see cref="CssBox.LineBoxes"/> at all: a trailing forced break's own line, once
+        /// <c>CssLayoutEngine.DropATrailingForcedBreaksOwnLine</c> removes it, leaves its break word (which
+        /// paints nothing) still naming it here - that case falls back to per-word membership too, since
+        /// there is no <c>Rectangles[line]</c> entry left for the emitter to read.
+        /// </summary>
+        internal CssLineBox? Line { get; set; }
+
+        /// <summary>
         /// Gets or sets the bounds of the rectangle
         /// </summary>
         public RRect Rectangle

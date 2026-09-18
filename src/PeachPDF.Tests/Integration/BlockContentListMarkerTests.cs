@@ -130,7 +130,13 @@ namespace PeachPDF.Tests.Integration
             {
                 var word = Assert.Single(MarkerOf(item).Words);
 
-                Assert.InRange(word.Top, item.Location.Y, item.Location.Y + item.ActualLineHeight);
+                // The marker sits on its item's first line like an ordinary inline word does, which for
+                // `line-height: normal` can be a small, font-metric-dependent, not-necessarily-zero
+                // amount either side of the item's own content-box top (issue #1054) - so the lower bound
+                // is the item's own half-leading, computed the same way the marker's own positioning
+                // does, rather than assumed to be exactly the content-box top.
+                var halfLeading = (item.ActualLineHeight - item.ActualFont.Height) / 2;
+                Assert.InRange(word.Top, item.Location.Y + Math.Min(0, halfLeading), item.Location.Y + item.ActualLineHeight);
                 Assert.True(word.Right <= item.ClientLeft + 0.001,
                     $"the marker of '{Id(item)}' overlaps its item's content edge");
 

@@ -6270,7 +6270,7 @@ namespace PeachPDF.Html.Core.Dom
             // directly (a <span> around an anonymous text box, an inline-block around its label) still has
             // to move with the content it wraps, or its background and border part company with the words
             // inside it. Null means the baseline does not govern this box at all.
-            (double FlowTop, double Delta)? BaselineShiftOf(CssBox box)
+            double? BaselineShiftOf(CssBox box)
             {
                 if (lineBox.BaselineY is not { } baselineY) return null;
 
@@ -6291,15 +6291,11 @@ namespace PeachPDF.Html.Core.Dom
                     if (!lineBox.Rectangles.TryGetValue(atomic, out var atomicRect)) continue;
                     if (AtomicInlineBaselineOf(atomic, lineBox, atomicRect) is not { } atomicBaseline) continue;
 
-                    var flowTop = lineBox.Rectangles.TryGetValue(box, out var ownRect)
-                        ? ownRect.Top
-                        : atomicRect.Top;
-
-                    return (flowTop, baselineY - atomicBaseline);
+                    return baselineY - atomicBaseline;
                 }
 
                 if (FirstNonReplacedWordOf(box, lineBox) is { } word)
-                    return (word.Top, baselineY - (word.FirstLineStyle ?? word.OwnerBox).ActualFont.Ascent - word.Top);
+                    return baselineY - (word.FirstLineStyle ?? word.OwnerBox).ActualFont.Ascent - word.Top;
 
                 // Replaced content aligns its bottom margin edge with the shared baseline. Use the
                 // replaced word's owner even while visiting an inline ancestor around it: both the
@@ -6308,8 +6304,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (FirstReplacedWordOf(box, lineBox) is { } replaced
                     && lineBox.Rectangles.TryGetValue(replaced.OwnerBox, out var replacedRect))
                 {
-                    return (replacedRect.Top,
-                        baselineY - (replacedRect.Bottom + replaced.OwnerBox.ActualMarginBottom));
+                    return baselineY - (replacedRect.Bottom + replaced.OwnerBox.ActualMarginBottom);
                 }
 
                 return null;
@@ -6354,52 +6349,20 @@ namespace PeachPDF.Html.Core.Dom
             // padded inline-block's border box from the label inside it.
             var baselineDeltas = new Dictionary<CssBox, double>(boxes.Count);
 
-            // Where the flow left the line's topmost governed content, and where baseline alignment would
-            // put it. A `line-height` shorter than the font makes the leading negative, and §10.8 then
-            // has the content area overflow its line box on BOTH sides - but this engine decides which
-            // fragmentainer a word belongs to from the word's own rectangle
-            // (Fragmentation.FragmentEmitter.ClaimsWord), so ink that escapes above its line box escapes
-            // the fragmentainer the line was placed in: at a page boundary the line's own words are then
-            // claimed by the page above it, or - their bottoms being past that page - by neither, and
-            // vanish. A line box is a monolithic break unit (css-break-3 §4.1) and its content has to go
-            // with it.
-            var governed = new List<CssBox>(boxes.Count);
-            var flowInkTop = double.MaxValue;
-            var alignedInkTop = double.MaxValue;
-
+            // A `line-height` shorter than the font makes the leading negative, and §10.8 then has the
+            // content area overflow its line box on BOTH sides (CSS 2.1 §10.8.1). This used to be floored
+            // at the line's own top - both here and in HalfLeadingOffsetOf's own flow-time placement -
+            // because Fragmentation.FragmentEmitter decided which fragmentainer a word belonged to from
+            // the word's own rectangle, and ink escaping above its line box escaped the fragmentainer the
+            // line was placed in. The emitter now resolves a word's fragmentainer through the line that
+            // owns it (FragmentEmitter.ClaimsLine, keyed by CssRect.Line) rather than the word's own
+            // rectangle, so a line's content is claimed as one unit regardless of where its ink actually
+            // sits - the floor's only reason to exist is gone, and baseline alignment is free to place
+            // content above the line box exactly as a length/percentage vertical-align offset already
+            // could.
             foreach (var box in boxes)
             {
-                if (BaselineShiftOf(box) is not { } shift)
-                {
-                    baselineDeltas[box] = 0;
-                    continue;
-                }
-
-                baselineDeltas[box] = shift.Delta;
-                governed.Add(box);
-                flowInkTop = Math.Min(flowInkTop, shift.FlowTop);
-                alignedInkTop = Math.Min(alignedInkTop, shift.FlowTop + shift.Delta);
-            }
-
-            // Negative leading is spread evenly over a line, so holding the line's topmost ink at the top
-            // the flow gave it moves every governed box by the same amount - the baseline the boxes now
-            // share is preserved exactly, and only the whole line's ink shifts down within its own box.
-            // Zero whenever the leading is positive, which is every line whose `line-height` is at least
-            // its font's own height.
-            if (alignedInkTop < flowInkTop)
-            {
-                var escape = flowInkTop - alignedInkTop;
-
-                foreach (var box in governed)
-                {
-                    baselineDeltas[box] += escape;
-                }
-
-                // The shared baseline moved down with them. Anything reading it afterwards - CssBoxMarker
-                // sitting an outside marker on the item's first baseline, and text-top/text-bottom below -
-                // has to see where the line's boxes actually ended up, or it lands a half-leading above
-                // the text it is aligning to.
-                lineBox.BaselineY += escape;
+                baselineDeltas[box] = BaselineShiftOf(box) ?? 0;
             }
 
             foreach (var box in boxes)
@@ -6487,13 +6450,14 @@ namespace PeachPDF.Html.Core.Dom
         /// puts above it, measured against the line's extent so far.
         /// </summary>
         /// <remarks>
-        /// Never negative, even where the leading is: a <c>line-height</c> shorter than the font would
-        /// otherwise lift the glyphs out through the top of their own line box, and this engine decides
-        /// which fragmentainer a word belongs to from the word's own rectangle
-        /// (<c>Fragmentation.FragmentEmitter.ClaimsWord</c>), so ink that escapes its line box escapes the
-        /// fragmentainer the line was placed in. <see cref="ApplyVerticalAlignment"/> holds the same floor
-        /// when it re-derives these offsets over the closed line, so the two cannot disagree — see the
-        /// note there on why it holds it line-wide rather than per word.
+        /// Can be negative: a <c>line-height</c> shorter than the font makes the leading negative, and
+        /// §10.8.1 has the content area overflow the line box on both sides - this used to be floored at
+        /// zero because <c>Fragmentation.FragmentEmitter</c> decided which fragmentainer a word belonged
+        /// to from the word's own rectangle, and upward-escaping ink would escape the fragmentainer the
+        /// line was placed in. The emitter now resolves a word's fragmentainer through the line that owns
+        /// it instead (<c>FragmentEmitter.ClaimsLine</c>, keyed by <see cref="CssRect.Line"/>), so a line's
+        /// content is claimed as one unit regardless of where its ink sits, and the floor has nothing left
+        /// to protect.
         /// <para>
         /// Zero for replaced and atomic inline content, which §10.8 sizes and aligns from the element's
         /// own margin box rather than from font metrics; <see cref="ApplyVerticalAlignment"/> handles it
@@ -6506,7 +6470,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var ascent = (word.FirstLineStyle ?? word.OwnerBox).ActualFont.Ascent;
 
-            return Math.Max(0, extent.AboveBaseline - ascent);
+            return extent.AboveBaseline - ascent;
         }
 
         /// <summary>

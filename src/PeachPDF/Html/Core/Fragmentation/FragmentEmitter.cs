@@ -2270,17 +2270,51 @@ namespace PeachPDF.Html.Core.Fragmentation
                     usesOwnBounds = true;
                 }
 
+                // A line box is a monolithic break unit (css-break-3 §4.1), so every word this box has on
+                // one line must be claimed by the same fragmentainer - one verdict per line, not one per
+                // word. Cached per line because a box commonly has several words on the same line (an
+                // ordinary run of text), and the verdict does not depend on which of them is being asked.
+                Dictionary<CssLineBox, bool>? lineClaims = null;
+
                 for (var i = 0; i < box.Words.Count; i++)
                 {
+                    var word = box.Words[i];
+
                     // A word on a line this pass discarded belongs to the next fragmentainer, whatever
                     // position it is still carrying from the attempt that was abandoned.
-                    if (box.Words[i].AwaitsTheNextFragmentainer) continue;
+                    if (word.AwaitsTheNextFragmentainer) continue;
 
                     if (!TryGetWordRect(box, i, snapshot, out var rect)) continue;
                     var shiftedRect = Shifted(rect);
 
-                    if (ClaimsWord(Displaced(shiftedRect, shift), slot.Index, region, isFixed))
-                        words.Add(new TextFragment(Localize(shiftedRect, originY), box.Words[i]));
+                    bool claims;
+
+                    if (word.Line is { } line && rectangles.TryGetValue(line, out var lineRect))
+                    {
+                        if (lineClaims is null || !lineClaims.TryGetValue(line, out claims))
+                        {
+                            var shiftedLineRect = Shifted(lineRect);
+                            claims = ClaimsLine(Displaced(shiftedLineRect, shift), slot.Index, region, isFixed);
+                            (lineClaims ??= [])[line] = claims;
+                        }
+                    }
+                    else
+                    {
+                        // Two cases reach here, neither of them a line's worth of real content losing the
+                        // per-line grouping this PR establishes: an outside ::marker's own phantom word
+                        // (CssBoxMarker.PerformLayoutImp positions it directly rather than flowing it onto
+                        // any of its owner's line boxes - see CssRect.Line's remarks), and a trailing
+                        // forced break's own line, which DropATrailingForcedBreaksOwnLine removes from
+                        // blockBox.LineBoxes before this box ever gets a Rectangles[line] entry for it -
+                        // the break word itself is left in box.Words with a Line that no longer names a
+                        // line the block still has, and it carries no ink (CssRect.IsLineBreak) for the
+                        // fragmentainer choice to matter to. Either way, fall back to the word's own
+                        // rectangle exactly as before this box gained line-based membership.
+                        claims = ClaimsWord(Displaced(shiftedRect, shift), slot.Index, region, isFixed);
+                    }
+
+                    if (claims)
+                        words.Add(new TextFragment(Localize(shiftedRect, originY), word));
                 }
             }
 
@@ -2430,8 +2464,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
-        /// Whether the fragmentainer of pagination slot <paramref name="slotIndex"/> claims the word at
-        /// <paramref name="rect"/>.
+        /// Whether the fragmentainer of pagination slot <paramref name="slotIndex"/> claims a line's worth
+        /// of content at <paramref name="rect"/> - <paramref name="rect"/> being <c>box.Rectangles[line]</c>,
+        /// the calling box's own portion of one physical line, per css-break-3 §4.1's line box being an
+        /// indivisible break unit. <see cref="ClaimsWord"/> is the same test asked of a single word's own
+        /// rectangle instead, for the one case a word has no owning line to ask this through (see
+        /// <see cref="CssRect.Line"/>'s remarks).
         /// </summary>
         /// <remarks>
         /// <para>
@@ -2494,12 +2532,23 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// slot, so the one slot its own Y falls in would name a single page instead of all of them.
         /// </para>
         /// </remarks>
-        private bool ClaimsWord(RRect rect, int slotIndex, FragmentRegion region, bool isFixed) =>
+        private bool ClaimsLine(RRect rect, int slotIndex, FragmentRegion region, bool isFixed) =>
             region.Contains(rect)
             && (isFixed
                 || container.SlotStartingAt(rect.Top) == slotIndex
                 || (HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(rect.Top))
                     && !MonolithicContent.FitsNoFragmentainer(rect.Height, 0, 0, container)));
+
+        /// <summary>
+        /// Whether the fragmentainer of pagination slot <paramref name="slotIndex"/> claims the word at
+        /// <paramref name="rect"/> - the same test as <see cref="ClaimsLine"/>, asked of a single word's
+        /// own rectangle rather than its line's. Reached only for a word with no owning
+        /// <see cref="CssRect.Line"/> to ask the line-based question through - in practice, an outside
+        /// <c>::marker</c>'s own phantom word (see <see cref="CssRect.Line"/>'s remarks) - so this is
+        /// exactly this engine's pre-line-based-membership behavior, preserved for that one case.
+        /// </summary>
+        private bool ClaimsWord(RRect rect, int slotIndex, FragmentRegion region, bool isFixed) =>
+            ClaimsLine(rect, slotIndex, region, isFixed);
 
         /// <summary>
         /// <paramref name="rect"/> where a displacement puts it — the rectangle every membership question

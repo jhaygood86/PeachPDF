@@ -220,6 +220,8 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="word"></param>
         internal void ReportExistanceOf(CssRect word)
         {
+            word.Line = this;
+
             if (!Words.Contains(word))
             {
                 Words.Add(word);

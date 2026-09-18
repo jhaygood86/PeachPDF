@@ -159,8 +159,15 @@ namespace PeachPDF.Tests.Integration
             var anonymousRun = Assert.Single(card.Boxes, box => box.IsInlineRunWrapper);
 
             Assert.Contains(description, anonymousRun.Boxes.SelectMany(box => box.Words));
-            Assert.True(description.Top >= title.ActualBottom,
-                $"description top ({description.Top}) must follow the title block ({title.ActualBottom})");
+
+            // Compared against the line box's own top (description.Line.LineTop), not the word's ink
+            // position - a word sits half a leading below its line box (CSS 2.1 §10.8.1), which for
+            // `line-height: normal` is a small, font-metric-dependent, not-necessarily-zero amount
+            // (issue #1054), unrelated to the structural question this test actually asks (does the
+            // trailing inline run's line come after the title block, not overlap or precede it).
+            var descriptionLineTop = description.Line!.LineTop;
+            Assert.True(descriptionLineTop >= title.ActualBottom,
+                $"description top ({descriptionLineTop}) must follow the title block ({title.ActualBottom})");
 
             var graphics = new TestRecordingGraphics();
             FragmentPaintHarness.PaintPage(container, graphics);

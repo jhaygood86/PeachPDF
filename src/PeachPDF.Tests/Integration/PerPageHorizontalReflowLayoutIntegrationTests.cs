@@ -731,7 +731,12 @@ namespace PeachPDF.Tests.Integration
             var words = new List<CssRect>();
             CollectWords(block, words);
 
-            var tops = words.Select(w => w.Top).Distinct().OrderBy(t => t).ToList();
+            // Grouped by each word's own LINE's top (word.Line.LineTop), not the word's ink position - a
+            // word sits half a leading below its line box (CSS 2.1 §10.8.1), which for `line-height:
+            // normal` can be a small, font-metric-dependent, not-necessarily-zero amount either side
+            // (issue #1054). Counting by ink position risked a line whose nominal top sits right at the
+            // boundary flipping which side it counts on, based on nothing this test is actually about.
+            var tops = words.Select(w => w.Line?.LineTop ?? w.Top).Distinct().OrderBy(t => t).ToList();
             if (tops.Count == 0) return null;
 
             var boundary = container.PageTopOf(container.PageIndexOf(tops[0]) + 1);
