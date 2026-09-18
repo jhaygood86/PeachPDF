@@ -259,6 +259,117 @@ namespace PeachPDF.Tests.Integration
                 "expected the space after the inline-block to still be rendered");
         }
 
+        // ─── Phase I: collapsible white space collapses ACROSS an inline element boundary
+        // (css-text-3 §4.1.1 phase I) - issue #1095. DomParser.CollapseWhitespaceAcrossInlineBoundaries
+        // is the DOM-normalization-time pass under test; CssBox.ParseToWords/AppendWordsFromText already
+        // handled collapsing WITHIN one text-owning box's own string and is not what these exercise. ──
+
+        [Fact]
+        public async Task ContentLessInlineBetweenTwoWords_CollapsesTheSurroundingSpacesToOne()
+        {
+            // The exact shape from the issue: an empty (but rendered - it has padding/border) span
+            // between two words, with source white space on BOTH sides of it. Compared against the same
+            // markup with only ONE space (before the empty span, none after) - correct collapsing means
+            // the two must render identically, since the second run disappears entirely rather than
+            // merely shrinking to its own single space.
+            const string emptySpan = "<span style='padding-left:20pt; border-left:1pt solid red'></span>";
+            var (bothSpaces, _) = await BuildAndLayout(Wrap(
+                $"<p id='p'><span id='z'>Z</span> {emptySpan} <span id='b'>BB</span></p>"));
+            var (oneSpace, _) = await BuildAndLayout(Wrap(
+                $"<p id='p'><span id='z'>Z</span> {emptySpan}<span id='b'>BB</span></p>"));
+
+            var pBoth = FindById(bothSpaces, "p")!;
+            var pOne = FindById(oneSpace, "p")!;
+
+            Assert.Equal(WordNamed(pOne, "BB").Left, WordNamed(pBoth, "BB").Left, 2);
+        }
+
+        [Fact]
+        public async Task ChainOfSeveralEmptyInlinesBetweenTwoWords_StillCollapsesToOneSpace()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<p id='p'><span id='a'>AA</span> <span></span> <span></span> <span></span> <span id='b'>BB</span></p>"));
+            var p = FindById(root, "p")!;
+
+            var single = await BuildAndLayout(Wrap("<p id='p'><span id='a'>AA</span> <span id='b'>BB</span></p>"));
+            var singleP = FindById(single.root, "p")!;
+
+            // The chain of empty inlines must not add any extra width over one plain collapsed space.
+            Assert.Equal(WordNamed(singleP, "BB").Left, WordNamed(p, "BB").Left, 2);
+        }
+
+        [Fact]
+        public async Task WhitespaceOnlySiblingSpan_CollapsesWithASurroundingRun()
+        {
+            // <span> </span>'s own single space is kept by CorrectTextBoxes (it is the span's only
+            // child), but it still participates in cross-boundary collapsing like any other run: the
+            // separate source space AFTER it must not add a second gap.
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<p id='p'><span id='a'>AA</span><span> </span> <span id='b'>BB</span></p>"));
+            var p = FindById(root, "p")!;
+
+            var single = await BuildAndLayout(Wrap("<p id='p'><span id='a'>AA</span> <span id='b'>BB</span></p>"));
+            var singleP = FindById(single.root, "p")!;
+
+            Assert.Equal(WordNamed(singleP, "BB").Left, WordNamed(p, "BB").Left, 2);
+        }
+
+        [Fact]
+        public async Task PreOnEitherSide_BothSpacesArePreserved_NoCollapsing()
+        {
+            // The exemption: white-space:pre/pre-wrap text is never collapsible, so it must not be
+            // affected by this pass even when it sits right next to a content-less inline the same way
+            // the collapsing shape above does.
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<p id='p' style='white-space:pre'><span id='a'>AA</span> <span></span> <span id='b'>BB</span></p>"));
+            var p = FindById(root, "p")!;
+
+            var a = WordNamed(p, "AA");
+            var b = WordNamed(p, "BB");
+
+            // Two preserved literal spaces (one on each side of the empty span) is a strictly wider
+            // gap than the single collapsed space the normal-white-space fixtures above produce.
+            var single = await BuildAndLayout(Wrap(
+                "<p id='p2' style='white-space:pre'><span id='a'>AA</span> <span id='b'>BB</span></p>"));
+            var singleP = FindById(single.root, "p2")!;
+            var singleGap = WordNamed(singleP, "BB").Left - (WordNamed(singleP, "AA").Left + WordNamed(singleP, "AA").Width);
+            var gap = b.Left - (a.Left + a.Width);
+
+            Assert.True(gap > singleGap,
+                $"expected pre to preserve both spaces around the empty span (gap {gap} vs single-space gap {singleGap})");
+        }
+
+        [Fact]
+        public async Task AtomicInlineBetweenTwoSpacedRuns_DoesNotCollapseAcrossIt()
+        {
+            // An atomic inline is real content, not "outside the boundary of the inline containing that
+            // space" - both spaces around it must survive untouched. An atomic inline-level box (here,
+            // an inline-block) is never positioned via Location/Rectangles the plain way a block-flowed
+            // box is, so this measures the gap between the surrounding WORDS instead: the extra distance
+            // between "AB" and "CD" that the two spaces contribute, versus the same markup with no spaces
+            // at all, must be two full space-widths - not one, which is what wrongly collapsing across
+            // the atomic inline would produce.
+            double Gap(CssBox root)
+            {
+                var p = FindById(root, "p")!;
+                var ab = WordNamed(p, "AB");
+                var cd = WordNamed(p, "CD");
+                return cd.Left - (ab.Left + ab.Width);
+            }
+
+            var (withSpaces, _) = await BuildAndLayout(Wrap(
+                "<p id='p'><span>AB </span><span style='display:inline-block'>x</span><span> CD</span></p>"));
+            var (noSpaces, _) = await BuildAndLayout(Wrap(
+                "<p id='p'><span>AB</span><span style='display:inline-block'>x</span><span>CD</span></p>"));
+            var (oneSpace, _) = await BuildAndLayout(Wrap("<p id='p'><span>AB</span> <span>CD</span></p>"));
+            var (zeroSpace, _) = await BuildAndLayout(Wrap("<p id='p'><span>AB</span><span>CD</span></p>"));
+
+            var extraFromBothSpaces = Gap(withSpaces) - Gap(noSpaces);
+            var singleSpaceWidth = Gap(oneSpace) - Gap(zeroSpace);
+
+            Assert.Equal(2 * singleSpaceWidth, extraFromBothSpaces, 1);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
