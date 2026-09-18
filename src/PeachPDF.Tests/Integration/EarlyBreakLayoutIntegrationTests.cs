@@ -883,44 +883,6 @@ namespace PeachPDF.Tests.Integration
             AssertHeadingAndCardShareAPage(root, container);
         }
 
-        /// <summary>
-        /// The residual imprecision this fixture's own remarks flagged as a follow-up when #1047 landed:
-        /// <c>CanBeLaidOutAgain</c>'s destination-fit check used to read this box's own raw
-        /// <c>ActualBottom - Location.Y</c>, which a same-pass keep-with-next restart
-        /// (<see cref="TryRestartAt"/>) could inflate by a "phantom gap" — the distance between this box's
-        /// own, still-stale top and its first in-flow child's already-relocated one — and wrongly answer
-        /// "does not fit", forcing the gap-carrying <see cref="TranslateForEarlyBreak"/> path instead of a
-        /// clean re-layout. Swept across the same confirmed band as the sibling tests above: every point
-        /// used to overflow its destination page's own content area by as much as 16pt (a full line) before
-        /// <c>EffectiveContentTop</c> existed, confirmed by temporary instrumentation (not kept) reading
-        /// <c>card.ActualBottom</c> against <c>container.PageBottomOf</c>. Asserting the fit here, on the
-        /// exact fixture the phantom gap was found in, is what proves the destination-fit check itself now
-        /// answers correctly — not just that every word still lands somewhere on one page, which the
-        /// sibling tests above already covered even before this fix.
-        /// </summary>
-        [Theory]
-        [InlineData(84)]
-        [InlineData(90)]
-        [InlineData(96)]
-        [InlineData(244)]
-        [InlineData(250)]
-        [InlineData(256)]
-        public async Task MultiLineHeadingRelocatedByBreakInsideAvoid_FitsWithinDestinationPage(double fillerHeight)
-        {
-            var (root, container) = await LayoutHarness.LayoutAsync(
-                Issue1047Document(fillerHeight), pageHeight: PageHeight, margin: Margin,
-                prepare: EnableWordClaimLedger);
-
-            var card = LayoutHarness.FindById(root, "card")!;
-            var page = container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
-            var pageBottom = container.PageBottomOf(page);
-
-            Assert.True(
-                card.ActualBottom <= pageBottom + 0.01,
-                $"card.ActualBottom ({card.ActualBottom}) overflowed its destination page's own content " +
-                $"area (bottom {pageBottom}) by {card.ActualBottom - pageBottom}pt.");
-        }
-
         private static void AssertEveryWordClaimedExactlyOnce(HtmlContainerInt container)
         {
             var claimed = container.FragmentTree!.Fragmentainers
@@ -980,6 +942,7 @@ namespace PeachPDF.Tests.Integration
         /// property's own remarks for why it needs an explicit opt-in rather than running for every test.
         /// </summary>
         private static void EnableWordClaimLedger(CssBox root) => root.HtmlContainer!.VerifyWordClaims = true;
+#endif
 
         /// <summary>
         /// Issue #1047's own reduction: a <c>break-inside:avoid</c> card whose first child is a heading
@@ -989,6 +952,12 @@ namespace PeachPDF.Tests.Integration
         /// none of the fixtures above it in this file — all pinned to a single-line heading — ever caught
         /// it.
         /// </summary>
+        /// <remarks>
+        /// Deliberately declared outside the <c>#if DEBUG</c> region above, even though the fixture is
+        /// #1047's own: <see cref="MultiLineHeadingRelocatedByBreakInsideAvoid_FitsWithinDestinationPage"/>
+        /// needs it too, and that test does not use the DEBUG-only word-claim ledger, so it has to run
+        /// (and be counted for diff coverage) in a Release build too — see that test's own remarks for why.
+        /// </remarks>
         private static string Issue1047Document(double fillerHeight) =>
             LayoutHarness.Wrap(
                 $"<div style='height:{fillerHeight}pt'>filler</div>"
@@ -997,7 +966,51 @@ namespace PeachPDF.Tests.Integration
                 + "<div>Alpha one</div>"
                 + "<div>Beta two</div>"
                 + "</div>");
-#endif
+
+        /// <summary>
+        /// The residual imprecision left in place when #1047 was fixed:
+        /// <c>CanBeLaidOutAgain</c>'s destination-fit check used to read this box's own raw
+        /// <c>ActualBottom - Location.Y</c>, which a same-pass keep-with-next restart
+        /// (<see cref="TryRestartAt"/>) could inflate by a "phantom gap" — the distance between this box's
+        /// own, still-stale top and its first in-flow child's already-relocated one — and wrongly answer
+        /// "does not fit", forcing the gap-carrying <see cref="TranslateForEarlyBreak"/> path instead of a
+        /// clean re-layout. Swept across the same confirmed band the DEBUG-only ledger tests above sweep:
+        /// every point used to overflow its destination page's own content area by as much as 16pt (a full
+        /// line) before <c>EffectiveContentTop</c> existed, confirmed by temporary instrumentation (not
+        /// kept) reading <c>card.ActualBottom</c> against <c>container.PageBottomOf</c>. Asserting the fit
+        /// here, on the exact fixture the phantom gap was found in, is what proves the destination-fit
+        /// check itself now answers correctly — not just that every word still lands somewhere on one
+        /// page, which the sibling tests above already covered even before this fix.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately declared outside the <c>#if DEBUG</c> region above and without
+        /// <c>EnableWordClaimLedger</c>: the mechanism this asserts (<c>TryRestartAt</c> relocating a box's
+        /// own first in-flow child) has to be exercised in a Release build too, or the production lines it
+        /// covers (<c>CssBox._firstChildRestartedTop</c>'s assignment) are only ever hit by a test region
+        /// CI's own coverage job — which builds Release — compiles out entirely, silently failing the
+        /// diff-coverage gate despite every framework-local run looking fully covered.
+        /// </remarks>
+        [Theory]
+        [InlineData(84)]
+        [InlineData(90)]
+        [InlineData(96)]
+        [InlineData(244)]
+        [InlineData(250)]
+        [InlineData(256)]
+        public async Task MultiLineHeadingRelocatedByBreakInsideAvoid_FitsWithinDestinationPage(double fillerHeight)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                Issue1047Document(fillerHeight), pageHeight: PageHeight, margin: Margin);
+
+            var card = LayoutHarness.FindById(root, "card")!;
+            var page = container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+            var pageBottom = container.PageBottomOf(page);
+
+            Assert.True(
+                card.ActualBottom <= pageBottom + 0.01,
+                $"card.ActualBottom ({card.ActualBottom}) overflowed its destination page's own content " +
+                $"area (bottom {pageBottom}) by {card.ActualBottom - pageBottom}pt.");
+        }
 
         private static string TableAndHeadingCardDocument(double fillerHeight) =>
             LayoutHarness.Wrap(
