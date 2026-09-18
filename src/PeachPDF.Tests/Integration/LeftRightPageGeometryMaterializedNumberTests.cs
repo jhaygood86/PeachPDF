@@ -22,6 +22,13 @@ namespace PeachPDF.Tests.Integration
     /// <c>HandleLinksPaginationTests</c>' own convention) to land the second paragraph on grid slot 2
     /// (grid page 3, odd - <c>:right</c>) which is actually materialized page 2 (even - <c>:left</c>).
     ///
+    /// Also covers issue #1041's narrow, relayout-gated extension for the case
+    /// <c>ResolveForMaterializedPage</c> alone still always declines - a page-side override that
+    /// itself changes the content-box WIDTH or HEIGHT (not both) - via
+    /// <see cref="Html.Core.HtmlContainerInt.TryApplyDimensionChangingPageCorrection"/>. See
+    /// <c>.claude/accepted-gaps/left-right-page-geometry-vs-materialized-numbering.md</c> for what
+    /// still stays out of scope (both dimensions changing at once; a slot under an active named page).
+    ///
     /// Asserted structurally, per this repo's painting-test convention: each page's own content
     /// stream is read in isolation via <c>PdfPage.Contents</c> (not a whole-file regex, which would be
     /// ambiguous across pages), and the leading `1 -0 -0 1 dx dy cm` page-margin translate
@@ -59,13 +66,19 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task AsymmetricLeftRightMargins_UnsafeToSubstitute_KeepsTheGridNumberedMargin()
+        public async Task AsymmetricLeftRightMargins_WidthOnlyChanges_CorrectsViaOneExtraRelayoutPass()
         {
             // :left's total margin (200pt) genuinely differs from :right's (20pt) - substituting the
-            // materialized side's margin here would paint a page whose content-box width disagrees
-            // with what its content was actually wrapped against, so ResolveForMaterializedPage
-            // declines (returns null) and the existing (accepted-gap, grid-numbered) behavior is
-            // unchanged: this is a regression guard on the fallback path, not a fix.
+            // materialized side's margin here changes the page's own content-box WIDTH, which
+            // PageGeometryTable.ResolveForMaterializedPage alone can never safely bake in after the
+            // fact (content was already wrapped against the grid-numbered width). Issue #1041's
+            // narrow, relayout-gated correction covers exactly this case, though: only WIDTH changes
+            // here (both rules leave margin-top/bottom at the base 60pt), so
+            // HtmlContainerInt.TryApplyDimensionChangingPageCorrection re-runs layout once more
+            // against the corrected width, and - because the tiny paragraph here fits on one line
+            // either way, so the page count and box-to-page assignment don't change - the correction
+            // validates and applies: the second (materialized) page must be translated by :left's
+            // margin-left (100pt), not grid slot 2's own rule (grid page 3, odd -> :right, 10pt).
             var doc = await GeneratePdf(
                 "@page :left { margin-left: 100pt; margin-right: 100pt; }",
                 "@page :right { margin-left: 10pt; margin-right: 10pt; }");
@@ -74,8 +87,29 @@ namespace PeachPDF.Tests.Integration
 
             var deltaXPage1 = GetLeadingDeltaX(doc, 1);
 
-            // Grid slot 2 / grid page 3 is :right (margin-left 10) - the fallback keeps that, even
-            // though the materialized page number (2) would otherwise select :left.
+            Assert.Equal(100 - BaseMarginLeft, deltaXPage1, 3);
+        }
+
+        [Fact]
+        public async Task AsymmetricLeftRightMarginsAndSize_BothDimensionsChange_KeepsTheGridNumberedMargin()
+        {
+            // The genuine residual issue #1041 still leaves open (see the accepted-gap file): :left
+            // here changes BOTH the width (asymmetric margin, as above) AND the height (a `size`
+            // override :right doesn't share) relative to :right. Nothing in the narrow fix can tell
+            // "a relayout would fix the width" apart from "...and also the height" with the same
+            // fallback-safety guarantee a single-dimension change gets, so both changing at once
+            // stays declined exactly as before this issue's fix: the grid-numbered (:right) margin is
+            // kept, unaffected by the materialized number.
+            var doc = await GeneratePdf(
+                "@page :left { margin-left: 100pt; margin-right: 100pt; size: 400pt 400pt; }",
+                "@page :right { margin-left: 10pt; margin-right: 10pt; }");
+
+            Assert.Equal(2, doc.PageCount);
+
+            var deltaXPage1 = GetLeadingDeltaX(doc, 1);
+
+            // Grid slot 2 / grid page 3 is :right (margin-left 10) - still kept, even though the
+            // materialized page number (2) would otherwise select :left.
             Assert.Equal(10 - BaseMarginLeft, deltaXPage1, 3);
         }
 

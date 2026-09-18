@@ -157,6 +157,14 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ABlockClearedPastAFloatOntoTheNextPage_TakesThatPagesMeasure()
         {
+            // The leading spacer needs a background: with none, it (and the float below it, also
+            // background-less) carry no printable content of their own (CSS Paged Media 3 §3.2), and
+            // with the cleared paragraph pushed onto page 1, page 0 would hold no printable content at
+            // all - triggering the UNRELATED issue #1041 gated correction (a `:first`-vs-base page-side
+            // override that changes BandWidth, now applied once a content-empty gap precedes the slot
+            // using it) and pulling page 1 onto :first's own margins too, defeating this fixture's own
+            // "two pages, two different measures" premise. The background makes page 0 non-empty so
+            // neither this test nor issue #1041's mechanism interact at all.
             var (container, g) = await BuildLayoutAsync("""
                 <!DOCTYPE html><html><head><style>
                 @page { margin: 40pt 200pt; }
@@ -164,7 +172,7 @@ namespace PeachPDF.Tests.Integration
                 body { margin: 0; }
                 div, p { margin: 0; }
                 </style></head><body>
-                <div style='height:600pt'></div>
+                <div style='height:600pt; background: rgb(240,240,240);'></div>
                 <div style='float:left;width:100pt;height:200pt'></div>
                 <p id='cleared' style='clear:both'>cleared paragraph</p>
                 </body></html>
