@@ -278,15 +278,14 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task AnRtlTextAlignLastJustify_StillStartAlignsAClosingLineItCannotStretch()
+        public async Task AnRtlTextAlignLastJustify_CentresAClosingLineItCannotStretch()
         {
             // text-align-last: justify hands the closing line to the justify path, which has nothing to
             // do with a line holding one word. css-text-3 §6.4.3 hands such a line to text-align-last,
-            // and its parenthetical asks for centre when that is itself justify; PeachPDF start-aligns
-            // instead, matching Chromium/Gecko/WebKit - see the accepted-gap file
-            // unexpandable-justified-line-starts-rather-than-centres.md. What this asserts is the part
-            // that is not in question: start under RTL is the physical *right* edge, so reading §6.4.3
-            // as "leave the line alone" strands it at the left, worse than not declaring the property.
+            // and its parenthetical asks for centre when that is itself justify - which PeachPDF now
+            // does, a deliberate divergence from Chromium/Gecko/WebKit (none of which implements the
+            // parenthetical; see .claude/migration-notes for the date this changed). Centring is a
+            // direction-agnostic result, so this and the LTR case below assert the same shape.
             var (block, _) = await BlockAsync(
                 $"<p id='p' style='{Justify};direction:rtl;text-align-last:justify'>A<span>B</span></p>");
 
@@ -296,7 +295,22 @@ namespace PeachPDF.Tests.Integration
             // whatever text-align-last asked for.
             Assert.Equal(2, last.Words.Count);
             Assert.Equal(last.Words[0].Right, last.Words[1].Left, 1);
-            Assert.Equal(last.ContentRight, last.Words.Max(w => w.Right), 1);
+            AssertCentred(last);
+        }
+
+        [Fact]
+        public async Task ALtrTextAlignLastJustify_CentresAClosingLineItCannotStretch()
+        {
+            // The LTR counterpart of AnRtlTextAlignLastJustify_CentresAClosingLineItCannotStretch: §6.4.3's
+            // parenthetical names no direction, so centring is expected under LTR exactly as under RTL.
+            var (block, _) = await BlockAsync(
+                $"<p id='p' style='{Justify};text-align-last:justify'>A<span>B</span></p>");
+
+            var last = Assert.Single(block.LineBoxes);
+
+            Assert.Equal(2, last.Words.Count);
+            Assert.Equal(last.Words[0].Right, last.Words[1].Left, 1);
+            AssertCentred(last);
         }
 
         [Fact]
