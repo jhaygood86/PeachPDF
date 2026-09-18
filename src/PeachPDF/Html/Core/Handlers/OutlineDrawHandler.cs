@@ -4,6 +4,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using System;
+using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Handlers
 {
@@ -40,6 +41,83 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
+        /// Draws the box's outline around every one of <paramref name="rects"/> at once, as a single
+        /// connected shape wherever they touch.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// CSS Basic User Interface 4 §4 says a fragmented box's outline "should" be drawn as one
+        /// connected shape rather than left open, or closed separately, at each fragment. Chromium
+        /// achieves that by unioning the fragments' rectangles and outlining the boundary of the
+        /// result, which is what this reproduces: where consecutive fragments touch - which a border on
+        /// a wrapped inline is usually enough to cause, since it makes each line's rectangle tall
+        /// enough to reach the next - the edges between them are interior to the region and so are not
+        /// outlined at all.
+        /// </para>
+        /// <para>
+        /// Only <c>solid</c>, <c>double</c> and <c>auto</c> take this path. The remaining styles fall
+        /// back to <see cref="DrawOutline"/> per rectangle, because their appearance is defined per
+        /// side - a dash pattern fitted to a side's length, a bevel lit from a side's direction - and
+        /// a unioned contour has neither four sides nor only convex corners to define those against.
+        /// See <see cref="SupportsRegionOutline"/>.
+        /// </para>
+        /// </remarks>
+        /// <param name="g">the device to draw into</param>
+        /// <param name="box">the box to draw the outline for</param>
+        /// <param name="rects">
+        /// the border-box rectangles of every fragment of <paramref name="box"/> on this page
+        /// </param>
+        public static void DrawRegionOutline(RGraphics g, CssBox box, IReadOnlyList<RRect> rects)
+        {
+            if (rects.Count == 0) return;
+            if (!TryResolveRing(g, box, out var ring)) return;
+
+            var inflated = new List<RRect>(rects.Count);
+            foreach (var rect in rects)
+            {
+                if (rect is not { Width: > 0, Height: > 0 }) continue;
+
+                // outline-offset is applied per rectangle, before the union, so a negative one is
+                // clamped against the rectangle it actually shrinks - and a positive one can pull two
+                // otherwise separate fragments into a single contour.
+                var horizontalReach = ClampReach(ring.Reach, rect.Width, ring.Width, true, true);
+                var verticalReach = ClampReach(ring.Reach, rect.Height, ring.Width, true, true);
+
+                inflated.Add(RRect.FromLTRB(
+                    rect.Left - horizontalReach,
+                    rect.Top - verticalReach,
+                    rect.Right + horizontalReach,
+                    rect.Bottom + verticalReach));
+            }
+
+            if (inflated.Count == 0) return;
+
+            var contours = RectilinearRegion.Union(inflated);
+            if (contours.Count == 0) return;
+
+            // The box's radii resolve against its first fragment, the same rectangle the per-fragment
+            // path resolves them against. Growing them to each contour is OutlineRegionPainter's job,
+            // since how much a corner grows depends on which way that contour turns through it.
+            BorderRadii? radii = null;
+            var declared = box.ComputeRadii(rects[0]);
+            if (declared.IsRounded) radii = declared;
+
+            if (ring.IsInvert) g.PushBlendMode(RBlendMode.Difference);
+
+            OutlineRegionPainter.DrawRegionOutline(
+                g, contours, ToLineStyle(ring.Style), ring.Color, ring.Width, radii, ring.Offset);
+
+            if (ring.IsInvert) g.PopBlendMode();
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/>'s outline style is one <see cref="DrawRegionOutline"/> can
+        /// draw. The rest keep the per-fragment ring <see cref="DrawOutline"/> produces.
+        /// </summary>
+        internal static bool SupportsRegionOutline(CssBox box) =>
+            box.OutlineStyle.Value is OutlineStyle.Solid or OutlineStyle.Double or OutlineStyle.Auto;
+
+        /// <summary>
         /// Draws the box's outline, if any, around <paramref name="rect"/> (the same border-box
         /// rectangle <see cref="BordersDrawHandler.DrawBoxBorders"/> receives).
         /// </summary>
@@ -60,36 +138,12 @@ namespace PeachPDF.Html.Core.Handlers
             bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
         {
             if (rect is not { Width: > 0, Height: > 0 }) return;
+            if (!TryResolveRing(g, box, out var ring)) return;
 
-            var style = box.OutlineStyle.Value;
-            if (style is OutlineStyle.None or OutlineStyle.Hidden) return;
-
-            var isInvert = string.Equals(box.OutlineColor, Keywords.Invert, StringComparison.OrdinalIgnoreCase);
-            var color = isInvert ? RColor.White : box.ActualOutlineColor;
-            var offset = box.ActualOutlineOffset;
-            var effectiveStyle = style == OutlineStyle.Auto ? OutlineStyle.Solid : style;
-
-            double width;
-            if (style == OutlineStyle.Auto)
-            {
-                // CSS-UI-4 §4: "The outline-width property is ignored when outline-style is auto."
-                // That sentence is normative and unconditional - the neighbouring "User agents may treat
-                // auto as solid" licenses the *style*, not the width - so the declared width never
-                // reaches the ring, not even a declared zero (Chrome paints `outline: 0 auto` too).
-                width = AutoRingWidth(g);
-                offset -= width / 2;
-            }
-            else
-            {
-                width = box.ActualOutlineWidth;
-                if (width <= 0) return;
-            }
-
-            var reach = offset + width;
             var horizontalReach = ClampReach(
-                reach, rect.Width, width, hasLeftEdge, hasRightEdge);
+                ring.Reach, rect.Width, ring.Width, hasLeftEdge, hasRightEdge);
             var verticalReach = ClampReach(
-                reach, rect.Height, width, hasTopEdge, hasBottomEdge);
+                ring.Reach, rect.Height, ring.Width, hasTopEdge, hasBottomEdge);
             var outerRect = RRect.FromLTRB(
                 hasLeftEdge ? rect.Left - horizontalReach : rect.Left,
                 hasTopEdge ? rect.Top - verticalReach : rect.Top,
@@ -113,16 +167,78 @@ namespace PeachPDF.Html.Core.Handlers
                     tlx, tly, trx, try_, brx, bry, blx, bly);
             }
 
-            if (isInvert) g.PushBlendMode(RBlendMode.Difference);
+            if (ring.IsInvert) g.PushBlendMode(RBlendMode.Difference);
 
             BoxEdgesDrawHandler.DrawBoxEdges(
-                g, outerRect, ToLineStyle(effectiveStyle), color, width,
+                g, outerRect, ToLineStyle(ring.Style), ring.Color, ring.Width,
                 hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge, outerRadii);
 
-            if (isInvert) g.PopBlendMode();
+            if (ring.IsInvert) g.PopBlendMode();
         }
 
         #region Private methods
+
+        /// <summary>
+        /// Resolves everything about the ring that does not depend on the rectangle it surrounds:
+        /// colour, width, offset and the style actually painted.
+        /// </summary>
+        /// <returns>whether there is a ring to paint at all</returns>
+        private static bool TryResolveRing(RGraphics g, CssBox box, out Ring ring)
+        {
+            ring = default;
+
+            var style = box.OutlineStyle.Value;
+            if (style is OutlineStyle.None or OutlineStyle.Hidden) return false;
+
+            var isInvert = string.Equals(box.OutlineColor, Keywords.Invert, StringComparison.OrdinalIgnoreCase);
+            var color = isInvert ? RColor.White : box.ActualOutlineColor;
+            var offset = box.ActualOutlineOffset;
+
+            double width;
+            if (style == OutlineStyle.Auto)
+            {
+                // CSS-UI-4 §4: "The outline-width property is ignored when outline-style is auto."
+                // That sentence is normative and unconditional - the neighbouring "User agents may treat
+                // auto as solid" licenses the *style*, not the width - so the declared width never
+                // reaches the ring, not even a declared zero (Chrome paints `outline: 0 auto` too).
+                width = AutoRingWidth(g);
+                offset -= width / 2;
+            }
+            else
+            {
+                width = box.ActualOutlineWidth;
+                if (width <= 0) return false;
+            }
+
+            ring = new Ring(
+                style == OutlineStyle.Auto ? OutlineStyle.Solid : style,
+                color, width, offset, isInvert);
+            return true;
+        }
+
+        /// <summary>
+        /// A resolved outline ring - everything about it that is independent of the rectangle or
+        /// region it surrounds.
+        /// </summary>
+        /// <param name="Style">
+        /// the style actually painted, with <c>auto</c> already resolved to <c>solid</c> (CSS-UI-4
+        /// leaves <c>auto</c>'s appearance UA-defined)
+        /// </param>
+        /// <param name="Color">
+        /// the colour to paint, with <c>invert</c> resolved - see <paramref name="IsInvert"/>
+        /// </param>
+        /// <param name="Width">the ring's thickness</param>
+        /// <param name="Offset">how far outside the border edge the ring's inner edge sits</param>
+        /// <param name="IsInvert">
+        /// whether <c>outline-color: invert</c> was declared, in which case the ring paints white
+        /// through a difference blend rather than in its own colour
+        /// </param>
+        private readonly record struct Ring(
+            OutlineStyle Style, RColor Color, double Width, double Offset, bool IsInvert)
+        {
+            /// <summary>How far outside the border edge the ring's outer edge sits.</summary>
+            internal double Reach => Offset + Width;
+        }
 
         /// <summary>
         /// The width of the <c>auto</c> ring, in the caller's raw layout-space units. CSS-UI-4 leaves

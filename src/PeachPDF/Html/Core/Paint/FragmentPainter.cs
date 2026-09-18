@@ -612,11 +612,10 @@ namespace PeachPDF.Html.Core.Paint
                 // all) deliberately keeps those same inline-axis edges open, matching how a wrapped
                 // inline actually looks in every UA. Close them for the outline only - geometry's own
                 // HasLeftEdge/HasRightEdge above already painted the border/background with the real,
-                // open flags, so this doesn't touch that. This is Chromium's own "closed rect per
-                // line" shape - the simpler of the two connected shapes real engines produce, and the
-                // one CSS UI 4 leaves room for (Firefox instead builds one connected/minimum-outline
-                // polygon around every fragment). Scoped to a horizontal inline axis - which also
-                // covers sideways-rl/-lr, whose own line boxes are laid out exactly like
+                // open flags, so this doesn't touch that. Closing each rectangle is also what lets the
+                // deferred pass below union them: a fragment contributes its whole rectangle to that
+                // region, not a three-sided piece of one. Scoped to a horizontal inline axis - which
+                // also covers sideways-rl/-lr, whose own line boxes are laid out exactly like
                 // horizontal-tb's, see IsVerticalDecorationGeometry - a genuinely vertical
                 // (vertical-rl/vertical-lr) box's wrapped inline outline is left exactly as it was:
                 // its own inline-axis border/padding isn't even reserved at a line wrap yet either
@@ -737,10 +736,28 @@ namespace PeachPDF.Html.Core.Paint
 
             if (outlinePaints is not null)
             {
-                foreach (var (paintRect, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge) in outlinePaints)
+                // More than one rectangle is a fragmented box, whose outline CSS UI 4 §4 asks be drawn
+                // as one connected shape rather than closed separately around each fragment - see
+                // OutlineDrawHandler.DrawRegionOutline. Only the styles whose appearance is fully
+                // determined by which area is filled can be drawn that way; the rest keep a ring per
+                // fragment. Either way this stays within the page: these rectangles are one
+                // fragmentainer's, so a box broken across pages still gets one shape per page.
+                if (outlinePaints.Count > 1 &&
+                    !IsVerticalDecorationGeometry(box) &&
+                    OutlineDrawHandler.SupportsRegionOutline(box))
                 {
-                    OutlineDrawHandler.DrawOutline(g, box, paintRect,
-                        hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
+                    var rects = new List<RRect>(outlinePaints.Count);
+                    foreach (var paint in outlinePaints) rects.Add(paint.Rect);
+
+                    OutlineDrawHandler.DrawRegionOutline(g, box, rects);
+                }
+                else
+                {
+                    foreach (var (paintRect, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge) in outlinePaints)
+                    {
+                        OutlineDrawHandler.DrawOutline(g, box, paintRect,
+                            hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
+                    }
                 }
             }
 

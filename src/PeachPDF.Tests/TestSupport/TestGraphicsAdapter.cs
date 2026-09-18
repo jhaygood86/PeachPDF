@@ -163,15 +163,32 @@ namespace PeachPDF.Tests.TestSupport
     /// applies the matrix to every recorded point (same convention as the real
     /// <c>GraphicsPathAdapter</c>/<c>XMatrix</c>) and <see cref="AddPath"/> merges another path's
     /// recorded points, faithfully mirroring the production path so a test double never diverges from
-    /// what actually renders.</summary>
+    /// what actually renders. <see cref="SubpathStarts"/> additionally records where each subpath
+    /// begins, which is the only way to tell one shape from several in a single path - an outline
+    /// unioned over several fragments emits every disjoint piece of the region as its own subpath of
+    /// one fill call, so the merged point list alone cannot distinguish that from one connected
+    /// shape.</summary>
     internal sealed class TestGraphicsPath : RGraphicsPath
     {
         public List<RPoint> Points { get; } = [];
 
-        public override void Start(double x, double y) => Points.Add(new RPoint(x, y));
+        /// <summary>The index into <see cref="Points"/> at which each subpath begins.</summary>
+        public List<int> SubpathStarts { get; } = [];
+
+        public override void Start(double x, double y)
+        {
+            SubpathStarts.Add(Points.Count);
+            Points.Add(new RPoint(x, y));
+        }
+
         public override void LineTo(double x, double y) => Points.Add(new RPoint(x, y));
         public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) => Points.Add(new RPoint(x, y));
-        public override void AddMove(double x, double y) => Points.Add(new RPoint(x, y));
+
+        public override void AddMove(double x, double y)
+        {
+            SubpathStarts.Add(Points.Count);
+            Points.Add(new RPoint(x, y));
+        }
 
         public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3)
         {
@@ -194,7 +211,12 @@ namespace PeachPDF.Tests.TestSupport
             }
         }
 
-        public override void AddPath(RGraphicsPath path) => Points.AddRange(((TestGraphicsPath)path).Points);
+        public override void AddPath(RGraphicsPath path)
+        {
+            var other = (TestGraphicsPath)path;
+            foreach (var start in other.SubpathStarts) SubpathStarts.Add(Points.Count + start);
+            Points.AddRange(other.Points);
+        }
 
         public override RFillMode FillMode { get; set; }
         public override void Dispose() { }
@@ -227,6 +249,30 @@ namespace PeachPDF.Tests.TestSupport
             public RRect Bounds => Points.Count == 0
                 ? RRect.Empty
                 : RRect.FromLTRB(Points.Min(p => p.X), Points.Min(p => p.Y), Points.Max(p => p.X), Points.Max(p => p.Y));
+
+            /// <summary>
+            /// The index into <see cref="Points"/> at which each of this path's subpaths begins - see
+            /// <see cref="TestGraphicsPath.SubpathStarts"/>. One fill call can hold several disjoint
+            /// shapes, so this is what distinguishes "one connected shape" from "three separate ones".
+            /// </summary>
+            public IReadOnlyList<int> SubpathStarts { get; init; } = [];
+
+            /// <summary>The points making up subpath <paramref name="index"/>.</summary>
+            public IReadOnlyList<RPoint> Subpath(int index)
+            {
+                var start = SubpathStarts[index];
+                var end = index + 1 < SubpathStarts.Count ? SubpathStarts[index + 1] : Points.Count;
+                return [.. Points.Skip(start).Take(end - start)];
+            }
+
+            /// <summary>The axis-aligned bounds of subpath <paramref name="index"/>.</summary>
+            public RRect SubpathBounds(int index)
+            {
+                var points = Subpath(index);
+                return points.Count == 0
+                    ? RRect.Empty
+                    : RRect.FromLTRB(points.Min(p => p.X), points.Min(p => p.Y), points.Max(p => p.X), points.Max(p => p.Y));
+            }
 
             /// <summary>The linear gradient endpoints this fill was resolved against (null for a solid
             /// fill/stroke, or a non-gradient brush) - see <see cref="TestBrush.GradientStart"/>.</summary>
@@ -333,7 +379,7 @@ namespace PeachPDF.Tests.TestSupport
         public override void DrawPath(RBrush brush, RGraphicsPath path)
         {
             var tb = brush as TestBrush;
-            Log.Add(new DrawPathCall(tb?.Color ?? RColor.Empty, PointsOf(path)) { GradientStart = tb?.GradientStart, GradientEnd = tb?.GradientEnd });
+            Log.Add(new DrawPathCall(tb?.Color ?? RColor.Empty, PointsOf(path)) { GradientStart = tb?.GradientStart, GradientEnd = tb?.GradientEnd, SubpathStarts = SubpathStartsOf(path) });
         }
 
         public override void DrawPath(RPen pen, RGraphicsPath path)
@@ -345,12 +391,16 @@ namespace PeachPDF.Tests.TestSupport
                 StrokeWidth = testPen?.Width ?? 0,
                 LineCap = testPen?.RecordedLineCap ?? RLineCap.Butt,
                 DashPattern = testPen?.RecordedDashPattern,
-                DashOffset = testPen?.RecordedDashOffset ?? 0
+                DashOffset = testPen?.RecordedDashOffset ?? 0,
+                SubpathStarts = SubpathStartsOf(path)
             });
         }
 
         private static IReadOnlyList<RPoint> PointsOf(RGraphicsPath path) =>
             path is TestGraphicsPath testPath ? testPath.Points.ToArray() : [];
+
+        private static IReadOnlyList<int> SubpathStartsOf(RGraphicsPath path) =>
+            path is TestGraphicsPath testPath ? testPath.SubpathStarts.ToArray() : [];
 
         /// <summary>One filled shape, whichever primitive produced it.</summary>
         public sealed record FilledShape(RColor Color, RRect Bounds);
