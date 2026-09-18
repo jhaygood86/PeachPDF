@@ -39,9 +39,10 @@ namespace PeachPDF.Html.Core.Dom
     internal static class CssLayoutEngine
     {
         /// <summary>
-        /// Slack, in layout units (points), a word may overshoot the line's limit by and still count as
-        /// fitting. The same idiom as the existing <c>+ 0.01</c> fit tests in this file (~0.0075pt,
-        /// comparable to Chrome's 1/64px <c>LayoutUnit</c>): a shrink-wrapped item is exactly its text's
+        /// Slack, in layout units, a word (or a whole <c>nowrap</c> run) may overshoot the line's limit by
+        /// and still count as fitting. The same idiom as the existing <c>+ 0.01</c> fit tests in this file,
+        /// and the same order of magnitude as Chrome's 1/64px <c>LayoutUnit</c> (not numerically identical:
+        /// one layout unit is a point at a pixel scale of 1). A shrink-wrapped item is exactly its text's
         /// natural width, and the commit pass re-accumulates that line's <c>CurrentX</c> word by word at
         /// a shifted X, so the running sum can land one floating-point ULP past a limit the item was sized
         /// to exactly - which a strict compare would read as overflow and wrap the last word.
@@ -4213,7 +4214,7 @@ namespace PeachPDF.Html.Core.Dom
                             ? coordinates.Line.ContentRight - GetLineTextIndent(blockBox, coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak)
                             : coordinates.Line.ContentRight;
 
-                        if (boxRight > noWrapLimitRight)
+                        if (boxRight > noWrapLimitRight + LineFitTolerance)
                             wrapNoWrapBox = true;
                     }
 

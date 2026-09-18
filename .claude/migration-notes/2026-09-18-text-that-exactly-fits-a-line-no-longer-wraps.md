@@ -9,11 +9,15 @@ into `16 /` + `9`, `3 / 4` likewise, and an absolutely positioned `aspect-ratio`
 (`also centered`), `full_bleed` (the cover's `edges`), `bengali_gujarati_tamil_use`, `cmyk_colors`
 and `table_visibility_collapse`.
 
-Now a word counts as fitting when it overshoots the line's limit by no more than 0.01pt (about
-Chrome's 1/64px layout unit), so exact-fit text stays on one line, matching Chrome. The same tolerance applies along the column axis of `vertical-rl`/`vertical-lr` text.
+Now a word (or a whole `white-space: nowrap` run) counts as fitting when it overshoots the line's
+limit by no more than 0.01 layout units, roughly the size of Chrome's 1/64px layout unit, so exact-fit
+text stays on one line, matching Chrome. The same tolerance applies along the column axis of
+`vertical-rl`/`vertical-lr` text.
 
-Checked against the v0.9.18 release's showcase PDFs: v0.9.18 already wrapped `also centered` in the `flexbox` showcase and `edges` in `full_bleed`, so those two
-are a fix relative to the last release; the `aspect_ratio` label wrap is new since v0.9.18 (it kept
-`16 / 9` on one line there) and this change removes it again.
+Checked against the v0.9.18 release's showcase PDFs: v0.9.18 already wrapped `also centered` in the
+`flexbox` showcase and `edges` in `full_bleed`, so those two are a fix relative to the last release;
+the `aspect_ratio` label wrap is new since v0.9.18 (it kept `16 / 9` on one line there) and this
+change removes it again.
 
-Text that is genuinely wider than its line by more than 0.01pt still wraps exactly as before.
+Text that is genuinely wider than its line by more than 0.01 layout units still wraps exactly as
+before.

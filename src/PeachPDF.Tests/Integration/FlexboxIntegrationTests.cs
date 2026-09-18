@@ -1898,7 +1898,7 @@ namespace PeachPDF.Tests.Integration
 
         private static double SweepPixelsPerPoint(int i) => 1 + i * 0.00091;
 
-        private static string CenteredLabelHtml(int i)
+        private static string CenteredLabelHtml(int i, string content = "16 / 9")
         {
             var fontSize = 10.0 + i * 0.0137;
             var left = (i % 17) * 3.3 + (i % 7) * 0.171;
@@ -1908,24 +1908,38 @@ namespace PeachPDF.Tests.Integration
                        font-size: {{InvariantNumber(fontSize)}}pt; display: flex; align-items: center;
                        justify-content: center; aspect-ratio: 16/9; text-align: center; }
                 </style>
-                <div id='box' class='box'>16 / 9</div>
+                <div id='box' class='box'>{{content}}</div>
                 """);
         }
 
-        private static string AbsposLabelHtml(int i)
+        // A `white-space: nowrap` span is moved to the next line as a whole when its run would overshoot
+        // the line, decided by the run-level compare in the horizontal FlowBox (not the per-word one).
+        // That compare carries the same LineFitTolerance, but the intrinsic width a shrink-wrapped item is
+        // sized to already leaves ~0.01 units of headroom against it, so these sweeps pass without the
+        // tolerance too: they guard the nowrap path against regressing, they do not prove the tolerance.
+        private static string CenteredNoWrapSpanLabelHtml(int i) =>
+            CenteredLabelHtml(i, "<div id='inner'>ratio <span style='white-space:nowrap'>16 / 9</span></div>");
+
+        // The item is shrink-wrapped, so the box (3:1 of a 72pt height = 216pt) only has to be wider than
+        // the ~132pt text: that headroom keeps a wider fallback font for the arrow glyph from producing a
+        // genuine wrap, while the exact-fit character still comes from the shrink-wrapped item.
+        private static string AbsposLabelHtml(int i, string content = "abspos &rarr; 192px wide")
         {
             var left = 6 + i % 13 * 1.37;
             var fontSize = 9 + i * 0.0111;
             return LayoutHarness.Wrap($$"""
                 <style>
-                .rel { position: relative; width: 240pt; height: 72pt; }
-                .abs { position: absolute; top: 6pt; left: {{InvariantNumber(left)}}pt; height: 48pt;
+                .rel { position: relative; width: 300pt; height: 96pt; }
+                .abs { position: absolute; top: 6pt; left: {{InvariantNumber(left)}}pt; height: 72pt;
                        aspect-ratio: 3/1; display: flex; align-items: center; justify-content: center;
                        font-size: {{InvariantNumber(fontSize)}}pt; }
                 </style>
-                <div class='rel'><div id='box' class='abs'>abspos &rarr; 192px wide</div></div>
+                <div class='rel'><div id='box' class='abs'>{{content}}</div></div>
                 """);
         }
+
+        private static string AbsposNoWrapSpanLabelHtml(int i) =>
+            AbsposLabelHtml(i, "<div id='inner'>abspos <span style='white-space:nowrap'>&rarr; 192px wide</span></div>");
 
         private static string VerticalLabelHtml(int i)
         {
@@ -1949,12 +1963,23 @@ namespace PeachPDF.Tests.Integration
             return LayoutHarness.Descendants(box).Sum(b => b.LineBoxes.Count);
         }
 
-        private static async Task AssertNoSweepCaseWrapsAsync(Func<int, string> htmlFor)
+        // Line count of the block (#inner) that directly holds inline content: a span that is itself a
+        // flex item is blockified into its own item, so only a block wrapper reaches the inline
+        // FlowBox compare that a nowrap span goes through.
+        private static async Task<int> InnerBlockLineCountAsync(string html, double pixelsPerPoint)
         {
+            var (root, _) = await LayoutHarness.LayoutAsync(html, pixelsPerPoint: pixelsPerPoint);
+            return FindById(root, "inner")!.LineBoxes.Count;
+        }
+
+        private static async Task AssertNoSweepCaseWrapsAsync(Func<int, string> htmlFor,
+            Func<string, double, Task<int>>? lineCounter = null)
+        {
+            lineCounter ??= TotalLineCountAsync;
             var wrapped = new List<string>();
             for (var i = 0; i < ExactFitSweepCount; i++)
             {
-                var lines = await TotalLineCountAsync(htmlFor(i), SweepPixelsPerPoint(i));
+                var lines = await lineCounter(htmlFor(i), SweepPixelsPerPoint(i));
                 if (lines != 1)
                 {
                     wrapped.Add($"i={i} (ppp {InvariantNumber(SweepPixelsPerPoint(i))}): {lines} lines");
@@ -1965,6 +1990,8 @@ namespace PeachPDF.Tests.Integration
                 $"{wrapped.Count}/{ExactFitSweepCount} exact-fit labels wrapped: {string.Join("; ", wrapped.Take(8))}");
         }
 
+        // The "pinned" indices below were found on one machine's font metrics; on another host they may
+        // not land on a last-bit case at all, so the sweeps are the real regression guard.
         [Theory]
         [InlineData(10)]
         [InlineData(11)]
@@ -1977,11 +2004,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task CenteredAspectRatioLabel_AcrossPixelScaleMarginAndFontSize_NeverWraps()
         {
-            await AssertNoSweepCaseWrapsAsync(CenteredLabelHtml);
+            await AssertNoSweepCaseWrapsAsync(i => CenteredLabelHtml(i));
         }
 
         [Theory]
-        [InlineData(50)]
+        [InlineData(12)]
         [InlineData(67)]
         [InlineData(84)]
         public async Task AbsolutelyPositionedAspectRatioLabel_PinnedLastBitCases_StaysOnOneLine(int i)
@@ -1992,7 +2019,19 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task AbsolutelyPositionedAspectRatioLabel_AcrossPixelScaleLeftAndFontSize_NeverWraps()
         {
-            await AssertNoSweepCaseWrapsAsync(AbsposLabelHtml);
+            await AssertNoSweepCaseWrapsAsync(i => AbsposLabelHtml(i));
+        }
+
+        [Fact]
+        public async Task CenteredAspectRatioLabel_NoWrapSpan_AcrossPixelScaleMarginAndFontSize_NeverWraps()
+        {
+            await AssertNoSweepCaseWrapsAsync(CenteredNoWrapSpanLabelHtml, InnerBlockLineCountAsync);
+        }
+
+        [Fact]
+        public async Task AbsolutelyPositionedAspectRatioLabel_NoWrapSpan_AcrossPixelScaleLeftAndFontSize_NeverWraps()
+        {
+            await AssertNoSweepCaseWrapsAsync(AbsposNoWrapSpanLabelHtml, InnerBlockLineCountAsync);
         }
 
         [Fact]
