@@ -59,10 +59,28 @@ Extracted the fit-check-and-wrap sequence into `FitAtomicInlineOnLine` (returnin
 `AtomicInlineLineFit` result: `Fits` / `Wrapped` / `ClampedStop`, since line-clamp can still intercept
 the wrap the same way it already could for `inline-block`) and called it for all four displays.
 `inline-block` passes its already-resolved used width unchanged; `inline-table`/`inline-grid`/
-`inline-flex` pass a new `GetAtomicInlineFitCheckWidth` estimate (declared non-percentage width as-is,
-else the box's own - now #1032-corrected - max-content width bounded by the containing block, mirroring
-`GetFitContentWidth`'s existing shrink-to-fit clamp) that is used for the fit check ONLY and discarded;
-each engine still settles its real used width independently once its own layout runs.
+`inline-flex` initially got a new, narrower `GetAtomicInlineFitCheckWidth` estimate - **wrong**, see
+below - since replaced by reusing `ResolveAtomicInlineBlockWidth` directly for all four, since each
+engine still settles its own real used width independently once its own layout runs regardless of
+what estimate the fit check used.
+
+**Self-review turned up a real bug in the first version's estimate, closed in a third commit**:
+`GetAtomicInlineFitCheckWidth` reimplemented "declared width as-is, else shrink-to-fit" narrowly and
+disagreed with `ResolveAtomicInlineBlockWidth` (the version `inline-block` already used correctly) in
+three ways - a literal percentage width fell through to the auto-width estimate as if none were
+declared; a `calc()` expression containing a percentage resolved that percentage against a hardcoded
+`0` (the `!EndsWith('%')` guard only filters literal percentages); and the auto-width branch dropped
+both the min-content floor and the explicit `min-width` floor `ResolveAtomicInlineBlockWidth` applies
+after computing fit-content width. Any of the three could make the fit check disagree with the box's
+real, eventually-laid-out width and wrongly report "fits" for a box that does not -
+reintroducing #1105's own bug class for these cases instead of the fixed-width case the first round of
+tests covered. Fixed by deleting the narrow reimplementation and reusing
+`ResolveAtomicInlineBlockWidth` (which already resolves a declared width - length, percentage, or
+`calc()` - via `GetBoxWidth`, and already applies both floors) for all four displays; confirmed by
+reading `CssLayoutEngineTable`/`Grid`/`Flex`'s own width resolution that none of the three cache
+anything computed before a wrap (each re-derives fresh from the box's own, already-repositioned
+`Location`/`ContainingBlock` when its own layout runs), so no post-wrap re-resolution analogous to
+`inline-block`'s is needed for them.
 
 ## What was deliberately not done
 
@@ -78,8 +96,11 @@ each engine still settles its real used width independently once its own layout 
 ## Evidence
 
 11 new `IntrinsicWidthWalkTests` cases (the issue's own repro table variants, the padding
-double-count trap, and a new inline-flex-column case not in the original issue) plus 6 new
-`AtomicInlineLevelBlockContentIntegrationTests` cases (declared-width and auto-width wrap parity across
-`inline-table`/`inline-grid`/`inline-flex`). Full net8.0 suite green (12,367 total, 9 platform skips,
-zero failures) after both commits, including the full `Flexbox`/`Table`/`Grid`/`InlineBlock` filtered
-subset (1,606 tests) run in isolation after the #1032 commit alone. Solution rebuild with 0 warnings.
+double-count trap, and a new inline-flex-column case not in the original issue) plus 14 new
+`AtomicInlineLevelBlockContentIntegrationTests` cases: declared-width and auto-width wrap parity across
+`inline-table`/`inline-grid`/`inline-flex`, right-float/RTL/left-float-after-wrap edge cases in the
+shared fit-check helper, and (added with the third commit) the min-width-floor and percentage-width
+cases that would have failed against the first version's narrower estimate. Full net8.0 suite green
+(12,375 total, 9 platform skips, zero failures) after all three commits, including the full
+`Flexbox`/`Table`/`Grid`/`InlineBlock` filtered subset (1,606 tests) run in isolation after the #1032
+commit alone. Solution rebuild with 0 warnings; 100% diff coverage on the full three-commit diff.
