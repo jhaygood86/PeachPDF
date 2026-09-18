@@ -1695,7 +1695,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <paramref name="containingBlock"/>'s own <see cref="CssBox.ClientRight"/> wherever per-page
         /// measure does not apply (no <see cref="HtmlContainerInt"/>, <see cref="HtmlContainerInt.UseVariableInlineMeasure"/>
         /// is off, or the containing block isn't an unconstrained main column), so callers may invoke it
-        /// unconditionally. Shared by <see cref="GetBoxWidth"/>'s own box-width resolution and
+        /// unconditionally. Shared by <see cref="GetBoxWidth(RGraphics, CssBox, double?)"/>'s own box-width resolution and
         /// <see cref="FloatBox"/>'s displacement scan, rather than each re-deriving the same
         /// page-area-minus-inset expression independently.
         /// </summary>
@@ -1730,7 +1730,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// <c>internal</c> rather than <c>private</c> so <see cref="CssLayoutEngineTable"/> can resolve
         /// its own table's width against the same page-aware basis (issue #197) — its own
-        /// <c>GetAvailableTableWidth</c> bypasses <see cref="GetBoxWidth"/> entirely (a table's width has
+        /// <c>GetAvailableTableWidth</c> bypasses <see cref="GetBoxWidth(RGraphics, CssBox, double?)"/> entirely (a table's width has
         /// its own column-width-driven resolution), so it needs this basis directly rather than through
         /// that method.
         /// </remarks>
@@ -1741,12 +1741,12 @@ namespace PeachPDF.Html.Core.Dom
         /// <paramref name="blockBox"/>'s own content-right edge for wrapping the line starting at document
         /// Y <paramref name="y"/> - the per-line counterpart of <see cref="ContentRightOf"/> (which answers
         /// the same question for a box being <i>placed inside</i> a containing block) for the box whose own
-        /// children are being flowed. Mirrors <see cref="GetBoxWidth"/>'s own auto-width branch: an
+        /// children are being flowed. Mirrors <see cref="GetBoxWidth(RGraphics, CssBox, double?)"/>'s own auto-width branch: an
         /// explicit-length or percentage <c>width</c> keeps <paramref name="blockBox"/>'s one already-
         /// resolved <see cref="CssBox.ClientRight"/> - re-sizing the block's own border box per fragment is
         /// <c>Draft.InlineExtent</c>, a separate, not-yet-built fragment-tree contract change - while an
         /// auto-width block re-derives its content edge fresh from whichever page <paramref name="y"/> falls
-        /// in, exactly as it would if <see cref="GetBoxWidth"/> were resolving it for the first time there
+        /// in, exactly as it would if <see cref="GetBoxWidth(RGraphics, CssBox, double?)"/> were resolving it for the first time there
         /// (css-break-3 §5.1).
         /// </summary>
         private static double LineContentRightOf(CssBox blockBox, double y)
@@ -2070,6 +2070,64 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// A narrow row-axis counterpart to <see cref="GetBoxHeight"/>, added for
+        /// <see cref="CssLayoutEngineTable"/>'s own row-height enforcement (CSS 2.1 §17.5.3) on a
+        /// <c>writing-mode: vertical-rl</c>/<c>vertical-lr</c> table, where the row axis is physical
+        /// <c>width</c> rather than physical <c>height</c> - see the writing-mode remarks at the top of
+        /// that class. Deliberately scoped to only what
+        /// <see cref="CssLayoutEngineTable.TryComputeRowHeightRedistribution"/> and its own
+        /// <c>RowHeightFloor</c> need: a definite <c>width</c>/<c>min-width</c> parsed against
+        /// <paramref name="box"/>'s percentage base, clamped by <c>max-width</c>.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately does NOT port two of <see cref="GetBoxHeight"/>'s branches:
+        /// <list type="bullet">
+        /// <item>the initial-containing-block pinning (<c>box == box.ContainingBlock</c>), meaningful only
+        /// for the true document root - never a table or table-row box;</item>
+        /// <item>the absolutely-positioned <c>top</c>/<c>bottom</c>-fill rule (CSS 2.1 §10.6.4's width
+        /// counterpart), unreachable here since a table/row box is always in-flow or floated, never
+        /// absolutely positioned, under CSS 2.1's table box model.</item>
+        /// </list>
+        /// A future generalization of this method to other box kinds needs to add those back
+        /// deliberately, rather than inherit them silently from this narrower purpose.
+        /// </remarks>
+        /// <returns>
+        /// The resolved border-box width, or null when <paramref name="box"/> has neither a definite
+        /// <c>width</c> nor a definite <c>min-width</c> - mirroring <see cref="GetBoxHeight"/>'s own
+        /// null-for-auto contract for its own explicit-height branch.
+        /// </returns>
+        public static double? GetBoxWidth(CssBox box)
+        {
+            var basis = PercentageBase(box).Size.Width;
+
+            var hasExplicitWidth = CssValueParser.IsValidLength(box.Width);
+            var hasExplicitMinWidth = box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth);
+
+            if (!hasExplicitWidth && !hasExplicitMinWidth) return null;
+
+            double width = hasExplicitWidth
+                ? CssValueParser.ParseLength(box.Width, basis, box) + box.ActualBoxSizeIncludedWidth
+                : 0;
+
+            // Max-width clamps before min-width, so min-width still wins on conflict per CSS 2.1 §10.4 -
+            // the same order the existing async GetBoxWidth(RGraphics, CssBox, double?) overload already
+            // uses.
+            if (CssValueParser.IsValidLength(box.MaxWidth))
+            {
+                var maxWidth = CssValueParser.ParseLength(box.MaxWidth, basis, box) + box.ActualBoxSizeIncludedWidth;
+                width = Math.Min(width, maxWidth);
+            }
+
+            if (hasExplicitMinWidth)
+            {
+                var minWidth = CssValueParser.ParseLength(box.MinWidth, basis, box) + box.ActualBoxSizeIncludedWidth;
+                width = Math.Max(width, minWidth);
+            }
+
+            return width;
+        }
+
+        /// <summary>
         /// Computes a box's border-box height from its <c>aspect-ratio</c> and its (definite) used width, when
         /// the box has a usable preferred ratio and no definite height. The ratio applies to the box-sizing
         /// box, so dividing the content width by the ratio and adding the box-sizing-included height yields the
@@ -2291,7 +2349,7 @@ namespace PeachPDF.Html.Core.Dom
         /// would otherwise be shrink-to-fit (an absolutely-positioned auto-width box): a normal-flow block's
         /// auto inline size is stretch-fit, which wins over the ratio (CSS Box Sizing 4 §5.1), so the caller
         /// must not use this on a stretch-fit box. The returned width is the box-sizing box's width (matching
-        /// <see cref="GetBoxWidth"/>'s explicit-width branch), so the caller adds <c>ActualBoxSizeIncludedWidth</c>
+        /// <see cref="GetBoxWidth(RGraphics, CssBox, double?)"/>'s explicit-width branch), so the caller adds <c>ActualBoxSizeIncludedWidth</c>
         /// to reach the border-box edge — for both <c>content-box</c> (dividing/multiplying on the content box)
         /// and <c>border-box</c> (the included term is 0, so the ratio maps border-box height to border-box width).
         /// </summary>
@@ -2710,7 +2768,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>box-sizing</c>, because <c>Size.Width</c> means whichever one that property selects:
         /// <c>ActualBoxSizeIncludedWidth</c> adds the padding and border back under <c>content-box</c> and
         /// adds nothing under <c>border-box</c>. A percentage resolves against the child box's containing
-        /// block using the same page-aware basis as <see cref="GetBoxWidth"/>. <c>auto</c> is left alone,
+        /// block using the same page-aware basis as <see cref="GetBoxWidth(RGraphics, CssBox, double?)"/>. <c>auto</c> is left alone,
         /// which is exactly the case §10.3.9 hands to shrink-to-fit.
         /// </para>
         /// </remarks>
@@ -3100,7 +3158,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Resolves an atomic inline-level box's used border-box width under the ordinary CSS 2.1 §10.3.9
         /// width algorithm - a declared, non-auto <c>width</c> (length, percentage, or <c>calc()</c>,
-        /// via <see cref="GetBoxWidth"/>'s own already-correct resolution of all three against the
+        /// via <see cref="GetBoxWidth(RGraphics, CssBox, double?)"/>'s own already-correct resolution of all three against the
         /// containing block's real, page-aware basis) as-is, or otherwise shrink-to-fit, floored by both
         /// the box's own min-content width and an explicit <c>min-width</c> - without committing any
         /// placement geometry.

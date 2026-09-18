@@ -220,7 +220,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Resolves a pending dynamic-content callback into real decoded content, once this box's own
         /// definite size is known. <see cref="MeasureWordsSize"/> is the earliest point that's true: for a
-        /// replaced element (one word, always), <see cref="CssLayoutEngine.GetBoxWidth"/> derives this
+        /// replaced element (one word, always), <see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/> derives this
         /// box's own <c>ActualWidth</c> from that one word's already-measured size whenever the box has
         /// words - so by the time layout would otherwise resolve this box's width/height, it's already too
         /// late (circular). The declarative layer defaults a dynamic content box to <c>width:100%;

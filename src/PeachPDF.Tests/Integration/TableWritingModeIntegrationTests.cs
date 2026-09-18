@@ -1480,6 +1480,188 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(b!.ActualBoxSizingHeight, 395, 405);
         }
 
+        #region Vertical Table Row-Axis Width/Min-Width Enforcement Tests (issue #1131)
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_TrWidth_StretchesEveryCellInTheRow(string writingMode)
+        {
+            // CSS 2.1 §17.5.3's row-axis floor, extended to a vertical table's own row axis - physical
+            // width, not physical height (issue #1131): a <tr>'s own explicit `width` is one of the
+            // candidates its computed row-axis extent (ActualRight - Location.X) is the maximum of,
+            // mirroring CssLayoutEngineTableTests.TrHeight_StretchesEveryCellInTheRow's horizontal-tb
+            // counterpart exactly, on the other axis.
+            var html = LayoutHarness.Wrap($"""
+                <table style="writing-mode: {writingMode}; border-spacing: 0">
+                  <tr id="row" style="width:80pt">
+                    <td id="a" style="height:20pt">x</td>
+                    <td id="b" style="height:20pt">y</td>
+                  </tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var row = LayoutHarness.FindById(root, "row");
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(row);
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            var rowAxisExtent = row!.ActualRight - row.Location.X;
+            Assert.True(rowAxisExtent >= 79, $"row should grow to its explicit width (actual: {rowAxisExtent})");
+            Assert.Equal(row.ActualRight, a!.ActualRight, 1);
+            Assert.Equal(row.ActualRight, b!.ActualRight, 1);
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_TrMinWidth_SmallerThanContent_DoesNotShrinkRow(string writingMode)
+        {
+            // min-width only ever raises the row's row-axis extent - a min-width smaller than the
+            // content's own required width must not shrink the row below it.
+            var html = LayoutHarness.Wrap($"""
+                <table style="writing-mode: {writingMode}; border-spacing: 0">
+                  <tr id="row" style="min-width:1pt"><td style="height:20pt;width:60pt">x</td></tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var row = LayoutHarness.FindById(root, "row");
+            Assert.NotNull(row);
+
+            var rowAxisExtent = row!.ActualRight - row.Location.X;
+            Assert.True(rowAxisExtent > 55,
+                $"row must keep its content-driven width, not shrink to min-width:1pt (actual: {rowAxisExtent})");
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_TableWidth_GrowsTheSingleRowToItsExplicitWidth(string writingMode)
+        {
+            // A vertical table's own `width` has no column-axis role at all (GetAvailableTableWidth reads
+            // Height, not Width, for the column-axis/inline-size decision on a vertical table) - so it is
+            // entirely free to drive the row-axis floor instead, exactly like an ordinary horizontal
+            // table's `height` already does for its own (physical-Y) row axis.
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: {writingMode}; width:200pt; border-spacing: 0">
+                  <tr id="row"><td style="height:20pt;width:10pt">x</td></tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var table = LayoutHarness.FindById(root, "t");
+            var row = LayoutHarness.FindById(root, "row");
+            Assert.NotNull(table);
+            Assert.NotNull(row);
+
+            var tableRowAxisExtent = table!.ActualRight - table.Location.X;
+            var rowAxisExtent = row!.ActualRight - row.Location.X;
+            Assert.True(tableRowAxisExtent >= 199,
+                $"table should grow to its explicit width (actual: {tableRowAxisExtent})");
+            Assert.True(rowAxisExtent >= 199, $"row should grow to fill it too (actual: {rowAxisExtent})");
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_TableWidth_SmallerThanContent_DoesNotClipTheTable(string writingMode)
+        {
+            // §17.5.3 makes the table's own row-axis size a maximum-of rule too, mirroring the row/cell
+            // carve-out: an explicit width smaller than the rows' real content must never shrink the
+            // table's own ActualRight below it.
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: {writingMode}; width:1pt; border-spacing: 0">
+                  <tr><td style="height:20pt;width:60pt">x</td></tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var table = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(table);
+
+            var tableRowAxisExtent = table!.ActualRight - table.Location.X;
+            Assert.True(tableRowAxisExtent > 55,
+                $"table must keep its content-driven width, not shrink to width:1pt (actual: {tableRowAxisExtent})");
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_TableWidth_TwoRows_DistributesSurplusProportionallyToNaturalRowWidth(string writingMode)
+        {
+            // No explicit width on either row, so the table's own measurement pass has to decide how the
+            // shortfall is shared between them - mirrors this engine's column-width surplus rule
+            // (SpreadSurplusProportionally) and its horizontal-tb row-height counterpart
+            // (CssLayoutEngineTableTests.TableHeight_TwoRows_DistributesSurplusProportionallyToNaturalRowHeight):
+            // each row grows by a share of the surplus proportional to its own natural (pre-redistribution)
+            // width, not equally.
+            const string style = "border-spacing: 0";
+            var naturalHtml = LayoutHarness.Wrap($"""
+                <table style="writing-mode: {writingMode}; {style}">
+                  <tr id="short"><td style="height:20pt;width:20pt">s</td></tr>
+                  <tr id="tall"><td style="height:20pt;width:60pt">t</td></tr>
+                </table>
+                """);
+            var (naturalRoot, _) = await LayoutHarness.LayoutAsync(naturalHtml);
+            var naturalShortRow = LayoutHarness.FindById(naturalRoot, "short")!;
+            var naturalTallRow = LayoutHarness.FindById(naturalRoot, "tall")!;
+            var naturalShort = naturalShortRow.ActualRight - naturalShortRow.Location.X;
+            var naturalTall = naturalTallRow.ActualRight - naturalTallRow.Location.X;
+            var naturalTotal = naturalShort + naturalTall;
+
+            var html = LayoutHarness.Wrap($"""
+                <table style="writing-mode: {writingMode}; width:{naturalTotal + 100}pt; {style}">
+                  <tr id="short"><td style="height:20pt;width:20pt">s</td></tr>
+                  <tr id="tall"><td style="height:20pt;width:60pt">t</td></tr>
+                </table>
+                """);
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var shortRow = LayoutHarness.FindById(root, "short")!;
+            var tallRow = LayoutHarness.FindById(root, "tall")!;
+
+            var grownShort = shortRow.ActualRight - shortRow.Location.X;
+            var grownTall = tallRow.ActualRight - tallRow.Location.X;
+
+            Assert.True(grownTall - naturalTall > grownShort - naturalShort,
+                $"the taller row's own growth ({grownTall - naturalTall}) should exceed the shorter row's ({grownShort - naturalShort})");
+            Assert.True(grownTall / (grownShort + grownTall) > naturalTall / naturalTotal - 0.02,
+                "the taller row should keep at least roughly its natural share of the grown total");
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_TableWidth_RowspanCellCrossingAGrownRow_StretchesToTheNewCombinedWidth(string writingMode)
+        {
+            // A rowspan cell spanning both rows must still cover their combined (now wider, via
+            // redistribution) row-axis extent - verifying the redo's fresh pass correctly re-closes a
+            // spanning cell against the new row geometry rather than the pre-redistribution one.
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: {writingMode}; width:200pt; border-spacing: 0">
+                  <tr>
+                    <td id="span" rowspan="2" style="height:20pt;width:10pt">span</td>
+                    <td style="height:20pt;width:20pt">one</td>
+                  </tr>
+                  <tr><td style="height:20pt;width:60pt">t</td></tr>
+                </table>
+                """);
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var table = LayoutHarness.FindById(root, "t");
+            var span = LayoutHarness.FindById(root, "span");
+            Assert.NotNull(table);
+            Assert.NotNull(span);
+
+            var tableRowAxisExtent = table!.ActualRight - table.Location.X;
+            Assert.True(tableRowAxisExtent >= 199, $"table should grow to its explicit width (actual: {tableRowAxisExtent})");
+            Assert.Equal(table.ActualRight, span!.ActualRight, 1);
+        }
+
+        #endregion
+
         private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
         {
             yield return fragment;

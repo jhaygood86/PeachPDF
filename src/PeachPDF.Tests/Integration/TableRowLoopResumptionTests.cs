@@ -1311,5 +1311,207 @@ namespace PeachPDF.Tests.Integration
             IReadOnlyList<CssBox>? finished = null) =>
             new(table, resumeSlot, resumeRow, maxRight, unfinished ?? [], finished ?? [],
                 new Dictionary<int, IReadOnlyList<CssBox>>());
+
+        // ─── Table height enforcement across a true row-loop continuation (issue #1132) ──────────
+
+        /// <summary>
+        /// Puts row <paramref name="rowIndex"/>'s cell back exactly where <see cref="StopRow"/> found it -
+        /// the undo half of that swap, so a fixture can simulate "the pass that follows the one that
+        /// stopped genuinely finishes" rather than stopping forever.
+        /// </summary>
+        private static void UnstopRow(StoppingCell stopping, CssBox anchor)
+        {
+            var row = stopping.ParentBox!;
+            row.Boxes[row.Boxes.IndexOf(stopping)] = anchor;
+        }
+
+        /// <summary>
+        /// Issue #1132: <see cref="CssLayoutEngineTable.PerformLayout"/>'s own measure-then-redo mechanism
+        /// (issue #1116) used to be gated on the table's row loop finishing entirely within its first
+        /// top-level pass (<c>resume is null</c> on entry, <c>PendingBreakToken</c> null after
+        /// <c>Layout()</c> returns) - a table whose row loop itself had to stop and hand control to a
+        /// separate, later top-level pass (row 2's cell here, via <see cref="StopRow"/>) got no height
+        /// enforcement at all. <see cref="CssBox.NaturalRowAxisExtentCarry"/> banks the stopped pass's own
+        /// natural row-axis contribution, so the pass that finally finishes the table can still compute
+        /// and apply the floor - but only to the rows THAT pass places (2 and 3 here); rows 0 and 1,
+        /// already committed by the pass that stopped, are asserted byte-unchanged.
+        /// </summary>
+        [Fact]
+        public async Task TableHeight_TrueRowLoopContinuation_AppliesTheFloorOnlyToTheFinalPasssRemainingRows()
+        {
+            await WithALaidOutTable(RowsTable(4), async (table, container, g) =>
+            {
+                var anchor = LayoutHarness.FindById(table, "c2")!;
+                var stopping = StopRow(table, 2);
+
+                // Set well after the control layout above (which has no explicit height at all), and well
+                // past what these four one-line rows would ever naturally need.
+                table.Height = "400pt";
+
+                await RunEngine(g, container, table, resume: null);
+
+                var continuation = table.TableContinuation;
+                Assert.NotNull(continuation);
+                Assert.Equal(2, continuation!.ResumeRowIndex);
+                Assert.NotNull(table.NaturalRowAxisExtentCarry);
+
+                var rowsAfterFirstPass = BodyRowsOf(table);
+                var row0Location = rowsAfterFirstPass[0].Location;
+                var row0Bottom = rowsAfterFirstPass[0].ActualBottom;
+                var row1Location = rowsAfterFirstPass[1].Location;
+                var row1Bottom = rowsAfterFirstPass[1].ActualBottom;
+
+                // Row 2's cell now finishes for real, so the pass that resumes it can genuinely complete
+                // the table.
+                UnstopRow(stopping, anchor);
+
+                // RunEngine invokes CssLayoutEngineTable.PerformLayout directly, bypassing the ordinary
+                // CssBox.PerformLayoutImp prologue (BeginLayoutPass) that clears a box's own
+                // PendingBreakToken at the start of each real layout pass - production always goes through
+                // that prologue before ever reaching this engine, so the field is never still holding the
+                // previous pass's token by the time a later pass genuinely re-enters. Cleared by hand here
+                // for the same reason RunEngine's own detached fragmentainer stands in for a real one.
+                table.SetPendingBreakToken(null);
+
+                await RunEngine(g, container, table, continuation);
+
+                Assert.Null(table.PendingBreakToken);
+                Assert.Null(table.NaturalRowAxisExtentCarry);
+
+                var rows = BodyRowsOf(table);
+
+                // Rows 0 and 1 were committed by the pass that stopped and must never be touched by the
+                // final pass's own redo - different CssBox instances from a different point in time, per
+                // this repo's own invariant for this mechanism.
+                Assert.Equal(row0Location, rows[0].Location);
+                Assert.Equal(row0Bottom, rows[0].ActualBottom);
+                Assert.Equal(row1Location, rows[1].Location);
+                Assert.Equal(row1Bottom, rows[1].ActualBottom);
+
+                // Rows 2 and 3 - the ones the final pass actually placed - received a real proportional
+                // floor, growing well past an ordinary one-line row's natural height (well under 20pt at
+                // this fixture's 10pt font, per the no-explicit-height control test below).
+                var row2Height = rows[2].ActualBottom - rows[2].Location.Y;
+                var row3Height = rows[3].ActualBottom - rows[3].Location.Y;
+                Assert.True(row2Height > 50, $"row 2 should have grown by redistribution (actual: {row2Height})");
+                Assert.True(row3Height > 50, $"row 3 should have grown by redistribution (actual: {row3Height})");
+            });
+        }
+
+        /// <summary>
+        /// The no-explicit-height control for the test above: the identical true row-loop continuation,
+        /// with no <c>height</c> ever set on the table, must produce zero behavior change - proving
+        /// <see cref="CssBox.NaturalRowAxisExtentCarry"/>'s own bookkeeping is inert whenever
+        /// height/min-height enforcement does not apply, exactly like an ordinary single-pass table
+        /// without one.
+        /// </summary>
+        [Fact]
+        public async Task TableWithNoExplicitHeight_TrueRowLoopContinuation_ProducesNoRedistribution()
+        {
+            await WithALaidOutTable(RowsTable(4), async (table, container, g) =>
+            {
+                var anchor = LayoutHarness.FindById(table, "c2")!;
+                var stopping = StopRow(table, 2);
+
+                await RunEngine(g, container, table, resume: null);
+
+                var continuation = table.TableContinuation;
+                Assert.NotNull(continuation);
+                Assert.NotNull(table.NaturalRowAxisExtentCarry);
+
+                UnstopRow(stopping, anchor);
+
+                // See the sibling test's own remarks on why this is needed with RunEngine's direct-engine
+                // invocation, which bypasses the ordinary CssBox layout prologue that would otherwise do
+                // this in production.
+                table.SetPendingBreakToken(null);
+
+                await RunEngine(g, container, table, continuation);
+
+                Assert.Null(table.PendingBreakToken);
+                Assert.Null(table.NaturalRowAxisExtentCarry);
+                Assert.Null(table.RowHeightRedistribution);
+
+                var rows = BodyRowsOf(table);
+                var row2Height = rows[2].ActualBottom - rows[2].Location.Y;
+                var row3Height = rows[3].ActualBottom - rows[3].Location.Y;
+
+                // Still just one line tall each (10pt font, one short word) - no floor was ever computed,
+                // let alone applied. A redistributed row in the sibling test above grows to well over
+                // 100pt, so this bound is nowhere near that regardless of exact line-height metrics.
+                Assert.True(row2Height < 20,
+                    $"row 2 should keep its ordinary, unredistributed one-line height (actual: {row2Height})");
+                Assert.True(row3Height < 20,
+                    $"row 3 should keep its ordinary, unredistributed one-line height (actual: {row3Height})");
+            });
+        }
+
+        /// <summary>
+        /// Regression guard for two precision bugs caught in post-change review, both in
+        /// <c>ThisPassNaturalRowAxisContentLength</c>: the chain's first pass's own banked contribution
+        /// used to subtract its own cursor start unconditionally, which (for the first pass specifically)
+        /// already includes the border-spacing laid out before the first row, discarding it from the
+        /// banked length; and every pass's own contribution used to leave the table's single trailing
+        /// row-axis gap (<c>VerticalSpacingAt(_grid.RowCount)</c>, added unconditionally by
+        /// <c>LayoutBodyRows</c>' Step 7 regardless of whether that pass is genuinely the table's last)
+        /// baked in, so accumulating more than one pass's worth double-counted it. A table with
+        /// non-default <c>border-spacing</c>, forced into a genuine row-loop continuation, must still
+        /// redistribute a real surplus without throwing and without touching rows 0/1 - the same shape as
+        /// <see cref="TableHeight_TrueRowLoopContinuation_AppliesTheFloorOnlyToTheFinalPasssRemainingRows"/>,
+        /// just with spacing added. (An exact expected value is deliberately not asserted here: getting
+        /// one exactly right requires precisely modeling how a stopped row's own natural height is
+        /// recorded mid-row-loop, a separate, pre-existing piece of machinery this fix does not touch -
+        /// see this PR's own recent-fix note for what remains only qualitatively, not numerically,
+        /// verified for this specific combination.)
+        /// </summary>
+        [Fact]
+        public async Task TableHeight_TrueRowLoopContinuation_WithBorderSpacing_RedistributesWithoutCorruptingEarlierRows()
+        {
+            var markup = "<table style='width:150pt;font-size:10pt;border-spacing:60pt'>"
+                         + string.Concat(Enumerable.Range(0, 4).Select(i => $"<tr><td id='c{i}'>row {i}</td></tr>"))
+                         + "</table>";
+
+            await WithALaidOutTable(markup, async (table, container, g) =>
+            {
+                var anchor = LayoutHarness.FindById(table, "c2")!;
+                var stopping = StopRow(table, 2);
+
+                // Comfortably past anything this fixture's own content and spacing could naturally reach,
+                // so redistribution is expected to trigger regardless of exactly how large the spacing's
+                // own contribution to the natural total turns out to be.
+                table.Height = "2000pt";
+
+                await RunEngine(g, container, table, resume: null);
+
+                var continuation = table.TableContinuation;
+                Assert.NotNull(continuation);
+
+                var rowsAfterFirstPass = BodyRowsOf(table);
+                var row0Location = rowsAfterFirstPass[0].Location;
+                var row0Bottom = rowsAfterFirstPass[0].ActualBottom;
+                var row1Location = rowsAfterFirstPass[1].Location;
+                var row1Bottom = rowsAfterFirstPass[1].ActualBottom;
+
+                UnstopRow(stopping, anchor);
+                table.SetPendingBreakToken(null);
+
+                await RunEngine(g, container, table, continuation);
+
+                Assert.Null(table.PendingBreakToken);
+
+                var rows = BodyRowsOf(table);
+
+                // Rows 0 and 1 - already committed by the pass that stopped - are still byte-unchanged.
+                Assert.Equal(row0Location, rows[0].Location);
+                Assert.Equal(row0Bottom, rows[0].ActualBottom);
+                Assert.Equal(row1Location, rows[1].Location);
+                Assert.Equal(row1Bottom, rows[1].ActualBottom);
+
+                var row2Height = rows[2].ActualBottom - rows[2].Location.Y;
+                var row3Height = rows[3].ActualBottom - rows[3].Location.Y;
+                Assert.True(row2Height > 50, $"row 2 should have grown by redistribution (actual: {row2Height})");
+                Assert.True(row3Height > 50, $"row 3 should have grown by redistribution (actual: {row3Height})");
+            });
+        }
     }
 }

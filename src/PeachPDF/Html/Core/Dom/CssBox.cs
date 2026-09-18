@@ -745,6 +745,32 @@ namespace PeachPDF.Html.Core.Dom
         internal IReadOnlyDictionary<CssBox, double>? RowHeightRedistribution { get; set; }
 
         /// <summary>
+        /// Accumulates, across a table whose row loop must continue into a separate, later top-level
+        /// layout pass (its own <see cref="PendingBreakToken"/> still set when a pass of
+        /// <see cref="CssLayoutEngineTable.PerformLayout"/> returns), how much of the row axis (CSS 2.1
+        /// §17.5.3's row direction - physical height for horizontal-tb, physical width for
+        /// vertical-rl/vertical-lr) each earlier pass's own rows actually consumed. The chain's own first
+        /// pass measures its contribution from the table's true row-axis-start coordinate (folding in
+        /// whatever leading row-axis border, top caption, and border-spacing that pass alone lays out);
+        /// a later pass continuing it measures from wherever <i>that pass's own cursor</i> resumed instead
+        /// (the resumed fragmentainer's own content top), deliberately excluding the page-boundary gap
+        /// before it - that gap is not content, and folding it in would inflate the table's own measured
+        /// natural extent by however much whitespace sits at the foot of whichever page a pass stopped on.
+        /// See <see cref="CssLayoutEngineTable"/>'s own <c>ThisPassNaturalRowAxisContentLength</c> for the
+        /// exact per-pass formula.
+        /// </summary>
+        /// <remarks>
+        /// Null whenever no such continuation is in progress - every table without an explicit
+        /// height/min-height, every table whose row loop completes within one top-level pass (the
+        /// overwhelming common case, including an ordinary table spanning many pages entirely inside one
+        /// call to <c>LayoutBodyRows</c>), and a table's every pass once it has genuinely finished. Reset
+        /// to null only on a genuinely fresh top-level entry into <c>PerformLayout</c> (<c>resume is
+        /// null</c>), never on the redistribution-redo call that same invocation may make internally - the
+        /// redo needs to inherit whatever this invocation is in the middle of accumulating, not restart it.
+        /// </remarks>
+        internal double? NaturalRowAxisExtentCarry { get; set; }
+
+        /// <summary>
         /// The vertical line segments (in absolute document coordinates) to draw between adjacent
         /// columns of a multi-column container — one segment per gap per page-row actually used.
         /// Set by <see cref="CssLayoutEngineColumns"/>, painted by <see cref="FragmentPainter"/>.
@@ -2662,7 +2688,7 @@ namespace PeachPDF.Html.Core.Dom
         /// against the *previous* page's geometry, and two fresh lookups taken any time after that
         /// registration agree with each other and hide the staleness completely. <see cref="double.NaN"/>
         /// (via <see cref="double.IsNaN"/>) marks "not yet resolved this layout" / "not resolved via
-        /// <see cref="CssLayoutEngine.GetBoxWidth"/> at all" (a table/flex/grid box sizes itself through its
+        /// <see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/> at all" (a table/flex/grid box sizes itself through its
         /// own engine instead), for which the guard this field feeds is simply inapplicable.
         /// </summary>
         private double _measureResolvedAgainst = double.NaN;
@@ -4824,7 +4850,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Deliberately gated on <paramref name="resolvedBlockExtent"/> (the child's own already-resolved
         /// border-box width) rather than a <c>Width</c> style token the way <see cref="IsMarginCollapseThrough"/>
         /// gates on <c>Height == auto</c>: unlike a horizontal box's auto HEIGHT (always content-driven/
-        /// shrink-to-fit in this engine), a vertical child's auto WIDTH (<see cref="CssLayoutEngine.GetBoxWidth"/>)
+        /// shrink-to-fit in this engine), a vertical child's auto WIDTH (<see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/>)
         /// STRETCHES to fill the available block-axis space instead of shrinking - so "Width == auto" is
         /// not itself evidence of zero block-axis extent here. Border/padding/min-width are all
         /// non-negative and already folded into <paramref name="resolvedBlockExtent"/> by GetBoxWidth, so
@@ -5435,7 +5461,7 @@ namespace PeachPDF.Html.Core.Dom
         /// second fresh lookup at the original Y - see <see cref="_measureResolvedAgainst"/>'s own remarks
         /// for why two fresh lookups can't see this box's own named-page registration invalidating the
         /// very slot its width was just resolved against. Always false for a box whose width didn't come
-        /// from <see cref="ResolveOwnInlineSize"/>'s <see cref="CssLayoutEngine.GetBoxWidth"/> branch at
+        /// from <see cref="ResolveOwnInlineSize"/>'s <see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/> branch at
         /// all (a table/flex/grid box, or one this method has not yet run for this layout).
         /// </remarks>
         private bool InlineSizeCameFromAnotherPagesMeasure() =>
