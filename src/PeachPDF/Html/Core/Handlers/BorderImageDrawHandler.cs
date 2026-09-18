@@ -265,13 +265,74 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// Draws one edge region, stretched to fill it in one call under <c>stretch</c>, or tiled
-        /// edge-to-edge along its one free axis otherwise - clipped to <paramref name="dest"/> itself so a
-        /// partial final tile (the source slice's own natural aspect against the edge's fixed cross-axis
-        /// thickness rarely divides it evenly) is cut off rather than overrunning into a neighboring corner.
-        /// <c>round</c> is accepted but not distinguished from <c>repeat</c> here - it degrades to the same
-        /// edge-to-edge tiling rather than resizing each tile to fit an integer count evenly, matching this
-        /// repo's own pre-existing <c>background-repeat: round</c> treatment (see the accepted-gap note).
+        /// One axis's tiling plan, shared by <see cref="DrawEdge"/> and <see cref="DrawMiddle"/> - see
+        /// <see cref="ResolveTiling"/>.
+        /// </summary>
+        private readonly record struct TilingPlan(double TileExtent, int Count, double Gap);
+
+        /// <summary>
+        /// Resolves one axis of <c>border-image-repeat</c> tiling (CSS Backgrounds and Borders 3 §13.5,
+        /// which explicitly reuses <see href="https://www.w3.org/TR/css-backgrounds-3/#background-repeat">
+        /// <c>background-repeat</c>'s own <c>round</c>/<c>space</c> algorithm</see>) against one axis's
+        /// natural tile extent and the destination extent available to tile across. Axis-neutral: the
+        /// caller picks which of a rect's two axes <paramref name="naturalExtent"/>/<paramref name="destExtent"/>
+        /// name, so this one implementation serves <see cref="DrawEdge"/>'s single free axis and both of
+        /// <see cref="DrawMiddle"/>'s independent axes without duplicating the round/space math per call site.
+        /// </summary>
+        /// <param name="naturalExtent">The tile's own size along this axis, before any resizing.</param>
+        /// <param name="destExtent">The destination extent available to tile across.</param>
+        /// <param name="mode">Which of the four keywords to resolve.</param>
+        /// <returns>
+        /// The size each tile should be painted at, how many tiles to paint, and the gap to leave between
+        /// one tile's trailing edge and the next one's leading edge (0 except under <c>space</c>).
+        /// </returns>
+        private static TilingPlan ResolveTiling(double naturalExtent, double destExtent, BorderRepeat mode)
+        {
+            if (naturalExtent <= 0 || destExtent <= 0) return new TilingPlan(0, 0, 0);
+
+            switch (mode)
+            {
+                case BorderRepeat.Stretch:
+                    return new TilingPlan(destExtent, 1, 0);
+
+                case BorderRepeat.Round:
+                {
+                    // "The image is repeated as often as will fit ... If it doesn't fit a whole number of
+                    // times, it is rescaled so that it does": count = round(dest/natural), min 1, then each
+                    // tile is resized to dest/count so the count fits exactly with no partial tile.
+                    var count = (int)Math.Clamp(
+                        Math.Round(destExtent / naturalExtent, MidpointRounding.AwayFromZero),
+                        1, MaxTilesPerAxis);
+                    return new TilingPlan(destExtent / count, count, 0);
+                }
+
+                case BorderRepeat.Space:
+                {
+                    // "Repeated as often as will fit ... without being clipped, and then the images are
+                    // spaced out to fill the area. The first and last images touch the edges": count =
+                    // floor(dest/natural); with fewer than one whole tile fitting, fall back to a single
+                    // tile at its natural size rather than clipping or resizing it.
+                    var count = (int)Math.Clamp(Math.Floor(destExtent / naturalExtent), 0, MaxTilesPerAxis);
+                    if (count < 1) return new TilingPlan(naturalExtent, 1, 0);
+                    var gap = count > 1 ? (destExtent - count * naturalExtent) / (count - 1) : 0;
+                    return new TilingPlan(naturalExtent, count, gap);
+                }
+
+                default: // Repeat - edge-to-edge at natural size; the caller's own clip cuts off the
+                         // partial final tile rather than this resizing or spacing anything to fit evenly.
+                {
+                    var count = (int)Math.Clamp(Math.Ceiling(destExtent / naturalExtent), 1, MaxTilesPerAxis);
+                    return new TilingPlan(naturalExtent, count, 0);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Draws one edge region, stretched to fill it in one call under <c>stretch</c>, or tiled along its
+        /// one free axis otherwise per <see cref="ResolveTiling"/> - clipped to <paramref name="dest"/>
+        /// itself so a <c>repeat</c> tiling's partial final tile (the source slice's own natural aspect
+        /// against the edge's fixed cross-axis thickness rarely divides it evenly) is cut off rather than
+        /// overrunning into a neighboring corner.
         /// </summary>
         private static void DrawEdge(RGraphics g, RImage image, RRect src, RRect dest, bool tileAlongX, BorderRepeat repeat)
         {
@@ -288,19 +349,21 @@ namespace PeachPDF.Html.Core.Handlers
             {
                 if (tileAlongX)
                 {
-                    var tileWidth = src.Width * (dest.Height / src.Height);
-                    if (tileWidth <= 0) return;
+                    var naturalTileWidth = src.Width * (dest.Height / src.Height);
+                    var plan = ResolveTiling(naturalTileWidth, dest.Width, repeat);
+                    if (plan.TileExtent <= 0 || plan.Count <= 0) return;
                     var x = dest.Left;
-                    for (var i = 0; i < MaxTilesPerAxis && x < dest.Right; i++, x += tileWidth)
-                        g.DrawImage(image, new RRect(x, dest.Top, tileWidth, dest.Height), src);
+                    for (var i = 0; i < plan.Count; i++, x += plan.TileExtent + plan.Gap)
+                        g.DrawImage(image, new RRect(x, dest.Top, plan.TileExtent, dest.Height), src);
                 }
                 else
                 {
-                    var tileHeight = src.Height * (dest.Width / src.Width);
-                    if (tileHeight <= 0) return;
+                    var naturalTileHeight = src.Height * (dest.Width / src.Width);
+                    var plan = ResolveTiling(naturalTileHeight, dest.Height, repeat);
+                    if (plan.TileExtent <= 0 || plan.Count <= 0) return;
                     var y = dest.Top;
-                    for (var i = 0; i < MaxTilesPerAxis && y < dest.Bottom; i++, y += tileHeight)
-                        g.DrawImage(image, new RRect(dest.Left, y, dest.Width, tileHeight), src);
+                    for (var i = 0; i < plan.Count; i++, y += plan.TileExtent + plan.Gap)
+                        g.DrawImage(image, new RRect(dest.Left, y, dest.Width, plan.TileExtent), src);
                 }
             }
             finally
@@ -311,10 +374,9 @@ namespace PeachPDF.Html.Core.Handlers
 
         /// <summary>
         /// Draws the center region: a single stretched call when both axes are <c>stretch</c>, otherwise
-        /// tiled along whichever axis (or both) is <c>repeat</c>/<c>round</c> - the stretched axis's own
-        /// tile size always spans <paramref name="dest"/>'s full extent on that axis, so a "repeat
-        /// horizontally, stretch vertically" center still comes out one tile tall. See <see cref="DrawEdge"/>
-        /// for why <c>round</c> is not distinguished from <c>repeat</c>.
+        /// tiled along whichever axis (or both) is <c>repeat</c>/<c>round</c>/<c>space</c> per
+        /// <see cref="ResolveTiling"/>, resolved independently per axis - so a "repeat horizontally, stretch
+        /// vertically" center still comes out one tile tall, each with its own tile size/count/gap.
         /// </summary>
         private static void DrawMiddle(RGraphics g, RImage image, RRect src, RRect dest,
             BorderRepeat repeatHorizontal, BorderRepeat repeatVertical)
@@ -327,19 +389,20 @@ namespace PeachPDF.Html.Core.Handlers
                 return;
             }
 
-            var tileWidth = repeatHorizontal == BorderRepeat.Stretch ? dest.Width : src.Width;
-            var tileHeight = repeatVertical == BorderRepeat.Stretch ? dest.Height : src.Height;
-            if (tileWidth <= 0 || tileHeight <= 0) return;
+            var horizontal = ResolveTiling(src.Width, dest.Width, repeatHorizontal);
+            var vertical = ResolveTiling(src.Height, dest.Height, repeatVertical);
+            if (horizontal.TileExtent <= 0 || horizontal.Count <= 0 ||
+                vertical.TileExtent <= 0 || vertical.Count <= 0) return;
 
             g.PushClip(dest);
             try
             {
                 var y = dest.Top;
-                for (var j = 0; j < MaxTilesPerAxis && y < dest.Bottom; j++, y += tileHeight)
+                for (var j = 0; j < vertical.Count; j++, y += vertical.TileExtent + vertical.Gap)
                 {
                     var x = dest.Left;
-                    for (var i = 0; i < MaxTilesPerAxis && x < dest.Right; i++, x += tileWidth)
-                        g.DrawImage(image, new RRect(x, y, tileWidth, tileHeight), src);
+                    for (var i = 0; i < horizontal.Count; i++, x += horizontal.TileExtent + horizontal.Gap)
+                        g.DrawImage(image, new RRect(x, y, horizontal.TileExtent, vertical.TileExtent), src);
                 }
             }
             finally

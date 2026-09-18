@@ -294,11 +294,21 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public void ResolveRepeat_SpaceKeyword_Recognized()
+        {
+            var (horizontal, vertical) = BorderImageLayerResolver.ResolveRepeat("space");
+
+            Assert.Equal(BorderRepeat.Space, horizontal);
+            Assert.Equal(BorderRepeat.Space, vertical);
+        }
+
+        [Fact]
         public void ResolveRepeat_UnrecognizedComponent_DefaultsToStretch()
         {
-            // "space" can never actually reach here (Map.BorderRepeatModes has no entry for it - see
-            // the accepted-gap note), but the resolver still degrades gracefully rather than throwing.
-            var (horizontal, vertical) = BorderImageLayerResolver.ResolveRepeat("space");
+            // This repo's own BorderImageRepeatProperty converter should already reject anything not in
+            // Map.BorderRepeatModes, so this component can never actually reach here in practice - the
+            // resolver still degrades gracefully rather than throwing if one ever did.
+            var (horizontal, vertical) = BorderImageLayerResolver.ResolveRepeat("bogus");
 
             Assert.Equal(BorderRepeat.Stretch, horizontal);
             Assert.Equal(BorderRepeat.Stretch, vertical);

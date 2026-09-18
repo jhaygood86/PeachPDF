@@ -5,6 +5,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -29,14 +30,15 @@ namespace PeachPDF.Tests.Integration
         // pt throughout (not px, which resolves at 0.75pt per CSS px - CLAUDE.md's own guidance on
         // fixtures whose numbers should read literally), so the geometry asserted below matches these
         // declared numbers exactly rather than needing a 0.75 conversion factor worked in by hand.
-        private static string Doc(string style) =>
+        private static string Doc(string style, double width = 100, double height = 60) =>
             "<!DOCTYPE html><html><head></head><body style=\"margin:0\">" +
-            $"<div id='b' style=\"width:100pt;height:60pt;border:10pt solid black;{style}\"></div>" +
+            $"<div id='b' style=\"width:{width}pt;height:{height}pt;border:10pt solid black;{style}\"></div>" +
             "</body></html>";
 
-        private static async Task<(CssBox Box, TestRecordingGraphics Graphics)> PaintAsync(string style, TestRecordingGraphics? graphics = null)
+        private static async Task<(CssBox Box, TestRecordingGraphics Graphics)> PaintAsync(
+            string style, TestRecordingGraphics? graphics = null, double width = 100, double height = 60)
         {
-            var (root, container) = await BuildAndLayout(Doc(style));
+            var (root, container) = await BuildAndLayout(Doc(style, width, height));
             var box = FindById(root, "b")!;
             var g = graphics ?? new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, box, g);
@@ -220,6 +222,148 @@ namespace PeachPDF.Tests.Integration
 
             Assert.True(mixedG.DrawImageCalls.Count > stretchBothG.DrawImageCalls.Count,
                 $"expected mixed repeat/stretch to tile the middle horizontally (stretch-both={stretchBothG.DrawImageCalls.Count}, mixed={mixedG.DrawImageCalls.Count})");
+        }
+
+        // ─── border-image-repeat: round/space (CSS Backgrounds and Borders 3 §13.5) ───────────────────
+        //
+        // slice:1 on the 4x4 source (Png4X4) always gives an edge band 2pt-natural-wide (scaled to the
+        // edge's own fixed cross-axis thickness) and a 2x2pt middle patch (src rect (1,1,2,2)) - both
+        // independent of the fixture's content width/height, which each test below picks specifically to
+        // land its axis on an uneven (round) or gap-producing (space) fit against that natural size.
+
+        [Fact]
+        public async Task Round_ResizesEdgeTilesToFitAnIntegerCountEvenly()
+        {
+            // content width 90pt -> border box 110pt -> the top/bottom edge's free-axis extent
+            // (areaRect.Width - 2*border) is 90pt. The edge band's natural tile size, scaled to the
+            // edge's 10pt cross-axis thickness, is 2 * (10/1) = 20pt. 90/20 = 4.5, which round() takes to
+            // 5 tiles of 90/5 = 18pt each - not the natural 20pt a repeat-shaped clip-the-remainder
+            // implementation would keep.
+            var (_, g) = await PaintAsync(
+                $"border-image-source:url('{Png4X4}');border-image-slice:1;border-image-width:10pt;border-image-repeat:round",
+                width: 90);
+
+            // 4 corners, then the top edge's own tiles (the bottom edge's identical 5 follow it).
+            var topEdgeTiles = g.DrawImageCalls.Skip(4).Take(5).ToList();
+            Assert.All(topEdgeTiles, call => Assert.Equal(18, call.DestRect.Width, 3));
+            Assert.All(topEdgeTiles, call => Assert.Equal(10, call.DestRect.Height, 3));
+
+            // The top edge spans x=10..100 (areaRect 0..110, border-image-width 10pt each side); the
+            // resized tiles must fit that exactly, with the last one ending flush at the far side.
+            Assert.Equal(10, topEdgeTiles[0].DestRect.X, 3);
+            Assert.Equal(100, topEdgeTiles[4].DestRect.X + topEdgeTiles[4].DestRect.Width, 3);
+        }
+
+        [Fact]
+        public async Task Round_ResizesMiddleTilesToFitAnIntegerCountEvenlyOnBothAxes()
+        {
+            // content 9x13 -> the fill middle's destWidth/destHeight equal the content box exactly (the
+            // 10pt border-image-width matches the declared border). The middle's own natural tile is the
+            // 2x2pt source patch. 9/2=4.5 rounds to 5 tiles of 9/5=1.8pt; 13/2=6.5 rounds to 7 tiles of
+            // 13/7pt - neither axis's natural size divides its destination evenly.
+            var (_, g) = await PaintAsync(
+                $"border-image-source:url('{Png4X4}');border-image-slice:1 fill;border-image-width:10pt;border-image-repeat:round",
+                width: 9, height: 13);
+
+            var middleSrc = new RRect(1, 1, 2, 2);
+            var middleTiles = g.DrawImageCalls.Where(call => call.SrcRect == middleSrc).ToList();
+
+            Assert.Equal(5 * 7, middleTiles.Count);
+            Assert.All(middleTiles, call => Assert.Equal(9.0 / 5, call.DestRect.Width, 3));
+            Assert.All(middleTiles, call => Assert.Equal(13.0 / 7, call.DestRect.Height, 3));
+        }
+
+        [Fact]
+        public async Task Space_InsertsEqualGapsBetweenEdgeTiles()
+        {
+            // content width 110pt -> top/bottom edge destWidth 110pt; natural tile 20pt (as above).
+            // floor(110/20) = 5 tiles kept at their natural 20pt size, with the leftover 10pt split into
+            // 4 equal 2.5pt gaps between them (first/last tile still touch the edge's own ends).
+            var (_, g) = await PaintAsync(
+                $"border-image-source:url('{Png4X4}');border-image-slice:1;border-image-width:10pt;border-image-repeat:space",
+                width: 110);
+
+            var topEdgeTiles = g.DrawImageCalls.Skip(4).Take(5).ToList();
+            Assert.All(topEdgeTiles, call => Assert.Equal(20, call.DestRect.Width, 3));
+
+            const double gap = 2.5;
+            for (var i = 0; i < topEdgeTiles.Count; i++)
+                Assert.Equal(10 + i * (20 + gap), topEdgeTiles[i].DestRect.X, 3);
+
+            // The first tile touches the edge's own left end and the last touches its right end.
+            Assert.Equal(10, topEdgeTiles[0].DestRect.X, 3);
+            Assert.Equal(120, topEdgeTiles[4].DestRect.X + topEdgeTiles[4].DestRect.Width, 3);
+        }
+
+        [Fact]
+        public async Task Space_InsertsEqualGapsBetweenMiddleTilesOnBothAxes()
+        {
+            // content 7x9 -> middle destWidth 7pt, destHeight 9pt; natural tile 2x2pt.
+            // floor(7/2)=3 tiles, leftover 1pt split into 2 gaps of 0.5pt; floor(9/2)=4 tiles, leftover
+            // 1pt split into 3 gaps of 1/3pt.
+            var (_, g) = await PaintAsync(
+                $"border-image-source:url('{Png4X4}');border-image-slice:1 fill;border-image-width:10pt;border-image-repeat:space",
+                width: 7, height: 9);
+
+            var middleSrc = new RRect(1, 1, 2, 2);
+            var middleTiles = g.DrawImageCalls.Where(call => call.SrcRect == middleSrc).ToList();
+
+            const int countX = 3;
+            const int countY = 4;
+            var gapX = (7 - countX * 2.0) / (countX - 1);
+            var gapY = (9 - countY * 2.0) / (countY - 1);
+
+            Assert.Equal(countX * countY, middleTiles.Count);
+            Assert.All(middleTiles, call => Assert.Equal(2, call.DestRect.Width, 3));
+            Assert.All(middleTiles, call => Assert.Equal(2, call.DestRect.Height, 3));
+
+            var firstRow = middleTiles.Take(countX).ToList();
+            for (var i = 0; i < countX; i++)
+                Assert.Equal(10 + i * (2 + gapX), firstRow[i].DestRect.X, 3);
+
+            var firstColumn = middleTiles.Where(call => Math.Abs(call.DestRect.X - 10) < 0.01)
+                .OrderBy(call => call.DestRect.Y).ToList();
+            for (var j = 0; j < countY; j++)
+                Assert.Equal(10 + j * (2 + gapY), firstColumn[j].DestRect.Y, 3);
+        }
+
+        [Fact]
+        public async Task Space_FallsBackToASingleUnclippedTile_OnAnEdge_WhenLessThanOneWholeTileFits()
+        {
+            // content width 15pt -> top/bottom edge destWidth 15pt, smaller than the 20pt natural tile
+            // size - floor(15/20) = 0, so space falls back to exactly one tile at its natural (unshrunk)
+            // 20pt size rather than resizing or clipping it to fit.
+            var (_, g) = await PaintAsync(
+                $"border-image-source:url('{Png4X4}');border-image-slice:1;border-image-width:10pt;border-image-repeat:space",
+                width: 15);
+
+            // Exactly one tile for the top edge (index 4, right after the 4 corners) - the bottom edge's
+            // own single tile follows immediately at index 5, confirming no extra tiles were inserted.
+            var topEdgeTile = g.DrawImageCalls[4];
+            Assert.Equal(20, topEdgeTile.DestRect.Width, 3);
+            Assert.Equal(10, topEdgeTile.DestRect.Height, 3);
+            Assert.Equal(10, topEdgeTile.DestRect.X, 3);
+
+            var bottomEdgeTile = g.DrawImageCalls[5];
+            Assert.Equal(20, bottomEdgeTile.DestRect.Width, 3);
+        }
+
+        [Fact]
+        public async Task Space_FallsBackToASingleUnclippedTile_InTheMiddle_WhenLessThanOneWholeTileFits()
+        {
+            // content 1x1pt -> middle destWidth/destHeight 1pt, smaller than the 2pt natural tile size on
+            // either axis - floor(1/2) = 0 on both, so space falls back to one 2x2pt tile rather than a
+            // clipped or resized fit.
+            var (_, g) = await PaintAsync(
+                $"border-image-source:url('{Png4X4}');border-image-slice:1 fill;border-image-width:10pt;border-image-repeat:space",
+                width: 1, height: 1);
+
+            var middleSrc = new RRect(1, 1, 2, 2);
+            var middleTiles = g.DrawImageCalls.Where(call => call.SrcRect == middleSrc).ToList();
+
+            var middleTile = Assert.Single(middleTiles);
+            Assert.Equal(2, middleTile.DestRect.Width, 3);
+            Assert.Equal(2, middleTile.DestRect.Height, 3);
         }
 
         [Fact]
