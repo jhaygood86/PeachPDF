@@ -2,16 +2,28 @@
   url: /why-peachpdf.html
 - title: Getting Started
   url: /getting-started.html
-- title: Architecture
-  url: /architecture.html
-- title: HTML & CSS
-  url: /html-css-support.html
-- title: SVG
-  url: /supported-svg-features.html
-- title: Examples
-  url: /usage-examples.html
+- title: Guides
+  children:
+    - title: Architecture
+      url: /architecture.html
+    - title: HTML & CSS
+      url: /html-css-support.html
+    - title: SVG
+      url: /supported-svg-features.html
+    - title: MathML
+      url: /supported-mathml-features.html
+    - title: Examples
+      url: /usage-examples.html
+    - title: Declarative API
+      url: /declarative-api.html
+    - title: Command-line tool
+      url: /cli.html
+    - title: Testing
+      url: /testing.html
 - title: Showcase
   url: /showcase.html
+- title: Try it
+  url: /demo/
 - title: API Reference
   url: /api/
 - title: Support

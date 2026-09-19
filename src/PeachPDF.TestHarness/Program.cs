@@ -101,10 +101,26 @@ static PdfGenerateConfig ClonePdfAConfig(PdfGenerateConfig source, DateTimeOffse
 
 List<ShowcaseEntry> showcaseManifest = [];
 
+// The manifest's category/title/description are plain text: docs/showcase.html HTML-escapes them itself, so a
+// value written as "Caps &amp; Numerals" is escaped twice and prints the literal "&amp;" on the site.
+static void RequirePlainTextMetadata(string slug, params string[] values)
+{
+    foreach (var value in values)
+    {
+        if (System.Text.RegularExpressions.Regex.IsMatch(value, @"&(?:[A-Za-z][A-Za-z0-9]*|#[0-9]+|#[xX][0-9A-Fa-f]+);"))
+        {
+            throw new ArgumentException(
+                $"Showcase '{slug}' metadata contains an HTML entity ('{value}'). Write plain text (& not &amp;, < not &lt;) - the site escapes it.");
+        }
+    }
+}
+
 // Every showcase goes through here so the manifest (showcases.json) that drives
 // the website's /showcase page always matches the files actually written.
 async Task SaveShowcaseAsync(string slug, string category, string cardTitle, string cardDescription, string sourceHtml, PdfGenerateConfig renderConfig)
 {
+    RequirePlainTextMetadata(slug, category, cardTitle, cardDescription);
+
     if (benchmarkMode)
     {
         await BenchmarkShowcaseAsync(slug, sourceHtml, renderConfig);
@@ -144,6 +160,8 @@ async Task SaveShowcaseAsync(string slug, string category, string cardTitle, str
 async Task SaveDeclarativeShowcaseAsync(string slug, string category, string cardTitle, string cardDescription,
     string csharpSource, Func<PdfGenerator, Task<PeachPdfDocument>> build)
 {
+    RequirePlainTextMetadata(slug, category, cardTitle, cardDescription);
+
     // --benchmark measures HTML-parsing showcases only (BenchmarkShowcaseAsync times GeneratePdf
     // specifically) - a declarative showcase has no comparable "parse this HTML" cost to measure, so it
     // simply doesn't run in that mode rather than writing files a benchmark pass isn't meant to produce.
@@ -156,7 +174,7 @@ async Task SaveDeclarativeShowcaseAsync(string slug, string category, string car
 
     var sourceHtml =
         $"""
-        <!DOCTYPE html><html><head><meta charset="utf-8"><title>{cardTitle}</title></head>
+        <!DOCTYPE html><html><head><meta charset="utf-8"><title>{System.Net.WebUtility.HtmlEncode(cardTitle)}</title></head>
         <body><pre><code>{System.Net.WebUtility.HtmlEncode(csharpSource)}</code></pre></body></html>
         """;
     File.WriteAllText(Path.Combine(outputDir, $"{slug}.html"), sourceHtml);
@@ -4757,7 +4775,7 @@ var svgWritingModeHtml = "<!DOCTYPE html><html><head>" + SvgTextCss + "</head><b
     "</body></html>";
 
 await SaveShowcaseAsync("svg_vertical_text", "Graphics & Effects", "SVG Text: Vertical Writing Mode",
-    "SVG &lt;text&gt; under writing-mode: vertical-rl/vertical-lr with real per-character text-orientation (issue #765's SVG counterpart) - CJK glyphs upright, Latin/digits rotated, composing with gradient fill.",
+    "SVG <text> under writing-mode: vertical-rl/vertical-lr with real per-character text-orientation - CJK glyphs upright, Latin/digits rotated, composing with gradient fill.",
     svgWritingModeHtml, pdfConfig);
 
 // --- opacity showcase ---
@@ -7266,7 +7284,7 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "</body></html>";
 
 await SaveShowcaseAsync("writing_mode", "Typography & Text", "writing-mode (Vertical Text)",
-    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), writing-mode-aware Flexbox and Table layout (including captions, thead/tfoot, collapsed borders, vertical-align and rowspan row-axis sizing), block-level/orthogonal-flow content inside a vertical box, direction: rtl block children anchoring to the physical bottom edge, real CSS2.1 margin collapse (sibling-to-sibling and box-own-edge) between block-axis-stacked children, and (issue #768) text-align, Unicode Bidi Algorithm reordering, hyphenation, position: absolute/fixed, and float column wrap-around all working inside vertical line flow.",
+    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), writing-mode-aware Flexbox and Table layout (including captions, thead/tfoot, collapsed borders, vertical-align and rowspan row-axis sizing), block-level/orthogonal-flow content inside a vertical box, direction: rtl block children anchoring to the physical bottom edge, real CSS2.1 margin collapse (sibling-to-sibling and box-own-edge) between block-axis-stacked children, and text-align, Unicode Bidi Algorithm reordering, hyphenation, position: absolute/fixed, and float column wrap-around all working inside vertical line flow.",
     writingModeHtml, pdfConfig);
 
 // --- text-overflow: ellipsis showcase (issue #694) ---
@@ -8041,7 +8059,7 @@ var unicodeRangeHtml = $$"""
     </html>
     """;
 
-await SaveShowcaseAsync("unicode_range", "Fonts & Text", "@font-face unicode-range",
+await SaveShowcaseAsync("unicode_range", "Typography & Text", "@font-face unicode-range",
     "Per-character font matching: a monospaced webfont declared only for the digit range (U+0030-0039) supplies the digits, while letters in the same text run fall back to serif - each character resolved to the family whose unicode-range (or glyph coverage) covers it.",
     unicodeRangeHtml, pdfConfig);
 
@@ -8078,7 +8096,7 @@ var systemFallbackHtml = $$"""
     </html>
     """;
 
-await SaveShowcaseAsync("system_fallback_font", "Fonts & Text", "Last-Resort System Font Fallback",
+await SaveShowcaseAsync("system_fallback_font", "Typography & Text", "Last-Resort System Font Fallback",
     "The final step of the CSS Fonts 4 matching algorithm: when no font in the declared font-family stack covers a character, PeachPDF searches every OTHER font registered with the document - here a Noto Sans Arabic subset registered but never referenced in any font-family - instead of drawing a missing-glyph box.",
     systemFallbackHtml, pdfConfig);
 
@@ -8124,7 +8142,7 @@ var emojiHtml = $$"""
     </html>
     """;
 
-await SaveShowcaseAsync("emoji", "Fonts & Text", "Emoji (astral codepoints)",
+await SaveShowcaseAsync("emoji", "Typography & Text", "Emoji (astral codepoints)",
     "Supplementary-plane glyph rendering and grapheme-aware wrapping: adjacent emoji resolve through a bundled Noto Emoji subset and wrap as complete clusters; the separate Color Fonts showcase covers COLR/CPAL.",
     emojiHtml, pdfConfig);
 
@@ -9766,7 +9784,7 @@ var colorEmojiHtml =
     "<div class=\"cg seq\">\U0001F44D \U0001F44D\U0001F3FB \U0001F44D\U0001F3FC \U0001F44D\U0001F3FD " +
     "\U0001F44D\U0001F3FE \U0001F44D\U0001F3FF</div>" +
     "</body></html>";
-await SaveShowcaseAsync("color_emoji", "Text &amp; Fonts", "Color Fonts (COLR/CPAL)",
+await SaveShowcaseAsync("color_emoji", "Typography & Text", "Color Fonts (COLR/CPAL)",
     "COLR/CPAL color-glyph fonts — including the real COLR v1 build of Noto Color Emoji — rendered as " +
     "native PDF vector content: layered palette colors, gradients, transforms, and blend-mode " +
     "compositing, with an invisible embedded subset for searchable, selectable, exact-copy text.",
@@ -9827,7 +9845,7 @@ var fontPaletteHtml =
     PaletteSwatch("p-mix", "palette-mix()", "palette-mix(in oklab, --blue, --grey)") +
     "</tr></table>" +
     "</body></html>";
-await SaveShowcaseAsync("font_palette", "Text &amp; Fonts", "CSS font-palette",
+await SaveShowcaseAsync("font_palette", "Typography & Text", "CSS font-palette",
     "Selecting among a COLR/CPAL color font's palettes with the CSS font-palette property: the light/dark " +
     "keywords, custom palettes via @font-palette-values (base-palette + override-colors), and palette-mix(). " +
     "Rendered against a subset of Nabla, a real 7-palette COLR v1 font.",
@@ -9882,7 +9900,7 @@ var ligatureHtml =
     "<text x=\"0\" y=\"50\" font-size=\"48\" fill=\"url(#g)\">office staff</text>" +
     "</svg>" +
     "</body></html>";
-await SaveShowcaseAsync("gsub_ligatures", "Text &amp; Fonts", "GSUB Ligatures",
+await SaveShowcaseAsync("gsub_ligatures", "Typography & Text", "GSUB Ligatures",
     "Real GSUB liga/clig ligature substitution (not a synthesized effect): font-variant-ligatures " +
     "actually turns a font's ligatures on and off, for both ordinary text and gradient-filled SVG text.",
     ligatureHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
@@ -9949,7 +9967,7 @@ var fontVariantCapsHtml =
     "<tr><td class=\"label\">slashed-zero</td><td style=\"font-variant-numeric: slashed-zero\">1002000</td></tr>" +
     "</table>" +
     "</body></html>";
-await SaveShowcaseAsync("font_variant_caps", "Text &amp; Fonts", "Font Variant: Caps &amp; Numerals",
+await SaveShowcaseAsync("font_variant_caps", "Typography & Text", "Font Variant: Caps & Numerals",
     "font-variant-caps prefers a font's real GSUB smcp/c2sc/titl substitution, falling back to a " +
     "synthesized approximation only where the standard allows it; font-variant-numeric activates a " +
     "font's real oldstyle/tabular/slashed-zero GSUB features the same way.",
@@ -10016,7 +10034,7 @@ var bidiHtml =
     "<p class=\"sample\" dir=\"auto\">Hello, this is text with dir=\"auto\" that starts in English - " +
     "auto-detected as left-to-right.</p>" +
     "</body></html>";
-await SaveShowcaseAsync("bidi_text", "Text &amp; Fonts", "Bidirectional Text (dir, bdo, bdi)",
+await SaveShowcaseAsync("bidi_text", "Typography & Text", "Bidirectional Text (dir, bdo, bdi)",
     "A real Unicode Bidi Algorithm (UAX #9): the dir global attribute (incl. auto-detection), " +
     "bdo/bdi, and CSS direction/unicode-bidi, with per-character reordering, digit/Latin run " +
     "embedding, and bracket mirroring in real Hebrew text.",
@@ -10078,7 +10096,7 @@ var arabicJoiningHtml =
     "points connect edge to edge:</p>" +
     "<p class=\"sample ruqaa\">بيتالف</p>" +
     "</body></html>";
-await SaveShowcaseAsync("arabic_joining", "Text &amp; Fonts", "Arabic-Family Complex-Script Joining",
+await SaveShowcaseAsync("arabic_joining", "Typography & Text", "Arabic-Family Complex-Script Joining",
     "Positional initial/medial/final/isolated GSUB joining forms resolved from each character's own " +
     "Unicode Joining_Type, a font's rlig lam-alef ligature, and GPOS cursive attachment (curs) for a " +
     "calligraphic font whose joining relies on it.",
@@ -10137,7 +10155,7 @@ var devanagariUseHtml =
     "<tr><td class=\"letters\">कं</td><td class=\"letters\">कः</td><td class=\"letters\">का</td></tr>" +
     "</table>" +
     "</body></html>";
-await SaveShowcaseAsync("devanagari_use", "Text &amp; Fonts", "Devanagari Universal Shaping Engine (USE)",
+await SaveShowcaseAsync("devanagari_use", "Typography & Text", "Devanagari Universal Shaping Engine (USE)",
     "Indic_Syllabic_Category/Indic_Positional_Category-driven syllable classification, GSUB conjunct " +
     "(cjct)/reph (rphf) formation, and the resulting glyph reorder (repha repositioning, pre-base " +
     "matra movement) - ported from HarfBuzz's own Universal Shaping Engine.",
@@ -10209,7 +10227,7 @@ var bengaliGujaratiTamilUseHtml =
     "conjunct:</p>" +
     "<p class=\"sample tamil\">கெ &nbsp; க்ஷெ</p>" +
     "</body></html>";
-await SaveShowcaseAsync("bengali_gujarati_tamil_use", "Text &amp; Fonts", "USE: Bengali, Gujarati &amp; Tamil",
+await SaveShowcaseAsync("bengali_gujarati_tamil_use", "Typography & Text", "USE: Bengali, Gujarati & Tamil",
     "Universal Shaping Engine syllable reordering extended to three more Brahmic scripts - pre-base " +
     "matra movement, conjunct (cjct)/reph (rphf) formation, and Bengali's own two additional USE " +
     "categories (Consonant Placeholder, Syllable Modifier) no Devanagari codepoint reaches.",
@@ -10733,7 +10751,7 @@ var mathHtml =
     "</body></html>";
 
 await SaveShowcaseAsync("mathml", "Math", "MathML",
-    "Inline &lt;math&gt; formulas rendered as true vector PDF content: fraction bars, radical signs, " +
+    "Inline <math> formulas rendered as true vector PDF content: fraction bars, radical signs, " +
     "sub/superscripts, and MATH-table stretchy fences, using STIX Two Math's own OpenType MATH table.",
     mathHtml, pdfConfig);
 
@@ -11101,7 +11119,7 @@ var losslessRasterHtml =
     "</div>" +
     "</body></html>";
 
-await SaveShowcaseAsync("lossless_webp_avif", "Images & Replaced Content", "Lossless WebP &amp; AVIF Embedding",
+await SaveShowcaseAsync("lossless_webp_avif", "Images & Replaced Content", "Lossless WebP & AVIF Embedding",
     "A WebP or AVIF source that was itself encoded losslessly (VP8L, or AV1's lossless coding path) is " +
     "detected via PeachImage's ImageInfo.IsLosslessEncoding and embedded as a raw /FlateDecode stream " +
     "under ImageCompression.Auto/Lossless, instead of always being re-encoded as lossy JPEG the way every " +
@@ -11380,7 +11398,7 @@ var textUnderlineOffsetPositionHtml =
     "</table>" +
     "</body></html>";
 
-await SaveShowcaseAsync("text_underline_offset_position", "Text &amp; Fonts", "text-underline-offset &amp; text-underline-position",
+await SaveShowcaseAsync("text_underline_offset_position", "Typography & Text", "text-underline-offset & text-underline-position",
     "text-underline-offset moves an underline further from (or closer to) the text it decorates; " +
     "text-underline-position chooses auto/from-font/under as the position that offset is measured from. " +
     "Both were previously unimplemented and silently dropped at parse time.",
@@ -11429,13 +11447,13 @@ var verticalDecorationHtml =
     "</div>" +
     "</body></html>";
 
-await SaveShowcaseAsync("vertical_writing_mode_decoration", "Text &amp; Fonts", "Vertical Writing Mode: text-decoration",
+await SaveShowcaseAsync("vertical_writing_mode_decoration", "Typography & Text", "Vertical Writing Mode: text-decoration",
     "Under a true vertical writing mode (vertical-rl/vertical-lr), a text-decoration line now runs " +
     "along the column's own extent on the correct physical side of the glyphs, instead of being drawn " +
     "as a short horizontal stroke across its top. Also covers text-decoration-skip-ink now applying to " +
-    "a rotated run (issue #1145) and text-underline-position: left/right pinning the underline to a " +
+    "a rotated run and text-underline-position: left/right pinning the underline to a " +
     "literal physical edge, switching a same-line overline to the opposite edge when they would " +
-    "otherwise collide (issue #1146).",
+    "otherwise collide.",
     verticalDecorationHtml, pdfConfig);
 
 // ── Vertical writing mode: background-clip: text (issue #1123, #1194) ───────────────
@@ -11470,11 +11488,11 @@ var verticalBackgroundClipTextHtml =
     "</div>" +
     "</body></html>";
 
-await SaveShowcaseAsync("vertical_writing_mode_background_clip_text", "Text &amp; Fonts", "Vertical Writing Mode: background-clip: text",
+await SaveShowcaseAsync("vertical_writing_mode_background_clip_text", "Typography & Text", "Vertical Writing Mode: background-clip: text",
     "background-clip: text now clips to the real glyph-outline union under a true vertical writing " +
     "mode (vertical-rl/vertical-lr), for both a rotated (sideways) run and an upright run - including " +
-    "one whose font carries real vhea/vmtx vertical metrics (issue #1194) - instead of falling back to " +
-    "a plain border-box fill (issue #1123).",
+    "one whose font carries real vhea/vmtx vertical metrics - instead of falling back to " +
+    "a plain border-box fill.",
     verticalBackgroundClipTextHtml, pdfConfig);
 
 const string declarativeApiSource =

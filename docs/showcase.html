@@ -11,12 +11,14 @@ The previews show the first page of each PDF, rendered on Linux with Liberation 
 
 <p>Want to render your own? <a href="demo/">Try PeachPDF in your browser</a> — drop in an HTML
 file, an MHTML archive, or a ZIP of a site folder and get a PDF back. It runs entirely on your
-machine, in the page, with no server involved.</p>
+machine, in the page, with no server involved. Prefer the command line or plain C#? See the
+<a href="{{ '/cli.html' | relative_url }}"><code>peachpdf</code> CLI</a> and the
+<a href="{{ '/declarative-api.html' | relative_url }}">declarative API</a>, which build PDFs without an HTML string.</p>
 
 {% if site.data.showcases %}
 {% assign categories = site.data.showcases | map: "category" | uniq %}
 {% for cat in categories %}
-<h2>{{ cat }}</h2>
+<h2>{{ cat | escape }}</h2>
 <div class="card-grid showcase-grid">
   {% assign items = site.data.showcases | where: "category", cat %}
   {% for s in items %}
