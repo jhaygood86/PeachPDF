@@ -300,7 +300,10 @@ produces, so a document proofed in a browser prints the same way:
   always begins and ends flush with the corner rather than being cut off part-way through. Because the
   fit depends on the edge, the spacing changes slightly as a box's width or height changes, and an
   edge's horizontal and vertical runs may use slightly different gaps. An edge too short to hold two
-  dashes is drawn solid.
+  dashes is drawn solid. With a translucent color, the corner squares come out slightly darker than
+  the runs: each edge is drawn half a width past its ends so the corners stay covered, and both
+  edges meeting at a corner paint the square. A browser isolates the whole outline in one alpha
+  layer instead, so the translucency stays uniform.
 - **`double`** paints two lines with a gap between them, each exactly one third of the border width.
 - **`groove`** and **`ridge`** each paint two halves of the border: `groove` draws its outer half as
   `inset` and its inner half as `outset`, and `ridge` does the reverse.
@@ -382,7 +385,9 @@ Unlike `border`, outline is layout-neutral: it never participates in box sizing,
 
 When an inline element wraps across multiple lines, its outline is drawn as **one connected shape** around all of them rather than leaving the two line-wrap edges open the way `border`/`background` do under `box-decoration-break: slice` (the default) — CSS Basic User Interface 4 recommends a fragmented outline be fully connected rather than open on some sides. The shape is the outline of the region the lines' rectangles cover once `outline-offset` has been applied to each of them: where consecutive lines touch or overlap — which is what a `border`, extra padding, or a positive `outline-offset` on a wrapped inline typically causes — they merge into a single stepped contour, with the outline running around its concave corners rather than closing across each wrap. Lines that don't touch stay separate pieces of the same shape, which is how an ordinary widely-spaced wrapped inline still reads as one ring per line. This matches Chromium, which builds the same region the same way.
 
-Two limitations follow from that. The patterned and bevelled styles — `dotted`, `dashed`, `groove`, `ridge`, `inset`, `outset` — instead keep a closed ring per line: a dash pattern has to be fitted along each side and a bevel needs a per-side light/dark colour, and neither is defined for the concave corners a merged region introduces. And only the element's own line boxes take part in the region, not the border boxes of any atomic inlines (images, inline-blocks) inside it, so an outline around content taller than its own line box can cut through it where Chromium's would go around.
+Every outline style follows that shape, including the patterned and bevelled ones. On a square-cornered contour, `dotted` and `dashed` fit their pattern along each straight edge, so a dash lands on every corner it turns, including the concave ones a merge introduces; a rounded one has no corner for a dash to land on, so it is fitted to the closed contour as a whole, which spaces the pattern evenly all the way round rather than restarting it at each corner. `groove`, `ridge`, `inset` and `outset` pick each edge's light or dark face from the direction that edge runs in rather than from which side of a box it is — the only rule that is still well defined once the lines have merged and a "side" no longer is. Both match what Chromium does for the same content.
+
+One limitation remains: only the element's own line boxes take part in the region, not the border boxes of any atomic inlines (images, inline-blocks) inside it, so an outline around content taller than its own line box can cut through it where Chromium's would go around.
 
 A page or column break is a different axis and is unaffected by any of this: the region is always built from one page's own rectangles, so a box broken across pages gets its own shape on each, and the block-axis edge the break cuts through stays open on both sides of it, exactly as border's own `slice` geometry already leaves it.
 

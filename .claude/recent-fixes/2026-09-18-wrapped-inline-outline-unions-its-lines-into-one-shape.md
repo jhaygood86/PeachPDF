@@ -96,8 +96,9 @@ edges to grid indices via an `IndexOf` binary search and marks only its own cell
 
 ## Deliberately not done
 
-The patterned/bevelled styles and the atomic-inline-descendant rectangles — both are accepted gaps
-with their own files and issues #1206/#1207. Chromium's cosmetic style degradations (`double` at
+The patterned/bevelled styles were accepted gaps with their own file and issue #1206 at the time;
+they have since been unioned across lines too, so only the atomic-inline-descendant rectangles
+remain an accepted gap (own file, issue #1207). Chromium's cosmetic style degradations (`double` at
 `width ≤ 2` → `solid`; `groove`/`ridge` at 1px → `solid` blended 50% toward `color.Dark()`) are not
 ported. The `!IsVerticalDecorationGeometry(box)` guard was kept on the union path, preserving the
 vertical-writing-mode exclusion from #769.

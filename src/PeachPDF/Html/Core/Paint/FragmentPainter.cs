@@ -498,7 +498,7 @@ namespace PeachPDF.Html.Core.Paint
             var lines = fragment.Lines;
             var clip = g.GetClip();
 
-            // Outline is drawn last - CSS Basic User Interface 4 §4: "the outline ... is drawn 'over' a
+            // Outline is drawn last - CSS Basic User Interface 4 §3.1: "the outline ... is drawn 'over' a
             // box, i.e., the outline is always on top" of that box's own content and, per CSS2.1
             // Appendix E, of its entire stacking context (all its descendants too). So the per-line
             // geometry this box's outline needs is captured here, alongside border's own (which paints
@@ -606,7 +606,7 @@ namespace PeachPDF.Html.Core.Paint
                 // which of this rectangle's edges are real ones to expand outward from.
                 var outlineRect = geometry.NeedsClip ? geometry.ClipRect : rectForBorders;
 
-                // CSS Basic User Interface 4 §4 recommends a fragmented outline be a fully connected
+                // CSS Basic User Interface 4 §3.1 recommends a fragmented outline be a fully connected
                 // shape rather than one left open at every wrap - unlike border/background, which
                 // box-decoration-break's `slice` (css-break-3 §6.2, which does not govern outline at
                 // all) deliberately keeps those same inline-axis edges open, matching how a wrapped
@@ -728,7 +728,7 @@ namespace PeachPDF.Html.Core.Paint
             // table-internal background and content has painted - which is the whole fix (issue #735):
             // boxes paint in tree order, so a later row's opaque cell background would otherwise erase
             // the border the row above it shares with it. Before the outline pass, because an outline is
-            // always on top (CSS UI 4 §4).
+            // always on top (CSS UI 4 §3.1).
             if (box.CollapsedBorderSegments is { Count: > 0 })
             {
                 PaintCollapsedTableBorders(g, box, fragment.OriginY, clip);
@@ -736,12 +736,13 @@ namespace PeachPDF.Html.Core.Paint
 
             if (outlinePaints is not null)
             {
-                // More than one rectangle is a fragmented box, whose outline CSS UI 4 §4 asks be drawn
+                // More than one rectangle is a fragmented box, whose outline CSS UI 4 §3.1 asks be drawn
                 // as one connected shape rather than closed separately around each fragment - see
-                // OutlineDrawHandler.DrawRegionOutline. Only the styles whose appearance is fully
-                // determined by which area is filled can be drawn that way; the rest keep a ring per
-                // fragment. Either way this stays within the page: these rectangles are one
-                // fragmentainer's, so a box broken across pages still gets one shape per page.
+                // OutlineDrawHandler.DrawRegionOutline. Every style that paints at all takes that path
+                // (see SupportsRegionOutline); anything else - a single rectangle, vertical-decoration
+                // geometry, a style that paints nothing - keeps the per-fragment rings below. Either way
+                // this stays within the page: these rectangles are one fragmentainer's, so a box
+                // broken across pages still gets one shape per page.
                 if (outlinePaints.Count > 1 &&
                     !IsVerticalDecorationGeometry(box) &&
                     OutlineDrawHandler.SupportsRegionOutline(box))
