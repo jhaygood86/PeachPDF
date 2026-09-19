@@ -8,7 +8,7 @@ Chromium feeds one more kind of rectangle into the same union: the border box of
 Where such a descendant is taller than the line box holding it, Chromium's outline bulges around it
 and PeachPDF's follows the line box.
 
-Tracked as #1207 rather than prose alone, since CSS Basic User Interface 4 §5.2's "around the border
+Tracked as #1207 rather than prose alone, since CSS Basic User Interface 4 §3.1's "around the border
 edge of the element's fragments" is reasonably read to include them.
 
 ## Why it was out of scope

@@ -1,6 +1,6 @@
 # outline-style: auto ignores outline-width, and rings the offset edge
 
-`outline: 8px auto` painted an 8px ring. CSS-UI-4 §4 says it must not:
+`outline: 8px auto` painted an 8px ring. CSS-UI-4 §3.3 says it must not:
 
 > The `auto` value permits the user agent to render a custom outline style […] User agents may enable
 > authors to influence the rendering of auto style outlines via the `outline-color` property, but this

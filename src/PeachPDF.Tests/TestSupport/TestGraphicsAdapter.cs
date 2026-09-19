@@ -175,6 +175,15 @@ namespace PeachPDF.Tests.TestSupport
         /// <summary>The index into <see cref="Points"/> at which each subpath begins.</summary>
         public List<int> SubpathStarts { get; } = [];
 
+        /// <summary>
+        /// The indices into <see cref="Points"/> of the two control points of each Bézier. They are
+        /// the only recorded points the path does not pass through, so a test that treats the point
+        /// list as the shape - asking whether a clip covers it, say - has to know to skip them or to
+        /// flatten the curve through them, rather than assert against a point the curve only leans
+        /// towards.
+        /// </summary>
+        public HashSet<int> BezierControlPoints { get; } = [];
+
         public override void Start(double x, double y)
         {
             SubpathStarts.Add(Points.Count);
@@ -192,6 +201,8 @@ namespace PeachPDF.Tests.TestSupport
 
         public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3)
         {
+            BezierControlPoints.Add(Points.Count);
+            BezierControlPoints.Add(Points.Count + 1);
             Points.Add(new RPoint(x1, y1));
             Points.Add(new RPoint(x2, y2));
             Points.Add(new RPoint(x3, y3));
@@ -215,6 +226,7 @@ namespace PeachPDF.Tests.TestSupport
         {
             var other = (TestGraphicsPath)path;
             foreach (var start in other.SubpathStarts) SubpathStarts.Add(Points.Count + start);
+            foreach (var control in other.BezierControlPoints) BezierControlPoints.Add(Points.Count + control);
             Points.AddRange(other.Points);
         }
 
@@ -270,6 +282,14 @@ namespace PeachPDF.Tests.TestSupport
             /// shapes, so this is what distinguishes "one connected shape" from "three separate ones".
             /// </summary>
             public IReadOnlyList<int> SubpathStarts { get; init; } = [];
+
+            /// <summary>
+            /// The indices into <see cref="Points"/> that are Bézier control points - see
+            /// <see cref="TestGraphicsPath.BezierControlPoints"/>. A test asking whether the shape
+            /// lies somewhere needs these to tell the points the path passes through from the two
+            /// per curve that it only leans towards.
+            /// </summary>
+            public IReadOnlySet<int> BezierControlPoints { get; init; } = new HashSet<int>();
 
             /// <summary>The points making up subpath <paramref name="index"/>.</summary>
             public IReadOnlyList<RPoint> Subpath(int index)
@@ -393,7 +413,7 @@ namespace PeachPDF.Tests.TestSupport
         public override void DrawPath(RBrush brush, RGraphicsPath path)
         {
             var tb = brush as TestBrush;
-            Log.Add(new DrawPathCall(tb?.Color ?? RColor.Empty, PointsOf(path)) { GradientStart = tb?.GradientStart, GradientEnd = tb?.GradientEnd, SubpathStarts = SubpathStartsOf(path) });
+            Log.Add(new DrawPathCall(tb?.Color ?? RColor.Empty, PointsOf(path)) { GradientStart = tb?.GradientStart, GradientEnd = tb?.GradientEnd, SubpathStarts = SubpathStartsOf(path), BezierControlPoints = BezierControlPointsOf(path) });
         }
 
         public override void DrawPath(RPen pen, RGraphicsPath path)
@@ -406,9 +426,15 @@ namespace PeachPDF.Tests.TestSupport
                 LineCap = testPen?.RecordedLineCap ?? RLineCap.Butt,
                 DashPattern = testPen?.RecordedDashPattern,
                 DashOffset = testPen?.RecordedDashOffset ?? 0,
-                SubpathStarts = SubpathStartsOf(path)
+                SubpathStarts = SubpathStartsOf(path),
+                BezierControlPoints = BezierControlPointsOf(path)
             });
         }
+
+        private static IReadOnlySet<int> BezierControlPointsOf(RGraphicsPath path) =>
+            path is TestGraphicsPath testPath
+                ? new HashSet<int>(testPath.BezierControlPoints)
+                : new HashSet<int>();
 
         private static IReadOnlyList<RPoint> PointsOf(RGraphicsPath path) =>
             path is TestGraphicsPath testPath ? testPath.Points.ToArray() : [];

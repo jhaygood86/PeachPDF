@@ -10,7 +10,7 @@ namespace PeachPDF.Html.Core.Handlers
 {
     /// <summary>
     /// Paints CSS <c>outline</c> - a ring drawn outside the border edge, offset by
-    /// <c>outline-offset</c>, that never affects box sizing (CSS Basic User Interface 4 §4). Structured
+    /// <c>outline-offset</c>, that never affects box sizing (CSS Basic User Interface 4 §3.5). Structured
     /// as a uniform border around the rectangle inflated by <c>outline-offset + outline-width</c>, so
     /// every ordinary outline style delegates to the same neutral <see cref="BoxEdgesDrawHandler"/>
     /// used by uniform borders. This handler only resolves outline-specific behavior before handing it off:
@@ -46,7 +46,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         /// <remarks>
         /// <para>
-        /// CSS Basic User Interface 4 §4 says a fragmented box's outline "should" be drawn as one
+        /// CSS Basic User Interface 4 §3.1 says a fragmented box's outline "should" be drawn as one
         /// connected shape rather than left open, or closed separately, at each fragment. Chromium
         /// achieves that by unioning the fragments' rectangles and outlining the boundary of the
         /// result, which is what this reproduces: where consecutive fragments touch - which a border on
@@ -55,11 +55,10 @@ namespace PeachPDF.Html.Core.Handlers
         /// outlined at all.
         /// </para>
         /// <para>
-        /// Only <c>solid</c>, <c>double</c> and <c>auto</c> take this path. The remaining styles fall
-        /// back to <see cref="DrawOutline"/> per rectangle, because their appearance is defined per
-        /// side - a dash pattern fitted to a side's length, a bevel lit from a side's direction - and
-        /// a unioned contour has neither four sides nor only convex corners to define those against.
-        /// See <see cref="SupportsRegionOutline"/>.
+        /// Every style takes this path. The patterned and bevelled ones are defined per side on an
+        /// ordinary box - a dash pattern fitted to a side's length, a bevel lit from a side's
+        /// direction - which a unioned contour has no equivalent of, so they are resolved against the
+        /// boundary itself instead: see <see cref="OutlineRegionPainter"/>.
         /// </para>
         /// </remarks>
         /// <param name="g">the device to draw into</param>
@@ -112,10 +111,10 @@ namespace PeachPDF.Html.Core.Handlers
 
         /// <summary>
         /// Whether <paramref name="box"/>'s outline style is one <see cref="DrawRegionOutline"/> can
-        /// draw. The rest keep the per-fragment ring <see cref="DrawOutline"/> produces.
+        /// draw. Every style that paints at all can be; the rest paint nothing either way.
         /// </summary>
         internal static bool SupportsRegionOutline(CssBox box) =>
-            box.OutlineStyle.Value is OutlineStyle.Solid or OutlineStyle.Double or OutlineStyle.Auto;
+            box.OutlineStyle.Value is not (OutlineStyle.None or OutlineStyle.Hidden);
 
         /// <summary>
         /// Draws the box's outline, if any, around <paramref name="rect"/> (the same border-box
@@ -197,7 +196,7 @@ namespace PeachPDF.Html.Core.Handlers
             double width;
             if (style == OutlineStyle.Auto)
             {
-                // CSS-UI-4 §4: "The outline-width property is ignored when outline-style is auto."
+                // CSS-UI-4 §3.3: "The outline-width property is ignored when outline-style is auto."
                 // That sentence is normative and unconditional - the neighbouring "User agents may treat
                 // auto as solid" licenses the *style*, not the width - so the declared width never
                 // reaches the ring, not even a declared zero (Chrome paints `outline: 0 auto` too).
