@@ -482,31 +482,31 @@ namespace PeachPDF.Html.Core.Handlers
             {
                 if (polygon.Count < 3) return;
 
-                    var scale = 1 / g.PixelsPerPoint;
-                    var last = new RPoint(double.NaN, double.NaN);
-                    var started = false;
-                    var vertices = 0;
+                var scale = 1 / g.PixelsPerPoint;
+                var last = new RPoint(double.NaN, double.NaN);
+                var started = false;
+                var vertices = 0;
 
-                    foreach (var (s, h) in polygon)
-                    {
-                        var x = (Start.X + Dx * s + Nx * h) * scale;
-                        var y = (Start.Y + Dy * s + Ny * h) * scale;
+                foreach (var (s, h) in polygon)
+                {
+                    var x = (Start.X + Dx * s + Nx * h) * scale;
+                    var y = (Start.Y + Dy * s + Ny * h) * scale;
 
-                        // A repeated point is a zero-length edge some path consumers will not thank
-                        // us for; the wedge crossing lands exactly on a rect corner often enough
-                        // that this fires on real staircase steps, not just in theory.
-                        if (started && Math.Abs(x - last.X) < 1e-9 && Math.Abs(y - last.Y) < 1e-9)
-                            continue;
+                    // A repeated point is a zero-length edge some path consumers will not thank
+                    // us for; the wedge crossing lands exactly on a rect corner often enough
+                    // that this fires on real staircase steps, not just in theory.
+                    if (started && Math.Abs(x - last.X) < 1e-9 && Math.Abs(y - last.Y) < 1e-9)
+                        continue;
 
-                        if (started) clip.LineTo(x, y);
-                        else clip.AddMove(x, y);
+                    if (started) clip.LineTo(x, y);
+                    else clip.AddMove(x, y);
 
-                        last = new RPoint(x, y);
-                        started = true;
-                        vertices++;
-                    }
+                    last = new RPoint(x, y);
+                    started = true;
+                    vertices++;
+                }
 
-                    if (vertices >= 3) clip.CloseFigure();
+                if (vertices >= 3) clip.CloseFigure();
             }
 
             private LayoutRect ToLayout(double sMin, double sMax, double hMin, double hMax)

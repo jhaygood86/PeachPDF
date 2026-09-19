@@ -728,7 +728,7 @@ namespace PeachPDF.Html.Core.Paint
             // table-internal background and content has painted - which is the whole fix (issue #735):
             // boxes paint in tree order, so a later row's opaque cell background would otherwise erase
             // the border the row above it shares with it. Before the outline pass, because an outline is
-            // always on top (CSS UI 4 §4).
+            // always on top (CSS UI 4 §3.1).
             if (box.CollapsedBorderSegments is { Count: > 0 })
             {
                 PaintCollapsedTableBorders(g, box, fragment.OriginY, clip);

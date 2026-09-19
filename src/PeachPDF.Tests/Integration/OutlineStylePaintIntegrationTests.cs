@@ -419,7 +419,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Outline_PaintsAfterItsOwnTextAndDescendants_NotJustAfterBorder()
         {
-            // CSS-UI-4 §4: outline "is drawn 'over' a box" - CSS2.1 Appendix E draws it as the very last
+            // CSS-UI-4 §3.1: outline "is drawn 'over' a box" - CSS2.1 Appendix E draws it as the very last
             // step for the element, after its own generated content AND its whole stacking context (every
             // descendant). A negative outline-offset large enough to reach over the box's own text makes
             // this observable: the outline ring must still end up on top of that text, not underneath it.
@@ -725,7 +725,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task OutlineOnAWrappingInlineElement_PaintsOneConnectedShapeAcrossEveryLine()
         {
-            // A span forced onto three lines. CSS Basic User Interface 4 §4 recommends a fragmented
+            // A span forced onto three lines. CSS Basic User Interface 4 §3.1 recommends a fragmented
             // outline be drawn as one fully connected shape rather than one left open - or closed
             // separately - at every wrap, which is also what Chromium does: it unions every fragment's
             // rectangle and traces the boundary of the region they cover. Here the three lines start at
@@ -981,7 +981,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task DoubleOutlineOnAWrappingInlineElement_PaintsTwoConcentricConnectedBands()
         {
-            // css-backgrounds-3 §4.3's two lines, drawn over the unioned contour rather than per line:
+            // css-backgrounds-3 §3.2's two lines, drawn over the unioned contour rather than per line:
             // two filled shapes, the inner one strictly inside the outer, each an equal third of the
             // declared width with the middle third left as the gap between them.
             var html = LayoutHarness.Wrap(
@@ -1261,19 +1261,38 @@ namespace PeachPDF.Tests.Integration
                 p => Math.Abs(p.X - (rects.Min(r => r.Left) - 6)) < 0.5
                      && Math.Abs(p.Y - (rects.Min(r => r.Top) - 6)) < 0.5);
 
-            // And the clips of one pass cover it: every point the band actually passes through - the
-            // arcs included, flattened through their control points - falls inside one clip quad or
-            // the other. Asserting only the clips' outer extent would not show this, because the
-            // straight edges' own quads already reach that extent whether or not anything covers the
-            // arcs between them.
-            var clips = g.ClipPaths.TakeLast(2).SelectMany(Quads).ToList();
+            // And every pass's own clips cover its own band: every point that band actually passes
+            // through - the arcs included, flattened through their control points - falls inside one
+            // clip quad or the other. Asserting only the clips' outer extent would not show this,
+            // because the straight edges' own quads already reach that extent whether or not anything
+            // covers the arcs between them. Each pass is checked against the clips it was pushed
+            // with, not against the last pass's: groove/ridge fill two different halves of the width,
+            // and the clips of either pass carry the whole width, so checking one pass's band against
+            // the other's clips would let a mitre leaning the wrong way hide behind the half it does
+            // not paint.
+            Assert.Equal(paths.Count, g.ClipPaths.Count);
 
-            Assert.All(Flatten(band), point =>
-                Assert.True(
-                    clips.Any(quad => ContainsPoint(quad, point)),
-                    $"({point.X:0.##}, {point.Y:0.##}) of the band is inside no clip, so that part of "
-                    + "the band - an arc, if the mitres are only as deep as the straight run - goes "
-                    + "unpainted"));
+            // The tolerance is not slack for rounding: where two territories meet along a mitre that
+            // crosses an arc, their straight boundaries chord the curve, and the deepest point the
+            // chord leaves outside both measures 0.26pt on this case (6pt band, 8pt radius) - about a
+            // third of a CSS pixel, which rasterizes as antialiasing rather than a hole in either
+            // engine. What this is guarding against is three orders of magnitude bigger: an
+            // unpainted wedge at a corner, or the inner half of every notch.
+            const double subPixel = 0.35;
+
+            for (var pass = 0; pass < paths.Count; pass += 2)
+            {
+                var clips = g.ClipPaths.Skip(pass).Take(2).SelectMany(Quads).ToList();
+
+                Assert.All(Flatten(paths[pass]), point =>
+                    Assert.True(
+                        clips.Any(quad => ContainsPoint(quad, point))
+                        || clips.Min(quad => DistanceToPolygon(quad, point)) <= subPixel,
+                        $"({point.X:0.##}, {point.Y:0.##}) of the band is inside no clip of its own "
+                        + "pass, so that part of the band - an arc, if the mitres are only as deep as "
+                        + "the straight run; the inner half of a notch, if they all lean convex - goes "
+                        + "unpainted"));
+            }
         }
 
         [Theory]
@@ -1367,6 +1386,12 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEmpty(bands);
             Assert.Equal(bands.Count, g.ClipPaths.Count);
             Assert.True(bands.Count % 2 == 0);
+
+            // One band fill per contour, guarded structurally: a pair's band path holds exactly one
+            // contour - its outer edge and its inner edge, two subpaths. The ownership sampling below
+            // only sees a piece that another piece's clip reaches *and* repaints second, so it is not
+            // on its own a guard for the separate-pieces repro; this is.
+            Assert.All(bands, band => Assert.Equal(2, band.SubpathStarts.Count));
 
             for (var i = 0; i < bands.Count; i += 2)
             {
@@ -1623,6 +1648,33 @@ namespace PeachPDF.Tests.Integration
 
                 yield return path.Points[i];
             }
+        }
+
+        /// <summary>
+        /// How far <paramref name="point"/> lies from <paramref name="polygon"/>'s boundary.
+        /// </summary>
+        private static double DistanceToPolygon(IReadOnlyList<RPoint> polygon, RPoint point)
+        {
+            var best = double.MaxValue;
+
+            for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+            {
+                var a = polygon[j];
+                var b = polygon[i];
+                var dx = b.X - a.X;
+                var dy = b.Y - a.Y;
+                var lengthSquared = dx * dx + dy * dy;
+                if (lengthSquared <= 0) continue;
+
+                var t = Math.Max(0, Math.Min(1,
+                    ((point.X - a.X) * dx + (point.Y - a.Y) * dy) / lengthSquared));
+                var x = a.X + t * dx;
+                var y = a.Y + t * dy;
+                best = Math.Min(
+                    best, Math.Sqrt((point.X - x) * (point.X - x) + (point.Y - y) * (point.Y - y)));
+            }
+
+            return best;
         }
 
         /// <summary>
