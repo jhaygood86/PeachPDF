@@ -33,10 +33,41 @@ title: Why PeachPDF?
     </div>
     <div class="card">
       <h3>Accessibility from your markup</h3>
-      <p>The semantic HTML you already write — headings, lists, tables, <code>alt</code> text — becomes an optionally tagged, accessible PDF with a real structure tree. Tune the tagging per element with a CSS property, not a separate accessibility API.</p>
+      <p>The semantic HTML you already write — headings, lists, tables, <code>alt</code> text, even MathML formulas — becomes an optionally tagged, accessible PDF with a real structure tree. Tune the tagging per element with a CSS property, not a separate accessibility API.</p>
     </div>
   </div>
-  <p class="landing-lede">See exactly what's supported in the <a href="{{ '/html-css-support.html' | relative_url }}">HTML &amp; CSS compatibility matrix</a> and the <a href="{{ '/supported-svg-features.html' | relative_url }}">SVG feature list</a>.</p>
+  <p class="landing-lede">See exactly what's supported in the <a href="{{ '/html-css-support.html' | relative_url }}">HTML &amp; CSS compatibility matrix</a> and the <a href="{{ '/supported-svg-features.html' | relative_url }}">SVG feature list</a>. Would rather stay in C#? The <a href="{{ '/declarative-api.html' | relative_url }}">declarative API</a> builds documents from code on the very same layout engine, and the <a href="{{ '/cli.html' | relative_url }}"><code>peachpdf</code> command-line tool</a> needs no .NET at all.</p>
+</section>
+
+<section class="landing-section">
+  <h2 class="landing-h2">Standards and print production</h2>
+  <p class="landing-lede">Archival, print-shop, and accessibility requirements are usually where a free HTML-to-PDF tool runs out. They are built in here, and each is opt-in.</p>
+  <div class="card-grid">
+    <div class="card">
+      <h3>PDF/A for archiving</h3>
+      <p>ISO 19005 parts 1, 2, and 3 at levels B, U, and A, with an sRGB output intent and XMP metadata. A character no font can render fails loudly instead of silently vanishing. <a href="{{ '/usage-examples.html' | relative_url }}#generating-pdfa-conformant-output">PDF/A guide</a></p>
+    </div>
+    <div class="card">
+      <h3>PDF/X for print</h3>
+      <p>PDF/X-1a, X-3, and X-4, with <code>device-cmyk()</code> colors, CMYK images kept as CMYK, and conversion to a target ICC profile for the press. <a href="{{ '/usage-examples.html' | relative_url }}#generating-pdfx-conformant-output">PDF/X guide</a></p>
+    </div>
+    <div class="card">
+      <h3>PDF/UA tagging</h3>
+      <p>A logical structure tree, automatic document language, and per-element control through <code>-peachpdf-pdf-tag-type</code>. <a href="{{ '/usage-examples.html' | relative_url }}#enabling-tagged-pdf-pdfua-output">Tagged PDF guide</a></p>
+    </div>
+    <div class="card">
+      <h3>PDF 2.0</h3>
+      <p>Optional PDF 2.0 output. MathML formulas are tagged as <code>Formula</code> elements that carry their MathML source as an Associated File. <a href="{{ '/usage-examples.html' | relative_url }}#pdf-20-output">PDF 2.0 guide</a></p>
+    </div>
+    <div class="card">
+      <h3>Bookmarks and navigation</h3>
+      <p>Headings become PDF bookmarks automatically, with full CSS control. Add CSS-only tables of contents with real page numbers, and link annotations that land where they should.</p>
+    </div>
+    <div class="card">
+      <h3>Fillable forms</h3>
+      <p><code>&lt;input&gt;</code> and <code>&lt;select&gt;</code> become real AcroForm fields, styled with ordinary CSS. <a href="{{ '/usage-examples.html' | relative_url }}#enabling-interactive-pdf-forms">Forms guide</a></p>
+    </div>
+  </div>
 </section>
 
 <section class="landing-section">
@@ -56,8 +87,8 @@ title: Why PeachPDF?
       <p>Every line of source is on <a href="https://github.com/jhaygood86/PeachPDF" rel="noopener">GitHub</a>. Read it, audit it, debug into it, fork it. Optional <a href="{{ '/support.html' | relative_url }}">paid support</a> and <a href="{{ '/sponsorship.html' | relative_url }}">sponsorship</a> exist for teams that want them — the library never depends on either.</p>
     </div>
     <div class="card">
-      <h3>Runs on every supported .NET</h3>
-      <p>PeachPDF supports <strong>.NET 8 and newer</strong>, in step with <a href="https://dotnet.microsoft.com/platform/support/policy/dotnet-core" rel="noopener">Microsoft's own .NET support policy</a>, and is ready for trimmed and AOT-compiled deployments. When a new .NET lands, PeachPDF is there — no legacy runtime shims to carry.</p>
+      <h3>Runs on every supported .NET — and beyond</h3>
+      <p>PeachPDF supports <strong>.NET 8 and newer</strong>, in step with <a href="https://dotnet.microsoft.com/platform/support/policy/dotnet-core" rel="noopener">Microsoft's own .NET support policy</a>, and is ready for trimmed and AOT-compiled deployments. It also runs in the browser under WebAssembly (<a href="demo/">try the demo</a>) and ships as a standalone <a href="{{ '/cli.html' | relative_url }}">command-line tool</a>.</p>
     </div>
   </div>
   <p class="landing-lede">Read the full <a href="{{ '/license.html' | relative_url }}">license and FAQ</a>.</p>
@@ -74,7 +105,7 @@ title: Why PeachPDF?
         <th>License &amp; cost</th>
         <th>HTML &amp; CSS input</th>
         <th>How it renders</th>
-        <th>Accessible (tagged) PDF</th>
+        <th>Standards &amp; accessibility (PDF/A, PDF/X, tagged PDF)</th>
         <th>Native / external dependencies</th>
         <th>.NET runtime support</th>
         <th>Containers &amp; serverless</th>
@@ -85,9 +116,9 @@ title: Why PeachPDF?
       <tr>
         <td><strong>PeachPDF</strong></td>
         <td>Free — BSD-3-Clause</td>
-        <td>✅ HTML, CSS, and SVG</td>
+        <td>✅ HTML, CSS, SVG, and MathML</td>
         <td>Own layout engine, fully in-process</td>
-        <td>✅ Optional tagged output with a structure tree; tag mapping customizable per element via CSS (<code>-peachpdf-pdf-tag-type</code>, including <code>none</code> for decorative content)</td>
+        <td>✅ PDF/A parts 1–3, PDF/X-1a/3/4, and PDF 2.0; optional tagged output with a structure tree, customizable per element via CSS (<code>-peachpdf-pdf-tag-type</code>, including <code>none</code> for decorative content)</td>
         <td>None — pure managed .NET</td>
         <td>✅ .NET 8 and newer — every currently-supported .NET version</td>
         <td>Excellent — no browser, no native binaries, works in trimmed and AOT deployments</td>
@@ -98,7 +129,7 @@ title: Why PeachPDF?
         <td>Commercial — paid per developer</td>
         <td>✅ Chromium-grade</td>
         <td>Embedded Chromium renderer</td>
-        <td>⚠️ PDF/A and PDF/UA export options; no per-element tag control</td>
+        <td>✅ PDF/A (1 through 4) and PDF/UA export; PDF/X not documented; no per-element tag control</td>
         <td>Ships Chromium native binaries with the package</td>
         <td>.NET Framework 4.6.2+, .NET Standard 2.0, .NET Core / .NET 5–10</td>
         <td>Works, but images grow by hundreds of MB</td>
@@ -109,7 +140,7 @@ title: Why PeachPDF?
         <td>Free — MIT</td>
         <td>✅ Chrome-grade</td>
         <td>Drives a headless Chrome in a separate process</td>
-        <td>⚠️ Chrome can emit tagged PDFs; no tag customization</td>
+        <td>⚠️ Chrome can emit tagged PDFs; no tag customization and no PDF/A or PDF/X option</td>
         <td>Downloads a full Chromium build (hundreds of MB)</td>
         <td>.NET Standard 2.0 and .NET 8+</td>
         <td>Hard — browser install, sandbox flags, and extra memory in every image</td>
@@ -120,7 +151,7 @@ title: Why PeachPDF?
         <td>Free — MIT</td>
         <td>⚠️ 2012-era WebKit; no flexbox or modern CSS</td>
         <td>Wraps the native <code>libwkhtmltox</code> library</td>
-        <td>❌ Untagged output</td>
+        <td>❌ Untagged output; no PDF/A or PDF/X options</td>
         <td>Per-platform native library you deploy yourself</td>
         <td>.NET Standard 2.0 / .NET Core (dormant)</td>
         <td>Fragile — native loading issues and long-standing thread-safety problems</td>
@@ -131,7 +162,7 @@ title: Why PeachPDF?
         <td>Free — LGPL</td>
         <td>⚠️ 2012-era WebKit; no flexbox or modern CSS</td>
         <td>External command-line process</td>
-        <td>❌ Untagged output</td>
+        <td>❌ Untagged output; no PDF/A or PDF/X options</td>
         <td>Native binary installed on the host</td>
         <td>Language-agnostic external CLI</td>
         <td>Possible, but you're baking an archived tool into new images</td>
@@ -142,7 +173,7 @@ title: Why PeachPDF?
         <td>Commercial — paid per server</td>
         <td>✅ Excellent, best-in-class paged-media CSS</td>
         <td>External native process</td>
-        <td>✅ Strong tagged / PDF-UA support with CSS tag customization</td>
+        <td>✅ PDF/A 1–3, PDF/X-1a/3/4, and PDF/UA-1, with CSS tag customization</td>
         <td>Native binary installed on the host</td>
         <td>Language-agnostic external process</td>
         <td>Works, but every container counts as a licensed server</td>
@@ -153,7 +184,7 @@ title: Why PeachPDF?
         <td>Free under $1M annual revenue, paid above</td>
         <td>❌ None — code-first fluent C# API</td>
         <td>Own engine drawing through SkiaSharp</td>
-        <td>⚠️ PDF/A and PDF/UA conformance in recent versions, from code-first layouts</td>
+        <td>⚠️ PDF/A-2 and -3 and PDF/UA conformance in recent versions, from code-first layouts; PDF/X not documented</td>
         <td>SkiaSharp native binaries</td>
         <td>.NET Framework 4.x, .NET Standard 2.0, .NET 6+</td>
         <td>Good, but every layout is C# code your developers maintain</td>
@@ -175,7 +206,7 @@ title: Why PeachPDF?
         <td>Commercial — paid per developer</td>
         <td>⚠️ HTML conversion with partial CSS fidelity</td>
         <td>Own converter inside a large general-purpose PDF suite</td>
-        <td>✅ Tagged PDF via a programmatic tagging API</td>
+        <td>✅ Tagged PDF via a programmatic tagging API; PDF/A and PDF/X by converting the finished PDF</td>
         <td>Large closed-source library</td>
         <td>.NET Framework, .NET Standard 2.0, .NET 6+</td>
         <td>Works</td>
@@ -184,8 +215,13 @@ title: Why PeachPDF?
     </tbody>
   </table>
   </div>
-  <p class="landing-lede">Licensing and pricing details are as of this writing and change over time — always check each vendor's site before deciding.</p>
-  <p class="landing-lede"><strong>Where PeachPDF isn't the right fit:</strong> it doesn't execute JavaScript, and pixel-perfect Chrome parity isn't the goal — if your documents are rendered by client-side scripts, a browser-based tool is the honest recommendation. For everything else, the <a href="{{ '/html-css-support.html' | relative_url }}">compatibility matrix</a> tells you exactly what you get.</p>
+  <p class="landing-lede">Licensing, pricing, and standards-support details are as of this writing and change over time — always check each vendor's site before deciding.</p>
+  <p class="landing-lede"><strong>Where PeachPDF isn't the right fit:</strong> it doesn't execute JavaScript, and pixel-perfect Chrome parity isn't the goal — if your documents are rendered by client-side scripts, a browser-based tool is the honest recommendation. A few visual effects are also outside what it draws today, including <code>backdrop-filter</code>, blur, and 3D perspective. For everything else, the <a href="{{ '/html-css-support.html' | relative_url }}">compatibility matrix</a> tells you exactly what you get.</p>
+</section>
+
+<section class="landing-section">
+  <h2 class="landing-h2">Proven, not just claimed</h2>
+  <p class="landing-lede">PeachPDF is tested across Windows, Linux, and macOS, gated on test coverage for every change, and its graphics output is verified by rasterizing it rather than just reading PDF operators. <a href="{{ '/testing.html' | relative_url }}">Read how PeachPDF is tested</a>, or <a href="{{ '/showcase.html' | relative_url }}">see the output for yourself</a>.</p>
 </section>
 
 <section class="landing-cta">

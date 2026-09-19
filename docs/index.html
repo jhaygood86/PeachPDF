@@ -4,9 +4,10 @@ layout: default
 <section class="hero">
   <img class="hero-logo" src="{{ '/assets/img/peach.svg' | relative_url }}" alt="" width="96" height="96">
   <h1 class="hero-title">HTML to PDF.<br><span class="hero-grad">Pure .NET.</span></h1>
-  <p class="hero-sub">PeachPDF renders HTML, CSS, and SVG straight to vector PDF — entirely in-process. No headless browsers. No native dependencies. Anywhere .NET runs.</p>
+  <p class="hero-sub">PeachPDF renders HTML, CSS, SVG, and MathML straight to vector PDF — entirely in-process. No headless browsers. No native dependencies. Anywhere .NET runs.</p>
   <div class="hero-ctas">
     <a class="btn btn-primary" href="{{ '/getting-started.html' | relative_url }}">Get started</a>
+    <a class="btn btn-ghost" href="demo/">Try it in your browser</a>
     <a class="btn btn-ghost" href="{{ '/why-peachpdf.html' | relative_url }}">Why PeachPDF?</a>
     <a class="btn btn-ghost" href="https://github.com/jhaygood86/PeachPDF" rel="noopener">View on GitHub</a>
   </div>
@@ -24,27 +25,58 @@ layout: default
       <p>No Puppeteer, wkhtmltopdf, or Ghostscript to install, babysit, or patch. HTML parsing, CSS cascade, layout, and PDF writing all run inside your process — containers, serverless, trimmed and AOT deployments included.</p>
     </div>
     <div class="card">
-      <h3>Native vector SVG</h3>
-      <p>Inline <code>&lt;svg&gt;</code>, standalone files, data URIs, and CSS <code>background-image</code> sources render as real vector PDF content — crisp at any zoom, never rasterized.</p>
+      <h3>Native vector SVG and MathML</h3>
+      <p>Inline <code>&lt;svg&gt;</code>, standalone files, data URIs, and CSS image sources render as real vector PDF content — and so do <code>&lt;math&gt;</code> formulas, typeset from the font's own OpenType MATH table. Crisp at any zoom, never rasterized.</p>
     </div>
     <div class="card">
       <h3>Modern CSS layout</h3>
-      <p>Flexbox, multi-column layout, 2D and 3D transforms, custom properties with <code>var()</code>, <code>calc()</code>/<code>min()</code>/<code>max()</code>/<code>clamp()</code>, and gradients with CSS Color Level 4 interpolation.</p>
+      <p>Flexbox, Grid with subgrid, multi-column layout, container queries, cascade layers, nesting, <code>@supports</code>, custom properties with <code>var()</code>, <code>calc()</code>, transforms, and gradients with CSS Color Level 4 interpolation.</p>
     </div>
     <div class="card">
       <h3>Print-grade paged media</h3>
-      <p><code>@page</code> rules, named pages, margin boxes, and running headers and footers — the CSS Paged Media toolkit for real documents, not screenshots of web pages.</p>
+      <p><code>@page</code> rules, named pages, margin boxes, running headers, footnotes, automatic bookmarks, and CSS-only tables of contents with real page numbers. Mix page sizes and orientations in one PDF.</p>
     </div>
     <div class="card">
-      <h3>Accessible, tagged output</h3>
-      <p>Optional Tagged PDF (PDF/UA) output with a logical structure tree, automatic document language, and CSS-driven tag mapping. Metadata flows in automatically from <code>&lt;title&gt;</code> and <code>&lt;meta&gt;</code>.</p>
+      <h3>Standards-grade PDF output</h3>
+      <p>Optional tagged PDF (PDF/UA) with CSS-driven tag mapping, PDF/A parts 1–3, PDF/X-1a/3/4 with CMYK and ICC color management, and PDF 2.0. Metadata flows in automatically from <code>&lt;title&gt;</code> and <code>&lt;meta&gt;</code>.</p>
     </div>
     <div class="card">
-      <h3>Real font handling</h3>
-      <p>Web fonts via <code>@font-face</code>, fonts loaded from a stream, system font discovery on every platform, and browser-grade weight/style/stretch matching with faux-bold and faux-italic synthesis.</p>
+      <h3>Text in every script</h3>
+      <p>Web fonts via <code>@font-face</code>, fonts from a stream, and system font discovery, with browser-grade matching. Arabic and Indic shaping, full Unicode bidi, vertical writing modes, OpenType features, and searchable color emoji.</p>
+    </div>
+    <div class="card">
+      <h3>Images done right</h3>
+      <p>JPEG, PNG, GIF, BMP, WebP, AVIF, and TIFF decode in-process. Lossless images embed without recompression, CMYK stays CMYK, and an image used twice is stored once.</p>
+    </div>
+    <div class="card">
+      <h3>Effects that stay vector</h3>
+      <p><code>filter</code>, all sixteen <code>mix-blend-mode</code> values, SVG filters, <code>clip-path</code>, <code>border-image</code>, and <code>background-clip: text</code> are written as native PDF content, not baked into bitmaps.</p>
+    </div>
+    <div class="card">
+      <h3>Fillable forms</h3>
+      <p>Turn <code>&lt;input&gt;</code> and <code>&lt;select&gt;</code> into real AcroForm fields — text, checkbox, radio, and choice — styled with ordinary CSS. One opt-in setting, <code>EnableInteractivePdfForms</code>.</p>
     </div>
   </div>
   <p class="landing-lede">See how PeachPDF <a href="{{ '/why-peachpdf.html' | relative_url }}">compares to other .NET PDF libraries</a> →</p>
+</section>
+
+<section class="landing-section">
+  <h2 class="landing-h2">Three ways to build a PDF</h2>
+  <p class="landing-lede">One layout engine, three front doors — pick the one that fits how your team works.</p>
+  <div class="card-grid">
+    <a class="card card-link" href="{{ '/getting-started.html' | relative_url }}">
+      <h3>HTML &amp; CSS</h3>
+      <p>Hand PeachPDF an HTML string and get a vector PDF back. Your templates stay plain HTML you can preview in any browser and hand to anyone who knows the web.</p>
+    </a>
+    <a class="card card-link" href="{{ '/declarative-api.html' | relative_url }}">
+      <h3>Declarative C# API</h3>
+      <p>Prefer code? <code>PdfGenerator.CreateDocument</code> builds pages, tables, lists, and running headers fluently from C# — on the same layout engine, with no HTML or CSS strings.</p>
+    </a>
+    <a class="card card-link" href="{{ '/cli.html' | relative_url }}">
+      <h3>Command line</h3>
+      <p>The <code>peachpdf</code> tool is a single native executable — no .NET runtime needed. Convert files, URLs, MHTML, or stdin, and merge several inputs into one PDF.</p>
+    </a>
+  </div>
 </section>
 
 <section class="landing-section landing-code">
@@ -60,6 +92,28 @@ layout: default
 
 <span class="k">var</span> <span class="n">document</span> <span class="p">=</span> <span class="k">await</span> <span class="n">generator</span><span class="p">.</span><span class="nf">GeneratePdf</span><span class="p">(</span><span class="n">html</span><span class="p">,</span> <span class="n">pdfConfig</span><span class="p">);</span>
 <span class="n">document</span><span class="p">.</span><span class="nf">Save</span><span class="p">(</span><span class="n">stream</span><span class="p">);</span></code></pre></div></div>
+  </div>
+</section>
+
+<section class="landing-section">
+  <h2 class="landing-h2">Runs where you do</h2>
+  <div class="card-grid">
+    <div class="card">
+      <h3>Trimmed and Native AOT</h3>
+      <p>The library is trim-safe and AOT-compatible, so it fits self-contained, single-file, and natively compiled deployments.</p>
+    </div>
+    <div class="card">
+      <h3>Standalone binaries</h3>
+      <p>Prebuilt <a href="{{ '/cli.html' | relative_url }}"><code>peachpdf</code></a> executables for Windows and Linux (x64 and ARM64) and Apple Silicon macOS.</p>
+    </div>
+    <div class="card">
+      <h3>In the browser</h3>
+      <p>The whole pipeline runs under WebAssembly. <a href="demo/">Try the live demo</a> — your document never leaves your machine.</p>
+    </div>
+    <div class="card">
+      <h3>Desktop, server, and mobile</h3>
+      <p>Windows, Linux, macOS, Android, and iOS, on .NET 8 and newer.</p>
+    </div>
   </div>
 </section>
 
@@ -80,7 +134,7 @@ layout: default
     </a>
     <a class="card card-link" href="{{ '/html-css-support.html' | relative_url }}">
       <h3>HTML &amp; CSS Support</h3>
-      <p>The full compatibility matrix of elements, properties, selectors, and at-rules — including gaps and extensions.</p>
+      <p>The full compatibility matrix of elements, properties, selectors, at-rules, and MathML — including gaps and extensions.</p>
     </a>
     <a class="card card-link" href="{{ '/supported-svg-features.html' | relative_url }}">
       <h3>SVG Features</h3>
@@ -90,15 +144,55 @@ layout: default
       <h3>Usage Examples</h3>
       <p>Copy-pasteable recipes: MHTML, HTTP fetching, fonts, tagged PDF output, ASP.NET Core, and Azure Functions.</p>
     </a>
+    <a class="card card-link" href="{{ '/declarative-api.html' | relative_url }}">
+      <h3>Declarative API</h3>
+      <p>Build documents directly from C# — pages, tables, lists, and running headers — with no HTML or CSS strings.</p>
+    </a>
+    <a class="card card-link" href="{{ '/cli.html' | relative_url }}">
+      <h3>Command-Line Tool</h3>
+      <p>Install the standalone <code>peachpdf</code> executable and convert HTML to PDF from any shell or build script.</p>
+    </a>
+    <a class="card card-link" href="{{ '/testing.html' | relative_url }}">
+      <h3>How It's Tested</h3>
+      <p>The test suite, the CI matrix, the coverage gate, and how rendering is verified by rasterizing the output.</p>
+    </a>
     <a class="card card-link" href="{{ '/showcase.html' | relative_url }}">
       <h3>Feature Showcase</h3>
       <p>Real PDFs rendered by the current release at build time, side by side with the exact HTML they came from.</p>
+    </a>
+    <a class="card card-link" href="demo/">
+      <h3>Try It in Your Browser</h3>
+      <p>Drop in an HTML file, an MHTML archive, or a ZIP of a site and get a PDF back — running entirely on your machine.</p>
     </a>
     <a class="card card-link" href="{{ '/api/' | relative_url }}">
       <h3>API Reference</h3>
       <p>Generated reference for every public type and member, always in sync with the latest source.</p>
     </a>
   </div>
+</section>
+
+<section class="landing-section">
+  <h2 class="landing-h2">Built to be trusted</h2>
+  <p class="landing-lede">A PDF can contain exactly the right operators and still look wrong, so PeachPDF is tested on the pixels as well as the bytes.</p>
+  <div class="card-grid">
+    <div class="card">
+      <h3>{% if site.data.tests %}{{ site.data.tests.total }}{% else %}3,000+{% endif %} automated tests</h3>
+      <p>The parser, cascade, every layout engine, painting, SVG, fonts, and PDF output — run against .NET 8, 10, and 11.</p>
+    </div>
+    <div class="card">
+      <h3>Three operating systems</h3>
+      <p>Every change builds and tests on Windows, Linux, and macOS, where font discovery and text metrics differ most.</p>
+    </div>
+    <div class="card">
+      <h3>A 90% coverage gate</h3>
+      <p>New and changed lines must be covered by tests before a pull request can merge.</p>
+    </div>
+    <div class="card">
+      <h3>Verified by rasterizing</h3>
+      <p>Graphics work is checked by rendering the output with two independent engines — PDFium, Chrome's, and MuPDF — not only by inspecting PDF operators.</p>
+    </div>
+  </div>
+  <p class="landing-lede">Read <a href="{{ '/testing.html' | relative_url }}">how PeachPDF is tested</a> →</p>
 </section>
 
 <section class="landing-cta">

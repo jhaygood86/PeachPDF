@@ -26,10 +26,25 @@
       </a>
       <nav class="site-nav" aria-label="Site">
         {%- for item in site.data.nav -%}
-          {%- assign active = false -%}
-          {%- if page.url == item.url -%}{%- assign active = true -%}{%- endif -%}
-          {%- if item.url == '/api/' and page.url contains '/api/' -%}{%- assign active = true -%}{%- endif -%}
-          <a href="{{ item.url | relative_url }}"{% if active %} class="active" aria-current="page"{% endif %}>{{ item.title }}</a>
+          {%- if item.children -%}
+            {%- assign group_active = false -%}
+            {%- for child in item.children -%}
+              {%- if page.url == child.url -%}{%- assign group_active = true -%}{%- endif -%}
+            {%- endfor -%}
+            <details class="nav-menu{% if group_active %} active{% endif %}">
+              <summary>{{ item.title | escape }}</summary>
+              <div class="nav-menu-panel">
+                {%- for child in item.children -%}
+                <a href="{{ child.url | relative_url }}"{% if page.url == child.url %} class="active" aria-current="page"{% endif %}>{{ child.title | escape }}</a>
+                {%- endfor -%}
+              </div>
+            </details>
+          {%- else -%}
+            {%- assign active = false -%}
+            {%- if page.url == item.url -%}{%- assign active = true -%}{%- endif -%}
+            {%- if item.url == '/api/' and page.url contains '/api/' -%}{%- assign active = true -%}{%- endif -%}
+            <a href="{{ item.url | relative_url }}"{% if active %} class="active" aria-current="page"{% endif %}>{{ item.title | escape }}</a>
+          {%- endif -%}
         {%- endfor -%}
         <a class="nav-github" href="https://github.com/jhaygood86/PeachPDF" rel="noopener">GitHub</a>
       </nav>
@@ -59,5 +74,24 @@
       </div>
     </div>
   </footer>
+  <script>
+    // A bare <details> stays open until its summary is clicked again; close the Guides menu on
+    // outside click, Escape, and when the page is restored from the back/forward cache.
+    (function () {
+      var menus = document.querySelectorAll('.nav-menu');
+      if (!menus.length) return;
+      function closeAll(except) {
+        menus.forEach(function (m) { if (m !== except) m.removeAttribute('open'); });
+      }
+      document.addEventListener('click', function (e) { closeAll(e.target.closest('.nav-menu')); });
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        menus.forEach(function (m) {
+          if (m.open) { m.removeAttribute('open'); m.querySelector('summary').focus(); }
+        });
+      });
+      window.addEventListener('pageshow', function () { closeAll(null); });
+    })();
+  </script>
 </body>
 </html>

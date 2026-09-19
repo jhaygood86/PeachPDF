@@ -102,9 +102,16 @@ body {
   align-items: center;
   gap: 0.25rem;
   margin-left: auto;
-  overflow-x: auto;
-  scrollbar-width: none;
   white-space: nowrap;
+}
+
+/* Narrow widths scroll the nav sideways. That is scoped to narrow widths because an overflow
+   container also clips an absolutely-positioned Guides panel; see .nav-menu-panel below. */
+@media (max-width: 960px) {
+  .site-nav {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
 }
 
 .site-nav::-webkit-scrollbar {
@@ -137,6 +144,87 @@ body {
 
 .site-nav .nav-github:hover {
   color: var(--text);
+}
+
+/* Guides dropdown: a <details> element, so it is keyboard- and screen-reader-operable without script. */
+.nav-menu {
+  position: relative;
+}
+
+.nav-menu summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.nav-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.nav-menu summary::after {
+  content: "\25BE";
+  margin-left: 0.3em;
+  font-size: 0.85em;
+}
+
+.nav-menu summary:hover,
+.nav-menu[open] summary {
+  color: var(--text);
+  background: var(--green-soft);
+}
+
+.nav-menu.active summary {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.nav-menu summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.nav-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 20;
+  min-width: 12.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.4rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.nav-menu-panel a {
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.7rem;
+}
+
+/* While .site-nav scrolls sideways it would clip an absolutely-positioned panel. A fixed panel escapes
+   that: its containing block is .site-header (its backdrop-filter makes it one), which sits above
+   .site-nav, so .site-nav's overflow does not clip it. */
+@media (max-width: 960px) {
+  .nav-menu {
+    position: static;
+  }
+
+  .nav-menu-panel {
+    position: fixed;
+    top: var(--header-h);
+    left: 0.75rem;
+    right: 0.75rem;
+    min-width: 0;
+  }
 }
 
 /* ---------- Content ---------- */
