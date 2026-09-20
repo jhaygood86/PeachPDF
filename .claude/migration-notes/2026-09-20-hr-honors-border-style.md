@@ -34,7 +34,11 @@ so:
 ```
 
 An author who was relying on the rewrite to get a visible rule out of `border: none` needs to declare
-the border they want. The rule's height is unaffected either way — only what is painted into it.
+the border they want. The rule's own height is unaffected either way — only what is painted into it.
+One spacing change comes with it: content after `<hr style="border: 0">` now starts at the rule's top
+rather than 2 units below it, which is what `border: none` already did. The two spellings agree now;
+both are governed by the separate flow-advance defect noted in the `hr` row of
+[html-css-support.md](../../docs/html-css-support.md).
 
 **A default `<hr>` is unchanged.** It still paints `#9a9a9a` over `#eeeeee`, at the same width and
 height, wherever it appears. Those two greys used to be declared per side in the UA stylesheet — they
@@ -82,7 +86,28 @@ So a rule that was silently doing nothing may start applying. Nothing that alrea
 matching: an absent attribute still does not match, and `attr()` already substituted the empty string
 for a valueless attribute.
 
-Two further consequences, both of them the spec's own answer rather than a judgement call:
+### It also fixes 22 ways a document could fail to render
+
+This is the larger half of the change in practice. The stored null was not inert: any element that
+actually *read* one of these attributes dereferenced it, and the whole render threw.
+
+| markup | v0.9.19 | now |
+| --- | --- | --- |
+| `<p style>` | `ArgumentNullException` | renders |
+| `<div align>`, `<font color>`, `<font size>`, `<font face>` | `NullReferenceException` | renders |
+| `<td bgcolor>`, `<td align>`, `<td valign>` | `NullReferenceException` | renders |
+| `<p bgcolor>`, `<p background>`, `<body bgcolor>`, `<table bordercolor>` | `NullReferenceException` | renders |
+| `<hr align>`, `<hr color>`, `<img hspace>`, `<img vspace>` | `NullReferenceException` | renders |
+| `<hr size>`, `<td width>`, `<td height>`, `<img height>` | `HtmlRenderException` | renders |
+| `<table cellspacing>`, `<input type>` | `HtmlRenderException` | renders |
+
+A valueless attribute is ordinary in hand-written and legacy HTML, so any document containing one of
+these could not be converted at all. Nothing that rendered before renders differently.
+
+The same attribute on an element that *ignores* it (`<div colspan>`, `<p nowrap>`) always parsed fine,
+which is why this went unnoticed: it is only reachable through the element that consumes it.
+
+### Two semantic changes, both the spec's own answer
 
 - **`<option value>`** exports the empty string in an interactive form, instead of falling back to the
   option's label text. Per the HTML Standard an `option` with a `value` attribute takes that attribute

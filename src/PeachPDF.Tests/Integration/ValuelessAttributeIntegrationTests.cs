@@ -45,6 +45,43 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("rgb(1, 2, 3)", box.Color);
         }
 
+        [Theory]
+        // Each of these threw before the parser stored the empty string: an ArgumentNullException from
+        // the inline-style reparse, a NullReferenceException from a presentational-hint translator
+        // dereferencing the value, or an HtmlRenderException wrapping one from inside layout.
+        [InlineData("<p style>x</p>")]
+        [InlineData("<p bgcolor>x</p>")]
+        [InlineData("<p background>x</p>")]
+        [InlineData("<div align>x</div>")]
+        [InlineData("<body bgcolor>x</body>")]
+        [InlineData("<font color>x</font>")]
+        [InlineData("<font size>x</font>")]
+        [InlineData("<font face>x</font>")]
+        [InlineData("<img height>")]
+        [InlineData("<img hspace>")]
+        [InlineData("<img vspace>")]
+        [InlineData("<hr size>")]
+        [InlineData("<hr align>")]
+        [InlineData("<hr color>")]
+        [InlineData("<input type>")]
+        [InlineData("<table cellspacing><tr><td>x</td></tr></table>")]
+        [InlineData("<table bordercolor><tr><td>x</td></tr></table>")]
+        [InlineData("<table><tr><td bgcolor>x</td></tr></table>")]
+        [InlineData("<table><tr><td align>x</td></tr></table>")]
+        [InlineData("<table><tr><td valign>x</td></tr></table>")]
+        [InlineData("<table><tr><td width>x</td></tr></table>")]
+        [InlineData("<table><tr><td height>x</td></tr></table>")]
+        public async Task ValuelessAttribute_OnAnElementThatConsumesIt_DoesNotThrow(string markup)
+        {
+            // The null was only reachable through an element that actually READS the attribute - the
+            // same attribute on a box that ignores it parses fine, which is what makes this easy to
+            // probe for and miss. Every case here is one that threw on the release before the fix.
+            var exception = await Record.ExceptionAsync(async () => await LayoutHarness.LayoutAsync(
+                $"<!DOCTYPE html><html><body>{markup}</body></html>"));
+
+            Assert.Null(exception);
+        }
+
         [Fact]
         public async Task AbsentAttribute_StillDoesNotMatch()
         {

@@ -107,11 +107,35 @@ author can see — both spec-correct, both in the migration note: `<option value
 of falling back to the option's label, and `<mfenced open>` yields no open fence instead of the default
 `(`.
 
-Two things that null did *not* do, checked rather than assumed. It did not crash anything: 23 valueless
-attributes (`style`, `class`, `id`, `href`, `src`, `colspan`, `rowspan`, `border`, `size`, `align`,
-`nowrap`, `cellpadding`, `start`, `bgcolor`, …) all parse and lay out on `main`. And it did not change
-any `<hr>` height: 13 height/border combinations measure identically on both sides. `attr()` is
-unaffected too, since `CssContentEngine` already passes `""` as its own default.
+**That null was also throwing exceptions, and this fixes 22 of them.** Any element that actually
+*reads* one of these attributes dereferenced the null: `<p style>` threw `ArgumentNullException` out of
+the inline-style reparse, `<font color>` / `<div align>` / `<td bgcolor>` / `<hr align>` threw
+`NullReferenceException` out of their presentational-hint translators, and `<hr size>` /
+`<td width>` / `<table cellspacing>` / `<input type>` surfaced as `HtmlRenderException` from inside
+layout. A document containing any of them failed to render at all on v0.9.19; it renders now. 22 of 39
+probed snippets throw on `main` and none do here, each one pinned by an `[InlineData]` in
+`ValuelessAttributeIntegrationTests`.
+
+The reason this is easy to *miss* rather than easy to see is that the null is only reachable through an
+element that consumes the attribute. `<div colspan>`, `<div size>`, `<p nowrap>` all parse fine,
+because nothing reads them — so a probe that sprays valueless attributes across arbitrary elements
+comes back clean.
+
+`attr()` is unaffected, since `CssContentEngine` already passes `""` as its own default, and no `<hr>`
+height changes (15 height/border combinations measure identically against a `main` worktree).
+
+### How the first version of this note got that wrong
+
+It claimed the null "did not crash anything", from a probe whose baseline was produced with
+`git stash -- src/PeachPDF`. **`git stash` cannot restore a file whose deletion is already committed**,
+so on a branch that has already committed a deletion the stash is a partial no-op and the "before"
+column is really the branch again. Both columns came back identical, which reads as confirmation and
+is actually the tell. The same trap produced a self-inconsistent UA-colour comparison earlier in this
+same change.
+
+Use `git worktree add <dir> main` for any before/after measurement on a branch that deletes or renames
+a file. Two false conclusions in one change came from not doing that; see
+[.claude/invariants/tooling-a-main-baseline-needs-a-worktree-not-a-stash.md](../invariants/tooling-a-main-baseline-needs-a-worktree-not-a-stash.md).
 
 ## A separate defect found while verifying, deliberately not fixed here: issue #1229
 
