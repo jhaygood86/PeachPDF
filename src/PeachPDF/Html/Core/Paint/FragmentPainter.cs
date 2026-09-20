@@ -25,9 +25,11 @@ namespace PeachPDF.Html.Core.Paint
     /// <para>
     /// One painter instance paints one page. Per-page state — which fragments have already been drawn
     /// — is the painter's own, so nothing about painting is recorded on the box tree or the container.
-    /// Replaced elements (images, inline SVG, <c>&lt;hr&gt;</c>, list markers, repeated table
-    /// headers) are painted by an <see cref="IFragmentContentPainter"/> selected from the box's type;
-    /// see <see cref="FragmentContentPainters"/>.
+    /// Replaced elements (images, inline SVG, form fields), list markers and repeated table headers
+    /// are painted by an <see cref="IFragmentContentPainter"/> selected from the box's type; see
+    /// <see cref="FragmentContentPainters"/>. A box whose content the generic paint CAN express has
+    /// no painter — an <c>&lt;hr&gt;</c>, whose rule is simply its own border, is the example to
+    /// reach for before adding one.
     /// </para>
     /// </remarks>
     internal sealed partial class FragmentPainter(HtmlContainerInt container)

@@ -42,8 +42,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// Discriminated by box type, the same way <c>FragmentContentPainters.For</c> selects the painter
         /// that draws these. Only <c>&lt;object&gt;</c> can answer no — it is replaced only once its
         /// <c>data</c> resource resolves to something renderable, which measurement decides.
-        /// <c>&lt;hr&gt;</c> and a list marker have their own content painters but are not replaced
-        /// elements, and they are never tall enough for the distinction to matter anyway.
+        /// A list marker has a content painter of its own but is not a replaced element, and is never
+        /// tall enough for the distinction to matter anyway.
         /// <c>CssBoxFormField</c> (<c>&lt;input&gt;</c>/<c>&lt;select&gt;</c>) is not a replaced
         /// element per spec either, but is included here anyway: an AcroForm widget annotation names
         /// exactly one page rect, so a form field must never fragment across a page break regardless

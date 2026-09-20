@@ -11,9 +11,10 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// The per-box-type paint dispatch: <see cref="FragmentContentPainters.For"/> picks the painter,
-    /// and the ones the other paint suites don't already drive (<c>&lt;iframe&gt;</c>,
-    /// <c>&lt;hr&gt;</c>) draw what they should. Asserted on the ordered
-    /// <see cref="TestRecordingGraphics.Log"/>, per this repo's painting-test conventions.
+    /// the one the other paint suites don't already drive (<c>&lt;iframe&gt;</c>) draws what it should,
+    /// and a box that needs no painter at all (<c>&lt;hr&gt;</c>) is dispatched to the generic paint.
+    /// Asserted on the ordered <see cref="TestRecordingGraphics.Log"/>, per this repo's painting-test
+    /// conventions.
     /// </summary>
     public class FragmentContentPainterTests
     {
@@ -30,7 +31,6 @@ namespace PeachPDF.Tests.Integration
         [InlineData("<object id='el' data='missing.png'>fallback</object>", typeof(ObjectFragmentPainter))]
         [InlineData("<svg id='el' width='10' height='10'></svg>", typeof(SvgFragmentPainter))]
         [InlineData("<iframe id='el' width='40' height='30'></iframe>", typeof(FrameFragmentPainter))]
-        [InlineData("<hr id='el'>", typeof(HrFragmentPainter))]
         public async Task For_ReplacedBox_PicksItsOwnPainter(string body, System.Type expected)
         {
             var (root, _) = await BuildAndLayout(Wrap(body));
@@ -57,10 +57,22 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task Hr_TallerThanTheRule_FillsItsBackground()
+        public async Task For_Hr_HasNoContentPainter()
         {
-            // An <hr> tall enough to have an interior fills it with background-color before drawing
-            // the border sides that make up the rule itself.
+            // An <hr> is an ordinary box whose rule IS its border, so it paints through the generic
+            // path like any other block. It used to have a painter of its own that drew each side as a
+            // flat polygon, which silently discarded border-style (issue #1225).
+            var (root, _) = await BuildAndLayout(Wrap("<hr id='el'>"));
+
+            Assert.Null(FragmentContentPainters.For(FindById(root, "el")!));
+        }
+
+        [Fact]
+        public async Task Hr_WithAnInterior_FillsItsBackground()
+        {
+            // A rule is an ordinary box, so a background on one paints like any other box's - over the
+            // padding box, under the border. Nothing about it is conditional on the rule's height, which
+            // the painter this box used to have made it (its background needed rect.Height > 2).
             var (root, container) = await BuildAndLayout(Wrap(
                 "<hr id='el' style='height: 20pt; background: rgb(10,20,30); border: none'>"));
 

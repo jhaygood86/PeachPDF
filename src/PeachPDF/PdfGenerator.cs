@@ -1344,9 +1344,9 @@ namespace PeachPDF
         /// "Footnotes" section), then each footnote body. Mirrors <see cref="PaintElementMarginBoxes"/>
         /// exactly for the bodies (real, laid-out <see cref="CssBox"/> subtrees reused unmodified through
         /// <see cref="FragmentPainter.PaintFragment"/> - backgrounds/borders/nested styling and tagged-PDF
-        /// structure attach for free, same reasoning) - the divider alone is drawn directly, the same
-        /// simple filled-rectangle primitive <see cref="PeachPDF.Html.Core.Paint.Content.HrFragmentPainter"/>
-        /// uses for <c>&lt;hr&gt;</c>.
+        /// structure attach for free, same reasoning) - the divider alone is drawn directly, as a simple
+        /// filled rectangle: it is a UA-drawn separator with no box of its own, not an <c>&lt;hr&gt;</c>
+        /// (which is an ordinary box and paints its rule through the normal border path).
         /// </summary>
         private static void PaintFootnoteArea(XGraphics g, RAdapter adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
         {

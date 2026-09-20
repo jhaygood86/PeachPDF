@@ -6,8 +6,10 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// <summary>
     /// Paints the content of one kind of box that the generic box paint
     /// (<see cref="FragmentPainter.PaintBoxContent"/>) cannot express — a replaced element, a list
-    /// marker, an <c>&lt;hr&gt;</c>, a repeated table header. Selected by box type; see
-    /// <see cref="FragmentContentPainters.For"/>.
+    /// marker, a repeated table header. Selected by box type; see
+    /// <see cref="FragmentContentPainters.For"/>. "Cannot express" is the whole bar: an
+    /// <c>&lt;hr&gt;</c> had one of these for years purely to draw its own border by hand, which is
+    /// how it came to be the one box in the document that ignored <c>border-style</c> (issue #1225).
     /// </summary>
     /// <remarks>
     /// This is the extension seam replaced-element boxes used to provide by overriding a virtual paint

@@ -14,7 +14,6 @@ namespace PeachPDF.Html.Core.Paint.Content
         private static readonly SvgFragmentPainter SvgPainter = new();
         private static readonly MathFragmentPainter MathPainter = new();
         private static readonly FrameFragmentPainter FramePainter = new();
-        private static readonly HrFragmentPainter HrPainter = new();
         private static readonly MarkerFragmentPainter MarkerPainter = new();
         private static readonly FormFieldFragmentPainter FormFieldPainter = new();
 
@@ -30,7 +29,6 @@ namespace PeachPDF.Html.Core.Paint.Content
             CssBoxSvg => SvgPainter,
             CssBoxMath => MathPainter,
             CssBoxFrame => FramePainter,
-            CssBoxHr => HrPainter,
             CssBoxMarker => MarkerPainter,
             // Only when interactive forms are enabled AND the box actually resolves to a field kind -
             // otherwise this falls through to the generic path, preserving the flag-off static box

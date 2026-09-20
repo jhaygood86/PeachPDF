@@ -320,6 +320,21 @@ static string TriangleSwatch(string desc, string colors) =>
     $"<div class=\"css\">width/height: 0; border-color: {colors}</div>" +
     "</td>";
 
+/// <summary>
+/// A &lt;hr&gt; beside the zero-height &lt;div&gt; that is its exact equivalent. The rule IS a border, so
+/// the pair has to be indistinguishable - and was not, until the rule stopped being painted by a
+/// per-side path of its own that ignored border-style entirely.
+/// </summary>
+static string HrStyleSwatch(string desc, string inlineCss) =>
+    "<td>" +
+    "<div class=\"hrbox\">" +
+    $"<hr style=\"{inlineCss}\">" +
+    $"<div style=\"height: 0; {inlineCss}\"></div>" +
+    "</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">hr / div, {inlineCss}</div>" +
+    "</td>";
+
 static string RadiusBorderSwatch(string desc, string style, string width, string radius) =>
     "<td>" +
     $"<div class=\"bsbox\" style=\"border: {width} {style} #4a90d9; border-radius: {radius}\"></div>" +
@@ -5885,6 +5900,7 @@ const string BorderStyleCss = """
     .phasebox { position: absolute; left: 0; top: 0; height: 48px; border: 14px #d94a4a; border-style: double dotted inset outset; border-radius: 28px; background: #eee; transform: scale(.5); transform-origin: top left }
     .phasebox.second { left: 140px }
     .wbox { height: 16px; background: #eee; margin-bottom: 1px }
+    .hrbox { height: 58px } .hrbox hr, .hrbox div { margin: 0 0 12px }
     .wlabel { font-size: 6pt; color: #888; margin-bottom: 4px }
     .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
     .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
@@ -5974,6 +5990,25 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
         SideSwatch("mixed styles", "border: 14px #4a90d9; border-style: solid dashed double dotted"),
         SideSwatch("mixed everything",
             "border-color: #d94a4a #4ad98a #4a90d9 #d9c74a; border-style: double solid groove dashed; border-width: 18px 6px 14px 10px")
+    ) +
+
+    // A horizontal rule is an ordinary box whose border IS the rule, so every border-style applies to
+    // it exactly as it does to the zero-height div paired beneath each one here. The two are drawn by
+    // the same code and must be indistinguishable; the rule used to be painted by a path of its own
+    // that filled each side with the declared color flat, so every bevelled, patterned and double rule
+    // below rendered as a solid slab.
+    "<h2>The same styles on a horizontal rule (hr above, equivalent div below)</h2>" +
+    Row(
+        HrStyleSwatch("inset", "border: 4px inset #808080"),
+        HrStyleSwatch("outset", "border: 4px outset #808080"),
+        HrStyleSwatch("groove", "border: 6px groove #808080"),
+        HrStyleSwatch("ridge", "border: 6px ridge #808080")
+    ) +
+    Row(
+        HrStyleSwatch("double", "border: 6px double #4a90d9"),
+        HrStyleSwatch("dashed", "border: 3px dashed #d94a4a"),
+        HrStyleSwatch("dotted", "border: 3px dotted #4ad98a"),
+        HrStyleSwatch("solid", "border: 2px solid #4a90d9")
     ) +
 
     // The classic zero-content "border triangle": four mitred trapezoids meeting at the box's center.

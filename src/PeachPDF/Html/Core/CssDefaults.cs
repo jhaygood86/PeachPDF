@@ -90,6 +90,12 @@ namespace PeachPDF.Html.Core
             td, th          { vertical-align: inherit }
             s, strike, del  { text-decoration: line-through }
             hr              { border: 1px inset; }
+            /* HTML Standard 15.3.6: a rule carrying either presentational attribute is flat, not
+               engraved - the attribute is there to colour the rule, and a bevel derives two faces
+               from that colour instead of using it. Specificity (0,1,1) beats the bare hr rule
+               above whatever their order. */
+            hr[color],
+            hr[noshade]     { border-style: solid; }
             ol, ul, dir,
             menu, dd        { margin-left: 40px }
             ol              { list-style-type: decimal }
