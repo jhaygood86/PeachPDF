@@ -7,6 +7,7 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 
 namespace PeachPDF.Tests.Html.Core.Dom
@@ -2095,10 +2096,16 @@ Assert.NotNull(tbody);
 
             var desiredWidth = (minSum + maxSum) / 2;
 
+            // Invariant culture, deliberately: under a comma-decimal culture (nl-NL, de-DE, ...) the
+            // interpolated width reaches the parser as "213,98pt", which is invalid CSS, so the table
+            // silently falls back to width:auto and lays out at exactly maxSum - a spurious "overflowed
+            // its specified width" failure that only reproduces off CI's invariant-culture agents.
+            var desiredWidthCss = desiredWidth.ToString(CultureInfo.InvariantCulture);
+
             var realHtml = $@"
 <!DOCTYPE html>
 <html><head><style>
-    table {{ border-collapse: separate; border-spacing: 0; border: 0; margin: 0; font-size: 10pt; width: {desiredWidth}pt }}
+    table {{ border-collapse: separate; border-spacing: 0; border: 0; margin: 0; font-size: 10pt; width: {desiredWidthCss}pt }}
     th {{ padding: 0; border: 0 }}
 </style></head>
 <body>
