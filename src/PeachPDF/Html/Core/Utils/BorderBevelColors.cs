@@ -13,14 +13,16 @@ namespace PeachPDF.Html.Core.Utils
     /// CSS 2.1 §8.5.3 leaves the exact shading UA-defined, so "correct" here means "what a reader
     /// comparing against a browser expects". These transforms were derived by sampling Chrome's own
     /// rasterization (Blink's <c>Color::Dark</c>/<c>Color::Light</c> and
-    /// <c>CalculateBorderStyleColor</c>) and reproduce it exactly, including the integer truncation and
+    /// <c>CalculateInsetOutsetColor</c>) and reproduce it exactly, including the integer truncation and
     /// the 255.99998 scale factor Blink uses - see <see cref="Dark"/>/<see cref="Light"/>.
     ///
     /// The part that is not obvious, and that a naive "just darken one pair of sides" implementation
-    /// gets visibly wrong, is <see cref="Shade"/>'s fallback: a color at or near black cannot be
-    /// darkened into a visible edge, so both faces lighten instead, one step apart. Without it a plain
-    /// <c>border: 2px inset black</c> - which is what a UA-default <c>&lt;fieldset&gt;</c>/
-    /// <c>&lt;table border=1&gt;</c> amounts to - paints black-on-black and the bevel disappears.
+    /// gets visibly wrong, is <see cref="Shade"/>'s two ends. A color at or near black cannot be
+    /// darkened into a visible edge, so both faces lighten instead, one step apart: without that, a
+    /// bare <c>border: 2px inset</c> over default black text - where <c>border-color</c>'s initial
+    /// <c>currentColor</c> resolves to black - would paint black-on-black and the bevel would vanish.
+    /// A color at or near white cannot be lightened into one either, so there the lit face keeps the
+    /// declared color rather than clipping to white.
     /// </remarks>
     internal static class BorderBevelColors
     {
@@ -35,16 +37,25 @@ namespace PeachPDF.Html.Core.Utils
         private const double ShadeStep = 0.33;
 
         /// <summary>
-        /// The WCAG contrast ratio a color must still have against its own darkened form for darkening
-        /// to read as an edge at all. Measured from Chrome: a gray of 32 (ratio 1.289) lightens, a gray
-        /// of 33 (ratio 1.304) darkens.
+        /// At or below this relative luminance a color is too dark to darken into a visible edge, and
+        /// both faces lighten instead. It is the luminance of <c>rgb(32, 32, 32)</c>: a gray of 32
+        /// lightens, a gray of 33 darkens.
         /// </summary>
-        private const double MinBevelContrastRatio = 1.3;
+        private const double NearBlackLuminance = 0.014443844;
+
+        /// <summary>
+        /// Above this relative luminance a color is too light to lighten into a visible edge, and the
+        /// lit face keeps the declared color instead. It is the luminance of <c>rgb(235, 235, 235)</c>,
+        /// and the comparison is strict: a gray of 235 still lightens, a gray of 236 does not.
+        /// </summary>
+        private const double NearWhiteLuminance = 0.83077;
 
         /// <summary>
         /// The darkened face of a bevel: scales every channel so the brightest one drops by
-        /// <see cref="ShadeStep"/>. Black (and anything whose channels all scale to zero) stays black -
-        /// <see cref="Shade"/> is what notices that and lightens instead.
+        /// <see cref="ShadeStep"/>. A color dark enough that every channel scales to zero comes out
+        /// black. That on its own is not what makes <see cref="Shade"/> lighten instead - it decides on
+        /// the declared color's luminance (see <see cref="NearBlackLuminance"/>), so a dark chromatic
+        /// color above the threshold keeps the black this returns.
         /// </summary>
         internal static RColor Dark(RColor c)
         {
@@ -70,19 +81,27 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
-        /// One face of a bevel. Normally the darkened face is <see cref="Dark"/> and the lit face is
-        /// <see cref="Light"/>; when darkening would leave too little contrast to read as an edge (see
-        /// <see cref="MinBevelContrastRatio"/>) both faces lighten instead, the lit one twice, so they
-        /// stay distinguishable from each other.
+        /// One face of a bevel, mirroring Blink's <c>CalculateInsetOutsetColor</c>. Normally the
+        /// darkened face is <see cref="Dark"/> and the lit face is <see cref="Light"/>. At either end of
+        /// the luminance range one of those stops producing a visible edge, so the rule changes: at or
+        /// below <see cref="NearBlackLuminance"/> both faces lighten, the lit one twice, so they stay
+        /// distinguishable from each other; above <see cref="NearWhiteLuminance"/> the lit face keeps
+        /// the declared color, because lightening it would only clip toward white.
         /// </summary>
         internal static RColor Shade(RColor color, bool darken)
         {
-            var dark = Dark(color);
-            if (ContrastRatio(color, dark) >= MinBevelContrastRatio)
-                return darken ? dark : Light(color);
+            var luminance = RelativeLuminance(color);
 
-            var light = Light(color);
-            return darken ? light : Light(light);
+            if (luminance <= NearBlackLuminance)
+            {
+                var light = Light(color);
+                return darken ? light : Light(light);
+            }
+
+            if (darken)
+                return Dark(color);
+
+            return luminance > NearWhiteLuminance ? color : Light(color);
         }
 
         /// <summary>
@@ -112,16 +131,10 @@ namespace PeachPDF.Html.Core.Utils
         private static int Channel(byte value, double multiplier) =>
             Math.Clamp((int)(multiplier * (value / 255.0) * ChannelScale), 0, 255);
 
-        /// <summary>WCAG 2 contrast ratio between two opaque colors.</summary>
-        private static double ContrastRatio(RColor a, RColor b)
-        {
-            var la = RelativeLuminance(a);
-            var lb = RelativeLuminance(b);
-            return la > lb
-                ? (la + 0.05) / (lb + 0.05)
-                : (lb + 0.05) / (la + 0.05);
-        }
-
+        /// <summary>
+        /// WCAG 2 relative luminance. Alpha plays no part: Blink thresholds the declared color, not
+        /// whatever it will end up composited over.
+        /// </summary>
         private static double RelativeLuminance(RColor c) =>
             0.2126 * Linearize(c.R) + 0.7152 * Linearize(c.G) + 0.0722 * Linearize(c.B);
 

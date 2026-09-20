@@ -5942,6 +5942,17 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
         BorderColorSwatch("ridge, black", "ridge", "#000")
     ) +
 
+    // The mirror case at the other end: a color too light to lighten visibly keeps the declared color
+    // on its lit pair instead of clipping to white, so the bevel still reads as two distinct faces.
+    // These sit on a mid-grey fill because a near-white bevel is invisible against the usual #eee.
+    "<h2>...and colors too light to lighten</h2>" +
+    Row(
+        SideSwatch("inset, near-white", "border: 16px inset #f0f0f0; background: #888"),
+        SideSwatch("outset, near-white", "border: 16px outset #f0f0f0; background: #888"),
+        SideSwatch("groove, near-white", "border: 16px groove #f0f0f0; background: #888"),
+        SideSwatch("ridge, white", "border: 16px ridge #fff; background: #888")
+    ) +
+
     // Each style scales differently: double needs 3px before its three bands are a whole unit each,
     // and a dot/dash pattern's period is a multiple of the width, so a thin edge carries many more of
     // them. An edge too short to hold two dashes degenerates to solid.

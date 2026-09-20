@@ -200,6 +200,33 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(inset ? light : dark, pairs[1].Color); // one connected bottom + right path
         }
 
+        [Theory]
+        [InlineData("inset", true)]
+        [InlineData("outset", false)]
+        public async Task BorderStyleInsetOutset_NearWhite_PaintsTheLitPairAtTheDeclaredColor(string style, bool inset)
+        {
+            // Same rule as the outline case: above the near-white luminance threshold the lit pair keeps
+            // the declared color, because Light() would only clip it to white and erase the bevel.
+            // Asserting the literal colors rather than BorderBevelColors.Shade keeps this a check of the
+            // rule instead of a restatement of it.
+            var (root, container) = await BuildAndLayout(Wrap(
+                $"<div id='b' style='width:40px; height:40px; border: 8px {style} rgb(240,240,240)'>x</div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var pairs = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(path => !path.Stroked)
+                .ToList();
+            Assert.Equal(2, pairs.Count);
+
+            var declared = RColor.FromArgb(240, 240, 240);
+            var dark = RColor.FromArgb(156, 156, 156);
+            Assert.Equal(inset ? dark : declared, pairs[0].Color); // top + left
+            Assert.Equal(inset ? declared : dark, pairs[1].Color); // bottom + right
+        }
+
         [Fact]
         public void BorderBevelColors_NearBlack_LightensBothFacesRatherThanVanishing()
         {
@@ -210,11 +237,37 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(RColor.FromArgb(84, 84, 84), BorderBevelColors.Shade(black, darken: true));
             Assert.Equal(RColor.FromArgb(168, 168, 168), BorderBevelColors.Shade(black, darken: false));
 
-            // The fallback is a contrast test, not an "is it black" test: a dark-but-not-black color
-            // whose darkened form still reads as an edge keeps darkening (gray 33 in Chrome), while one
-            // just below the threshold lightens (gray 32).
+            // The fallback is a luminance test, not an "is it black" test: a dark-but-not-black color
+            // above the threshold keeps darkening (gray 33 in Chrome), while one at or below it lightens
+            // (gray 32, whose luminance is the threshold itself).
             Assert.Equal(RColor.FromArgb(0, 0, 0), BorderBevelColors.Shade(RColor.FromArgb(33, 33, 33), darken: true));
             Assert.Equal(RColor.FromArgb(116, 116, 116), BorderBevelColors.Shade(RColor.FromArgb(32, 32, 32), darken: true));
+
+            // A chromatic color can sit above the luminance threshold while still having very little
+            // contrast against its own darkened form - Chrome darkens it to black anyway. This is the
+            // case a WCAG-contrast-ratio approximation of the threshold gets wrong.
+            Assert.Equal(RColor.FromArgb(0, 0, 0), BorderBevelColors.Shade(RColor.FromArgb(0, 30, 76), darken: true));
+        }
+
+        [Fact]
+        public void BorderBevelColors_NearWhite_KeepsTheDeclaredColorOnTheLitFace()
+        {
+            // Lightening a near-white color only clips it to white, which erases the lit/declared
+            // distinction the bevel is made of, so Chrome leaves the lit face at the declared color.
+            // Sampled from Chrome's rendering of `border: 12px outset #f0f0f0`.
+            var nearWhite = RColor.FromArgb(240, 240, 240);
+            Assert.Equal(nearWhite, BorderBevelColors.Shade(nearWhite, darken: false));
+            Assert.Equal(RColor.FromArgb(156, 156, 156), BorderBevelColors.Shade(nearWhite, darken: true));
+
+            // The threshold is the luminance of gray 235 and the comparison is strict, so 235 is the
+            // last gray that still lightens and 236 the first that does not.
+            Assert.Equal(RColor.FromArgb(255, 255, 255), BorderBevelColors.Shade(RColor.FromArgb(235, 235, 235), darken: false));
+            Assert.Equal(RColor.FromArgb(236, 236, 236), BorderBevelColors.Shade(RColor.FromArgb(236, 236, 236), darken: false));
+
+            // White itself is the degenerate case the rule exists for.
+            var white = RColor.FromArgb(255, 255, 255);
+            Assert.Equal(white, BorderBevelColors.Shade(white, darken: false));
+            Assert.Equal(RColor.FromArgb(171, 171, 171), BorderBevelColors.Shade(white, darken: true));
         }
 
         [Fact]
