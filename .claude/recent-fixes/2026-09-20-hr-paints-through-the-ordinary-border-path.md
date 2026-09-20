@@ -73,12 +73,26 @@ default rule should land on `#2c2c2c`/`#d4d4d4`; implementing Blink's actual rul
 now for, and it is the only way to also fix an author-set `hr { border-style: dashed }`, which takes
 `#eee` here where Chrome takes gray.
 
-**`hr[color], hr[noshade] { border-style: solid; border-color: gray }`.** The HTML Standard (§15.3.11 —
-15.3.6 is "Sections and headings") pairs that rule with the `border-style: inset` the sheet already had.
-While the rule painted flat regardless, `noshade` was right by accident; the moment `border-style`
-started working it began rendering engraved, the exact thing the attribute exists to turn off. `gray`
-because a flat rule derives nothing from a bevel, so the spec's own `color: gray` stands — and flat
-`#808080` is what Chrome paints for `<hr noshade>`, which `main` does not.
+**`hr[color], hr[noshade] { border-style: solid; border-color: currentcolor }`.** The HTML Standard
+(§15.3.11 — 15.3.6 is "Sections and headings") pairs that rule with the `border-style: inset` the sheet
+already had. While the rule painted flat regardless, `noshade` was right by accident; the moment
+`border-style` started working it began rendering engraved, the exact thing the attribute exists to
+turn off.
+
+`currentcolor`, plus the spec's own `hr { color: gray }`, rather than a declared grey — and this is the
+part worth reading twice, because the first attempt at this rule *did* declare the grey, which is the
+same mistake as the per-side greys above one size down. A flat rule derives nothing from a bevel, so
+there is no reason to resolve its colour by hand, and resolving it by hand is precisely what stopped
+`<hr color=red>` painting red: `color` has been a presentational hint for the `color` property in
+`DomParser.TranslateAttributes` the whole time, and the UA sheet was pinning `border-color` over the
+top of it. With `currentcolor` the chain reconnects — `<hr color=red>` is red, `<hr noshade>` is flat
+`#808080`, both matching Chrome, and neither did on `main`.
+
+The `color: gray` matters for a second reason: it stops an inherited colour reaching a rule, so
+`<div style="color: green"><hr></div>` stays grey. Without it, the flat arm would inherit green.
+
+**The generalisable bit**: a UA sheet declaration that names a colour the engine could have derived is
+a bug waiting for the derivation to start working. Both halves of this change were that same bug.
 
 **Valueless attributes were stored as null, so `[attr]` never matched them.**
 `HtmlParser.ParseHtmlTag` did `x.First().Value!` over the token's attributes; the tokenizer reports a

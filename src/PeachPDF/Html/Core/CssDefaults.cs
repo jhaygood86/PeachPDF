@@ -103,11 +103,15 @@ namespace PeachPDF.Html.Core
                double darkening the moment it stopped (issue #1225).
 
                A rule carrying either presentational attribute is flat rather than engraved, so no
-               bevel derives anything and the spec's own gray stands. Specificity (0,1,1) beats the
-               bare hr rule whatever their order. */
-            hr              { border: 1px inset #eee; }
+               bevel derives anything and border-color can go back to currentcolor - which is what
+               makes <hr color=red> red, since `color` is a presentational hint for the color
+               property (DomParser.TranslateAttributes). Declaring the resolved grey here instead
+               would paint every <hr color> grey. hr's own `color: gray` above is what a bare
+               <hr noshade> then resolves to, and is also why an inherited color does not reach a
+               rule. Specificity (0,1,1) beats the bare hr rule whatever their order. */
+            hr              { color: gray; border: 1px inset #eee; }
             hr[color],
-            hr[noshade]     { border-style: solid; border-color: gray; }
+            hr[noshade]     { border-style: solid; border-color: currentcolor; }
             ol, ul, dir,
             menu, dd        { margin-left: 40px }
             ol              { list-style-type: decimal }

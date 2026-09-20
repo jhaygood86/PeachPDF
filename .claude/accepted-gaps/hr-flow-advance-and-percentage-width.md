@@ -62,9 +62,12 @@ That keeps a default rule byte-identical to a browser's and to v0.9.19's.
 
 **The residue this leaves**, and the reason it is written down: an author who sets `hr { border-style:
 dashed }` and nothing else gets `#eee`, where Chrome gives gray. A rule's declared base is only the
-right colour while it is being beveled. Nothing short of implementing Blink's actual rule fixes that —
-which is also what would fix the general `<div style="border: 2px inset">` case, and is why #1226's
-scope is now the cascade signal rather than the `hr` colours it was originally filed about.
+right colour while it is being beveled, and the `hr[color], hr[noshade]` arm hands the other
+non-beveled case back to `currentcolor` precisely so it does not have the same problem — but an
+author-set `border-style` cannot be enumerated that way. Nothing short of implementing Blink's actual
+rule fixes it, which is also what would fix the general `<div style="border: 2px inset">` case, and is
+why #1226's scope is now the cascade signal rather than the `hr` colours it was originally filed
+about.
 
 **Do not "simplify"** `hr { border: 1px inset #eee }` to the spec's literal `color: gray` +
 `currentColor` while this is open. It reads like the more correct thing and it repaints every default

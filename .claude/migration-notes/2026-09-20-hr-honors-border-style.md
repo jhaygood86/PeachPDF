@@ -56,11 +56,15 @@ Either presentational attribute makes the rule flat rather than engraved, which 
 | | v0.9.19 | now | Chrome |
 | --- | --- | --- | --- |
 | `<hr noshade>` | `#9a9a9a` / `#eeeeee` | `#808080` flat | `#808080` flat |
-| `<hr color="red">` | `#9a9a9a` / `#eeeeee` | `#808080` flat | red, flat |
+| `<hr color="red">` | `#9a9a9a` / `#eeeeee` | red, flat | red, flat |
 
-`<hr noshade>` now matches a browser exactly. `<hr color>` gets the right *shape* but still not the
-colour, because the `color` attribute is not yet wired up as a presentational hint for the `color`
-property — that is unchanged from v0.9.19, which did not honour it either.
+Both now match a browser. **`color` has an effect on a rule for the first time**: the flat rule takes
+`border-color: currentcolor`, so it resolves through the `color` property, and the `color` attribute
+is a presentational hint for that property. The attribute was always being applied — the UA sheet
+simply pinned an explicit `border-color`, so the border never consulted it.
+
+The rule also carries the spec's own `color: gray` now, so an inherited `color` still does not reach
+it (`<div style="color: green"><hr></div>` is unchanged). That matches a browser too.
 
 ## A valueless HTML attribute is now visible to `[attr]` selectors
 

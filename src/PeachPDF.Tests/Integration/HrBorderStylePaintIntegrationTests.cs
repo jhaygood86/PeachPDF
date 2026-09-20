@@ -139,17 +139,25 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Theory]
-        [InlineData("<hr noshade>")]
-        [InlineData("<hr color='red'>")]
-        [InlineData("<hr noshade color='red'>")]
-        public async Task HrWithAPresentationalColorAttribute_IsFlatNotEngraved(string markup)
+        [InlineData("<hr noshade>", 128, 128, 128)]
+        [InlineData("<hr color='red'>", 255, 0, 0)]
+        [InlineData("<hr color='#0000ff'>", 0, 0, 255)]
+        [InlineData("<hr noshade color='red'>", 255, 0, 0)]
+        public async Task HrWithAPresentationalColorAttribute_PaintsOneFlatColor(
+            string markup, int r, int g, int b)
         {
             // HTML Standard 15.3.11 pairs the UA sheet's `hr { border-style: inset }` with
             // `hr[color], hr[noshade] { border-style: solid }`. That second rule only started to
             // matter once the rule honored border-style at all - before that every rule painted flat,
-            // so `noshade` was right by accident. The flat rule carries the spec's own `color: gray`,
-            // which is the byte Chrome paints for `<hr noshade>`.
-            var (root, _) = await LayoutHarness.LayoutAsync(
+            // so `noshade` was right by accident.
+            //
+            // The colour half is what makes `color` work: the flat rule takes `border-color:
+            // currentcolor`, so it resolves through the `color` property - the UA sheet's own
+            // `color: gray` for `noshade`, and the `color` attribute's value (a presentational hint
+            // for `color`, applied by DomParser.TranslateAttributes) for `<hr color>`. Declaring the
+            // resolved grey here instead would paint every `<hr color>` grey, which is what both this
+            // sheet and its predecessor used to do.
+            var (root, container) = await LayoutHarness.LayoutAsync(
                 $"<!DOCTYPE html><html><body>{markup.Replace("<hr", "<hr id='el'")}</body></html>");
 
             var hr = LayoutHarness.FindById(root, "el")!;
@@ -158,7 +166,30 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(LineStyle.Solid, hr.BorderRightStyle.Value);
             Assert.Equal(LineStyle.Solid, hr.BorderBottomStyle.Value);
             Assert.Equal(LineStyle.Solid, hr.BorderLeftStyle.Value);
-            Assert.Equal(Gray, hr.ActualBorderTopColor);
+
+            // One flat colour on every side - a solid ring, not two beveled faces.
+            var graphics = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, hr, graphics);
+            Assert.Equal(
+                [RColor.FromArgb(r, g, b)],
+                graphics.FilledShapes.Select(shape => shape.Color).Distinct().ToList());
+        }
+
+        [Fact]
+        public async Task DefaultHr_KeepsItsOwnGrayAgainstAnInheritedColor()
+        {
+            // The UA sheet gives the rule `color: gray` of its own (HTML Standard 15.3.11), so an
+            // inherited `color` does not reach it - matching a browser. Worth pinning because the
+            // flat-rule arm above resolves through `color`: without this declaration a rule inside a
+            // coloured block would pick that colour up.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><body><div style='color: green'>"
+                + "<hr id='el' noshade></div></body></html>");
+
+            var graphics = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, LayoutHarness.FindById(root, "el")!, graphics);
+
+            Assert.Equal([Gray], graphics.FilledShapes.Select(shape => shape.Color).Distinct().ToList());
         }
 
         [Fact]
