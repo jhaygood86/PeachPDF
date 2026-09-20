@@ -33,6 +33,22 @@ namespace PeachPDF.Tests.Integration
         [InlineData("height: 10px", 9.0)]                    // 7.5 content + 1.5 default borders
         [InlineData("border: 2px solid; height: 10px", 10.5)]
         [InlineData("border: none; height: 10px", 7.5)]
+        // The two cases that pin `<= 0` rather than the `< 1` it replaced: a rule whose whole height is
+        // under one unit, reached through the fallback branch and through a declared height. `< 1`
+        // rounds both up to the nominal 2.
+        [InlineData("border: 0; border-top: 1px solid", 0.75)]
+        [InlineData("border: 0; height: 0.5pt", 0.5)]
+        // Padding is part of the box's own edges like the borders are, and is counted exactly once:
+        // GetBoxHeight already includes it, so ActualBottom must not add it again.
+        [InlineData("padding: 5px", 9.0)]                        // 7.5 padding + 1.5 default borders
+        [InlineData("padding: 5px; height: 10px", 16.5)]         // + 7.5 content
+        [InlineData("border: 2px solid; padding: 5px; height: 10px", 18.0)]
+        [InlineData("box-sizing: border-box; padding: 5px; height: 20px", 15.0)]
+        [InlineData("border: 0; height: 1px; padding: 2px 0", 3.75)]
+        // max-height governs the flow too, not just the paint: GetBoxHeight does not consider it, and
+        // ApplyHeight's own clamp runs after the next sibling has been committed.
+        [InlineData("height: 20px; max-height: 5px", 5.25)]
+        [InlineData("height: 20px; max-height: 5px; min-height: 12px", 10.5)]   // min wins, §10.7
         public async Task Hr_UsedHeight_IsItsContentPlusItsOwnBorders(string declaration, double expected)
         {
             var (root, container) = await LayoutAsync(declaration);
@@ -107,9 +123,19 @@ namespace PeachPDF.Tests.Integration
         [InlineData("border: 10px solid", 15.0)]
         [InlineData("height: 10px", 9.0)]
         [InlineData("border: 2px solid; height: 10px", 10.5)]
+        [InlineData("padding: 5px", 9.0)]
+        [InlineData("padding: 5px; height: 10px", 16.5)]
+        [InlineData("box-sizing: border-box; padding: 5px; height: 20px", 15.0)]
+        [InlineData("height: 20px; max-height: 5px", 5.25)]
+        // Both `<= 0` cases belong here rather than only on the used height: the layout epilogue
+        // re-resolves the rule's own bottom afterwards, so a wrong value there is corrected before
+        // anything reads it back. The sibling's offset is committed from the rule's own pass and is
+        // never revisited, which makes it the only observable that catches the difference.
+        [InlineData("border: 0; border-top: 1px solid", 0.75)]
+        [InlineData("border: 0; height: 0.5pt", 0.5)]
         public async Task NextInFlowSibling_StartsAtTheRulesBottom(string declaration, double expected)
         {
-            // CSS 2.1 §8.3.1 with §10.5. The rule's own bottom was always right; what was wrong is that
+            // CSS 2.1 §9.4.1 with §8.3.1. The rule's own bottom was always right; what was wrong is that
             // the frame committed the NEXT sibling's offset against a value the rule had not resolved
             // yet, because a declared height only reached it later, in the layout epilogue. Resolving
             // the height inside the rule's own pass is what puts the two in the right order.
@@ -125,6 +151,8 @@ namespace PeachPDF.Tests.Integration
         [InlineData("border: 2px solid", 3.0)]
         [InlineData("border: 10px solid", 15.0)]
         [InlineData("height: 10px", 9.0)]
+        [InlineData("padding: 5px", 9.0)]
+        [InlineData("height: 20px; max-height: 5px", 5.25)]
         public async Task ContainerHoldingOnlyARule_IsAsTallAsTheRule(string declaration, double expected)
         {
             // CSS 2.1 §10.6.3: a block container's content height runs to its last in-flow child's

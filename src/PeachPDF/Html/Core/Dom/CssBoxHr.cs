@@ -65,10 +65,11 @@ namespace PeachPDF.Html.Core.Dom
         /// </para>
         /// <para>
         /// Width is resolved before the placement rather than after it, so a floated rule reaches
-        /// <c>CssLayoutEngine.FloatBox</c> at its real width. Height still comes after, because the
-        /// placement writes <see cref="CssBox.ActualBottom"/> and so clears
-        /// <see cref="CssBox.ActualHeight"/> — which is exactly what makes the fallback below
-        /// fire on a re-layout instead of reading the previous pass's height.
+        /// <c>CssLayoutEngine.FloatBox</c> at its real width. Height comes after, and must not be read
+        /// back off this box: the placement writes <see cref="CssBox.ActualBottom"/>, whose setter
+        /// leaves <see cref="CssBox.Size"/>'s height at minus this box's own padding and borders, so
+        /// <see cref="CssBox.ActualHeight"/> reads 0 here for every rule. It is resolved through
+        /// <c>CssLayoutEngine.GetBoxHeight</c> instead — see the height block below.
         /// </para>
         /// </remarks>
         protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
@@ -123,34 +124,56 @@ namespace PeachPDF.Html.Core.Dom
             // rule, declared height or not. Resolving it here rather than leaving it to the epilogue is
             // what puts the real bottom in place before the frame commits the NEXT sibling's offset
             // against it (issue #1229).
+            // Border-box, already including this rule's own padding and borders - GetBoxHeight adds
+            // ActualBoxSizeIncludedHeight itself. Adding padding again below is what double-counted it.
             double height = CssLayoutEngine.GetBoxHeight(this) ?? 0;
 
-            // No declared height: the rule is exactly its own two horizontal borders, per CSS 2.1
+            // No declared height: the rule is exactly its own padding and borders, per CSS 2.1
             // §10.6.3's used content height of 0 for an auto-height block with no in-flow children.
-            // The old spelling added the borders to that already-negated Size.Height, which cancels to
+            // The old spelling added the borders to an already-negated Size.Height, which cancels to
             // zero every time - so this branch was unreachable and every rule fell through to the 2
             // below, which is what left the remainder painting as a gap between the two borders
             // (issue #1232).
+            //
+            // Deliberately a fallback, not a floor. Flooring every height at the box's own edges also
+            // looks right, and gives the same answer on every case here bar one: `box-sizing:
+            // border-box; height: 5px; padding: 5px`, whose border box is smaller than its own edges.
+            // GetBoxHeight returns that height as declared, and ApplyHeight re-runs GetBoxHeight in the
+            // epilogue - so a floor applied only here would put the flow at the floored value while the
+            // paint stayed at the declared one. Whether GetBoxHeight should clamp that case at all is
+            // its own question; what this must not do is answer it differently from the paint.
+            var ownEdges = ActualBorderTopWidth + ActualBorderBottomWidth
+                           + ActualPaddingTop + ActualPaddingBottom;
+
             if (height <= 0)
             {
-                height = ActualBorderTopWidth + ActualBorderBottomWidth;
+                height = ownEdges;
             }
 
-            // A rule with neither a height nor a border still needs to exist: a zero-size box emits no
-            // fragment at all, so it would not merely be invisible, it would be absent from the
-            // fragment tree. Kept at the nominal 2 units it has always had. This is the only branch
-            // that still reaches that constant, and the only case where the rule's box (2) and the
-            // flow advance it produces (0, since a borderless rule collapses through) disagree -
-            // unchanged from before this fix, and invisible, because nothing paints either way.
+            // A rule with no height, no border and no padding still needs to exist: a zero-size box
+            // emits no fragment at all, so it would not merely be invisible, it would be absent from
+            // the fragment tree. Kept at the nominal 2 units it has always had. This is the only branch
+            // that still reaches that constant, and the only case where the rule's box (2) and the flow
+            // advance it produces (0, since a borderless rule collapses through) disagree - unchanged
+            // from before this fix, and invisible, because nothing paints either way.
+            //
+            // `<= 0`, not the old `< 1`: while ActualHeight was always 0 here that threshold was dead
+            // code, but real values flow through it now and `< 1` would round a genuinely small rule
+            // (`border: 0; height: 0.5pt`, or a 1px top border alone at 0.75pt) up to 2.
             if (height <= 0)
             {
                 height = 2;
             }
 
-
             Size = new RSize(width, height);
 
-            ActualBottom = Location.Y + ActualPaddingTop + ActualPaddingBottom + height;
+            ActualBottom = Location.Y + height;
+
+            // GetBoxHeight deliberately does not consider min/max-height, and ApplyHeight's own clamp
+            // runs in the epilogue - after the frame has already committed the next sibling's offset
+            // against this bottom. Clamping here is what keeps `max-height` out of the flow arithmetic
+            // it is supposed to govern (CSS 2.1 §10.7).
+            CssLayoutEngine.ClampToMaxHeight(this);
 
             return ValueTask.CompletedTask;
         }

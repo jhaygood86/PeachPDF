@@ -46,6 +46,38 @@ The rule was always 9pt tall (7.5pt content plus the UA's 1.5pt of border), but 
 below its top. It now starts 9pt below. The declared height reached the rule only after the following
 block had already been placed against it.
 
+## `padding` on a rule is counted once
+
+A rule's own padding used to be added to its height twice — once inside the resolved height and again
+when its bottom was written — so a padded rule reserved more space than it occupies, and a rule with a
+declared height placed the block after it as if it had none.
+
+| | before | now | Chrome |
+| --- | --- | --- | --- |
+| `<hr style="padding: 5px">`, height | 9.5 | **9** | 9 |
+| `<hr style="padding: 5px; height: 10px">`, next block | +9.5 | **+16.5** | +16.5 |
+| `<hr style="box-sizing: border-box; padding: 5px; height: 20px">`, next block | +9 | **+15** | +15 |
+| `<hr style="border: 0; height: 1px; padding: 2px 0">`, height | 5.25 | **3.75** | 3.75 |
+
+## `max-height` applies to the flow, not just the paint
+
+A clamped rule painted at its clamped height but was *placed against* its unclamped one, so the block
+after it sat too low by the whole difference.
+
+```html
+<hr style="height: 20px; max-height: 5px">
+```
+
+| | before | now | Chrome |
+| --- | --- | --- | --- |
+| painted height | 5.25 | 5.25 | 5.25 |
+| next block | +2 | **+5.25** | +5.25 |
+
+`min-height` still overrides `max-height` on conflict, per
+[CSS 2.1 §10.7](https://www.w3.org/TR/CSS21/visudet.html#min-max-heights). A percentage `max-height`
+against a parent with no definite height still does not apply at all, which is also what a browser
+does.
+
 ## Heights, before and after
 
 Points, at 1px = 0.75pt, on an `<hr>` with `margin: 0`:
@@ -72,6 +104,6 @@ An auto-height block-level box with no in-flow children has a used content heigh
 ([CSS 2.1 §10.6.3](https://www.w3.org/TR/CSS21/visudet.html#normal-block)), so a rule is exactly its
 own two horizontal borders; and a following in-flow sibling starts at the previous box's border-box
 bottom plus the collapsed margin
-([§8.3.1](https://www.w3.org/TR/CSS21/box.html#collapsing-margins) with
-[§10.5](https://www.w3.org/TR/CSS21/visudet.html#the-height-property)). `<hr>` was the one box in the
+([§9.4.1](https://www.w3.org/TR/CSS21/visuren.html#block-formatting) with
+[§8.3.1](https://www.w3.org/TR/CSS21/box.html#collapsing-margins)). `<hr>` was the one box in the
 document that followed neither.
