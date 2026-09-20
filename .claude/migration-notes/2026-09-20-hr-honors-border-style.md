@@ -29,22 +29,18 @@ so:
 
 ```html
 <hr style="border: none">          <!-- v0.9.19: two 1px solid lines.  Now: nothing. -->
+<hr style="border: 0">             <!-- v0.9.19: two 1px solid lines.  Now: nothing. -->
 <hr style="border: 0.5pt dotted">  <!-- v0.9.19: 1px solid.            Now: 0.5pt dotted. -->
 ```
 
 An author who was relying on the rewrite to get a visible rule out of `border: none` needs to declare
 the border they want. The rule's height is unaffected either way — only what is painted into it.
 
-The default `<hr>` (no author style) keeps the same 1px width and the same total height it always
-had, but now shades as the `inset` the UA stylesheet declares rather than as `solid`, so its top edge
-darkens:
-
-| edge | v0.9.19 | now |
-| --- | --- | --- |
-| top | `#9a9a9a` | `#464646` |
-| bottom | `#eeeeee` | `#eeeeee` (too light to lighten, so the declared color stands) |
-
-The default rule therefore reads as a higher-contrast engraved line than it did.
+**A default `<hr>` is unchanged.** It still paints `#9a9a9a` over `#eeeeee`, at the same width and
+height, wherever it appears. Those two greys used to be declared per side in the UA stylesheet — they
+are what Chrome's bevel *produces*, written down as literals — and a rule that now bevels for real
+would have shaded them a second time (`#9a9a9a` → `#464646`). The sheet declares the single base
+colour they derive from instead, `border: 1px inset #eee`, so the output is byte-identical.
 
 ## `<hr noshade>` and `<hr color=…>` stay flat
 
@@ -55,8 +51,16 @@ hr[color], hr[noshade] { border-style: solid }
 ```
 
 Either presentational attribute makes the rule flat rather than engraved, which is the whole point of
-`noshade`. In v0.9.19 every rule was flat regardless, so this changes nothing an author would see for
-those two attributes — it is what keeps them right now that `inset` does something.
+`noshade`, and the flat rule carries the spec's own `color: gray`:
+
+| | v0.9.19 | now | Chrome |
+| --- | --- | --- | --- |
+| `<hr noshade>` | `#9a9a9a` / `#eeeeee` | `#808080` flat | `#808080` flat |
+| `<hr color="red">` | `#9a9a9a` / `#eeeeee` | `#808080` flat | red, flat |
+
+`<hr noshade>` now matches a browser exactly. `<hr color>` gets the right *shape* but still not the
+colour, because the `color` attribute is not yet wired up as a presentational hint for the `color`
+property — that is unchanged from v0.9.19, which did not honour it either.
 
 ## A valueless HTML attribute is now visible to `[attr]` selectors
 
@@ -73,6 +77,15 @@ selector never matched it. The identical attribute written as `disabled=""` did 
 So a rule that was silently doing nothing may start applying. Nothing that already matched stops
 matching: an absent attribute still does not match, and `attr()` already substituted the empty string
 for a valueless attribute.
+
+Two further consequences, both of them the spec's own answer rather than a judgement call:
+
+- **`<option value>`** exports the empty string in an interactive form, instead of falling back to the
+  option's label text. Per the HTML Standard an `option` with a `value` attribute takes that attribute
+  as its value, and a valueless attribute's value is `""`; the label fallback applies only when the
+  attribute is *absent*.
+- **`<mfenced open>`** renders with no opening fence, instead of the default `(`. An empty
+  `open`/`close` attribute omits that fence, and a valueless one is empty.
 
 ## Why
 

@@ -72,6 +72,39 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task DefaultHr_PaintsTheTwoGreysABrowserPaints()
+        {
+            // The plainest <hr> there is, and the one this whole change is most able to break: the UA
+            // sheet declares ONE base colour and the inset bevel derives both faces from it. It used to
+            // declare Chrome's two already-shaded output bytes per side instead, which was invisible
+            // while the rule ignored border-style and a second darkening (#9a9a9a -> #464646) the
+            // moment it stopped. Nothing else in this suite would have caught that, because every
+            // other test declares its own border.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><body><hr id='el'></body></html>");
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, LayoutHarness.FindById(root, "el")!, g);
+
+            // Chrome 153's own bytes for an unstyled rule: the darkened face over the lit one.
+            Assert.Equal(
+                [RColor.FromArgb(154, 154, 154), RColor.FromArgb(238, 238, 238)],
+                g.FilledShapes.Select(shape => shape.Color).ToList());
+        }
+
+        [Fact]
+        public async Task DefaultHrBaseColor_ShadesToExactlyThoseGreys()
+        {
+            // States the relationship the UA sheet depends on, so a future change to BorderBevelColors
+            // that moves either face fails HERE, naming the cause, rather than only in the paint test
+            // above. #eee is in the sheet precisely because these two are its faces.
+            var declared = RColor.FromArgb(238, 238, 238);
+
+            Assert.Equal(RColor.FromArgb(154, 154, 154), BorderBevelColors.Shade(declared, darken: true));
+            Assert.Equal(declared, BorderBevelColors.Shade(declared, darken: false));
+        }
+
+        [Fact]
         public async Task HrWithDashedBorder_StrokesAPatternRatherThanFillingASlab()
         {
             // A patterned rule is drawn as a dashed stroke, not a filled band - the old painter had
@@ -111,10 +144,11 @@ namespace PeachPDF.Tests.Integration
         [InlineData("<hr noshade color='red'>")]
         public async Task HrWithAPresentationalColorAttribute_IsFlatNotEngraved(string markup)
         {
-            // HTML Standard 15.3.6 pairs the UA sheet's `hr { border-style: inset }` with
+            // HTML Standard 15.3.11 pairs the UA sheet's `hr { border-style: inset }` with
             // `hr[color], hr[noshade] { border-style: solid }`. That second rule only started to
             // matter once the rule honored border-style at all - before that every rule painted flat,
-            // so `noshade` was right by accident.
+            // so `noshade` was right by accident. The flat rule carries the spec's own `color: gray`,
+            // which is the byte Chrome paints for `<hr noshade>`.
             var (root, _) = await LayoutHarness.LayoutAsync(
                 $"<!DOCTYPE html><html><body>{markup.Replace("<hr", "<hr id='el'")}</body></html>");
 
@@ -124,6 +158,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(LineStyle.Solid, hr.BorderRightStyle.Value);
             Assert.Equal(LineStyle.Solid, hr.BorderBottomStyle.Value);
             Assert.Equal(LineStyle.Solid, hr.BorderLeftStyle.Value);
+            Assert.Equal(Gray, hr.ActualBorderTopColor);
         }
 
         [Fact]
@@ -143,13 +178,15 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0.5, hr.ActualBorderBottomWidth, 3);
         }
 
-        [Fact]
-        public async Task BorderlessHr_PaintsNothing()
+        [Theory]
+        [InlineData("border: none")]
+        [InlineData("border: 0")]
+        public async Task BorderlessHr_PaintsNothing(string declaration)
         {
-            // `border: none` used to be rewritten back into a 1px solid top and bottom border, so a
+            // Either spelling used to be rewritten back into a 1px solid top and bottom border, so a
             // rule an author had explicitly switched off still painted two lines.
             var (root, container) = await LayoutHarness.LayoutAsync(
-                "<!DOCTYPE html><html><body><hr id='el' style='border: none'></body></html>");
+                $"<!DOCTYPE html><html><body><hr id='el' style='{declaration}'></body></html>");
 
             var hr = LayoutHarness.FindById(root, "el")!;
             Assert.Equal(LineStyle.None, hr.BorderTopStyle.Value);

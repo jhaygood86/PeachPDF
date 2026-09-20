@@ -50,22 +50,54 @@ Chrome's literal `#2c2c2c`/`#d4d4d4` for the issue's `2px inset #808080` repro, 
 
 ## Two things the fix newly made load-bearing, and so had to come with it
 
-**`hr[color], hr[noshade] { border-style: solid }`.** The HTML Standard pairs that rule with the
-`hr { border-style: inset }` the UA sheet already had. While the rule painted flat regardless,
-`noshade` was right by accident; the moment `border-style` started working, `<hr noshade>` began
-rendering engraved — the exact thing the attribute exists to turn off. Added to `CssDefaults`.
-Specificity (0,1,1) beats the bare `hr` rule whatever their order, so it needed no repositioning.
+**The UA sheet's two greys were Chrome's already-shaded *output*.** `hr { border-top-color: #9A9A9A;
+border-left-color: #9A9A9A; border-bottom-color: #EEEEEE; border-right-color: #EEEEEE }` is what a
+default rule *looks like* in Chrome, per side, baked in — harmless while `<hr>` ignored `border-style`,
+and a **second darkening** the moment it stopped: `#9A9A9A` beveled again is `#464646`. That regresses
+the commonest `<hr>` on the web, and the whole suite stayed green through it, because every other test
+declares its own border. It is the one thing in this change that had to be caught by looking.
+
+The single base colour whose two faces *are* those greys is `#eee`: `Shade(#eee, darken) == #9a9a9a`,
+and the lit face keeps the declared colour above the near-white threshold, so it stays `#eeeeee`. The
+four per-side declarations therefore collapse to `hr { border: 1px inset #eee }`, and a default rule
+comes out byte-identical to what it was before this change — verified by rendering an unstyled rule,
+`size=3` and a rule in a table cell against a `main` worktree, not against a stash (stashing cannot
+restore a file whose deletion is already committed, which quietly reproduces the bug instead of the
+baseline).
+
+Why `#eee` rather than the spec's own `color: gray`: Blink does not bevel a `currentColor` border from
+`currentColor`, it shades a fixed light base — which is why Chrome paints a default rule `#9a9a9a` and
+not gray's own `#2c2c2c`. PeachPDF has no "this border colour came from currentColor" signal to branch
+on, so the base is declared directly. **That corrects the premise #1226 was filed on**, which assumed a
+default rule should land on `#2c2c2c`/`#d4d4d4`; implementing Blink's actual rule is what that issue is
+now for, and it is the only way to also fix an author-set `hr { border-style: dashed }`, which takes
+`#eee` here where Chrome takes gray.
+
+**`hr[color], hr[noshade] { border-style: solid; border-color: gray }`.** The HTML Standard (§15.3.11 —
+15.3.6 is "Sections and headings") pairs that rule with the `border-style: inset` the sheet already had.
+While the rule painted flat regardless, `noshade` was right by accident; the moment `border-style`
+started working it began rendering engraved, the exact thing the attribute exists to turn off. `gray`
+because a flat rule derives nothing from a bevel, so the spec's own `color: gray` stands — and flat
+`#808080` is what Chrome paints for `<hr noshade>`, which `main` does not.
 
 **Valueless attributes were stored as null, so `[attr]` never matched them.**
 `HtmlParser.ParseHtmlTag` did `x.First().Value!` over the token's attributes; the tokenizer reports a
 valueless attribute with a null value, and the HTML Standard gives it the empty string. So
 `hr[noshade]` matched nothing, while `hr[noshade=""]` matched — and the same held for `[disabled]`,
 `[hidden]`, `[required]` and every other boolean attribute in the language. One `?? string.Empty`.
-The blast radius is the reason to say so here: this changes what `TryGetAttribute(name, default)`
-returns for *any* valueless attribute — `""` now, the caller's own default before — so every caller
-that branches on "absent" sees one more attribute as present. Presentational-attribute translation is
-the one to watch; `attr()` is not, since `CssContentEngine` already passes `""` as its default. The
-whole suite was run against it specifically to find out, and no test moved.
+The blast radius is the reason to say so here. The old value was **null, not the caller's default**:
+the key was present, so `TryGetValue` succeeded and handed the null straight back, and
+`TryGetAttribute`'s `defaultValue` never came into it. Every caller that branches on "absent" therefore
+sees one more attribute as present now, and two of those branches change meaning in a way a document
+author can see — both spec-correct, both in the migration note: `<option value>` exports `""` instead
+of falling back to the option's label, and `<mfenced open>` yields no open fence instead of the default
+`(`.
+
+Two things that null did *not* do, checked rather than assumed. It did not crash anything: 23 valueless
+attributes (`style`, `class`, `id`, `href`, `src`, `colspan`, `rowspan`, `border`, `size`, `align`,
+`nowrap`, `cellpadding`, `start`, `bgcolor`, …) all parse and lay out on `main`. And it did not change
+any `<hr>` height: 13 height/border combinations measure identically on both sides. `attr()` is
+unaffected too, since `CssContentEngine` already passes `""` as its own default.
 
 ## A separate defect found while verifying, deliberately not fixed here: issue #1229
 
