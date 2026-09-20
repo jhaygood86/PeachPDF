@@ -533,10 +533,23 @@ namespace PeachPDF.Html.Core.Dom
             var colorParser = new CssValueParser(adapter);
             var textColor = string.IsNullOrEmpty(style.Color) ? RColor.Black : colorParser.GetActualColor(style.Color);
 
-            RColor ResolveBorderColor(string? colorValue) =>
+            // An edge with no explicit colour resolves currentColor exactly as CssUtils.ApplyCurrentColor
+            // does for an ordinary box: against the text colour normally, but against the fixed light
+            // base when the edge is bevelled - a page box is never a table display type, so it always
+            // takes that base. Without the second arm an `@page { border: 20px inset }` would shade
+            // black text into a bevel the identical declaration on a <div> no longer produces.
+            //
+            // The literal "initial" counts as "no explicit colour" here: an omitted slot of a `border`/
+            // `border-top` shorthand is exported as that sentinel (ShorthandProperty.Export, and see
+            // OptionValueConverter), and border-*-color's initial value IS currentcolor. Resolving it
+            // through GetActualColor instead yields black - which is how `border-top: 4pt inset` came
+            // out a shade of black on a margin box while the identical declaration on a <div>, whose
+            // cascade path leaves the longhand at `currentcolor`, came out the two greys.
+            RColor ResolveBorderColor(string? colorValue, LineStyle lineStyle) =>
                 string.IsNullOrWhiteSpace(colorValue) ||
-                colorValue.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase)
-                    ? textColor
+                colorValue.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase) ||
+                colorValue.Equals(Keywords.Initial, StringComparison.OrdinalIgnoreCase)
+                    ? BorderBevelColors.IsBeveled(lineStyle) ? BorderBevelColors.CurrentColorBase : textColor
                     : colorParser.GetActualColor(colorValue);
 
             void PaintEdge(bool isHorizontal, RRect edgeRect, double widthPx, string? styleValue, string? colorValue)
@@ -547,7 +560,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (widthPx <= 0 || lineStyle is LineStyle.None or LineStyle.Hidden)
                     return;
 
-                BordersDrawHandler.DrawCollapsedSegment(g, isHorizontal, edgeRect, lineStyle, ResolveBorderColor(colorValue), widthPx);
+                BordersDrawHandler.DrawCollapsedSegment(g, isHorizontal, edgeRect, lineStyle, ResolveBorderColor(colorValue, lineStyle), widthPx);
             }
 
             var topWidthPx = ResolveBorderWidthPt(style.BorderTopWidth, style.BorderTopStyle, emPt, remPt) * pixelsPerPoint;

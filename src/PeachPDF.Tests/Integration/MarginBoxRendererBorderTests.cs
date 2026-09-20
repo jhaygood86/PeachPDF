@@ -120,5 +120,58 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Contains("1 0 1 rg", pdfText);
         }
+
+        [Fact]
+        public async Task ABevelledEdgeWithNoDeclaredColor_ShadesTheFixedBase_NotTheBoxsText()
+        {
+            // This path resolves `currentcolor` itself rather than going through the cascade's
+            // CssUtils.ApplyCurrentColor, so it needs its own copy of the bevel-base rule (issue
+            // #1226): a bevelled side with no declared colour shades rgb(238,238,238), not the box's
+            // text colour. Without it, `@page { border: inset }` would shade the declared red here
+            // while the identical declaration on a <div> paints the two greys - a divergence entirely
+            // invisible to the border tests above, every one of which declares its own colour.
+            //
+            // The `border-top` SHORTHAND with its colour slot omitted, deliberately: that slot exports
+            // as the literal "initial", which this path used to run through GetActualColor and get
+            // black out of - so it shaded 0.329 (Light(black)) where a <div> with the identical
+            // declaration paints the two greys. Asserting the longhand form instead would pass
+            // without the "initial" arm and prove nothing.
+            //
+            // 0.604 = 154/255, the darkened face of rgb(238,238,238) - the same byte an unstyled <hr>
+            // paints. The LIT face (0.933) is deliberately not asserted: DrawCollapsedSegment shades
+            // every segment as if it were a top/left edge, so a margin box's bottom border darkens too
+            // and no lit face is produced at all. That is issue #1237, independent of this rule; when
+            // it closes, the bottom edge here becomes 0.933 and this test should gain that assertion.
+            var pdfText = await GetPdfText(
+                "<!DOCTYPE html><html><head><style>@page { @bottom-center { content: \"x\"; width: 200pt; " +
+                "color: rgb(255,0,0); border-top: 4pt inset; } }</style></head>" +
+                "<body><p>short</p></body></html>");
+
+            Assert.Contains("0.604 0.604 0.604 rg", pdfText);
+            // ...and emphatically neither the shaded red nor the shaded black it produced before.
+            Assert.DoesNotContain("0.671 0 0 rg", pdfText);
+            Assert.DoesNotContain("0.329 0.329 0.329 rg", pdfText);
+        }
+
+        [Theory]
+        // Every flat style, so the bevel arm cannot be widened to "unset colour" without failing here.
+        [InlineData("solid")]
+        [InlineData("double")]
+        public async Task AFlatEdgeWithNoDeclaredColor_StillResolvesThroughColor(string style)
+        {
+            // The other half of the same rule, and the one the bevel arm must not swallow: nothing is
+            // derived from a flat edge, so `currentcolor` means the box's own colour as it always has.
+            // `color` is deliberately non-default here - against the default black, returning the base
+            // unconditionally and returning it only for a bevel are indistinguishable.
+            var pdfText = await GetPdfText(
+                "<!DOCTYPE html><html><head><style>@page { @bottom-center { content: \"x\"; width: 200pt; " +
+                $"color: rgb(255,0,0); border-top: 4pt {style}; }} }}</style></head>" +
+                "<body><p>short</p></body></html>");
+
+            Assert.Contains("1 0 0 rg", pdfText);
+            // 0.933 = 238/255: the base must not reach a flat edge at all.
+            Assert.DoesNotContain("0.933 0.933 0.933 rg", pdfText);
+            Assert.DoesNotContain("0.604 0.604 0.604 rg", pdfText);
+        }
     }
 }

@@ -43,8 +43,10 @@ both are governed by the separate flow-advance defect noted in the `hr` row of
 **A default `<hr>` is unchanged.** It still paints `#9a9a9a` over `#eeeeee`, at the same width and
 height, wherever it appears. Those two greys used to be declared per side in the UA stylesheet — they
 are what Chrome's bevel *produces*, written down as literals — and a rule that now bevels for real
-would have shaded them a second time (`#9a9a9a` → `#464646`). The sheet declares the single base
-colour they derive from instead, `border: 1px inset #eee`, so the output is byte-identical.
+would have shaded them a second time (`#9a9a9a` → `#464646`). The sheet stopped naming the two faces
+and let the bevel derive them, so the colours are unchanged. (At the time of this change the sheet
+declared the base they derive from, `border: 1px inset #eee`; #1226 has since removed that too, and
+the engine derives the base itself. Either way a default rule paints the same two greys.)
 
 ## `<hr noshade>` and `<hr color=…>` stay flat
 

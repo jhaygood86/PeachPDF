@@ -59,7 +59,7 @@ declares its own border. It is the one thing in this change that had to be caugh
 
 The single base colour whose two faces *are* those greys is `#eee`: `Shade(#eee, darken) == #9a9a9a`,
 and the lit face keeps the declared colour above the near-white threshold, so it stays `#eeeeee`. The
-four per-side declarations therefore collapse to `hr { border: 1px inset #eee }`, and a default rule
+four per-side declarations therefore collapsed to `hr { border: 1px inset #eee }`, and a default rule
 comes out byte-identical to what it was before this change — verified by rendering an unstyled rule,
 `size=3` and a rule in a table cell against a `main` worktree, not against a stash (stashing cannot
 restore a file whose deletion is already committed, which quietly reproduces the bug instead of the
@@ -67,11 +67,16 @@ baseline).
 
 Why `#eee` rather than the spec's own `color: gray`: Blink does not bevel a `currentColor` border from
 `currentColor`, it shades a fixed light base — which is why Chrome paints a default rule `#9a9a9a` and
-not gray's own `#2c2c2c`. PeachPDF has no "this border colour came from currentColor" signal to branch
-on, so the base is declared directly. **That corrects the premise #1226 was filed on**, which assumed a
-default rule should land on `#2c2c2c`/`#d4d4d4`; implementing Blink's actual rule is what that issue is
-now for, and it is the only way to also fix an author-set `hr { border-style: dashed }`, which takes
-`#eee` here where Chrome takes gray.
+not gray's own `#2c2c2c`. **That corrects the premise #1226 was filed on**, which assumed a default
+rule should land on `#2c2c2c`/`#d4d4d4`.
+
+**Superseded on the colour half.** At the time of this change PeachPDF had no "this border colour came
+from currentColor" signal, so the base was declared in the sheet directly, which left an author-set
+`hr { border-style: dashed }` taking `#eee` where Chrome takes gray. #1226 has since implemented
+Blink's actual rule, so the sheet declares **no** border colour at all and that residue is gone — see
+[2026-09-20-a-bevelled-currentcolor-border-shades-a-fixed-base.md](2026-09-20-a-bevelled-currentcolor-border-shades-a-fixed-base.md).
+The reasoning above is kept because it is why the per-side greys had to go; the sheet it describes is
+no longer what is in the tree.
 
 **`hr[color], hr[noshade] { border-style: solid; border-color: currentcolor }`.** The HTML Standard
 (§15.3.11 — 15.3.6 is "Sections and headings") pairs that rule with the `border-style: inset` the sheet

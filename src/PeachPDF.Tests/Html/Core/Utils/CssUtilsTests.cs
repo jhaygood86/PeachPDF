@@ -2,6 +2,7 @@ using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -379,13 +380,20 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
-        public async Task ApplyCurrentColor_ReplacesCurrentColorWithColorValue()
+        public async Task ApplyCurrentColor_LeavesABorderColorUnresolved_ForTheUsedValueToResolvePerBox()
         {
+            // The four border longhands are the one family ApplyCurrentColor deliberately does NOT
+            // substitute: a bevelled side resolves to a fixed base rather than to `color`, and
+            // `border-color: inherit` has to hand a child the unresolved keyword so the child resolves
+            // it against its own color. Both are used-value questions, so DerivedStyle answers them -
+            // see DerivedStyle.ResolveBorderSideColor and BeveledBorderCurrentColorTests.
             var (box, parser) = await FindDivBoxAndParser("color: rgb(10, 20, 30); border-top-color: currentColor;");
 
             CssUtils.ApplyCurrentColor(box, parser);
 
-            Assert.Equal("rgb(10, 20, 30)", box.BorderTopColor);
+            Assert.Equal("currentcolor", box.BorderTopColor, ignoreCase: true);
+            // ...and the used value is still the box's own color, since no border-style makes it bevelled.
+            Assert.Equal(RColor.FromArgb(10, 20, 30), box.ActualBorderTopColor);
         }
 
         [Fact]

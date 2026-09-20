@@ -190,7 +190,8 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualBorderTopColor.IsEmpty) _actualBorderTopColor = Owner.GetActualColor(Style.Border.BorderTopColor);
+                if (_actualBorderTopColor.IsEmpty)
+                    _actualBorderTopColor = ResolveBorderSideColor(Style.Border.BorderTopColor, Style.Border.BorderTopStyle.Value);
                 return _actualBorderTopColor;
             }
         }
@@ -199,7 +200,8 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualBorderRightColor.IsEmpty) _actualBorderRightColor = Owner.GetActualColor(Style.Border.BorderRightColor);
+                if (_actualBorderRightColor.IsEmpty)
+                    _actualBorderRightColor = ResolveBorderSideColor(Style.Border.BorderRightColor, Style.Border.BorderRightStyle.Value);
                 return _actualBorderRightColor;
             }
         }
@@ -208,7 +210,8 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualBorderBottomColor.IsEmpty) _actualBorderBottomColor = Owner.GetActualColor(Style.Border.BorderBottomColor);
+                if (_actualBorderBottomColor.IsEmpty)
+                    _actualBorderBottomColor = ResolveBorderSideColor(Style.Border.BorderBottomColor, Style.Border.BorderBottomStyle.Value);
                 return _actualBorderBottomColor;
             }
         }
@@ -217,10 +220,60 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualBorderLeftColor.IsEmpty) _actualBorderLeftColor = Owner.GetActualColor(Style.Border.BorderLeftColor);
+                if (_actualBorderLeftColor.IsEmpty)
+                    _actualBorderLeftColor = ResolveBorderSideColor(Style.Border.BorderLeftColor, Style.Border.BorderLeftStyle.Value);
                 return _actualBorderLeftColor;
             }
         }
+
+        /// <summary>
+        /// One border side's <em>used</em> color. <c>currentcolor</c> is deliberately still unresolved
+        /// in <see cref="ComputedStyle"/> for the four border longhands - unlike every other color
+        /// property, which <c>CssUtils.ApplyCurrentColor</c> substitutes in place during the cascade -
+        /// so it is resolved here, per box, against that box's own <c>color</c>.
+        /// </summary>
+        /// <remarks>
+        /// Two reasons it has to be this way round rather than resolved into the cascade like the rest.
+        /// <para>
+        /// A bevelled side does not resolve to <c>color</c> at all: it resolves to
+        /// <see cref="BorderBevelColors.CurrentColorBase"/>, a fixed light grey, everywhere except on a
+        /// table display type (issue #1226 - see that field for the measurements). That is a
+        /// <em>used</em> value in Blink too, which is why <c>getComputedStyle</c> there still reports
+        /// the unsubstituted color.
+        /// </para>
+        /// <para>
+        /// And what a child inherits through <c>border-color: inherit</c> is the computed value, which
+        /// is still <c>currentcolor</c> - so the child resolves it against <em>its own</em> color, not
+        /// the parent's. Substituting during the cascade broke exactly that: the child inherited the
+        /// parent's already-resolved color, so a solid child of a bevelled parent inherited the light
+        /// grey and painted a near-invisible border, and before that it inherited the parent's text
+        /// color where a browser uses the child's.
+        /// </para>
+        /// </remarks>
+        private RColor ResolveBorderSideColor(string colorValue, LineStyle lineStyle)
+        {
+            if (!Keywords.CurrentColor.Equals(colorValue, StringComparison.OrdinalIgnoreCase))
+                return Owner.GetActualColor(colorValue);
+
+            return BorderBevelColors.IsBeveled(lineStyle) && !IsTableDisplay(ActualDisplay)
+                ? BorderBevelColors.CurrentColorBase
+                : ActualColor;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="display"/> is one of css-tables-3's table display types, which Blink
+        /// exempts from <see cref="BorderBevelColors.CurrentColorBase"/>. Confirmed against Chrome 153
+        /// for all ten: a <c>display: table</c> box with <c>border: 20px inset; color: red</c> paints a
+        /// shaded red, while the same declaration on <c>block</c>/<c>inline-block</c>/<c>flex</c>/
+        /// <c>grid</c>/<c>list-item</c> paints the two greys. Asked of <see cref="ActualDisplay"/>, not
+        /// the cascaded <c>display</c>, because Blink consults a ComputedStyle that CSS Display 3 §2.7
+        /// has already blockified - a floated table-cell is a block by then and loses the exemption.
+        /// </summary>
+        private static bool IsTableDisplay(string display) =>
+            display is Keywords.Table or Keywords.InlineTable or Keywords.TableCaption
+                or Keywords.TableCell or Keywords.TableColumn or Keywords.TableColumnGroup
+                or Keywords.TableFooterGroup or Keywords.TableHeaderGroup or Keywords.TableRow
+                or Keywords.TableRowGroup;
 
         /// <summary>Actual column-rule color (the line drawn between columns in a multi-column container).</summary>
         public RColor ActualColumnRuleColor
