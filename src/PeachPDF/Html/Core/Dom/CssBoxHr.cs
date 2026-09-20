@@ -115,15 +115,38 @@ namespace PeachPDF.Html.Core.Dom
             if (RequestedBreakBeforeTop is not null)
                 return ValueTask.CompletedTask;
 
-            double height = ActualHeight;
-            if (height < 1)
+            // CssLayoutEngine.GetBoxHeight is the one resolver for a declared height - the same one
+            // CssLayoutEngine.ApplyHeight uses in the epilogue - and, unlike ActualHeight, it does not
+            // read back Size.Height. That matters here: PlaceAsBlockChild above has just written
+            // ActualBottom = Location.Y, whose setter stores Size.Height = value - borders - Location.Y,
+            // so Size.Height is exactly -(borderTop + borderBottom) and ActualHeight reads 0 for every
+            // rule, declared height or not. Resolving it here rather than leaving it to the epilogue is
+            // what puts the real bottom in place before the frame commits the NEXT sibling's offset
+            // against it (issue #1229).
+            double height = CssLayoutEngine.GetBoxHeight(this) ?? 0;
+
+            // No declared height: the rule is exactly its own two horizontal borders, per CSS 2.1
+            // §10.6.3's used content height of 0 for an auto-height block with no in-flow children.
+            // The old spelling added the borders to that already-negated Size.Height, which cancels to
+            // zero every time - so this branch was unreachable and every rule fell through to the 2
+            // below, which is what left the remainder painting as a gap between the two borders
+            // (issue #1232).
+            if (height <= 0)
             {
-                height = Size.Height + ActualBorderTopWidth + ActualBorderBottomWidth;
+                height = ActualBorderTopWidth + ActualBorderBottomWidth;
             }
-            if (height < 1)
+
+            // A rule with neither a height nor a border still needs to exist: a zero-size box emits no
+            // fragment at all, so it would not merely be invisible, it would be absent from the
+            // fragment tree. Kept at the nominal 2 units it has always had. This is the only branch
+            // that still reaches that constant, and the only case where the rule's box (2) and the
+            // flow advance it produces (0, since a borderless rule collapses through) disagree -
+            // unchanged from before this fix, and invisible, because nothing paints either way.
+            if (height <= 0)
             {
                 height = 2;
             }
+
 
             Size = new RSize(width, height);
 
