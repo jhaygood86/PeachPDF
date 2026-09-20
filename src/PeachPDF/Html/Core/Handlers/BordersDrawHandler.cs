@@ -15,7 +15,6 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using System;
 
 namespace PeachPDF.Html.Core.Handlers
 {
@@ -168,60 +167,6 @@ namespace PeachPDF.Html.Core.Handlers
                 new RPoint(band.Right, band.Bottom),
                 new RPoint(band.Left, band.Bottom)
             ]);
-        }
-
-        /// <summary>
-        /// Draws one plain side polygon for the legacy horizontal-rule painter, which supplies its
-        /// brush separately. Normal CSS box borders use <see cref="DrawBoxBorders"/>.
-        /// </summary>
-        public static void DrawBorder(
-            Border border, RGraphics g, CssBox box, RBrush brush, RRect rectangle)
-        {
-            g.DrawPolygon(
-                brush,
-                GetBandPoints(border, box, rectangle, from: 0, to: 1));
-        }
-
-        private static RPoint[] GetBandPoints(
-            Border border, CssBox box, RRect rect, double from, double to)
-        {
-            var left = box.ActualBorderLeftWidth;
-            var right = box.ActualBorderRightWidth;
-            var top = box.ActualBorderTopWidth;
-            var bottom = box.ActualBorderBottomWidth;
-
-            return border switch
-            {
-                Border.Top =>
-                [
-                    new RPoint(rect.Left + from * left, rect.Top + from * top),
-                    new RPoint(rect.Right - from * right, rect.Top + from * top),
-                    new RPoint(rect.Right - to * right, rect.Top + to * top),
-                    new RPoint(rect.Left + to * left, rect.Top + to * top)
-                ],
-                Border.Right =>
-                [
-                    new RPoint(rect.Right - from * right, rect.Top + from * top),
-                    new RPoint(rect.Right - from * right, rect.Bottom - from * bottom),
-                    new RPoint(rect.Right - to * right, rect.Bottom - to * bottom),
-                    new RPoint(rect.Right - to * right, rect.Top + to * top)
-                ],
-                Border.Bottom =>
-                [
-                    new RPoint(rect.Left + from * left, rect.Bottom - from * bottom),
-                    new RPoint(rect.Right - from * right, rect.Bottom - from * bottom),
-                    new RPoint(rect.Right - to * right, rect.Bottom - to * bottom),
-                    new RPoint(rect.Left + to * left, rect.Bottom - to * bottom)
-                ],
-                Border.Left =>
-                [
-                    new RPoint(rect.Left + from * left, rect.Top + from * top),
-                    new RPoint(rect.Left + from * left, rect.Bottom - from * bottom),
-                    new RPoint(rect.Left + to * left, rect.Bottom - to * bottom),
-                    new RPoint(rect.Left + to * left, rect.Top + to * top)
-                ],
-                _ => throw new ArgumentOutOfRangeException(nameof(border))
-            };
         }
     }
 }

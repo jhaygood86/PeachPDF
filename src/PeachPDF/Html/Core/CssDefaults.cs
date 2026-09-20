@@ -89,7 +89,29 @@ namespace PeachPDF.Html.Core
             tfoot, tr       { vertical-align: middle }
             td, th          { vertical-align: inherit }
             s, strike, del  { text-decoration: line-through }
-            hr              { border: 1px inset; }
+            /* HTML Standard 15.3.11 gives the rule `color: gray; border-style: inset;
+               border-width: 1px`, leaving border-color at its initial currentColor. Blink does not
+               bevel a currentColor border from currentColor: it shades a fixed light base instead,
+               so Chrome paints an unstyled rule #9a9a9a over #eeeeee rather than gray's own
+               #2c2c2c / #d4d4d4. PeachPDF has no notion of "this border colour came from
+               currentColor" to branch on, so the base is declared here directly - #eee is the value
+               whose two bevel faces ARE #9a9a9a and #eeeeee (BorderBevelColors.Shade, measured
+               against Chrome). Do not "restore" this to currentColor or to gray without
+               implementing that Blink rule first: either one repaints every default rule on the web
+               a different colour. Those two greys used to be declared per side, which was Chrome's
+               already-shaded OUTPUT baked in - harmless while <hr> ignored border-style, and a
+               double darkening the moment it stopped (issue #1225).
+
+               A rule carrying either presentational attribute is flat rather than engraved, so no
+               bevel derives anything and border-color can go back to currentcolor - which is what
+               makes <hr color=red> red, since `color` is a presentational hint for the color
+               property (DomParser.TranslateAttributes). Declaring the resolved grey here instead
+               would paint every <hr color> grey. hr's own `color: gray` above is what a bare
+               <hr noshade> then resolves to, and is also why an inherited color does not reach a
+               rule. Specificity (0,1,1) beats the bare hr rule whatever their order. */
+            hr              { color: gray; border: 1px inset #eee; }
+            hr[color],
+            hr[noshade]     { border-style: solid; border-color: currentcolor; }
             ol, ul, dir,
             menu, dd        { margin-left: 40px }
             ol              { list-style-type: decimal }
@@ -153,7 +175,6 @@ namespace PeachPDF.Html.Core
             script, link,
             meta, area,
             base, param     { display:none }
-            hr              { border-top-color: #9A9A9A; border-left-color: #9A9A9A; border-bottom-color: #EEEEEE; border-right-color: #EEEEEE; }
             pre             { font-size: 10pt; margin-top: 15px; }
 
             /* Default -peachpdf-pdf-tag-type mapping (used only when tagged PDF output is

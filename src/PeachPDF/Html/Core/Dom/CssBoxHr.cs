@@ -50,8 +50,9 @@ namespace PeachPDF.Html.Core.Dom
         /// </param>
         /// <remarks>
         /// <para>
-        /// The rule's <i>size</i> is its own — a full-width line whose height falls back to a 1px top and
-        /// bottom border — but its <i>position</i> is not, so it goes through
+        /// The rule's <i>size</i> is its own — a full-width line whose height falls back to its own two
+        /// horizontal border widths, and to two units when it has none — but its <i>position</i> is not, so
+        /// it goes through
         /// <see cref="CssBox.PlaceAsBlockChild"/> like every other block-level box rather than through a
         /// copy of that formula. The copy is what let three placement rules drift: it read the
         /// predecessor's <c>ActualBottom</c> rather than its static one (so a relatively-positioned
@@ -122,12 +123,6 @@ namespace PeachPDF.Html.Core.Dom
             if (height < 1)
             {
                 height = 2;
-            }
-            if (height <= 2 && ActualBorderTopWidth < 1 && ActualBorderBottomWidth < 1)
-            {
-                BorderTopStyle = BorderBottomStyle = CssProperty<LineStyle>.FromValue(Keywords.Solid, LineStyle.Solid);
-                BorderTopWidth = "1px";
-                BorderBottomWidth = "1px";
             }
 
             Size = new RSize(width, height);

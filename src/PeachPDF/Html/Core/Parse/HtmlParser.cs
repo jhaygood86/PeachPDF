@@ -287,9 +287,15 @@ namespace PeachPDF.Html.Core.Parse
 
             if (!isClosing)
             {
+                // A valueless attribute (<hr noshade>, <input disabled>) tokenizes with a null
+                // value, but the HTML Standard gives it the empty string - which is what makes
+                // an [attr] presence selector match it (Selectors 4 §6.1 tests for the
+                // attribute, not for a value). Storing the null instead made every boolean
+                // attribute invisible to `[disabled]`, `[hidden]`, `hr[noshade]` and friends,
+                // while the same attribute written as `noshade=""` matched.
                 attributes = token.Attributes
                     .GroupBy(x => x.Name)
-                    .ToDictionary(x => x.Key, x => x.First().Value!);
+                    .ToDictionary(x => x.Key, x => x.First().Value ?? string.Empty);
             }
 
             return isClosing;
