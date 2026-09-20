@@ -1,9 +1,29 @@
-# `<hr>`: flow advance, percentage width, and the currentColor bevel base (tracked, not accepted forever)
+# `<hr>`: auto height, flow advance, percentage width, and the currentColor bevel base (tracked, not accepted forever)
 
 Deviations found while fixing #1225 (`<hr>` discarding `border-style`) and deliberately left out of
 that change. All are **tracked bugs to fix**, not limitations argued through and accepted — this file
-exists because `docs/html-css-support.md`'s `hr` row now describes the first two to readers, and that
-note and this file are deleted together when the issues close.
+exists because `docs/html-css-support.md`'s `hr` row now describes the first three to readers, and
+that note and this file are deleted together when the issues close.
+
+## An auto-height rule is always 2pt tall, and paints the remainder as a gap — issue #1232
+
+The shared root cause of this section and the next one. `CssBoxHr.PerformLayoutImp`'s height fallback
+reads `Size.Height + ActualBorderTopWidth + ActualBorderBottomWidth`, but `PlaceAsBlockChild` has
+already written `ActualBottom = Location.Y` by then, and that setter stores
+`Size.Height = value - ActualBoxSizeIncludedHeight - Location.Y` — so `Size.Height` is exactly
+`-(borderTop + borderBottom)`. Instrumented: `-1.5` with the default 0.75pt borders, `-3` with 2px
+ones, `ActualHeight` `0` in both. The sum cancels to zero every time, so the fallback is unreachable
+and the hard-coded `height = 2` below it is what every auto-height rule gets.
+
+Two things fall out. The leftover `max(0, 2pt - borders)` is used **content**, so it paints as a white
+gap between the two border edges — 0.5pt on the 1px default, and a full 1pt on a `border: 0.5pt` rule,
+wider than either border. And the same constant 2 is what the flow arithmetic below sees.
+
+Dropping the poisoned term (`height = ActualBorderTopWidth + ActualBorderBottomWidth`) fixes the gap
+and the auto-height half of #1229; measured, with the full suite passing. It was deliberately not
+folded into #1225, which is a paint-path change: it moves every default rule's height from 2pt to
+1.5pt, and that is a user-visible change wanting its own migration note rather than riding along with
+an unrelated one.
 
 ## The following block is placed 2 units below the rule's *top* — issue #1229
 
@@ -21,9 +41,10 @@ the rule's own `ActualBottom` correctly reads 28 / 29 / 30.5 / 35 / 41 / 42.5. A
 zero-height `<div>` puts the follower at 35. The rule's fragment `WholeBoxRect` is the right height
 too — only the *following* sibling's placement ignores it.
 
-The constant 2 is `CssBoxHr.PerformLayoutImp`'s own `height = 2` fallback, so the follower appears to
-be placed against an `ActualBottom` written before the rule's real height resolved, and never
-re-placed. That much is inference; everything above it is measurement.
+The constant 2 is the `height = 2` above. Removing that fixes this for an auto-height rule (a
+`border: 6px` rule's follower moves from +2 to +9, matching Chrome) but **not** for one with a declared
+`height`, whose follower still advances by the border total — it is placed on an earlier pass and never
+re-placed once the real height resolves. That remaining half is a genuine pass-ordering problem.
 
 ## A percentage `width` resolves against the wrong basis — issue #1230
 
