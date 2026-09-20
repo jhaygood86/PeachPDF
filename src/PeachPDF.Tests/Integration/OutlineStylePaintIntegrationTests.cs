@@ -664,6 +664,28 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task OutlineStyleOutset_NearWhite_PaintsTheLitPairAtTheDeclaredColor()
+        {
+            // A near-white outline has nowhere to lighten to, so Chrome paints the lit pair at the
+            // declared color rather than clipping it to white. Asserting the literal declared color
+            // here, not BorderBevelColors.Shade, is what makes this a check of the rule rather than a
+            // restatement of it.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='b' style='width:20pt; height:20pt; outline: 6pt outset rgb(240,240,240)'>x</div>"));
+            var div = LayoutHarness.FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var pairs = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(path => !path.Stroked)
+                .ToList();
+            Assert.Equal(2, pairs.Count);
+            Assert.Equal(RColor.FromArgb(240, 240, 240), pairs[0].Color); // lit top + left
+            Assert.Equal(RColor.FromArgb(156, 156, 156), pairs[1].Color); // darkened bottom + right
+        }
+
+        [Fact]
         public async Task OutlineStyleNone_ZeroesActualOutlineWidth_EvenWithANonZeroDeclaredWidth()
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(

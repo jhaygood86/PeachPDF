@@ -26,13 +26,18 @@ the raw color in 7. The dark face is identical under either rule. So the `#4a90d
 this reads as "the raw color" only if the darkened face is mistaken for the lit one; every
 non-near-white color is genuinely lightened.
 
-## What is left open
+## What was left open, and is now closed
 
-Tracked as jhaygood86/PeachPDF#1224. PeachPDF is wrong for the near-white end: `Light(#f0f0f0)`
-clips to `#ffffff` where Chrome keeps `#f0f0f0`. Closing that means porting Blink's actual rule - raw color above 0.83077 relative
-luminance, `Light()` below - which should take the exact-match rate to 60/60. It is its own change,
-not a side effect of an outline-union PR: `BorderBevelColors` is shared by every bevelled border,
-outline and collapsed-table segment, and the lightening it does today shipped in v0.9.19.
+Tracked as jhaygood86/PeachPDF#1224: PeachPDF was wrong for the near-white end, where `Light(#f0f0f0)`
+clips to `#ffffff` and Chrome keeps `#f0f0f0`. Closed by porting the whole of Blink's
+`CalculateInsetOutsetColor` - see
+[2026-09-20-bevel-shade-is-two-luminance-thresholds-not-a-contrast-ratio.md](2026-09-20-bevel-shade-is-two-luminance-thresholds-not-a-contrast-ratio.md),
+which also found that the near-black fallback's trigger was a second, separate divergence the 60-sample
+measurement below could not see.
+
+The judgement that it was its own change rather than a side effect of an outline-union PR held up:
+`BorderBevelColors` is shared by every bevelled border, outline and collapsed-table segment, and the
+lightening it did shipped in v0.9.19.
 
 ## Traps
 

@@ -308,10 +308,11 @@ produces, so a document proofed in a browser prints the same way:
 - **`groove`** and **`ridge`** each paint two halves of the border: `groove` draws its outer half as
   `inset` and its inner half as `outset`, and `ridge` does the reverse.
 - **`inset`** and **`outset`** shade one pair of sides darker and the other lighter. `inset` darkens the
-  top and left and lightens the bottom and right; `outset` is the mirror image. A color too dark to
+  top and left and lightens the bottom and right; `outset` is the mirror image. Both ends of the
+  lightness range are special-cased so the bevel never disappears into itself: a color too dark to
   darken visibly — black, most importantly, which is the initial `border-color` via `currentColor` —
-  lightens both faces instead, by differing amounts, so the bevel stays visible rather than
-  disappearing into itself.
+  lightens both faces instead, by differing amounts, while a color too light to lighten visibly keeps
+  the declared color on the lit pair rather than being clipped to white.
 
 Every style mitres into its neighbours at the corners, including each individual line of a `double`
 border and each half of a `groove`/`ridge`, so adjacent edges of differing width or color meet on the
