@@ -175,6 +175,48 @@ namespace PeachPDF.Tests.Integration
                 graphics.FilledShapes.Select(shape => shape.Color).Distinct().ToList());
         }
 
+        [Theory]
+        // The common way to restyle a rule: replace the UA border and leave the colour to
+        // `currentcolor`, which every one of these shorthands resets it to.
+        [InlineData("hr { border: 0; border-top: 1px solid }")]
+        [InlineData("hr { border: 1px solid }")]
+        [InlineData("hr { border: 4px double }")]
+        [InlineData("hr { border: 0; border-bottom: 1px solid }")]
+        // Patterned too, which paints as a stroke rather than a fill - hence PaintedColors below.
+        [InlineData("hr { border: 0; border-top: 2px dashed }")]
+        public async Task AuthorBorderWithNoColor_ResolvesToTheRulesOwnGray(string css)
+        {
+            // `currentcolor` on a rule means the UA sheet's `color: gray` (HTML Standard 15.3.11), not
+            // the colour the rule sits in - which is what a browser does, and what PeachPDF did not
+            // before that declaration existed. Pinned separately from the default rule because it is a
+            // different path to the same property: the author has replaced the UA's own
+            // `border-color: #eee`, so the border resolves through `color` rather than a declared base.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                $"<!DOCTYPE html><html><head><style>{css}</style></head><body>"
+                + "<div style='color: green'><hr id='el'></div></body></html>");
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, LayoutHarness.FindById(root, "el")!, g);
+
+            Assert.Equal([Gray], PaintedColors(g));
+        }
+
+        [Theory]
+        // ...but an author who names a colour, by either spelling, still wins.
+        [InlineData("color: red", 255, 0, 0)]
+        [InlineData("color: inherit", 0, 128, 0)]
+        public async Task AuthorColorOnARule_StillWinsOverTheUaGray(string colorDeclaration, int r, int g, int b)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                $"<!DOCTYPE html><html><head><style>hr {{ {colorDeclaration}; border: 0; border-top: 1px solid }}</style>"
+                + "</head><body><div style='color: green'><hr id='el'></div></body></html>");
+
+            var graphics = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, LayoutHarness.FindById(root, "el")!, graphics);
+
+            Assert.Equal([RColor.FromArgb(r, g, b)], PaintedColors(graphics));
+        }
+
         [Fact]
         public async Task DefaultHr_KeepsItsOwnGrayAgainstAnInheritedColor()
         {
@@ -270,6 +312,17 @@ namespace PeachPDF.Tests.Integration
                 })
             ];
         }
+
+        /// <summary>
+        /// Every distinct colour the rule actually put on the page, whichever primitive carried it -
+        /// a solid or bevelled border fills, a dotted/dashed one strokes.
+        /// </summary>
+        private static List<RColor> PaintedColors(TestRecordingGraphics g) =>
+        [
+            .. g.FilledShapes.Select(shape => shape.Color)
+                .Concat(g.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(line => line.Color))
+                .Distinct()
+        ];
 
         private static string Offset(RPoint point, RPoint origin) =>
             $"({point.X - origin.X:F3},{point.Y - origin.Y:F3})";

@@ -67,8 +67,33 @@ Both now match a browser. **`color` has an effect on a rule for the first time**
 is a presentational hint for that property. The attribute was always being applied — the UA sheet
 simply pinned an explicit `border-color`, so the border never consulted it.
 
-The rule also carries the spec's own `color: gray` now, so an inherited `color` still does not reach
-it (`<div style="color: green"><hr></div>` is unchanged). That matches a browser too.
+The rule also carries the spec's own `color: gray` now. A default rule is unaffected by that — its
+border colour is declared outright — but an **authored** border is not, which is the next section.
+
+## An author border with no colour of its own is now gray, not the inherited text colour
+
+This is the change most likely to be noticed, because the idiom is common: replace the UA border and
+say nothing about its colour, which every `border` shorthand resets to `currentcolor`.
+
+```html
+<style>hr { border: 0; border-top: 1px solid }</style>
+<div style="color: green"><hr></div>
+```
+
+| | v0.9.19 | now | Chrome |
+| --- | --- | --- | --- |
+| inside `color: green` | green | `#808080` | `#808080` |
+| with no surrounding colour | black | `#808080` | `#808080` |
+
+`currentcolor` on a rule resolves through the rule's *own* `color`, and the rule now has one. The same
+applies to `border: 1px solid`, `border: 4px double`, `border-top: 2px dashed`,
+`border-bottom: 1px solid`, and an explicit `border-color: currentcolor` — anything that leaves the
+border colour at its initial value.
+
+An author who names a colour still wins, exactly as before: `hr { color: red }` paints red, and
+`hr { color: inherit }` restores the old behaviour of taking the surrounding text colour.
+
+A rule whose `border-color` is declared (`border-top: 1px solid black`) is unaffected.
 
 ## A valueless HTML attribute is now visible to `[attr]` selectors
 
