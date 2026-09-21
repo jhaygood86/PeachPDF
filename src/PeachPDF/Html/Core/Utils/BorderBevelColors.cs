@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using System;
@@ -26,6 +27,40 @@ namespace PeachPDF.Html.Core.Utils
     /// </remarks>
     internal static class BorderBevelColors
     {
+        /// <summary>
+        /// The four line styles that derive their faces from their color rather than painting it as
+        /// declared - everything this class handles. Shared rather than re-listed per call site,
+        /// because a fifth arm added here and missed at one of them is a silent divergence: the style
+        /// would shade in one place and paint flat in another.
+        /// </summary>
+        internal static bool IsBeveled(LineStyle style) =>
+            style is LineStyle.Inset or LineStyle.Outset or LineStyle.Groove or LineStyle.Ridge;
+
+        /// <summary>
+        /// The color a <c>currentColor</c> border side resolves to when <see cref="IsBeveled"/> holds
+        /// for that side - the base whose two faces are the familiar <c>#9a9a9a</c> over
+        /// <c>#eeeeee</c> of an unstyled <c>&lt;hr&gt;</c> or a bare <c>border: 2px inset</c>.
+        /// </summary>
+        /// <remarks>
+        /// Blink substitutes this fixed light color for the box's own <c>color</c> when it resolves a
+        /// border side's <c>currentColor</c> and that side is bevelled
+        /// (<c>ComputedStyleUtils::BorderSideColor</c>), because shading a bevel from the text color
+        /// produces no usable edge at either end of the range - default black text would give a
+        /// black-on-black frame. Measured against Chrome 153: <c>border: 20px inset</c> paints
+        /// <c>#9a9a9a</c>/<c>#eeeeee</c> whatever <c>color</c> is - black, red, white, <c>#808080</c>,
+        /// even <c>transparent</c> or a translucent color, since the base is fully opaque. A
+        /// *declared* color is untouched, which is why <c>border: 20px inset #808080</c> still shades
+        /// to <c>#2c2c2c</c>/<c>#d4d4d4</c>.
+        /// <para>
+        /// The substitution is of the resolution base, not of the painted result: it happens where
+        /// <c>currentColor</c> becomes a real color, and <see cref="Shade"/> then shades whatever came
+        /// out. Blink reports the *unsubstituted* color from <c>getComputedStyle</c>, so this is a used
+        /// value for painting only. See <c>DerivedStyle.ResolveBorderSideColor</c>, which applies it per
+        /// side, and exempts a table display type the way Blink does.
+        /// </para>
+        /// </remarks>
+        internal static readonly RColor CurrentColorBase = RColor.FromArgb(238, 238, 238);
+
         /// <summary>
         /// Blink converts its 0..1 float channels back to bytes with this factor and a truncating cast,
         /// not by multiplying by 255 and rounding. Matching it is what makes the results land on the

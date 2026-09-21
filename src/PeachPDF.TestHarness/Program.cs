@@ -335,6 +335,34 @@ static string HrStyleSwatch(string desc, string inlineCss) =>
     $"<div class=\"css\">hr / div, {inlineCss}</div>" +
     "</td>";
 
+/// <summary>
+/// A &lt;hr&gt; on its own, for a case where the equivalent &lt;div&gt; would legitimately differ and so
+/// must not be shown beside it - a rule carries the UA sheet's own <c>color: gray</c>, which is what
+/// its border resolves <c>currentcolor</c> through whenever nothing is derived from a bevel.
+/// <paramref name="inlineCss"/> of <c>null</c> means the bare <c>noshade</c> rule instead.
+/// </summary>
+static string HrAloneSwatch(string desc, string? inlineCss) =>
+    "<td>" +
+    "<div class=\"hrbox\">" +
+    (inlineCss is null ? "<hr noshade>" : $"<hr style=\"{inlineCss}\">") +
+    "</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">hr, {inlineCss ?? "noshade"}</div>" +
+    "</td>";
+
+/// <summary>
+/// The one box in the bevel-base section that shades its own <c>currentcolor</c>: a table, which
+/// Blink exempts from the substitution and PeachPDF follows. A real &lt;table&gt; with a cell rather
+/// than a bare <c>display: table</c> div, so it has content to give it a height.
+/// </summary>
+static string TableBevelExemptionSwatch() =>
+    "<td>" +
+    "<table style=\"border: 16px inset; color: #d94a4a; background: #888; border-collapse: separate; " +
+    "border-spacing: 0; width: 100%\"><tr><td style=\"height: 48px\"></td></tr></table>" +
+    "<div class=\"desc\">table is exempt</div>" +
+    "<div class=\"css\">table, border: 16px inset; color: #d94a4a</div>" +
+    "</td>";
+
 static string RadiusBorderSwatch(string desc, string style, string width, string radius) =>
     "<td>" +
     $"<div class=\"bsbox\" style=\"border: {width} {style} #4a90d9; border-radius: {radius}\"></div>" +
@@ -5948,8 +5976,9 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
     ) +
 
     // A beveled style shades one pair of sides darker and the other lighter, so the same keyword reads
-    // differently per edge - and a color too dark to darken visibly (black, the initial border-color
-    // via currentColor) lightens both faces instead rather than disappearing into itself.
+    // differently per edge - and a color too dark to darken visibly lightens both faces instead rather
+    // than disappearing into itself. These have to DECLARE black to reach that arm: an undeclared
+    // border-color never arrives as black, for the reason the section after next demonstrates.
     "<h2>Bevel shading, including colors too dark to darken</h2>" +
     Row(
         BorderColorSwatch("inset, black", "inset", "#000"),
@@ -5967,6 +5996,30 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
         SideSwatch("outset, near-white", "border: 16px outset #f0f0f0; background: #888"),
         SideSwatch("groove, near-white", "border: 16px groove #f0f0f0; background: #888"),
         SideSwatch("ridge, white", "border: 16px ridge #fff; background: #888")
+    ) +
+
+    // A bevel whose color is currentColor does not shade `color` at all - it shades a fixed light
+    // grey, so all three of the first row's boxes paint the same two faces however different their
+    // text colors are. That is what an unstyled <hr> and a bare `border: inset` look like in a
+    // browser, and it is only visible as a showcase: every one of these parses and lays out
+    // identically whichever base is used, so nothing but the painted bytes tells them apart.
+    "<h2>A bevel with no declared color</h2>" +
+    Row(
+        SideSwatch("no color, color: red", "border: 16px inset; color: #d94a4a; background: #888"),
+        SideSwatch("no color, color: black", "border: 16px inset; color: #000; background: #888"),
+        SideSwatch("no color, color: white", "border: 16px inset; color: #fff; background: #888"),
+        // ...and the same grey named explicitly is a different border, because now there IS a
+        // declared color to shade. The one pair here that must NOT match.
+        SideSwatch("declared #808080", "border: 16px inset #808080; background: #888")
+    ) +
+    Row(
+        SideSwatch("outset, no color", "border: 16px outset; color: #d94a4a; background: #888"),
+        SideSwatch("groove, no color", "border: 16px groove; color: #d94a4a; background: #888"),
+        // A table display type is the one exemption: it does shade its own currentColor, so this one
+        // comes out red where the identical declaration on a div above comes out grey.
+        TableBevelExemptionSwatch(),
+        // An outline is never substituted either, whatever its style - so this one is red too.
+        SideSwatch("outline is not substituted", "outline: 16px inset; color: #d94a4a; background: #888; margin: 16px")
     ) +
 
     // Each style scales differently: double needs 3px before its three bands are a whole unit each,
@@ -6009,6 +6062,29 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
         HrStyleSwatch("dashed", "border: 3px dashed #d94a4a"),
         HrStyleSwatch("dotted", "border: 3px dotted #4ad98a"),
         HrStyleSwatch("solid", "border: 2px solid #4a90d9")
+    ) +
+
+    // The same rules with no colour declared at all, which is how the UA sheet leaves a rule and how
+    // most authors restyle one. A bevelled rule derives its two greys from the fixed base, so it still
+    // pairs exactly with its equivalent div - neither has a declared colour and both take that base.
+    "<h2>...and with no declared colour (hr above, equivalent div below)</h2>" +
+    Row(
+        HrStyleSwatch("inset, as the UA sheet leaves it", "border-style: inset; border-width: 4px"),
+        HrStyleSwatch("outset", "border-style: outset; border-width: 4px"),
+        HrStyleSwatch("groove", "border-style: groove; border-width: 6px"),
+        HrStyleSwatch("ridge", "border-style: ridge; border-width: 6px")
+    ) +
+
+    // A FLAT rule with no declared colour is deliberately shown alone, not paired: it resolves
+    // currentColor through `color`, and the UA sheet gives a rule its own `color: gray` that a div
+    // does not have - so the pair legitimately differs here, and pairing them would read as a defect.
+    // These used to paint the near-invisible #eee that the bevel base was declared as.
+    "<h2>A flat rule with no declared colour takes the UA sheet's gray</h2>" +
+    Row(
+        HrAloneSwatch("solid", "border-style: solid; border-width: 2px"),
+        HrAloneSwatch("dashed", "border-style: dashed; border-width: 3px"),
+        HrAloneSwatch("dotted", "border-style: dotted; border-width: 3px"),
+        HrAloneSwatch("noshade attribute", null)
     ) +
 
     // The classic zero-content "border triangle": four mitred trapezoids meeting at the box's center.

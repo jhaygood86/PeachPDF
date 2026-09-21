@@ -89,29 +89,31 @@ namespace PeachPDF.Html.Core
             tfoot, tr       { vertical-align: middle }
             td, th          { vertical-align: inherit }
             s, strike, del  { text-decoration: line-through }
-            /* HTML Standard 15.3.11 gives the rule `color: gray; border-style: inset;
-               border-width: 1px`, leaving border-color at its initial currentColor. Blink does not
-               bevel a currentColor border from currentColor: it shades a fixed light base instead,
-               so Chrome paints an unstyled rule #9a9a9a over #eeeeee rather than gray's own
-               #2c2c2c / #d4d4d4. PeachPDF has no notion of "this border colour came from
-               currentColor" to branch on, so the base is declared here directly - #eee is the value
-               whose two bevel faces ARE #9a9a9a and #eeeeee (BorderBevelColors.Shade, measured
-               against Chrome). Do not "restore" this to currentColor or to gray without
-               implementing that Blink rule first: either one repaints every default rule on the web
-               a different colour. Those two greys used to be declared per side, which was Chrome's
-               already-shaded OUTPUT baked in - harmless while <hr> ignored border-style, and a
-               double darkening the moment it stopped (issue #1225).
+            /* HTML Standard 15.3.11, verbatim: border-color is left at its initial currentColor in
+               both rules, and every colour a rule paints is derived from `color: gray` below.
 
-               A rule carrying either presentational attribute is flat rather than engraved, so no
-               bevel derives anything and border-color can go back to currentcolor - which is what
-               makes <hr color=red> red, since `color` is a presentational hint for the color
-               property (DomParser.TranslateAttributes). Declaring the resolved grey here instead
-               would paint every <hr color> grey. hr's own `color: gray` above is what a bare
-               <hr noshade> then resolves to, and is also why an inherited color does not reach a
-               rule. Specificity (0,1,1) beats the bare hr rule whatever their order. */
-            hr              { color: gray; border: 1px inset #eee; }
+               An engraved rule's two greys are NOT declared anywhere.
+               DerivedStyle.ResolveBorderSideColor resolves a beveled border side's currentColor
+               against a fixed light base rather than the box's colour, exactly as Blink does, so
+               `border-style: inset` here shades that base into #9a9a9a over #eeeeee on its own -
+               which is why `color: gray` does not tint a default rule, and why neither does an
+               inherited colour from an ancestor.
+
+               A rule carrying either presentational attribute is flat rather than engraved, so
+               nothing is derived and currentColor resolves to `color` itself: gray for a bare
+               <hr noshade>, and red for <hr color=red>, since the colour attribute is a
+               presentational hint for the color property (DomParser.TranslateAttributes).
+               Specificity (0,1,1) beats the bare hr rule whatever their order.
+
+               Both rules previously had to declare the colour the engine could not yet derive -
+               first as four per-side greys, which were Chrome's already-shaded OUTPUT baked in
+               (harmless while <hr> ignored border-style, a double darkening the moment it stopped,
+               issue #1225), then as the single #eee base they derive from (issue #1226). Keep
+               deriving: a colour written here is one the cascade stops being able to reason about,
+               which is what made `hr { border-style: dashed }` paint #eee instead of gray. */
+            hr              { color: gray; border-style: inset; border-width: 1px; }
             hr[color],
-            hr[noshade]     { border-style: solid; border-color: currentcolor; }
+            hr[noshade]     { border-style: solid; }
             ol, ul, dir,
             menu, dd        { margin-left: 40px }
             ol              { list-style-type: decimal }

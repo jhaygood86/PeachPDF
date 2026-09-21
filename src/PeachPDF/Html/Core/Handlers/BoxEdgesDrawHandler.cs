@@ -102,7 +102,7 @@ namespace PeachPDF.Html.Core.Handlers
             if (outerRadii is { IsRounded: true }) return false;
 
             var first = edges.Top;
-            if (first.Style is not (LineStyle.Inset or LineStyle.Outset or LineStyle.Groove or LineStyle.Ridge) ||
+            if (!BorderBevelColors.IsBeveled(first.Style) ||
                 !first.IsActive || !edges.Right.IsActive ||
                 !edges.Bottom.IsActive || !edges.Left.IsActive ||
                 edges.Right.Style != first.Style || edges.Bottom.Style != first.Style ||

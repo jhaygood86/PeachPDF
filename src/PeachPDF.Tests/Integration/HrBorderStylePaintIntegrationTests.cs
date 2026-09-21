@@ -95,9 +95,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task DefaultHrBaseColor_ShadesToExactlyThoseGreys()
         {
-            // States the relationship the UA sheet depends on, so a future change to BorderBevelColors
-            // that moves either face fails HERE, naming the cause, rather than only in the paint test
-            // above. #eee is in the sheet precisely because these two are its faces.
+            // States the relationship a default rule depends on, so a future change to
+            // BorderBevelColors that moves either face fails HERE, naming the cause, rather than only
+            // in the paint test above. #eee is no longer declared anywhere - it is the base
+            // DerivedStyle.ResolveBorderSideColor resolves a beveled currentColor border to (issue
+            // #1226) - but it is still the value whose two faces those greys are.
             var declared = RColor.FromArgb(238, 238, 238);
 
             Assert.Equal(RColor.FromArgb(154, 154, 154), BorderBevelColors.Shade(declared, darken: true));
@@ -151,12 +153,12 @@ namespace PeachPDF.Tests.Integration
             // matter once the rule honored border-style at all - before that every rule painted flat,
             // so `noshade` was right by accident.
             //
-            // The colour half is what makes `color` work: the flat rule takes `border-color:
-            // currentcolor`, so it resolves through the `color` property - the UA sheet's own
-            // `color: gray` for `noshade`, and the `color` attribute's value (a presentational hint
-            // for `color`, applied by DomParser.TranslateAttributes) for `<hr color>`. Declaring the
-            // resolved grey here instead would paint every `<hr color>` grey, which is what both this
-            // sheet and its predecessor used to do.
+            // The colour half is what makes `color` work: border-color is left at its initial
+            // `currentcolor`, and a flat side resolves that through the `color` property - the UA
+            // sheet's own `color: gray` for `noshade`, and the `color` attribute's value (a
+            // presentational hint for `color`, applied by DomParser.TranslateAttributes) for
+            // `<hr color>`. Declaring the resolved grey in the sheet instead would paint every
+            // `<hr color>` grey, which is what two earlier versions of this sheet did.
             var (root, container) = await LayoutHarness.LayoutAsync(
                 $"<!DOCTYPE html><html><body>{markup.Replace("<hr", "<hr id='el'")}</body></html>");
 
@@ -189,8 +191,10 @@ namespace PeachPDF.Tests.Integration
             // `currentcolor` on a rule means the UA sheet's `color: gray` (HTML Standard 15.3.11), not
             // the colour the rule sits in - which is what a browser does, and what PeachPDF did not
             // before that declaration existed. Pinned separately from the default rule because it is a
-            // different path to the same property: the author has replaced the UA's own
-            // `border-color: #eee`, so the border resolves through `color` rather than a declared base.
+            // different path to the same property: every style here is a flat one, so the side
+            // resolves through `color` rather than through the beveled base a default rule takes
+            // (DerivedStyle.ResolveBorderSideColor - and see BeveledBorderCurrentColorTests for that
+            // half).
             var (root, container) = await LayoutHarness.LayoutAsync(
                 $"<!DOCTYPE html><html><head><style>{css}</style></head><body>"
                 + "<div style='color: green'><hr id='el'></div></body></html>");

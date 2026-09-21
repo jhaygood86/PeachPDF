@@ -1,4 +1,4 @@
-# `<hr>`: percentage width, indefinite percentage height, and the currentColor bevel base (tracked, not accepted forever)
+# `<hr>`: percentage width and indefinite percentage height (tracked, not accepted forever)
 
 Deviations found while fixing #1225 (`<hr>` discarding `border-style`) and deliberately left out of
 that change. Both are **tracked bugs to fix**, not limitations argued through and accepted — this file
@@ -10,6 +10,12 @@ height, and #1232's painted gap between the borders — are **closed**, fixed to
 `CssBoxHr.PerformLayoutImp`. See
 [.claude/recent-fixes/2026-09-20-hr-resolves-its-own-used-height.md](../recent-fixes/2026-09-20-hr-resolves-its-own-used-height.md)
 for the mechanism, which is worth reading before touching that method.
+
+The third, #1226's currentColor bevel base, is **closed** too: `DerivedStyle.ResolveBorderSideColor`
+now resolves a bevelled border side's `currentColor` against the fixed light base itself, so the UA sheet
+no longer declares a colour at all and the `border-style: dashed` residue this file used to describe
+is gone. See
+[.claude/recent-fixes/2026-09-20-a-bevelled-currentcolor-border-shades-a-fixed-base.md](../recent-fixes/2026-09-20-a-bevelled-currentcolor-border-shades-a-fixed-base.md).
 
 ## A percentage `width` resolves against the wrong basis — issue #1230
 
@@ -33,31 +39,6 @@ test or showcase rule painting — is only valid with no `width` declared at all
 two differ by twice the border width, the div's border box overflows its cell, and the pair looks
 broken for a reason that has nothing to do with what is being demonstrated. That is exactly how the
 first version of the `border_style` showcase's `<hr>` section shipped four mismatched pairs.
-
-## An inset/outset border whose colour is `currentColor` is beveled from the wrong base — issue #1226
-
-Blink does not shade a `currentColor` border from `currentColor`; it shades a fixed light base. That is
-why Chrome paints an unstyled `<hr>` `#9a9a9a` over `#eeeeee` rather than gray's own
-`#2c2c2c`/`#d4d4d4`, and why `<div style="border: 2px inset; color: red">` paints those same two greys
-rather than anything red. PeachPDF has no "this border colour came from currentColor" signal in the
-cascade, so it shades whatever colour it is given.
-
-#1225 works around it for the one case it would otherwise have regressed: the UA sheet declares
-`hr { border: 1px inset #eee }`, `#eee` being the base whose two faces *are* `#9a9a9a` and `#eeeeee`.
-That keeps a default rule byte-identical to a browser's and to v0.9.19's.
-
-**The residue this leaves**, and the reason it is written down: an author who sets `hr { border-style:
-dashed }` and nothing else gets `#eee`, where Chrome gives gray. A rule's declared base is only the
-right colour while it is being beveled, and the `hr[color], hr[noshade]` arm hands the other
-non-beveled case back to `currentcolor` precisely so it does not have the same problem — but an
-author-set `border-style` cannot be enumerated that way. Nothing short of implementing Blink's actual
-rule fixes it, which is also what would fix the general `<div style="border: 2px inset">` case, and is
-why #1226's scope is now the cascade signal rather than the `hr` colours it was originally filed
-about.
-
-**Do not "simplify"** `hr { border: 1px inset #eee }` to the spec's literal `color: gray` +
-`currentColor` while this is open. It reads like the more correct thing and it repaints every default
-rule on the web `#2c2c2c`.
 
 ## A percentage or `calc()` height against an indefinite containing block — issue #1236
 

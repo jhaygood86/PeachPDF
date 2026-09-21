@@ -67,7 +67,7 @@ namespace PeachPDF.Html.Core.Handlers
                 return;
             }
 
-            if (style is LineStyle.Inset or LineStyle.Outset or LineStyle.Groove or LineStyle.Ridge)
+            if (BorderBevelColors.IsBeveled(style))
             {
                 PaintBevelledRegion(g, contours, style, color, width, radii, offset);
                 return;

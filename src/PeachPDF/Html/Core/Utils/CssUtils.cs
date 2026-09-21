@@ -136,29 +136,46 @@ namespace PeachPDF.Html.Core.Utils
                 },
             }.ToFrozenDictionary(StringComparer.Ordinal);
 
+        /// <summary>
+        /// Substitutes this box's own <c>color</c> for every <c>currentColor</c> it carries, now that
+        /// that color is final.
+        /// </summary>
+        /// <remarks>
+        /// The four <c>border-*-color</c> longhands are deliberately NOT in this list, and are the only
+        /// color properties that are not. They stay at the literal <c>currentcolor</c> and are resolved
+        /// per box, at used-value time, by <c>DerivedStyle.ResolveBorderSideColor</c> - see there for
+        /// the two reasons (a bevelled side resolves to a fixed base rather than to <c>color</c>, and
+        /// <c>border-color: inherit</c> must hand a child the unresolved keyword so it resolves against
+        /// its own color, as in a browser).
+        /// <para>
+        /// <c>outline-color</c> and <c>column-rule-color</c> do belong here: Blink's substitution lives
+        /// on the four border longhands only (<c>OutlineColor</c>/<c>ColumnRuleColor::ColorIncludingFallback</c>
+        /// resolve against <c>GetCurrentColor()</c>), and Chrome 153 agrees - <c>outline: 20px inset;
+        /// color: red</c> paints a shaded red, not the base. An outline really is bevelled by
+        /// <see cref="BorderBevelColors"/> here (<c>OutlineRegionPainter</c>), so that exemption is
+        /// load-bearing; a column rule is not - <c>FragmentPainter.PaintColumnRules</c> maps only
+        /// <c>dashed</c>/<c>dotted</c> to a dash style and strokes every other style as a plain line of
+        /// <c>ActualColumnRuleColor</c> - so for that one the exemption is only what keeps it right if a
+        /// bevelled <c>column-rule-style</c> ever starts being shaded. Neither is inheritable in a way
+        /// that would notice the difference.
+        /// </para>
+        /// </remarks>
         public static void ApplyCurrentColor(CssBox box, CssValueParser valueParser)
         {
-            string[] colorProperties =
-            [
-                "border-top-color",
-                "border-bottom-color",
-                "border-left-color",
-                "border-right-color",
-                "background-color",
-                "column-rule-color",
-                "outline-color"
-            ];
-
             var colorValue = GetPropertyValue(box, "color") ?? Keywords.Initial;
 
-            foreach (var propertyName in colorProperties)
-            {
-                var value = GetPropertyValue(box, propertyName);
+            ResolveCurrentColor(box, valueParser, "background-color", colorValue);
+            ResolveCurrentColor(box, valueParser, "column-rule-color", colorValue);
+            ResolveCurrentColor(box, valueParser, "outline-color", colorValue);
+        }
 
-                if (value is not null && value.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase))
-                {
-                    SetPropertyValue(valueParser, box, propertyName, colorValue);
-                }
+        private static void ResolveCurrentColor(CssBox box, CssValueParser valueParser, string propertyName, string baseColor)
+        {
+            var value = GetPropertyValue(box, propertyName);
+
+            if (value is not null && value.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase))
+            {
+                SetPropertyValue(valueParser, box, propertyName, baseColor);
             }
         }
     }
