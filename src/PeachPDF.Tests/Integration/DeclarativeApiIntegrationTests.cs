@@ -2043,6 +2043,333 @@ namespace PeachPDF.Tests.Integration
             }
         }
 
+        // ─── Text alignment (a shorthand the registry drops) and table-cell alignment ───────────────
+
+        [Fact]
+        public void TextAlignShorthand_IsRejectedByTheRegistry_SoBuildersMustSetTheLonghands()
+        {
+            // The trap this whole group of tests exists for: CssPropertyFactory.Set reaches the generated,
+            // per-longhand CssPropertyRegistry, which returns false for the text-align shorthand - and the
+            // builders ignored that, so Alignment(...) aligned nothing. If the registry ever learns the
+            // shorthand this flips, and CssPropertyFactory.SetTextAlign can go back to a single Set.
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var parser = new CssValueParser(adapter);
+            var parent = DocumentBuilder.BuildPage(page => page.Content(c => c.Text("x")), new CssPropertyFactory(adapter)).RootBox;
+
+            Assert.False(CssPropertyRegistry.TrySet(parser, CssBox.CreateBox(parent, new HtmlTag("div", false)), "text-align", "right"));
+            Assert.True(CssPropertyRegistry.TrySet(parser, CssBox.CreateBox(parent, new HtmlTag("div", false)), "text-align-all", "right"));
+            Assert.True(CssPropertyRegistry.TrySet(parser, CssBox.CreateBox(parent, new HtmlTag("div", false)), "text-align-last", "auto"));
+        }
+
+        [Fact]
+        public async Task Alignment_SetsTextAlignAll_AndResetsTextAlignLastToAuto_LikeTheShorthand()
+        {
+            CssBox? paragraph = null;
+            await BuildAndLayoutPage(page => page.Content(c =>
+            {
+                var container = (ContainerBuilder)c;
+                container.Text(t => { t.Alignment(TextAlignment.Right); t.Span("x"); });
+                paragraph = container.Box;
+            }));
+
+            Assert.Equal(PeachPDF.CSS.HorizontalAlignment.Right, paragraph!.ActualTextAlignAll);
+            Assert.Equal(PeachPDF.CSS.TextAlignLast.Auto, paragraph.ActualTextAlignLast);
+            // Recorded as builder-set, so a document-level stylesheet's plain rule cannot override it.
+            Assert.Contains("text-align-all", paragraph.BuilderSetProperties!);
+        }
+
+        [Theory]
+        [InlineData(TextAlignment.Left)]
+        [InlineData(TextAlignment.Start)]
+        [InlineData(TextAlignment.Center)]
+        [InlineData(TextAlignment.Right)]
+        [InlineData(TextAlignment.End)]
+        public async Task TextAlignment_InATableCell_PlacesTheWordAgainstThatEdge(TextAlignment alignment)
+        {
+            // The reported symptom: every one of these rendered flush-left.
+            var (cell, word) = await LayOutCell(cell => cell.Text(t => { t.Alignment(alignment); t.Span("RIGHT"); }));
+
+            AssertWordAligned(cell, word, alignment, padding: 0);
+        }
+
+        [Theory]
+        [InlineData(TextAlignment.Center)]
+        [InlineData(TextAlignment.Right)]
+        public async Task TextAlignment_InAPaddedTableCell_RespectsThePadding(TextAlignment alignment)
+        {
+            var (cell, word) = await LayOutCell(cell =>
+                cell.Padding(6).Text(t => { t.Alignment(alignment); t.Span("RIGHT"); }));
+
+            AssertWordAligned(cell, word, alignment, padding: 6);
+        }
+
+        [Fact]
+        public async Task TextAlignment_InATableCellWithAFixedWidthChild_StillAlignsTheText()
+        {
+            var (cell, word) = await LayOutCell(cell =>
+                cell.Padding(4).Width(PdfLength.Percent(100)).Text(t => { t.Alignment(TextAlignment.Right); t.Span("RIGHT"); }));
+
+            AssertWordAligned(cell, word, TextAlignment.Right, padding: 4);
+        }
+
+        [Theory]
+        [InlineData("left")]
+        [InlineData("center")]
+        [InlineData("right")]
+        public async Task AlignX_OnATableCell_AlignsTheCellsText(string which)
+        {
+            // Margins do not apply to a table cell, so the box-positioning Align* methods mean "align the
+            // cell's content" there.
+            var (cell, word) = await LayOutCell(cell =>
+            {
+                var aligned = which switch
+                {
+                    "left" => cell.Padding(4).AlignLeft(),
+                    "center" => cell.Padding(4).AlignCenter(),
+                    _ => cell.Padding(4).AlignRight(),
+                };
+                aligned.Text("RIGHT");
+            });
+
+            var expected = which switch { "left" => TextAlignment.Left, "center" => TextAlignment.Center, _ => TextAlignment.Right };
+            AssertWordAligned(cell, word, expected, padding: 4);
+        }
+
+        [Fact]
+        public async Task AlignRight_OnAHeaderCell_AlignsTheHeaderText()
+        {
+            CssBox? headerCell = null;
+            var (root, _) = await BuildAndLayoutPage(page =>
+            {
+                page.Size(PdfLength.Points(400), PdfLength.Points(200));
+                page.Margin(0);
+                page.Content(c => c.Table(table =>
+                {
+                    table.Columns(cols => { cols.RelativeColumn(1); cols.RelativeColumn(1); });
+                    table.Header(header =>
+                    {
+                        header.Cell().Text("Item");
+                        var amount = (ContainerBuilder)header.Cell();
+                        amount.AlignRight().Text("Amount");
+                        headerCell = amount.Box;
+                    });
+                    table.Row(row =>
+                    {
+                        row.Cell().Text("Bread");
+                        row.Cell().AlignRight().Text("3.20");
+                    });
+                }));
+            });
+
+            var word = LayoutHarnessDescendants(headerCell!).SelectMany(box => box.Words).Single();
+            Assert.True(headerCell!.ActualRight - word.Right < 1.0, $"header word ends at {word.Right}, cell at {headerCell.ActualRight}");
+
+            // And the body cell in the same column lines up with it - the reason to right-align amounts.
+            var bodyWord = LayoutHarnessDescendants(root).Where(box => box.Words.Count > 0).Select(box => box.Words[0]).Single(w => (w.Text ?? "").StartsWith("3."));
+            Assert.Equal(word.Right, bodyWord.Right, 1.0);
+        }
+
+        [Fact]
+        public async Task ANeighbouringCellsAlignment_DoesNotLeakIntoTheOthers()
+        {
+            CssBox? left = null;
+            CssBox? right = null;
+            await BuildAndLayoutPage(page =>
+            {
+                page.Size(PdfLength.Points(400), PdfLength.Points(200));
+                page.Margin(0);
+                page.Content(c => c.Table(table =>
+                {
+                    table.Columns(cols => { cols.RelativeColumn(1); cols.RelativeColumn(1); });
+                    table.Row(row =>
+                    {
+                        var l = (ContainerBuilder)row.Cell();
+                        l.Text("left");
+                        left = l.Box;
+                        var r = (ContainerBuilder)row.Cell();
+                        r.AlignRight().Text("right");
+                        right = r.Box;
+                    });
+                }));
+            });
+
+            var leftWord = LayoutHarnessDescendants(left!).SelectMany(box => box.Words).Single();
+            Assert.Equal(left!.Location.X, leftWord.Left, 1.0);
+            Assert.Equal(PeachPDF.CSS.HorizontalAlignment.Right, right!.ActualTextAlignAll);
+            Assert.Equal(PeachPDF.CSS.HorizontalAlignment.Start, left.ActualTextAlignAll);
+        }
+
+        [Fact]
+        public async Task AlignRight_OnARowItem_StillPositionsTheContainerWithAutoMargins()
+        {
+            // Regression guard: the table-cell branch must not change what the Align methods do elsewhere.
+            // On a row (main-axis) item the auto left margin absorbs the free space and pushes the box right.
+            CssBox? item = null;
+            await BuildAndLayoutPage(page =>
+            {
+                page.Size(PdfLength.Points(400), PdfLength.Points(200));
+                page.Margin(0);
+                page.Content(c => c.Row(row =>
+                {
+                    var b = (ContainerBuilder)row.Item();
+                    b.Width(100).AlignRight().Text("x");
+                    item = b.Box;
+                }));
+            });
+
+            Assert.InRange(item!.Location.X, 299, 301);
+            // A plain box alignment, not a text alignment: the text inside keeps its default.
+            Assert.Equal(PeachPDF.CSS.HorizontalAlignment.Start, item.ActualTextAlignAll);
+        }
+
+        [Theory]
+        [InlineData("left", 0)]
+        [InlineData("center", 150)]
+        [InlineData("right", 300)]
+        public async Task AlignX_OnAColumnItem_PositionsTheContainerAcrossTheColumn(string which, double expectedLeft)
+        {
+            // The reported case: a column's cross axis is horizontal, so this needs cross-axis auto margins.
+            CssBox? item = null;
+            await BuildAndLayoutPage(page =>
+            {
+                page.Size(PdfLength.Points(400), PdfLength.Points(200));
+                page.Margin(0);
+                page.Content(c => c.Column(column =>
+                {
+                    var b = (ContainerBuilder)column.Item();
+                    var sized = b.Width(100);
+                    var aligned = which switch { "left" => sized.AlignLeft(), "center" => sized.AlignCenter(), _ => sized.AlignRight() };
+                    aligned.Text("x");
+                    item = b.Box;
+                }));
+            });
+
+            Assert.Equal(expectedLeft, item!.Location.X, 0.5);
+            Assert.Equal(100, item.ActualBoxSizingWidth, 0.5);
+        }
+
+        [Fact]
+        public async Task AlignRight_OnAnAutoWidthColumnItem_ShrinksItToItsContentAndPushesItToTheEdge()
+        {
+            // `column.Item().AlignRight().Text("x")` with no Width at all - the item has to be fit-content,
+            // not column-wide, for the auto margin to have anything to absorb.
+            CssBox? item = null;
+            await BuildAndLayoutPage(page =>
+            {
+                page.Size(PdfLength.Points(400), PdfLength.Points(200));
+                page.Margin(0);
+                page.Content(c => c.Column(column =>
+                {
+                    var b = (ContainerBuilder)column.Item();
+                    b.AlignRight().Text("x");
+                    item = b.Box;
+                }));
+            });
+
+            Assert.True(item!.ActualBoxSizingWidth < 50, $"item should be as wide as its text, was {item.ActualBoxSizingWidth}");
+            Assert.Equal(400, item.ActualRight, 0.5);
+        }
+
+        [Fact]
+        public async Task AlignRight_OnAColumnItem_InsideATableCell_AlignsTheItemToTheCellsRightEdge()
+        {
+            // The report's fifth variant: r.Cell().Column(col => col.Item().AlignRight().Text("x")).
+            CssBox? item = null;
+            CssBox? cell = null;
+            await BuildAndLayoutPage(page =>
+            {
+                page.Size(PdfLength.Points(400), PdfLength.Points(200));
+                page.Margin(0);
+                page.Content(c => c.Table(table =>
+                {
+                    table.Columns(cols => { cols.RelativeColumn(1); cols.RelativeColumn(1); });
+                    table.Row(row =>
+                    {
+                        row.Cell().Text("label");
+                        var second = (ContainerBuilder)row.Cell();
+                        second.Column(col =>
+                        {
+                            var b = (ContainerBuilder)col.Item();
+                            b.AlignRight().Text("x");
+                            item = b.Box;
+                        });
+                        cell = second.Box;
+                    });
+                }));
+            });
+
+            Assert.Equal(cell!.ActualRight, item!.ActualRight, 1.0);
+            Assert.True(item.Location.X > cell.Location.X + 100, "the item must sit at the right of its 200pt cell");
+        }
+
+        [Fact]
+        public async Task TextAlignment_OutsideATableCell_AlignsTheParagraph()
+        {
+            CssBox? paragraph = null;
+            await BuildAndLayoutPage(page =>
+            {
+                page.Size(PdfLength.Points(400), PdfLength.Points(200));
+                page.Margin(0);
+                page.Content(c =>
+                {
+                    var b = (ContainerBuilder)c;
+                    b.Text(t => { t.Alignment(TextAlignment.Right); t.Span("RIGHT"); });
+                    paragraph = b.Box;
+                });
+            });
+
+            var word = LayoutHarnessDescendants(paragraph!).SelectMany(box => box.Words).Single();
+            Assert.True(paragraph!.ActualRight - word.Right < 1.0, $"word ends at {word.Right}, paragraph at {paragraph.ActualRight}");
+        }
+
+        /// <summary>Lays out a two-column, 200pt-per-column table whose second cell is filled by <paramref name="fill"/>.</summary>
+        private static async Task<(CssBox cell, CssRect word)> LayOutCell(Action<IContainer> fill)
+        {
+            CssBox? cell = null;
+            await BuildAndLayoutPage(page =>
+            {
+                page.Size(PdfLength.Points(400), PdfLength.Points(200));
+                page.Margin(0);
+                page.Content(c => c.Table(table =>
+                {
+                    table.Columns(cols => { cols.RelativeColumn(1); cols.RelativeColumn(1); });
+                    table.Row(row =>
+                    {
+                        row.Cell().Text("label");
+                        var second = (ContainerBuilder)row.Cell();
+                        fill(second);
+                        cell = second.Box;
+                    });
+                }));
+            });
+
+            var word = LayoutHarnessDescendants(cell!).SelectMany(box => box.Words).Single();
+            return (cell!, word);
+        }
+
+        private static void AssertWordAligned(CssBox cell, CssRect word, TextAlignment alignment, double padding)
+        {
+            var contentLeft = cell.Location.X + padding;
+            var contentRight = cell.ActualRight - padding;
+            const double tolerance = 1.0;
+
+            switch (alignment)
+            {
+                case TextAlignment.Left:
+                case TextAlignment.Start:
+                    Assert.Equal(contentLeft, word.Left, tolerance);
+                    break;
+                case TextAlignment.Center:
+                    Assert.Equal((contentLeft + contentRight) / 2, (word.Left + word.Right) / 2, tolerance);
+                    Assert.True(word.Left > contentLeft + 10, "a centered word must not sit against the left edge");
+                    break;
+                default:
+                    Assert.Equal(contentRight, word.Right, tolerance);
+                    Assert.True(word.Left > contentLeft + 10, "a right-aligned word must not sit against the left edge");
+                    break;
+            }
+        }
+
         private static System.Collections.Generic.IEnumerable<CssBox> LayoutHarnessDescendants(CssBox root)
         {
             yield return root;

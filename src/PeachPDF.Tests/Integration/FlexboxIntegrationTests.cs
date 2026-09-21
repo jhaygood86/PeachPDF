@@ -2233,6 +2233,364 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(a.Location.Y, b.Location.Y, 0.5);
         }
 
+        // ─── Cross-axis auto margins (CSS Flexbox 1 §8.1, §9.4 step 11) ─────────────────────────
+        //
+        // An auto margin in the cross axis absorbs the line's free cross space and overrides align-self; the
+        // item is not stretched. Only the main axis was handled before, so a column item's margin-left: auto
+        // (and a row item's margin-top: auto) left the item at the start edge.
+
+        // A 1x1 PNG: a replaced element whose width:auto is its own small intrinsic size, not container fill.
+        private const string TinyPng =
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+        [Theory]
+        [InlineData("margin-top:auto", 80)]          // pushed to the bottom of the line
+        [InlineData("margin-bottom:auto", 0)]        // held at the top
+        [InlineData("margin-top:auto; margin-bottom:auto", 40)] // both auto: centred
+        [InlineData("margin-top:auto; margin-bottom:10pt", 70)] // a fixed margin is subtracted first
+        [InlineData("margin-top:10pt; margin-bottom:auto", 10)]
+        public async Task Row_AutoCrossMargins_ShareTheLinesFreeSpace(string margins, double expectedTop)
+        {
+            var html = Wrap($@"
+                <div id='container' style='display:flex; width:300pt; height:100pt;'>
+                    <div id='a' style='width:50pt; height:20pt; {margins}'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+
+            Assert.Equal(container.ClientTop + expectedTop, a.Location.Y, 0.5);
+            // Not stretched: an auto margin means the item keeps its own cross size.
+            Assert.Equal(20, a.ActualBoxSizingHeight, 0.5);
+        }
+
+        [Theory]
+        [InlineData("flex-start")]
+        [InlineData("flex-end")]
+        [InlineData("center")]
+        [InlineData("stretch")]
+        [InlineData("baseline")]
+        public async Task Row_AutoCrossMargin_OverridesEveryAlignSelf(string alignSelf)
+        {
+            var html = Wrap($@"
+                <div id='container' style='display:flex; width:300pt; height:100pt;'>
+                    <div id='a' style='width:50pt; height:20pt; margin-top:auto; align-self:{alignSelf};'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+
+            Assert.Equal(container.ClientTop + 80, FindById(root, "a")!.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task Row_AutoCrossMargin_ItemIsNotStretched_ButAnItemWithoutOneStillIs()
+        {
+            // The regression guard for the stretch path: the same auto-height item stretches to the
+            // 100pt line by default, and stops stretching (keeping its 20pt content height) only when it
+            // has an auto cross margin.
+            var html = Wrap($@"
+                <div id='container' style='display:flex; width:300pt; height:100pt;'>
+                    <div id='stretched' style='width:50pt;'><div style='height:20pt'></div></div>
+                    <div id='pinned' style='width:50pt; margin-top:auto;'><div style='height:20pt'></div></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var stretched = FindById(root, "stretched")!;
+            var pinned = FindById(root, "pinned")!;
+
+            Assert.Equal(100, stretched.ActualBoxSizingHeight, 0.5);
+            Assert.Equal(container.ClientTop, stretched.Location.Y, 0.5);
+
+            Assert.Equal(20, pinned.ActualBoxSizingHeight, 0.5);
+            Assert.Equal(container.ClientTop + 80, pinned.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task Row_AutoCrossMargin_DoesNotChangeTheLineSize_ItAbsorbsWhatIsLeft()
+        {
+            // An auto margin counts as 0 while the line is sized (§9.4 step 8), so the line is still as tall
+            // as its tallest item, and the auto-margined item is placed within it.
+            var html = Wrap($@"
+                <div id='container' style='display:flex; align-items:flex-start; width:300pt;'>
+                    <div id='tall' style='width:50pt; height:60pt;'></div>
+                    <div id='a' style='width:50pt; height:10pt; margin-top:auto;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+
+            Assert.Equal(60, container.ActualBoxSizingHeight, 0.5);
+            Assert.Equal(container.ClientTop + 50, FindById(root, "a")!.Location.Y, 0.5);
+            Assert.Equal(container.ClientTop, FindById(root, "tall")!.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task Row_AutoCrossMargin_MultiLine_EachItemUsesItsOwnLine()
+        {
+            // Two lines (a+b, then c). a sits at the bottom of the first line, c is held at the top of the
+            // second; align-content: flex-start keeps the lines at their natural 40pt.
+            var html = Wrap($@"
+                <div id='container' style='display:flex; flex-wrap:wrap; align-content:flex-start; width:200pt; height:200pt;'>
+                    <div id='a' style='width:100pt; height:10pt; margin-top:auto;'></div>
+                    <div id='b' style='width:100pt; height:40pt;'></div>
+                    <div id='c' style='width:150pt; height:10pt; margin-bottom:auto;'></div>
+                    <div id='d' style='width:50pt; height:40pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            double top = FindById(root, "container")!.ClientTop;
+
+            // Line 1 is 0..40 (b), line 2 is 40..80 (d).
+            Assert.Equal(top + 30, FindById(root, "a")!.Location.Y, 0.5);
+            Assert.Equal(top, FindById(root, "b")!.Location.Y, 0.5);
+            Assert.Equal(top + 40, FindById(root, "c")!.Location.Y, 0.5);
+            Assert.Equal(top + 40, FindById(root, "d")!.Location.Y, 0.5);
+        }
+
+        [Theory]
+        [InlineData("margin-top:auto", 90)]   // physical bottom of the line - which is also wrap-reverse's flex-start
+        [InlineData("margin-bottom:auto", 60)] // physical top of the line - NOT where flex-start (bottom) would put it
+        public async Task Row_WrapReverse_AutoMargin_NamesAPhysicalSide_NotFlexStart(string margins, double expectedTop)
+        {
+            // Same fixture as WrapReverse_AlignItems_PlacesTheShortItemAgainstTheSwappedEdge: a and b share
+            // the bottom line (60..100), c has the line above it. An auto margin is a physical margin, so
+            // margin-bottom:auto holds `a` at the top of ITS line whichever way the lines are stacked -
+            // where align-self: flex-start would (wrap-reverse) have put it at the bottom.
+            var html = Wrap($@"
+                <div id='container' style='display:flex; flex-wrap:wrap-reverse; align-items:flex-start;
+                                           align-content:flex-start; width:200pt; height:100pt;'>
+                    <div id='a' style='width:100pt; height:10pt; flex-shrink:0; {margins}'></div>
+                    <div id='b' style='width:100pt; height:40pt; flex-shrink:0;'></div>
+                    <div id='c' style='width:150pt; height:40pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+
+            Assert.Equal(container.ClientTop + expectedTop, FindById(root, "a")!.Location.Y, 0.5);
+            // The stack of lines is untouched by the item's margins.
+            Assert.Equal(container.ClientTop + 60, FindById(root, "b")!.Location.Y, 0.5);
+            Assert.Equal(container.ClientTop + 20, FindById(root, "c")!.Location.Y, 0.5);
+        }
+
+        [Theory]
+        [InlineData("margin-left:auto", 200)]                       // pushed to the right edge: the reported case
+        [InlineData("margin-right:auto", 0)]                        // held at the left
+        [InlineData("margin-left:auto; margin-right:auto", 100)]    // both auto: centred
+        [InlineData("margin-left:auto; margin-right:20pt", 180)]
+        public async Task Column_AutoCrossMargins_ShareTheLinesFreeSpace(string margins, double expectedLeft)
+        {
+            var html = Wrap($@"
+                <div id='container' style='display:flex; flex-direction:column; width:300pt; height:100pt;'>
+                    <div id='a' style='width:100pt; height:20pt; {margins}'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+
+            Assert.Equal(container.ClientLeft + expectedLeft, a.Location.X, 0.5);
+            Assert.Equal(100, a.ActualBoxSizingWidth, 0.5);
+        }
+
+        [Theory]
+        [InlineData("flex-start")]
+        [InlineData("flex-end")]
+        [InlineData("center")]
+        [InlineData("stretch")]
+        public async Task Column_AutoCrossMargin_OverridesEveryAlignSelf(string alignSelf)
+        {
+            var html = Wrap($@"
+                <div id='container' style='display:flex; flex-direction:column; width:300pt; height:100pt;'>
+                    <div id='a' style='width:100pt; height:20pt; margin-left:auto; align-self:{alignSelf};'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+
+            Assert.Equal(container.ClientLeft + 200, FindById(root, "a")!.Location.X, 0.5);
+        }
+
+        [Fact]
+        public async Task Column_AutoWidthItemWithAnAutoCrossMargin_ShrinksToItsContent_ThenSitsAtTheEdge()
+        {
+            // No width at all: the item has to be fit-content (not container-fill) for its auto margin to
+            // have anything to absorb - the declarative `column.Item().AlignRight().Text("x")` shape.
+            var html = Wrap($@"
+                <div id='container' style='display:flex; flex-direction:column; width:300pt;'>
+                    <div id='a' style='margin-left:auto;'><div style='width:60pt; height:20pt;'></div></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+
+            Assert.Equal(60, a.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(container.ClientRight, a.ActualRight, 0.5);
+        }
+
+        [Fact]
+        public async Task Column_AutoCrossMargin_ItemIsNotStretched_ButAnItemWithoutOneStillIs()
+        {
+            // The column-direction regression guard for the stretch path. An <img> is the fixture because its
+            // width:auto is its own intrinsic size, so it only fills the column when it is genuinely stretched
+            // (an ordinary block already fills, which would make this test vacuous).
+            var html = Wrap($@"
+                <div id='container' style='display:flex; flex-direction:column; width:300pt; height:100pt;'>
+                    <img id='stretched' src='{TinyPng}' style='height:10pt; align-self:stretch;'>
+                    <img id='pinned' src='{TinyPng}' style='height:10pt; align-self:stretch; margin-left:auto;'>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var stretched = FindById(root, "stretched")!;
+            var pinned = FindById(root, "pinned")!;
+
+            Assert.Equal(300, stretched.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(container.ClientLeft, stretched.Location.X, 0.5);
+
+            // align-self: stretch is overridden by the auto margin: the image keeps its intrinsic 10pt width.
+            Assert.Equal(10, pinned.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(container.ClientRight, pinned.ActualRight, 0.5);
+        }
+
+        [Fact]
+        public async Task Column_AutoCrossMargins_AreResolvedPerItem()
+        {
+            var html = Wrap($@"
+                <div id='container' style='display:flex; flex-direction:column; width:300pt; height:100pt;'>
+                    <div id='left' style='width:100pt; height:10pt;'></div>
+                    <div id='right' style='width:100pt; height:10pt; margin-left:auto;'></div>
+                    <div id='middle' style='width:100pt; height:10pt; margin:0 auto;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            double left = FindById(root, "container")!.ClientLeft;
+
+            Assert.Equal(left, FindById(root, "left")!.Location.X, 0.5);
+            Assert.Equal(left + 200, FindById(root, "right")!.Location.X, 0.5);
+            Assert.Equal(left + 100, FindById(root, "middle")!.Location.X, 0.5);
+        }
+
+        [Fact]
+        public async Task Column_MultiLine_AutoMarginAbsorbsTheFreeSpaceOfItsOwnLine()
+        {
+            // Column, wrapping: line 1 holds a and b (60pt tall each, 100pt of container height fits only
+            // one - so put them in separate lines by height). Lines are as wide as their widest item.
+            var html = Wrap($@"
+                <div id='container' style='display:flex; flex-direction:column; flex-wrap:wrap; align-content:flex-start;
+                                           width:300pt; height:100pt;'>
+                    <div id='a' style='width:40pt; height:60pt; margin-left:auto;'></div>
+                    <div id='b' style='width:100pt; height:30pt;'></div>
+                    <div id='c' style='width:30pt; height:60pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            double left = FindById(root, "container")!.ClientLeft;
+
+            // Line 1 (a, b) is as wide as b: 100pt. a is pushed to that line's right edge, not the container's.
+            Assert.Equal(left + 60, FindById(root, "a")!.Location.X, 0.5);
+            Assert.Equal(left, FindById(root, "b")!.Location.X, 0.5);
+            // Line 2 starts where line 1 ends.
+            Assert.Equal(left + 100, FindById(root, "c")!.Location.X, 0.5);
+        }
+
+        [Fact]
+        public async Task Column_MultiLine_BothAutoMargins_CentreWithinTheLine_AndDoNotWidenIt()
+        {
+            // The case that tells "an auto margin counts as 0 while the line is sized" from "it is whatever
+            // block layout resolved it to": with BOTH margins auto, block layout centres the item in the whole
+            // 300pt container (130pt each side of a 40pt item), which - read as a real margin - would make
+            // line 1 300pt wide and shove line 2 to the far edge. Correctly, line 1 is as wide as its widest
+            // item (100pt), a is centred inside that, and line 2 follows immediately.
+            var html = Wrap($@"
+                <div id='container' style='display:flex; flex-direction:column; flex-wrap:wrap; align-content:flex-start;
+                                           width:300pt; height:100pt;'>
+                    <div id='a' style='width:40pt; height:60pt; margin-left:auto; margin-right:auto;'></div>
+                    <div id='b' style='width:100pt; height:30pt;'></div>
+                    <div id='c' style='width:30pt; height:60pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            double left = FindById(root, "container")!.ClientLeft;
+
+            Assert.Equal(left + 30, FindById(root, "a")!.Location.X, 0.5);
+            Assert.Equal(left + 100, FindById(root, "c")!.Location.X, 0.5);
+        }
+
+        [Theory]
+        [InlineData("margin-left:auto", 200)]
+        [InlineData("margin-right:auto", 0)]
+        [InlineData("margin-left:auto; margin-right:auto", 100)]
+        public async Task Column_RtlContainer_AutoMarginsAreStillPhysical(string margins, double expectedLeft)
+        {
+            // An auto margin names a physical side (`margin-left` is the left margin in either direction),
+            // so direction: rtl must not mirror where the free space goes.
+            var html = Wrap($@"
+                <div id='container' style='display:flex; flex-direction:column; direction:rtl; width:300pt; height:100pt;'>
+                    <div id='a' style='width:100pt; height:20pt; {margins}'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+
+            Assert.Equal(container.ClientLeft + expectedLeft, FindById(root, "a")!.Location.X, 0.5);
+        }
+
+        [Theory]
+        [InlineData("margin-top:auto", 80)]
+        [InlineData("margin-bottom:auto", 0)]
+        public async Task Row_RtlContainer_AutoCrossMarginsAreUnaffected(string margins, double expectedTop)
+        {
+            var html = Wrap($@"
+                <div id='container' style='display:flex; direction:rtl; width:300pt; height:100pt;'>
+                    <div id='a' style='width:50pt; height:20pt; {margins}'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+
+            Assert.Equal(container.ClientTop + expectedTop, FindById(root, "a")!.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task Row_AutoCrossMargin_ItemFillingItsLine_HasNothingToAbsorb()
+        {
+            var html = Wrap($@"
+                <div id='container' style='display:flex; width:300pt; height:100pt;'>
+                    <div id='a' style='width:50pt; height:100pt; margin-top:auto; margin-bottom:auto;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+
+            Assert.Equal(container.ClientTop, FindById(root, "a")!.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task Row_AutoCrossMargin_ItemTallerThanAFixedContainer_SitsAtTheStartEdge()
+        {
+            // The container is only 50pt tall but its single line is sized to the 80pt item, so there is no
+            // free space: per §9.4 step 11 the item ignores its auto margin and stays at the block-start edge
+            // (an overflowing box overflows in the end direction) rather than being pushed off the top.
+            var html = Wrap($@"
+                <div id='container' style='display:flex; width:300pt; height:50pt;'>
+                    <div id='a' style='width:50pt; height:80pt; margin-top:auto;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+
+            Assert.Equal(container.ClientTop, FindById(root, "a")!.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task Row_BaselineGroup_IgnoresAnAutoMarginedItem()
+        {
+            // b is placed by its auto margin, so it must not take part in the baseline group. It carries much
+            // larger text than a and c: were it in the group, its taller baseline would push a and c down to
+            // meet it. Instead a and c share a baseline flush with the top of the line, and b sits at the bottom.
+            var html = Wrap($@"
+                <div id='container' style='display:flex; align-items:baseline; width:300pt; height:100pt;'>
+                    <div id='a' style='width:50pt; font-size:10pt;'>a</div>
+                    <div id='b' style='width:50pt; font-size:40pt; margin-top:auto;'>B</div>
+                    <div id='c' style='width:50pt; font-size:10pt;'>c</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var b = FindById(root, "b")!;
+
+            Assert.Equal(container.ClientBottom, b.ActualBottom, 0.5);
+            Assert.Equal(container.ClientTop, FindById(root, "a")!.Location.Y, 0.5);
+            Assert.Equal(container.ClientTop, FindById(root, "c")!.Location.Y, 0.5);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 

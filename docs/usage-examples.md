@@ -510,7 +510,7 @@ var config = new PdfGenerateConfig
 |---|---|---|
 | PDF/A-1 | `PdfA1B`, `PdfA1A` | Based on PDF 1.4. **Forbids PDF transparency groups entirely** — see below. |
 | PDF/A-2 | `PdfA2B`, `PdfA2U`, `PdfA2A` | Based on PDF 1.7. Permits transparency. |
-| PDF/A-3 | `PdfA3B`, `PdfA3U`, `PdfA3A` | Same as PDF/A-2, plus permission to embed arbitrary files (PeachPDF has no "attach a file" API, so this allowance goes unused). |
+| PDF/A-3 | `PdfA3B`, `PdfA3U`, `PdfA3A` | Same as PDF/A-2, plus permission to embed arbitrary files — see [Embedding files](#embedding-files-pdfa-3-attachments). |
 
 If you don't have a specific requirement for PDF/A-1 or PDF/A-3, `PdfA2B` (or `PdfA2U`, effectively free once you're already targeting 2B — see below) is the least restrictive, most broadly useful choice.
 
@@ -552,6 +552,97 @@ var config = new PdfGenerateConfig { EnableXmpMetadata = true, Metadata = metada
 #### The XMP creation date
 
 `xmp:CreateDate` needs a real value. PeachPDF uses the same date HTML `<meta>`-extraction already populates the Document Information dictionary's `/CreationDate` from, or `PdfDocumentMetadata.CreationDate` when you set it explicitly (it wins over the HTML-extracted date, same override pattern as `Title`/`Author`/etc.). Whenever an XMP stream is being written (`EnableXmpMetadata` or `PdfAConformance`) and neither is available, generation throws an `InvalidOperationException` rather than writing a placeholder date — set `PdfDocumentMetadata.CreationDate` to fix it.
+
+### Embedding files (PDF/A-3 attachments)
+
+PDF/A-3 is the PDF/A part that lets a document carry arbitrary files — the source data behind a report, supporting documents, or the structured data of an invoice. Add them to `PdfGenerateConfig.Attachments`:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PdfAConformance = PdfAConformance.PdfA3B,
+    Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow }
+};
+
+config.Attachments.Add(new PdfAttachment
+{
+    FileName = "q3-sales.csv",
+    MimeType = "text/csv",
+    Relationship = PdfAttachmentRelationship.Data,
+    Description = "The numbers behind the report's table",
+    Data = File.ReadAllBytes("q3-sales.csv")
+});
+```
+
+Each file shows up in a viewer's attachments panel and is indexed twice: in the document catalog's `/AF` (Associated Files) array, which PDF/A-3 uses to say how a file relates to the document, and in the `/Names /EmbeddedFiles` name tree, which viewers list attachments from.
+
+| `PdfAttachment` property | Meaning |
+|---|---|
+| `FileName` | Required and unique within the document. Limited to Latin-1 characters; a non-ASCII name is also written as a Unicode string. |
+| `Data` | The file's content. |
+| `MimeType` | For example `text/xml`. Defaults to `application/octet-stream`. |
+| `Relationship` | How the file relates to the document — `Source`, `Data`, `Alternative`, `Supplement` or `Unspecified` (the default). It informs a reader; it has no technical effect on the PDF. |
+| `Description` | An optional human-readable description. |
+| `ModificationDate` | The file's last-modification date. Defaults to the document's creation date, so the output stays deterministic (and to the current time when the document has no creation date either). |
+
+Attachments are only allowed with a PDF/A-3 level (`PdfA3B`, `PdfA3U` or `PdfA3A`) or with no PDF/A level at all, where they are ordinary PDF attachments. PDF/A-1 forbids embedded files entirely and PDF/A-2 allows only PDF/A files, so requesting an attachment under one of those levels throws an `InvalidOperationException`. Embedded streams are Flate-compressed unless `CompressContentStreams` is turned off.
+
+Attachments are a whole-document property, like `PdfAConformance`. When several `AddPdfPages`/`AddPages` calls build one document — or a declarative document has several pages — every call must specify the same attachments; the files are embedded once.
+
+### ZUGFeRD / Factur-X e-invoices
+
+Factur-X (France) and ZUGFeRD (Germany) are one hybrid e-invoice format under two names: a PDF/A-3 file that carries the invoice twice — as the readable pages PeachPDF renders, and as structured XML (a Cross Industry Invoice, the syntax of the European EN 16931 invoice standard) that accounting software can read without parsing the pages. Set `PdfGenerateConfig.FacturX` to make the output one:
+
+```csharp
+byte[] invoiceXml = /* the invoice as Cross Industry Invoice XML - see below */;
+
+var config = new PdfGenerateConfig
+{
+    PdfAConformance = PdfAConformance.PdfA3A,
+    DefaultLanguage = "en",
+    Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+    FacturX = new FacturXOptions { Xml = invoiceXml }
+};
+
+var document = await generator.GeneratePdf(invoiceHtml, config);
+```
+
+**PeachPDF embeds the XML you give it. It does not generate the invoice XML, and it does not validate it** against the format's schemas and business rules. Generate the XML with any Cross Industry Invoice library — for .NET, the open-source `ZUGFeRD-csharp` package (`InvoiceDescriptor` … `Save(stream, ZUGFeRDVersion.Version23, Profile.Comfort)`) — and check the finished file with a validator such as Mustang. What PeachPDF takes care of is the PDF side of the format, which is fiddly to get right by hand:
+
+- the file specification, embedded-file stream (MIME type `text/xml`, with `/Params /ModDate`), and its entries in both the catalog's `/AF` array and the `/Names /EmbeddedFiles` name tree;
+- the `/AFRelationship` the specification calls for;
+- the XMP metadata block — the `fx:` properties (`DocumentType`, `DocumentFileName`, `Version`, `ConformanceLevel`) and the PDF/A extension schema that declares them, without which a PDF/A validator rejects the properties.
+
+Requirements:
+
+- **A PDF/A-3 level.** `PdfA3B`, `PdfA3U` or `PdfA3A` all work; the specification recommends `PdfA3A`, the accessible level (which needs a document language — the source HTML's `lang`, or `DefaultLanguage`). Any other level, or none, throws an `InvalidOperationException`.
+- **A creation date**, like any PDF that carries XMP metadata: `PdfDocumentMetadata.CreationDate`, or a date in the source HTML.
+- The invoice XML must be well-formed and a Cross Industry Invoice (root element `CrossIndustryInvoice`).
+
+#### The profile
+
+A Factur-X invoice declares how much of the EN 16931 data model its XML carries — its *profile*. PeachPDF reads it from the XML's own guideline identifier (`GuidelineSpecifiedDocumentContextParameter/ID`, business term BT-24), so by default you set nothing. Set `FacturXOptions.Profile` only to state it explicitly — it must then agree with the XML, so a document cannot claim a profile its XML does not meet — or when the XML uses a guideline PeachPDF does not recognise.
+
+| `FacturXProfile` | `fx:ConformanceLevel` | Embedded as | Default `/AFRelationship` |
+|---|---|---|---|
+| `Minimum` | `MINIMUM` | `factur-x.xml` | `Data` |
+| `BasicWl` | `BASIC WL` | `factur-x.xml` | `Data` |
+| `Basic` | `BASIC` | `factur-x.xml` | `Alternative` |
+| `En16931` | `EN 16931` | `factur-x.xml` | `Alternative` |
+| `Extended` | `EXTENDED` | `factur-x.xml` | `Alternative` |
+| `XRechnung` | `XRECHNUNG` | `xrechnung.xml` | `Alternative` |
+
+`Minimum` and `BasicWl` carry too little to be an invoice under German tax law, and the German rules forbid them when both seller and buyer are in Germany; prefer `Basic`, or better `En16931`. PeachPDF cannot know the parties, so it does not enforce this.
+
+`FacturXOptions.Relationship` overrides the `/AFRelationship`, within what the specification permits for the profile. `Alternative` — asserting that the PDF and the XML carry the same invoice information — is the only value allowed for German invoices; French invoices may also use `Source` or `Data` for `Basic`, `En16931` and `Extended`. A value outside the permitted set is rejected.
+
+#### Supporting documents
+
+Add further files — a purchase order, a timesheet — to `PdfGenerateConfig.Attachments` as described [above](#embedding-files-pdfa-3-attachments). The invoice XML is always the first attachment, and a Factur-X document carries exactly one invoice data file, so `Attachments` may not use the names `factur-x.xml` or `xrechnung.xml`.
+
+Like `Attachments` and `PdfAConformance`, `FacturX` is a whole-document property: when several `AddPdfPages`/`AddPages` calls build one document — or a declarative document has several pages — every call must specify the same invoice.
+
+The [showcase](showcase.html) has two complete, validated examples, built with the declarative API and `ZUGFeRD-csharp`: an EN 16931 invoice between companies and an XRechnung invoice to a public body. Only the Factur-X 1.0x / ZUGFeRD 2.1-and-later XMP schema (`fx`) is supported, not the legacy ZUGFeRD 1.0 and 2.0 ones, and the container is always PDF/A-3: the specification also allows PDF/A-4f, but PeachPDF has no PDF/A-4 support.
 
 ### Color and ICC profiles
 

@@ -130,6 +130,11 @@ internal static class ArgumentParser
                 case "pdf-keywords": _options.PdfKeywords = RequireValue(name, inlineValue) ?? _options.PdfKeywords; break;
                 case "pdf-creator": _options.PdfCreator = RequireValue(name, inlineValue) ?? _options.PdfCreator; break;
                 case "pdf-lang": _options.PdfLang = RequireValue(name, inlineValue) ?? _options.PdfLang; break;
+                case "pdfa": ParsePdfA(_options, RequireValue(name, inlineValue)); break;
+                case "pdf-creation-date": ParseCreationDate(_options, RequireValue(name, inlineValue)); break;
+                case "attach": AddAttachment(_options, RequireValue(name, inlineValue)); break;
+                case "facturx-xml": _options.FacturXXmlPath = RequireValue(name, inlineValue) ?? _options.FacturXXmlPath; break;
+                case "facturx-profile": ParseFacturXProfile(_options, RequireValue(name, inlineValue)); break;
 
                 case "http-timeout": SetTimeout(_options, RequireValue(name, inlineValue)); break;
                 case "http-header": AddHeader(_options, RequireValue(name, inlineValue)); break;
@@ -230,6 +235,137 @@ internal static class ArgumentParser
         else
         {
             options.Errors.Add($"invalid --http-timeout value '{value}' (expected a positive number of seconds)");
+        }
+    }
+
+    private static readonly Dictionary<string, PdfAConformance> PdfALevels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["1a"] = PdfAConformance.PdfA1A,
+        ["1b"] = PdfAConformance.PdfA1B,
+        ["2a"] = PdfAConformance.PdfA2A,
+        ["2b"] = PdfAConformance.PdfA2B,
+        ["2u"] = PdfAConformance.PdfA2U,
+        ["3a"] = PdfAConformance.PdfA3A,
+        ["3b"] = PdfAConformance.PdfA3B,
+        ["3u"] = PdfAConformance.PdfA3U,
+    };
+
+    private static void ParsePdfA(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        if (PdfALevels.TryGetValue(value, out var level))
+        {
+            options.PdfA = level;
+        }
+        else
+        {
+            options.Errors.Add($"invalid --pdfa value '{value}' (expected one of {string.Join(", ", PdfALevels.Keys)})");
+        }
+    }
+
+    private static void ParseCreationDate(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        // A date without an offset means UTC, so the same command line gives the same file on every machine.
+        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var date))
+        {
+            options.PdfCreationDate = date;
+        }
+        else
+        {
+            options.Errors.Add($"invalid --pdf-creation-date value '{value}' (expected an ISO 8601 date or date-time, e.g. 2026-09-21T10:30:00Z)");
+        }
+    }
+
+    private static readonly Dictionary<string, PdfAttachmentRelationship> AttachmentRelationships = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["source"] = PdfAttachmentRelationship.Source,
+        ["data"] = PdfAttachmentRelationship.Data,
+        ["alternative"] = PdfAttachmentRelationship.Alternative,
+        ["supplement"] = PdfAttachmentRelationship.Supplement,
+        ["unspecified"] = PdfAttachmentRelationship.Unspecified,
+    };
+
+    /// <summary>
+    /// <c>--attach=FILE[;mime=TYPE][;rel=RELATIONSHIP]</c>: the file to embed, optionally with its MIME type
+    /// and its <c>/AFRelationship</c>.
+    /// </summary>
+    private static void AddAttachment(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        var parts = value.Split(';');
+        var path = parts[0].Trim();
+        if (path.Length == 0)
+        {
+            options.Errors.Add("--attach needs a file (--attach=FILE[;mime=TYPE][;rel=RELATIONSHIP])");
+            return;
+        }
+
+        string? mimeType = null;
+        PdfAttachmentRelationship? relationship = null;
+
+        foreach (var part in parts.Skip(1))
+        {
+            var separator = part.IndexOf('=');
+            var key = separator < 0 ? part.Trim() : part[..separator].Trim();
+            var setting = separator < 0 ? "" : part[(separator + 1)..].Trim();
+
+            if (key.Equals("mime", StringComparison.OrdinalIgnoreCase) && setting.Contains('/'))
+            {
+                mimeType = setting;
+            }
+            else if (key.Equals("rel", StringComparison.OrdinalIgnoreCase) && AttachmentRelationships.TryGetValue(setting, out var parsed))
+            {
+                relationship = parsed;
+            }
+            else
+            {
+                options.Errors.Add(
+                    $"invalid --attach setting '{part.Trim()}' (expected mime=TYPE/SUBTYPE or rel={string.Join("|", AttachmentRelationships.Keys)})");
+                return;
+            }
+        }
+
+        options.Attachments.Add(new CliAttachment(path, mimeType, relationship));
+    }
+
+    private static void ParseFacturXProfile(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        FacturXProfile? profile = value.Replace("-", "").Replace("_", "").Replace(" ", "").ToLowerInvariant() switch
+        {
+            "minimum" => FacturXProfile.Minimum,
+            "basicwl" => FacturXProfile.BasicWl,
+            "basic" => FacturXProfile.Basic,
+            "en16931" => FacturXProfile.En16931,
+            "extended" => FacturXProfile.Extended,
+            "xrechnung" => FacturXProfile.XRechnung,
+            _ => null,
+        };
+
+        if (profile is null)
+        {
+            options.Errors.Add($"invalid --facturx-profile value '{value}' (expected minimum, basic-wl, basic, en16931, extended or xrechnung)");
+        }
+        else
+        {
+            options.FacturXProfile = profile;
         }
     }
 
@@ -440,6 +576,16 @@ internal static class ArgumentParser
         if (options.NoNetwork && options.Inputs.Any(input => input.Kind == CliInputKind.Url))
         {
             options.Errors.Add("cannot fetch a URL input while --no-network is set");
+        }
+
+        if (options.FacturXProfile is not null && options.FacturXXmlPath is null)
+        {
+            options.Errors.Add("--facturx-profile has no effect without --facturx-xml");
+        }
+
+        if (options.FacturXXmlPath is not null && options.PdfA is not (PdfAConformance.PdfA3A or PdfAConformance.PdfA3B or PdfAConformance.PdfA3U))
+        {
+            options.Errors.Add("--facturx-xml requires a PDF/A-3 level: add --pdfa=3a (recommended), --pdfa=3b or --pdfa=3u");
         }
 
         // Without an explicit -o, the output name is derived from the first input's file name, which

@@ -239,8 +239,22 @@ namespace PeachPDF.Layout
             return this;
         }
 
+        /// <summary>
+        /// Margins do not apply to a table cell (CSS 2.1 §17.5), so the auto-margin positioning the three
+        /// Align methods use everywhere else would silently do nothing on one. What "align this container's own
+        /// content" can mean for a cell is aligning its inline content - which is what a table author asks
+        /// for when they right-align a column of amounts - so a cell gets <c>text-align</c> instead.
+        /// </summary>
+        private bool IsTableCell => box.Display.Value == PeachPDF.CSS.DisplayMode.TableCell;
+
         public IContainer AlignLeft()
         {
+            if (IsTableCell)
+            {
+                properties.SetTextAlign(box, "left");
+                return this;
+            }
+
             properties.Set(box, "margin-left", "0");
             properties.Set(box, "margin-right", "auto");
             return this;
@@ -248,6 +262,12 @@ namespace PeachPDF.Layout
 
         public IContainer AlignCenter()
         {
+            if (IsTableCell)
+            {
+                properties.SetTextAlign(box, "center");
+                return this;
+            }
+
             properties.Set(box, "margin-left", "auto");
             properties.Set(box, "margin-right", "auto");
             return this;
@@ -255,6 +275,12 @@ namespace PeachPDF.Layout
 
         public IContainer AlignRight()
         {
+            if (IsTableCell)
+            {
+                properties.SetTextAlign(box, "right");
+                return this;
+            }
+
             properties.Set(box, "margin-left", "auto");
             properties.Set(box, "margin-right", "0");
             return this;

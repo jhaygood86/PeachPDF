@@ -691,7 +691,11 @@ namespace PeachPDF.Html.Core.Dom
 
             // Resolve the item's effective cross-axis alignment (same idiom as ComputeCrossOffsets).
             var align = box.AlignSelf.Value == AlignItem.Auto ? _flexBox.AlignItems.Value : box.AlignSelf.Value;
-            if (align is AlignItem.Stretch or AlignItem.Normal) return;
+
+            // An item with an auto cross margin is never stretched (§8.3: stretch needs "neither of the
+            // cross-axis margins" to be auto), so it takes its fit-content width whatever its alignment says -
+            // that is what leaves the free space its auto margin will absorb.
+            if (align is AlignItem.Stretch or AlignItem.Normal && !HasAutoCrossMargin(box)) return;
 
             // Only auto-width items shrink; a definite width is already the item's cross size.
             if (CssValueParser.IsValidLength(box.Width)) return;
@@ -700,8 +704,8 @@ namespace PeachPDF.Html.Core.Dom
             // the container cross size is unknown → no cap). Subtracting the margins keeps an overflowing item
             // (content wider than the container) at the container-minus-margins width block layout already
             // gave it, rather than re-expanding it to the full container width and pushing the margins into
-            // overflow.
-            double crossMargins = box.ActualMarginLeft + box.ActualMarginRight;
+            // overflow. An auto margin counts as 0 here - it is what will absorb whatever is left.
+            double crossMargins = CrossMarginBefore(box) + CrossMarginAfter(box);
             double available = containerCrossSize > 0 ? Math.Max(0, containerCrossSize - crossMargins) : double.MaxValue;
             double fitOuter = await CssLayoutEngine.GetFitContentWidth(g, box, available);
 
@@ -739,10 +743,11 @@ namespace PeachPDF.Html.Core.Dom
         private double ComputeLineCrossSize(FlexLine line)
         {
             if (line.Items.Count == 0) return 0;
+            // The item's outer cross size, with an auto cross margin counted as 0 (§9.4 step 8 - the free
+            // space it later absorbs is measured against exactly this line size).
             return line.Items.Max(i =>
-                _mainAxisIsPhysicalX
-                    ? i.Box.ActualBoxSizingHeight + i.Box.ActualMarginTop  + i.Box.ActualMarginBottom
-                    : i.Box.ActualBoxSizingWidth  + i.Box.ActualMarginLeft + i.Box.ActualMarginRight);
+                (_mainAxisIsPhysicalX ? i.Box.ActualBoxSizingHeight : i.Box.ActualBoxSizingWidth)
+                    + CrossMarginBefore(i.Box) + CrossMarginAfter(i.Box));
         }
 
         // ─── Phase 6: align-content ───────────────────────────────────────────────
@@ -933,6 +938,10 @@ namespace PeachPDF.Html.Core.Dom
                     var itemAlign = item.Box.AlignSelf.Value == AlignItem.Auto ? _flexBox.AlignItems.Value : item.Box.AlignSelf.Value;
                     if (itemAlign != AlignItem.Baseline) continue;
 
+                    // An item placed by its auto cross margins is not aligned by its baseline at all (the
+                    // margins override align-self), so it must not pull the shared baseline group around.
+                    if (HasAutoCrossMargin(item.Box)) continue;
+
                     var offset = BaselineAlignment.GetItemBaselineOffset(item.Box);
                     if (offset is null) continue;
 
@@ -960,11 +969,33 @@ namespace PeachPDF.Html.Core.Dom
                 // _isWrapReverse here too: that swap is handled separately by flushCrossStart/flushCrossEnd
                 // below, exactly mirroring how _isReverse never touched the original (pre-writing-mode)
                 // Left/Top-only version of this pair either.
-                double crossMarginBefore = CrossBefore(item.Box.ActualMarginLeft, item.Box.ActualMarginRight,
-                    item.Box.ActualMarginTop, item.Box.ActualMarginBottom);
-                double crossMarginAfter = CrossAfter(item.Box.ActualMarginLeft, item.Box.ActualMarginRight,
-                    item.Box.ActualMarginTop, item.Box.ActualMarginBottom);
+                // An auto cross margin reads as 0 here (CrossMarginBefore/After) - see the auto-margin arm just
+                // below, which is the one place that shares the line's free space into it.
+                double crossMarginBefore = CrossMarginBefore(item.Box);
+                double crossMarginAfter = CrossMarginAfter(item.Box);
                 double itemCrossSize = _mainAxisIsPhysicalX ? item.Box.ActualBoxSizingHeight : item.Box.ActualBoxSizingWidth;
+
+                // CSS Flexbox 1 §9.4 step 11 (§8.1): an item with an auto margin in the cross axis has it
+                // absorb the line's free cross space, and that overrides align-self entirely - the item is
+                // not stretched, not centred, not flushed to an edge. Positive free space is shared equally
+                // among the auto margins; an item that overflows its line ignores its auto margins and sits
+                // at the block-start edge (its start margin - auto or not - is that edge's margin).
+                //
+                // Deliberately independent of _isWrapReverse: an auto margin names a physical side
+                // (CrossBefore/CrossAfter, writing-mode only), so `margin-top: auto` puts a row item at the
+                // bottom of its line whichever way the container's lines are stacked. The wrap-reverse swap
+                // belongs to the flex-start/flex-end arms below, which this branch bypasses on purpose.
+                bool crossBeforeAuto = IsCrossMarginBeforeAuto(item.Box);
+                bool crossAfterAuto = IsCrossMarginAfterAuto(item.Box);
+                if (crossBeforeAuto || crossAfterAuto)
+                {
+                    double freeCross = line.CrossSize - itemCrossSize - crossMarginBefore - crossMarginAfter;
+                    item.CrossOffset = freeCross <= 0 ? crossMarginBefore
+                        : crossBeforeAuto && crossAfterAuto ? freeCross / 2
+                        : crossBeforeAuto ? freeCross + crossMarginBefore
+                        : crossMarginBefore;
+                    continue;
+                }
 
                 // `flex-wrap: wrap-reverse` swaps the cross-start and cross-end directions
                 // (https://www.w3.org/TR/css-flexbox-1/#flex-wrap-property), and that swap applies inside a
@@ -1751,6 +1782,36 @@ namespace PeachPDF.Html.Core.Dom
 
         private bool IsMainMarginAfterAuto(CssBox box) =>
             MainAfter(box.MarginLeft, box.MarginRight, box.MarginTop, box.MarginBottom).Value.IsKeyword;
+
+        // ─── Cross-axis auto margins (CSS Flexbox 1 §8.1, §9.4 step 11) ──────────
+        //
+        // "Before"/"after" follow CrossBefore/CrossAfter: the physical side the cross axis starts on from
+        // writing-mode alone, deliberately NOT swapped by wrap-reverse. An auto margin is a physical
+        // (block-start/inline-start) margin, not a flex-start one, so `margin-top: auto` pushes an item to the
+        // bottom of its row line under wrap-reverse exactly as it does without it.
+
+        private bool IsCrossMarginBeforeAuto(CssBox box) =>
+            CrossBefore(box.MarginLeft, box.MarginRight, box.MarginTop, box.MarginBottom).Value.IsKeyword;
+
+        private bool IsCrossMarginAfterAuto(CssBox box) =>
+            CrossAfter(box.MarginLeft, box.MarginRight, box.MarginTop, box.MarginBottom).Value.IsKeyword;
+
+        private bool HasAutoCrossMargin(CssBox box) => IsCrossMarginBeforeAuto(box) || IsCrossMarginAfterAuto(box);
+
+        // The cross-axis margins as the flex algorithm sees them: an auto margin is 0 until step 11 shares
+        // out the line's free space (§9.4: "any auto margins are treated as zero" while sizing). This is NOT
+        // what CssBox.ActualMarginLeft/Right return for an auto margin - block layout has already resolved
+        // those against the containing block by now, so reading them here would size the line, and shrink the
+        // item, as though the auto margin were a real, already-filled-in length.
+        private double CrossMarginBefore(CssBox box) =>
+            IsCrossMarginBeforeAuto(box)
+                ? 0
+                : CrossBefore(box.ActualMarginLeft, box.ActualMarginRight, box.ActualMarginTop, box.ActualMarginBottom);
+
+        private double CrossMarginAfter(CssBox box) =>
+            IsCrossMarginAfterAuto(box)
+                ? 0
+                : CrossAfter(box.ActualMarginLeft, box.ActualMarginRight, box.ActualMarginTop, box.ActualMarginBottom);
 
         private double MainPaddingBorder(CssBox box) =>
             _mainAxisIsPhysicalX

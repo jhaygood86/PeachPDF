@@ -178,7 +178,7 @@ async Task SaveDeclarativeShowcaseAsync(string slug, string category, string car
         <body><pre><code>{System.Net.WebUtility.HtmlEncode(csharpSource)}</code></pre></body></html>
         """;
     File.WriteAllText(Path.Combine(outputDir, $"{slug}.html"), sourceHtml);
-    showcaseManifest.Add(new ShowcaseEntry(slug, category, cardTitle, cardDescription, $"{slug}.pdf", $"{slug}.html"));
+    showcaseManifest.Add(new ShowcaseEntry(slug, category, cardTitle, cardDescription, $"{slug}.pdf", $"{slug}.html", ShowcaseSourceKind.CSharp));
     Console.WriteLine($"Saved {slug}.pdf + {slug}.html (declarative)");
 }
 
@@ -3579,6 +3579,30 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
             FItem("B", "#3498db", "margin-left:auto;width:50px;"))
     ) +
 
+    // An auto margin on the cross axis absorbs the line's free cross space (Flexbox §8.1, §9.4 step 11):
+    // it overrides align-self, and the item is not stretched. Each row pairs the auto-margined item (A)
+    // with a plain sibling (B) so the difference is visible against a reference.
+    FSection("14b — Auto margins (cross axis)",
+        FContainer("row: margin-top:auto pushes A to the bottom", "height:70px;gap:4px;",
+            FItem("A", "#e74c3c", "width:50px;height:24px;margin-top:auto;") +
+            FItem("B", "#3498db", "width:50px;height:24px;")) +
+        FContainer("row: margin:auto 0 centers A vertically", "height:70px;gap:4px;",
+            FItem("A", "#e74c3c", "width:50px;height:24px;margin:auto 0;") +
+            FItem("B", "#3498db", "width:50px;height:24px;")) +
+        FContainer("row: margin-bottom:auto holds A at the top of its line under wrap-reverse", "height:70px;gap:4px;flex-wrap:wrap-reverse;align-items:flex-start;",
+            FItem("A", "#e74c3c", "width:50px;height:24px;margin-bottom:auto;") +
+            FItem("B", "#3498db", "width:50px;height:24px;")) +
+        FContainer("column: margin-left:auto pushes A to the right", "flex-direction:column;width:240px;gap:2px;",
+            FItem("A", "#e74c3c", "width:60px;margin-left:auto;") +
+            FItem("B", "#3498db", "width:60px;")) +
+        FContainer("column: margin:0 auto centers A", "flex-direction:column;width:240px;gap:2px;",
+            FItem("A", "#e74c3c", "width:60px;margin:0 auto;") +
+            FItem("B", "#3498db", "width:60px;")) +
+        FContainer("column: an auto margin overrides align-self:stretch (A shrinks to its content)", "flex-direction:column;width:240px;gap:2px;",
+            FItem("A", "#e74c3c", "margin-left:auto;align-self:stretch;") +
+            FItem("B", "#3498db", "align-self:stretch;"))
+    ) +
+
     FSection("15 — Replaced elements (img/svg) mixed with block siblings",
         "<tr><td colspan='3' style='padding:2px 4px 6px;font:7pt Arial;color:#555'>" +
         "A flex container mixing an inline-level replaced element (an &lt;img&gt; or inline &lt;svg&gt;) " +
@@ -3602,7 +3626,7 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
     "</body></html>";
 
 await SaveShowcaseAsync("flexbox", "Layout", "Flexbox",
-    "Flexbox layout: direction, wrapping, justification (including start/right and self-start/self-end), alignment, gaps, flexible item sizing, and replaced elements (img/svg) as flex items.",
+    "Flexbox layout: direction, wrapping, justification (including start/right and self-start/self-end), alignment, gaps, auto margins on both axes, flexible item sizing, and replaced elements (img/svg) as flex items.",
     flexHtml, pdfConfig);
 
 // ─── CSS Custom Properties (var()) showcase ─────────────────────────────────
@@ -5803,6 +5827,81 @@ var pdfAConfig = new PdfGenerateConfig
 await SaveShowcaseAsync("pdf_a_conformance", "Standards & Accessibility", "PDF/A Conformance",
     "Archival PDF/A output: an embedded sRGB ICC output intent, XMP metadata with pdfaid:part/conformance, and (at the accessible \"A\" level shown here) a tagged structure tree.",
     pdfAHtml, pdfAConfig);
+
+// --- PDF/A-3 Attachments showcase ---
+// PDF/A-3 is the PDF/A part that allows embedding arbitrary files, which PeachPDF exposes as
+// PdfGenerateConfig.Attachments. Like the PDF/A showcase above, what matters is in the file's structure -
+// each file is indexed both in the catalog's /AF array and in the /Names /EmbeddedFiles tree (open the PDF
+// in a viewer and look at its attachments panel) - so the page just shows the report the files belong to.
+
+const string PdfA3AttachmentsCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 10pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 16pt }
+    p.intro { color: #555 }
+    table { border-collapse: collapse; margin: 10pt 0 }
+    th, td { border: 1px solid #999; padding: 4pt 10pt; text-align: right }
+    th:first-child, td:first-child { text-align: left }
+    </style>
+    """;
+
+var pdfA3AttachmentsHtml = "<!DOCTYPE html><html lang=\"en-US\"><head><title>Quarterly Sales Report</title>" + PdfA3AttachmentsCss + "</head><body>" +
+    "<h1>Quarterly Sales Report</h1>" +
+    "<p class=\"intro\">This PDF/A-3 document carries two files: <code>q3-sales.csv</code>, the data behind the table below, and <code>notes.txt</code>, a supplementary note. " +
+    "Each is added through <code>PdfGenerateConfig.Attachments</code> with its own MIME type and <code>AFRelationship</code>, and is listed in the viewer's attachments panel.</p>" +
+    "<table><tr><th>Region</th><th>Units</th><th>Revenue</th></tr>" +
+    "<tr><td>North</td><td>1,204</td><td>$48,160</td></tr>" +
+    "<tr><td>South</td><td>987</td><td>$39,480</td></tr>" +
+    "<tr><td>East</td><td>1,533</td><td>$61,320</td></tr>" +
+    "<tr><td>West</td><td>1,076</td><td>$43,040</td></tr></table>" +
+    "</body></html>";
+
+var pdfA3AttachmentsConfig = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    PdfAConformance = PdfAConformance.PdfA3B,
+    Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+};
+pdfA3AttachmentsConfig.Attachments.Add(new PdfAttachment
+{
+    FileName = "q3-sales.csv",
+    MimeType = "text/csv",
+    // The table above is derived from this file, and holds nothing the table does not.
+    Relationship = PdfAttachmentRelationship.Data,
+    Description = "The numbers behind the report's table",
+    Data = Encoding.UTF8.GetBytes("Region,Units,Revenue\nNorth,1204,48160\nSouth,987,39480\nEast,1533,61320\nWest,1076,43040\n"),
+});
+pdfA3AttachmentsConfig.Attachments.Add(new PdfAttachment
+{
+    FileName = "notes.txt",
+    MimeType = "text/plain",
+    Relationship = PdfAttachmentRelationship.Supplement,
+    Description = "A note that adds to the report",
+    Data = Encoding.UTF8.GetBytes("East led the quarter; South is expected to recover once the new store opens.\n"),
+});
+await SaveShowcaseAsync("pdf_a3_attachments", "Standards & Accessibility", "PDF/A-3 Attachments",
+    "Embedded files in a PDF/A-3 document, added through PdfGenerateConfig.Attachments: a CSV holding the report's data and a text note, each with its own MIME type and AFRelationship, indexed in both /AF and /Names /EmbeddedFiles.",
+    pdfA3AttachmentsHtml, pdfA3AttachmentsConfig);
+
+// --- ZUGFeRD / Factur-X e-invoice showcases ---
+// Built with the declarative API, and with the invoice XML generated by the open-source ZUGFeRD-csharp
+// library. The C# shown on the site is Showcases/ZugferdInvoiceShowcase.cs itself - the very file compiled
+// into this harness (it is copied next to the executable) - so what a reader sees is what actually ran.
+// The two showcases share everything but the profile: EN 16931 (a company-to-company invoice, embedded as
+// factur-x.xml) and XRECHNUNG (an invoice to a German public body, embedded as xrechnung.xml).
+
+var zugferdInvoiceSource = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Showcases", "ZugferdInvoiceShowcase.cs"));
+
+await SaveDeclarativeShowcaseAsync("zugferd_factur_x_invoice", "Standards & Accessibility", "ZUGFeRD / Factur-X Invoice",
+    "A hybrid e-invoice: a readable invoice laid out with the declarative API, plus the same invoice as EN 16931 Cross Industry Invoice XML - generated by the open-source ZUGFeRD-csharp library and embedded by PdfGenerateConfig.FacturX in a PDF/A-3 file, with the Factur-X XMP metadata and extension schema.",
+    zugferdInvoiceSource,
+    gen => ZugferdInvoiceShowcase.BuildAsync(gen, xRechnung: false));
+
+await SaveDeclarativeShowcaseAsync("zugferd_xrechnung_invoice", "Standards & Accessibility", "ZUGFeRD XRechnung Invoice",
+    "The same hybrid e-invoice in the German XRECHNUNG profile, for an invoice to a public body: the XML is embedded as xrechnung.xml and the buyer reference (Leitweg-ID) is carried both in the XML and on the page.",
+    zugferdInvoiceSource,
+    gen => ZugferdInvoiceShowcase.BuildAsync(gen, xRechnung: true));
 
 // --- CMYK Colors showcase ---
 // device-cmyk() colors are carried through natively (never approximated to sRGB) and reach the PDF as
@@ -12198,7 +12297,16 @@ else
     Console.WriteLine($"Saved showcases.json ({showcaseManifest.Count} showcases)");
 }
 
-record ShowcaseEntry(string Slug, string Category, string Title, string Description, string Pdf, string Html);
+// SourceKind says what the "source" file (Html) holds, so docs/showcase.html can label the link
+// accurately: "html" for the markup given to GeneratePdf, "csharp" for the code a declarative-API showcase
+// runs (that file is a minimal HTML page wrapping the C#, purely so the manifest schema stays one shape).
+record ShowcaseEntry(string Slug, string Category, string Title, string Description, string Pdf, string Html, string SourceKind = ShowcaseSourceKind.Html);
+
+static class ShowcaseSourceKind
+{
+    public const string Html = "html";
+    public const string CSharp = "csharp";
+}
 
 /// <summary>One showcase's --benchmark measurements: one wall-time (ms) and one allocated-bytes sample per iteration.</summary>
 record BenchmarkResult(string Slug, double[] WallTimesMs, long[] AllocatedBytes)

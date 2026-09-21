@@ -229,5 +229,30 @@ namespace PeachPDF.PdfSharpCore.Pdf
             set { _colorOptions = value; }
         }
         ColorOptions? _colorOptions;
+
+        /// <summary>
+        /// The set of files a prior <c>PdfGenerator.AddPdfPages</c>/<c>AddPages</c> call on this document
+        /// asked to embed (<see cref="PeachPDF.PdfGenerateConfig.Attachments"/>), or <c>null</c> until one
+        /// has. Embedding is a whole-document property, so a later call must ask for the same set - the same
+        /// reasoning as <see cref="PdfAConformanceEstablished"/>.
+        /// </summary>
+        internal PdfEmbeddingPlan? EmbeddingPlan
+        {
+            get { return _embeddingPlan; }
+            set { _embeddingPlan = value; }
+        }
+        PdfEmbeddingPlan? _embeddingPlan;
+
+        /// <summary>
+        /// Whether <see cref="EmbeddingPlan"/> has already been written into the document. Rendering re-enters
+        /// once per <c>AddPdfPages</c> call and once per declarative <c>Page(...)</c>, but the files are
+        /// embedded only once.
+        /// </summary>
+        internal bool EmbeddingApplied
+        {
+            get { return _embeddingApplied; }
+            set { _embeddingApplied = value; }
+        }
+        bool _embeddingApplied;
     }
 }

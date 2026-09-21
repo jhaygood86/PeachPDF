@@ -30,6 +30,7 @@
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
 using System.Diagnostics;
+using System.Globalization;
 
 namespace PeachPDF.PdfSharpCore.Pdf
 {
@@ -61,8 +62,10 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// </summary>
         public override string ToString()
         {
-            var delta = _value.ToString("zzz").Replace(':', '\'');
-            return $"D:{_value:yyyyMMddHHmmss}{delta}'";
+            // Invariant culture: a PDF date is not localized, and the current culture's calendar (th-TH is
+            // Buddhist, ar-SA Hijri) would otherwise write a different year into it.
+            var delta = _value.ToString("zzz", CultureInfo.InvariantCulture).Replace(':', '\'');
+            return $"D:{_value.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture)}{delta}'";
         }
 
         /// <summary>

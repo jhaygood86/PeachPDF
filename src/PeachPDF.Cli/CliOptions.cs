@@ -45,6 +45,12 @@ internal enum CliOutputKind
 internal sealed record CliInput(CliInputKind Kind, string Value);
 
 /// <summary>
+/// A file to embed (<c>--attach</c>). <see cref="MimeType"/> and <see cref="Relationship"/> are <c>null</c>
+/// unless given on the command line, in which case the MIME type is guessed from the file's extension.
+/// </summary>
+internal sealed record CliAttachment(string Path, string? MimeType, PdfAttachmentRelationship? Relationship);
+
+/// <summary>
 /// The fully parsed command line. <see cref="ArgumentParser.Parse"/> produces one of these; when
 /// <see cref="Errors"/> is non-empty the command line was invalid and the CLI exits non-zero.
 /// </summary>
@@ -87,6 +93,11 @@ internal sealed class CliOptions
     public string? PdfKeywords { get; set; }
     public string? PdfCreator { get; set; }
     public string? PdfLang { get; set; }
+    public PdfAConformance? PdfA { get; set; }
+    public DateTimeOffset? PdfCreationDate { get; set; }
+    public List<CliAttachment> Attachments { get; } = [];
+    public string? FacturXXmlPath { get; set; }
+    public FacturXProfile? FacturXProfile { get; set; }
 
     // --- Network ---
     public int? HttpTimeoutSeconds { get; set; }

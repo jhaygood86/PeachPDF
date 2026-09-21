@@ -27,5 +27,28 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
 
             Assert.Equal($"D:20240615103000{expectedSuffix}", date.ToString());
         }
+
+        [Theory]
+        [InlineData("th-TH")] // Buddhist calendar: 2024 would print as 2567
+        [InlineData("ar-SA")] // Hijri calendar
+        [InlineData("fa-IR")] // Persian calendar
+        public void ToString_IsNotLocalizedByTheCurrentCulture(string cultureName)
+        {
+            var value = new DateTime(2024, 6, 15, 10, 30, 0);
+            var expected = new PdfDate(value).ToString();
+
+            var original = System.Globalization.CultureInfo.CurrentCulture;
+            try
+            {
+                System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo(cultureName);
+
+                Assert.Equal(expected, new PdfDate(value).ToString());
+                Assert.StartsWith("D:20240615103000", new PdfDate(value).ToString());
+            }
+            finally
+            {
+                System.Globalization.CultureInfo.CurrentCulture = original;
+            }
+        }
     }
 }

@@ -23,6 +23,41 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             {
                 _dests = new PdfNameTreeNode(dests);
             }
+
+            var embeddedFiles = Elements.GetDictionary(Keys.EmbeddedFiles);
+            if (embeddedFiles != null)
+            {
+                _embeddedFiles = new PdfNameTreeNode(embeddedFiles);
+            }
+        }
+
+        /// <summary>
+        /// Gets the embedded-files name tree ("/EmbeddedFiles": file name -> file specification), or
+        /// <c>null</c> when nothing has been embedded.
+        /// </summary>
+        public PdfNameTreeNode? EmbeddedFilesTree => _embeddedFiles;
+
+        /// <summary>
+        /// Registers <paramref name="fileSpecification"/> under <paramref name="name"/> in the
+        /// "/EmbeddedFiles" name tree, creating the tree on first use. Only reached when a file is
+        /// embedded - untouched, no "/EmbeddedFiles" entry is added at all.
+        /// </summary>
+        /// <remarks>
+        /// The tree is one flat leaf ("/Names" only, no "/Kids"), which is valid at any size and so
+        /// never needs the "/Limits" bookkeeping. The value is a real <see cref="PdfReference"/> - not a
+        /// literal carrying an object number - because the writer renumbers every object at save time.
+        /// </remarks>
+        internal void AddEmbeddedFile(string name, PdfFileSpecification fileSpecification)
+        {
+            if (_embeddedFiles == null)
+            {
+                _embeddedFiles = new PdfNameTreeNode();
+                Owner.Internals.AddObject(_embeddedFiles);
+                Elements.SetReference(Keys.EmbeddedFiles, _embeddedFiles.Reference);
+            }
+
+            Owner.Internals.AddObject(fileSpecification);
+            _embeddedFiles.AddName(name, fileSpecification.Reference);
         }
 
         /// <summary>
@@ -61,6 +96,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
 
         PdfNameTreeNode? _dests;
+        PdfNameTreeNode? _embeddedFiles;
 
         /// <summary>
         /// Predefined keys of this dictionary.
@@ -117,12 +153,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             //[KeyInfo("1.3", KeyType.NameTree | KeyType.Optional)]
             //public const string URLS = "/URLS";
 
-            ///// <summary>
-            ///// (Optional; PDF 1.4) A name tree mapping name strings to file specifications for embedded file streams
-            ///// (see Section 3.10.3, “Embedded File Streams”).
-            ///// </summary>
-            //[KeyInfo("1.4", KeyType.NameTree | KeyType.Optional)]
-            //public const string EmbeddedFiles = "/EmbeddedFiles";
+            /// <summary>
+            /// (Optional; PDF 1.4) A name tree mapping name strings to file specifications for embedded file streams
+            /// (see Section 3.10.3, “Embedded File Streams”).
+            /// </summary>
+            [KeyInfo("1.4", KeyType.NameTree | KeyType.Optional)]
+            public const string EmbeddedFiles = "/EmbeddedFiles";
 
             ///// <summary>
             ///// (Optional; PDF 1.4) A name tree mapping name strings to alternate presentations

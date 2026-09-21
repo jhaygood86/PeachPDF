@@ -86,6 +86,18 @@ internal static class CliProgram
               --pdf-keywords=WORDS   Set the PDF keywords.
               --pdf-creator=CREATOR  Set the PDF creator.
               --pdf-lang=LANG        Set the PDF language (/Lang).
+              --pdfa=LEVEL           Produce PDF/A: 1a, 1b, 2a, 2b, 2u, 3a, 3b or 3u.
+              --pdf-creation-date=DATE
+                                     Set the PDF creation date (ISO 8601). PDF/A needs
+                                     one: else the document's own date is used.
+              --attach=FILE          Embed a file (PDF/A-3 or no PDF/A). Optional settings
+                                     after the name: FILE;mime=TYPE;rel=RELATIONSHIP.
+                                     Repeatable.
+              --facturx-xml=FILE     Make a ZUGFeRD/Factur-X e-invoice by embedding this
+                                     invoice XML (requires --pdfa=3a, 3b or 3u).
+              --facturx-profile=NAME Set the e-invoice profile instead of reading it from
+                                     the XML: minimum, basic-wl, basic, en16931,
+                                     extended or xrechnung.
               --tagged-pdf           Emit a tagged (PDF/UA) structure tree.
               --interactive-pdf-forms
                                      Emit fillable AcroForm fields for form elements.
