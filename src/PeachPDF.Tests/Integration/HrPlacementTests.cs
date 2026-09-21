@@ -89,7 +89,12 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box")!;
 
             Assert.Equal(box.ClientLeft, h.Location.X, 3);
-            Assert.Equal(180, h.ActualRight - h.Location.X, 3);
+            // The container's CONTENT width is the declared 200pt - its padding sits outside that, and
+            // an `auto` rule's border box spans it exactly. This asserted 180 until issue #1230: the
+            // basis took the container's padding out of a Size.Width that, under `content-box`, was
+            // already the content width, so the rule came out short by exactly that padding. Chrome
+            // measures 200pt here, as does the equivalent zero-height <div>.
+            Assert.Equal(200, h.ActualRight - h.Location.X, 3);
         }
     }
 }

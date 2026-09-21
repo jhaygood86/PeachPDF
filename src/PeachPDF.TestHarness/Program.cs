@@ -1,4 +1,4 @@
-using PeachPDF;
+﻿using PeachPDF;
 using PeachPDF.Layout;
 using PeachPDF.PdfSharpCore;
 using ScottPlot;
@@ -325,11 +325,34 @@ static string TriangleSwatch(string desc, string colors) =>
 /// the pair has to be indistinguishable - and was not, until the rule stopped being painted by a
 /// per-side path of its own that ignored border-style entirely.
 /// </summary>
+// The height the <div> paired against a rule declares, so that the two really are equivalent. `auto`
+// rather than `0`: a rule's used content height is 0 and its box is its own borders and padding, and
+// `height: auto` on an empty block is the one declaration that reproduces that under EITHER
+// box-sizing. `height: 0` reads as the same thing and is not - under `box-sizing: border-box` it sizes
+// the BORDER box to zero, so the div collapses to nothing and paints no band at all, leaving the pair
+// looking mismatched for a reason that has nothing to do with what the swatch is demonstrating.
+const string EquivalentDivHeight = "height: auto; ";
+
 static string HrStyleSwatch(string desc, string inlineCss) =>
     "<td>" +
     "<div class=\"hrbox\">" +
     $"<hr style=\"{inlineCss}\">" +
-    $"<div style=\"height: 0; {inlineCss}\"></div>" +
+    $"<div style=\"{EquivalentDivHeight}{inlineCss}\"></div>" +
+    "</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">hr / div, {inlineCss}</div>" +
+    "</td>";
+
+/// <summary>
+/// The same pairing inside a containing block with padding and a border of its own. The rule's basis
+/// is that block's CONTENT width - its padding and border sit outside it - so the pair must still line
+/// up, and must line up with the pairs in an unpadded cell at the same declared width.
+/// </summary>
+static string HrPaddedBoxSwatch(string desc, string inlineCss) =>
+    "<td>" +
+    "<div class=\"hrbox\" style=\"padding: 0 10px; border: 2px solid #ccc\">" +
+    $"<hr style=\"{inlineCss}\">" +
+    $"<div style=\"{EquivalentDivHeight}{inlineCss}\"></div>" +
     "</div>" +
     $"<div class=\"desc\">{desc}</div>" +
     $"<div class=\"css\">hr / div, {inlineCss}</div>" +
@@ -6085,6 +6108,41 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
         HrAloneSwatch("dashed", "border-style: dashed; border-width: 3px"),
         HrAloneSwatch("dotted", "border-style: dotted; border-width: 3px"),
         HrAloneSwatch("noshade attribute", null)
+    ) +
+
+    // A percentage width on a rule resolves against its containing block's CONTENT width, with the
+    // rule's own borders and padding outside that basis - so each pair below still lines up exactly,
+    // at every width. It did not: the rule used to resolve against a basis already reduced by its own
+    // borders, so every one of these came out narrower than its div by twice the border width, and
+    // the whole section had to avoid declaring a width at all to stay honest.
+    "<h2>A percentage width on a rule (hr above, equivalent div below)</h2>" +
+    Row(
+        HrStyleSwatch("100%", "width: 100%; border: 4px inset #808080"),
+        HrStyleSwatch("75%", "width: 75%; border: 4px inset #808080"),
+        HrStyleSwatch("50%", "width: 50%; border: 4px inset #808080"),
+        HrStyleSwatch("25%", "width: 25%; border: 4px inset #808080")
+    ) +
+    Row(
+        // A margin shifts the rule without shrinking the basis...
+        HrStyleSwatch("50%, margin-left", "width: 50%; margin-left: 20px; border: 4px solid #4a90d9"),
+        // ...padding sits outside it in the same way border does...
+        HrStyleSwatch("50%, padding", "width: 50%; padding: 0 10px; border: 4px solid #4a90d9"),
+        // ...and border-box makes the percentage the border box instead, borders inside it.
+        HrStyleSwatch("50%, border-box", "width: 50%; box-sizing: border-box; border: 6px solid #4a90d9"),
+        // auto is the one case that is NOT the basis: it is what is left of it after the rule's own
+        // edges, which is why an unstyled rule's border box spans its container exactly.
+        HrStyleSwatch("auto, with padding", "padding: 0 10px; border: 4px solid #4a90d9")
+    ) +
+    Row(
+        // What "the rule's own edges" means depends on box-sizing: under border-box they are already
+        // inside the width, so auto takes out nothing but the margins and the rule spans the cell.
+        // Subtracting them literally instead left these two short by exactly that padding and border.
+        HrStyleSwatch("auto, border-box + padding", "box-sizing: border-box; padding: 0 10px; border: 4px solid #4a90d9"),
+        HrStyleSwatch("auto, border-box", "box-sizing: border-box; border: 6px solid #4a90d9"),
+        // ...and the basis is measured from the containing block's CONTENT width, so these two match
+        // the same declarations in an unpadded cell above, inset by the cell's own 10px of padding.
+        HrPaddedBoxSwatch("50% in a padded box", "width: 50%; border: 4px solid #4a90d9"),
+        HrPaddedBoxSwatch("auto in a padded box", "border: 4px solid #4a90d9")
     ) +
 
     // The classic zero-content "border triangle": four mitred trapezoids meeting at the box's center.

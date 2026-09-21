@@ -91,17 +91,44 @@ namespace PeachPDF.Html.Core.Dom
 
             RectanglesReset();
 
-            //width at 100% (or auto)
             double minwidth = GetMinimumWidth();
-            double width = ContainingBlock.Size.Width
-                           - ContainingBlock.ActualPaddingLeft - ContainingBlock.ActualPaddingRight
-                           - ContainingBlock.ActualBorderLeftWidth - ContainingBlock.ActualBorderRightWidth
-                           - ActualMarginLeft - ActualMarginRight - ActualBorderLeftWidth - ActualBorderRightWidth;
+
+            // The containing block's CONTENT width, which is what a percentage `width` resolves
+            // against: CSS 2.1 §10.1 puts the containing block at the content edge of the nearest block
+            // container ancestor, and §10.2 resolves the percentage against its width - so the rule's
+            // own margins, borders and padding all sit outside it. Passing the `auto` expression below
+            // as the basis instead made every percentage rule narrower than the equivalent <div> by
+            // twice its border width, and a rule with a margin narrower again by that margin (issue
+            // #1230). It is not only a styled-rule problem: the UA sheet's own 1px border is 0.75pt a
+            // side, so a plain `<hr style="width: 50%">` in a 200pt block came out 99.25pt rather than 100.
+            //
+            // AvailableWidth is the one expression that means "content width" for either `box-sizing`:
+            // the containing block's own Size.Width is already its content width under `content-box`,
+            // so subtracting its padding and border by hand took them out a second time - measured, an
+            // `hr { width: 50%; border: 4px }` in a `width: 200px; padding: 10px; border: 5px` parent
+            // came out 93 against Chrome's (and the equivalent <div>'s) 108.
+            double containingBlockContentWidth = ContainingBlock.AvailableWidth;
+
+            // `auto` is the available space rather than the basis: the same content width less this
+            // rule's own margins and whatever its `box-sizing` leaves outside Size.Width, which is what
+            // makes an unstyled rule's MARGIN box span its container exactly (CSS 2.1 §10.3.3's
+            // constraint, solved for width). Keep the two expressions apart - collapsing them back into
+            // one is the bug this fixed.
+            //
+            // ActualBoxSizeIncludedWidth is what CssLayoutEngine.GetBoxWidth subtracts here, and the
+            // reason is `border-box`: it is the rule's own padding and border under `content-box` but
+            // ZERO under `border-box`, where Size.Width already is the border box. Subtracting them
+            // unconditionally instead undercut a padded `border-box` rule by exactly its padding and
+            // border (measured: 178 inside a 200px block against Chrome's 200), and leaving them out
+            // altogether overflowed a padded `content-box` rule by its padding (220 inside 200).
+            double width = containingBlockContentWidth
+                           - ActualMarginLeft - ActualMarginRight
+                           - ActualBoxSizeIncludedWidth;
 
             //Check width if not auto
             if (Width != Keywords.Auto && !string.IsNullOrEmpty(Width))
             {
-                width = CssValueParser.ParseLength(Width, width, this);
+                width = CssValueParser.ParseLength(Width, containingBlockContentWidth, this);
             }
 
             if (width < minwidth || width >= 9999)
