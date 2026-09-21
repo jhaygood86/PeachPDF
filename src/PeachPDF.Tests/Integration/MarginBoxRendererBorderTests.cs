@@ -124,10 +124,10 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ABevelledEdgeWithNoDeclaredColor_ShadesTheFixedBase_NotTheBoxsText()
         {
-            // This path resolves `currentcolor` itself rather than going through the cascade's
-            // CssUtils.ApplyCurrentColor, so it needs its own copy of the bevel-base rule (issue
-            // #1226): a bevelled side with no declared colour shades rgb(238,238,238), not the box's
-            // text colour. Without it, `@page { border: inset }` would shade the declared red here
+            // This path resolves `currentcolor` itself rather than through an ordinary box's
+            // DerivedStyle.ResolveBorderSideColor, so it needs its own copy of the bevel-base rule
+            // (issue #1226): a bevelled side with no declared colour shades rgb(238,238,238), not the
+            // box's text colour. Without it, `@page { border: inset }` would shade the declared red here
             // while the identical declaration on a <div> paints the two greys - a divergence entirely
             // invisible to the border tests above, every one of which declares its own colour.
             //

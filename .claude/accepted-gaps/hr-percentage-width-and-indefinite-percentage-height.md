@@ -11,8 +11,8 @@ height, and #1232's painted gap between the borders — are **closed**, fixed to
 [.claude/recent-fixes/2026-09-20-hr-resolves-its-own-used-height.md](../recent-fixes/2026-09-20-hr-resolves-its-own-used-height.md)
 for the mechanism, which is worth reading before touching that method.
 
-The third, #1226's currentColor bevel base, is **closed** too: `CssUtils.ApplyCurrentColor` now
-resolves a bevelled border side's `currentColor` against the fixed light base itself, so the UA sheet
+The third, #1226's currentColor bevel base, is **closed** too: `DerivedStyle.ResolveBorderSideColor`
+now resolves a bevelled border side's `currentColor` against the fixed light base itself, so the UA sheet
 no longer declares a colour at all and the `border-style: dashed` residue this file used to describe
 is gone. See
 [.claude/recent-fixes/2026-09-20-a-bevelled-currentcolor-border-shades-a-fixed-base.md](../recent-fixes/2026-09-20-a-bevelled-currentcolor-border-shades-a-fixed-base.md).

@@ -54,6 +54,33 @@ The child's border was **red** (the parent's resolved colour) and is now **blue*
 what a browser paints. Documents that relied on the old behaviour were relying on a child ignoring its
 own `color`; to get the parent's colour deliberately, name it rather than inheriting it.
 
+## A logical `border-*-color: currentcolor` is no longer black
+
+```html
+<div style="color: red; border: 4pt solid; border-inline-start-color: currentcolor">…</div>
+```
+
+The left border was **black** and is now **red**. The four logical colour longhands
+(`border-block-start-color`, `border-block-end-color`, `border-inline-start-color`,
+`border-inline-end-color`) are mapped onto their physical edge *after* `currentcolor` was substituted,
+so a logical longhand that named the keyword put it back unresolved and it fell through to black. It
+is resolved per box at paint time now, so the order no longer matters. A logical longhand naming a
+real colour (`border-inline-start-color: red`) was never affected.
+
+## An `@page` margin box's border with no declared colour follows `color`
+
+```css
+@page { @bottom-center { content: "x"; color: red; border-bottom: 6pt solid } }
+```
+
+That border was **black** and is now **red**. An omitted colour slot in a `border`/`border-top`
+shorthand carries the literal `initial` through the margin-box style path, which resolved as an
+unparseable colour rather than as `border-*-color`'s actual initial value, `currentcolor`. The same
+declaration on an ordinary element has always painted the text colour; a margin box now agrees with
+it — and with the rule above, a *bevelled* margin-box edge with no declared colour shades the fixed
+light base instead of black (`@page { border: 4pt inset }` was a shaded black, and is now
+`#9a9a9a`/`#eeeeee`).
+
 ## Why
 
 PeachPDF had no way to tell a border colour that came from `currentColor` apart from the same colour

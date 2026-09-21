@@ -2,7 +2,6 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using System;
-using System.Globalization;
 
 namespace PeachPDF.Html.Core.Utils
 {
@@ -56,21 +55,11 @@ namespace PeachPDF.Html.Core.Utils
         /// The substitution is of the resolution base, not of the painted result: it happens where
         /// <c>currentColor</c> becomes a real color, and <see cref="Shade"/> then shades whatever came
         /// out. Blink reports the *unsubstituted* color from <c>getComputedStyle</c>, so this is a used
-        /// value for painting only. See <c>CssUtils.ApplyCurrentColor</c>, which applies it per side,
-        /// and exempts a table display type the way Blink does.
+        /// value for painting only. See <c>DerivedStyle.ResolveBorderSideColor</c>, which applies it per
+        /// side, and exempts a table display type the way Blink does.
         /// </para>
         /// </remarks>
         internal static readonly RColor CurrentColorBase = RColor.FromArgb(238, 238, 238);
-
-        /// <summary>
-        /// <see cref="CurrentColorBase"/> as a CSS value, for the cascade layer, which stores a color
-        /// as the text it was declared as. Derived from the one above rather than written out a second
-        /// time - two literals is how a base and its already-shaded faces got out of step before.
-        /// </summary>
-        internal static readonly string CurrentColorBaseCss = string.Format(
-            CultureInfo.InvariantCulture,
-            "rgb({0}, {1}, {2})",
-            CurrentColorBase.R, CurrentColorBase.G, CurrentColorBase.B);
 
         /// <summary>
         /// Blink converts its 0..1 float channels back to bytes with this factor and a truncating cast,

@@ -92,11 +92,12 @@ namespace PeachPDF.Html.Core
             /* HTML Standard 15.3.11, verbatim: border-color is left at its initial currentColor in
                both rules, and every colour a rule paints is derived from `color: gray` below.
 
-               An engraved rule's two greys are NOT declared anywhere. CssUtils.ApplyCurrentColor
-               resolves a beveled border side's currentColor against a fixed light base rather than
-               the box's colour, exactly as Blink does, so `border-style: inset` here shades that
-               base into #9a9a9a over #eeeeee on its own - which is why `color: gray` does not tint
-               a default rule, and why neither does an inherited colour from an ancestor.
+               An engraved rule's two greys are NOT declared anywhere.
+               DerivedStyle.ResolveBorderSideColor resolves a beveled border side's currentColor
+               against a fixed light base rather than the box's colour, exactly as Blink does, so
+               `border-style: inset` here shades that base into #9a9a9a over #eeeeee on its own -
+               which is why `color: gray` does not tint a default rule, and why neither does an
+               inherited colour from an ancestor.
 
                A rule carrying either presentational attribute is flat rather than engraved, so
                nothing is derived and currentColor resolves to `color` itself: gray for a bare

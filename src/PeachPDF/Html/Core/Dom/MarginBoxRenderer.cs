@@ -533,18 +533,21 @@ namespace PeachPDF.Html.Core.Dom
             var colorParser = new CssValueParser(adapter);
             var textColor = string.IsNullOrEmpty(style.Color) ? RColor.Black : colorParser.GetActualColor(style.Color);
 
-            // An edge with no explicit colour resolves currentColor exactly as CssUtils.ApplyCurrentColor
-            // does for an ordinary box: against the text colour normally, but against the fixed light
-            // base when the edge is bevelled - a page box is never a table display type, so it always
-            // takes that base. Without the second arm an `@page { border: 20px inset }` would shade
-            // black text into a bevel the identical declaration on a <div> no longer produces.
+            // An edge with no explicit colour resolves currentColor exactly as
+            // DerivedStyle.ResolveBorderSideColor does for an ordinary box: against the text colour
+            // normally, but against the fixed light base when the edge is bevelled - a page box is
+            // never a table display type, so it always takes that base. Without the second arm an
+            // `@page { border: 20px inset }` would shade black text into a bevel the identical
+            // declaration on a <div> no longer produces.
             //
             // The literal "initial" counts as "no explicit colour" here: an omitted slot of a `border`/
             // `border-top` shorthand is exported as that sentinel (ShorthandProperty.Export, and see
             // OptionValueConverter), and border-*-color's initial value IS currentcolor. Resolving it
-            // through GetActualColor instead yields black - which is how `border-top: 4pt inset` came
-            // out a shade of black on a margin box while the identical declaration on a <div>, whose
-            // cascade path leaves the longhand at `currentcolor`, came out the two greys.
+            // through GetActualColor instead yields black, whatever the style - which is how
+            // `border-top: 4pt inset` came out a shade of black on a margin box while the identical
+            // declaration on a <div>, whose cascade path leaves the longhand at `currentcolor`, came
+            // out the two greys, and how a flat `border-bottom: 6pt solid` under `color: red` came out
+            // black rather than red.
             RColor ResolveBorderColor(string? colorValue, LineStyle lineStyle) =>
                 string.IsNullOrWhiteSpace(colorValue) ||
                 colorValue.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase) ||

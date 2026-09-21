@@ -153,9 +153,11 @@ namespace PeachPDF.Html.Core.Utils
         /// resolve against <c>GetCurrentColor()</c>), and Chrome 153 agrees - <c>outline: 20px inset;
         /// color: red</c> paints a shaded red, not the base. An outline really is bevelled by
         /// <see cref="BorderBevelColors"/> here (<c>OutlineRegionPainter</c>), so that exemption is
-        /// load-bearing; a column rule with a bevelled style currently renders flat in PeachPDF, so for
-        /// that one the exemption is only what keeps it right if the style ever starts being honoured.
-        /// Neither is inheritable in a way that would notice the difference.
+        /// load-bearing; a column rule is not - <c>FragmentPainter.PaintColumnRules</c> maps only
+        /// <c>dashed</c>/<c>dotted</c> to a dash style and strokes every other style as a plain line of
+        /// <c>ActualColumnRuleColor</c> - so for that one the exemption is only what keeps it right if a
+        /// bevelled <c>column-rule-style</c> ever starts being shaded. Neither is inheritable in a way
+        /// that would notice the difference.
         /// </para>
         /// </remarks>
         public static void ApplyCurrentColor(CssBox box, CssValueParser valueParser)

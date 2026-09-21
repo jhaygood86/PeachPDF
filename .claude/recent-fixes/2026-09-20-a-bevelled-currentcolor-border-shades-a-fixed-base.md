@@ -30,6 +30,17 @@ Nothing else reads the raw `BorderTopColor` string expecting a resolved colour �
 committing to this — so `DerivedStyle` and the separate `MarginBoxRenderer` path are the only two
 places that had to learn the rule.
 
+### The latent trap that comes with it
+
+`DerivedStyle` caches each side's answer in `_actualBorder*Color`, and the only thing that clears one
+is its own `border-*-color` longhand being rewritten. That answer now also depends on
+`border-*-style`, on `color` and on `display` — none of which invalidate it. Safe today (every reader
+runs after the cascade has settled, and nothing mutates those afterwards except the `display` swap in
+flex/grid's `PerformLayoutBlockified`, which only ever swaps `inline`→`block`), and a real hazard for
+any future reader that moves earlier. Written up as
+[.claude/invariants/dom-a-border-sides-cached-actual-colour-is-invalidated-only-by-its-own-longhand.md](../invariants/dom-a-border-sides-cached-actual-colour-is-invalidated-only-by-its-own-longhand.md),
+since it outlives this note.
+
 ## What was found by running it rather than by reading it
 
 The rule was measured against Chrome 153 headless before a line was written. Four things came out of
@@ -45,8 +56,10 @@ that which reading the Blink source alone would not have settled:
   the **blockified** display: a `float: left; display: table-cell` is a block by then and loses it.
 - **`outline-color` and `column-rule-color` are never substituted**, even when their own style is
   bevelled — `outline: 20px inset; color: red` paints a shaded red in Chrome. An outline really is
-  bevelled through `BorderBevelColors` here, so that exemption is load-bearing; a column rule with a
-  bevelled style renders flat in PeachPDF today, so for that one it is only future-proofing.
+  bevelled through `BorderBevelColors` here, so that exemption is load-bearing. A column rule is not
+  bevelled here at all — `FragmentPainter.PaintColumnRules` maps only `dashed`/`dotted` to a dash
+  style and strokes everything else as a plain line of `ActualColumnRuleColor` — so for that one the
+  exemption is only future-proofing.
 
 ## The UA sheet went back to the HTML Standard's literal text
 
@@ -75,15 +88,25 @@ written down in place of something the engine could derive, and each one broke a
 
 ## Evidence
 
-- Full suite green (12,759 passed / net8.0), whole solution rebuilds with 0 warnings, **100% diff
-  coverage on the 34 changed executable lines**.
-- 50 tests in `BeveledBorderCurrentColorTests.cs`, split deliberately across the two layers:
+- Full suite green (12,751 passed, 9 skipped / net8.0), whole solution rebuilds with 0 warnings,
+  **100% diff coverage**. `diff-cover` — the tool the CI gate runs — reports **29** measurable
+  changed lines, 0 missing. A by-hand count comes out higher (a review counted 40) because much of
+  what it sees is not a coverable statement: the UA sheet's `hr` rules and the comment above them are
+  lines inside one multi-line string literal, and a multi-line expression — the four getters' wrapped
+  assignments, `ResolveBorderColor`'s nested conditional — carries one sequence point, not one per
+  line. Quote the tool's number; that is the one the gate is about.
+- 52 tests in `BeveledBorderCurrentColorTests.cs`, split deliberately across the two layers:
   `ActualBorder*Color` is the **resolved base** (`#eee`, unshaded) and the painted calls are the two
   **faces**. Getting that backwards is the first thing that goes wrong when writing a test here — the
   first draft of the file asserted faces against the resolved property and failed on all eight rows.
-- The per-side tests use `border-style: inset solid solid inset` **and its mirror**, deliberately:
-  a review mutation showed that wiring the right or left longhand to the *top* style survives every
-  test that varies only top-vs-bottom.
+- The per-side test runs **two** arrangements, `inset solid inset solid` and `inset solid solid
+  inset`, because one cannot do the job: four sides over two styles always leaves some pair sharing a
+  style, and a mutant that swaps exactly that pair survives. Those two leave no pair equal in both.
+  This took two rounds of review mutation to get right — the first attempt paired an arrangement with
+  its own mirror, which kept *left* equal to *top* in both, so a left longhand wired to the top style
+  still survived the whole file. A second test asserts four distinct **declared** colours across the
+  four sides, covering the colour argument the same way (every other test in the file leaves all four
+  at `currentcolor`, where a colour-argument swap is invisible).
 - Probe deck of 16 bevel cases rendered through both Chrome (headless screenshot) and PeachPDF
   (PDFium raster at 96 dpi, giving 1 CSS px per image px): **16/16 byte-identical**. The nine `<hr>`
   cases match Chrome exactly too, read out of the PDF content stream rather than the raster.

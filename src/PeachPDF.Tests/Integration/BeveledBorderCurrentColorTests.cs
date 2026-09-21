@@ -164,33 +164,73 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task EachSideResolvesAgainstItsOwnStyle_AcrossAllFour()
         {
-            // Four sides, two bevelled and two flat, arranged so that reading ANY one side's style for
-            // another side's colour gets a different answer. Without this a right/left longhand wired
-            // to the top style passes every other test in the file.
+            // Two sides bevelled and two flat, so that a longhand wired to the WRONG side's style
+            // resolves to the wrong colour and fails here. One arrangement cannot do it: with four
+            // sides and two styles some pair always shares a style, and a mutant swapping exactly that
+            // pair survives. So both arrangements below run, chosen to leave no pair equal in both -
+            // `inset solid inset solid` separates every pair except (top, bottom) and (right, left),
+            // and `inset solid solid inset` separates exactly those two.
+            //
+            // The mirror pair this replaced (`inset solid solid inset` and `solid inset inset solid`)
+            // left LEFT equal to TOP in both, so a left longhand reading the top style survived the
+            // whole file.
+            async Task AssertSides(string styles, RColor top, RColor right, RColor bottom, RColor left)
+            {
+                var (root, _) = await LayoutHarness.LayoutAsync(
+                    "<!DOCTYPE html><html><body>"
+                    + "<div id='el' style='width: 60pt; height: 12pt; color: red; border-width: 4pt;"
+                    + $" border-style: {styles}'></div>"
+                    + "</body></html>");
+
+                var box = LayoutHarness.FindById(root, "el")!;
+                Assert.Equal(top, box.ActualBorderTopColor);
+                Assert.Equal(right, box.ActualBorderRightColor);
+                Assert.Equal(bottom, box.ActualBorderBottomColor);
+                Assert.Equal(left, box.ActualBorderLeftColor);
+            }
+
+            await AssertSides("inset solid inset solid", top: Base, right: Red, bottom: Base, left: Red);
+            await AssertSides("inset solid solid inset", top: Base, right: Red, bottom: Red, left: Base);
+        }
+
+        [Fact]
+        public async Task EachSideResolvesItsOwnDeclaredColor_AcrossAllFour()
+        {
+            // The style argument's companion: ResolveBorderSideColor takes a colour too, and a side
+            // wired to another side's COLOUR longhand is invisible to every test above, all of which
+            // leave all four at currentcolor. Four distinct declared colours separate all six pairs at
+            // once. Flat styles throughout, so nothing is substituted and each side must report
+            // exactly what it declared.
             var (root, _) = await LayoutHarness.LayoutAsync(
                 "<!DOCTYPE html><html><body>"
-                + "<div id='el' style='width: 60pt; height: 12pt; color: red; border-width: 4pt;"
-                + " border-style: inset solid solid inset'></div>"
+                + "<div id='el' style='width: 60pt; height: 12pt; border-width: 4pt; border-style: solid;"
+                + " border-color: rgb(1, 0, 0) rgb(0, 2, 0) rgb(0, 0, 3) rgb(4, 4, 4)'></div>"
                 + "</body></html>");
 
             var box = LayoutHarness.FindById(root, "el")!;
-            Assert.Equal(Base, box.ActualBorderTopColor);     // inset
-            Assert.Equal(Red, box.ActualBorderRightColor);    // solid
-            Assert.Equal(Red, box.ActualBorderBottomColor);   // solid
-            Assert.Equal(Base, box.ActualBorderLeftColor);    // inset
+            Assert.Equal(RColor.FromArgb(1, 0, 0), box.ActualBorderTopColor);
+            Assert.Equal(RColor.FromArgb(0, 2, 0), box.ActualBorderRightColor);
+            Assert.Equal(RColor.FromArgb(0, 0, 3), box.ActualBorderBottomColor);
+            Assert.Equal(RColor.FromArgb(4, 4, 4), box.ActualBorderLeftColor);
+        }
 
-            // ...and the mirror image, so neither arrangement can be satisfied by a constant.
-            var (mirrored, _) = await LayoutHarness.LayoutAsync(
+        [Fact]
+        public async Task ALogicalBorderColor_IsSeenByTheSubstitution()
+        {
+            // `border-inline-start-color` reaches BorderLeftColor in ResolveLogicalProperties, which
+            // runs AFTER CssUtils.ApplyCurrentColor on this cascade path - so a logical longhand
+            // declaring `currentcolor` used to overwrite the already-substituted physical longhand with
+            // the literal keyword again, and GetActualColor turned that into black. Resolving at
+            // used-value time is what makes the order stop mattering: the keyword survives to
+            // DerivedStyle either way.
+            var (root, _) = await LayoutHarness.LayoutAsync(
                 "<!DOCTYPE html><html><body>"
-                + "<div id='el' style='width: 60pt; height: 12pt; color: red; border-width: 4pt;"
-                + " border-style: solid inset inset solid'></div>"
+                + "<div id='el' style='width: 60pt; height: 12pt; color: red; border: 4pt solid;"
+                + " border-inline-start-color: currentcolor'></div>"
                 + "</body></html>");
 
-            var mirroredBox = LayoutHarness.FindById(mirrored, "el")!;
-            Assert.Equal(Red, mirroredBox.ActualBorderTopColor);
-            Assert.Equal(Base, mirroredBox.ActualBorderRightColor);
-            Assert.Equal(Base, mirroredBox.ActualBorderBottomColor);
-            Assert.Equal(Red, mirroredBox.ActualBorderLeftColor);
+            var box = LayoutHarness.FindById(root, "el")!;
+            Assert.Equal(Red, box.ActualBorderLeftColor);
         }
 
         [Fact]

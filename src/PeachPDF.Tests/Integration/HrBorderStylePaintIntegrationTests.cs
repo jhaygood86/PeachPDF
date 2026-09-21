@@ -98,8 +98,8 @@ namespace PeachPDF.Tests.Integration
             // States the relationship a default rule depends on, so a future change to
             // BorderBevelColors that moves either face fails HERE, naming the cause, rather than only
             // in the paint test above. #eee is no longer declared anywhere - it is the base
-            // CssUtils.ApplyCurrentColor resolves a beveled currentColor border to (issue #1226) -
-            // but it is still the value whose two faces those greys are.
+            // DerivedStyle.ResolveBorderSideColor resolves a beveled currentColor border to (issue
+            // #1226) - but it is still the value whose two faces those greys are.
             var declared = RColor.FromArgb(238, 238, 238);
 
             Assert.Equal(RColor.FromArgb(154, 154, 154), BorderBevelColors.Shade(declared, darken: true));
@@ -193,7 +193,8 @@ namespace PeachPDF.Tests.Integration
             // before that declaration existed. Pinned separately from the default rule because it is a
             // different path to the same property: every style here is a flat one, so the side
             // resolves through `color` rather than through the beveled base a default rule takes
-            // (CssUtils.ApplyCurrentColor - and see BeveledBorderCurrentColorTests for that half).
+            // (DerivedStyle.ResolveBorderSideColor - and see BeveledBorderCurrentColorTests for that
+            // half).
             var (root, container) = await LayoutHarness.LayoutAsync(
                 $"<!DOCTYPE html><html><head><style>{css}</style></head><body>"
                 + "<div style='color: green'><hr id='el'></div></body></html>");
