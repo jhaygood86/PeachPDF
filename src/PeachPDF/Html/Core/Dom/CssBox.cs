@@ -1054,7 +1054,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public double ActualMarginTop =>
             MarginTop.Value is { IsValue: true, Value: { } marginTop }
-                ? CssValueParser.ParseLength(marginTop, ContainingBlock.Size.Width, this)
+                ? CssValueParser.ParseLength(marginTop, ContainingBlock.AvailableWidth, this)
                 : 0;
 
         /// <summary>
@@ -1067,7 +1067,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public double ActualMarginBottom =>
             MarginBottom.Value is { IsValue: true, Value: { } marginBottom }
-                ? CssValueParser.ParseLength(marginBottom, ContainingBlock.Size.Width, this)
+                ? CssValueParser.ParseLength(marginBottom, ContainingBlock.AvailableWidth, this)
                 : 0;
 
         /// <summary>

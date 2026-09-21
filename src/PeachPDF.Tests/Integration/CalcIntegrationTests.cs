@@ -339,15 +339,16 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task Width_CalcNegativeResult_ComputesExactNegativeValue()
+        public async Task Width_CalcNegativeResult_ClampsToZero()
         {
-            // PeachPDF doesn't clamp a negative used width to zero for a plain negative length either
-            // (verified separately) - calc() is consistent with that existing behavior, not a special case.
+            // A used width is never negative (CSS 2.1 §10.2), and a calc() result is clamped to the
+            // property's allowed range (css-values-4 §10.2), so `calc(50pt - 100pt)` is 0 rather than the
+            // -50 this test used to pin. Chrome agrees.
             var root = await BuildBoxTree(WidthHtml("calc(50pt - 100pt)"));
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal(-50, el!.ActualWidth, 2);
+            Assert.Equal(0, el!.ActualWidth, 2);
         }
 
         [Fact]

@@ -1442,7 +1442,7 @@ namespace PeachPDF.Html.Core.Dom
             var marginLeft = box.MarginLeft.Value;
             if (marginLeft.IsValue)
             {
-                return CssValueParser.ParseLength(marginLeft.Value!.Value, box.ContainingBlock.Size.Width, box);
+                return CssValueParser.ParseLength(marginLeft.Value!.Value, box.ContainingBlock.AvailableWidth, box);
             }
 
             if (box.MarginRight.Value.IsValue) return 0;
@@ -1462,7 +1462,7 @@ namespace PeachPDF.Html.Core.Dom
             // here with a non-null boxWidth) so a `margin: … auto` table centers against that width.
             if (boxWidth is not null)
             {
-                return (box.ContainingBlock.Size.Width - boxWidth.Value) / 2;
+                return (box.ContainingBlock.AvailableWidth - boxWidth.Value) / 2;
             }
 
             return ResolveAutoHorizontalMargin(box);
@@ -1473,7 +1473,7 @@ namespace PeachPDF.Html.Core.Dom
             var marginRight = box.MarginRight.Value;
             if (marginRight.IsValue)
             {
-                return CssValueParser.ParseLength(marginRight.Value!.Value, box.ContainingBlock.Size.Width, box);
+                return CssValueParser.ParseLength(marginRight.Value!.Value, box.ContainingBlock.AvailableWidth, box);
             }
 
             if (box.MarginLeft.Value.IsValue) return 0;
@@ -1493,7 +1493,7 @@ namespace PeachPDF.Html.Core.Dom
             // here with a non-null boxWidth) so a `margin: … auto` table centers against that width.
             if (boxWidth is not null)
             {
-                return (box.ContainingBlock.Size.Width - boxWidth.Value) / 2;
+                return (box.ContainingBlock.AvailableWidth - boxWidth.Value) / 2;
             }
 
             return ResolveAutoHorizontalMargin(box);
@@ -1511,7 +1511,12 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static double ResolveAutoHorizontalMargin(CssBox box)
         {
-            var containingWidth = box.ContainingBlock.Size.Width;
+            // The containing block's CONTENT width, which is what §10.3.3's constraint is stated over
+            // (§10.1 puts the containing block at the content edge of the nearest block container
+            // ancestor). Size.Width is that only under `content-box`; under `border-box` it is the border
+            // box, so splitting it pushed the box toward the end edge by half the container's own padding
+            // and border. AvailableWidth means "content width" under either.
+            var containingWidth = box.ContainingBlock.AvailableWidth;
 
             // A display:block image/SVG's synthetic wrapper (IsReplacedBlockWrapper) forces this box's
             // own Display back to inline purely so it can be sized as an atomic inline word (see the
@@ -1957,6 +1962,20 @@ namespace PeachPDF.Html.Core.Dom
                 var minW = CssValueParser.ParseLength(box.MinWidth, PageAwareWidthBasis(box.ContainingBlock, blockTop ?? box.Location.Y), box);
                 width = Math.Max(width, minW);
             }
+
+            // A used width can never leave the box's own content narrower than nothing (CSS 2.1 §10.2), and
+            // under `border-box` that means the border box cannot go below the box's own padding and border
+            // (css-sizing-3 §3 derives the content box by subtracting them from the specified size). Both
+            // are the same floor on the content box, spelled in whichever box `width` names: everything
+            // above works in content-box terms - the auto branch subtracts ActualBoxSizeIncludedWidth,
+            // which is ZERO under border-box, and under content-box goes negative in a container with no
+            // width to give - so a narrow enough container reached here at 0 (or below) with nothing to
+            // stop it. Last, so it also outranks a `max-width` that would otherwise squeeze the edges out.
+            var minimumUsedWidth = box.BoxSizing.Value is BoxSizingMode.BorderBox
+                ? box.ActualPaddingLeft + box.ActualPaddingRight + box.ActualBorderLeftWidth + box.ActualBorderRightWidth
+                : 0;
+
+            width = Math.Max(width, minimumUsedWidth);
 
             return width;
         }
