@@ -325,11 +325,34 @@ static string TriangleSwatch(string desc, string colors) =>
 /// the pair has to be indistinguishable - and was not, until the rule stopped being painted by a
 /// per-side path of its own that ignored border-style entirely.
 /// </summary>
+// The height the <div> paired against a rule declares, so that the two really are equivalent. `auto`
+// rather than `0`: a rule's used content height is 0 and its box is its own borders and padding, and
+// `height: auto` on an empty block is the one declaration that reproduces that under EITHER
+// box-sizing. `height: 0` reads as the same thing and is not - under `box-sizing: border-box` it sizes
+// the BORDER box to zero, so the div collapses to nothing and paints no band at all, leaving the pair
+// looking mismatched for a reason that has nothing to do with what the swatch is demonstrating.
+const string EquivalentDivHeight = "height: auto; ";
+
 static string HrStyleSwatch(string desc, string inlineCss) =>
     "<td>" +
     "<div class=\"hrbox\">" +
     $"<hr style=\"{inlineCss}\">" +
-    $"<div style=\"height: 0; {inlineCss}\"></div>" +
+    $"<div style=\"{EquivalentDivHeight}{inlineCss}\"></div>" +
+    "</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">hr / div, {inlineCss}</div>" +
+    "</td>";
+
+/// <summary>
+/// The same pairing inside a containing block with padding and a border of its own. The rule's basis
+/// is that block's CONTENT width - its padding and border sit outside it - so the pair must still line
+/// up, and must line up with the pairs in an unpadded cell at the same declared width.
+/// </summary>
+static string HrPaddedBoxSwatch(string desc, string inlineCss) =>
+    "<td>" +
+    "<div class=\"hrbox\" style=\"padding: 0 10px; border: 2px solid #ccc\">" +
+    $"<hr style=\"{inlineCss}\">" +
+    $"<div style=\"{EquivalentDivHeight}{inlineCss}\"></div>" +
     "</div>" +
     $"<div class=\"desc\">{desc}</div>" +
     $"<div class=\"css\">hr / div, {inlineCss}</div>" +
@@ -6109,6 +6132,17 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
         // auto is the one case that is NOT the basis: it is what is left of it after the rule's own
         // edges, which is why an unstyled rule's border box spans its container exactly.
         HrStyleSwatch("auto, with padding", "padding: 0 10px; border: 4px solid #4a90d9")
+    ) +
+    Row(
+        // What "the rule's own edges" means depends on box-sizing: under border-box they are already
+        // inside the width, so auto takes out nothing but the margins and the rule spans the cell.
+        // Subtracting them literally instead left these two short by exactly that padding and border.
+        HrStyleSwatch("auto, border-box + padding", "box-sizing: border-box; padding: 0 10px; border: 4px solid #4a90d9"),
+        HrStyleSwatch("auto, border-box", "box-sizing: border-box; border: 6px solid #4a90d9"),
+        // ...and the basis is measured from the containing block's CONTENT width, so these two match
+        // the same declarations in an unpadded cell above, inset by the cell's own 10px of padding.
+        HrPaddedBoxSwatch("50% in a padded box", "width: 50%; border: 4px solid #4a90d9"),
+        HrPaddedBoxSwatch("auto in a padded box", "border: 4px solid #4a90d9")
     ) +
 
     // The classic zero-content "border triangle": four mitred trapezoids meeting at the box's center.
