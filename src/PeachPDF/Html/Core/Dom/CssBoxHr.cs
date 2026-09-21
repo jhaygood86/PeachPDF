@@ -91,17 +91,37 @@ namespace PeachPDF.Html.Core.Dom
 
             RectanglesReset();
 
-            //width at 100% (or auto)
             double minwidth = GetMinimumWidth();
-            double width = ContainingBlock.Size.Width
-                           - ContainingBlock.ActualPaddingLeft - ContainingBlock.ActualPaddingRight
-                           - ContainingBlock.ActualBorderLeftWidth - ContainingBlock.ActualBorderRightWidth
-                           - ActualMarginLeft - ActualMarginRight - ActualBorderLeftWidth - ActualBorderRightWidth;
+
+            // The containing block's CONTENT width, which is what a percentage `width` resolves
+            // against per CSS 2.1 §10.2 - the rule's own margins, borders and padding all sit outside
+            // it. Passing the `auto` expression below as the basis instead made every percentage rule
+            // narrower than the equivalent <div> by twice its border width, and a rule with a margin
+            // narrower again by that margin (issue #1230). It is not only a styled-rule problem: the
+            // UA sheet's own 1px border is 0.75pt a side, so a plain `<hr style="width: 50%">` in a
+            // 200pt block came out 99.25pt rather than 100.
+            double containingBlockContentWidth =
+                ContainingBlock.Size.Width
+                - ContainingBlock.ActualPaddingLeft - ContainingBlock.ActualPaddingRight
+                - ContainingBlock.ActualBorderLeftWidth - ContainingBlock.ActualBorderRightWidth;
+
+            // `auto` is the available space rather than the basis: the same content width less this
+            // rule's own margins, borders and padding, which is what makes an unstyled rule's MARGIN
+            // box span its container exactly (CSS 2.1 §10.3.3's constraint, solved for width). Keep the
+            // two expressions apart - collapsing them back into one is the bug this fixed.
+            //
+            // Padding is subtracted here for the same reason border is; leaving it out made an `auto`
+            // rule with horizontal padding overflow its container by exactly that padding (measured:
+            // 220px inside a 200px block, where Chrome and the equivalent <div> both give 200).
+            double width = containingBlockContentWidth
+                           - ActualMarginLeft - ActualMarginRight
+                           - ActualBorderLeftWidth - ActualBorderRightWidth
+                           - ActualPaddingLeft - ActualPaddingRight;
 
             //Check width if not auto
             if (Width != Keywords.Auto && !string.IsNullOrEmpty(Width))
             {
-                width = CssValueParser.ParseLength(Width, width, this);
+                width = CssValueParser.ParseLength(Width, containingBlockContentWidth, this);
             }
 
             if (width < minwidth || width >= 9999)

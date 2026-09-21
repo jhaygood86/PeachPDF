@@ -1,4 +1,4 @@
-# `<hr>`: percentage width, indefinite percentage height, and the currentColor bevel base (tracked, not accepted forever)
+# `<hr>`: indefinite percentage height and the currentColor bevel base (tracked, not accepted forever)
 
 Deviations found while fixing #1225 (`<hr>` discarding `border-style`) and deliberately left out of
 that change. Both are **tracked bugs to fix**, not limitations argued through and accepted — this file
@@ -11,28 +11,11 @@ height, and #1232's painted gap between the borders — are **closed**, fixed to
 [.claude/recent-fixes/2026-09-20-hr-resolves-its-own-used-height.md](../recent-fixes/2026-09-20-hr-resolves-its-own-used-height.md)
 for the mechanism, which is worth reading before touching that method.
 
-## A percentage `width` resolves against the wrong basis — issue #1230
-
-`CssBoxHr.PerformLayoutImp` builds the percentage basis as the containing block's content width minus
-the rule's *own* left and right border widths, then passes it to `CssValueParser.ParseLength`. CSS 2.1
-[§10.2](https://www.w3.org/TR/CSS21/visudet.html#the-width-property) resolves against the containing
-block's content width, with the element's own border outside it. Those two subtrahends belong to the
-`auto` branch, which is correct and is what an unstyled rule uses.
-
-Measured, in a 200pt containing block with `border:4px solid` (3pt per side):
-
-| declaration | `<div>` content / border box | `<hr>` content / border box |
-| --- | --- | --- |
-| `width: 50%` | 100 / 106 | **97 / 103** |
-| `width: 100%` | 200 / 206 | **194 / 200** |
-
-A browser agrees with the `<div>` column.
-
-**The trap this sets.** Pairing a rule against its equivalent zero-height `<div>` — the natural way to
-test or showcase rule painting — is only valid with no `width` declared at all. With `width: 100%` the
-two differ by twice the border width, the div's border box overflows its cell, and the pair looks
-broken for a reason that has nothing to do with what is being demonstrated. That is exactly how the
-first version of the `border_style` showcase's `<hr>` section shipped four mismatched pairs.
+The one that was here on the rule's **width** — #1230's percentage basis, reduced by the rule's own
+borders and margins — is **closed** too, in the same method. The `auto` expression and the percentage
+basis are now two separate statements, which is the whole fix; an `auto` rule's own padding is taken
+out of the available space alongside its borders as part of it. See
+[.claude/recent-fixes/2026-09-21-hr-resolves-a-percentage-width-against-its-containing-block.md](../recent-fixes/2026-09-21-hr-resolves-a-percentage-width-against-its-containing-block.md).
 
 ## An inset/outset border whose colour is `currentColor` is beveled from the wrong base — issue #1226
 

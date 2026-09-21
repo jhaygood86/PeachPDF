@@ -6011,6 +6011,30 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
         HrStyleSwatch("solid", "border: 2px solid #4a90d9")
     ) +
 
+    // A percentage width on a rule resolves against its containing block's CONTENT width, with the
+    // rule's own borders and padding outside that basis - so each pair below still lines up exactly,
+    // at every width. It did not: the rule used to resolve against a basis already reduced by its own
+    // borders, so every one of these came out narrower than its div by twice the border width, and
+    // the whole section had to avoid declaring a width at all to stay honest.
+    "<h2>A percentage width on a rule (hr above, equivalent div below)</h2>" +
+    Row(
+        HrStyleSwatch("100%", "width: 100%; border: 4px inset #808080"),
+        HrStyleSwatch("75%", "width: 75%; border: 4px inset #808080"),
+        HrStyleSwatch("50%", "width: 50%; border: 4px inset #808080"),
+        HrStyleSwatch("25%", "width: 25%; border: 4px inset #808080")
+    ) +
+    Row(
+        // A margin shifts the rule without shrinking the basis...
+        HrStyleSwatch("50%, margin-left", "width: 50%; margin-left: 20px; border: 4px solid #4a90d9"),
+        // ...padding sits outside it in the same way border does...
+        HrStyleSwatch("50%, padding", "width: 50%; padding: 0 10px; border: 4px solid #4a90d9"),
+        // ...and border-box makes the percentage the border box instead, borders inside it.
+        HrStyleSwatch("50%, border-box", "width: 50%; box-sizing: border-box; border: 6px solid #4a90d9"),
+        // auto is the one case that is NOT the basis: it is what is left of it after the rule's own
+        // edges, which is why an unstyled rule's border box spans its container exactly.
+        HrStyleSwatch("auto, with padding", "padding: 0 10px; border: 4px solid #4a90d9")
+    ) +
+
     // The classic zero-content "border triangle": four mitred trapezoids meeting at the box's center.
     // It only works if every corner really is cut on the diagonal, so it is the sharpest test there is
     // for the mitre - and the same trick Acid2's nose relies on.
