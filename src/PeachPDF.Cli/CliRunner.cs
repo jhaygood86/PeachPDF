@@ -66,6 +66,12 @@ internal static class CliRunner
             await WriteOutputAsync(document, options, stdout, logger);
             return 0;
         }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("no creation date is available", StringComparison.Ordinal))
+        {
+            // The library's message names PdfDocumentMetadata.CreationDate, which a command-line user cannot set.
+            await Console.Error.WriteLineAsync($"error: {ex.Message} On the command line, pass --pdf-creation-date.");
+            return 1;
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException or UriFormatException or ArgumentException or InvalidOperationException)
         {
             await Console.Error.WriteLineAsync($"error: {ex.Message}");
@@ -117,8 +123,17 @@ internal static class CliRunner
         if (options.MarginBottomPt is { } bottom) config.MarginBottom = (int)Math.Round(bottom);
         if (options.MarginLeftPt is { } left) config.MarginLeft = (int)Math.Round(left);
 
+        if (options.PdfA is { } pdfA)
+        {
+            config.PdfAConformance = pdfA;
+        }
+
+        // PDF/A always writes an XMP stream, which needs a creation date - and the library throws when it
+        // has none, rather than inventing one. So no date is made up here either: an explicit
+        // --pdf-creation-date is used as given, otherwise the document's own date (<meta name="date">) is.
         if (options.PdfTitle is not null || options.PdfAuthor is not null || options.PdfSubject is not null ||
-            options.PdfKeywords is not null || options.PdfCreator is not null)
+            options.PdfKeywords is not null || options.PdfCreator is not null ||
+            options.PdfCreationDate is not null)
         {
             config.Metadata = new PdfDocumentMetadata
             {
@@ -127,6 +142,27 @@ internal static class CliRunner
                 Subject = options.PdfSubject,
                 Keywords = options.PdfKeywords,
                 Creator = options.PdfCreator,
+                CreationDate = options.PdfCreationDate,
+            };
+        }
+
+        foreach (var attachment in options.Attachments)
+        {
+            config.Attachments.Add(new PdfAttachment
+            {
+                FileName = Path.GetFileName(attachment.Path),
+                Data = File.ReadAllBytes(attachment.Path),
+                MimeType = attachment.MimeType ?? GuessMimeType(attachment.Path),
+                Relationship = attachment.Relationship ?? PdfAttachmentRelationship.Unspecified,
+            });
+        }
+
+        if (options.FacturXXmlPath is { } facturXXml)
+        {
+            config.FacturX = new FacturXOptions
+            {
+                Xml = File.ReadAllBytes(facturXXml),
+                Profile = options.FacturXProfile,
             };
         }
 
@@ -137,6 +173,30 @@ internal static class CliRunner
 
         return config;
     }
+
+    private static readonly Dictionary<string, string> MimeTypesByExtension = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".txt"] = "text/plain",
+        [".csv"] = "text/csv",
+        [".xml"] = "text/xml",
+        [".json"] = "application/json",
+        [".html"] = "text/html",
+        [".htm"] = "text/html",
+        [".pdf"] = "application/pdf",
+        [".png"] = "image/png",
+        [".jpg"] = "image/jpeg",
+        [".jpeg"] = "image/jpeg",
+        [".gif"] = "image/gif",
+        [".tif"] = "image/tiff",
+        [".tiff"] = "image/tiff",
+        [".xls"] = "application/vnd.ms-excel",
+        [".xlsx"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        [".ods"] = "application/vnd.oasis.opendocument.spreadsheet",
+    };
+
+    /// <summary>The MIME type for an attachment's file extension, or a generic binary type.</summary>
+    internal static string GuessMimeType(string path) =>
+        MimeTypesByExtension.TryGetValue(Path.GetExtension(path), out var mimeType) ? mimeType : "application/octet-stream";
 
     private static async Task<PeachPdfCssContent?> BuildCssDataAsync(PdfGenerator generator, CliOptions options)
     {

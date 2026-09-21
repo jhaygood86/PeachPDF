@@ -431,6 +431,29 @@ namespace PeachPDF
             document.PdfDocument.Options.PdfXConformanceEstablished = true;
             document.PdfDocument.Options.ColorOptions = config.ColorOptions;
 
+            // Embedded files are a whole-document property too - and validated here, ahead of any layout or
+            // painting, so a document that is about to be rejected wastes no work. A declarative document
+            // re-enters the render core once per Page(...), so a later call must ask for the same files
+            // (they are embedded once, in RenderPagesCore), exactly like PdfAConformance above.
+            var embeddingPlan = PdfEmbeddingPlan.Create(config);
+            if (document.PdfDocument.Options.EmbeddingPlan is { } establishedPlan && !establishedPlan.SameAs(embeddingPlan))
+            {
+                throw new InvalidOperationException(
+                    "PdfGenerateConfig.Attachments must be the same on every AddPdfPages/AddPages call for a given " +
+                    "document - this call asks for a different set of embedded files than an earlier call did. " +
+                    "A document's embedded files are established once, by its first call.");
+            }
+
+            document.PdfDocument.Options.EmbeddingPlan = embeddingPlan;
+
+            // /UF (PDF 1.7), /Desc (1.6) and /AFRelationship are newer than the historical 1.4 header, and a
+            // PDF/A-3 level already asks for 1.7 above - so a plain attachment gets the same, not a 1.4 file
+            // that uses 1.7 features. (PDF/X, which would lower it again, is rejected together with files.)
+            if (embeddingPlan.Files.Count > 0 && document.PdfDocument.Version < 17)
+            {
+                document.PdfDocument.Version = 17;
+            }
+
             // ISO 15930-4/6 (PDF/X-1a:2003/PDF/X-3:2003) target PDF 1.4 - already PeachPDF's own
             // historical default (see PdfVersionTests.Default_Pdf17_KeepsHistoricalVersion14), so no
             // explicit change is needed for those two levels; ISO 15930-7 (PDF/X-4) targets PDF 1.6, a
@@ -779,7 +802,10 @@ namespace PeachPDF
                     resolvedCreationDate!.Value,
                     config.PdfAConformance,
                     config.PdfXConformance,
-                    config.Metadata?.CustomXmpProperties ?? []);
+                    config.Metadata?.CustomXmpProperties ?? [],
+                    document.PdfDocument.Options.EmbeddingPlan?.FacturX is { } facturX
+                        ? (facturX.FileName, facturX.ConformanceLevel)
+                        : null);
                 document.PdfDocument.Catalog.SetMetadata(metadataStream);
             }
 
@@ -814,6 +840,17 @@ namespace PeachPDF
                 {
                     document.PdfDocument.Info.Elements.SetString("/GTS_PDFXConformance", gtsConformance, PdfStringEncoding.RawEncoding);
                 }
+            }
+
+            // Embedded files go in before any page is painted, so they precede the MathML sources that
+            // tagging attaches while painting in /AF. The plan was established (and checked against any
+            // earlier call) in EstablishDocumentOptions; writing it once per document, not once per call, is
+            // what the Applied flag is for.
+            if (document.PdfDocument.Options.EmbeddingPlan is { Files.Count: > 0 } embeddingPlan
+                && !document.PdfDocument.Options.EmbeddingApplied)
+            {
+                embeddingPlan.Apply(document.PdfDocument, resolvedCreationDate);
+                document.PdfDocument.Options.EmbeddingApplied = true;
             }
 
             // Only constructed when tagging is enabled - CssBox.PaintImp's tagging wrapper checks

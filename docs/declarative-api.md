@@ -60,7 +60,7 @@ var stream = new MemoryStream();
 document.Save(stream);
 ```
 
-`doc.Page(...)` can be called more than once to append further pages, and `PdfGenerator.AddPages` adds more pages to a `PeachPdfDocument` you already have (mirroring `AddPdfPages` on the HTML side). A document built with no `PdfGenerateConfig` at all defaults to A4 with 20pt margins; pass one to `CreateDocument`/`AddPages` for PDF metadata, PDF/A conformance, tagged PDF, compression, or a custom network loader — every `PdfGenerateConfig` option that isn't specific to HTML parsing applies here too.
+`doc.Page(...)` can be called more than once to append further pages, and `PdfGenerator.AddPages` adds more pages to a `PeachPdfDocument` you already have (mirroring `AddPdfPages` on the HTML side). A document built with no `PdfGenerateConfig` at all defaults to A4 with 20pt margins; pass one to `CreateDocument`/`AddPages` for PDF metadata, PDF/A conformance, tagged PDF, compression, or a custom network loader — every `PdfGenerateConfig` option that isn't specific to HTML parsing applies here too (PDF/A conformance, file attachments and [ZUGFeRD / Factur-X e-invoices](usage-examples.md#zugferd--factur-x-e-invoices) among them, set on the config exactly as for an HTML document).
 
 ## Pages: size, margin, background
 
@@ -306,6 +306,8 @@ container.Column(column =>
 
 `Grow(ratio)` maps to `flex-grow`; combine it with an explicit `Width`/`Height` on sibling items for a "fixed items plus one flexible item" layout.
 
+`AlignLeft()`/`AlignCenter()`/`AlignRight()` position a container within its parent (with auto margins, so give it a `Width` narrower than the parent - or leave it auto-width, and it shrinks to its content). They work on both `Row` and `Column` items. Text inside a container is aligned separately, with `Alignment(...)` on the text (`t.Alignment(TextAlignment.Right)`).
+
 ## Tables
 
 Backed by the real CSS table layout algorithm, including colspan/rowspan:
@@ -332,6 +334,8 @@ container.Table(table =>
     });
 });
 ```
+
+To right-align a column of amounts, align the cells' text — `row.Cell().AlignRight().Text("3.20")` (or `Text(t => { t.Alignment(TextAlignment.Right); t.Span("3.20"); })`). Margins do not apply to a table cell, so on a cell `AlignLeft()`/`AlignCenter()`/`AlignRight()` align the cell's content instead of positioning it.
 
 `Header`/`Footer` repeat on every physical page the table spans, exactly like a real `<thead>`/`<tfoot>`.
 

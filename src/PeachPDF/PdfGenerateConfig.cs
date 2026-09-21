@@ -13,6 +13,7 @@
 #nullable enable
 
 using PeachPDF.Network;
+using System.Collections.Generic;
 
 namespace PeachPDF
 {
@@ -266,6 +267,37 @@ namespace PeachPDF
         /// config object.
         /// </summary>
         public bool EnableXmpMetadata { get; set; } = false;
+
+        /// <summary>
+        /// Files to embed in the generated PDF - for example the source data behind a report, or the
+        /// supporting documents of an invoice. Each is listed in the PDF's attachments panel and indexed
+        /// in the catalog's <c>/AF</c> array and <c>/Names /EmbeddedFiles</c> name tree. Empty by default,
+        /// in which case nothing is embedded.
+        /// </summary>
+        /// <remarks>
+        /// Embedding arbitrary files is what distinguishes PDF/A-3 from PDF/A-1 and PDF/A-2: generation
+        /// throws when a file is attached together with <see cref="PdfAConformance"/> set to a PDF/A-1 or
+        /// PDF/A-2 level (use one of the <c>PdfA3*</c> levels instead). With no PDF/A level requested,
+        /// attachments are ordinary PDF attachments.
+        /// Attachments are a whole-document property, like <see cref="PdfAConformance"/>: when several
+        /// <c>AddPdfPages</c>/<c>AddPages</c> calls build one document, every call must specify the same
+        /// set (the files are embedded once).
+        /// </remarks>
+        public ICollection<PdfAttachment> Attachments { get; } = [];
+
+        /// <summary>
+        /// When set, the generated PDF becomes a Factur-X / ZUGFeRD hybrid e-invoice: the supplied invoice XML is
+        /// embedded and the document is marked as a Factur-X invoice in its XMP metadata. See
+        /// <see cref="FacturXOptions"/> for what PeachPDF does and does not do, and its requirements (a PDF/A-3
+        /// level in <see cref="PdfAConformance"/>). Defaults to <c>null</c> - not an e-invoice.
+        /// </summary>
+        /// <remarks>
+        /// Like <see cref="Attachments"/> and <see cref="PdfAConformance"/> this is a whole-document
+        /// property: every <c>AddPdfPages</c>/<c>AddPages</c> call on one document must specify the same
+        /// invoice. It can be combined with <see cref="Attachments"/> for supporting documents; the invoice XML is
+        /// always the first attachment.
+        /// </remarks>
+        public FacturXOptions? FacturX { get; set; }
 
         /// <summary>
         /// When set to <c>true</c> (the default), a raster image whose decoded pixel size is larger than

@@ -871,8 +871,26 @@ engine's internal, already-desugared `MathNode` interpretation of it) and attach
 (`/AF`, `/AFRelationship /Supplement`) on the structure element, using `PdfFileSpecification`/
 `PdfEmbeddedFile` — two low-level PDF object primitives that existed, unused, before this feature (the
 same "pre-existing-but-uncalled primitive" pattern `XForm`/`PdfSoftMask` followed for other features).
+The same two objects back the general [`PdfGenerateConfig.Attachments`](#embedded-files-attachments) API.
 See [MathML Associated Files](html-css-support.md#mathml-associated-files) for the user-facing mechanism
 and [PDF 2.0 output](usage-examples.md#pdf-20-output) for `PdfGenerateConfig.PdfVersion`.
+
+### Embedded files (attachments)
+
+`PdfGenerateConfig.Attachments` embeds arbitrary files document-wide. `PdfEmbeddingPlan` validates the request
+(PDF/A-3 or no PDF/A level, unique Latin-1 names, a MIME type per file) and freezes a copy of it;
+`PdfEmbeddingPlan.Apply` builds a `PdfEmbeddedFile` (the stream, with `/Params /Size` and `/ModDate`, optionally
+Flate-compressed as it is written) and a `PdfFileSpecification` (`/F`, `/UF`, `/Desc`, `/AFRelationship`, and an
+`/EF` dictionary naming the stream under both `/F` and `/UF`) per file, then `PdfCatalog.AddAttachment` indexes the
+specification twice: in the catalog's `/AF` array and in the `/Names /EmbeddedFiles` name tree.
+
+Two constraints shape it. Rendering re-enters `RenderPagesCore` once per `AddPdfPages` call *and* once per
+declarative `Page(...)`, so the plan is remembered on `PdfDocumentOptions` (`EmbeddingPlan`), compared against on
+every later call (a different set throws, exactly like a changed `PdfAConformance`), and written once
+(`EmbeddingApplied`). And the writer renumbers every object at save time, so the name tree stores real
+`PdfReference` items rather than literals carrying object numbers. The tree is a single flat leaf (`/Names`
+only), which is valid at any size and needs no `/Limits` bookkeeping. See
+[Embedding files](usage-examples.md#embedding-files-pdfa-3-attachments) for the user-facing behavior.
 
 ### Coverage
 

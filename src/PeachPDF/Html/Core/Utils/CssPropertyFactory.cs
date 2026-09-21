@@ -43,6 +43,24 @@ namespace PeachPDF.Html.Core.Utils
             CssUtils.SetPropertyValue(_parser, box, propertyName, value);
         }
 
+        /// <summary>
+        /// Sets <paramref name="box"/>'s <c>text-align</c> to <paramref name="keyword"/> (<c>left</c>, <c>right</c>,
+        /// <c>center</c>, <c>justify</c>, <c>start</c>, <c>end</c>).
+        /// </summary>
+        /// <remarks>
+        /// <c>text-align</c> is a shorthand, and <see cref="Set(CssBox, string, string)"/> reaches only the generated
+        /// <see cref="CssPropertyRegistry"/>, which is per-longhand: handed the shorthand it returns false and
+        /// the value is silently dropped (a declarative <c>Alignment(...)</c> aligned nothing anywhere). The
+        /// cascade expands the shorthand before it ever calls the registry, so this does the same expansion by
+        /// hand - <c>text-align-all</c> takes the keyword and <c>text-align-last</c> resets to its initial
+        /// <c>auto</c> (css-text-3 §6.1), which is exactly what the shorthand sets.
+        /// </remarks>
+        public void SetTextAlign(CssBox box, string keyword)
+        {
+            Set(box, "text-align-all", keyword);
+            Set(box, "text-align-last", "auto");
+        }
+
         /// <summary>Sets <paramref name="box"/>'s <paramref name="propertyName"/> to <paramref name="value"/>'s canonical CSS length token.</summary>
         public void Set(CssBox box, string propertyName, PdfLength value) =>
             Set(box, propertyName, value.ToCssText());

@@ -1,5 +1,7 @@
 #nullable disable warnings
 
+using System.Text;
+
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
     /// <summary>
@@ -31,6 +33,32 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             set { Elements.SetString(Keys.F, value); }
         }
 
+        /// <summary>
+        /// The file name as a Unicode text string ("/UF", PDF 1.7). ISO 19005-3 wants it alongside
+        /// "/F", which stays the plain-ASCII fallback for older readers.
+        /// </summary>
+        public string UnicodeFileName
+        {
+            get { return Elements.GetString(Keys.UF); }
+            set { Elements.SetString(Keys.UF, value, PdfStringEncoding.Unicode); }
+        }
+
+        /// <summary>
+        /// A human-readable description of the file ("/Desc"). Written as a plain string when it is
+        /// pure ASCII (the common case), and as a UTF-16BE text string otherwise.
+        /// </summary>
+        public string Description
+        {
+            get { return Elements.GetString(Keys.Desc); }
+            set
+            {
+                if (Ascii.IsValid(value))
+                    Elements.SetString(Keys.Desc, value);
+                else
+                    Elements.SetString(Keys.Desc, value, PdfStringEncoding.Unicode);
+            }
+        }
+
         public PdfEmbeddedFile EmbeddedFile
         {
             get
@@ -44,13 +72,17 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 if (value == null)
                 {
                     embeddedFileDictionary.Elements.Remove(Keys.F);
+                    embeddedFileDictionary.Elements.Remove(Keys.UF);
                 }
                 else
                 {
                     if (!value.IsIndirect)
                         Owner._irefTable.Add(value);
 
+                    // Both keys name the same stream: "/F" for legacy readers, "/UF" because a PDF/A-3
+                    // validator (and the Factur-X specification's structure diagram) expects it too.
                     embeddedFileDictionary.Elements.SetReference(Keys.F, value);
+                    embeddedFileDictionary.Elements.SetReference(Keys.UF, value);
                 }
             }
         }
@@ -109,6 +141,20 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             public const string EF = "/EF";
 
             /// <summary>
+            /// (Optional, but recommended alongside F; PDF 1.7) A Unicode text string that provides a
+            /// file specification of the form described in the PDF specification - the cross-platform,
+            /// cross-language counterpart of F.
+            /// </summary>
+            [KeyInfo(KeyType.String | KeyType.Optional)]
+            public const string UF = "/UF";
+
+            /// <summary>
+            /// (Optional; PDF 1.6) A text string describing the file.
+            /// </summary>
+            [KeyInfo(KeyType.String | KeyType.Optional)]
+            public const string Desc = "/Desc";
+
+            /// <summary>
             /// (Optional; PDF 2.0) The relationship between this file specification's file and the
             /// object it's associated with - one of /Source, /Data, /Alternative, /Supplement,
             /// /EncryptedPayload, /FormData, /Schema, or /Unspecified (ISO 32000-2 Table 43).
@@ -121,12 +167,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             /// </summary>
             internal static DictionaryMeta Meta
             {
-                get
-                {
-                    if (Keys.meta == null)
-                        Keys.meta = CreateMeta(typeof(Keys));
-                    return Keys.meta = null!;
-                }
+                get { return meta ??= CreateMeta(typeof(Keys)); }
             }
             static DictionaryMeta meta = null!;
         }

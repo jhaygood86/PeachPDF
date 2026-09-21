@@ -33,6 +33,14 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         static readonly XNamespace XmpNs = "http://ns.adobe.com/xap/1.0/";
         static readonly XNamespace PdfaidNs = "http://www.aiim.org/pdfa/ns/id/";
 
+        // The PDF/A extension-schema vocabulary (ISO 19005-3 §6.6.2.3.3) - PDF/A only allows a property outside
+        // the predefined XMP schemas if the packet also declares the schema that defines it - and the Factur-X
+        // schema itself (Factur-X 1.09.2 §6.3). The trailing '#' of the Factur-X URI is part of the name.
+        static readonly XNamespace PdfaExtensionNs = "http://www.aiim.org/pdfa/ns/extension/";
+        static readonly XNamespace PdfaSchemaNs = "http://www.aiim.org/pdfa/ns/schema#";
+        static readonly XNamespace PdfaPropertyNs = "http://www.aiim.org/pdfa/ns/property#";
+        static readonly XNamespace FxNs = "urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#";
+
         // The original Adobe-defined PDF/X identification schema (used by every PDF/X level, including
         // X-4 - confirmed against the widely-deployed LaTeX "pdfx" package's own XMP template, which is
         // the clearest real-world reference available short of the paywalled ISO 15930 text itself: see
@@ -51,13 +59,14 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             DateTimeOffset creationDate,
             PdfAConformance conformance,
             PeachPDF.PdfXConformance pdfXConformance,
-            IEnumerable<XElement> customProperties)
+            IEnumerable<XElement> customProperties,
+            (string FileName, string ConformanceLevel)? facturX = null)
             : base(document)
         {
             Elements.SetName(Keys.Type, "/Metadata");
             Elements.SetName(Keys.Subtype, "/XML");
 
-            var packetBytes = BuildPacket(info, creationDate, conformance, pdfXConformance, customProperties);
+            var packetBytes = BuildPacket(info, creationDate, conformance, pdfXConformance, customProperties, facturX);
 
             // Per ISO 19005 §6.7.4 the metadata stream must not specify a /Filter - every other
             // stream writer in this codebase sets Elements[PdfStream.Keys.Filter] explicitly
@@ -71,7 +80,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             DateTimeOffset creationDate,
             PdfAConformance conformance,
             PeachPDF.PdfXConformance pdfXConformance,
-            IEnumerable<XElement> customProperties)
+            IEnumerable<XElement> customProperties,
+            (string FileName, string ConformanceLevel)? facturX)
         {
             var description = new XElement(RdfNs + "Description",
                 new XAttribute(RdfNs + "about", ""),
@@ -136,7 +146,17 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 }
             }
 
-            var rdf = new XElement(RdfNs + "RDF", description);
+            // The rdf prefix is declared explicitly (rather than left to LINQ to XML's generated "p1") so the
+            // packet reads like every other XMP packet - some consumers match on the conventional prefix.
+            var rdf = new XElement(RdfNs + "RDF", new XAttribute(XNamespace.Xmlns + "rdf", RdfNs), description);
+
+            // Factur-X / ZUGFeRD: the extension schema that declares the fx: properties, then the properties
+            // themselves - separate rdf:Description blocks, exactly as the specification's sample XMP has them.
+            if (facturX is { } facturXValues)
+            {
+                rdf.Add(FacturXExtensionSchemaDescription());
+                rdf.Add(FacturXValuesDescription(facturXValues.FileName, facturXValues.ConformanceLevel));
+            }
 
             // Deep-copy (new XElement(custom), not custom itself) - an XElement already has a parent
             // once added to a tree, so reusing the caller's own element instance directly would strip
@@ -163,6 +183,51 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
             return memoryStream.ToArray();
         }
+
+        /// <summary>
+        /// The <c>pdfaExtension:schemas</c> description that declares the Factur-X XMP schema (Factur-X 1.09.2
+        /// §6.3.1): its name, namespace URI, prefix, and the four Text properties, in the specification's order.
+        /// </summary>
+        static XElement FacturXExtensionSchemaDescription()
+        {
+            static XElement Property(string name, string description) =>
+                new(RdfNs + "li", new XAttribute(RdfNs + "parseType", "Resource"),
+                    new XElement(PdfaPropertyNs + "name", name),
+                    new XElement(PdfaPropertyNs + "valueType", "Text"),
+                    new XElement(PdfaPropertyNs + "category", "external"),
+                    new XElement(PdfaPropertyNs + "description", description));
+
+            return new XElement(RdfNs + "Description",
+                new XAttribute(RdfNs + "about", ""),
+                new XAttribute(XNamespace.Xmlns + "pdfaExtension", PdfaExtensionNs),
+                new XAttribute(XNamespace.Xmlns + "pdfaSchema", PdfaSchemaNs),
+                new XAttribute(XNamespace.Xmlns + "pdfaProperty", PdfaPropertyNs),
+                new XElement(PdfaExtensionNs + "schemas",
+                    new XElement(RdfNs + "Bag",
+                        new XElement(RdfNs + "li", new XAttribute(RdfNs + "parseType", "Resource"),
+                            new XElement(PdfaSchemaNs + "schema", "Factur-X PDFA Extension Schema"),
+                            new XElement(PdfaSchemaNs + "namespaceURI", FxNs.NamespaceName),
+                            new XElement(PdfaSchemaNs + "prefix", "fx"),
+                            new XElement(PdfaSchemaNs + "property",
+                                new XElement(RdfNs + "Seq",
+                                    Property("DocumentFileName", "The name of the embedded XML document"),
+                                    Property("DocumentType", "The type of the hybrid document in capital letters, e.g. INVOICE or ORDER"),
+                                    Property("Version", "The actual version of the standard applying to the embedded XML document"),
+                                    Property("ConformanceLevel", "The conformance level of the embedded XML document")))))));
+        }
+
+        /// <summary>
+        /// The <c>fx:</c> values that mark the document as a Factur-X invoice. <c>fx:Version</c> is the version
+        /// of the XMP schema and of the invoice instance - <c>1.0</c> for every current Factur-X/ZUGFeRD release.
+        /// </summary>
+        static XElement FacturXValuesDescription(string fileName, string conformanceLevel) =>
+            new(RdfNs + "Description",
+                new XAttribute(RdfNs + "about", ""),
+                new XAttribute(XNamespace.Xmlns + "fx", FxNs),
+                new XElement(FxNs + "DocumentType", "INVOICE"),
+                new XElement(FxNs + "DocumentFileName", fileName),
+                new XElement(FxNs + "Version", "1.0"),
+                new XElement(FxNs + "ConformanceLevel", conformanceLevel));
 
         static (string Part, string Level) PdfAConformanceIdentifiers(PdfAConformance conformance) => conformance switch
         {

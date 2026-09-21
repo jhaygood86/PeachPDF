@@ -92,13 +92,24 @@ namespace PeachPDF.Layout
         /// <summary>Inside a <see cref="IColumnDescriptor"/>/<see cref="IRowDescriptor"/> item, lets this item grow to fill available space (<c>flex-grow</c>).</summary>
         IContainer Grow(double ratio = 1);
 
-        /// <summary>Left-aligns this container's own content.</summary>
+        /// <summary>
+        /// Left-aligns this container's own content. On a table cell (<see cref="ITableRowDescriptor.Cell"/>),
+        /// whose margins cannot position it, this aligns the cell's text; anywhere else it positions the container
+        /// within its parent.
+        /// </summary>
         IContainer AlignLeft();
 
-        /// <summary>Center-aligns this container's own content horizontally.</summary>
+        /// <summary>
+        /// Center-aligns this container's own content horizontally. On a table cell this centers the cell's text;
+        /// anywhere else it centers the container within its parent.
+        /// </summary>
         IContainer AlignCenter();
 
-        /// <summary>Right-aligns this container's own content.</summary>
+        /// <summary>
+        /// Right-aligns this container's own content. On a table cell this right-aligns the cell's text - the
+        /// way to right-align a column of amounts; anywhere else it pushes the container to the right of its
+        /// parent.
+        /// </summary>
         IContainer AlignRight();
 
         /// <summary>

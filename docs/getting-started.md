@@ -30,7 +30,7 @@ var document = await generator.GeneratePdf(html, pdfConfig);
 document.Save(stream);
 ```
 
-For more usage examples — rendering self-contained MHTML files, fetching HTML from a remote URI, sharing a parsed CSS context across renders, saving to disk, working with fonts, enabling tagged PDF (PDF/UA) output, generating PDF/A-conformant output, and returning PDFs from ASP.NET Core or Azure Functions endpoints — see [Usage Examples](usage-examples.md).
+For more usage examples — rendering self-contained MHTML files, fetching HTML from a remote URI, sharing a parsed CSS context across renders, saving to disk, working with fonts, enabling tagged PDF (PDF/UA) output, generating PDF/A-conformant output (including embedded-file attachments and ZUGFeRD / Factur-X e-invoices), and returning PDFs from ASP.NET Core or Azure Functions endpoints — see [Usage Examples](usage-examples.md).
 
 ## Thread safety
 
@@ -47,8 +47,8 @@ PeachPDF is built to be **trimming-safe and [Native AOT](https://learn.microsoft
 - **[Supported SVG Features](supported-svg-features.md)** — the full compatibility matrix for inline and standalone SVG, rendered as real vector PDF content rather than rasterized bitmaps.
 - **[Supported MathML Features](supported-mathml-features.md)** — the full compatibility matrix for inline `<math>` formulas, rendered as real vector PDF content using the font's own OpenType `MATH` table.
 - **[How PeachPDF Is Tested](testing.md)** — the automated test suite, the CI matrix, the diff-coverage gate, and the two-renderer rasterization checks that verify output actually renders correctly.
-- **[Usage Examples](usage-examples.md)** — copy-pasteable examples: local HTML strings, MHTML files, HTTP fetching, shared CSS contexts, saving to disk, fonts, tagged PDF (PDF/UA) output, PDF/A-conformant output, and returning PDFs from ASP.NET Core (controllers and Minimal APIs) and Azure Functions.
+- **[Usage Examples](usage-examples.md)** — copy-pasteable examples: local HTML strings, MHTML files, HTTP fetching, shared CSS contexts, saving to disk, fonts, tagged PDF (PDF/UA) output, PDF/A-conformant output (including embedded-file attachments and ZUGFeRD / Factur-X e-invoices), and returning PDFs from ASP.NET Core (controllers and Minimal APIs) and Azure Functions.
 - **[Declarative Document-Building API](declarative-api.md)** — build a PDF directly from C# with `PdfGenerator.CreateDocument`, no HTML/CSS strings required: pages, containers, text, images, rows/columns, tables, lists, repeating headers/footers with page numbers, a document-level stylesheet with class/id selectors, and splicing in HTML fragments (with slots) where needed.
 - **[Command-Line Tool](cli.md)** — the standalone `peachpdf` CLI (a self-contained Native AOT binary) for rendering HTML to PDF from the shell, without writing any code.
-- **[Feature Showcase](showcase.html)** — real PDFs rendered by the current release at site build time, each paired with the exact HTML source it was generated from.
+- **[Feature Showcase](showcase.html)** — real PDFs rendered by the current release at site build time, each paired with the exact HTML (or, for the declarative API, C#) source it was generated from.
 - **[API Reference](api/index.md)** — generated reference for every public type and member, always in sync with the latest source.

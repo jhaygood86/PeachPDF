@@ -1,5 +1,9 @@
 #nullable disable warnings
 
+using PeachPDF.PdfSharpCore.Pdf.Filters;
+using PeachPDF.PdfSharpCore.Pdf.IO;
+using System;
+
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
     /// <summary>
@@ -40,6 +44,47 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         {
             get { return Elements.GetName(Keys.Subtype); }
             set { Elements.SetName(Keys.Subtype, value); }
+        }
+
+        /// <summary>
+        /// The last-modification date of the embedded file ("/Params /ModDate"). Required in practice:
+        /// the Factur-X specification asks that <c>/Params</c> contain at least this entry.
+        /// </summary>
+        public DateTime? ModificationDate
+        {
+            get
+            {
+                return paramsDictionary.Elements.ContainsKey(Keys.ModDate)
+                    ? paramsDictionary.Elements.GetDateTime(Keys.ModDate, DateTime.MinValue)
+                    : null;
+            }
+            set
+            {
+                if (value is { } date)
+                    paramsDictionary.Elements.SetDateTime(Keys.ModDate, date);
+                else
+                    paramsDictionary.Elements.Remove(Keys.ModDate);
+            }
+        }
+
+        /// <summary>
+        /// When <c>true</c>, the stream is Flate-compressed as it is written (and <c>/Params /Size</c>
+        /// still reports the uncompressed size, as the specification requires). Off by default so a
+        /// caller that never asks for it keeps byte-for-byte the same output as before.
+        /// </summary>
+        public bool CompressOnWrite { get; set; }
+
+        internal override void WriteObject(PdfWriter writer)
+        {
+            // Same write-time pattern PdfContent uses; the Filter check makes a second Save() a no-op.
+            if (CompressOnWrite && Stream != null && Elements.GetName(Keys.Filter).Length == 0)
+            {
+                Stream.Value = Filtering.FlateDecode.Encode(Stream.Value, _document.Options.FlateEncodeMode);
+                Elements.SetName(Keys.Filter, "/FlateDecode");
+                Elements.SetInteger(Keys.Length, Stream.Length);
+            }
+
+            base.WriteObject(writer);
         }
 
         // TODO : Add properties for the subdictionnary Params and the subsubdictionnary Mac
@@ -113,12 +158,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             /// </summary>
             internal static DictionaryMeta Meta
             {
-                get
-                {
-                    if (Keys.meta == null)
-                        Keys.meta = CreateMeta(typeof(Keys));
-                    return Keys.meta = null!;
-                }
+                get { return meta ??= CreateMeta(typeof(Keys)); }
             }
             static DictionaryMeta meta = null!;
         }

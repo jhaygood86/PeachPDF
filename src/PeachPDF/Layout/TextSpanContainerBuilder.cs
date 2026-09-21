@@ -19,7 +19,7 @@ namespace PeachPDF.Layout
                 TextAlignment.End => "end",
                 _ => "left"
             };
-            properties.Set(box, "text-align", value);
+            properties.SetTextAlign(box, value);
             return this;
         }
 

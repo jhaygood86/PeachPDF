@@ -225,6 +225,18 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
 
         /// <summary>
+        /// Embeds a file document-wide: indexes its file specification in the catalog's <c>/AF</c> array
+        /// (see <see cref="AddAssociatedFile"/>) <em>and</em> in the <c>/Names /EmbeddedFiles</c> name tree
+        /// under <paramref name="name"/>. PDF/A-3 wants the former, and viewers (and the Factur-X
+        /// specification, which asks for both) list attachments from the latter.
+        /// </summary>
+        internal void AddAttachment(string name, PdfFileSpecification fileSpecification)
+        {
+            AddAssociatedFile(fileSpecification);
+            Names.AddEmbeddedFile(name, fileSpecification);
+        }
+
+        /// <summary>
         /// Sets the document's XMP metadata stream (<c>/Metadata</c>, see <see cref="PdfMetadataStream"/>) -
         /// only ever called when <see cref="PeachPDF.PdfGenerateConfig.EnableXmpMetadata"/> or
         /// <see cref="PeachPDF.PdfGenerateConfig.PdfAConformance"/> requests one. Untouched, no
