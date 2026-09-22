@@ -2099,8 +2099,41 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (tag.Name.Equals(HtmlConstants.Img, StringComparison.OrdinalIgnoreCase))
                 TranslateImgAlign(box, value);
+            else if (tag.Name.Equals(HtmlConstants.Hr, StringComparison.OrdinalIgnoreCase))
+                TranslateHrAlign(box, value);
             else
                 TranslateGenericAlign(box, value);
+        }
+
+        /// <summary>
+        /// Translates <c>&lt;hr align&gt;</c>: the HTML Standard maps it to <b>margins</b>, not
+        /// <c>text-align</c> - a rule has no inline content for <c>text-align</c> to act on. <c>left</c> is
+        /// <c>margin-left: 0; margin-right: auto</c>, <c>right</c> the mirror, and <c>center</c> both
+        /// <c>auto</c>.
+        /// </summary>
+        /// <remarks>
+        /// The match is on the exact value, ASCII case-insensitively, with no trimming - <c>" right "</c> does
+        /// not match, in the specification or in Blink. Anything else maps to nothing at all, which leaves the
+        /// UA sheet's own <c>margin-inline: auto</c> to centre the rule. Physical, not logical: <c>left</c> is the
+        /// left in an <c>rtl</c> block too.
+        /// </remarks>
+        private static void TranslateHrAlign(CssBox box, string value)
+        {
+            string left, right;
+
+            if (value.Equals(HtmlConstants.Left, StringComparison.OrdinalIgnoreCase))
+                (left, right) = ("0", Keywords.Auto);
+            else if (value.Equals(HtmlConstants.Right, StringComparison.OrdinalIgnoreCase))
+                (left, right) = (Keywords.Auto, "0");
+            else if (value.Equals(HtmlConstants.Center, StringComparison.OrdinalIgnoreCase))
+                (left, right) = (Keywords.Auto, Keywords.Auto);
+            else
+                return;
+
+            box.MarginLeft = CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
+                left, Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
+            box.MarginRight = CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
+                right, Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
         }
 
         /// <summary>Builds a purely-keyword <c>vertical-align</c> value - the shape every presentational
@@ -2185,14 +2218,64 @@ namespace PeachPDF.Html.Core.Parse
 
         /// <summary>
         /// Translates the <c>size</c> attribute - meaning differs by element: an <c>hr</c>'s <c>size</c>
-        /// is its height, a <c>font</c>'s <c>size</c> is its legacy 1-7 (or relative) font-size scale.
+        /// is its total height, a <c>font</c>'s <c>size</c> is its legacy 1-7 (or relative) font-size scale.
         /// </summary>
         private static void TranslateSize(HtmlTag tag, CssBox box, string value)
         {
             if (tag.Name.Equals(HtmlConstants.Hr, StringComparison.OrdinalIgnoreCase))
-                box.Height = TranslateLength(value);
+                TranslateHrSize(box, value);
             else if (tag.Name.Equals(HtmlConstants.Font, StringComparison.OrdinalIgnoreCase))
                 TranslateFontSize(box, value);
+        }
+
+        /// <summary>
+        /// Translates <c>&lt;hr size&gt;</c>. The attribute is the rule's <i>total</i> height, and the rule
+        /// already has a 1px border top and bottom, so a size above 1 is <c>height: size - 2px</c>; at 1 or
+        /// below it drops the bottom border instead (<c>border-bottom-width: 0</c>), leaving the single 1px
+        /// line that "hairline rule" legacy markup means by it.
+        /// </summary>
+        /// <remarks>
+        /// Parsed the way Blink's <c>HTMLHRElement</c> does (a leading integer: optional whitespace, a sign,
+        /// then digits, with trailing text ignored), so <c>"3px"</c>, <c>" 3"</c> and <c>"3.7"</c> are all 3.
+        /// Anything with no leading integer is 0 and so behaves like <c>size=1</c> - measured in Chrome for
+        /// <c>abc</c>, the empty string and a valueless attribute. The HTML Standard would treat an invalid
+        /// value as "no hint"; a document authored against a browser sees the Chrome behaviour, which is what
+        /// is reproduced here.
+        /// </remarks>
+        private static void TranslateHrSize(CssBox box, string value)
+        {
+            var size = ParseLeadingInteger(value);
+
+            if (size > 1)
+                box.Height = string.Format(NumberFormatInfo.InvariantInfo, "{0}px", size - 2);
+            else
+                box.BorderBottomWidth = "0";
+        }
+
+        /// <summary>
+        /// The integer a string starts with: leading ASCII white space, an optional sign, then digits, with
+        /// anything after them ignored; 0 when there are none. Saturates rather than overflowing.
+        /// </summary>
+        private static long ParseLeadingInteger(string value)
+        {
+            var i = 0;
+            while (i < value.Length && value[i] is ' ' or '\t' or '\n' or '\f' or '\r') i++;
+
+            var negative = false;
+            if (i < value.Length && value[i] is '+' or '-')
+            {
+                negative = value[i] == '-';
+                i++;
+            }
+
+            long result = 0;
+            while (i < value.Length && value[i] is >= '0' and <= '9')
+            {
+                result = Math.Min(result * 10 + (value[i] - '0'), int.MaxValue);
+                i++;
+            }
+
+            return negative ? -result : result;
         }
 
         private static void TranslateFontSize(CssBox box, string value)

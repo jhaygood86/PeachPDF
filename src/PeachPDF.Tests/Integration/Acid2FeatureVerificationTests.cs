@@ -272,11 +272,12 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task Hr_WithZeroMargin_StillGetsMinimumSeparation()
+        public async Task Hr_WithZeroMargin_HasNoSeparation()
         {
-            // Pins the long-standing <hr> quirk in MarginTopCollapse: when the collapsed top margin
-            // resolves to (near) zero, an <hr> is given ~1.1em of separation anyway, so back-to-back
-            // rules never fuse visually.
+            // This used to pin the opposite: a hard-coded substitution in margin collapsing gave an <hr>
+            // ~1.1em of separation whenever its collapsed top margin came out near zero, so an author's
+            // `margin: 0` was silently discarded. The default margin now lives in the UA sheet
+            // (`hr { margin: 0.5em auto }`), where an author declaration overrides it in the ordinary way.
             var html = Wrap(@"
                 <div id='a' style='height:20px;'></div>
                 <hr id='h' style='margin:0;' />");
@@ -284,8 +285,7 @@ namespace PeachPDF.Tests.Integration
             var a = FindById(root, "a")!;
             var h = FindById(root, "h")!;
 
-            Assert.True(h.Location.Y >= a.ActualBottom + 5,
-                $"expected the hr quirk to keep at least a font-derived gap, got Y={h.Location.Y} vs a.bottom={a.ActualBottom}");
+            Assert.Equal(a.ActualBottom, h.Location.Y, 3);
         }
 
         [Fact]

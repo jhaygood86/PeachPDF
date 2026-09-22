@@ -6350,6 +6350,50 @@ await SaveShowcaseAsync("block_inline_placement", "Layout", "Block Placement in 
     "Where a narrower block-level box sits in a left-to-right and a right-to-left container, including auto margins and overflow.",
     blockPlacementHtml, pdfConfig);
 
+// --- horizontal rule attributes showcase ---
+
+// One row per <hr>, each in a fixed-width band so where the rule sits between the band's edges is the whole
+// picture: the default 0.5em margins, `align` (which maps to margins, not text-align), `size` (the rule's
+// TOTAL height, so size=3 is a 3px rule and size=1 a single hairline), and `color`/`noshade` filling a thick
+// rule rather than leaving a white gap between two coloured lines.
+static string RuleRow(string label, string ruleHtml) =>
+    $"<div class=\"row\"><div class=\"label\">{label}</div><div class=\"band\">{ruleHtml}</div></div>";
+
+var hrAttributesHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a4; margin: 15mm }
+    body { font-family: Arial, sans-serif; font-size: 11px; margin: 0 }
+    h1 { font-size: 15px; margin: 0 0 4px }
+    p.note { margin: 0 0 10px; color: #555 }
+    .row { display: flex; gap: 10px; align-items: center; margin-bottom: 4px }
+    .label { width: 210px; font-family: monospace; font-size: 10px; color: #333 }
+    .band { width: 300px; background: #f0f0f0; border-left: 2px solid #999; border-right: 2px solid #999 }
+    .band p { margin: 0; font-size: 9px; color: #777 }
+    </style></head><body>
+    <h1>Horizontal rule attributes and margins</h1>
+    <p class="note">Each rule sits in a grey band. A rule has 0.5em above and below by default, and centres when it
+    is narrower than the band; <code>align</code> moves it by changing those margins, and an author margin overrides both.</p>
+    """
+    + RuleRow("default", "<hr>")
+    + RuleRow("width=\"50%\"", "<hr width=\"50%\">")
+    + RuleRow("width=\"50%\" align=\"left\"", "<hr width=\"50%\" align=\"left\">")
+    + RuleRow("width=\"50%\" align=\"center\"", "<hr width=\"50%\" align=\"center\">")
+    + RuleRow("width=\"50%\" align=\"right\"", "<hr width=\"50%\" align=\"right\">")
+    + RuleRow("align=\"right\" + margin: 0", "<hr width=\"50%\" align=\"right\" style=\"margin: 0\">")
+    + RuleRow("hr { margin: 0 } between text", "<p>above</p><hr style=\"margin: 0\"><p>below</p>")
+    + RuleRow("hr default between text", "<p>above</p><hr><p>below</p>")
+    + RuleRow("size=\"1\"", "<hr size=\"1\">")
+    + RuleRow("size=\"3\"", "<hr size=\"3\">")
+    + RuleRow("size=\"10\"", "<hr size=\"10\">")
+    + RuleRow("size=\"10\" noshade", "<hr size=\"10\" noshade>")
+    + RuleRow("size=\"10\" color=\"red\"", "<hr size=\"10\" color=\"red\">")
+    + RuleRow("size=\"10\" color=\"#2a7\" width=\"50%\" align=\"right\"", "<hr size=\"10\" color=\"#2a7\" width=\"50%\" align=\"right\">")
+    + "</body></html>";
+
+await SaveShowcaseAsync("hr_attributes", "Layout", "Horizontal Rule Attributes",
+    "Horizontal rules with their default margins, align, size, color and noshade attributes, and an author margin overriding them.",
+    hrAttributesHtml, pdfConfig);
+
 // --- outline showcase ---
 
 const string OutlineCss = """
