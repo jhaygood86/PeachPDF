@@ -26,15 +26,22 @@ well. Verified both ways: with only the `DerivedStyle` change reverted the paint
 hidden rule is drawn), and with only the guard restored it passes — the guard is sufficient on its
 own, which is what makes it real defence and not decoration.
 
-**That guard will read as partly-dead in branch coverage, and it must stay anyway.** Once the width
-is zeroed, the call site's own `ActualColumnRuleWidth > 0` check keeps `none` and `hidden` from
-reaching `PaintColumnRules` at all, so the guard's taken-`return` arms are unreachable through
-ordinary paint (the line measures ~75% branch coverage for exactly that reason, while line coverage
-is full). Both defences hold independently and neither test distinguishes them, which is the point:
-the guard exists for the case where the width stops being zero — a new caller, or a style whose
-width is resolved somewhere other than `DerivedStyle`. Deleting it to satisfy a branch-coverage
-report re-arms a defect that shipped once already. Same reasoning as the `OutlineDrawHandler` guards
-below.
+**The guard looks redundant and is not.** Once the width is zeroed, the call site's own
+`ActualColumnRuleWidth > 0` check keeps `none` and `hidden` out of `PaintColumnRules` entirely, so
+through ordinary cascade-settled paint the guard's taken-`return` arms never run — it first measured
+75% branch coverage (3/4) for exactly that reason, with full line coverage.
+
+That made it look like speculative defence. It is not, and the proof is the hazard in the next
+paragraph: because `_actualColumnRuleWidth` has **no invalidator**, priming the cache from a drawn
+rule and then writing `column-rule-style` leaves a stale non-zero width that the call site waves
+straight through. `AStaleColumnRuleWidth_IsStoppedByThePaintGuard` takes that route, fails without
+the guard, and lifts the line to 100% (4/4). So the guard is the only thing standing between a
+documented cache hazard and a visible regression — deleting it to satisfy a coverage report re-arms
+a defect that shipped once already.
+
+The `OutlineDrawHandler` guards below are the same idea **without** that escape hatch: there is no
+comparable stale-state path, so they stay genuinely unexercised and have to be justified rather than
+tested.
 
 Note the cache it is defending against has **no invalidator**: neither `column-rule-style` nor
 `column-rule-width` carries an `invalidates` entry in `css-properties.json`, and unlike the four
@@ -74,10 +81,10 @@ Three things here are rules a *future* change must not break, so they live in
 - [`hidden` is a zero used width, so the collapsed resolver must read style before width](../invariants/css-hidden-is-a-zero-used-width-so-the-style-longhand-must-invalidate-the-width-cache.md)
   — why zeroing the width does not cost `hidden` its CSS 2.1 §17.6.2 clause-1 win, and the
   `invalidates` hooks the cached width depends on.
-- [The `hidden` paint guards are deliberately unreachable](../invariants/paint-the-hidden-style-guards-are-deliberately-unreachable.md)
-  — `PaintColumnRules` and `OutlineDrawHandler`'s guards read as dead branches on purpose, and
-  `_actualColumnRuleWidth` has no invalidator at all, which is why the rule is stated rather than
-  inferred.
+- [The `hidden` paint guards must not be deleted as dead branches](../invariants/paint-the-hidden-style-guards-must-not-be-deleted-as-dead-branches.md)
+  — `PaintColumnRules` and `OutlineDrawHandler`'s guards read as dead branches, and
+  `_actualColumnRuleWidth` has no invalidator at all, which is both why the rule is stated rather
+  than inferred *and* how the column-rule guard turns out to be reachable and testable after all.
 - [A border side's cached colour](../invariants/dom-a-border-sides-cached-actual-colour-is-invalidated-only-by-its-own-longhand.md)
   — updated here, since `border-*-style` now carries an `invalidates` hook that clears the width
   cache but **not** the colour one.
@@ -137,7 +144,7 @@ the deletion a coverage report would suggest here is precisely the one that re-o
 
 ## Evidence
 
-- `HiddenBorderWidthTests` (23 cases: per-shorthand, per-side, the `NaturalBorder*` accessors,
+- `HiddenBorderWidthTests` (25 cases: per-shorthand, per-side, the `NaturalBorder*` accessors,
   border- and outline-style cache invalidation, column-rule used width, column-rule *paint*, plus
   `none`/`solid` controls throughout). Stashing only `DerivedStyle.cs` fails 9 and passes the control
   cases, so each assertion is pinned to the defect rather than to layout in general.
@@ -154,12 +161,16 @@ the deletion a coverage report would suggest here is precisely the one that re-o
   left all 13 tests of that draft — and the whole suite — green. Diff coverage did not catch it either: the lines
   executed, nothing asserted on them. With a stated width the same revert fails 5 tests. A covered
   line is not a pinned line.
-- Full suite `--framework net8.0`: 13110 passed, 0 failed, 9 skipped. Diff coverage: all nine
-  changed `DerivedStyle` lines at 100% line *and* branch; `PaintColumnRules`' new guard at 75% branch
-  (3/4) by design — its taken-`return` arms are unreachable once the width is zeroed, which is the
-  whole reason
-  [the guards invariant](../invariants/paint-the-hidden-style-guards-are-deliberately-unreachable.md)
-  exists.
+- Full suite `--framework net8.0`: 13112 passed, 0 failed, 9 skipped. Diff coverage: all nine
+  changed `DerivedStyle` lines and `PaintColumnRules`' new guard at 100% line *and* branch.
+- **The guard's last branch is reached through the hazard it defends against, not through a
+  contrivance.** It first measured 75% (3/4): once the width is zeroed the call site's own
+  `ActualColumnRuleWidth > 0` check keeps a suppressed rule out of the method entirely.
+  `AStaleColumnRuleWidth_IsStoppedByThePaintGuard` gets in by priming the width cache from a drawn
+  rule and *then* writing `column-rule-style` — legal precisely because `_actualColumnRuleWidth` has
+  no invalidator — so the call site waves a stale 16pt width through and only the guard stops a solid
+  line. It fails without the guard, and it asserts the staleness itself, so it starts failing the day
+  an invalidator is added rather than silently ceasing to exercise anything.
 - Cache invalidation: `WritingTheStyle_InvalidatesAnAlreadyReadWidth` (4 cases, both directions, all
   four border sides) and `WritingTheOutlineStyle_InvalidatesAnAlreadyReadOutlineWidth` (2 cases, both
   directions). Stashing only `css-properties.json` fails all 6.

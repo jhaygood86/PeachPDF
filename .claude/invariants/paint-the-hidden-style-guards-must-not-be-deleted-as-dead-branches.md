@@ -1,8 +1,13 @@
-# The `hidden` paint guards are deliberately unreachable — a coverage sweep must not delete them
+# The `hidden` paint guards must not be deleted as dead branches
 
-Several paint sites guard on a style being `hidden` even though, today, nothing can reach them with
-that value. They read as dead branches in branch coverage. **They are defence-in-depth against a
-defect that has actually shipped, and deleting them re-arms it.**
+Several paint sites guard on a style being `hidden` even though ordinary, cascade-settled paint
+cannot reach them with that value — the used width is already 0 by then, and the callers skip a
+zero-width edge. They therefore look like dead branches. **They are defence-in-depth against a defect
+that has actually shipped, and deleting them re-arms it.**
+
+One of the two is *not* merely theoretical, and that is the part worth reading before trusting the
+word "unreachable": the column-rule guard has a real, non-contrived route in, and a test that takes
+it.
 
 ## `FragmentPainter.PaintColumnRules`
 
@@ -10,8 +15,16 @@ defect that has actually shipped, and deleting them re-arms it.**
 if (box.ColumnRuleStyle.Value is LineStyle.None or LineStyle.Hidden) return;
 ```
 
-Unreachable because `DerivedStyle.ActualColumnRuleWidth` now zeroes both styles and the call site
-only paints when that width is `> 0`.
+Unreachable through ordinary paint, because `DerivedStyle.ActualColumnRuleWidth` zeroes both styles
+and the call site only paints when that width is `> 0`.
+
+**But reachable in the one way that matters.** `_actualColumnRuleWidth` has no invalidator, so
+priming the cache from a drawn rule and *then* writing `column-rule-style` leaves a stale non-zero
+width behind: the call site waves it through, and only this guard stops a solid 16pt line reaching
+the page. `AStaleColumnRuleWidth_IsStoppedByThePaintGuard` does exactly that and fails without the
+guard, which is why the line sits at 100% branch coverage rather than 75%. The guard is not
+speculative — it is the only thing standing between a documented cache hazard and a visible
+regression.
 
 It is stated anyway because the *inference* is fragile in two ways. The dash-style switch below it
 ends in `_ => RDashStyle.Solid`, so any width that ever reaches this method non-zero paints a solid
@@ -45,6 +58,11 @@ Do not delete a `hidden` branch because coverage reports it unexercised, and do 
 into the width check it duplicates. A zero-hit branch here is the intended state, not evidence of
 dead code. If one genuinely must go, the thing to remove first is the *reason* it is unreachable —
 and then it is no longer unreachable.
+
+Note the asymmetry, so the outline guards are not assumed to be equally testable: the column-rule
+guard has a test because the missing invalidator hands it a route in. The outline guards have none,
+because `Map.OutlineStyles` omits the keyword outright and there is no comparable stale-state path —
+the only way to exercise them would be to reintroduce the defect they guard against.
 
 Measured symptom if they go: a `column-rule: 16pt hidden` paints a solid 16pt line, and an
 `outline-style: hidden` silently suppresses an outline that the cascade should have kept.

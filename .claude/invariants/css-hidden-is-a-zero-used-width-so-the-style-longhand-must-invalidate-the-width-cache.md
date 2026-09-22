@@ -50,7 +50,7 @@ a sample:
 `_actualColumnRuleWidth` has no invalidator at all, and `DerivedStyle` has no
 `InvalidateColumnRuleWidth` method to hook up — unlike the border and outline cases, closing it means
 writing the method first, not just adding a JSON line. That is why
-[the hidden paint guards](paint-the-hidden-style-guards-are-deliberately-unreachable.md) state the
+[the hidden paint guards](paint-the-hidden-style-guards-must-not-be-deleted-as-dead-branches.md) state the
 suppression rule at the paint site rather than inferring it from the cached width.
 
 The logical longhands (`border-block-start-style` and friends) need no hook of their own: they are

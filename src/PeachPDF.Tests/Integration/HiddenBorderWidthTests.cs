@@ -208,5 +208,49 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(expectedRules, rules.Count());
         }
+
+        /// <summary>
+        /// Reaches <c>PaintColumnRules</c>' own <c>none</c>/<c>hidden</c> guard, which ordinary paint
+        /// cannot: once the used width is 0 the call site's <c>ActualColumnRuleWidth &gt; 0</c> check
+        /// keeps a suppressed rule out of the method entirely.
+        /// </summary>
+        /// <remarks>
+        /// The route in is the exact scenario the guard exists for, not a contrivance:
+        /// <c>_actualColumnRuleWidth</c> has **no invalidator** (neither `column-rule-width` nor
+        /// `column-rule-style` carries an `invalidates` hook, and there is no
+        /// `InvalidateColumnRuleWidth` to hook up), so priming the cache from a drawn rule and then
+        /// writing the style leaves a stale non-zero width behind. The call site waves that through,
+        /// and only the guard stops a solid 16pt line being painted - which is what
+        /// <c>column-rule: 16pt hidden</c> did before this change.
+        /// </remarks>
+        [Theory]
+        [InlineData("hidden")]
+        [InlineData("none")]
+        public async Task AStaleColumnRuleWidth_IsStoppedByThePaintGuard(string style)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='cols' style='width: 400pt; columns: 2; column-gap: 40pt; "
+                + "column-rule: 16pt solid rgb(10,20,30)'>"
+                + "<div style='height: 40pt'></div><div style='height: 40pt'></div></div>"));
+
+            var cols = LayoutHarness.FindById(root, "cols")!;
+            var parser = new PeachPDF.Html.Core.Parse.CssValueParser(new PeachPDF.Adapters.PdfSharpAdapter());
+
+            Assert.NotEmpty(cols.ColumnRuleSegments!);
+            Assert.Equal(16d, cols.ActualColumnRuleWidth, 3);   // prime the cache from a drawn rule
+
+            CssUtils.SetPropertyValue(parser, cols, "column-rule-style", style);
+
+            // The stale width survives the style write - that is the hazard, asserted rather than
+            // assumed, so this test starts failing the day an invalidator is added rather than
+            // silently ceasing to exercise the guard.
+            Assert.Equal(16d, cols.ActualColumnRuleWidth, 3);
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, cols, g);
+
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawLineCall>(),
+                l => l.Color == RColor.FromArgb(10, 20, 30));
+        }
     }
 }
