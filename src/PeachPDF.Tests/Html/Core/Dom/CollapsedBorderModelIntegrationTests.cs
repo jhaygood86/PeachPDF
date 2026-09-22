@@ -265,5 +265,43 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var resolved = table.CollapsedBorders!.Horizontal(2, 1);
             Assert.Equal(6.75, resolved.Width, 2);
         }
+
+        [Fact]
+        public async Task RelaidOutCollapsedTable_ResolvesTheSameLineWidthsOnEveryPass()
+        {
+            // CssLayoutEngineTable.ApplyCollapsedUsedBorderWidths overwrites each participant's cached
+            // ActualBorder*Width with the box-model USED half-width, and leaves it there for as long as
+            // the table stays collapsed. Resolution is that override's input, so a resolver that read
+            // the cache would feed the previous pass's output back in and halve the grid line again on
+            // every re-entry - and re-entry is routine (ShrinkToFit, a CSS Fragmentation 3 SS4.3
+            // relocation, a per-page-width reflow). Symptom: a 12pt declared border rendering at 6pt,
+            // then 3pt, with the cells shrinking to match.
+            var widths = await LayoutHarness.LayoutRepeatedlyAsync(
+                LayoutHarness.Wrap(
+                    "<table style='border-collapse:collapse'>" +
+                    "<tr><td style='width:40pt;height:20pt;border:12pt solid rgb(51,51,51)'></td>" +
+                    "<td style='width:40pt;height:20pt;border:12pt solid rgb(51,51,51)'></td></tr>" +
+                    "<tr><td style='width:40pt;height:20pt;border:12pt solid rgb(51,51,51)'></td>" +
+                    "<td style='width:40pt;height:20pt;border:12pt solid rgb(51,51,51)'></td></tr></table>"),
+                passes: 3,
+                snapshot: (root, _) =>
+                {
+                    var table = LayoutHarness.Descendants(root)
+                        .First(b => b.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable);
+                    var model = table.CollapsedBorders!;
+                    return (Horizontal: model.HorizontalLineWidth.ToArray(),
+                            Vertical: model.VerticalLineWidth.ToArray(),
+                            Segments: table.CollapsedBorderSegments!.Select(s => s.Width).ToArray());
+                });
+
+            // Every line - the two outer ones and the interior one, on both axes - stays at the declared
+            // 12pt, and the emitted segments with it.
+            foreach (var (horizontal, vertical, segments) in widths)
+            {
+                Assert.All(horizontal, w => Assert.Equal(12, w, 2));
+                Assert.All(vertical, w => Assert.Equal(12, w, 2));
+                Assert.All(segments, w => Assert.Equal(12, w, 2));
+            }
+        }
     }
 }
