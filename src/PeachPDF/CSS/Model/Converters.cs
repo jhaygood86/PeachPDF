@@ -388,6 +388,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter PositionModeConverter = Map.PositionModes.ToConverter();
         public static readonly IValueConverter OverflowModeConverter = Map.OverflowModes.ToConverter();
         public static readonly IValueConverter FloatingConverter = Map.FloatingModes.ToConverter();
+        public static readonly IValueConverter FloatReferenceConverter = Map.FloatReferences.ToConverter();
         public static readonly IValueConverter FootnoteDisplayConverter = Map.FootnoteDisplayModes.ToConverter();
         public static readonly IValueConverter FootnotePolicyConverter = Map.FootnotePolicyModes.ToConverter();
         public static readonly IValueConverter DisplayModeConverter = Map.DisplayModes.ToConverter();

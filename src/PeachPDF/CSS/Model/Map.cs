@@ -735,6 +735,16 @@ namespace PeachPDF.CSS
                 {Keywords.Right, Floating.Right},
                 {Keywords.Footnote, Floating.Footnote}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        // Named *References (plural), not FloatReference, to avoid colliding with the FloatReference
+        // enum type itself - same convention as FloatingModes above.
+        public static readonly FrozenDictionary<string, FloatReference> FloatReferences =
+            new Dictionary<string, FloatReference>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Inline, FloatReference.Inline},
+                {Keywords.Column, FloatReference.Column},
+                {Keywords.Region, FloatReference.Region},
+                {Keywords.Page, FloatReference.Page}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, FootnoteDisplayMode> FootnoteDisplayModes =
             new Dictionary<string, FootnoteDisplayMode>(StringComparer.OrdinalIgnoreCase)
             {

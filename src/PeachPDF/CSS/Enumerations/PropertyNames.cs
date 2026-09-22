@@ -118,6 +118,7 @@
         public static readonly string FlexShrink = "flex-shrink";
         public static readonly string FlexWrap = "flex-wrap";
         public static readonly string Float = "float";
+        public static readonly string FloatReference = "float-reference";
         public static readonly string FontFamily = "font-family";
         public static readonly string FontFeatureSettings = "font-feature-settings";
         public static readonly string FontKerning = "font-kerning";

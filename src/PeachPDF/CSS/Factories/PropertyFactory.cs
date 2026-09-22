@@ -271,6 +271,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FlexShrink, () => new FlexShrinkProperty());
             AddLonghand(PropertyNames.FlexWrap, () => new FlexWrapProperty());
             AddLonghand(PropertyNames.Float, () => new FloatProperty());
+            AddLonghand(PropertyNames.FloatReference, () => new FloatReferenceProperty());
 
             // CSS Fonts 4 §7.7 "Reset Implicitly": the font-variant-* longhands (and
             // font-feature-settings) reset to their initial value whenever `font` is set, even though
