@@ -761,7 +761,8 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// States every collapse participant's <i>used</i> border widths - half the resolved grid-line
-        /// width per edge - via <see cref="DerivedStyle.SetCollapsedUsedBorderWidths"/>, so
+        /// width per cell edge, and the <i>whole</i> resolved width per table edge - via
+        /// <see cref="DerivedStyle.SetCollapsedUsedBorderWidths"/>, so
         /// <c>ClientLeft</c>/<c>ClientTop</c>/content insets and the width-sum math all agree with the
         /// spacing model <see cref="HorizontalSpacingAt"/>/<see cref="VerticalSpacingAt"/> implement. A
         /// row/row-group/column/column-group owns no box-model space of its own under this model - the
@@ -769,6 +770,21 @@ namespace PeachPDF.Html.Core.Dom
         /// zeros. A cell spanning multiple segments takes the max resolved width across its own span on
         /// each edge, so its inset clears the thickest segment it touches.
         /// </summary>
+        /// <remarks>
+        /// The table's own four edges take the whole outermost grid line, not
+        /// <see href="https://www.w3.org/TR/CSS21/tables.html#collapsing-borders">CSS 2.1 §17.6.2</see>'s
+        /// "half of the maximum collapsed top border". Taking half puts the line's centre on the table's
+        /// border-box edge and so paints the outer half <i>outside</i> the table - over whatever precedes
+        /// it, or clipped away entirely at a page or container edge, which is what made an outer line come
+        /// out half the thickness of an interior one (issue #1257). Every browser sizes the table to
+        /// contain the whole outermost line instead; measured against Chrome 153, a 2×2 table of 60×40
+        /// cells with 20px collapsed borders occupies exactly 180×140 px, i.e. 20 + 60 + 20 + 60 + 20.
+        /// This is a deliberate choice of browser behaviour over §17.6.2's letter, not a transcription of
+        /// it. The cells are unaffected: they still take half the line on each edge and so still meet at
+        /// its centre, which is what <see cref="GetGridLineX"/>/<see cref="GetGridLineY"/> read - all that
+        /// moves is the table's own border box, outward by half a line on each side, paid for by
+        /// <see cref="StartXSpacing"/>/<see cref="StartYSpacing"/> no longer cancelling the whole width.
+        /// </remarks>
         private void ApplyCollapsedUsedBorderWidths()
         {
             if (_grid is not { } grid || _collapsedBorders is not { } model)
@@ -801,11 +817,12 @@ namespace PeachPDF.Html.Core.Dom
             var columnCount = grid.ColumnCount;
 
             {
+                // The whole outermost line, not half of it - see this method's own remarks.
                 var (top, right, bottom, left) = ResolvePhysicalBorderWidths(
-                    blockStartWidth: model.HorizontalLineWidth[0] / 2,
-                    blockEndWidth: model.HorizontalLineWidth[rowCount] / 2,
-                    inlineStartWidth: model.VerticalLineWidth[0] / 2,
-                    inlineEndWidth: model.VerticalLineWidth[columnCount] / 2);
+                    blockStartWidth: model.HorizontalLineWidth[0],
+                    blockEndWidth: model.HorizontalLineWidth[rowCount],
+                    inlineStartWidth: model.VerticalLineWidth[0],
+                    inlineEndWidth: model.VerticalLineWidth[columnCount]);
                 _tableBox.DerivedStyle.SetCollapsedUsedBorderWidths(top, right, bottom, left);
             }
 
@@ -964,47 +981,376 @@ namespace PeachPDF.Html.Core.Dom
             var lineStart = _headerBox != null ? headerRowCount + 1 : 0;
             var lineEnd = _footerBox != null ? grid.RowCount - footerRowCount - 1 : grid.RowCount;
 
-            for (var line = lineStart; line <= lineEnd; line++)
-            {
-                if (model.HorizontalLineWidth[line] <= 0) continue;
-                var rowAxisCenter = GetGridLineY(grid, line);
-
-                EmitRuns(grid.ColumnCount, col => model.Horizontal(line, col), (start, end, border) =>
-                {
-                    var colAxisStart = GetGridLineX(grid, start);
-                    var colAxisEnd = GetGridLineX(grid, end);
-                    if (colAxisStart is null || colAxisEnd is null) return;
-
-                    // !_isVertical: this loop resolves row-axis (block-axis) boundaries, which paint as a
-                    // physically horizontal stripe for horizontal-tb but a physically vertical one for a
-                    // vertical table (rows stack along physical X there) - see RowBoundaryRect's own remarks.
-                    segments.Add(new CollapsedBorderSegment(!_isVertical,
-                        RowBoundaryRect(rowAxisCenter, colAxisStart.Value, colAxisEnd.Value, border.Width),
-                        border.Style, border.Width, border.Color));
-                });
-            }
-
             var rowStart = headerRowCount;
             var rowEnd = grid.RowCount - footerRowCount;
 
+            // A detached header's/footer's own boundary-to-body line is resolved fresh per page by
+            // EmitHeaderFooterBorderSegments, against whichever row starts or ends THAT page - so the
+            // single, DOM-order resolution below can name a border far wider than the one really painted
+            // there, and a body divider that retracted by half of it would leave a hole under every
+            // repeat (a 40pt first-row border against a 4pt boundary measured an 18pt gap on every page
+            // but the first). A body run therefore takes no offset at such a line and stops on its
+            // centre, which is where it met the boundary segment before joints had owners at all - the
+            // two then split that joint square, exactly as two runs of one line meeting there would.
+            // These are the same two lines lineStart/lineEnd already hand to that method.
+            var headerBoundaryLine = _headerBox != null ? rowStart : -1;
+            var footerBoundaryLine = _footerBox != null ? rowEnd : -1;
+
+            CollapsedBorder BodyJointBorderAt(int blockLine, int column) =>
+                blockLine == headerBoundaryLine || blockLine == footerBoundaryLine
+                    ? CollapsedBorder.None
+                    : model.Horizontal(blockLine, column);
+
+            // Inline-axis lines first, block-axis lines second - see InlineLineOwnsJoint's own remarks
+            // for why that order is half of what settles each joint square.
             for (var line = 0; line <= grid.ColumnCount; line++)
             {
                 if (model.VerticalLineWidth[line] <= 0) continue;
                 var colAxisCenter = GetGridLineX(grid, line);
                 if (colAxisCenter is null) continue;
 
-                EmitRuns(rowEnd - rowStart, i => model.Vertical(rowStart + i, line), (start, end, border) =>
-                {
-                    var rowAxisStart = GetGridLineY(grid, rowStart + start);
-                    var rowAxisEnd = GetGridLineY(grid, rowStart + end);
+                var jointColumn = JointColumn(grid, line);
 
-                    segments.Add(new CollapsedBorderSegment(_isVertical,
-                        ColumnBoundaryRect(colAxisCenter.Value, rowAxisStart, rowAxisEnd, border.Width),
-                        border.Style, border.Width, border.Color));
-                });
+                EmitInlineAxisRuns(
+                    segments, grid, line, colAxisCenter.Value, rowStart, rowEnd - rowStart,
+                    row => model.Vertical(row, line),
+                    blockLine => BodyJointBorderAt(blockLine, jointColumn),
+                    blockLine => GetGridLineY(grid, blockLine));
+            }
+
+            for (var line = lineStart; line <= lineEnd; line++)
+            {
+                if (model.HorizontalLineWidth[line] <= 0) continue;
+
+                var jointRow = JointRow(grid, line);
+
+                EmitBlockAxisRuns(
+                    segments, grid, line, GetGridLineY(grid, line),
+                    column => model.Horizontal(line, column),
+                    inlineLine => model.Vertical(jointRow, inlineLine));
             }
 
             _tableBox.CollapsedBorderSegments = segments;
+        }
+
+        /// <summary>
+        /// Whether inline-axis grid line <paramref name="inlineLine"/> paints the whole <i>joint square</i>
+        /// where it crosses block-axis grid line <paramref name="blockLine"/> - the rectangle the two
+        /// lines' widths span - rather than the block-axis line doing so.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see href="https://www.w3.org/TR/CSS21/tables.html#collapsing-borders">CSS 2.1 §17.6.2</see>
+        /// resolves a border per <i>segment</i> and says nothing whatever about the square two crossing
+        /// segments share, so this is measured browser behaviour, not a transcription. Against Chrome 153
+        /// at 1 image px per CSS px, every joint square comes out a solid rectangle of exactly one line's
+        /// paint - there is no mitre, no diagonal, and no split, at any combination of width, style and
+        /// colour tried - and the line that gets it is decided in §17.6.2's own order, minus its origin
+        /// clause (which compares where two declarations came from, and so has nothing to say about two
+        /// already-resolved borders on different lines):
+        /// </para>
+        /// <list type="number">
+        /// <item>the wider border wins (30px inline lines take every joint from 10px block lines, and
+        /// 30px block lines take every joint back from 10px inline ones);</item>
+        /// <item>at equal width, the higher <see cref="CollapsedBorderResolver.StylePriority"/> wins
+        /// (<c>double</c> inline lines take every joint from <c>solid</c> block lines, including the one
+        /// the tiebreak below would otherwise give away);</item>
+        /// <item>at equal width and style, the later of the logical side order <i>inline-start,
+        /// block-start, inline-end, block-end</i> wins. The joint's owning cell is §17.6.2's own tiebreak
+        /// winner on both lines at once (<see cref="JointRow"/>/<see cref="JointColumn"/> name it), so
+        /// the block-axis line is that cell's block-start side only at line 0 and its block-end side
+        /// everywhere else, and the inline-axis line is its inline-start side only at the inline-start-most
+        /// line. That collapses to the one-line test below, and it really is <i>logical</i>: under
+        /// <c>dir="rtl"</c> Chrome mirrors it onto the other end of the table.</item>
+        /// </list>
+        /// <para>
+        /// Ownership is realized two ways, both in <see cref="EmitBlockAxisRuns"/>/
+        /// <see cref="EmitInlineAxisRuns"/>. At a run's own <i>end</i> the run reaches outward over the
+        /// square it owns and stops short of one it doesn't, which is what stopped the table's four outer
+        /// corners going unpainted (issue #1257). <i>Through</i> a run, where splitting every inline-axis
+        /// line at every row it crosses would cost a segment per cell, emission order carries it instead:
+        /// inline-axis lines are emitted first and block-axis lines paint over them, so a block-axis line
+        /// owns every joint it passes through for free, and only the inline-axis-owned ones (never more
+        /// than one block line's worth, by the tiebreak above) have to split a block-axis run.
+        /// </para>
+        /// </remarks>
+        private bool InlineLineOwnsJoint(
+            CollapsedBorder blockBorder, CollapsedBorder inlineBorder,
+            int inlineLine, int blockLine, int inlineLineCount)
+        {
+            if (!inlineBorder.IsPainted) return false;
+            if (!blockBorder.IsPainted) return true;
+
+            if (inlineBorder.UsedWidth != blockBorder.UsedWidth)
+                return inlineBorder.UsedWidth > blockBorder.UsedWidth;
+
+            var inlinePriority = CollapsedBorderResolver.StylePriority(inlineBorder.Style);
+            var blockPriority = CollapsedBorderResolver.StylePriority(blockBorder.Style);
+            if (inlinePriority != blockPriority) return inlinePriority > blockPriority;
+
+            return blockLine == 0 && inlineLine != (IsLeftToRight() ? 0 : inlineLineCount);
+        }
+
+        /// <summary>
+        /// Whether a border style covers every point of the rect it is given - <c>solid</c> and the four
+        /// bevels do, while <c>double</c> leaves the gap between its two rules and <c>dotted</c>/
+        /// <c>dashed</c> leave the gaps in their pattern. A style that does not cannot take a joint
+        /// square by being painted <i>over</i> the crossing line, because that line goes on showing
+        /// through its gaps; the crossing run is cut back clear of the square instead.
+        /// </summary>
+        private static bool FillsItsWholeRect(LineStyle style) =>
+            style is not (LineStyle.Double or LineStyle.Dotted or LineStyle.Dashed);
+
+        /// <summary>
+        /// The row whose own §17.6.2 resolution owns every joint on block-axis grid line
+        /// <paramref name="blockLine"/> - the "further to the top" tiebreak's winner, i.e. the row on the
+        /// line's block-start side, clamped to a real row at the block-start edge (and on a grid with no
+        /// rows at all). See <see cref="InlineLineOwnsJoint"/>'s own remarks.
+        /// </summary>
+        private static int JointRow(TableGrid grid, int blockLine) =>
+            Math.Clamp(blockLine - 1, 0, Math.Max(grid.RowCount - 1, 0));
+
+        /// <summary>
+        /// The column whose own §17.6.2 resolution owns every joint on inline-axis grid line
+        /// <paramref name="inlineLine"/> - the "further to the left (or right, if the table's
+        /// <c>direction</c> is rtl)" tiebreak's winner, the inline-axis twin of <see cref="JointRow"/>.
+        /// </summary>
+        private int JointColumn(TableGrid grid, int inlineLine) =>
+            Math.Clamp(IsLeftToRight() ? inlineLine - 1 : inlineLine, 0, Math.Max(grid.ColumnCount - 1, 0));
+
+        /// <summary>
+        /// Emits every run of one block-axis (row) grid line, reaching outward over the joint square at
+        /// each of its own ends, plus a square of its own for each joint along it that the crossing
+        /// inline-axis line owns. See <see cref="InlineLineOwnsJoint"/>'s own remarks.
+        /// </summary>
+        /// <remarks>
+        /// A lost joint is normally taken by painting a square <i>over</i> this run rather than by
+        /// splitting the run around it, and that is the load-bearing part. A split opens a real hole in
+        /// the block-axis line, which shows whenever the inline-axis segment meant to fill it does not
+        /// reach the page - and a multi-page table's own body dividers currently do not, so a wide
+        /// divider crossing a narrow row line notched that line on every page but the last. A run that a
+        /// square merely paints over degrades to the right colour in the wrong place instead of to a
+        /// gap. It also keeps the segment count proportional to the grid's lines rather than to its
+        /// cells: only the joints an inline-axis line actually wins cost an extra rect, and by the
+        /// tiebreak those are confined to one block-axis line unless a border width or style says
+        /// otherwise. The exception is a winner whose own style does not fill the square it is given
+        /// (<see cref="FillsItsWholeRect"/>) - this run would keep showing through its gaps - and that
+        /// one really is cut out.
+        /// </remarks>
+        /// <param name="segments">The list to append to.</param>
+        /// <param name="grid">The table's topology, for <see cref="GetGridLineX"/>'s column-axis positions.</param>
+        /// <param name="blockLine">Which block-axis grid line this is (0..RowCount).</param>
+        /// <param name="rowAxisCenter">That line's own row-axis centre, in document space.</param>
+        /// <param name="blockBorderAt">This line's resolved border, by column.</param>
+        /// <param name="inlineBorderAt">The crossing inline-axis line's resolved border at this line's own joints, by inline-axis line index.</param>
+        private void EmitBlockAxisRuns(
+            List<CollapsedBorderSegment> segments,
+            TableGrid grid,
+            int blockLine,
+            double rowAxisCenter,
+            Func<int, CollapsedBorder> blockBorderAt,
+            Func<int, CollapsedBorder> inlineBorderAt)
+        {
+            var inlineLineCount = grid.ColumnCount;
+
+            EmitRuns(inlineLineCount, blockBorderAt, (start, end, border) =>
+            {
+                // A joint whose owner cannot be painted over this run (see FillsItsWholeRect) is cut out
+                // of it instead, splitting the run either side of the square; the inline-axis line's own
+                // run passes through the square and fills it. Every other joint this run loses is taken
+                // by a square painted over it, below.
+                var pieceStart = start;
+
+                for (var line = start + 1; line < end; line++)
+                {
+                    if (!CutsOutJoint(line)) continue;
+
+                    EmitPiece(pieceStart, line);
+                    pieceStart = line;
+                }
+
+                EmitPiece(pieceStart, end);
+
+                for (var line = start; line <= end; line++)
+                {
+                    var inlineBorder = inlineBorderAt(line);
+                    if (CutsOutJoint(line)) continue;
+                    if (!InlineLineOwnsJoint(border, inlineBorder, line, blockLine, inlineLineCount)) continue;
+
+                    // Two identical borders have nothing to argue about unless the style itself says
+                    // which line a square belongs to, which only a bevel's two faces do - this run
+                    // already paints the square in the very same paint otherwise.
+                    if (inlineBorder == border && !BorderBevelColors.IsBeveled(border.Style)) continue;
+
+                    var colAxisCenter = GetGridLineX(grid, line);
+                    if (colAxisCenter is null) continue;
+
+                    // The joint square, carrying the inline-axis line's own paint and orientation - so a
+                    // bevelled one bands across it the way that line does rather than the way this run
+                    // does. ColumnBoundaryRect normalizes its own row-axis pair, so the two ends below
+                    // need no vertical-rl direction flip of their own.
+                    var half = border.UsedWidth / 2;
+                    segments.Add(new CollapsedBorderSegment(_isVertical,
+                        ColumnBoundaryRect(
+                            colAxisCenter.Value, rowAxisCenter - half, rowAxisCenter + half, inlineBorder.Width),
+                        inlineBorder.Style, inlineBorder.Width, inlineBorder.Color));
+                }
+
+                void EmitPiece(int from, int to)
+                {
+                    var colAxisStart = GetGridLineX(grid, from);
+                    var colAxisEnd = GetGridLineX(grid, to);
+                    if (colAxisStart is null || colAxisEnd is null) return;
+
+                    var runStart = colAxisStart.Value + BoundaryOffset(from, atRunStart: true);
+                    var runEnd = colAxisEnd.Value + BoundaryOffset(to, atRunStart: false);
+
+                    // Both ends cut back past each other - a column narrower than the two joint squares
+                    // bracketing it, which between them already cover every point of it.
+                    if (runEnd <= runStart) return;
+
+                    // !_isVertical: this loop resolves row-axis (block-axis) boundaries, which paint as a
+                    // physically horizontal stripe for horizontal-tb but a physically vertical one for a
+                    // vertical table (rows stack along physical X there) - see RowBoundaryRect's own remarks.
+                    segments.Add(new CollapsedBorderSegment(!_isVertical,
+                        RowBoundaryRect(rowAxisCenter, runStart, runEnd, border.Width),
+                        border.Style, border.Width, border.Color));
+                }
+
+                // Whether this run has to be cut back clear of the joint at inline-axis line
+                // <paramref name="line"/> rather than simply being painted over there.
+                bool CutsOutJoint(int line)
+                {
+                    var inlineBorder = inlineBorderAt(line);
+                    return !FillsItsWholeRect(inlineBorder.Style)
+                        && InlineLineOwnsJoint(border, inlineBorder, line, blockLine, inlineLineCount);
+                }
+
+                // How far this run's own end moves along the column axis from the inline-axis line it
+                // stops at: inward clear of a joint it has to cut out, outward over the whole square
+                // otherwise, and not at all when another run of this same block-axis line continues past
+                // the boundary and the two split the square between them. GetGridLineX is always given
+                // in increasing physical order, so no direction flip here.
+                double BoundaryOffset(int line, bool atRunStart)
+                {
+                    var half = inlineBorderAt(line).UsedWidth / 2;
+                    if (half <= 0) return 0;
+
+                    if (CutsOutJoint(line)) return atRunStart ? half : -half;
+
+                    var continues = atRunStart
+                        ? line > 0 && blockBorderAt(line - 1).IsPainted
+                        : line < inlineLineCount && blockBorderAt(line).IsPainted;
+
+                    return continues ? 0 : atRunStart ? -half : half;
+                }
+            });
+        }
+
+        /// <summary>
+        /// Emits every run of one inline-axis (column) grid line - the inline-axis twin of
+        /// <see cref="EmitBlockAxisRuns"/>: a block-axis line owns the joints it passes through by
+        /// painting over them, so only a run's own two ends move here, and only outward.
+        /// </summary>
+        /// <param name="segments">The list to append to.</param>
+        /// <param name="grid">The table's topology, for the inline-axis line count the joint tiebreak needs.</param>
+        /// <param name="inlineLine">Which inline-axis grid line this is (0..ColumnCount).</param>
+        /// <param name="colAxisCenter">That line's own column-axis centre, in document space.</param>
+        /// <param name="rowOffset">The grid row this line's runs start at - past a detached header, whose own lines <see cref="EmitHeaderFooterBorderSegments"/> emits instead.</param>
+        /// <param name="rowCount">How many rows those runs cover.</param>
+        /// <param name="inlineBorderAt">This line's resolved border, by absolute grid row.</param>
+        /// <param name="blockBorderAt">The crossing block-axis line's resolved border at this line's own joints, by absolute block-axis line index.</param>
+        /// <param name="blockLinePosition">A block-axis line's own row-axis centre, by absolute block-axis line index; null where that line has no geometry to read.</param>
+        private void EmitInlineAxisRuns(
+            List<CollapsedBorderSegment> segments,
+            TableGrid grid,
+            int inlineLine,
+            double colAxisCenter,
+            int rowOffset,
+            int rowCount,
+            Func<int, CollapsedBorder> inlineBorderAt,
+            Func<int, CollapsedBorder> blockBorderAt,
+            Func<int, double?> blockLinePosition)
+        {
+            var inlineLineCount = grid.ColumnCount;
+
+            // GetGridLineY runs *decreasing* with line index for a vertical-rl table (row 0 sits at the
+            // physical-max edge there), so "outward past the block-start end" is physically +half there
+            // and -half everywhere else - see RowBoundaryRect's own remarks for the same reversal.
+            var rowAxisSign = _rowAxisStartIsAtMax ? -1 : 1;
+
+            EmitRuns(rowCount, i => inlineBorderAt(rowOffset + i), (start, end, border) =>
+            {
+                // The mirror of EmitBlockAxisRuns' own split: a joint won by a block-axis line whose
+                // style does not fill the square it is given has to be cut out of this run, or this run
+                // goes on showing through that style's gaps. Every other lost joint is left to be
+                // painted over, since block-axis lines are emitted second.
+                var pieceStart = start;
+
+                for (var i = start + 1; i < end; i++)
+                {
+                    if (!CutsOutJoint(rowOffset + i)) continue;
+
+                    EmitPiece(pieceStart, i);
+                    pieceStart = i;
+                }
+
+                EmitPiece(pieceStart, end);
+
+                void EmitPiece(int from, int to)
+                {
+                    var rowAxisStart = blockLinePosition(rowOffset + from);
+                    var rowAxisEnd = blockLinePosition(rowOffset + to);
+                    if (rowAxisStart is null || rowAxisEnd is null) return;
+
+                    var runStart = rowAxisStart.Value + BoundaryOffset(rowOffset + from, atRunStart: true);
+                    var runEnd = rowAxisEnd.Value + BoundaryOffset(rowOffset + to, atRunStart: false);
+
+                    // Signed, because a vertical-rl run's own end is at the *lower* coordinate - see
+                    // EmitBlockAxisRuns' own equivalent guard for what a collapsed run means.
+                    if ((runEnd - runStart) * rowAxisSign <= 0) return;
+
+                    segments.Add(new CollapsedBorderSegment(_isVertical,
+                        ColumnBoundaryRect(colAxisCenter, runStart, runEnd, border.Width),
+                        border.Style, border.Width, border.Color));
+                }
+
+                // Whether this run has to be cut back clear of the joint at block-axis line
+                // <paramref name="line"/> rather than left to be painted over there.
+                bool CutsOutJoint(int line)
+                {
+                    var blockBorder = blockBorderAt(line);
+                    return !FillsItsWholeRect(blockBorder.Style)
+                        && !InlineLineOwnsJoint(blockBorder, border, inlineLine, line, inlineLineCount);
+                }
+
+                // How far this run's own end moves along the row axis from the block-axis line it stops
+                // at: inward clear of a joint it has to cut out, outward over the whole square when it
+                // owns that joint, and otherwise nowhere at all - it stays on the line's centre, where
+                // it has always met the block-axis line, and lets that line (emitted second, so painted
+                // over this one) cover the square. Staying rather than retracting is deliberate: the
+                // block-axis run it would be making room for can fail to reach a page, and a gap is the
+                // one failure that reads as a defect rather than as the wrong paint. Signed throughout,
+                // since a vertical-rl run's own block-start end is at the *greater* coordinate - see
+                // this method's own remarks.
+                double BoundaryOffset(int line, bool atRunStart)
+                {
+                    var blockBorder = blockBorderAt(line);
+                    var half = blockBorder.UsedWidth / 2;
+                    if (half <= 0) return 0;
+
+                    if (CutsOutJoint(line)) return rowAxisSign * (atRunStart ? half : -half);
+
+                    if (!InlineLineOwnsJoint(blockBorder, border, inlineLine, line, inlineLineCount))
+                        return 0;
+
+                    var continues = atRunStart
+                        ? line > rowOffset && inlineBorderAt(line - 1).IsPainted
+                        : line < rowOffset + rowCount && inlineBorderAt(line).IsPainted;
+
+                    return continues ? 0 : rowAxisSign * (atRunStart ? -half : half);
+                }
+            });
         }
 
         /// <summary>
@@ -1169,42 +1515,6 @@ namespace PeachPDF.Html.Core.Dom
                 var ownLineStart = isHeader ? sourceStart : sourceStart + 1;
                 var ownLineEnd = isHeader ? sourceStart + sourceCount - 1 : sourceStart + sourceCount;
 
-                for (var line = ownLineStart; line <= ownLineEnd; line++)
-                {
-                    if (model.HorizontalLineWidth[line] <= 0) continue;
-                    var rowAxisCenter = SnapshotLine(line);
-                    if (rowAxisCenter is null) continue;
-
-                    EmitRuns(grid.ColumnCount, col => model.Horizontal(line, col), (start, end, border) =>
-                    {
-                        var colAxisStart = GetGridLineX(grid, start);
-                        var colAxisEnd = GetGridLineX(grid, end);
-                        if (colAxisStart is null || colAxisEnd is null) return;
-
-                        segments.Add(new CollapsedBorderSegment(!_isVertical,
-                            RowBoundaryRect(rowAxisCenter.Value, colAxisStart.Value, colAxisEnd.Value, border.Width),
-                            border.Style, border.Width, border.Color));
-                    });
-                }
-
-                for (var line = 0; line <= grid.ColumnCount; line++)
-                {
-                    if (model.VerticalLineWidth[line] <= 0) continue;
-                    var colAxisCenter = GetGridLineX(grid, line);
-                    if (colAxisCenter is null) continue;
-
-                    EmitRuns(sourceCount, i => model.Vertical(sourceStart + i, line), (start, end, border) =>
-                    {
-                        var rowAxisStart = SnapshotLine(sourceStart + start);
-                        var rowAxisEnd = SnapshotLine(sourceStart + end);
-                        if (rowAxisStart is null || rowAxisEnd is null) return;
-
-                        segments.Add(new CollapsedBorderSegment(_isVertical,
-                            ColumnBoundaryRect(colAxisCenter.Value, rowAxisStart.Value, rowAxisEnd.Value, border.Width),
-                            border.Style, border.Width, border.Color));
-                    });
-                }
-
                 var proxyNear = RowAxisNearEdge(proxy);
                 var proxyFar = RowAxisFarEdge(proxy);
                 var groupRow = isHeader ? sourceStart + sourceCount - 1 : sourceStart;
@@ -1222,32 +1532,71 @@ namespace PeachPDF.Html.Core.Dom
                     ? _bodyRows.FindIndex(r => _rowAxisStartIsAtMax ? RowAxisFarEdge(r) <= proxyFar + 0.5 : RowAxisFarEdge(r) >= proxyFar - 0.5)
                     : _bodyRows.FindLastIndex(r => _rowAxisStartIsAtMax ? RowAxisNearEdge(r) >= proxyNear - 0.5 : RowAxisNearEdge(r) <= proxyNear + 0.5);
 
-                if (adjacentRowIndex >= 0)
-                {
-                    var groupRowGroup = isHeader ? _headerBox : _footerBox;
+                // Resolved before anything is emitted, not at the boundary's own turn below: the
+                // inline-axis loop's runs reach this same line, and the joint they compete for there has
+                // to be decided against the border that will actually be painted on it. The two arms
+                // match the emission arms below - a fresh per-page resolution where a real adjacent row
+                // exists, the whole-table static one where none does (see those arms' own remarks).
+                var groupRowGroup = isHeader ? _headerBox : _footerBox;
 
-                    var resolved = CollapsedBorderModel.ResolveRepeatedGroupBoundary(
+                var boundaryResolved = adjacentRowIndex >= 0
+                    ? CollapsedBorderModel.ResolveRepeatedGroupBoundary(
                         grid, groupRow, groupRowGroup, HeaderRowCountInGrid + adjacentRowIndex,
-                        groupIsAbove: isHeader, IsLeftToRight(), _blockStartBorder, _blockEndBorder);
+                        groupIsAbove: isHeader, IsLeftToRight(), _blockStartBorder, _blockEndBorder)
+                    : null;
 
+                CollapsedBorder BlockBorderAt(int line, int column) =>
+                    line == boundaryLine && boundaryResolved is not null
+                        ? boundaryResolved[column]
+                        : model.Horizontal(line, column);
+
+                // Inline-axis lines first, block-axis lines second - see InlineLineOwnsJoint's own
+                // remarks for why that order is half of what settles each joint square.
+                for (var line = 0; line <= grid.ColumnCount; line++)
+                {
+                    if (model.VerticalLineWidth[line] <= 0) continue;
+                    var colAxisCenter = GetGridLineX(grid, line);
+                    if (colAxisCenter is null) continue;
+
+                    var jointColumn = JointColumn(grid, line);
+
+                    EmitInlineAxisRuns(
+                        segments, grid, line, colAxisCenter.Value, sourceStart, sourceCount,
+                        row => model.Vertical(row, line),
+                        blockLine => BlockBorderAt(blockLine, jointColumn),
+                        SnapshotLine);
+                }
+
+                for (var line = ownLineStart; line <= ownLineEnd; line++)
+                {
+                    if (model.HorizontalLineWidth[line] <= 0) continue;
+                    var rowAxisCenter = SnapshotLine(line);
+                    if (rowAxisCenter is null) continue;
+
+                    var jointRow = JointRow(grid, line);
+
+                    EmitBlockAxisRuns(
+                        segments, grid, line, rowAxisCenter.Value,
+                        column => model.Horizontal(line, column),
+                        inlineLine => model.Vertical(jointRow, inlineLine));
+                }
+
+                var boundaryJointRow = JointRow(grid, boundaryLine);
+
+                if (boundaryResolved is not null)
+                {
                     // proxyFar/proxyNear already name the shared line's true center - see GetGridLineY's
                     // own remarks - so this has to agree exactly with SnapshotLine(boundaryLine)'s value
-                    // (used by the vertical-divider loop above for any run spanning the group's full row
+                    // (used by the inline-axis loop above for any run spanning the group's full row
                     // range), which reads from the very same proxyFar/bottom-far-edge (equivalently
                     // proxyNear/top-near-edge), so a divider that reaches this line still meets the
                     // boundary segment exactly.
                     var boundaryPos = isHeader ? proxyFar : proxyNear;
 
-                    EmitRuns(grid.ColumnCount, col => resolved[col], (start, end, border) =>
-                    {
-                        var colAxisStart = GetGridLineX(grid, start);
-                        var colAxisEnd = GetGridLineX(grid, end);
-                        if (colAxisStart is null || colAxisEnd is null) return;
-
-                        segments.Add(new CollapsedBorderSegment(!_isVertical,
-                            RowBoundaryRect(boundaryPos, colAxisStart.Value, colAxisEnd.Value, border.Width),
-                            border.Style, border.Width, border.Color));
-                    });
+                    EmitBlockAxisRuns(
+                        segments, grid, boundaryLine, boundaryPos,
+                        column => boundaryResolved[column],
+                        inlineLine => model.Vertical(boundaryJointRow, inlineLine));
                 }
                 else if (model.HorizontalLineWidth[boundaryLine] > 0)
                 {
@@ -1263,16 +1612,10 @@ namespace PeachPDF.Html.Core.Dom
                     var rowAxisCenter = SnapshotLine(boundaryLine);
                     if (rowAxisCenter is not null)
                     {
-                        EmitRuns(grid.ColumnCount, col => model.Horizontal(boundaryLine, col), (start, end, border) =>
-                        {
-                            var colAxisStart = GetGridLineX(grid, start);
-                            var colAxisEnd = GetGridLineX(grid, end);
-                            if (colAxisStart is null || colAxisEnd is null) return;
-
-                            segments.Add(new CollapsedBorderSegment(!_isVertical,
-                                RowBoundaryRect(rowAxisCenter.Value, colAxisStart.Value, colAxisEnd.Value, border.Width),
-                                border.Style, border.Width, border.Color));
-                        });
+                        EmitBlockAxisRuns(
+                            segments, grid, boundaryLine, rowAxisCenter.Value,
+                            column => model.Horizontal(boundaryLine, column),
+                            inlineLine => model.Vertical(boundaryJointRow, inlineLine));
                     }
                 }
             }
@@ -6853,24 +7196,24 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>ClientTop</c> already folded the border term in directly.
         /// </summary>
         /// <remarks>
-        /// Under <c>collapse</c> this is <c>-ActualBorderLeftWidth</c>, not 0: <c>ClientLeft</c> already
-        /// added that same <c>VW[0]/2</c> once (it is <c>Location.X + ActualBorderLeftWidth</c>, and
-        /// padding is always zero on a table), so this cancels it back to bare <c>Location.X</c>. That is
-        /// deliberate, not a second double-count - per <see cref="CollapsedBorderModel"/>'s own geometric
-        /// model, the table's border box and the first cell's own border box are <i>the same edge</i>
-        /// (<c>X_0 − VW[0]/2</c> both), not two edges VW[0]/2 apart the way a normal (non-collapsed) box's
-        /// border-then-content layering would suggest. Verified by hand against <c>GetWidthSum</c>'s own
-        /// (independently-derived, and already-correct) total: a first cell placed at
-        /// <c>ClientLeft + HorizontalSpacingAt(0)</c> instead - reusing the interior formula's shape -
-        /// measured 200.375pt against 200.000pt of column width for a 3-column, 1px-bordered fixture, an
-        /// exact one-outer-edge (VW[0]/2 = 0.375pt) residual.
+        /// Under <c>collapse</c> this is <c>-ActualBorderLeftWidth / 2</c>, not 0: <c>ClientLeft</c>
+        /// already added the whole <c>VW[0]</c> once (it is <c>Location.X + ActualBorderLeftWidth</c>, and
+        /// padding is always zero on a table), and the first cell's own border box starts at that line's
+        /// <i>centre</i>, one half-width inside the table's border box - so this gives back the half the
+        /// cell itself reserves. That is deliberate, not a double-count: the table's border box holds the
+        /// whole outermost line (see <see cref="ApplyCollapsedUsedBorderWidths"/>'s own remarks) while the
+        /// cell holds its inner half, so the two edges are exactly <c>VW[0]/2</c> apart. Verified by hand
+        /// against <c>GetWidthSum</c>'s own (independently-derived) total, which sums
+        /// <c>SumHorizontalSpacing()</c>'s two <c>-VW/2</c> outer terms against the table's own two whole
+        /// widths and so lands on <c>columns + VW[0]/2 + VW[n]/2</c> - the same border box this places the
+        /// first cell inside of.
         /// </remarks>
         private double StartXSpacing() =>
-            _tableBox.BorderCollapse == Keywords.Collapse ? -TableInlineBorderStart : ColumnAxisBorderSpacing;
+            _tableBox.BorderCollapse == Keywords.Collapse ? -TableInlineBorderStart / 2 : ColumnAxisBorderSpacing;
 
         /// <summary>The row-axis twin of <see cref="StartXSpacing"/> - see its own remarks.</summary>
         private double StartYSpacing() =>
-            _tableBox.BorderCollapse == Keywords.Collapse ? -TableRowAxisBorderStart : RowAxisBorderSpacing;
+            _tableBox.BorderCollapse == Keywords.Collapse ? -TableRowAxisBorderStart / 2 : RowAxisBorderSpacing;
 
         /// <summary>
         /// CSS <c>border-spacing</c>'s two values are physical (horizontal = X gaps, vertical = Y gaps),
@@ -6898,8 +7241,10 @@ namespace PeachPDF.Html.Core.Dom
         /// additional gap at all (<c>0</c>): moving it by the resolved width on top of that would
         /// double-count the one shared border (issue #1138). Only the table's own two <b>outer</b> edges
         /// (line 0 and <see cref="_columnCount"/>) still pull back by half the width - the table's own
-        /// border box supplies its own separate half there (see <see cref="StartXSpacing"/>/<see
-        /// cref="StartYSpacing"/> for how the two are reconciled without double-counting that edge too).
+        /// border box holds the <i>whole</i> line there (issue #1257) and the cell holds its inner half,
+        /// so pulling back by half is exactly what leaves the two meeting at the line's centre (see
+        /// <see cref="StartXSpacing"/>/<see cref="StartYSpacing"/> for how the two are reconciled without
+        /// double-counting that edge either).
         /// </summary>
         private double HorizontalSpacingAt(int line)
         {
