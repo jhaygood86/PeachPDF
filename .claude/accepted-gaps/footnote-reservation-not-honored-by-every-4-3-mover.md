@@ -31,16 +31,10 @@ Four related gaps remain, none closed by either change:
 - **The orphans/widows whole-box push** (`CssBox.cs`, `ActualBottom - Location.Y <= constraint.NextBandHeight`)
   also still reads `NextBandHeight` directly, and (unlike the two calls above) is not obviously asking about
   the *destination* page's own band via a fresh `AtNextSlot()`-style constraint in the first place.
-- **`CssLayoutEngineColumns`'s per-column `FragmentainerContext`** (a nested nested context nested inside a
-  page, `inheritsSuppression: true`) is never seeded with the enclosing page's own footnote reservation the
-  way `HtmlContainerInt.LayoutDocument`'s per-page loop and `LayoutTheRemainderMonolithically`'s fallback
-  context both are - column content on a page that also has a footnote lays out unaware of the reserved
-  strip at that page's bottom.
 
-In practice this only matters for the narrow case of an unforced margin collapse, a keep-with-next/
-widows-orphans relocation, or a multi-column container, landing exactly inside a footnote-reserved strip at
-a page's very bottom - rare, and the ordinary per-word `CssRect.WouldStraddleFragmentainer` check (already
+In practice this only matters for the narrow case of an unforced margin collapse or a keep-with-next/
+widows-orphans relocation landing exactly inside a footnote-reserved strip at a page's very bottom - rare, and the ordinary per-word `CssRect.WouldStraddleFragmentainer` check (already
 reservation-aware, unrelated to `BlockConstraint`) still correctly stops the actual *content* that would
-follow in the non-column case. Revisiting these was judged higher-risk (each sits inside heavily-invariant-
+follow. Revisiting these was judged higher-risk (each sits inside heavily-invariant-
 documented fragmentation logic) than the value of closing this narrow gap in the same change. Filed as
 [issue #756](https://github.com/jhaygood86/PeachPDF/issues/756).

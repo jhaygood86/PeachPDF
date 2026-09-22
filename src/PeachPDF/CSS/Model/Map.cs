@@ -317,6 +317,15 @@ namespace PeachPDF.CSS
                 {Keywords.Unicase, FontVariantCaps.Unicase},
                 {Keywords.TitlingCaps, FontVariantCaps.TitlingCaps}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        // Named *Keywords (plural) rather than FontVariantPosition, to avoid colliding with the
+        // FontVariantPosition enum type itself - same convention as FontVariantCapsKeywords above.
+        public static readonly FrozenDictionary<string, FontVariantPosition> FontVariantPositionKeywords =
+            new Dictionary<string, FontVariantPosition>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Normal, FontVariantPosition.Normal},
+                {Keywords.Sub, FontVariantPosition.Sub},
+                {Keywords.Super, FontVariantPosition.Super}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         // The restricted `<font-variant-css2>` grammar (normal | small-caps) - the only caps values
         // reachable from inside the `font` shorthand's embedded variant slot, per spec.
         public static readonly FrozenDictionary<string, FontVariantCaps> FontVariantCss2Keywords =
@@ -725,6 +734,16 @@ namespace PeachPDF.CSS
                 {Keywords.Left, Floating.Left},
                 {Keywords.Right, Floating.Right},
                 {Keywords.Footnote, Floating.Footnote}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        // Named *References (plural), not FloatReference, to avoid colliding with the FloatReference
+        // enum type itself - same convention as FloatingModes above.
+        public static readonly FrozenDictionary<string, FloatReference> FloatReferences =
+            new Dictionary<string, FloatReference>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Inline, FloatReference.Inline},
+                {Keywords.Column, FloatReference.Column},
+                {Keywords.Region, FloatReference.Region},
+                {Keywords.Page, FloatReference.Page}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, FootnoteDisplayMode> FootnoteDisplayModes =
             new Dictionary<string, FootnoteDisplayMode>(StringComparer.OrdinalIgnoreCase)

@@ -154,6 +154,10 @@ namespace PeachPDF.Tests.TestSupport
         public override double GetWhitespaceWidth(RGraphics graphics) => size * 0.25;
         public override bool HasGlyph(System.Text.Rune rune) => true;
         public override bool SupportsFontVariantCaps(FontVariantCapsFeature feature) => false;
+
+        public override bool SupportsFontVariantPosition(FontVariantPositionFeature feature) => false;
+
+        public override (double SizeScale, double BaselineShift)? GetSubSuperscriptMetrics(bool superscript) => null;
         public override string FaceKey => "test";
     }
 

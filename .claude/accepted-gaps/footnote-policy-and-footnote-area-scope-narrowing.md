@@ -1,16 +1,16 @@
-# footnote-policy and @footnote: four narrower-than-full-spec behaviors
+# footnote-policy and @footnote: narrower-than-full-spec behaviors
 
-Issue #1080 added `footnote-display`, `footnote-policy`, and the `@footnote` area rule. Four
-places where the implementation is deliberately (or currently unavoidably) narrower than a
-literal reading of css-gcpm-3 would ask for:
+Issue #1080 added `footnote-display`, `footnote-policy`, and the `@footnote` area rule. Places
+where the implementation is deliberately (or currently unavoidably) narrower than a literal
+reading of css-gcpm-3 would ask for:
 
-- **`@footnote` doesn't support `counter-increment`/`float`/`column-span`/`height`** - the spec's
-  own default UA stylesheet declares all four on `@footnote`; `HtmlContainerInt.ResolveFootnoteAreaBoxModel`
-  only reads `border-top`/`margin-top`/`padding-top`/`max-height`. Three of the four are moot in
-  PeachPDF's model (numbering already resets per page without `counter-increment`; the note area
-  is always page-bottom/full-width already, matching `float: bottom`/`column-span: all`) but a
-  fixed `height` (as opposed to `max-height`'s upper bound) has no equivalent. Filed as
-  [issue #1259](https://github.com/jhaygood86/PeachPDF/issues/1259).
+- **`float`/`column-span` declared on `@footnote` are parsed and ignored.** The spec's own default UA
+  stylesheet declares both (`float: bottom`, `column-span: all`), and PeachPDF's note area already
+  behaves that way unconditionally - it is always at the bottom of the page and always spans the full
+  content width - so the declared defaults are matched. Any *other* value has no code path to drive:
+  there is no mechanism to put the note area anywhere but the page bottom, and half-honouring
+  `float: top` (or narrowing the area for `column-span: none`) would be worse than ignoring it.
+  `height` and `counter-increment`, the other two the spec declares there, are now both supported.
 
 - **`footnote-policy`'s "doesn't fit" check is a whole-slot aggregate, not per-footnote** - when a
   page's *combined* note-area height exceeds the limit, every `block`/`line` call landing on that

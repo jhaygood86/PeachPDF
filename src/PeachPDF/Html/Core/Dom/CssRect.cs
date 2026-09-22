@@ -335,6 +335,21 @@ namespace PeachPDF.Html.Core.Dom
         public double FontSizeScale { get; set; } = 1.0;
 
         /// <summary>
+        /// Which synthesis asked for this fragment's <see cref="FontSizeScale"/>, and so which of the
+        /// owner box's scaled faces it is measured and painted with.
+        /// <see cref="Dom.ScaledFontKind.None"/> for the overwhelming majority of fragments, which use
+        /// the box's own <see cref="DerivedStyle.ActualFont"/>.
+        /// </summary>
+        /// <remarks>
+        /// This is deliberately not inferred from <see cref="FontSizeScale"/> being non-1: there is now
+        /// more than one reason a fragment is drawn smaller than its box, and the scale alone cannot say
+        /// which face to pick. <see cref="CssBox.ResolveWordFont"/> is shared by measurement and by
+        /// <see cref="Paint.FragmentPainter"/>, so a wrong answer here makes the two disagree about which
+        /// font a word was drawn in - which shows up as a mis-aligned baseline, not as a failure.
+        /// </remarks>
+        public ScaledFontKind ScaledFontKind { get; set; } = ScaledFontKind.None;
+
+        /// <summary>
         /// When true, this fragment's font is resolved per-codepoint (its <see cref="Text"/>'s first
         /// <see cref="System.Text.Rune"/> against <see cref="DerivedStyle.ActualFontForCodepoint"/>)
         /// rather than from the owner box's single <see cref="DerivedStyle.ActualFont"/> - the basis of

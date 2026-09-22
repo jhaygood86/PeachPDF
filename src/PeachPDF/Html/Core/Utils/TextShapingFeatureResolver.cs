@@ -51,6 +51,17 @@ namespace PeachPDF.Html.Core.Utils
             _ => FontVariantCapsFeature.None,
         };
 
+        /// <summary>The position feature <paramref name="value"/> requests, ungated - the caller must
+        /// still check its own resolved font's <c>SupportsFontVariantPosition</c> capability to decide
+        /// between real substitution and a synthesized sub/superscript (see
+        /// <c>DerivedStyle.ActualFontVariantPosition</c> for the HTML-side gating).</summary>
+        internal static FontVariantPositionFeature ResolvePositionRequested(string value) => value switch
+        {
+            Keywords.Sub => FontVariantPositionFeature.Sub,
+            Keywords.Super => FontVariantPositionFeature.Super,
+            _ => FontVariantPositionFeature.None,
+        };
+
         internal static NumericFeatures ResolveNumeric(string value)
         {
             var resolved = NumericFeatures.None;

@@ -1063,6 +1063,44 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        private FontVariantPositionFeature? _requestedFontVariantPosition;
+        private FontVariantPositionFeature? _actualFontVariantPosition;
+
+        /// <summary>
+        /// The <c>font-variant-position</c> keyword this box's style asks for, before any capability
+        /// gating - <see cref="FontVariantPositionFeature.None"/> only for <c>normal</c>. This is the
+        /// question "should this text be a sub/superscript at all", which stays true whether the font
+        /// has real <c>subs</c>/<c>sups</c> glyphs or the effect has to be synthesized.
+        /// </summary>
+        public FontVariantPositionFeature RequestedFontVariantPosition =>
+            _requestedFontVariantPosition ??= TextShapingFeatureResolver.ResolvePositionRequested(Style.Font.FontVariantPosition);
+
+        /// <summary>
+        /// The position feature that should actually be requested from the shaping layer:
+        /// <see cref="RequestedFontVariantPosition"/> when the resolved font really has the matching
+        /// GSUB feature, and <see cref="FontVariantPositionFeature.None"/> otherwise - in which case
+        /// <c>CssBox.AddWord</c> synthesizes the sub/superscript instead, and real substitution must
+        /// never also be requested. CSS Fonts 4 makes this an all-or-nothing choice per run ("if one
+        /// such glyph is not available for a character, all the characters in that run are rendered
+        /// using synthesized glyphs"), which is exactly what a single per-box capability answer gives.
+        /// </summary>
+        public FontVariantPositionFeature ActualFontVariantPosition
+        {
+            get
+            {
+                if (_actualFontVariantPosition is { } cached) return cached;
+
+                var requested = RequestedFontVariantPosition;
+
+                var resolved = requested != FontVariantPositionFeature.None && ActualFont.SupportsFontVariantPosition(requested)
+                    ? requested
+                    : FontVariantPositionFeature.None;
+
+                _actualFontVariantPosition = resolved;
+                return resolved;
+            }
+        }
+
         private NumericFeatures? _actualFontVariantNumeric;
 
         /// <summary>The resolved GSUB numeric features (CSS <c>font-variant-numeric</c>) for this box's
@@ -1107,7 +1145,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// The single combined GSUB feature request for this box's text - ligatures, caps, numeric,
-        /// east-asian, and explicit <c>font-feature-settings</c> tags all folded into one
+        /// east-asian, position, and explicit <c>font-feature-settings</c> tags all folded into one
         /// <see cref="TextShapingFeatures"/> value, the one actually threaded into every measure/paint
         /// call site.
         /// </summary>
@@ -1124,7 +1162,8 @@ namespace PeachPDF.Html.Core.Dom
                     ActualFontVariantEastAsian,
                     ActualFontFeatureSettings,
                     Kerning: ActualFontKerning,
-                    Language: Owner.Language);
+                    Language: Owner.Language,
+                    Position: ActualFontVariantPosition);
 
                 _actualTextShapingFeatures = resolved;
                 return resolved;
@@ -1334,6 +1373,82 @@ namespace PeachPDF.Html.Core.Dom
                 _smallCapsFont = Owner.GetCachedFont(Style.Font.FontFamily!, font.Size * CssBox.SmallCapsFontScale, GetActualFontStyleFlags(), ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
                                  ?? font;
                 return _smallCapsFont;
+            }
+        }
+
+        // Two fields, not one Nullable: "no synthesis needed" is itself a resolved answer worth
+        // caching, and a nullable can't distinguish it from "not computed yet".
+        private bool _subSuperscriptSynthesisResolved;
+        private (double SizeScale, double BaselineShift)? _subSuperscriptSynthesis;
+
+        /// <summary>
+        /// The geometry for a *synthesized* sub/superscript on this box - the face scale, and the
+        /// baseline shift in layout units, signed for the axis (negative = up, for a superscript).
+        /// Null whenever no synthesis is needed: <c>font-variant-position: normal</c>, or a resolved font
+        /// that really has the requested <c>subs</c>/<c>sups</c> GSUB feature, in which case
+        /// <see cref="ActualFontVariantPosition"/> is non-None and real substitution does the work.
+        /// </summary>
+        /// <remarks>
+        /// The numbers come from the font's own OS/2 table (<see cref="RFont.GetSubSuperscriptMetrics"/>),
+        /// whose <c>ySuperscript*</c>/<c>ySubscript*</c> fields exist precisely to tell a UA how to build
+        /// these - so a synthesized variant follows the type designer's intent rather than one ratio
+        /// imposed on every face. The fallbacks are only for a font that leaves those fields at zero.
+        /// </remarks>
+        public (double SizeScale, double BaselineShift)? SubSuperscriptSynthesis
+        {
+            get
+            {
+                if (_subSuperscriptSynthesisResolved) return _subSuperscriptSynthesis;
+
+                var requested = RequestedFontVariantPosition;
+                (double SizeScale, double BaselineShift)? resolved = null;
+
+                // Never synthesize what real GSUB substitution is already doing - requesting both would
+                // shrink and shift glyphs that are already drawn as proper sub/superscripts.
+                if (requested != FontVariantPositionFeature.None && ActualFontVariantPosition == FontVariantPositionFeature.None)
+                {
+                    var isSuper = requested == FontVariantPositionFeature.Super;
+                    var font = ActualFont;
+
+                    // Representative fallbacks for a font that states nothing: the ratios browsers use
+                    // when OS/2 is unhelpful.
+                    var (sizeScale, shiftEm) = font.GetSubSuperscriptMetrics(isSuper)
+                                               ?? (0.583, isSuper ? 0.34 : 0.2);
+
+                    resolved = (sizeScale, (isSuper ? -1 : 1) * shiftEm * font.Size);
+                }
+
+                _subSuperscriptSynthesis = resolved;
+                _subSuperscriptSynthesisResolved = true;
+                return resolved;
+            }
+        }
+
+        private RFont? _subSuperscriptFont;
+
+        /// <summary>
+        /// A cached font derived from <see cref="ActualFont"/> at <see cref="SubSuperscriptSynthesis"/>'s
+        /// reduced size (same family/style), used to draw a synthesized sub/superscript. Falls back to
+        /// <see cref="ActualFont"/> itself when no synthesis applies or the smaller face can't be
+        /// resolved.
+        /// </summary>
+        public RFont ActualSubSuperscriptFont
+        {
+            get
+            {
+                if (_subSuperscriptFont != null) return _subSuperscriptFont;
+
+                var font = ActualFont;
+
+                if (SubSuperscriptSynthesis is not { } synthesis)
+                {
+                    _subSuperscriptFont = font;
+                    return font;
+                }
+
+                _subSuperscriptFont = Owner.GetCachedFont(Style.Font.FontFamily!, font.Size * synthesis.SizeScale, GetActualFontStyleFlags(), ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
+                                      ?? font;
+                return _subSuperscriptFont;
             }
         }
 

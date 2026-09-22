@@ -1081,7 +1081,10 @@ namespace PeachPDF
                 // ordinary content - not after the restore below, which is what a true page-absolute rect
                 // (a plain string/counter/element() margin box's own rect, computed directly from this
                 // page's own margins) needs instead.
-                if (fragmentainer.FootnoteArea is { } footnoteArea)
+                // A page can carry more than one: its own note area, plus one per column any
+                // float-reference: column call landed in. Each already knows its own rect, so nothing
+                // here needs to distinguish them.
+                foreach (var footnoteArea in fragmentainer.FootnoteAreas ?? [])
                 {
                     PaintFootnoteArea(g, _pdfSharpAdapter, container.HtmlContainerInt, footnoteArea);
                 }
@@ -1378,7 +1381,7 @@ namespace PeachPDF
         /// <summary>
         /// Paints one page's css-gcpm-3 <c>float: footnote</c> note area - a divider rule above the
         /// stacked footnote bodies, then each body. The divider's own geometry and color were already
-        /// resolved at layout time (<see cref="HtmlContainerInt.ResolveFootnoteAreaBoxModel"/>, via
+        /// resolved at layout time (<see cref="HtmlContainerInt.ResolveFootnoteAreaRule"/>, via
         /// <see cref="FootnoteAreaFragment.DividerRect"/>/<see cref="FootnoteAreaFragment.DividerColor"/>)
         /// - this reads that resolved data rather than re-resolving <c>@footnote</c>'s cascade itself, the
         /// same "paint consumes only the fragment tree" division of labor every other paint code in this
@@ -1430,7 +1433,7 @@ namespace PeachPDF
 
         /// <summary>
         /// The <c>@footnote</c> divider's resolved paint color - black when <paramref name="declaredColor"/>
-        /// is null (no <c>border-top</c> declared, see <see cref="HtmlContainerInt.ResolveFootnoteAreaBoxModel"/>)
+        /// is null (no <c>border-top</c> declared, see <see cref="HtmlContainerInt.ResolveFootnoteAreaRule"/>)
         /// or resolves to no real color of its own (<c>currentcolor</c>/<c>initial</c> - the divider is a
         /// UA-drawn separator with no element of its own to inherit a text color from), otherwise the
         /// declared color parsed the same way any other CSS color value is.

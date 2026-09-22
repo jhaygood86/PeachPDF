@@ -118,6 +118,7 @@
         public static readonly string FlexShrink = "flex-shrink";
         public static readonly string FlexWrap = "flex-wrap";
         public static readonly string Float = "float";
+        public static readonly string FloatReference = "float-reference";
         public static readonly string FontFamily = "font-family";
         public static readonly string FontFeatureSettings = "font-feature-settings";
         public static readonly string FontKerning = "font-kerning";
@@ -131,6 +132,7 @@
         public static readonly string FontVariantLigatures = "font-variant-ligatures";
         public static readonly string FontVariantNumeric = "font-variant-numeric";
         public static readonly string FontVariantEastAsian = "font-variant-east-asian";
+        public static readonly string FontVariantPosition = "font-variant-position";
         public static readonly string FontWeight = "font-weight";
         public static readonly string Font = "font";
         public static readonly string FootnoteDisplay = "footnote-display";

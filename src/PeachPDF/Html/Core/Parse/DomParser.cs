@@ -1474,6 +1474,11 @@ namespace PeachPDF.Html.Core.Parse
             // Fully detach the body - it is never reachable via ordinary CssBox.Boxes walks again, the
             // same carve-out FragmentEmitter already documents for a repeating table <thead>/<tfoot>'s
             // CssProxyBox source subtree.
+            // Assigned before the detach: CssBox.HtmlContainer walks the parent chain, and from here on
+            // this body has no parent - so whether it (and the marker about to be built inside it) could
+            // answer at all would otherwise depend on something having memoized it earlier. The footnote
+            // counter bridge reads HtmlContainer from exactly these boxes.
+            sourceBox.HtmlContainer = htmlContainer;
             sourceBox.ParentBox = null;
 
             // The source is very often inline-level (the dominant real case, a <sup>/<span> reference -

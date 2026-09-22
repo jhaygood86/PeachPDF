@@ -325,6 +325,101 @@ h1::before { content: ""Chapter "" content(text); }
             Assert.Equal(" (Length: Test)", afterBox.Text);
         }
 
+        [Fact]
+        public async Task CountersFunction_JoinsEveryValueInTheScopeChain()
+        {
+            // The classic nested-list numbering counters() exists for: the inner item shows its own
+            // ancestry, outermost value first, not just its own value.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        ol { counter-reset: item; list-style: none; }
+        li { counter-increment: item; }
+        li::before { content: counters(item, ""."") "" ""; }
+    </style>
+</head>
+<body>
+    <ol><li>One<ol><li id=""inner"">Nested</li></ol></li></ol>
+</body>
+</html>";
+
+            var (root, _) = await BuildCssBoxTree(html);
+            var inner = FindById(root, "inner");
+            Assert.NotNull(inner);
+
+            var before = inner!.Boxes.FirstOrDefault(b => b.IsBeforePseudoElement);
+            Assert.NotNull(before);
+            Assert.Equal("1.1 ", before!.Text);
+        }
+
+        [Fact]
+        public async Task CountersFunction_HonoursItsCounterStyleArgument()
+        {
+            // The third argument used to be dropped entirely by the one implementation that existed
+            // (reachable only from string-set); both callers now share one that reads it.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        ol { counter-reset: item; list-style: none; }
+        li { counter-increment: item; }
+        li::before { content: counters(item, ""."", upper-roman); }
+    </style>
+</head>
+<body>
+    <ol><li>One</li><li id=""second"">Two</li></ol>
+</body>
+</html>";
+
+            var (root, _) = await BuildCssBoxTree(html);
+            var second = FindById(root, "second");
+            Assert.NotNull(second);
+
+            var before = second!.Boxes.FirstOrDefault(b => b.IsBeforePseudoElement);
+            Assert.NotNull(before);
+            Assert.Equal("II", before!.Text);
+        }
+
+        [Fact]
+        public async Task CountersFunction_ForACounterThatWasNeverSet_IsZero()
+        {
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        p::before { content: counters(nothing, "".""); }
+    </style>
+</head>
+<body>
+    <p>Text</p>
+</body>
+</html>";
+
+            var (pBox, _) = await BuildAndFindBox(html, "p");
+            var before = pBox.Boxes.FirstOrDefault(b => b.IsBeforePseudoElement);
+
+            Assert.NotNull(before);
+            Assert.Equal("0", before!.Text);
+        }
+
+        private static CssBox? FindById(CssBox box, string id)
+        {
+            var val = box.HtmlTag?.TryGetAttribute("id", "");
+            if (val != null && val.Equals(id, System.StringComparison.OrdinalIgnoreCase)) return box;
+
+            foreach (var child in box.Boxes)
+            {
+                var found = FindById(child, id);
+                if (found != null) return found;
+            }
+
+            return null;
+        }
+
         /// <summary>
         /// Builds CssBox tree and finds a single box by tag name.
         /// </summary>

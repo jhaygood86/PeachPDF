@@ -2104,6 +2104,16 @@ var footnotesHtml = """
         padding-top: 8pt;
       }
     }
+    /* A named page for the continuous-numbering section: declaring counter-reset here at all is
+       what replaces the UA sheet's own `counter-reset: footnote`, so nothing resets the counter and
+       numbering runs on from the previous pages. height gives the note area a fixed band. */
+    @page continuous {
+      counter-reset: none;
+      @footnote { height: 70pt; }
+    }
+    .continuous { page: continuous; }
+    .cols { column-count: 2; column-gap: 24pt; column-fill: auto; height: 300pt; }
+    .cols p { margin: 0 0 10pt; }
     body { font: 11pt Georgia, serif; margin: 0; color: #222; }
     h1 { font-size: 20pt; margin: 0 0 14pt; }
     p { line-height: 1.6; margin: 0 0 10pt; }
@@ -2119,7 +2129,7 @@ var footnotesHtml = """
     <body>
 
     <h1>Footnotes</h1>
-    <p>float: footnote pulls an element out of normal flow entirely<span style="float:footnote">css-gcpm-3 defines this alongside float: inline-footnote and column-scoped variants; PeachPDF supports the page-level case.</span>,
+    <p>float: footnote pulls an element out of normal flow entirely<span style="float:footnote">float: footnote is the only footnote float value css-gcpm-3 defines; inline-footnote is a PrinceXML extension, not a CSS feature.</span>,
     leaving a numbered in-flow reference behind and routing the element's own content to a note area
     at the bottom of the page the reference landed on<span style="float:footnote">The note area's height is reserved dynamically, based on how many footnotes actually land on a given page - not a fixed-height margin box.</span>.</p>
 
@@ -2132,10 +2142,46 @@ var footnotesHtml = """
     room at the foot of the page, this whole paragraph is kept together and, if it no longer fits,
     moves to the next page as a unit rather than splitting across the reserved strip<span style="float:footnote">A third footnote, to show the reservation composing across every footnote that lands on the same page.</span>.</p>
 
-    <p>Numbering resets per page - the next page starts back at 1:</p>
+    <p>The footnote counter is a real, cascaded counter: the UA stylesheet declares
+    @page { counter-reset: footnote } and @footnote { counter-increment: footnote }, so by default
+    each page starts back at 1.</p>
 
     <div style="break-before: page;">
-    <p>A fresh page, a fresh footnote<span style="float:footnote">This is footnote 1 again, not 4 - the footnote counter resets per page.</span>.</p>
+    <p>A fresh page, a fresh footnote<span style="float:footnote">This is footnote 1 again, not 4 - the UA stylesheet's own per-page counter-reset is what does that.</span>.</p>
+    </div>
+
+    <div style="break-before: page;" class="continuous">
+    <h1>Continuous numbering, and a fixed note-area height</h1>
+    <p>Declaring counter-reset yourself on an applicable @page replaces the UA declaration outright,
+    so a set that never mentions the footnote counter - counter-reset: none here - leaves nothing to
+    reset it and numbering simply runs on through the document. This page also declares
+    @footnote { height: 70pt }, a fixed band for the bodies rather than one sized to them: the
+    divider sits at the same place whatever lands below it, and the slack falls under the last
+    note.</p>
+    <p>These two notes carry on from wherever the counter already stood instead of restarting at
+    1<span style="float:footnote">Numbered by the document-wide counter, because this page's own
+    counter-reset never names it - the previous page ended at 1, so these are 2 and 3.</span>. The
+    number reaching the page is a real counter value, so content: counter(footnote, lower-roman) on
+    ::footnote-call renders it as a roman numeral, and counter-increment on @footnote changes the
+    step<span style="float:footnote">Both the call and the marker resolve counter(footnote) to the
+    live, pagination-resolved value.</span>.</p>
+    </div>
+
+    <div style="break-before: page;">
+    <h1>Column-scoped notes</h1>
+    <p>float-reference: column (CSS Page Floats) routes a note to the bottom of the column its own
+    reference landed in, rather than the bottom of the page. Each column gets its own divider, its own
+    width and its own reserved strip; the notes are still numbered across the page, because
+    float-reference decides placement and says nothing about counters.</p>
+    <div class="cols">
+    <p>The first column carries this note<span style="float:footnote; float-reference:column">Scoped to
+    the first column, so it sits at that column's own foot.</span>, and the column's own content stops
+    above the strip that note reserves rather than running into it.</p>
+    <p>__COLUMN_FILLER__</p>
+    <p>The second column carries its own<span style="float:footnote; float-reference:column">Scoped to
+    the second column - a separate area, with its own divider, beside the first rather than below
+    it.</span>, numbered 2 because numbering runs across the page.</p>
+    </div>
     </div>
 
     <div style="break-before: page;">
@@ -2184,12 +2230,19 @@ var footnotesHtml = """
 var footnoteOverflowFiller = string.Concat(Enumerable.Repeat(
     "This note's own body text is repeated enough times that its note area alone is taller than this whole page's content band. ",
     25));
+// Enough prose to push the second reference into the second column, so the two column-scoped notes
+// genuinely land in different columns rather than both in the first.
+var columnFiller = string.Concat(Enumerable.Repeat(
+    "Ordinary column prose, repeated to fill the first column so that what follows begins the second. ",
+    12));
+
 footnotesHtml = footnotesHtml
     .Replace("__BLOCK_NOTE_FILLER__", footnoteOverflowFiller)
-    .Replace("__LINE_NOTE_FILLER__", footnoteOverflowFiller);
+    .Replace("__LINE_NOTE_FILLER__", footnoteOverflowFiller)
+    .Replace("__COLUMN_FILLER__", columnFiller);
 
 await SaveShowcaseAsync("paged_media_footnotes", "Paged Media", "Footnotes",
-    "css-gcpm-3's float: footnote: a numbered in-flow reference, a note area whose height is reserved dynamically per page based on how many footnotes land there, break-inside: avoid content correctly kept clear of the reserved strip, an @footnote rule styling the note area's own divider, footnote-display: compact packing short notes onto one row, and footnote-policy: block/line forcing a page break when a note doesn't fit.",
+    "css-gcpm-3's float: footnote: a numbered in-flow reference, a note area whose height is reserved dynamically per page based on how many footnotes land there, break-inside: avoid content correctly kept clear of the reserved strip, an @footnote rule styling the note area's own divider and giving it a fixed height, a real cascaded footnote counter (continuous numbering via @page counter-reset), column-scoped areas via float-reference: column, footnote-display: compact packing short notes onto one row, and footnote-policy: block/line forcing a page break when a note doesn't fit.",
     footnotesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──
@@ -10446,13 +10499,16 @@ await SaveShowcaseAsync("gsub_ligatures", "Typography & Text", "GSUB Ligatures",
 // approximation on a font that doesn't (Source Code Pro, confirmed to carry zero caps-family GSUB
 // tags) - both are the same CSS, only the resolved font differs. font-variant-numeric activates a
 // font's real numeric-variant GSUB features (oldstyle figures, tabular figures, slashed zero) the
-// same way.
+// same way, and font-variant-position does the same for sups/subs - synthesizing from the font's own
+// OS/2 recommended scale and offset on STIX Two Math, which has no positional features at all.
 var sourceCodeProB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceCodePro-Regular.otf")));
+var stixTwoMathB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "StixTwoMath-Regular.ttf")));
 var fontVariantCapsHtml =
     "<!DOCTYPE html><html><head><style>" +
     "@page { size: a4; margin: 15mm }" +
     $"@font-face {{ font-family: 'SS3'; src: url('data:font/truetype;base64,{sourceSans3B64}') format('truetype'); }}" +
     $"@font-face {{ font-family: 'SCP'; src: url('data:font/opentype;base64,{sourceCodeProB64}') format('opentype'); }}" +
+    $"@font-face {{ font-family: 'STIX'; src: url('data:font/truetype;base64,{stixTwoMathB64}') format('truetype'); }}" +
     "body { font-family: 'SS3', serif; margin: 0; color: #222 }" +
     "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
     "h2 { font-size: 11pt; margin: 1.2em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
@@ -10462,10 +10518,11 @@ var fontVariantCapsHtml =
     "table.caps td { padding: 6px 8px; border-top: 1px solid #ddd }" +
     "table.caps td.label { font-size: 8pt; font-family: Arial, sans-serif; color: #666; vertical-align: middle }" +
     "</style></head><body>" +
-    "<h1>Font Variant: Caps &amp; Numerals</h1>" +
+    "<h1>Font Variant: Caps, Numerals &amp; Position</h1>" +
     "<p class=\"intro\">PeachPDF prefers a font's real OpenType GSUB substitution for " +
-    "<code>font-variant-caps</code> and <code>font-variant-numeric</code>, falling back to a " +
-    "synthesized approximation only where the standard specifically allows one.</p>" +
+    "<code>font-variant-caps</code>, <code>font-variant-numeric</code> and " +
+    "<code>font-variant-position</code>, falling back to a synthesized approximation only where the " +
+    "standard specifically allows one.</p>" +
 
     "<h2>font-variant-caps: real GSUB vs. synthesized fallback</h2>" +
     "<p class=\"intro\">Source Sans 3 has real <code>smcp</code>/<code>c2sc</code>/<code>titl</code> " +
@@ -10502,11 +10559,32 @@ var fontVariantCapsHtml =
     "<tr><td class=\"label\">tabular-nums</td><td style=\"font-variant-numeric: tabular-nums\">1234567890</td></tr>" +
     "<tr><td class=\"label\">slashed-zero</td><td style=\"font-variant-numeric: slashed-zero\">1002000</td></tr>" +
     "</table>" +
+
+    "<h2>font-variant-position: real GSUB vs. synthesized fallback</h2>" +
+    "<p class=\"intro\">Source Sans 3 has real <code>sups</code>/<code>subs</code> data, so its " +
+    "superscripts and subscripts below are the font's own purpose-drawn glyphs. STIX Two Math has " +
+    "neither (28 GSUB features, none of them positional), so the same CSS is synthesized instead - " +
+    "drawn at a reduced size with a shifted baseline, using the scale and offset that font's own OS/2 " +
+    "table recommends. Neither form changes the line's height, unlike vertical-align.</p>" +
+    "<table class=\"caps\" style=\"font-size: 16pt\">" +
+    "<tr><th>font-variant-position</th><th>Source Sans 3 (real GSUB)</th><th>STIX Two Math (synthesized)</th></tr>" +
+    "<tr><td class=\"label\">normal</td>" +
+    "<td style=\"font-family: 'SS3'\">E = mc2 and H2O</td>" +
+    "<td style=\"font-family: 'STIX'\">E = mc2 and H2O</td></tr>" +
+    "<tr><td class=\"label\">super</td>" +
+    "<td style=\"font-family: 'SS3'\">E = mc<span style=\"font-variant-position: super\">2</span></td>" +
+    "<td style=\"font-family: 'STIX'\">E = mc<span style=\"font-variant-position: super\">2</span></td></tr>" +
+    "<tr><td class=\"label\">sub</td>" +
+    "<td style=\"font-family: 'SS3'\">H<span style=\"font-variant-position: sub\">2</span>O</td>" +
+    "<td style=\"font-family: 'STIX'\">H<span style=\"font-variant-position: sub\">2</span>O</td></tr>" +
+    "</table>" +
     "</body></html>";
-await SaveShowcaseAsync("font_variant_caps", "Typography & Text", "Font Variant: Caps & Numerals",
+await SaveShowcaseAsync("font_variant_caps", "Typography & Text", "Font Variant: Caps, Numerals & Position",
     "font-variant-caps prefers a font's real GSUB smcp/c2sc/titl substitution, falling back to a " +
     "synthesized approximation only where the standard allows it; font-variant-numeric activates a " +
-    "font's real oldstyle/tabular/slashed-zero GSUB features the same way.",
+    "font's real oldstyle/tabular/slashed-zero GSUB features the same way, and font-variant-position " +
+    "uses real sups/subs glyphs where a font has them and synthesizes them from its OS/2 metrics " +
+    "where it doesn't.",
     fontVariantCapsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // Bidirectional text: the `dir` global attribute (including `auto`), `<bdo>`/`<bdi>`, CSS
@@ -11245,8 +11323,8 @@ await SaveShowcaseAsync("interactive_pdf_forms", "Interactivity", "Interactive P
     });
 
 // MathML: fractions, radicals, sub/superscripts, stretchy fences, and matrices rendered as real
-// vector PDF content using STIX Two Math's own OpenType MATH table.
-var stixTwoMathB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "StixTwoMath-Regular.ttf")));
+// vector PDF content using STIX Two Math's own OpenType MATH table. (stixTwoMathB64 is already read
+// above, for the font-variant-position showcase.)
 string MathPanel(string title, string mathml) =>
     "<div class=\"mpanel\">" +
     $"<div class=\"mtitle\">{title}</div>" +

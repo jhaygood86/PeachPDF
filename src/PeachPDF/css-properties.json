@@ -1761,6 +1761,24 @@
       }
     },
     {
+      "name": "float-reference",
+      "comment": "CSS Page Floats - which fragmentation context a float is positioned relative to. Consumed today only by a float: footnote source, where `column` routes the note into its own column's area; `inline` (the initial value) and `region` behave as `page` there. Inert on any other element, since PeachPDF implements no page floats.",
+      "inherited": false,
+      "initialValue": "inline",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FloatReference",
+        "keywordMap": "Map.FloatReferences",
+        "fallback": "FloatReference.Inline"
+      },
+      "html": {
+        "propertyPath": "FloatReference",
+        "csharpDataType": "CssProperty<FloatReference>",
+        "area": "DisplayPositioningArea",
+        "getterExpression": "{box}.FloatReference.ToString()"
+      }
+    },
+    {
       "name": "float",
       "inherited": false,
       "initialValue": "none",
@@ -2672,6 +2690,20 @@
       "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "FontVariantCaps",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "font-variant-position",
+      "comment": "CSS Fonts 4 §6.4, single mutually-exclusive keyword like font-variant-caps (not a space-separated combination). sub/super map to the OpenType 'subs'/'sups' GSUB features, with a synthesized fallback when the resolved font lacks them.",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": "keyword",
+      "supportedValues": ["normal", "sub", "super"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "FontVariantPosition",
         "csharpDataType": "string",
         "area": "FontArea"
       }

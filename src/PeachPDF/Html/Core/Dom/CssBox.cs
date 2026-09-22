@@ -1806,6 +1806,15 @@ namespace PeachPDF.Html.Core.Dom
             var needsSynthesis = isSmallCapsFamily && ActualFontVariantCaps == FontVariantCapsFeature.None;
             var synthesisApplies = needsSynthesis && (ContainsLowerLetter(text) || (isAllSmallCaps && ContainsUpperLetter(text)));
 
+            // A synthesized font-variant-position: sub/super applies uniformly to the whole word - CSS
+            // Fonts 4 makes it an all-or-nothing per-run choice, and there is no case-flip to split on -
+            // so unlike small-caps it needs no run splitting at all, just the scale. Null whenever real
+            // subs/sups substitution is handling it (or the property is normal), in which case the word
+            // is left alone here exactly as it is for real caps substitution.
+            // Small-caps synthesis wins when both would apply: ResolveWordFont can only name one face,
+            // and combining them would need a face at the product of the two scales.
+            var subSuperscriptScale = !synthesisApplies ? SubSuperscriptSynthesis?.SizeScale : null;
+
             if (!synthesisApplies)
             {
                 var needsOrientationSplit = NeedsOrientationSplit(text);
@@ -1815,12 +1824,14 @@ namespace PeachPDF.Html.Core.Dom
                     Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter, originalText, ToRuneIndexedJoiningForms(wordStart, text), ToRuneIndexedUseCategories(wordStart, text))
                     {
                         HyphenationCandidates = hyphenationCandidates,
-                        IsUprightOrientation = WholeTextOrientationIsUpright(text)
+                        IsUprightOrientation = WholeTextOrientationIsUpright(text),
+                        FontSizeScale = subSuperscriptScale ?? 1.0,
+                        ScaledFontKind = subSuperscriptScale is not null ? ScaledFontKind.SubSuperscript : ScaledFontKind.None
                     });
                     return;
                 }
 
-                EmitPerCodepointFragments(text, originalText, hasSpaceBefore, hasSpaceAfter, fontSizeScale: 1.0, alwaysSuppressWrap: false, textStart: wordStart);
+                EmitPerCodepointFragments(text, originalText, hasSpaceBefore, hasSpaceAfter, fontSizeScale: subSuperscriptScale ?? 1.0, alwaysSuppressWrap: false, textStart: wordStart);
                 return;
             }
 
@@ -1860,6 +1871,7 @@ namespace PeachPDF.Html.Core.Dom
                     Words.Add(new CssRectWord(this, displayText, runSpaceBefore, runSpaceAfter, runOriginalText, ToRuneIndexedJoiningForms(wordStart + start, runText), ToRuneIndexedUseCategories(wordStart + start, runText))
                     {
                         FontSizeScale = scale,
+                        ScaledFontKind = scale == 1.0 ? ScaledFontKind.None : ScaledFontKind.SmallCaps,
                         SuppressWrapBefore = i > 0,
                         IsUprightOrientation = WholeTextOrientationIsUpright(displayText)
                     });
@@ -2141,8 +2153,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// The font a word/fragment is measured and painted with: its per-codepoint face (resolved from its
         /// first <see cref="Rune"/>) when <see cref="CssRect.UsesPerCodepointFont"/>, otherwise the box's
-        /// own <see cref="DerivedStyle.ActualFont"/> (or <see cref="DerivedStyle.ActualSmallCapsFont"/>
-        /// for a synthesized small-caps run). <paramref name="styleSource"/> is the box whose font applies -
+        /// own <see cref="DerivedStyle.ActualFont"/>, or one of its scaled faces when
+        /// <see cref="CssRect.ScaledFontKind"/> names one (a synthesized small-caps run, or a synthesized
+        /// sub/superscript). <paramref name="styleSource"/> is the box whose font applies -
         /// the owner box, or a <c>::first-line</c> shadow box for a word on the first formatted line.
         /// Shared by measurement and by <see cref="FragmentPainter"/>, so the two can never disagree
         /// about which face a word is drawn in.
@@ -2170,7 +2183,12 @@ namespace PeachPDF.Html.Core.Dom
                 return styleSource.ActualFontForCodepoint(rune, word.FontSizeScale);
             }
 
-            return word.FontSizeScale == 1.0 ? styleSource.ActualFont : styleSource.ActualSmallCapsFont;
+            return word.ScaledFontKind switch
+            {
+                ScaledFontKind.SmallCaps => styleSource.ActualSmallCapsFont,
+                ScaledFontKind.SubSuperscript => styleSource.ActualSubSuperscriptFont,
+                _ => styleSource.ActualFont,
+            };
         }
 
         private static bool ContainsLowerLetter(string text)
@@ -9130,6 +9148,25 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var word in Words) top = Math.Min(top, word.Top);
 
             return top;
+        }
+
+        /// <summary>
+        /// The inline-axis mirror of <see cref="OwnGeometryTop"/>: this box's own leftmost rendered edge.
+        /// Returns <see cref="double.NaN"/> when the box has produced no geometry at all, which the caller
+        /// must treat as "cannot say" rather than as a position - an inline box's own
+        /// <see cref="Location"/> stays at a bogus line-local value layout never updates, so there is no
+        /// sensible fallback the way there is for the block axis.
+        /// </summary>
+        internal double OwnGeometryLeft()
+        {
+            if (Rectangles.Count == 0 && Words.Count == 0) return double.NaN;
+
+            var left = double.MaxValue;
+
+            foreach (var rect in Rectangles.Values) left = Math.Min(left, rect.Left);
+            foreach (var word in Words) left = Math.Min(left, word.Left);
+
+            return left;
         }
 
         private void OnBlockAxisRelocated(double fromY, double toY) =>

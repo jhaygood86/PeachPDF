@@ -181,6 +181,12 @@ namespace PeachPDF.Adapters
         public override bool SupportsFontVariantCaps(FontVariantCapsFeature feature) =>
             Font.Descriptor?.SupportsFeatureTags(GsubShaper.GetFeatureTags(feature)) ?? false;
 
+        public override bool SupportsFontVariantPosition(FontVariantPositionFeature feature) =>
+            Font.Descriptor?.SupportsFeatureTags(GsubShaper.GetFeatureTags(feature)) ?? false;
+
+        public override (double SizeScale, double BaselineShift)? GetSubSuperscriptMetrics(bool superscript) =>
+            Font.Descriptor?.GetSubSuperscriptMetrics(superscript);
+
         public override string FaceKey => Font.GlyphTypeface.Key;
 
         // ---- CPAL color-palette query surface --------------------------------------------------

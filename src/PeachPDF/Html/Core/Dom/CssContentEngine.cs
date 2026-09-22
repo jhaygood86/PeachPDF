@@ -171,6 +171,11 @@ namespace PeachPDF.Html.Core.Dom
                             AppendCounter(contentText, cssBox, functionToken);
                             break;
                         }
+                    case { Type: TokenType.Function, Data: FunctionNames.Counters } countersToken:
+                        {
+                            contentText.Append(ResolveCounters(cssBox, countersToken));
+                            break;
+                        }
                     case { Type: TokenType.Function, Data: "content" } contentFunctionToken:
                         {
                             var contentValue = ExtractContentValue(cssBox, contentFunctionToken);
@@ -473,9 +478,68 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
+            // The footnote counter is the same kind of UA magic: its value depends on which page a
+            // call landed on, which CssCounterEngine (resolving purely from DOM position) cannot know.
+            // HtmlContainerInt sets this ambient context around the one moment it applies a resolved
+            // number to a call/marker; outside that window it is null and the lookup below runs exactly
+            // as it always has, so counter(footnote) on an ordinary element is unaffected.
+            if (counterBox.HtmlContainer?.FootnoteNumberContext is { } footnoteNumber
+                && counterName.Data.Equals(Keywords.Footnote, StringComparison.OrdinalIgnoreCase))
+            {
+                sb.Append(CssCounterEngine.FormatCounterValue(footnoteNumber, style));
+                return;
+            }
+
             var counterValue = CssCounterEngine.GetCounter(counterBox, counterName.Data.ToString())?.Value ?? 1;
 
             sb.Append(CssCounterEngine.FormatCounterValue(counterValue, style));
+        }
+
+        /// <summary>
+        /// Resolves a <c>counters(&lt;name&gt;, &lt;separator&gt; [, &lt;counter-style&gt;])</c> function:
+        /// every value of that counter in <paramref name="counterBox"/>'s scope chain, outermost first,
+        /// joined by the separator. The one implementation, shared with <c>string-set</c>'s own
+        /// evaluation (<see cref="CssNamedStringEngine"/>) rather than duplicated there.
+        /// </summary>
+        internal static string ResolveCounters(CssBox counterBox, Token functionToken)
+        {
+            var arguments = functionToken.ArgumentTokens
+                .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
+                .ToArray();
+
+            if (arguments.Length < 2) return string.Empty;
+            if (arguments[0] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } counterName)
+                return string.Empty;
+
+            var separator = arguments[1] is { Type: TokenType.String } separatorToken
+                ? separatorToken.Data.ToString()
+                : ".";
+
+            var style = arguments.Length > 2 && arguments[2] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } styleToken
+                ? styleToken.Data.ToString()
+                : Keywords.Decimal;
+
+            // Same ambient-context rule as counter() above. A footnote counter has exactly one scope -
+            // it is reset by @page, not by a DOM ancestor - so counters(footnote, ...) is just
+            // counter(footnote), separator and all.
+            if (counterBox.HtmlContainer?.FootnoteNumberContext is { } footnoteNumber
+                && counterName.Data.Equals(Keywords.Footnote, StringComparison.OrdinalIgnoreCase))
+            {
+                return CssCounterEngine.FormatCounterValue(footnoteNumber, style);
+            }
+
+            List<int> values = [];
+            var counter = CssCounterEngine.GetCounter(counterBox, counterName.Data.ToString());
+
+            while (counter is not null)
+            {
+                values.Insert(0, counter.Value);
+                counter = counter.ParentScope;
+            }
+
+            return values.Count > 0
+                ? string.Join(separator, values.Select(v => CssCounterEngine.FormatCounterValue(v, style)))
+                : CssCounterEngine.FormatCounterValue(0, style);
         }
 
         /// <summary>UA default quote pair (guillemets), matching <c>QuotesProperty</c>'s own fallback.</summary>
@@ -946,6 +1010,11 @@ namespace PeachPDF.Html.Core.Dom
                     case { Type: TokenType.Function, Data: FunctionNames.Counter } functionToken:
                         {
                             AppendCounter(contentText, pseudoElement, functionToken);
+                            break;
+                        }
+                    case { Type: TokenType.Function, Data: FunctionNames.Counters } countersToken:
+                        {
+                            contentText.Append(ResolveCounters(pseudoElement, countersToken));
                             break;
                         }
                     case { Type: TokenType.Function, Data: "attr" } attrFunctionToken:

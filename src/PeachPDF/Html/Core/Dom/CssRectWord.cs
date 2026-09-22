@@ -289,6 +289,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 BidiLevel = BidiLevel,
                 FontSizeScale = FontSizeScale,
+                ScaledFontKind = ScaledFontKind,
                 FirstLineStyle = FirstLineStyle,
                 IsUprightOrientation = IsUprightOrientation,
                 ScriptTag = ScriptTag,

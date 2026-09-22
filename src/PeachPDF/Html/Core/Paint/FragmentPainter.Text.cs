@@ -209,6 +209,16 @@ namespace PeachPDF.Html.Core.Paint
             // word (font == ActualFont), so it is a no-op there.
             var font = fontOverride ?? CssBox.ResolveWordFont(word, styleSource);
             var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
+
+            // A synthesized font-variant-position sub/superscript then moves off that shared baseline by
+            // the font's own recommended offset (negative = up, for a superscript). Applied here rather
+            // than during layout because CSS Fonts 4 is explicit that these glyphs "have no effect on
+            // line-height and other box characteristics" - unlike vertical-align: super, which shifts the
+            // whole inline box within its line and does grow the line box.
+            if (styleSource.SubSuperscriptSynthesis is { } subSuperscript)
+            {
+                baselineAdjust += subSuperscript.BaselineShift;
+            }
             // A word's own resolved script tag/Arabic-family joining forms (CssBox.CharScripts/
             // JoiningForms, sliced per word by AppendWordsFromText) override styleSource's own
             // box-level shaping-feature request - see ResolveWordShapingFeatures.

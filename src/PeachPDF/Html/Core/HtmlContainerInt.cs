@@ -1020,7 +1020,11 @@ namespace PeachPDF.Html.Core
             ClearNamedPageElements();
             FootnoteCalls.Clear();
             FootnoteAreaHeightsBySlot = [];
-            _footnoteCallsBySlot = [];
+            _footnoteAreasBySlot = [];
+            FootnoteNumberContext = null;
+            _footnoteNumberingSignature = string.Empty;
+            ColumnFragmentainers.Clear();
+            FootnoteAreaHeightsByColumn = [];
             // Keyed by CssBox/CssBoxFootnoteCall, same reason ClearBlankSlotReservations() below is -
             // dropping the tree without this would keep every box in it (and everything it in turn
             // reaches via ParentBox/Boxes) reachable until the next document's own footnotes happened to
@@ -1439,7 +1443,7 @@ namespace PeachPDF.Html.Core
                     var changed = await ResolveFootnotesForThisAttempt(g);
 
                     // The bound below is a last resort, not the ordinary exit - resolving must always be
-                    // the last thing this loop does before FootnoteAreaHeightsBySlot/_footnoteCallsBySlot
+                    // the last thing this loop does before FootnoteAreaHeightsBySlot/_footnoteAreasBySlot
                     // are read by AttachFootnoteAreas, or they describe a Root tree an earlier LayoutDocument
                     // call already left behind: reaching the cap with changed still true and relaying out
                     // one further time, unresolved, is exactly what would do that.
@@ -1923,29 +1927,17 @@ namespace PeachPDF.Html.Core
         /// </summary>
         private FragmentTree AttachFootnoteAreas(FragmentTree tree)
         {
-            if (FootnoteAreaHeightsBySlot.Count == 0) return tree;
+            if (_footnoteAreasBySlot.Count == 0) return tree;
 
             var updated = new List<FragmentainerFragment>(tree.Fragmentainers.Count);
 
             foreach (var fragmentainer in tree.Fragmentainers)
             {
-                if (!FootnoteAreaHeightsBySlot.TryGetValue(fragmentainer.SlotIndex, out var totalHeight)
-                    || !_footnoteCallsBySlot.TryGetValue(fragmentainer.SlotIndex, out var calls) || calls.Count == 0)
+                if (!_footnoteAreasBySlot.TryGetValue(fragmentainer.SlotIndex, out var areas) || areas.Count == 0)
                 {
                     updated.Add(fragmentainer);
                     continue;
                 }
-
-                var contentLeft = MarginLeft;
-                var contentWidth = PageContentRightOf(PageTopOf(fragmentainer.SlotIndex)) - contentLeft;
-                // Mirrors ResolveFootnotesForThisAttempt's own areaTop/finalBodiesTop geometry exactly -
-                // both resolve @footnote's box model through the same ResolveFootnoteAreaBoxModel call,
-                // so the two can never disagree about the divider's thickness or position. The divider
-                // sits after the top padding, before the gap that precedes the first body.
-                var (topPadding, dividerThickness, _, _, dividerColor) =
-                    ResolveFootnoteAreaBoxModel(fragmentainer.SlotIndex, contentWidth);
-                var areaTop = PageBottomOf(fragmentainer.SlotIndex) - totalHeight;
-                var dividerTop = areaTop + topPadding;
 
                 // Bodies were laid out (and are still positioned) in document space - the coordinate
                 // space ReserveBandEnd/PageBottomOf's own reservation math needs, since it has to agree
@@ -1958,16 +1950,38 @@ namespace PeachPDF.Html.Core
                 // here, right before building the paint-facing fragments - this runs exactly once (unlike
                 // ResolveFootnotesForThisAttempt, which the convergence loop can call several times), so a
                 // permanent OffsetTop on each detached body is safe.
+                //
+                // That one-shot translation is also why the areas must PARTITION the slot's calls: a call
+                // reachable through two of them would be offset twice and paint in the wrong place. See
+                // PartitionFootnoteAreas.
                 var localOriginY = fragmentainer.LocalOriginY;
-                foreach (var call in calls)
+                var fragments = new List<FootnoteAreaFragment>(areas.Count);
+
+                foreach (var area in areas)
                 {
-                    call.Body.OffsetTop(-localOriginY);
+                    if (area.TotalHeight <= 0 || area.Calls.Count == 0) continue;
+
+                    foreach (var call in area.Calls)
+                    {
+                        call.Body.OffsetTop(-localOriginY);
+                    }
+
+                    // Every coordinate here was stated by the resolve pass rather than recomputed, so the
+                    // divider can never be drawn at a different Y than the band that was reserved - it
+                    // depends on the bodies' own natural height, which is not recoverable at this point.
+                    var dividerRect = new RRect(
+                        area.AreaLeft, area.DividerTop - localOriginY, area.AreaWidth, area.DividerThickness);
+
+                    var bodies = area.Calls.Select(call => MarginBoxContentFragmentBuilder.Build(call.Body)).ToList();
+
+                    fragments.Add(new FootnoteAreaFragment(
+                        dividerRect, bodies, area.DividerColor,
+                        area.Column is null ? FootnoteAreaScope.Page : FootnoteAreaScope.Column));
                 }
 
-                var dividerRect = new RRect(contentLeft, dividerTop - localOriginY, contentWidth, dividerThickness);
-                var bodies = calls.Select(call => MarginBoxContentFragmentBuilder.Build(call.Body)).ToList();
-
-                updated.Add(fragmentainer with { FootnoteArea = new FootnoteAreaFragment(dividerRect, bodies, dividerColor) });
+                updated.Add(fragments.Count == 0
+                    ? fragmentainer
+                    : fragmentainer with { FootnoteAreas = fragments });
             }
 
             return tree with { Fragmentainers = updated };
@@ -2741,16 +2755,44 @@ namespace PeachPDF.Html.Core
         /// Discards what <paramref name="contextRoot"/> recorded in <paramref name="slot"/> — or, with no
         /// slot, in every slot — for a fill being attempted afresh.
         /// </summary>
-        internal void ClearCapturedInstances(CssBox contextRoot, int? slot = null) =>
+        internal void ClearCapturedInstances(CssBox contextRoot, int? slot = null)
+        {
             _emitter?.ClearCapturedInstances(contextRoot, slot);
+            ColumnFragmentainers.RemoveAll(r => ReferenceEquals(r.ColumnsBox, contextRoot) && (slot is null || r.Slot == slot));
+        }
+
+        /// <summary>
+        /// Publishes one filled column's identity - see
+        /// <see cref="Fragmentation.ColumnFragmentainerRecord"/>. Called from the same place the emitter's
+        /// own captured instance is recorded, and truncated by the same two methods, so the two can never
+        /// disagree about which columns a balance retry discarded.
+        /// </summary>
+        internal void RecordColumnFragmentainer(Fragmentation.ColumnFragmentainerRecord record) =>
+            ColumnFragmentainers.Add(record);
+
+        /// <summary>
+        /// How much room a column-scoped note area needs in the column identified by
+        /// <paramref name="key"/>, as resolved on the previous attempt - zero when none landed there.
+        /// </summary>
+        internal double ColumnFootnoteInsetFor(Fragmentation.ColumnAreaKey key) =>
+            FootnoteAreaHeightsByColumn.GetValueOrDefault(key, 0);
 
         /// <summary>
         /// Discards only what <paramref name="contextRoot"/> recorded in <paramref name="slot"/> from
         /// index <paramref name="keepFirst"/> onward, leaving an earlier <c>column-span: all</c> run's
         /// already-finished columns in the same slot untouched.
         /// </summary>
-        internal void ClearCapturedInstancesFrom(CssBox contextRoot, int slot, int keepFirst) =>
+        internal void ClearCapturedInstancesFrom(CssBox contextRoot, int slot, int keepFirst)
+        {
             _emitter?.ClearCapturedInstancesFrom(contextRoot, slot, keepFirst);
+
+            // Lockstep with the emitter's own truncation rather than a parallel cleanup: keepFirst counts
+            // this contextRoot's instances in this slot, so the column records are dropped by the same
+            // index.
+            var seen = 0;
+            ColumnFragmentainers.RemoveAll(r =>
+                ReferenceEquals(r.ColumnsBox, contextRoot) && r.Slot == slot && seen++ >= keepFirst);
+        }
 
         /// <summary>
         /// Hands the emitter one repeating <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> instance's captured
@@ -2957,13 +2999,13 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
-        /// This attempt's footnote calls grouped by the pagination slot they landed on, in document
-        /// order within each group - the same grouping <see cref="ResolveFootnotesForThisAttempt"/> uses
-        /// to lay out and stack each page's bodies, kept around so <see cref="AttachFootnoteAreas"/> can
-        /// build each page's <see cref="FootnoteAreaFragment"/> from bodies already laid out rather than
-        /// re-deriving which calls landed where.
+        /// This attempt's resolved note areas, grouped by the pagination slot they sit on - what
+        /// <see cref="ResolveFootnotesForThisAttempt"/> laid out, kept around so
+        /// <see cref="AttachFootnoteAreas"/> can build each <see cref="FootnoteAreaFragment"/> from
+        /// bodies already laid out rather than re-deriving which calls landed where. A slot holds more
+        /// than one area whenever any <c>float-reference: column</c> call landed on it.
         /// </summary>
-        private Dictionary<int, List<CssBoxFootnoteCall>> _footnoteCallsBySlot = [];
+        private Dictionary<int, List<FootnoteAreaGroup>> _footnoteAreasBySlot = [];
 
         /// <summary>
         /// Containing blocks <see cref="ResolveFootnotesForThisAttempt"/> has asked for a
@@ -2991,34 +3033,60 @@ namespace PeachPDF.Html.Core
         /// </summary>
         internal readonly HashSet<CssBoxFootnoteCall> FootnotePolicyLineBreaksTakenThisPass = [];
 
-        /// <summary>Space (layout px, i.e. points) above a page's footnote-area divider rule.</summary>
-        private const double FootnoteAreaTopPadding = 4;
+        /// <summary>
+        /// The footnote number currently being applied to a <see cref="CssBoxFootnoteCall"/> or its
+        /// marker, and null outside that one moment. <see cref="CssContentEngine"/> consults it before
+        /// falling through to <see cref="CssCounterEngine"/>, which is what makes an author's
+        /// <c>content: counter(footnote)</c> resolve to the live, pagination-resolved number.
+        /// </summary>
+        /// <remarks>
+        /// The same ambient, scoped shape as <see cref="RunningElementPageContext"/>, and for the same
+        /// reason: a footnote's number depends on which page its call landed on, which the DOM-position
+        /// counter engine has no notion of. Set inside a try/finally around the apply, so nothing outside
+        /// that window ever sees it - <c>counter(footnote)</c> on an ordinary element still resolves
+        /// through the document counter exactly as before.
+        /// </remarks>
+        internal int? FootnoteNumberContext { get; set; }
 
-        /// <summary>Thickness of the footnote area's top divider rule.</summary>
-        private const double FootnoteDividerThickness = 1;
+        /// <summary>
+        /// Every column every multi-column container filled on this layout attempt, published by
+        /// <see cref="Dom.CssLayoutEngineColumns"/> as each one is recorded. Read only by
+        /// <see cref="ResolveFootnotesForThisAttempt"/>, to attribute a footnote call to the column it
+        /// landed in - which geometry alone cannot say, since every column shares one block band.
+        /// </summary>
+        internal List<Fragmentation.ColumnFragmentainerRecord> ColumnFragmentainers { get; } = [];
 
-        /// <summary>Space between the divider rule and the first footnote body.</summary>
-        private const double FootnoteAreaDividerToBodyGap = 4;
+        /// <summary>
+        /// The per-column analogue of <see cref="FootnoteAreaHeightsBySlot"/>: how much room each
+        /// column-scoped note area needs, seeded back into that column's own
+        /// <see cref="Fragmentation.FragmentainerContext.ReserveBandEnd"/> on the next attempt.
+        /// </summary>
+        internal Dictionary<Fragmentation.ColumnAreaKey, double> FootnoteAreaHeightsByColumn { get; private set; } = [];
 
-        /// <summary>Space between two stacked footnote bodies on the same page.</summary>
+        /// <summary>
+        /// Every footnote number and the exact call/marker text it produced on the previous convergence
+        /// pass, in document order - the fixpoint test for numbering, alongside the reserved-height one.
+        /// </summary>
+        private string _footnoteNumberingSignature = string.Empty;
+
+        /// <summary>
+        /// Space between two stacked footnote bodies on the same page. Stays here rather than moving to
+        /// <see cref="FootnoteAreaRule"/> with the area's other spacing: this is how bodies stack
+        /// <em>within</em> the area's content box, not part of the box model <c>@footnote</c> styles.
+        /// </summary>
         private const double FootnoteBodySpacing = 4;
 
         /// <summary>
-        /// Resolves css-gcpm-3 §2.4's <c>@footnote</c> area rule's box model for pagination slot
-        /// <paramref name="slot"/> - the single place both <see cref="ResolveFootnotesForThisAttempt"/>
-        /// (which needs it for height math) and <see cref="AttachFootnoteAreas"/> (which needs the
-        /// identical numbers to build a byte-for-byte matching rect, per that method's own remarks on why
-        /// the two must never disagree) resolve it, so the two can never drift apart. Falls back to
-        /// PeachPDF's own UA default (<see cref="FootnoteAreaTopPadding"/>/<see cref="FootnoteDividerThickness"/>/
-        /// <see cref="FootnoteAreaDividerToBodyGap"/>) per longhand, exactly as an unset property falls
-        /// back to its initial value in a real cascade - an author who declares only <c>border-top</c>
-        /// still gets the default top padding and divider-to-body gap. <c>max-height</c> is resolved but
-        /// never changes this method's own height math - it is purely a signal <c>footnote-policy</c>
-        /// reads to decide whether a page's note area "fits" (see the "Footnotes" section of
-        /// docs/html-css-support.md); under the default <c>footnote-policy: auto</c> a too-tall note area
-        /// still simply overflows, same as an over-tall single footnote body already does.
+        /// Resolves css-gcpm-3's <c>@footnote</c> area rule for pagination slot <paramref name="slot"/> -
+        /// the single place both <see cref="ResolveFootnotesForThisAttempt"/> (which needs it for height
+        /// math) and <see cref="AttachFootnoteAreas"/> (which needs the identical numbers to build a
+        /// byte-for-byte matching rect, per that method's own remarks on why the two must never disagree)
+        /// resolve it. Falls back to <see cref="FootnoteAreaRule.Ua"/> per longhand, exactly as an unset
+        /// property falls back to its initial value in a real cascade - an author who declares only
+        /// <c>border-top</c> still gets the default top padding and divider-to-body gap.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// Uses <see cref="PageRuleResolver.ActiveNameAtSlotStart"/> (not <c>ActiveNameAtPageEnd</c>,
         /// which paint-time margin-box resolution uses) and <c>slot + 1</c> as the page number - the same
         /// slot-start attribution <c>PageGeometryTable</c>'s own per-page geometry resolution uses, since
@@ -3028,51 +3096,372 @@ namespace PeachPDF.Html.Core
         /// in the document (issue #148) - a pre-existing limitation of the whole footnote-slot subsystem
         /// (<see cref="ResolveFootnotesForThisAttempt"/> already groups footnote calls by raw slot the
         /// same way), not a new one this introduces.
+        /// </para>
+        /// <para>
+        /// <c>height</c>/<c>max-height</c> are block-axis lengths, so a percentage resolves against the
+        /// page's own content band, not <paramref name="contentWidth"/> - which stays the basis for
+        /// <c>margin-top</c>/<c>padding-top</c>, whose percentages are inline-axis per the CSS box model.
+        /// </para>
         /// </remarks>
-        internal (double TopPadding, double DividerThickness, double DividerToBodyGap, double? MaxHeight, string? DividerColor)
-            ResolveFootnoteAreaBoxModel(int slot, double contentWidth)
+        internal FootnoteAreaRule ResolveFootnoteAreaRule(int slot, double contentWidth)
         {
-            if (PageRules.Count == 0)
-                return (FootnoteAreaTopPadding, FootnoteDividerThickness, FootnoteAreaDividerToBodyGap, null, null);
+            if (PageRules.Count == 0) return FootnoteAreaRule.Ua;
 
             var pageNumber = slot + 1;
             var activeName = PageRuleResolver.ActiveNameAtSlotStart(_namedPageElements, PageTopOf(slot));
             var rule = PageRuleResolver.SelectApplicableMarginRules(PageRules, pageNumber, activeName)
                 .FirstOrDefault(m => string.Equals(m.Selector?.Text?.Trim(), "footnote", StringComparison.OrdinalIgnoreCase));
 
-            if (rule is null)
-                return (FootnoteAreaTopPadding, FootnoteDividerThickness, FootnoteAreaDividerToBodyGap, null, null);
+            if (rule is null) return FootnoteAreaRule.Ua;
 
             var pageStyle = PageRuleResolver.SelectApplicablePageStyle(PageRules, pageNumber, activeName);
             var remPt = PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
 
             var topPadding = string.IsNullOrWhiteSpace(rule.Style.MarginTop)
-                ? FootnoteAreaTopPadding
+                ? FootnoteAreaRule.DefaultTopPadding
                 : MarginBoxRenderer.MarginExtent(rule, pageStyle, remPt, contentWidth, horizontal: false).Start;
 
             var dividerThickness = string.IsNullOrWhiteSpace(rule.Style.BorderTopStyle)
-                ? FootnoteDividerThickness
+                ? FootnoteAreaRule.DefaultDividerThickness
                 : MarginBoxRenderer.BorderExtent(rule, pageStyle, remPt, horizontal: false).Start;
 
             var dividerToBodyGap = string.IsNullOrWhiteSpace(rule.Style.PaddingTop)
-                ? FootnoteAreaDividerToBodyGap
+                ? FootnoteAreaRule.DefaultDividerToBodyGap
                 : MarginBoxRenderer.PaddingExtent(rule, pageStyle, remPt, contentWidth, horizontal: false).Start;
 
-            double? maxHeight = null;
-            if (!string.IsNullOrWhiteSpace(rule.Style.MaxHeight))
-            {
-                var emPt = MarginBoxRenderer.ResolveFontSizePt(rule.Style, pageStyle);
-                maxHeight = DomParser.ParseLengthToPdfPoints(rule.Style.MaxHeight, new PageLengthContext(emPt, remPt, contentWidth));
-            }
+            var emPt = MarginBoxRenderer.ResolveFontSizePt(rule.Style, pageStyle);
+            var blockBasis = PageBottomOf(slot) - PageTopOf(slot);
 
-            // A divider only paints when @footnote declares a real border-top (dividerThickness > 0
-            // handles the "declared but none/hidden/zero-width" cases); null means "use the UA default
-            // black" the same way an ordinary box's unset border-*-color falls back through currentcolor.
+            var height = ResolveFootnoteAreaBlockLength(rule.Style.Height, emPt, remPt, blockBasis);
+            var maxHeight = ResolveFootnoteAreaBlockLength(rule.Style.MaxHeight, emPt, remPt, blockBasis);
+
+            // A divider only paints when @footnote declares a real border-top (a zero thickness handles
+            // the "declared but none/hidden/zero-width" cases); null means "use the UA default black" the
+            // same way an ordinary box's unset border-*-color falls back through currentcolor.
             var dividerColor = string.IsNullOrWhiteSpace(rule.Style.BorderTopStyle)
                 ? null
                 : rule.Style.BorderTopColor;
 
-            return (topPadding, dividerThickness, dividerToBodyGap, maxHeight, dividerColor);
+            var step = ResolveFootnoteCounterStep(rule);
+
+            return new FootnoteAreaRule(topPadding, dividerThickness, dividerToBodyGap, height, maxHeight, step, dividerColor);
+        }
+
+        /// <summary>
+        /// One <c>@footnote</c> block-axis length (<c>height</c>/<c>max-height</c>), or null when it is
+        /// undeclared, <c>auto</c>, or unparseable - all of which mean "sized by content" for a note area.
+        /// </summary>
+        private static double? ResolveFootnoteAreaBlockLength(string? declaration, double emPt, double remPt, double blockBasis)
+        {
+            if (string.IsNullOrWhiteSpace(declaration)) return null;
+            if (declaration!.Trim().Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase)) return null;
+
+            // ParseLengthToPdfPoints already answers null for anything it cannot resolve, which is the
+            // same "sized by content" outcome as auto.
+            return DomParser.ParseLengthToPdfPoints(declaration, new PageLengthContext(emPt, remPt, blockBasis));
+        }
+
+        /// <summary>
+        /// How much the footnote counter advances per note on a page whose <c>@footnote</c> rule is
+        /// <paramref name="rule"/>, read from its own <c>counter-increment</c> exactly as the cascade
+        /// states it: a bare <c>footnote</c> steps by one, <c>footnote &lt;n&gt;</c> by n, and a
+        /// declaration that does not mention the counter at all (including <c>none</c>) steps by zero,
+        /// so every note on that page shares one number. An absent <c>@footnote</c> rule falls back to
+        /// the UA default of one.
+        /// </summary>
+        private static int ResolveFootnoteCounterStep(MarginStyleRule rule)
+        {
+            var declaration = rule.Style.CounterIncrement;
+
+            if (string.IsNullOrWhiteSpace(declaration)) return FootnoteAreaRule.DefaultStep;
+
+            return CounterListGrammar.TryGetValue(declaration, Keywords.Footnote, FootnoteAreaRule.DefaultStep, out var step)
+                ? step
+                : 0;
+        }
+
+        /// <summary>
+        /// What the footnote counter resets to at the start of pagination slot <paramref name="slot"/>,
+        /// or null when that page resets nothing - which is what gives numbering that runs continuously
+        /// across pages.
+        /// </summary>
+        /// <remarks>
+        /// This is ordinary cascade, not a special case. <c>counter-reset</c> is one property, so an
+        /// author declaration on an applicable <c>@page</c> replaces the UA sheet's own
+        /// <c>counter-reset: footnote</c> wholesale - which is why <c>counter-reset: none</c>, and
+        /// equally a <c>counter-reset</c> that only names some other counter, both stop the per-page
+        /// reset and give continuous numbering. A page with no applicable rule at all falls back to the
+        /// UA default of resetting to zero, so the first note on it is numbered one.
+        /// </remarks>
+        private int? ResolveFootnoteCounterResetForSlot(int slot)
+        {
+            if (PageRules.Count == 0) return 0;
+
+            var pageNumber = slot + 1;
+            var activeName = PageRuleResolver.ActiveNameAtSlotStart(_namedPageElements, PageTopOf(slot));
+            var declaration = PageRuleResolver.SelectApplicablePageStyle(PageRules, pageNumber, activeName)?.CounterReset;
+
+            if (string.IsNullOrWhiteSpace(declaration)) return 0;
+
+            return CounterListGrammar.TryGetValue(declaration, Keywords.Footnote, 0, out var reset)
+                ? reset
+                : null;
+        }
+
+        /// <summary>
+        /// Applies <paramref name="number"/> to <paramref name="call"/> and its marker, and records both
+        /// in <paramref name="signature"/> for the convergence loop's own change detection.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="FootnoteNumberContext"/> is set across the apply and restored after, so an author's
+        /// <c>content: counter(footnote)</c> on either pseudo-element resolves against this number, and
+        /// nothing outside the window can see it.
+        /// </para>
+        /// <para>
+        /// See <see cref="ReparseFootnoteText"/> for the two things that have to happen around the
+        /// re-parse, both of which have thrown for real when they were missing.
+        /// </para>
+        /// </remarks>
+        private void ApplyFootnoteNumber(CssBoxFootnoteCall call, int number, StringBuilder signature)
+        {
+            var marker = (CssBoxFootnoteMarker)call.Body.Boxes[0];
+
+            var previous = FootnoteNumberContext;
+            FootnoteNumberContext = number;
+            try
+            {
+                call.ApplyNumber(number);
+                marker.ApplyNumber(number);
+            }
+            finally
+            {
+                FootnoteNumberContext = previous;
+            }
+
+            ReparseFootnoteText(call);
+            ReparseFootnoteText(marker);
+
+            signature.Append(number).Append('')
+                     .Append(call.Text).Append('')
+                     .Append(marker.Text).Append('');
+        }
+
+        /// <summary>
+        /// Lays one note area's bodies out relative to a y=0 baseline, packing them onto shared rows for
+        /// <c>footnote-display: inline</c>/<c>compact</c>, and returns the area's total reserved height
+        /// alongside the bodies' own natural (content) height.
+        /// </summary>
+        private async ValueTask<(double TotalHeight, double NaturalContentHeight)> StackFootnoteBodies(
+            RGraphics g, FootnoteAreaGroup area, FootnoteAreaRule areaRule)
+        {
+            var y = 0d;
+            var rowStarted = false;
+            var rowX = 0d;
+            var rowHeight = 0d;
+
+            foreach (var call in area.Calls)
+            {
+                    var displayMode = call.Body.FootnoteDisplay.Value;
+                    double? naturalWidth = null;
+
+                    if (displayMode is FootnoteDisplayMode.Inline or FootnoteDisplayMode.Compact)
+                    {
+                        // Measurement pass: lay the body out at the full content width first, to learn
+                        // whether its own content fits on one line - and if so, exactly how wide that
+                        // one line naturally is - before committing to its final row/position below.
+                        // Safe to lay the same box out twice within one generation (see
+                        // RunningElementLayout.LayoutRunningElementFor's own remarks on
+                        // ResetRectanglesRecursively - this is exactly the reuse it documents).
+                        var measureRect = new RRect(area.AreaLeft, 0, area.AreaWidth, 100_000);
+                        await FootnoteBodyLayout.LayoutFootnoteBodyFor(g, call.Body, measureRect, this);
+
+                        if (call.Body.LineBoxes.Count == 1 && call.Body.LineBoxes[0].Words.Count > 0)
+                        {
+                            // The line's own ContentRight/ContentLeft are the bounds it was WRAPPED
+                            // against (the full available width), not where its content actually ends
+                            // - the real "ink" extent is the span between the first and last word's own
+                            // rendered edges, the same quantity ApplyCenterAlignment/ApplyRightAlignment
+                            // read off a line's Words to compute their own alignment shift.
+                            var line = call.Body.LineBoxes[0];
+                            naturalWidth = line.Words[^1].Right - line.Words[0].Left;
+                        }
+                    }
+
+                    // "compact" is inline only when the body is short enough to fit on one line at the
+                    // full content width - the spec's own UA-discretion wording ("the user agent
+                    // determines whether a given footnote element is placed as a block element or an
+                    // inline element"), operationalized as "fits without wrapping": a body that already
+                    // needed more than one line at full width gains nothing from a narrower one, so it
+                    // takes its own full-width row regardless of the declared mode.
+                    var packsInline = displayMode is FootnoteDisplayMode.Inline or FootnoteDisplayMode.Compact
+                        && naturalWidth is { } natural && natural > 0 && natural <= area.AreaWidth;
+
+                    var bodyWidth = packsInline ? naturalWidth!.Value : area.AreaWidth;
+
+                    if (!packsInline || !rowStarted || rowX + bodyWidth > area.AreaWidth)
+                    {
+                        // Starts a new row: this body isn't inline-packable, no row is open yet, or the
+                        // open row doesn't have enough width left for it.
+                        if (rowStarted)
+                        {
+                            y += rowHeight + FootnoteBodySpacing;
+                        }
+
+                        rowX = 0;
+                        rowHeight = 0;
+                        rowStarted = true;
+                    }
+
+                    // Unconstrained height (a large finite sentinel, not double.MaxValue - the running-
+                    // element layout path does incidental arithmetic on this rect that a true MaxValue
+                    // could push to Infinity): a footnote body never fragments in this codebase (an
+                    // accepted gap - see docs), so its natural, single-pass content height is exactly
+                    // what's reserved, however tall that turns out to be.
+                    var bodyRect = new RRect(area.AreaLeft + rowX, y, bodyWidth, 100_000);
+                    await FootnoteBodyLayout.LayoutFootnoteBodyFor(g, call.Body, bodyRect, this);
+
+                    rowHeight = Math.Max(rowHeight, call.Body.ActualBottom - call.Body.Location.Y);
+                    rowX += bodyWidth + FootnoteBodySpacing;
+                }
+
+                if (rowStarted)
+                {
+                    y += rowHeight + FootnoteBodySpacing;
+            }
+
+            if (rowStarted)
+            {
+                y += rowHeight + FootnoteBodySpacing;
+            }
+
+            // The stacked bodies are the note area's content box; a declared @footnote height replaces
+            // their natural height as the band reserved for them, so a short stack still reserves the
+            // whole declared band (the slack falls below the last body) and a tall one overflows it.
+            var naturalContentHeight = y - FootnoteBodySpacing;
+            return (areaRule.TotalHeight(naturalContentHeight), naturalContentHeight);
+        }
+
+        /// <summary>
+        /// Splits one pagination slot's footnote calls into the areas they belong to: the page's own note
+        /// area, plus one per column any <c>float-reference: column</c> call landed in.
+        /// </summary>
+        /// <remarks>
+        /// The returned groups partition <paramref name="calls"/> exactly - every call appears in one and
+        /// only one. That matters beyond tidiness: <see cref="AttachFootnoteAreas"/> translates each body
+        /// out of document space with a permanent, one-shot <c>OffsetTop</c>, so a call reachable twice
+        /// would be translated twice and paint in the wrong place.
+        /// </remarks>
+        private List<FootnoteAreaGroup> PartitionFootnoteAreas(
+            int slot,
+            List<CssBoxFootnoteCall> calls,
+            IReadOnlyDictionary<CssBoxFootnoteCall, (double Top, double Left)> callAnchors,
+            double pageContentLeft,
+            double pageContentWidth)
+        {
+            List<FootnoteAreaGroup> areas = [];
+            FootnoteAreaGroup? pageArea = null;
+            Dictionary<Fragmentation.ColumnAreaKey, FootnoteAreaGroup> columnAreas = [];
+
+            foreach (var call in calls)
+            {
+                if (ColumnAreaFor(slot, call, callAnchors) is { } record)
+                {
+                    if (!columnAreas.TryGetValue(record.Key, out var columnArea))
+                    {
+                        columnArea = new FootnoteAreaGroup(
+                            record.Key, record.InlineLeft, record.InlineRight - record.InlineLeft,
+                            record.BandBottom, record.BandBottom - record.BandTop);
+                        columnAreas[record.Key] = columnArea;
+                        areas.Add(columnArea);
+                    }
+
+                    columnArea.Calls.Add(call);
+                    continue;
+                }
+
+                if (pageArea is null)
+                {
+                    pageArea = new FootnoteAreaGroup(
+                        Column: null, pageContentLeft, pageContentWidth,
+                        PageBottomOf(slot), PageBottomOf(slot) - PageTopOf(slot));
+                    areas.Add(pageArea);
+                }
+
+                pageArea.Calls.Add(call);
+            }
+
+            return areas;
+        }
+
+        /// <summary>
+        /// The column <paramref name="call"/> belongs to, or null when it belongs to the page's own note
+        /// area - which is the answer for <c>float-reference</c>'s other three values, and for a
+        /// <c>column</c> call that turns out not to be inside a multi-column container after all.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// css-page-floats says a <c>column</c> reference falls back to the anchor's line box when the
+        /// anchor is not inside a column; for a footnote, which has no inline note area to fall back to,
+        /// that degenerates to the page's. <c>inline</c> is the property's initial value, so it must mean
+        /// today's behaviour or every existing footnote document changes, and <c>region</c> has nothing
+        /// to resolve against since PeachPDF implements no part of CSS Regions.
+        /// </para>
+        /// <para>
+        /// The match is by inline span as well as block band, never by block position alone: every column
+        /// of a container shares one block band, so the call's own Y says nothing about which column it
+        /// is in.
+        /// </para>
+        /// </remarks>
+        private Fragmentation.ColumnFragmentainerRecord? ColumnAreaFor(
+            int slot,
+            CssBoxFootnoteCall call,
+            IReadOnlyDictionary<CssBoxFootnoteCall, (double Top, double Left)> callAnchors)
+        {
+            if (call.Body.FloatReference.Value != FloatReference.Column) return null;
+            if (ColumnFragmentainers.Count == 0) return null;
+            if (!callAnchors.TryGetValue(call, out var anchor)) return null;
+
+            var (top, left) = anchor;
+
+            if (double.IsNaN(left)) return null;
+
+            foreach (var record in ColumnFragmentainers)
+            {
+                if (record.Slot != slot) continue;
+                if (!record.ContainsInline(left)) continue;
+                if (!record.ContainsBlock(top)) continue;
+
+                return record;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Rebuilds one renumbered footnote box's words from its new text.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The bidi re-resolve is mandatory, not cosmetic: <c>BidiLevels</c> is indexed against whatever
+        /// text was there before, so a number that merely changes width - "9" to "10", which continuous
+        /// numbering reaches immediately and per-page numbering reaches on any page with ten notes -
+        /// indexes past the end of that array inside <c>ParseToWords</c> and throws
+        /// <see cref="IndexOutOfRangeException"/>.
+        /// </para>
+        /// <para>
+        /// The emptiness guard mirrors <c>DomParser.DetachOneFootnoteBody</c>'s own: a <c>content</c>
+        /// override resolving to an image or to <c>none</c> leaves <c>Text</c> null, and the word-building
+        /// walk dereferences it - which threw <see cref="NullReferenceException"/> on every pass after the
+        /// first before this guard existed.
+        /// </para>
+        /// </remarks>
+        private static void ReparseFootnoteText(CssBox box)
+        {
+            if (string.IsNullOrEmpty(box.Text)) return;
+
+            CssBidiParagraphResolver.ResolveOwnTextAsParagraph(box);
+            box.ParseToWords();
         }
 
         /// <summary>
@@ -3096,7 +3485,10 @@ namespace PeachPDF.Html.Core
         private async ValueTask<bool> ResolveFootnotesForThisAttempt(RGraphics g)
         {
             var previous = FootnoteAreaHeightsBySlot;
+            var previousByColumn = FootnoteAreaHeightsByColumn;
             var current = new Dictionary<int, double>();
+            var currentByColumn = new Dictionary<Fragmentation.ColumnAreaKey, double>();
+            var areasBySlot = new Dictionary<int, List<FootnoteAreaGroup>>();
 
             // Cleared and re-decided fresh every pass, rather than left to accumulate or grow stale - see
             // the two fields' own remarks.
@@ -3107,10 +3499,13 @@ namespace PeachPDF.Html.Core
             _footnotePolicyForcedBreakBoxes.Clear();
             FootnotePolicyForcedLineCalls.Clear();
             var policyChanged = false;
+            var numberingSignature = new StringBuilder();
 
             if (HasRealPageGrid)
             {
                 var bySlot = new Dictionary<int, List<CssBoxFootnoteCall>>();
+                var callAnchors = new Dictionary<CssBoxFootnoteCall, (double Top, double Left)>();
+
                 foreach (var call in FootnoteCalls)
                 {
                     if (!IsInRenderedTree(call)) continue;
@@ -3118,172 +3513,160 @@ namespace PeachPDF.Html.Core
                     // Not call.Location.Y - an in-flow inline box's own Location stays at a bogus
                     // line-local value layout never updates; its real document position lives in its
                     // per-line Rectangles (CssBox.OwnGeometryTop's own remarks).
-                    var slot = PageIndexOf(call.OwnGeometryTop());
+                    //
+                    // Both coordinates are captured HERE, in the one pass that runs before any call is
+                    // renumbered. ApplyNumber re-parses the call's words, which replaces its CssRects with
+                    // fresh ones sitting at their unset defaults until a later inline layout would place
+                    // them - and none comes once this loop has exited. Reading the anchor afterwards
+                    // therefore yields (0, 0), which silently attributed every column-scoped note to
+                    // whichever column happened to contain the origin.
+                    var anchor = (Top: call.OwnGeometryTop(), Left: call.OwnGeometryLeft());
+                    callAnchors[call] = anchor;
+
+                    var slot = PageIndexOf(anchor.Top);
                     if (!bySlot.TryGetValue(slot, out var list))
                         bySlot[slot] = list = [];
                     list.Add(call);
                 }
 
-                _footnoteCallsBySlot = bySlot;
 
-                foreach (var (slot, calls) in bySlot)
+                // Ascending slot order, and every slot up to the last one carrying a call - not
+                // `foreach (var (slot, calls) in bySlot)`. A Dictionary enumerates in insertion order,
+                // which is document order of *calls* and so not slot order once a footnote-policy forced
+                // break has moved one; a running counter across pages makes that ordering load-bearing.
+                // Visiting slots with no footnotes of their own matters too: a counter-reset declared on
+                // such a page still takes effect there, as it would for any other counter.
+                var maxSlot = bySlot.Count == 0 ? -1 : bySlot.Keys.Max();
+                var runningNumber = 0;
+
+                for (var slot = 0; slot <= maxSlot; slot++)
                 {
-                    var contentLeft = MarginLeft;
-                    var contentWidth = PageContentRightOf(PageTopOf(slot)) - contentLeft;
-                    var (topPadding, dividerThickness, dividerToBodyGap, maxHeightPt, _) = ResolveFootnoteAreaBoxModel(slot, contentWidth);
+                    if (ResolveFootnoteCounterResetForSlot(slot) is { } resetTo) runningNumber = resetTo;
 
-                    var y = 0d;
-                    var number = 1;
-                    var rowStarted = false;
-                    var rowX = 0d;
-                    var rowHeight = 0d;
+                    if (!bySlot.TryGetValue(slot, out var calls)) continue;
 
+                    var pageContentLeft = MarginLeft;
+                    var pageContentWidth = PageContentRightOf(PageTopOf(slot)) - pageContentLeft;
+
+                    // The step is a property of the page own @footnote rule, so it is resolved once per
+                    // slot and applies to every note landing on it, wherever that note is placed.
+                    var slotRule = ResolveFootnoteAreaRule(slot, pageContentWidth);
+
+                    // Numbering runs over the slot calls in document order, BEFORE they are partitioned
+                    // into areas: float-reference is a placement property, and nothing in css-page-floats
+                    // makes it touch a counter. Numbering per column would also put two ones on a single
+                    // page and, worse, let a call migrating between columns across convergence passes
+                    // change its own number - turning a placement wobble into a text-content one that
+                    // feeds back into line breaking.
                     foreach (var call in calls)
                     {
-                        call.ApplyNumber(number);
-                        call.ParseToWords();
+                        runningNumber += slotRule.Step;
+                        ApplyFootnoteNumber(call, runningNumber, numberingSignature);
+                    }
 
-                        var marker = (CssBoxFootnoteMarker)call.Body.Boxes[0];
-                        marker.ApplyNumber(number);
-                        marker.ParseToWords();
-                        number++;
+                    var areas = PartitionFootnoteAreas(slot, calls, callAnchors, pageContentLeft, pageContentWidth);
+                    areasBySlot[slot] = areas;
 
-                        var displayMode = call.Body.FootnoteDisplay.Value;
-                        double? naturalWidth = null;
+                    foreach (var area in areas)
+                    {
+                        // A column area resolves @footnote against its own width, so a percentage
+                        // margin/padding on the rule means what it says for the box it applies to.
+                        var areaRule = area.Column is null ? slotRule : ResolveFootnoteAreaRule(slot, area.AreaWidth);
 
-                        if (displayMode is FootnoteDisplayMode.Inline or FootnoteDisplayMode.Compact)
+                        var (totalHeight, naturalContentHeight) = await StackFootnoteBodies(g, area, areaRule);
+                        if (totalHeight <= 0) continue;
+
+                        // css-gcpm-3 footnote-policy: "cannot be placed on the current page due to lack
+                        // of space", operationalized three ways - an author-declared @footnote max-height,
+                        // content overflowing an author-declared height, or the area own natural height
+                        // alone already exceeding the band it sits in (the same extreme case the "auto"
+                        // default already documents as overflowing). Deliberately NOT "does it leave room
+                        // for the flow content already above it" - that would need reasoning about a call
+                        // own position relative to content still being laid out around it. Only acted on
+                        // for a call whose own footnote-policy asks for it below; "auto" is unaffected.
+                        var usedContentHeight = areaRule.UsedContentHeight(naturalContentHeight);
+                        var doesntFit = totalHeight > area.BandHeight
+                                        // max-height and height refer to the same box (the content box),
+                                        // so they are compared against the same quantity - otherwise
+                                        // height: 50pt with max-height: 50pt would report an area that
+                                        // cannot fit the band the author just sized exactly.
+                                        || (areaRule.MaxHeight is { } maxH && usedContentHeight > maxH)
+                                        || (areaRule.Height is { } fixedHeight && naturalContentHeight > fixedHeight + 0.01);
+
+                        if (doesntFit)
                         {
-                            // Measurement pass: lay the body out at the full content width first, to learn
-                            // whether its own content fits on one line - and if so, exactly how wide that
-                            // one line naturally is - before committing to its final row/position below.
-                            // Safe to lay the same box out twice within one generation (see
-                            // RunningElementLayout.LayoutRunningElementFor's own remarks on
-                            // ResetRectanglesRecursively - this is exactly the reuse it documents).
-                            var measureRect = new RRect(contentLeft, 0, contentWidth, 100_000);
-                            await FootnoteBodyLayout.LayoutFootnoteBodyFor(g, call.Body, measureRect, this);
-
-                            if (call.Body.LineBoxes.Count == 1 && call.Body.LineBoxes[0].Words.Count > 0)
+                            foreach (var call in area.Calls)
                             {
-                                // The line's own ContentRight/ContentLeft are the bounds it was WRAPPED
-                                // against (the full available width), not where its content actually ends
-                                // - the real "ink" extent is the span between the first and last word's own
-                                // rendered edges, the same quantity ApplyCenterAlignment/ApplyRightAlignment
-                                // read off a line's Words to compute their own alignment shift.
-                                var line = call.Body.LineBoxes[0];
-                                naturalWidth = line.Words[^1].Right - line.Words[0].Left;
+                                switch (call.Body.FootnotePolicy.Value)
+                                {
+                                    case FootnotePolicyMode.Block:
+                                        // AnchorForBreakBefore, not the containing block itself:
+                                        // css-break-3 propagation means a forced break-before on a box
+                                        // that is the first in-flow child of its own parent is taken by
+                                        // that parent instead - an author break-before on the containing
+                                        // block would be hoisted the same way, and this needs to travel
+                                        // identically or a decorated wrapper around a single-paragraph
+                                        // containing block would never itself relocate.
+                                        var target = BreakPropagation.AnchorForBreakBefore(FootnotePolicyContainingBlockOf(call));
+                                        if (_footnotePolicyForcedBreakBoxes.Add(target))
+                                        {
+                                            target.FootnotePolicyForcedBreakBefore = true;
+                                            policyChanged = true;
+                                        }
+                                        break;
+                                    case FootnotePolicyMode.Line:
+                                        if (FootnotePolicyForcedLineCalls.Add(call))
+                                        {
+                                            policyChanged = true;
+                                        }
+                                        break;
+                                }
                             }
                         }
 
-                        // "compact" is inline only when the body is short enough to fit on one line at the
-                        // full content width - the spec's own UA-discretion wording ("the user agent
-                        // determines whether a given footnote element is placed as a block element or an
-                        // inline element"), operationalized as "fits without wrapping": a body that already
-                        // needed more than one line at full width gains nothing from a narrower one, so it
-                        // takes its own full-width row regardless of the declared mode.
-                        var packsInline = displayMode is FootnoteDisplayMode.Inline or FootnoteDisplayMode.Compact
-                            && naturalWidth is { } natural && natural > 0 && natural <= contentWidth;
-
-                        var bodyWidth = packsInline ? naturalWidth!.Value : contentWidth;
-
-                        if (!packsInline || !rowStarted || rowX + bodyWidth > contentWidth)
+                        // The stacking loop laid every body out relative to a y=0 baseline; translate the
+                        // whole group down so the area own bottom edge lands flush with the band it
+                        // belongs to - this page content-band bottom, or this column own band bottom.
+                        var areaTop = area.BandBottom - totalHeight;
+                        var finalBodiesTop = areaRule.BodiesTopFor(areaTop);
+                        foreach (var call in area.Calls)
                         {
-                            // Starts a new row: this body isn't inline-packable, no row is open yet, or the
-                            // open row doesn't have enough width left for it.
-                            if (rowStarted)
-                            {
-                                y += rowHeight + FootnoteBodySpacing;
-                            }
-
-                            rowX = 0;
-                            rowHeight = 0;
-                            rowStarted = true;
+                            call.Body.OffsetTop(finalBodiesTop);
                         }
 
-                        // Unconstrained height (a large finite sentinel, not double.MaxValue - the running-
-                        // element layout path does incidental arithmetic on this rect that a true MaxValue
-                        // could push to Infinity): a footnote body never fragments in this codebase (an
-                        // accepted gap - see docs), so its natural, single-pass content height is exactly
-                        // what's reserved, however tall that turns out to be.
-                        var bodyRect = new RRect(contentLeft + rowX, y, bodyWidth, 100_000);
-                        await FootnoteBodyLayout.LayoutFootnoteBodyFor(g, call.Body, bodyRect, this);
+                        area.TotalHeight = totalHeight;
+                        area.AreaTop = areaTop;
+                        area.DividerTop = areaRule.DividerTopFor(areaTop);
+                        area.DividerThickness = areaRule.DividerThickness;
+                        area.DividerColor = areaRule.DividerColor;
 
-                        rowHeight = Math.Max(rowHeight, call.Body.ActualBottom - call.Body.Location.Y);
-                        rowX += bodyWidth + FootnoteBodySpacing;
-                    }
-
-                    if (rowStarted)
-                    {
-                        y += rowHeight + FootnoteBodySpacing;
-                    }
-
-                    var totalHeight = y - FootnoteBodySpacing + topPadding + dividerThickness + dividerToBodyGap;
-                    if (totalHeight <= 0) continue;
-
-                    // css-gcpm-3 §2.8's footnote-policy: "cannot be placed on the current page due to lack
-                    // of space", operationalized two ways - an author-declared @footnote max-height (see
-                    // ResolveFootnoteAreaBoxModel), or the note area's own natural height alone already
-                    // exceeding the whole page's content band (the same extreme case the "auto" default
-                    // already documents as overflowing, see docs/html-css-support.md's "Footnotes"
-                    // section). Deliberately NOT "does it leave room for the flow content already above
-                    // it" - that would need reasoning about a call's own position relative to content still
-                    // being laid out around it, a materially deeper question than this feature's own scope
-                    // (see the plan this shipped from). Only acted on for a call whose own footnote-policy
-                    // asks for it below - "auto" is silently unaffected, same as before this feature.
-                    var pageBandHeight = PageBottomOf(slot) - PageTopOf(slot);
-                    var doesntFit = totalHeight > pageBandHeight || (maxHeightPt is { } maxH && totalHeight > maxH);
-
-                    if (doesntFit)
-                    {
-                        foreach (var call in calls)
+                        if (area.Column is { } columnKey)
                         {
-                            switch (call.Body.FootnotePolicy.Value)
-                            {
-                                case FootnotePolicyMode.Block:
-                                    // AnchorForBreakBefore, not the containing block itself: css-break-3
-                                    // §3.1 propagation means a forced break-before on a box that is the
-                                    // first in-flow child of its own parent is taken by that parent
-                                    // instead (PerformLayoutPrologue's own forcedBefore/propagatesOutward
-                                    // handling) - an author break-before on the containing block would be
-                                    // hoisted the same way, and this needs to travel identically or a
-                                    // decorated wrapper around a single-paragraph containing block would
-                                    // never itself relocate, only its content.
-                                    var target = BreakPropagation.AnchorForBreakBefore(FootnotePolicyContainingBlockOf(call));
-                                    if (_footnotePolicyForcedBreakBoxes.Add(target))
-                                    {
-                                        target.FootnotePolicyForcedBreakBefore = true;
-                                        policyChanged = true;
-                                    }
-                                    break;
-                                case FootnotePolicyMode.Line:
-                                    if (FootnotePolicyForcedLineCalls.Add(call))
-                                    {
-                                        policyChanged = true;
-                                    }
-                                    break;
-                            }
+                            currentByColumn[columnKey] = totalHeight;
+                        }
+                        else
+                        {
+                            current[slot] = totalHeight;
                         }
                     }
-
-                    // The stacking loop above laid every body out relative to a y=0 baseline; translate the
-                    // whole group down so the last body's own bottom edge lands flush with this slot's real
-                    // content-band bottom, the same "measure first, then place at the real position" shape
-                    // CssLayoutEngineColumns already uses for column-fill balancing.
-                    var areaTop = PageBottomOf(slot) - totalHeight;
-                    var finalBodiesTop = areaTop + topPadding + dividerThickness + dividerToBodyGap;
-                    foreach (var call in calls)
-                    {
-                        call.Body.OffsetTop(finalBodiesTop);
-                    }
-
-                    current[slot] = totalHeight;
                 }
             }
-            else
-            {
-                _footnoteCallsBySlot = [];
-            }
 
+            // areasBySlot is simply empty when there is no real page grid, so this one assignment covers
+            // both arms.
+            _footnoteAreasBySlot = areasBySlot;
             FootnoteAreaHeightsBySlot = current;
+            FootnoteAreaHeightsByColumn = currentByColumn;
+
+            var previousNumbering = _footnoteNumberingSignature;
+            _footnoteNumberingSignature = numberingSignature.ToString();
+
+            // A number that changes width ("9" -> "10") changes the CALL's own inline width, which moves
+            // the flow around it and so can move the call itself onto another page - but it need not
+            // change any note area's reserved height at all, so the comparison below would see nothing
+            // and let the loop exit a pass early with stale numbers. Same fixpoint discipline as the
+            // target-counter loop's own text signature.
+            if (!string.Equals(previousNumbering, _footnoteNumberingSignature, StringComparison.Ordinal)) return true;
 
             // policyChanged: a footnote-policy forced break was newly requested this pass, which a bare
             // height comparison would not otherwise catch - the request itself hasn't yet moved anything
@@ -3291,6 +3674,13 @@ namespace PeachPDF.Html.Core
             // can look identical to the previous pass's even though PerformLayout's convergence loop must
             // still re-enter LayoutDocument to act on it.
             if (policyChanged) return true;
+            if (currentByColumn.Count != previousByColumn.Count) return true;
+            foreach (var (key, height) in currentByColumn)
+            {
+                if (!previousByColumn.TryGetValue(key, out var previousHeight) || Math.Abs(previousHeight - height) > 0.01)
+                    return true;
+            }
+
             if (current.Count != previous.Count) return true;
             foreach (var (slot, height) in current)
             {

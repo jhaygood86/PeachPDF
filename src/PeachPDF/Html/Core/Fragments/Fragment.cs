@@ -270,12 +270,14 @@ namespace PeachPDF.Html.Core.Fragments
     /// pipeline (<c>MarginBoxRenderer</c>) - only <c>element()</c>'s genuine box-subtree content needs
     /// real layout, so only it is threaded through the fragment tree.
     /// </param>
-    /// <param name="FootnoteArea">
-    /// This page's css-gcpm-3 <c>float: footnote</c> note area, if any footnote landed here - attached by
+    /// <param name="FootnoteAreas">
+    /// This page's css-gcpm-3 <c>float: footnote</c> note areas, if any footnote landed here - attached by
     /// <c>HtmlContainerInt.AttachFootnoteAreas</c> alongside <paramref name="MarginBoxes"/>'s own
     /// attachment (both run once the final page list is known), from bodies the footnote convergence loop
     /// in <c>HtmlContainerInt.PerformLayout</c> already laid out. Null (never an empty placeholder) for a
     /// page with no footnotes, and always null on the draft this record is first constructed with.
+    /// A page holds more than one whenever a <c>float-reference: column</c> call routed a note into a
+    /// column's own area rather than the page's - and can hold both kinds at once.
     /// </param>
     internal sealed record FragmentainerFragment(
         RRect Rect,
@@ -284,7 +286,7 @@ namespace PeachPDF.Html.Core.Fragments
         double LocalOriginY,
         BoxFragment Root,
         IReadOnlyList<MarginBoxFragment> MarginBoxes,
-        FootnoteAreaFragment? FootnoteArea = null) : Fragment(Rect);
+        IReadOnlyList<FootnoteAreaFragment>? FootnoteAreas = null) : Fragment(Rect);
 
     /// <summary>
     /// One page margin box's <c>content: element(name)</c> content (css-gcpm-3) - the box-subtree
@@ -319,10 +321,30 @@ namespace PeachPDF.Html.Core.Fragments
     /// <param name="Bodies">Each footnote's own laid-out body, in document (and so numbering) order.</param>
     /// <param name="DividerColor">The resolved <c>@footnote</c> <c>border-top-color</c>, or null when
     /// <c>@footnote</c> declares no <c>border-top</c> (paint falls back to the UA default black) - see
-    /// <see cref="HtmlContainerInt.ResolveFootnoteAreaBoxModel"/>. Only a solid divider is supported
+    /// <see cref="HtmlContainerInt.ResolveFootnoteAreaRule"/>. Only a solid divider is supported
     /// (an author <c>border-top-style</c> other than <c>none</c>/<c>hidden</c> still paints solid); the
     /// line style itself is not carried through.</param>
-    internal sealed record FootnoteAreaFragment(RRect DividerRect, IReadOnlyList<BoxFragment> Bodies, string? DividerColor = null) : Fragment(DividerRect);
+    /// <param name="Scope">Which fragmentation context this area belongs to - descriptive only.</param>
+    internal sealed record FootnoteAreaFragment(
+        RRect DividerRect,
+        IReadOnlyList<BoxFragment> Bodies,
+        string? DividerColor = null,
+        FootnoteAreaScope Scope = FootnoteAreaScope.Page) : Fragment(DividerRect);
+
+    /// <summary>
+    /// Which fragmentation context a <see cref="FootnoteAreaFragment"/> belongs to. Descriptive only -
+    /// paint never reads it, since <see cref="FootnoteAreaFragment.DividerRect"/> already carries the X
+    /// and width that make a column area narrow and offset. It exists so a test can assert what an area
+    /// <em>is</em> rather than infer it from a rectangle.
+    /// </summary>
+    internal enum FootnoteAreaScope
+    {
+        /// <summary>The page's own note area, at the bottom of its content band.</summary>
+        Page,
+
+        /// <summary>One column's own note area, at the bottom of that column's band.</summary>
+        Column
+    }
 
     /// <summary>
     /// The complete immutable result of laying out one document: its fragmentainers, in page order.

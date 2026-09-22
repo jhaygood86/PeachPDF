@@ -57,9 +57,13 @@ namespace PeachPDF.Html.Core.Dom
         {
             Number = number;
 
-            if (!Content.Trim().Equals(Keywords.Normal, StringComparison.OrdinalIgnoreCase)) return;
+            if (Content.Trim().Equals(Keywords.Normal, StringComparison.OrdinalIgnoreCase))
+            {
+                Text = CssCounterEngine.FormatCounterValue(number, Keywords.Decimal);
+                return;
+            }
 
-            Text = CssCounterEngine.FormatCounterValue(number, Keywords.Decimal);
+            FootnoteNumberedContent.Reapply(this);
         }
     }
 }

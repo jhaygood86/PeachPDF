@@ -160,7 +160,8 @@ namespace PeachPDF.Svg
             double LetterSpacing, double WordSpacing, TextTransform TextTransform,
             LigatureFeatures Ligatures, FontVariantCapsFeature CapsRequested,
             NumericFeatures Numeric, EastAsianFeatures EastAsian,
-            IReadOnlyList<(string Tag, int Value)> FeatureSettings, bool Kerning, string? Language = null)
+            IReadOnlyList<(string Tag, int Value)> FeatureSettings, bool Kerning, string? Language = null,
+            FontVariantPositionFeature PositionRequested = FontVariantPositionFeature.None)
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
@@ -1151,6 +1152,11 @@ namespace PeachPDF.Svg
                 ? inherited.CapsRequested
                 : TextShapingFeatureResolver.ResolveCapsRequested(capsAttr.Trim().ToLowerInvariant());
 
+            var positionAttr = ResolveStyledAttr(node, "font-variant-position");
+            var positionRequested = positionAttr is null || positionAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.PositionRequested
+                : TextShapingFeatureResolver.ResolvePositionRequested(positionAttr.Trim().ToLowerInvariant());
+
             var numericAttr = ResolveStyledAttr(node, "font-variant-numeric");
             var numeric = numericAttr is null || numericAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.Numeric
@@ -1181,7 +1187,8 @@ namespace PeachPDF.Svg
             var language = string.IsNullOrEmpty(langAttr) ? inherited.Language : langAttr;
 
             return new FontContext(family, size, bold, italic, stretch, letterSpacing, wordSpacing, textTransform,
-                ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language);
+                ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language,
+                positionRequested);
         }
 
         /// <summary>
@@ -1327,11 +1334,19 @@ namespace PeachPDF.Svg
                 ? runFont.CapsRequested
                 : FontVariantCapsFeature.None;
 
+            // font-variant-position is gated the same way, and for the same reason has no synthesis
+            // fallback here: HTML synthesizes a sub/superscript by splitting the run onto a smaller font
+            // with a shifted baseline (CssBox.AddWord), machinery SVG text runs don't share.
+            var resolvedPosition = runFont.PositionRequested != FontVariantPositionFeature.None && run.Font is { } positionFont && positionFont.SupportsFontVariantPosition(runFont.PositionRequested)
+                ? runFont.PositionRequested
+                : FontVariantPositionFeature.None;
+
             run.LetterSpacing = runFont.LetterSpacing;
             run.WordSpacing = runFont.WordSpacing;
             run.ShapingFeatures = new TextShapingFeatures(
                 runFont.Ligatures, resolvedCaps, runFont.Numeric, runFont.EastAsian,
-                runFont.FeatureSettings, Kerning: runFont.Kerning, Language: runFont.Language);
+                runFont.FeatureSettings, Kerning: runFont.Kerning, Language: runFont.Language,
+                Position: resolvedPosition);
 
             // text-decoration is this run's own value only - CSS Text Decoration 3 §2 explicitly makes
             // it non-inherited (a descendant's decoration "flows across" via painting every glyph whose
