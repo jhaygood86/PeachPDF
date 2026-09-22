@@ -84,10 +84,38 @@ namespace PeachPDF.Html.Core.Handlers
                 return;
             }
 
+            HashSet<RColor>? groupedColors = null;
             foreach (var side in EdgePaintOrder)
             {
-                if (edges.Get(side).IsActive)
-                    DrawGeneralSide(g, side, outerRect, edges);
+                var edge = edges.Get(side);
+                if (!edge.IsActive) continue;
+
+                if (edge.Style is (LineStyle.Dotted or LineStyle.Dashed) &&
+                    edge.Color.A < byte.MaxValue)
+                {
+                    if (!(groupedColors ??= new HashSet<RColor>()).Add(edge.Color)) continue;
+
+                    var group = new List<Border>();
+                    foreach (var candidate in EdgePaintOrder)
+                    {
+                        var other = edges.Get(candidate);
+                        if (other.IsActive && other.Style is (LineStyle.Dotted or LineStyle.Dashed) &&
+                            other.Color == edge.Color)
+                            group.Add(candidate);
+                    }
+
+                    if (group.Count > 1)
+                    {
+                        PatternedStrokeOpacity.Paint(g, outerRect, edge.Color, (target, opaque) =>
+                        {
+                            foreach (var member in group)
+                                DrawGeneralPatternedSide(target, member, outerRect, edges, opaque);
+                        });
+                        continue;
+                    }
+                }
+
+                DrawGeneralSide(g, side, outerRect, edges);
             }
         }
 
@@ -192,6 +220,12 @@ namespace PeachPDF.Html.Core.Handlers
 
             if (widthsAreUniform)
             {
+                // The four square-cornered strokes share their corner squares. Alpha belongs on
+                // the completed pattern, not on each stroke (including its antialiased edge pixels).
+                if (first.Style is (LineStyle.Dotted or LineStyle.Dashed) &&
+                    first.Color.A < byte.MaxValue)
+                    return false;
+
                 DrawUniformWidthBoxEdges(
                     g, outerRect, first.Style, first.Color, first.Width,
                     edges.Left.IsActive, edges.Right.IsActive,
@@ -1217,10 +1251,10 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static void DrawGeneralPatternedSide(
-            RGraphics g, Border side, RRect rect, EdgeSet edges)
+            RGraphics g, Border side, RRect rect, EdgeSet edges, RColor? strokeColor = null)
         {
             var edge = edges.Get(side);
-            var pen = g.GetPen(edge.Color);
+            var pen = g.GetPen(strokeColor ?? edge.Color);
             pen.Width = edge.Width / g.PixelsPerPoint;
             pen.LineJoin = RLineJoin.Miter;
 

@@ -1190,6 +1190,32 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Theory]
+        [InlineData("dotted")]
+        [InlineData("dashed")]
+        public async Task TranslucentPatternedOutline_CompositesWrappedCornersOnce(string style)
+        {
+            var html = LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'>" +
+                $"<span id='s' style='outline:6pt {style} rgba(74,144,217,.5)'>" +
+                "Alpha<br>Alpha<br>Alpha</span></div>");
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "s")!;
+
+            var g = new TestLayerRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, span, g);
+
+            Assert.Equal(128 / 255d, g.CompositedOpacity!.Value, 3);
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var lines = g.TileGraphics!.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
+            Assert.Equal(4, lines.Count);
+            Assert.All(lines, line =>
+            {
+                Assert.Equal(byte.MaxValue, line.Color.A);
+                Assert.NotNull(line.DashPattern);
+            });
+        }
+
+        [Theory]
         [InlineData("groove")]
         [InlineData("ridge")]
         [InlineData("inset")]

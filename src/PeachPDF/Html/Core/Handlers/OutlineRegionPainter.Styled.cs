@@ -49,6 +49,37 @@ namespace PeachPDF.Html.Core.Handlers
             RGraphics g, IReadOnlyList<RectilinearRegion.Contour> contours,
             LineStyle style, RColor color, double width, BorderRadii? radii, double offset)
         {
+            if (radii is not { IsRounded: true } && color.A < byte.MaxValue)
+            {
+                var left = double.PositiveInfinity;
+                var top = double.PositiveInfinity;
+                var right = double.NegativeInfinity;
+                var bottom = double.NegativeInfinity;
+                foreach (var contour in contours)
+                {
+                    foreach (var point in contour.Points)
+                    {
+                        left = Math.Min(left, point.X);
+                        top = Math.Min(top, point.Y);
+                        right = Math.Max(right, point.X);
+                        bottom = Math.Max(bottom, point.Y);
+                    }
+                }
+
+                if (left >= right || top >= bottom) return;
+                PatternedStrokeOpacity.Paint(g, RRect.FromLTRB(left, top, right, bottom), color,
+                    (target, opaque) =>
+                        PaintPatternedRegionCore(target, contours, style, opaque, width, radii, offset));
+                return;
+            }
+
+            PaintPatternedRegionCore(g, contours, style, color, width, radii, offset);
+        }
+
+        private static void PaintPatternedRegionCore(
+            RGraphics g, IReadOnlyList<RectilinearRegion.Contour> contours,
+            LineStyle style, RColor color, double width, BorderRadii? radii, double offset)
+        {
             var dotted = style == LineStyle.Dotted;
             var halfWidth = width / 2;
             var isRounded = radii is { IsRounded: true };
