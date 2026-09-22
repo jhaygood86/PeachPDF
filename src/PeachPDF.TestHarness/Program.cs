@@ -2084,12 +2084,25 @@ var footnotesHtml = """
     <p>A fresh page, a fresh footnote<span style="float:footnote">This is footnote 1 again, not 4 - the footnote counter resets per page.</span>.</p>
     </div>
 
+    <div style="break-before: page;">
+    <h1>footnote-display: compact</h1>
+    <p>footnote-display, set on the float: footnote source element itself, controls how a footnote's
+    body stacks in the note area. compact places a short body inline, packed beside the previous one,
+    and gives a body that needs more than one line its own full-width row instead:</p>
+    <p>A short note<span style="float:footnote; footnote-display: compact;">Short.</span>, another
+    short note<span style="float:footnote; footnote-display: compact;">Also short.</span>, then a much
+    longer one<span style="float:footnote; footnote-display: compact;">This footnote's own text is
+    deliberately long enough that it wraps onto more than one line at the page's full content width,
+    so compact falls back to giving it a full-width row of its own rather than trying to pack it
+    beside its neighbors.</span>, and a short one again<span style="float:footnote; footnote-display: compact;">Short once more.</span>.</p>
+    </div>
+
     </body>
     </html>
     """;
 
 await SaveShowcaseAsync("paged_media_footnotes", "Paged Media", "Footnotes",
-    "css-gcpm-3's float: footnote: a numbered in-flow reference, a note area whose height is reserved dynamically per page based on how many footnotes land there, break-inside: avoid content correctly kept clear of the reserved strip, and an @footnote rule styling the note area's own divider.",
+    "css-gcpm-3's float: footnote: a numbered in-flow reference, a note area whose height is reserved dynamically per page based on how many footnotes land there, break-inside: avoid content correctly kept clear of the reserved strip, an @footnote rule styling the note area's own divider, and footnote-display: compact packing short notes onto one row.",
     footnotesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──

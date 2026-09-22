@@ -401,6 +401,84 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(RColor.FromArgb(r, g, b), resolved);
         }
 
+        [Fact]
+        public async Task FootnoteDisplayBlock_MultipleBodies_EachStartsItsOwnRow()
+        {
+            var html = Wrap(@"
+                <p>One<sup id='fn1' style='float:footnote; footnote-display: block;'>First</sup>
+                Two<sup id='fn2' style='float:footnote; footnote-display: block;'>Second</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var first = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn1");
+            var second = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn2");
+
+            Assert.True(second.Body.Location.Y > first.Body.Location.Y);
+            Assert.Equal(first.Body.Location.X, second.Body.Location.X, 0.01);
+        }
+
+        [Fact]
+        public async Task FootnoteDisplayInline_TwoShortBodies_PackOntoTheSameRow()
+        {
+            var html = Wrap(@"
+                <p>One<sup id='fn1' style='float:footnote; footnote-display: inline;'>First</sup>
+                Two<sup id='fn2' style='float:footnote; footnote-display: inline;'>Second</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var first = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn1");
+            var second = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn2");
+
+            // Same row: identical Y, second body positioned strictly to the right of the first.
+            Assert.Equal(first.Body.Location.Y, second.Body.Location.Y, 0.01);
+            Assert.True(second.Body.Location.X > first.Body.Location.X);
+
+            // Packed onto one row is shorter overall than the block default's two stacked rows.
+            var reservation = container.FootnoteAreaHeightsBySlot[0];
+            Assert.True(reservation > 0);
+        }
+
+        [Fact]
+        public async Task FootnoteDisplayInline_NarrowerThanBlockDefault_ForTheSameContent()
+        {
+            var inlineHtml = Wrap(@"
+                <p>One<sup id='fn1' style='float:footnote; footnote-display: inline;'>First</sup>
+                Two<sup id='fn2' style='float:footnote; footnote-display: inline;'>Second</sup></p>");
+            var blockHtml = Wrap(@"
+                <p>One<sup id='fn1' style='float:footnote;'>First</sup>
+                Two<sup id='fn2' style='float:footnote;'>Second</sup></p>");
+
+            var (_, inlineContainer) = await LayoutAsync(inlineHtml);
+            var (_, blockContainer) = await LayoutAsync(blockHtml);
+
+            // Two short notes packed onto one row reserve less height than the same two notes
+            // stacked as two full-width block rows.
+            Assert.True(inlineContainer.FootnoteAreaHeightsBySlot[0] < blockContainer.FootnoteAreaHeightsBySlot[0]);
+        }
+
+        [Fact]
+        public async Task FootnoteDisplayCompact_ShortBodyPacksInline_LongBodyTakesItsOwnRow()
+        {
+            var longNote = string.Join(" ", Enumerable.Repeat("word", 60));
+            var html = Wrap($@"
+                <p>One<sup id='fn1' style='float:footnote; footnote-display: compact;'>Short</sup>
+                Two<sup id='fn2' style='float:footnote; footnote-display: compact;'>{longNote}</sup>
+                Three<sup id='fn3' style='float:footnote; footnote-display: compact;'>Also short</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var first = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn1");
+            var second = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn2");
+            var third = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn3");
+
+            // fn2 wraps at full content width (many words), so compact falls back to a full-width row
+            // for it - a new row below fn1's, and fn3 (short again) starts yet another row rather than
+            // packing beside the wrapped fn2.
+            Assert.True(second.Body.Location.Y > first.Body.Location.Y);
+            Assert.Equal(0, second.Body.Location.X - container.MarginLeft, 0.01);
+            Assert.True(third.Body.Location.Y > second.Body.Location.Y);
+        }
+
         [Theory]
         [InlineData("block", "Block")]
         [InlineData("inline", "Inline")]

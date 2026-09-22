@@ -3051,6 +3051,10 @@ namespace PeachPDF.Html.Core
 
                     var y = 0d;
                     var number = 1;
+                    var rowStarted = false;
+                    var rowX = 0d;
+                    var rowHeight = 0d;
+
                     foreach (var call in calls)
                     {
                         call.ApplyNumber(number);
@@ -3061,15 +3065,72 @@ namespace PeachPDF.Html.Core
                         marker.ParseToWords();
                         number++;
 
+                        var displayMode = call.Body.FootnoteDisplay.Value;
+                        double? naturalWidth = null;
+
+                        if (displayMode is FootnoteDisplayMode.Inline or FootnoteDisplayMode.Compact)
+                        {
+                            // Measurement pass: lay the body out at the full content width first, to learn
+                            // whether its own content fits on one line - and if so, exactly how wide that
+                            // one line naturally is - before committing to its final row/position below.
+                            // Safe to lay the same box out twice within one generation (see
+                            // RunningElementLayout.LayoutRunningElementFor's own remarks on
+                            // ResetRectanglesRecursively - this is exactly the reuse it documents).
+                            var measureRect = new RRect(contentLeft, 0, contentWidth, 100_000);
+                            await FootnoteBodyLayout.LayoutFootnoteBodyFor(g, call.Body, measureRect, this);
+
+                            if (call.Body.LineBoxes.Count == 1 && call.Body.LineBoxes[0].Words.Count > 0)
+                            {
+                                // The line's own ContentRight/ContentLeft are the bounds it was WRAPPED
+                                // against (the full available width), not where its content actually ends
+                                // - the real "ink" extent is the span between the first and last word's own
+                                // rendered edges, the same quantity ApplyCenterAlignment/ApplyRightAlignment
+                                // read off a line's Words to compute their own alignment shift.
+                                var line = call.Body.LineBoxes[0];
+                                naturalWidth = line.Words[^1].Right - line.Words[0].Left;
+                            }
+                        }
+
+                        // "compact" is inline only when the body is short enough to fit on one line at the
+                        // full content width - the spec's own UA-discretion wording ("the user agent
+                        // determines whether a given footnote element is placed as a block element or an
+                        // inline element"), operationalized as "fits without wrapping": a body that already
+                        // needed more than one line at full width gains nothing from a narrower one, so it
+                        // takes its own full-width row regardless of the declared mode.
+                        var packsInline = displayMode is FootnoteDisplayMode.Inline or FootnoteDisplayMode.Compact
+                            && naturalWidth is { } natural && natural > 0 && natural <= contentWidth;
+
+                        var bodyWidth = packsInline ? naturalWidth!.Value : contentWidth;
+
+                        if (!packsInline || !rowStarted || rowX + bodyWidth > contentWidth)
+                        {
+                            // Starts a new row: this body isn't inline-packable, no row is open yet, or the
+                            // open row doesn't have enough width left for it.
+                            if (rowStarted)
+                            {
+                                y += rowHeight + FootnoteBodySpacing;
+                            }
+
+                            rowX = 0;
+                            rowHeight = 0;
+                            rowStarted = true;
+                        }
+
                         // Unconstrained height (a large finite sentinel, not double.MaxValue - the running-
                         // element layout path does incidental arithmetic on this rect that a true MaxValue
                         // could push to Infinity): a footnote body never fragments in this codebase (an
                         // accepted gap - see docs), so its natural, single-pass content height is exactly
                         // what's reserved, however tall that turns out to be.
-                        var bodyRect = new RRect(contentLeft, y, contentWidth, 100_000);
+                        var bodyRect = new RRect(contentLeft + rowX, y, bodyWidth, 100_000);
                         await FootnoteBodyLayout.LayoutFootnoteBodyFor(g, call.Body, bodyRect, this);
 
-                        y += (call.Body.ActualBottom - call.Body.Location.Y) + FootnoteBodySpacing;
+                        rowHeight = Math.Max(rowHeight, call.Body.ActualBottom - call.Body.Location.Y);
+                        rowX += bodyWidth + FootnoteBodySpacing;
+                    }
+
+                    if (rowStarted)
+                    {
+                        y += rowHeight + FootnoteBodySpacing;
                     }
 
                     var totalHeight = y - FootnoteBodySpacing + topPadding + dividerThickness + dividerToBodyGap;
