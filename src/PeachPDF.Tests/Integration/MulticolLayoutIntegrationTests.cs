@@ -944,6 +944,74 @@ namespace PeachPDF.Tests.Integration
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 
+        // ─── Footnote-area reservation ─────────────────────────────────────────────
+
+        [Fact]
+        public async Task Multicol_OnAPageWithAFootnote_ColumnContentStopsAboveTheReservedStrip()
+        {
+            // A per-column FragmentainerContext used to be told nothing about the page's own footnote
+            // area, so column content flowed straight over the reserved strip at the page bottom.
+            var html = Wrap(
+                "<p>Text<sup style='float:footnote'>A footnote whose body reserves a real strip at the "
+                + "bottom of this page, which the columns below must stop above.</sup></p>"
+                + "<div id='mc' style='column-count:2; column-gap:10pt; column-fill:auto'>" + FillerParagraphs(200) + "</div>");
+
+            var (root, container) = await BuildAndLayout(html, pageHeight: 400);
+
+            var reserved = container.FootnoteAreaHeightsBySlot[0];
+            Assert.True(reserved > 0, "the footnote should have reserved a strip on page 0");
+
+            var limit = container.PageBottomOf(0) - reserved;
+            var mc = FindById(root, "mc")!;
+
+            foreach (var child in mc.Boxes.Where(b => container.PageIndexOf(b.Location.Y) == 0))
+            {
+                Assert.True(child.ActualBottom <= limit + 0.01,
+                    $"column content bottom {child.ActualBottom} should stop above the reserved strip at {limit}");
+            }
+        }
+
+        [Fact]
+        public async Task Multicol_TheFootnoteReservation_IsWhatMovesTheColumnContentUp()
+        {
+            // The control half, as a direct comparison rather than an absolute threshold: under
+            // column-fill: balance the columns need not reach the page bottom at all, so the only
+            // meaningful claim is that the reservation - and nothing else - is what shortens them.
+            const string columns =
+                "<div id='mc' style='column-count:2; column-gap:10pt; column-fill:auto'>{0}</div>";
+
+            var withNote = await BuildAndLayout(Wrap(
+                "<p>Text<sup style='float:footnote'>A footnote whose body reserves a real strip at the "
+                + "bottom of this page.</sup></p>"
+                + string.Format(columns, FillerParagraphs(200))), pageHeight: 400);
+
+            var withoutNote = await BuildAndLayout(Wrap(
+                "<p>Text with no footnote at all.</p>"
+                + string.Format(columns, FillerParagraphs(200))), pageHeight: 400);
+
+            Assert.Empty(withoutNote.container.FootnoteAreaHeightsBySlot);
+            Assert.True(withNote.container.FootnoteAreaHeightsBySlot[0] > 0);
+
+            var reserved = DeepestOnFirstPage(withoutNote) - DeepestOnFirstPage(withNote);
+
+            Assert.True(reserved > 0,
+                $"the reserved strip should shorten the columns; delta was {reserved}");
+        }
+
+        private static double DeepestOnFirstPage((CssBox root, HtmlContainerInt container) laid)
+        {
+            var mc = FindById(laid.root, "mc")!;
+            return mc.Boxes
+                .Where(b => laid.container.PageIndexOf(b.Location.Y) == 0)
+                .Select(b => b.ActualBottom)
+                .DefaultIfEmpty(0)
+                .Max();
+        }
+
+        private static string FillerParagraphs(int count) =>
+            string.Concat(Enumerable.Range(0, count)
+                .Select(i => $"<p style='margin:0'>Column filler line {i}.</p>"));
+
         private async Task<CssBox> FindByIdAsync(string fragment, string id)
         {
             var (root, container) = await BuildAndLayout(Wrap(fragment), pageHeight: 1000);
