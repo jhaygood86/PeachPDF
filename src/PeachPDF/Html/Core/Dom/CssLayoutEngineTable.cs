@@ -1042,10 +1042,11 @@ namespace PeachPDF.Html.Core.Dom
         /// <para>
         /// <see href="https://www.w3.org/TR/CSS21/tables.html#collapsing-borders">CSS 2.1 §17.6.2</see>
         /// resolves a border per <i>segment</i> and says nothing whatever about the square two crossing
-        /// segments share, so this is measured browser behaviour, not a transcription. Against Chrome 153
-        /// at 1 image px per CSS px, every joint square comes out a solid rectangle of exactly one line's
-        /// paint - there is no mitre, no diagonal, and no split, at any combination of width, style and
-        /// colour tried - and the line that gets it is decided in §17.6.2's own order, minus its origin
+        /// segments share (issue #1263). The winning line is measured browser behaviour, not a
+        /// transcription: against Chrome 153 at 1 image px per CSS px, every joint square comes out a
+        /// solid rectangle of exactly one line's paint - there is no mitre, no diagonal, and no split,
+        /// at any width, style or colour tried - and the line that gets it is decided in §17.6.2's own
+        /// order, minus its origin
         /// clause (which compares where two declarations came from, and so has nothing to say about two
         /// already-resolved borders on different lines):
         /// </para>

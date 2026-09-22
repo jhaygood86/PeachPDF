@@ -13,9 +13,10 @@ namespace PeachPDF.Tests.Html.Core.Paint
     /// Where two collapsed grid lines cross, exactly one of them paints the whole <i>joint square</i>
     /// their two widths span - and at the table's own four corners one of them has to, or the corner is
     /// left blank, which is what
-    /// <see href="https://github.com/jhaygood86/PeachPDF/issues/1257">issue #1257</see> was. CSS 2.1
-    /// §17.6.2 resolves a border per segment and says nothing about the square two segments share, so
-    /// the rule these pin is measured browser behaviour - see
+    /// <see href="https://github.com/jhaygood86/PeachPDF/issues/1257">issue #1257</see> was.
+    /// <see href="https://github.com/jhaygood86/PeachPDF/issues/1263">Issue #1263</see> tracks which line
+    /// wins each crossing. CSS 2.1 §17.6.2 resolves a border per segment and says nothing about the
+    /// square two segments share, so the rule these pin is measured browser behaviour - see
     /// <c>CssLayoutEngineTable.InlineLineOwnsJoint</c>'s own remarks for the four fixtures it was read
     /// off Chrome 153 with, and for why it is stated in logical (inline-start/block-start) rather than
     /// physical terms.
