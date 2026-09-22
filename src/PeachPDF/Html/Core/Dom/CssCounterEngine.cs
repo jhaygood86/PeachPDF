@@ -82,100 +82,28 @@ namespace PeachPDF.Html.Core.Dom
 
         private static void ApplyCounterResets(CssBox box)
         {
-            var counterReset = GetEffectiveCounterReset(box);
-
-            if (counterReset is Keywords.None) return;
-
-            var valueParts = counterReset.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-            (string Name, bool IsReversed)? previousCounter = null;
-
-            for (int i = 0; i < valueParts.Length; i++)
+            foreach (var entry in CounterListGrammar.Parse(GetEffectiveCounterReset(box)))
             {
-                var valuePart = valueParts[i];
+                // A bare reversed(name) with no explicit value starts one more than the count of
+                // descendants in this scope that will increment the counter: each of the N contributors
+                // applies its own -1 AFTER inheriting the reset value, so starting at N+1 makes the first
+                // contributor land on N and the last on 1 - see MDN's counter-reset docs for
+                // reversed(<counter-name>). A non-reversed bare name just uses the CSS-default initial
+                // value of 0.
+                var initialValue = entry.Value
+                    ?? (entry.IsReversed ? CountScopeIncrements(box, entry.Name) + 1 : 0);
 
-                // Check if this is a number following a counter name
-                if (previousCounter is not null && CommonUtils.IsInteger(valuePart.AsSpan()))
-                {
-                    var counterValue = int.Parse(valuePart);
-                    var parentScopeCounter = box.Counters.GetValueOrDefault(previousCounter.Value.Name);
-                    box.Counters[previousCounter.Value.Name] = new CssCounter(previousCounter.Value.Name, counterValue, previousCounter.Value.IsReversed, true, parentScopeCounter);
-                    previousCounter = null; // Reset so we don't process this again
-                }
-                else
-                {
-                    // This is a counter name
-                    var (counterName, isReversed) = GetCounterName(valuePart);
-
-                    // Check if the next value is a number
-                    if (i + 1 < valueParts.Length && CommonUtils.IsInteger(valueParts[i + 1].AsSpan()))
-                    {
-                        // Let the next iteration handle the number
-                        previousCounter = (counterName, isReversed);
-                    }
-                    else
-                    {
-                        // No number following - reversed(name) with no explicit value means the
-                        // initial value is one more than the count of descendants in this scope that
-                        // will increment the counter: each of the N contributors applies its own -1
-                        // AFTER inheriting the reset value, so starting at N+1 makes the first
-                        // contributor land on N and the last on 1 - see MDN's counter-reset docs for
-                        // reversed(<counter-name>). A non-reversed bare name just uses the CSS-default
-                        // initial value of 0.
-                        var initialValue = isReversed ? CountScopeIncrements(box, counterName) + 1 : 0;
-                        var parentScopeCounter = box.Counters.GetValueOrDefault(counterName);
-                        box.Counters[counterName] = new CssCounter(counterName, initialValue, isReversed, true, parentScopeCounter);
-                        previousCounter = null;
-                    }
-                }
+                var parentScopeCounter = box.Counters.GetValueOrDefault(entry.Name);
+                box.Counters[entry.Name] = new CssCounter(entry.Name, initialValue, entry.IsReversed, true, parentScopeCounter);
             }
         }
 
-        /// <summary>
-        /// <c>counter-set</c> - sets a counter already visible in the current scope to a specific
-        /// value without creating a new scope (unlike <see cref="ApplyCounterResets"/>). Mirrors its
-        /// parsing structure. Applied between resets and increments in <see cref="InheritAndApplyCounter"/>,
-        /// matching the CSS-defined counter-reset -> counter-increment -> counter-set processing order
-        /// (counter-set applies last on a given element, so it wins over that same element's own
-        /// counter-increment - e.g. an &lt;li value="100"&gt;'s counter-set presentational hint must
-        /// override the implicit list-item counter-increment that would otherwise also apply to it,
-        /// so the item displays exactly 100, not 101).
-        /// </summary>
         private static void ApplyCounterSets(CssBox box)
         {
-            var counterSet = GetEffectiveCounterSet(box);
-
-            if (counterSet is Keywords.None) return;
-
-            var valueParts = counterSet.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-            string? previousCounterName = null;
-
-            for (int i = 0; i < valueParts.Length; i++)
+            foreach (var entry in CounterListGrammar.Parse(GetEffectiveCounterSet(box)))
             {
-                var valuePart = valueParts[i];
-
-                if (previousCounterName is not null && CommonUtils.IsInteger(valuePart.AsSpan()))
-                {
-                    var counterValue = int.Parse(valuePart);
-                    SetCounterValue(box, previousCounterName, counterValue);
-                    previousCounterName = null;
-                }
-                else
-                {
-                    var (counterName, _) = GetCounterName(valuePart);
-
-                    if (i + 1 < valueParts.Length && CommonUtils.IsInteger(valueParts[i + 1].AsSpan()))
-                    {
-                        previousCounterName = counterName;
-                    }
-                    else
-                    {
-                        // No number following - default counter-set value is 0.
-                        SetCounterValue(box, counterName, 0);
-                        previousCounterName = null;
-                    }
-                }
+                // counter-set's own per-property default when a name carries no explicit integer is 0.
+                SetCounterValue(box, entry.Name, entry.Value ?? 0);
             }
         }
 
@@ -191,27 +119,11 @@ namespace PeachPDF.Html.Core.Dom
         {
             Dictionary<string, int> incrementValues = [];
 
-            if (box.CounterIncrement is not Keywords.None)
+            foreach (var entry in CounterListGrammar.Parse(box.CounterIncrement))
             {
-                var valueParts = box.CounterIncrement.Split(' ');
-
-                string? previousCounterName = null;
-
-                foreach (var valuePart in valueParts)
-                {
-                    var counterName = valuePart;
-                    var counterValue = 1;
-
-                    if (previousCounterName is not null && CommonUtils.IsInteger(valuePart.AsSpan()))
-                    {
-                        counterName = previousCounterName;
-                        counterValue = int.Parse(valuePart);
-                    }
-
-                    previousCounterName = counterName;
-
-                    incrementValues[counterName] = counterValue;
-                }
+                // counter-increment's own per-property default when a name carries no explicit integer
+                // is 1, which is what makes "counter-increment: a b" increment both by one.
+                incrementValues[entry.Name] = entry.Value ?? 1;
             }
 
             // Per the CSS Lists spec, any box whose Display resolves to list-item automatically
@@ -262,19 +174,8 @@ namespace PeachPDF.Html.Core.Dom
             return counterName == Keywords.ListItem && box.DerivedStyle.ActualDisplay == Keywords.ListItem;
         }
 
-        private static bool CounterNameAppears(string counterPropertyValue, string counterName)
-        {
-            if (counterPropertyValue is Keywords.None) return false;
-
-            foreach (var valuePart in counterPropertyValue.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-            {
-                if (CommonUtils.IsInteger(valuePart.AsSpan())) continue;
-                var (name, _) = GetCounterName(valuePart);
-                if (name.Equals(counterName, StringComparison.OrdinalIgnoreCase)) return true;
-            }
-
-            return false;
-        }
+        private static bool CounterNameAppears(string counterPropertyValue, string counterName) =>
+            CounterListGrammar.Mentions(counterPropertyValue, counterName);
 
         /// <summary>
         /// Counts descendants of <paramref name="scopeBox"/> that would increment
@@ -431,35 +332,6 @@ namespace PeachPDF.Html.Core.Dom
             ApplyCounterIncrements(currentBox);
             ApplyCounterSets(currentBox);
 
-        }
-
-        private static (string CounterName, bool IsReversed) GetCounterName(string propValue)
-        {
-            using var pooledTokens = CssValueParser.GetCssTokensPooled(propValue);
-            List<Token> tokens = pooledTokens;
-
-            var reversedToken = tokens.SingleOrNull(x => x.Type == TokenType.Function && x.Data.Is("reversed"));
-            var keywordToken = tokens.FirstOrNull(t => t.Type is TokenType.Hash or TokenType.AtKeyword or TokenType.Ident);
-
-            if (reversedToken is { } reversed)
-            {
-                var args = reversed.ArgumentTokens;
-                var counterName = args.Count > 0 ? args[0].Data.ToString() : null;
-
-                return (counterName!, true);
-            }
-            else if (keywordToken is { } keyword)
-            {
-                var counterName = keyword.Data.ToString();
-
-                return (counterName, false);
-            }
-            else
-            {
-                // If no keyword token found, this might be a number or invalid value
-                // Return the original value as counter name (will be handled by caller)
-                return (propValue, false);
-            }
         }
 
         private static CssBox? GetPreviousSibling(CssBox b)
