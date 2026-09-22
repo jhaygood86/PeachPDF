@@ -1366,7 +1366,6 @@ namespace PeachPDF.Html.Core.Dom
             {
                 HtmlConstants.Img => new CssBoxImage(parent, tag),
                 HtmlConstants.Iframe => new CssBoxFrame(parent, tag),
-                HtmlConstants.Hr => new CssBoxHr(parent, tag),
                 HtmlConstants.Svg => new CssBoxSvg(parent, tag),
                 HtmlConstants.Math => new CssBoxMath(parent, tag),
                 HtmlConstants.Object => new CssBoxObject(parent, tag),
@@ -2624,7 +2623,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <remarks>
         /// <para>
-        /// The forced-break arm of <c>PlaceBlockChild</c> runs on the pass that <i>declines</i> to place
+        /// The forced-break arm of <c>ResolveBlockChildOffset</c> runs on the pass that <i>declines</i> to place
         /// the box; the pass that places it takes the resumed-target branch instead, which is not the
         /// branch that asserts either of these. And between the two, a nested engine re-opens this box's
         /// prologue (<see cref="PassRewind.RollBackTo"/>, called from <c>CssLayoutEngineColumns</c>'s own
@@ -3110,12 +3109,11 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="framePlacesChild">whether <paramref name="frame"/> assigns this box a position</param>
         /// <remarks>
         /// The base implementation is the generic block pass, driven in phases by the frame
-        /// (<see cref="DriveBlockChildPass"/>). Three box kinds override it with a pass of their own — the
-        /// horizontal rule (its size is a formula of its own, and it runs no prologue at all), an outside
+        /// (<see cref="DriveBlockChildPass"/>). Two box kinds override it with a pass of their own — an outside
         /// <c>::marker</c> (positioned beside its item rather than in any flow) and a repeated row group's
-        /// proxy (its content was laid out elsewhere and is only translated here) — none of which has a
-        /// prologue, a placement and a content phase that could be separated. The rule still asks the frame
-        /// for what is genuinely the frame's, through <see cref="PlaceAsBlockChild"/>.
+        /// proxy (its content was laid out elsewhere and is only translated here) — neither of which has a
+        /// prologue, a placement and a content phase that could be separated. Everything else, a horizontal
+        /// rule included, goes through the generic pass.
         /// </remarks>
         protected virtual ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>
             frame.DriveBlockChildPass(g, this, framePlacesChild);
@@ -3787,7 +3785,7 @@ namespace PeachPDF.Html.Core.Dom
                 // Which side the content after the break has to begin on (css-break-3 §3.1's
                 // left/right/recto/verso, which force one *or two* page breaks). Resolved here because it
                 // is settled by the two break values at this break point and by nothing else, and acted on
-                // in PlaceBlockChild: only that knows this box's preserved top margin, which can itself
+                // in ResolveBlockChildOffset: only that knows this box's preserved top margin, which can itself
                 // carry the box past the slot the break landed in, and only boxes that reach it take the
                 // break at all - a display:none or out-of-flow box runs this prologue but is never placed,
                 // so reserving a blank page here would manufacture one for a break that is never taken.
@@ -5005,7 +5003,7 @@ namespace PeachPDF.Html.Core.Dom
         /// (<c>CssLayoutEngineColumns.ResumeInTheNextColumn</c>). It can only state it on the record's
         /// <b>outermost</b> link, though, because that is the only one it holds — so a break raised inside a
         /// block nested below the container's own child arrives at that block's loop with nothing, and
-        /// <see cref="PlaceBlockChild"/> falls back to deriving the child's top from its previous sibling.
+        /// <see cref="ResolveBlockChildOffset"/> falls back to deriving the child's top from its previous sibling.
         /// That sibling is still in the column just left, so the continuation was laid out at the foot of a
         /// column it is not in, straddling the boundary it was moved to avoid.
         /// </para>
@@ -5299,7 +5297,7 @@ namespace PeachPDF.Html.Core.Dom
         /// simply <b>re-appended</b>: the rewound loop calls <see cref="PerformLayout"/> on each of them
         /// again, in order, exactly as it would for a child it had never reached yet, and each one
         /// re-derives its position from the sibling above it — which, for the head, is
-        /// <see cref="PlaceBlockChild"/> reading the resumed target rather than deriving one, and for
+        /// <see cref="ResolveBlockChildOffset"/> reading the resumed target rather than deriving one, and for
         /// every member after it, the ordinary derivation now reads a sibling already re-placed. Nothing
         /// here has to clear a break latch of its own first: <see cref="BeginLayoutPass"/> resets
         /// <c>_earlyBreakTaken</c> for every box on every entry to <see cref="PerformLayoutImp"/>, which a
@@ -5581,16 +5579,6 @@ namespace PeachPDF.Html.Core.Dom
             && Math.Abs(container.PageContentRightOf(StaticTop) - _measureResolvedAgainst) >= 0.01;
 
         /// <summary>
-        /// Has the frame above this box assign its position.
-        /// </summary>
-        /// <remarks>
-        /// The one dispatcher into <see cref="PlaceBlockChild"/>, so that a box reached by a path of its
-        /// own — <see cref="CssBoxHr"/>, which resolves its own size and has no children to lay out — is
-        /// placed by the same code as everything else rather than by a copy of it.
-        /// </remarks>
-        internal void PlaceAsBlockChild() => (ParentBox ?? this).PlaceBlockChild(this);
-
-        /// <summary>
         /// Resolves this box's own inline size — the half of placing a block-level box that is the box's
         /// own to answer — against the page <paramref name="blockTop"/> falls on.
         /// </summary>
@@ -5783,24 +5771,6 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return (top, reservedBlankSlot);
-        }
-
-        /// <summary>
-        /// Assigns <paramref name="child"/>'s position in this frame, and registers the used page name it
-        /// lands on.
-        /// </summary>
-        /// <remarks>
-        /// The two halves together, for a caller that has nothing to do between them —
-        /// <see cref="PlaceAsBlockChild"/>'s own callers, which have already resolved their size. A box
-        /// whose size is still to be resolved goes through <see cref="PlaceAndSizeBlockChild"/> instead, which is
-        /// exactly the caller that needs the offset before the size.
-        /// </remarks>
-        private void PlaceBlockChild(CssBox child)
-        {
-            if (ResolveBlockChildOffset(child) is { } offset)
-            {
-                CommitBlockChildOffset(child, offset);
-            }
         }
 
         /// <summary>
@@ -6232,7 +6202,7 @@ namespace PeachPDF.Html.Core.Dom
                         child._placedByPassRecordedAt = container.PassInvalidationCount;
                     }
 
-                    // The root places itself (PlaceAsBlockChild's (ParentBox ?? this) receiver), and §5.2's
+                    // The root places itself (PerformLayout's (ParentBox ?? this) receiver), and §5.2's
                     // whole crossing question above is never asked of it - "only the root is excluded - it
                     // has nothing before it for a break to fall between." A descendant's margin can still
                     // collapse all the way up to the root (margin-collapse-through), landing it far down

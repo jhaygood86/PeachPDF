@@ -12,7 +12,7 @@ channel an ordinary fragmentainer resumption uses, then re-enters the parent's c
 there — every box from the head on gets a fresh `PerformLayoutImp` call exactly as an
 unreached child would, and `BeginLayoutPass` resets `_earlyBreakTaken` for each one on that entry
 regardless of who calls it, so there is nothing left to retract by hand first. That is what "the
-parent holding the offset" (`PlaceBlockChild`) buys a same-pass restart over a cross-pass one: the
+parent holding the offset" (`ResolveBlockChildOffset`) buys a same-pass restart over a cross-pass one: the
 head's *position* is resolved the same way whether re-appended into a still-open pass or rewound
 into a completed one, and only the completed case needs a real rollback, since only there has the
 box's own state (a completed prologue, finalized line boxes) actually been settled onto record.

@@ -9,7 +9,7 @@ boundary cuts *through* has taken no break at the point above it at all, and the
 so asking before placement forbids breaks that never happen and misses the ones that do.
 
 That is why a forward walk over break points (`LineRelocation.Walk` over flex lines and grid rows;
-`CssBox.PlaceBlockChild` over siblings) has to keep enough state to reach **back** over content it has
+`CssBox.ResolveBlockChildOffset` over siblings) has to keep enough state to reach **back** over content it has
 already placed, and why avoidance is never merely another argument to the "how far does this move?" function.
 
 Two consequences that have each been got wrong once:

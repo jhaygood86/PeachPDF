@@ -43,6 +43,20 @@ namespace PeachPDF.Tests.TestSupport
         }
 
         /// <summary>
+        /// Whether <paramref name="box"/> produced a fragment on <paramref name="page"/> at all. A box that
+        /// occupies no area - an empty <c>&lt;div&gt;</c>, a borderless <c>&lt;hr&gt;</c> - is absent from the
+        /// tree, which is the same answer for both and is what makes "paints nothing" hold by construction.
+        /// </summary>
+        internal static bool HasFragment(HtmlContainerInt container, CssBox box, int page = 0)
+        {
+            var tree = container.FragmentTree;
+            Assert.NotNull(tree);
+            Assert.InRange(page, 0, tree!.Fragmentainers.Count - 1);
+
+            return Find(tree.Fragmentainers[page].Root, box) is not null;
+        }
+
+        /// <summary>
         /// The first fragment <paramref name="box"/> produces on any page — for tests about
         /// page-independent structure (paint order, stacking flattening), where which page the box
         /// happens to land on is not the point.

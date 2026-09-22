@@ -28,7 +28,8 @@ something once:
   complete. Do not re-introduce it as a placement gate.
 - **`PerformLayoutImp` is still the one virtual "run this box's pass" seam, and it must stay reachable for
   every box.** An earlier attempt at this change gave the frame a `RunsALayoutPassOfItsOwn` predicate and
-  called the override only for the three box kinds that set it (`CssBoxHr`, `CssBoxMarker`, `CssProxyBox`).
+  called the override only for the three box kinds that set it (`CssBoxHr`, `CssBoxMarker`, `CssProxyBox`;
+  `CssBoxHr` has since been retired, so two remain).
   That silently made every *other* override dead: nine tests across five files subclass `CssBox` and override
   `PerformLayoutImp` to state a condition no markup produces (a box whose layout throws, a cell that stops,
   a box that hands back the same break record every pass), and all nine stopped running rather than failing
