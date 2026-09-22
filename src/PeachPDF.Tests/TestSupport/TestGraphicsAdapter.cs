@@ -599,4 +599,25 @@ namespace PeachPDF.Tests.TestSupport
         }
         public override void Dispose() { }
     }
+
+    /// <summary>Records paint into an offscreen tile and the opacity used when it is composited.</summary>
+    internal sealed class TestLayerRecordingGraphics : TestRecordingGraphics
+    {
+        public TestRecordingGraphics? TileGraphics { get; private set; }
+        public double? CompositedOpacity { get; private set; }
+        public RRect? CompositedBounds { get; private set; }
+
+        public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height)
+        {
+            TileGraphics = new TestRecordingGraphics { PixelsPerPointOverride = PixelsPerPoint };
+            return (TileGraphics, new TestImage(width, height));
+        }
+
+        public override void DrawImageWithOpacity(
+            RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal)
+        {
+            CompositedOpacity = opacity;
+            CompositedBounds = destRect;
+        }
+    }
 }

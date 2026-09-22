@@ -6615,6 +6615,20 @@ var outlineHtml = "<!DOCTYPE html><html><head>" + OutlineCss + "</head><body>" +
         "<div class=\"css\">outline: 8px solid #4a90d9</div></td>"
     ) +
 
+    "<h2>Translucent patterned corners</h2>" +
+    "<p class=\"intro\">Corner dots and dashes have the same opacity as the straight runs, including on a wrapped inline outline.</p>" +
+    Row(
+        "<td><div class=\"obox\" style=\"outline:8px dashed rgba(74,144,217,.5)\"></div>" +
+        "<div class=\"desc\">dashed outline</div></td>",
+        "<td><div class=\"obox\" style=\"outline:8px dotted rgba(74,144,217,.5)\"></div>" +
+        "<div class=\"desc\">dotted outline</div></td>",
+        "<td><div class=\"obox\" style=\"border:8px dashed rgba(74,144,217,.5)\"></div>" +
+        "<div class=\"desc\">dashed border</div></td>",
+        "<td><div style=\"height:40px;margin:12px 8px;font:12px Arial\">" +
+        "<span style=\"outline:6px dashed rgba(74,144,217,.5)\">Alpha<br>Beta<br>Gamma</span></div>" +
+        "<div class=\"desc\">wrapped inline outline</div></td>"
+    ) +
+
     "<h2>border-radius following</h2>" +
     Row(
         RoundedOutlineStyleSwatch("rounded solid", "solid"),

@@ -443,6 +443,8 @@ When an inline element wraps across multiple lines, its outline is drawn as **on
 
 Every outline style follows that shape, including the patterned and bevelled ones. On a square-cornered contour, `dotted` and `dashed` fit their pattern along each straight edge, so a dash lands on every corner it turns, including the concave ones a merge introduces; a rounded one has no corner for a dash to land on, so it is fitted to the closed contour as a whole, which spaces the pattern evenly all the way round rather than restarting it at each corner. `groove`, `ridge`, `inset` and `outset` pick each edge's light or dark face from the direction that edge runs in rather than from which side of a box it is — the only rule that is still well defined once the lines have merged and a "side" no longer is. Both match what Chromium does for the same content.
 
+For translucent square-cornered `dotted` and `dashed` outlines, each corner dot or dash is painted once, so the corners have the same opacity as the straight runs. The same applies to borders with matching patterned sides.
+
 One limitation remains: only the element's own line boxes take part in the region, not the border boxes of any atomic inlines (images, inline-blocks) inside it, so an outline around content taller than its own line box can cut through it where Chromium's would go around.
 
 A page or column break is a different axis and is unaffected by any of this: the region is always built from one page's own rectangles, so a box broken across pages gets its own shape on each, and the block-axis edge the break cuts through stays open on both sides of it, exactly as border's own `slice` geometry already leaves it.

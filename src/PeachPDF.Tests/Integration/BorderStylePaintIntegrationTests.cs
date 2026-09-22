@@ -385,6 +385,99 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(LeftOf(div) + 160, top.X2, 2);
         }
 
+        [Theory]
+        [InlineData("dotted")]
+        [InlineData("dashed")]
+        public async Task TranslucentPatternedBorder_CompositesTheCornerStrokesOnce(string style)
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                $"<div id='b' style='width:128pt;height:40pt;border:6pt {style} rgba(74,144,217,.5)'></div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestLayerRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            Assert.Equal(128 / 255d, g.CompositedOpacity!.Value, 3);
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var lines = g.TileGraphics!.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
+            Assert.Equal(4, lines.Count);
+            Assert.All(lines, line =>
+            {
+                Assert.Equal(byte.MaxValue, line.Color.A);
+                Assert.NotNull(line.DashPattern);
+            });
+        }
+
+        [Fact]
+        public async Task TranslucentMixedPatternedBorder_GroupsOnlyTheMatchingColorStrokes()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:128pt;height:40pt;border:6pt rgba(74,144,217,.5);" +
+                "border-style:dashed dotted solid dashed'></div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestLayerRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            Assert.Equal(128 / 255d, g.CompositedOpacity!.Value, 3);
+            Assert.Equal(3, g.TileGraphics!.Log.OfType<TestRecordingGraphics.DrawLineCall>().Count());
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+        }
+
+        [Fact]
+        public async Task SingleTranslucentPatternedSide_PaintsDirectly()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:128pt;height:40pt;" +
+                "border-top:6pt dashed rgba(74,144,217,.5)'></div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestLayerRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            Assert.Null(g.CompositedOpacity);
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            Assert.Equal(128, line.Color.A);
+        }
+
+        [Fact]
+        public void PatternedStrokeOpacity_PreservesNativeCmykInTheOpaqueTile()
+        {
+            var g = new TestLayerRecordingGraphics();
+            var source = RColor.FromCmyk(128, .1f, .2f, .3f, .4f);
+            RColor painted = RColor.Empty;
+
+            PatternedStrokeOpacity.Paint(
+                g, new RRect(20, 30, 40, 50), source, (_, color) => painted = color);
+
+            Assert.True(painted.IsCmyk);
+            Assert.Equal(byte.MaxValue, painted.A);
+            Assert.Equal(source.C, painted.C);
+            Assert.Equal(source.M, painted.M);
+            Assert.Equal(source.Y, painted.Y);
+            Assert.Equal(source.K, painted.K);
+            Assert.Equal(128 / 255d, g.CompositedOpacity!.Value, 3);
+            Assert.Equal(new RRect(19, 29, 42, 52), g.CompositedBounds);
+            var translation = Assert.Single(
+                g.TileGraphics!.Log.OfType<TestRecordingGraphics.PushTransformCall>()).Matrix;
+            Assert.Equal(-19, translation.OffsetX);
+            Assert.Equal(-29, translation.OffsetY);
+        }
+
+        [Fact]
+        public void PatternedStrokeOpacity_WhenTileUnavailable_PaintsDirectly()
+        {
+            var g = new TestRecordingGraphics();
+            var source = RColor.FromArgb(128, 74, 144, 217);
+            RColor painted = RColor.Empty;
+
+            PatternedStrokeOpacity.Paint(
+                g, new RRect(20, 30, 40, 50), source, (_, color) => painted = color);
+
+            Assert.Equal(source, painted);
+        }
+
         [Fact]
         public async Task MixedBorderStyles_ClipsDottedAndDashedStrokesAtAdjacentStyleTransitions()
         {
