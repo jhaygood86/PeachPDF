@@ -9150,6 +9150,25 @@ namespace PeachPDF.Html.Core.Dom
             return top;
         }
 
+        /// <summary>
+        /// The inline-axis mirror of <see cref="OwnGeometryTop"/>: this box's own leftmost rendered edge.
+        /// Returns <see cref="double.NaN"/> when the box has produced no geometry at all, which the caller
+        /// must treat as "cannot say" rather than as a position - an inline box's own
+        /// <see cref="Location"/> stays at a bogus line-local value layout never updates, so there is no
+        /// sensible fallback the way there is for the block axis.
+        /// </summary>
+        internal double OwnGeometryLeft()
+        {
+            if (Rectangles.Count == 0 && Words.Count == 0) return double.NaN;
+
+            var left = double.MaxValue;
+
+            foreach (var rect in Rectangles.Values) left = Math.Min(left, rect.Left);
+            foreach (var word in Words) left = Math.Min(left, word.Left);
+
+            return left;
+        }
+
         private void OnBlockAxisRelocated(double fromY, double toY) =>
             NotifyGeometryChanged(Math.Min(fromY, toY), 0);
 

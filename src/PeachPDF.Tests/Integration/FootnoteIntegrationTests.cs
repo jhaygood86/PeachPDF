@@ -150,10 +150,8 @@ namespace PeachPDF.Tests.Integration
             // already moved on from - every page but the first silently lost its footnote area.
             var pages = container.FragmentTree!.Fragmentainers;
             Assert.Equal(2, pages.Count);
-            Assert.NotNull(pages[0].FootnoteArea);
-            Assert.Single(pages[0].FootnoteArea!.Bodies);
-            Assert.NotNull(pages[1].FootnoteArea);
-            Assert.Single(pages[1].FootnoteArea!.Bodies);
+            Assert.Single(SoleFootnoteArea(pages[0]).Bodies);
+            Assert.Single(SoleFootnoteArea(pages[1]).Bodies);
         }
 
         [Fact]
@@ -462,8 +460,8 @@ namespace PeachPDF.Tests.Integration
                 declaredContainer.FootnoteAreaHeightsBySlot[0],
                 0.01);
 
-            var declaredArea = Assert.Single(declaredContainer.FragmentTree!.Fragmentainers).FootnoteArea!;
-            var plainArea = Assert.Single(plainContainer.FragmentTree!.Fragmentainers).FootnoteArea!;
+            var declaredArea = SoleFootnoteArea(Assert.Single(declaredContainer.FragmentTree!.Fragmentainers));
+            var plainArea = SoleFootnoteArea(Assert.Single(plainContainer.FragmentTree!.Fragmentainers));
             Assert.Equal(plainArea.DividerRect.X, declaredArea.DividerRect.X, 0.01);
             Assert.Equal(plainArea.DividerRect.Y, declaredArea.DividerRect.Y, 0.01);
             Assert.Equal(plainArea.DividerRect.Width, declaredArea.DividerRect.Width, 0.01);
@@ -480,7 +478,7 @@ namespace PeachPDF.Tests.Integration
             var areaTop = container.PageBottomOf(0) - container.FootnoteAreaHeightsBySlot[0];
 
             // 4pt of UA margin-top sits above the divider.
-            Assert.Equal(areaTop + 4 - page.LocalOriginY, page.FootnoteArea!.DividerRect.Y, 0.01);
+            Assert.Equal(areaTop + 4 - page.LocalOriginY, SoleFootnoteArea(page).DividerRect.Y, 0.01);
         }
 
         [Fact]
@@ -581,6 +579,17 @@ namespace PeachPDF.Tests.Integration
             Assert.Single(container.FootnoteCalls);
         }
 
+        /// <summary>
+        /// The one note area on <paramref name="page"/>. A page holds a list now, since a
+        /// <c>float-reference: column</c> call gives its column an area of its own - every test here is
+        /// about the page-level area, so asserting there is exactly one is part of the assertion.
+        /// </summary>
+        private static FootnoteAreaFragment SoleFootnoteArea(FragmentainerFragment page)
+        {
+            Assert.NotNull(page.FootnoteAreas);
+            return Assert.Single(page.FootnoteAreas!);
+        }
+
         private static string HeightHtml(string? height, string noteBody)
         {
             var rule = height is null ? string.Empty : $"@page {{ @footnote {{ height: {height}; }} }}";
@@ -602,8 +611,7 @@ namespace PeachPDF.Tests.Integration
             var (_, container) = await LayoutAsync(html);
 
             var page = Assert.Single(container.FragmentTree!.Fragmentainers);
-            Assert.NotNull(page.FootnoteArea);
-            var footnoteArea = page.FootnoteArea!;
+            var footnoteArea = SoleFootnoteArea(page);
             Assert.Equal(6, footnoteArea.DividerRect.Height, 0.01);
             Assert.Equal("rgb(0, 128, 0)", footnoteArea.DividerColor);
         }

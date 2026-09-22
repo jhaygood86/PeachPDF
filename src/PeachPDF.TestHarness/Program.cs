@@ -2112,6 +2112,8 @@ var footnotesHtml = """
       @footnote { height: 70pt; }
     }
     .continuous { page: continuous; }
+    .cols { column-count: 2; column-gap: 24pt; column-fill: auto; height: 300pt; }
+    .cols p { margin: 0 0 10pt; }
     body { font: 11pt Georgia, serif; margin: 0; color: #222; }
     h1 { font-size: 20pt; margin: 0 0 14pt; }
     p { line-height: 1.6; margin: 0 0 10pt; }
@@ -2166,6 +2168,23 @@ var footnotesHtml = """
     </div>
 
     <div style="break-before: page;">
+    <h1>Column-scoped notes</h1>
+    <p>float-reference: column (CSS Page Floats) routes a note to the bottom of the column its own
+    reference landed in, rather than the bottom of the page. Each column gets its own divider, its own
+    width and its own reserved strip; the notes are still numbered across the page, because
+    float-reference decides placement and says nothing about counters.</p>
+    <div class="cols">
+    <p>The first column carries this note<span style="float:footnote; float-reference:column">Scoped to
+    the first column, so it sits at that column's own foot.</span>, and the column's own content stops
+    above the strip that note reserves rather than running into it.</p>
+    <p>__COLUMN_FILLER__</p>
+    <p>The second column carries its own<span style="float:footnote; float-reference:column">Scoped to
+    the second column - a separate area, with its own divider, beside the first rather than below
+    it.</span>, numbered 2 because numbering runs across the page.</p>
+    </div>
+    </div>
+
+    <div style="break-before: page;">
     <h1>footnote-display: compact</h1>
     <p>footnote-display, set on the float: footnote source element itself, controls how a footnote's
     body stacks in the note area. compact places a short body inline, packed beside the previous one,
@@ -2211,12 +2230,19 @@ var footnotesHtml = """
 var footnoteOverflowFiller = string.Concat(Enumerable.Repeat(
     "This note's own body text is repeated enough times that its note area alone is taller than this whole page's content band. ",
     25));
+// Enough prose to push the second reference into the second column, so the two column-scoped notes
+// genuinely land in different columns rather than both in the first.
+var columnFiller = string.Concat(Enumerable.Repeat(
+    "Ordinary column prose, repeated to fill the first column so that what follows begins the second. ",
+    12));
+
 footnotesHtml = footnotesHtml
     .Replace("__BLOCK_NOTE_FILLER__", footnoteOverflowFiller)
-    .Replace("__LINE_NOTE_FILLER__", footnoteOverflowFiller);
+    .Replace("__LINE_NOTE_FILLER__", footnoteOverflowFiller)
+    .Replace("__COLUMN_FILLER__", columnFiller);
 
 await SaveShowcaseAsync("paged_media_footnotes", "Paged Media", "Footnotes",
-    "css-gcpm-3's float: footnote: a numbered in-flow reference, a note area whose height is reserved dynamically per page based on how many footnotes land there, break-inside: avoid content correctly kept clear of the reserved strip, an @footnote rule styling the note area's own divider, footnote-display: compact packing short notes onto one row, and footnote-policy: block/line forcing a page break when a note doesn't fit.",
+    "css-gcpm-3's float: footnote: a numbered in-flow reference, a note area whose height is reserved dynamically per page based on how many footnotes land there, break-inside: avoid content correctly kept clear of the reserved strip, an @footnote rule styling the note area's own divider and giving it a fixed height, a real cascaded footnote counter (continuous numbering via @page counter-reset), column-scoped areas via float-reference: column, footnote-display: compact packing short notes onto one row, and footnote-policy: block/line forcing a page break when a note doesn't fit.",
     footnotesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──

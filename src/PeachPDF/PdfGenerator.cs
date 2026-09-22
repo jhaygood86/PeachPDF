@@ -1081,7 +1081,10 @@ namespace PeachPDF
                 // ordinary content - not after the restore below, which is what a true page-absolute rect
                 // (a plain string/counter/element() margin box's own rect, computed directly from this
                 // page's own margins) needs instead.
-                if (fragmentainer.FootnoteArea is { } footnoteArea)
+                // A page can carry more than one: its own note area, plus one per column any
+                // float-reference: column call landed in. Each already knows its own rect, so nothing
+                // here needs to distinguish them.
+                foreach (var footnoteArea in fragmentainer.FootnoteAreas ?? [])
                 {
                     PaintFootnoteArea(g, _pdfSharpAdapter, container.HtmlContainerInt, footnoteArea);
                 }

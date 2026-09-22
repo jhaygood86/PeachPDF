@@ -593,6 +593,25 @@ namespace PeachPDF.Html.Core.Dom
                     htmlContainer, columnsBox, startSlot, (boxTop, boxTop + target),
                     inheritsSuppression: true);
 
+                var columnInlineLeftForKey = columnLeft + col * pitch;
+                var columnKey = new ColumnAreaKey(columnsBox, startSlot, col, columnInlineLeftForKey);
+
+                // A column-scoped footnote area (float-reference: column) sits at this column's own band
+                // bottom, so ReserveBandEnd - which insets from the context's own band - is the right
+                // tool here, unlike the page-level reservation taken off pageBudget above. The two are
+                // never both applied for the same amount.
+                //
+                // The `< target` guard is load-bearing, not defensive: a reservation at or past the
+                // column's whole height leaves no usable space, so nothing is placed, carry never
+                // advances, and the container defers page after page until HasAlreadyBeenEntered trips
+                // the monolithic last resort. Declining lets the area overflow the column instead, which
+                // is the same answer the page path already gives for an over-tall note area.
+                var columnFootnoteInset = htmlContainer.ColumnFootnoteInsetFor(columnKey);
+                if (columnFootnoteInset > 0 && columnFootnoteInset < target)
+                {
+                    column.ReserveBandEnd(startSlot, columnFootnoteInset);
+                }
+
                 var previousContext = htmlContainer.EnterNestedFragmentainer(column);
 
                 bool stopped;
@@ -641,6 +660,16 @@ namespace PeachPDF.Html.Core.Dom
                         ContinuingPast(columnsBox.PendingBreakToken),
                         column,
                         previousContext);
+
+                    // The column's durable identity, published beside the emitter's own record and
+                    // truncated by the same two methods. The band bottom recorded here is the CONTEXT's
+                    // (boxTop + target), not the possibly-taller one above: a column-scoped note area is
+                    // reserved against the context band, so it has to be placed against the same edge
+                    // rather than be dragged down by an unbreakable child that overflowed.
+                    htmlContainer.RecordColumnFragmentainer(new ColumnFragmentainerRecord(
+                        columnsBox, startSlot, col,
+                        columnInlineLeft, columnInlineLeft + columnWidth,
+                        boxTop, boxTop + target));
                 }
                 finally
                 {
