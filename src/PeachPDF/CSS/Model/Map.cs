@@ -158,7 +158,12 @@ namespace PeachPDF.CSS
                 {Keywords.Outset, OutlineStyle.Outset},
                 {Keywords.Ridge, OutlineStyle.Ridge},
                 {Keywords.Groove, OutlineStyle.Groove},
-                {Keywords.Hidden, OutlineStyle.Hidden},
+                // No `hidden`: css-ui-4 §3.3 defines outline-style as `auto | <'border-style'>` *except*
+                // `hidden`, so the keyword is invalid here even though it is valid for every
+                // border-*-style. Leaving it out is what makes an authored `outline-style: hidden`
+                // fail Layer A validation and have its declaration dropped, so an earlier
+                // `outline: 2px solid red` in the same rule keeps painting - which is the whole point.
+                // Mapping it instead made the declaration win and then paint nothing.
                 {Keywords.Auto, OutlineStyle.Auto}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, PdfTagType> PdfTagTypes =

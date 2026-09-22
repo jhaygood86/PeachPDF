@@ -484,6 +484,32 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public async Task OutlineStyleHidden_IsRejectedByTheRegistry_ButAcceptedForBorderTopStyle()
+        {
+            // The mirror of OutlineStyleAuto_IsRejectedForBorderTopStyle above: `hidden` is valid for
+            // every border-*-style but *not* for outline-style (css-ui-4 §3.3 defines the latter as
+            // `auto | <'border-style'>` excluding it), so Map.OutlineStyles deliberately omits it.
+            //
+            // This pins the registry half of that gate specifically. Validate_OutlineStyle is emitted
+            // as `Map.OutlineStyles.ContainsKey(value)` and runs before the assignment, so a rejected
+            // keyword never reaches box.OutlineStyle. That ordering is load-bearing: the assignment
+            // itself calls CssProperty<T>.FromCssText, which *fails open* - on an unrecognized keyword
+            // it applies the fallback (OutlineStyle.None) rather than rejecting. Were the gate ever
+            // removed, or the property given a customSetter that skips it, `hidden` would silently
+            // resolve to `none` and suppress the outline again, exactly as it used to.
+            //
+            // The border-top-style half is what makes this discriminate on its own - without it the
+            // test also passes if SetPropertyValue simply isn't reaching the box in this harness.
+            var (box, parser) = await FindDivBoxAndParser("outline-style: solid; border-top-style: solid;");
+
+            CssUtils.SetPropertyValue(parser, box, "outline-style", "hidden");
+            CssUtils.SetPropertyValue(parser, box, "border-top-style", "hidden");
+
+            Assert.Equal("solid", CssUtils.GetPropertyValue(box, "outline-style"));
+            Assert.Equal("hidden", CssUtils.GetPropertyValue(box, "border-top-style"));
+        }
+
+        [Fact]
         public async Task OutlineColorInvert_IsRejectedForBorderTopColor()
         {
             var (box, parser) = await FindDivBoxAndParser("border-top-color: rgb(1, 2, 3);");
