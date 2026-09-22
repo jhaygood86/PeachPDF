@@ -4683,13 +4683,37 @@ namespace PeachPDF.Html.Core.Dom
                         if (box is { IsFixed: false } && box.HtmlContainer?.SuppressWordPageBreaks != true
                             && coordinates.Fragmentainer is not null)
                         {
+                            // css-gcpm-3 §2.8's footnote-policy: line: a footnote's own note area didn't
+                            // fit its call's landing page (HtmlContainerInt.ResolveFootnotesForThisAttempt,
+                            // on an earlier pass), so this word - part of the CssBoxFootnoteCall's own
+                            // number text - is forced off this page even though it would fit here on its
+                            // own. Reuses the exact same natural-overflow InlineBreakToken machinery below
+                            // (word.WouldStraddleFragmentainer's own branch), which already resumes at
+                            // coordinates.LineStartOrdinal - the start of the line this word is on, not
+                            // just this word - satisfying css-gcpm-3's "at the start of the line containing
+                            // the footnote reference" for free. The one thing that natural branch cannot
+                            // reuse is its own resume-slot math: ResumeSlotForBreakBefore re-derives "does
+                            // this genuinely not fit" from live geometry, which would answer "the current
+                            // slot" for a word that, taken alone, actually does fit - so the forced case
+                            // names the next slot directly instead.
+                            //
+                            // One-shot per LayoutDocument invocation (HtmlContainer.FootnotePolicyLineBreaksTakenThisPass,
+                            // cleared at the top of that method, not alongside FootnotePolicyForcedLineCalls
+                            // itself) - without it, this same pass's own fragmentainer walk resumes the call
+                            // onto the next page and asks the identical question again there, forcing it one
+                            // further page every time with nothing to stop it, since the call's membership in
+                            // FootnotePolicyForcedLineCalls does not change merely because it moved.
+                            var forcedFootnoteLineBreak = word.OwnerBox is CssBoxFootnoteCall footnoteCall
+                                && box.HtmlContainer!.FootnotePolicyForcedLineCalls.Contains(footnoteCall)
+                                && box.HtmlContainer!.FootnotePolicyLineBreaksTakenThisPass.Add(footnoteCall);
+
                             // The same question CssRect.BreakPage used to ask after the fact, answered
                             // here instead so this flow can stop before placing the word rather than
                             // relocating it and carrying on. The break is taken at the start of the line,
                             // not at this word: a line box is monolithic (css-break-3 §4.1), so the whole
                             // of it moves to the next fragmentainer rather than leaving its shorter words
                             // behind.
-                            if (word.WouldStraddleFragmentainer())
+                            if (word.WouldStraddleFragmentainer() || forcedFootnoteLineBreak)
                             {
                                 // CompletedLineCount is filled in by CreateLineBoxes once the
                                 // in-progress line has been discarded, since that is what fixes how
@@ -4698,8 +4722,14 @@ namespace PeachPDF.Html.Core.Dom
                                     blockBox,
                                     // Derived from where the break actually fell (the band this line
                                     // was trying to sit in), never assumed to be "the pass after this
-                                    // one" - see ResumeSlotForBreakBefore's own remarks.
-                                    word.ResumeSlotForBreakBefore(),
+                                    // one" - see ResumeSlotForBreakBefore's own remarks. The forced case
+                                    // is the one exception: nothing about this word's own geometry says
+                                    // it doesn't fit, so there is no "where it actually fell" to derive -
+                                    // the next slot after the one it's actually sitting in is the only
+                                    // coherent answer.
+                                    forcedFootnoteLineBreak && !word.WouldStraddleFragmentainer()
+                                        ? box.HtmlContainer!.SlotStartingAt(word.Top) + 1
+                                        : word.ResumeSlotForBreakBefore(),
                                     [], coordinates.LineStartOrdinal, CompletedLineCount: 0,
                                     FollowsForcedBreak: coordinates.Line.FollowsForcedBreak,
                                     // The discarded line-in-progress never closed, so it hasn't been

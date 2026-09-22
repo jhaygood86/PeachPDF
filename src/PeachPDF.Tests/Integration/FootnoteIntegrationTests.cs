@@ -553,6 +553,66 @@ namespace PeachPDF.Tests.Integration
             Assert.Single(container.FragmentTree!.Fragmentainers);
         }
 
+        [Fact]
+        public async Task FootnotePolicyLine_NoteAreaExceedsMaxHeight_ForcesAnExtraPageComparedToAuto()
+        {
+            // A raw CssBox's own Rectangles/Words are only a reliable read within the single pass that
+            // set them - HtmlContainerInt's footnote-policy: line handling (like every other multi-pass
+            // mechanism in this codebase) can re-lay the whole document out several times, and each pass
+            // creates fresh CssLineBox keys rather than overwriting the previous pass's entries (see
+            // docs/architecture.md §6: only the materialized FragmentTree is a reliable post-layout
+            // source, never CssBox geometry directly). So this compares page COUNT against the identical
+            // markup under the default footnote-policy: auto, rather than asserting exactly which page a
+            // particular line landed on - line and auto must disagree on page count, or nothing forced
+            // anything.
+            // The call sits after enough of its own paragraph's text that it lands on a LATER line, not
+            // the first - a forced break needs a predecessor to break away from (css-break-3 §4.4, the
+            // same reason footnote-policy: block's own test needs a preceding paragraph), and for an
+            // inline break that predecessor can be an earlier line of the very same paragraph. A narrow
+            // page forces the wrap.
+            var leading = string.Join(" ", Enumerable.Repeat("word", 10));
+            static string Markup(string leading, string policyDeclaration) =>
+                "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 10pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + $"<p id='p1'>{leading} <sup style='float:footnote;{policyDeclaration}'>This footnote's "
+                + "own body text is long enough that, combined with the tiny max-height declared on "
+                + "@footnote, its note area does not fit.</sup> more text.</p>"
+                + "</body></html>";
+
+            var (rootLine, containerLine) = await LayoutAsync(
+                Markup(leading, " footnote-policy: line;"), pageWidth: 120, margin: 10);
+            var (rootAuto, containerAuto) = await LayoutAsync(
+                Markup(leading, ""), pageWidth: 120, margin: 10);
+
+            var p1Line = FindById(rootLine, "p1");
+            Assert.NotNull(p1Line);
+
+            // Unlike footnote-policy: block, the paragraph box itself never relocates - only the specific
+            // line carrying the call does.
+            Assert.Equal(0, containerLine.PageIndexOf(p1Line!.Location.Y));
+
+            Assert.True(
+                containerLine.FragmentTree!.Fragmentainers.Count > containerAuto.FragmentTree!.Fragmentainers.Count);
+        }
+
+        [Fact]
+        public async Task FootnotePolicyLine_NoteAreaFits_DoesNotForceABreak()
+        {
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 500pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p1'>Text<sup style='float:footnote; footnote-policy: line;'>Short note.</sup></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            var p1 = FindById(root, "p1");
+            Assert.NotNull(p1);
+            Assert.Equal(0, container.PageIndexOf(p1!.Location.Y));
+            Assert.Single(container.FragmentTree!.Fragmentainers);
+        }
+
         [Theory]
         [InlineData("block", "Block")]
         [InlineData("inline", "Inline")]

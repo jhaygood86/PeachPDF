@@ -2041,6 +2041,15 @@ namespace PeachPDF.Html.Core
             PageGeometry.Reset();
             ClearBlankSlotReservations();
 
+            // One footnote-policy: line break per call per LayoutDocument invocation - without this, a
+            // call forced off its landing page keeps re-triggering as this same pass's own fragmentainer
+            // walk resumes it onto each successive page in turn (FootnotePolicyForcedLineCalls itself
+            // isn't cleared until the next ResolveFootnotesForThisAttempt, since it must survive resuming
+            // onto the NEXT page within this call), forcing it one further page every time - not bounded
+            // by PerformLayout's own footnote-convergence pass cap at all, since it never leaves this one
+            // LayoutDocument call.
+            FootnotePolicyLineBreaksTakenThisPass.Clear();
+
             // Both per layout, not per document: ShrinkToFit and the per-page reflow loop each re-run this
             // method, and a record kept across them would describe passes that no longer exist while the
             // latch silently disabled the correction on every layout after the first (#320). Every box's
@@ -2933,6 +2942,16 @@ namespace PeachPDF.Html.Core
         /// by <see cref="CssBox.PerformLayoutPrologue"/>. Cleared and re-decided fresh every pass.
         /// </summary>
         internal readonly HashSet<CssBoxFootnoteCall> FootnotePolicyForcedLineCalls = [];
+
+        /// <summary>
+        /// The one-shot-per-<see cref="LayoutDocument"/>-invocation counterpart to
+        /// <see cref="FootnotePolicyForcedLineCalls"/>: which calls have already taken their forced
+        /// <c>footnote-policy: line</c> break this pass, so <see cref="CssLayoutEngine.FlowBox"/> stops
+        /// asking for one again as this same pass resumes the call onto each successive page in turn -
+        /// see <see cref="LayoutDocument"/>'s own remarks on why this is cleared there, not alongside
+        /// <see cref="FootnotePolicyForcedLineCalls"/>.
+        /// </summary>
+        internal readonly HashSet<CssBoxFootnoteCall> FootnotePolicyLineBreaksTakenThisPass = [];
 
         /// <summary>Space (layout px, i.e. points) above a page's footnote-area divider rule.</summary>
         private const double FootnoteAreaTopPadding = 4;
