@@ -137,10 +137,32 @@ namespace PeachPDF.Html.Core
             ol, ul, dir,
             menu            { counter-reset: list-item }
             li::marker      { margin-right: 5px }
-            *::footnote-call
-                            { vertical-align: super; font-size: .7em }
+            /* css-gcpm-3 Appendix B's own default footnote stylesheet. The @page block is what makes
+               the footnote counter an ordinary cascaded counter: an author counter-reset on an
+               applicable @page replaces this declaration wholesale, which is how counter-reset: none
+               (or any set omitting `footnote`) produces continuous numbering across pages. float and
+               column-span are declared here to match the spec exactly, and neither has any effect:
+               PeachPDF's note area is always page-bottom and full-width. column-span parses and is
+               simply never read; `float: bottom` is a css-page-floats page-float value PeachPDF does
+               not implement at all, so it is dropped as an invalid value - deliberately, since adding
+               it to the float keyword set purely to satisfy this rule would make
+               `@supports (float: bottom)` claim support that does not exist. */
+            @page           { counter-reset: footnote;
+                              @footnote { counter-increment: footnote; float: bottom;
+                                          column-span: all; height: auto } }
+            /* The marker's trailing ". " is folded into its own content rather than written as the
+               spec's separate ::footnote-marker::after rule - PeachPDF cannot match a pseudo-element
+               on a pseudo-element, and the rendered result is identical. */
             *::footnote-marker
-                            { margin-right: 0.3em }
+                            { content: counters(footnote, ".") ". ";
+                              list-style-position: inside }
+            *::footnote-call
+                            { content: counter(footnote); vertical-align: super; font-size: 65% }
+            @supports (font-variant-position: super) {
+              *::footnote-call
+                            { content: counter(footnote); vertical-align: baseline; font-size: 100%;
+                              line-height: inherit; font-variant-position: super }
+            }
             ol ul, ul ol,
             ul ul, ol ol    { margin-top: 0; margin-bottom: 0 }
             ol ul, ul ul    { list-style-type: circle }

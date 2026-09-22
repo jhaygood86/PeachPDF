@@ -2104,6 +2104,14 @@ var footnotesHtml = """
         padding-top: 8pt;
       }
     }
+    /* A named page for the continuous-numbering section: declaring counter-reset here at all is
+       what replaces the UA sheet's own `counter-reset: footnote`, so nothing resets the counter and
+       numbering runs on from the previous pages. height gives the note area a fixed band. */
+    @page continuous {
+      counter-reset: none;
+      @footnote { height: 70pt; }
+    }
+    .continuous { page: continuous; }
     body { font: 11pt Georgia, serif; margin: 0; color: #222; }
     h1 { font-size: 20pt; margin: 0 0 14pt; }
     p { line-height: 1.6; margin: 0 0 10pt; }
@@ -2119,7 +2127,7 @@ var footnotesHtml = """
     <body>
 
     <h1>Footnotes</h1>
-    <p>float: footnote pulls an element out of normal flow entirely<span style="float:footnote">css-gcpm-3 defines this alongside float: inline-footnote and column-scoped variants; PeachPDF supports the page-level case.</span>,
+    <p>float: footnote pulls an element out of normal flow entirely<span style="float:footnote">float: footnote is the only footnote float value css-gcpm-3 defines; inline-footnote is a PrinceXML extension, not a CSS feature.</span>,
     leaving a numbered in-flow reference behind and routing the element's own content to a note area
     at the bottom of the page the reference landed on<span style="float:footnote">The note area's height is reserved dynamically, based on how many footnotes actually land on a given page - not a fixed-height margin box.</span>.</p>
 
@@ -2132,10 +2140,29 @@ var footnotesHtml = """
     room at the foot of the page, this whole paragraph is kept together and, if it no longer fits,
     moves to the next page as a unit rather than splitting across the reserved strip<span style="float:footnote">A third footnote, to show the reservation composing across every footnote that lands on the same page.</span>.</p>
 
-    <p>Numbering resets per page - the next page starts back at 1:</p>
+    <p>The footnote counter is a real, cascaded counter: the UA stylesheet declares
+    @page { counter-reset: footnote } and @footnote { counter-increment: footnote }, so by default
+    each page starts back at 1.</p>
 
     <div style="break-before: page;">
-    <p>A fresh page, a fresh footnote<span style="float:footnote">This is footnote 1 again, not 4 - the footnote counter resets per page.</span>.</p>
+    <p>A fresh page, a fresh footnote<span style="float:footnote">This is footnote 1 again, not 4 - the UA stylesheet's own per-page counter-reset is what does that.</span>.</p>
+    </div>
+
+    <div style="break-before: page;" class="continuous">
+    <h1>Continuous numbering, and a fixed note-area height</h1>
+    <p>Declaring counter-reset yourself on an applicable @page replaces the UA declaration outright,
+    so a set that never mentions the footnote counter - counter-reset: none here - leaves nothing to
+    reset it and numbering simply runs on through the document. This page also declares
+    @footnote { height: 70pt }, a fixed band for the bodies rather than one sized to them: the
+    divider sits at the same place whatever lands below it, and the slack falls under the last
+    note.</p>
+    <p>These two notes carry on from wherever the counter already stood instead of restarting at
+    1<span style="float:footnote">Numbered by the document-wide counter, because this page's own
+    counter-reset never names it - the previous page ended at 1, so these are 2 and 3.</span>. The
+    number reaching the page is a real counter value, so content: counter(footnote, lower-roman) on
+    ::footnote-call renders it as a roman numeral, and counter-increment on @footnote changes the
+    step<span style="float:footnote">Both the call and the marker resolve counter(footnote) to the
+    live, pagination-resolved value.</span>.</p>
     </div>
 
     <div style="break-before: page;">

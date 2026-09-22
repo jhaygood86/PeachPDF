@@ -47,7 +47,9 @@ namespace PeachPDF.Tests.Integration
 
             var call = Assert.Single(container.FootnoteCalls);
             var marker = Assert.IsType<CssBoxFootnoteMarker>(call.Body.Boxes[0]);
-            Assert.Equal("1.", marker.Text);
+            // The UA stylesheet declares ::footnote-marker's content as the spec does, so the number's
+            // trailing ". " is part of the content rather than a hardcoded "." plus a margin.
+            Assert.Equal("1. ", marker.Text);
         }
 
         [Fact]
