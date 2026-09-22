@@ -1,4 +1,5 @@
 using PeachPDF.Html.Core.Dom;
+using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Fragmentation
 {
@@ -54,23 +55,22 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>Only answered for the slot the live pass is actually filling</b> - <see cref="Fragmentainer"/>'s
-        /// own <c>SlotIndex</c> must equal the live context's, or this reads zero rather than asking
-        /// <see cref="FragmentainerContext.BandEndInsetOf"/> about a different one. A repeating
-        /// <c>&lt;tfoot&gt;</c>'s reservation is a genuine constant across every slot the table spans, so
-        /// <c>BandEndInsetOf</c>'s own "composes forward from <c>fromSlot</c>" contract is correct for it
-        /// even when asked about a slot the live pass hasn't reached yet - but a page's own footnote area
-        /// (<see cref="HtmlContainerInt.FootnoteAreaHeightsBySlot"/>) is seeded fresh, per slot, with a
-        /// genuinely different amount each time <see cref="HtmlContainerInt.LayoutDocument"/> enters a new
-        /// one; the live context only ever remembers the amount it was itself seeded with, for its own
-        /// slot. Without this guard, a §4.3 mover asking about a *different* slot via <see cref="AtNextSlot"/>/
-        /// <see cref="AtSlot"/> (e.g. "would this box fit if pushed to the next page") would read the
-        /// live page's own footnote reservation and misapply it to a page whose own footnotes may be a
-        /// different height, or none at all - measured as a `break-inside: avoid` box being told a
-        /// footnote-free next page has less room than it really does. This is a strictly narrower answer
-        /// than a `&lt;tfoot&gt;`-only reservation would need (it also declines to compose the `&lt;tfoot&gt;`
-        /// case forward the way <see cref="Dom.CssRect.WouldStraddleFragmentainer"/>'s per-word check
-        /// already correctly does), never a wrong one - see
+        /// <b>The slot the live pass is actually filling</b> asks <see cref="FragmentainerContext.BandEndInsetOf"/>
+        /// directly, which already correctly handles a repeating <c>&lt;tfoot&gt;</c>'s reservation (a
+        /// genuine constant across every slot the table spans, composed forward from its own
+        /// <c>fromSlot</c>) as well as the live slot's own footnote-area amount, whichever is active.
+        /// </para>
+        /// <para>
+        /// <b>A different slot</b> answers from <see cref="HtmlContainerInt.FootnoteAreaHeightsBySlot"/>
+        /// directly instead - that dictionary is seeded fresh, per slot, with a genuinely different amount
+        /// each time <see cref="HtmlContainerInt.LayoutDocument"/> enters a new one, so (unlike asking the
+        /// live context's own <c>BandEndInsetOf</c> about a slot it never itself reserved for) this can
+        /// never misattribute one page's footnote reservation to another's - measured, before this, as a
+        /// `break-inside: avoid` box being told a footnote-free next page had less room than it really
+        /// did. A repeating <c>&lt;tfoot&gt;</c>'s own reservation is not visible this way for a
+        /// non-live slot (it isn't tracked per-slot the way footnotes are, and the live context's
+        /// <c>_bandEndReservation</c> doesn't say which kind is active) - narrower than a full fix would
+        /// be, but a strict improvement over reading zero unconditionally, and never a wrong answer - see
         /// <c>.claude/accepted-gaps/footnote-reservation-not-honored-by-every-4-3-mover.md</c>.
         /// </para>
         /// <para>
@@ -82,7 +82,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 ? 0
                 : Fragmentainer.Container.CurrentFragmentainer is { } live && live.SlotIndex == Fragmentainer.SlotIndex
                     ? live.BandEndInsetOf(Fragmentainer.SlotIndex)
-                    : 0;
+                    : Fragmentainer.Container.FootnoteAreaHeightsBySlot.GetValueOrDefault(Fragmentainer.SlotIndex, 0);
 
         /// <summary>How much of <see cref="Fragmentainer"/>'s band remains below <see cref="BlockOffset"/>, after <see cref="BandEndInset"/>.</summary>
         internal double RemainingBlockSize => NextBandHeight - BlockOffset - BandEndInset;

@@ -2097,12 +2097,45 @@ var footnotesHtml = """
     beside its neighbors.</span>, and a short one again<span style="float:footnote; footnote-display: compact;">Short once more.</span>.</p>
     </div>
 
+    <div style="break-before: page;">
+    <h1>footnote-policy: block and line</h1>
+    <p>footnote-policy controls what happens when a page's note area can't hold everything that landed
+    on it - here, because the note body itself is long enough that its note area alone would exceed
+    this whole page's content band. block forces the whole paragraph carrying the call onto the next
+    page; line forces only the specific line carrying the call, leaving earlier lines of the same
+    paragraph on this page:</p>
+
+    <p class="keep" id="policy-block">This paragraph's own footnote-policy is block<span
+    style="float:footnote; footnote-policy: block;">__BLOCK_NOTE_FILLER__ Because
+    footnote-policy: block is set, the whole paragraph carrying this call - not just this line - moves
+    to the next page so the call and its note land together there instead.</span>, so once its note
+    doesn't fit, the whole paragraph moves to the next page.</p>
+
+    <p id="policy-line">This paragraph is long enough to wrap across several lines before reaching its
+    own footnote reference, which is exactly the point: footnote-policy: line only pushes the specific
+    line carrying the call<span style="float:footnote; footnote-policy: line;">__LINE_NOTE_FILLER__
+    Because footnote-policy: line is set, only the line carrying this call (and whatever follows it in
+    the same paragraph) moves onward - the lines before it, earlier in this same paragraph, stay right
+    here.</span> onward, while every line before it - including the start of this very paragraph - stays
+    exactly where it already was.</p>
+    </div>
+
     </body>
     </html>
     """;
 
+// The note bodies above need to genuinely exceed a whole A4 page's content band on their own (not
+// just be long) to actually demonstrate footnote-policy forcing a break - a handful of sentences
+// comfortably fits a page, so this repeats a filler sentence enough times to guarantee real overflow.
+var footnoteOverflowFiller = string.Concat(Enumerable.Repeat(
+    "This note's own body text is repeated enough times that its note area alone is taller than this whole page's content band. ",
+    25));
+footnotesHtml = footnotesHtml
+    .Replace("__BLOCK_NOTE_FILLER__", footnoteOverflowFiller)
+    .Replace("__LINE_NOTE_FILLER__", footnoteOverflowFiller);
+
 await SaveShowcaseAsync("paged_media_footnotes", "Paged Media", "Footnotes",
-    "css-gcpm-3's float: footnote: a numbered in-flow reference, a note area whose height is reserved dynamically per page based on how many footnotes land there, break-inside: avoid content correctly kept clear of the reserved strip, an @footnote rule styling the note area's own divider, and footnote-display: compact packing short notes onto one row.",
+    "css-gcpm-3's float: footnote: a numbered in-flow reference, a note area whose height is reserved dynamically per page based on how many footnotes land there, break-inside: avoid content correctly kept clear of the reserved strip, an @footnote rule styling the note area's own divider, footnote-display: compact packing short notes onto one row, and footnote-policy: block/line forcing a page break when a note doesn't fit.",
     footnotesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──

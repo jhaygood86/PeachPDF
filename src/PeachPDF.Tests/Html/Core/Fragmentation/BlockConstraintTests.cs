@@ -342,5 +342,55 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             Assert.False(constraint.Straddles(BandHeight - 30 - 50));
             Assert.True(constraint.Straddles(BandHeight - 30 - 50 + 0.01));
         }
+
+        // Issue #1080's footnote-policy needed a §4.3 mover to answer "does the DESTINATION slot have
+        // room" - which HtmlContainerInt.FootnoteAreaHeightsBySlot already tracks per slot, independent
+        // of which one the live pass is filling. Unlike a live FragmentainerContext.ReserveBandEnd
+        // reservation (only ever known for the live slot), this dictionary is queried directly for a
+        // non-live slot rather than declining to answer.
+        [Fact]
+        public void BandEndInset_ForADifferentSlot_ReadsThatSlotsOwnFootnoteReservation()
+        {
+            var container = CreateContainer();
+            var box = new CssBox(null, null) { HtmlContainer = container };
+            // The live pass is filling slot 0 (CreateContainer's own EnterNestedFragmentainer); slot 2's
+            // own footnote reservation, seeded independently, must not be confused with slot 0's (which
+            // has none here).
+            container.FootnoteAreaHeightsBySlot[2] = 42;
+
+            var constraint = BlockConstraint.AtSlot(container, box, slot: 2);
+
+            Assert.Equal(42, constraint.BandEndInset, 9);
+            Assert.Equal(BandHeight - 42, constraint.RemainingBlockSize, 9);
+        }
+
+        [Fact]
+        public void BandEndInset_ForADifferentSlotWithNoFootnoteReservation_IsZero()
+        {
+            var container = CreateContainer();
+            var box = new CssBox(null, null) { HtmlContainer = container };
+            container.FootnoteAreaHeightsBySlot[2] = 42;
+
+            // Slot 3 has no reservation of its own - slot 2's must not leak forward onto it.
+            var constraint = BlockConstraint.AtSlot(container, box, slot: 3);
+
+            Assert.Equal(0, constraint.BandEndInset, 9);
+        }
+
+        [Fact]
+        public void BandEndInset_ForTheLiveSlot_StillReadsFromTheLiveContextNotFootnoteAreaHeightsBySlot()
+        {
+            // The live slot keeps asking FragmentainerContext.BandEndInsetOf (which also correctly
+            // handles a repeating <tfoot> reservation) rather than switching to the dictionary lookup -
+            // seeding only the dictionary, with no live ReserveBandEnd call, must not produce a nonzero
+            // answer for the live slot.
+            var container = CreateContainer();
+            var box = CreateBox(container, MarginTop + 30);
+            container.FootnoteAreaHeightsBySlot[0] = 42;
+
+            var constraint = BlockConstraint.For(box);
+
+            Assert.Equal(0, constraint.BandEndInset, 9);
+        }
     }
 }

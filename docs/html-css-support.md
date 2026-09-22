@@ -1596,6 +1596,8 @@ The `<h1>` no longer appears at its original position in the document; instead, 
   - `block` — forces a page break before the paragraph (containing block) carrying the footnote's call, so both the call and its note move to the next page together.
   - `line` — forces a page break at the start of the specific line carrying the call, moving only that line and what follows in the same paragraph — earlier lines of the paragraph stay on the current page. Widows/orphans are still honored, so the actual break may land on an earlier line than the call's own.
 
+  Both values only react to the note area's fit on the *current* page (its own `@footnote` `max-height`, or its natural height alone already exceeding the whole page) — they don't first check whether the *destination* page will actually have room either. If it doesn't, PeachPDF forces another break from there and keeps retrying, bounded by the same small pass limit the note area's own height-reservation convergence already uses; an unsatisfiable case (e.g. a `max-height` too small for any page) settles wherever that limit is reached rather than searching indefinitely.
+
   Both values only react to the *current* page's own room — if the note area still doesn't fit after moving to the next page, PeachPDF keeps retrying (bounded, same as the footnote-area reservation convergence generally) rather than searching further ahead for a page that fits.
 
 **Limitations:**
