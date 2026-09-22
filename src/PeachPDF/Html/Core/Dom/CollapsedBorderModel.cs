@@ -253,12 +253,12 @@ namespace PeachPDF.Html.Core.Dom
             {
                 candidates.Clear();
 
-                Add(candidates, grid.CellAt(groupRow, column), groupSide, CollapsedBorderOrigin.Cell, 0, column, natural: true);
-                Add(candidates, grid.CellAt(adjacentRow, column), adjacentSide, CollapsedBorderOrigin.Cell, 0, column, natural: true);
-                Add(candidates, grid.RowAt(groupRow), groupSide, CollapsedBorderOrigin.Row, 0, 0, natural: true);
-                Add(candidates, grid.RowAt(adjacentRow), adjacentSide, CollapsedBorderOrigin.Row, 0, 0, natural: true);
-                Add(candidates, groupRowGroup, groupSide, CollapsedBorderOrigin.RowGroup, 0, 0, natural: true);
-                Add(candidates, adjacentRowGroup, adjacentSide, CollapsedBorderOrigin.RowGroup, 0, 0, natural: true);
+                Add(candidates, grid.CellAt(groupRow, column), groupSide, CollapsedBorderOrigin.Cell, 0, column);
+                Add(candidates, grid.CellAt(adjacentRow, column), adjacentSide, CollapsedBorderOrigin.Cell, 0, column);
+                Add(candidates, grid.RowAt(groupRow), groupSide, CollapsedBorderOrigin.Row, 0, 0);
+                Add(candidates, grid.RowAt(adjacentRow), adjacentSide, CollapsedBorderOrigin.Row, 0, 0);
+                Add(candidates, groupRowGroup, groupSide, CollapsedBorderOrigin.RowGroup, 0, 0);
+                Add(candidates, adjacentRowGroup, adjacentSide, CollapsedBorderOrigin.RowGroup, 0, 0);
 
                 result[column] = CollapsedBorderResolver.Resolve(CollectionsMarshal.AsSpan(candidates), leftToRight);
             }
@@ -272,30 +272,31 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="origin">This candidate's CSS 2.1 §17.6.2 origin-priority tier.</param>
         /// <param name="row">The candidate's own row, for the resolver's position tiebreak.</param>
         /// <param name="column">The candidate's own column, for the resolver's position tiebreak.</param>
-        /// <param name="natural">
-        /// True to read <see cref="CssBox.NaturalBorderTopWidth"/>/etc instead of the cached
-        /// <see cref="CssBox.ActualBorderTopWidth"/>/etc - required for any candidate collected after
-        /// <c>CssLayoutEngineTable.ApplyCollapsedUsedBorderWidths</c> has overwritten that cache with the
-        /// box-model *used* half-width (see <see cref="ResolveRepeatedGroupBoundary"/>'s call site).
-        /// <see cref="Resolve"/>'s own candidates run before that override, so they read the cheaper
-        /// cached property.
-        /// </param>
+        /// <remarks>
+        /// The width read is always the <i>declared</i> one (<see cref="CssBox.NaturalBorderTopWidth"/>
+        /// and siblings), never the cached <see cref="CssBox.ActualBorderTopWidth"/> family, because
+        /// <c>CssLayoutEngineTable.ApplyCollapsedUsedBorderWidths</c> overwrites that cache with the
+        /// box-model <i>used</i> half-width and never restores it while the table stays collapsed. A
+        /// resolution is an input to that override, so reading the cache would feed the previous
+        /// resolution's output back in: correct on a table's first layout pass and halved on every one
+        /// after it. Nothing guarantees a single pass - <c>ShrinkToFit</c>, a §4.3 relocation and a
+        /// per-page-width reflow all re-enter the engine over the same boxes - and the symptom is a
+        /// grid line that quietly renders at half, then a quarter, of its declared width, with the
+        /// cells shrinking to match. See
+        /// .claude/recent-fixes/2026-09-22-a-collapsed-grid-line-resolves-from-its-declared-width.md.
+        /// </remarks>
         private static void Add(
             List<CollapsedBorderCandidate> into, CssBox? box, Border side,
-            CollapsedBorderOrigin origin, int row, int column, bool natural = false)
+            CollapsedBorderOrigin origin, int row, int column)
         {
             if (box is null) return;
 
             var (style, width, color) = side switch
             {
-                Border.Top => (box.BorderTopStyle.Value,
-                    natural ? box.NaturalBorderTopWidth : box.ActualBorderTopWidth, box.ActualBorderTopColor),
-                Border.Right => (box.BorderRightStyle.Value,
-                    natural ? box.NaturalBorderRightWidth : box.ActualBorderRightWidth, box.ActualBorderRightColor),
-                Border.Bottom => (box.BorderBottomStyle.Value,
-                    natural ? box.NaturalBorderBottomWidth : box.ActualBorderBottomWidth, box.ActualBorderBottomColor),
-                Border.Left => (box.BorderLeftStyle.Value,
-                    natural ? box.NaturalBorderLeftWidth : box.ActualBorderLeftWidth, box.ActualBorderLeftColor),
+                Border.Top => (box.BorderTopStyle.Value, box.NaturalBorderTopWidth, box.ActualBorderTopColor),
+                Border.Right => (box.BorderRightStyle.Value, box.NaturalBorderRightWidth, box.ActualBorderRightColor),
+                Border.Bottom => (box.BorderBottomStyle.Value, box.NaturalBorderBottomWidth, box.ActualBorderBottomColor),
+                Border.Left => (box.BorderLeftStyle.Value, box.NaturalBorderLeftWidth, box.ActualBorderLeftColor),
                 _ => throw new ArgumentOutOfRangeException(nameof(side)),
             };
 

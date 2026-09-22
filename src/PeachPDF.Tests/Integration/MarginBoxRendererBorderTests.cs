@@ -1,6 +1,15 @@
 using PeachPDF;
+using PeachPDF.Adapters;
+using PeachPDF.CSS;
+using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore;
+using PeachPDF.Tests.TestSupport;
+using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -17,6 +26,12 @@ namespace PeachPDF.Tests.Integration
     /// tests: a solid-color polygon fill's exact vertex coordinates are unambiguous proof, confirmed
     /// against this library's actual coordinate convention (PDF Y is flipped from document Y - a
     /// "border-top" edge ends up at the HIGH end of the box's own PDF-space Y range).
+    /// <para>
+    /// The per-side bevel tests at the end take the other route, painting
+    /// <see cref="MarginBoxRenderer.PaintBorder"/> through a recording <c>RGraphics</c> instead: they
+    /// assert which <em>face</em> each edge takes, and an exact <c>RColor</c> says that where an
+    /// <c>rg</c> operator rounded to three decimals only says it approximately.
+    /// </para>
     /// </summary>
     public class MarginBoxRendererBorderTests
     {
@@ -138,16 +153,17 @@ namespace PeachPDF.Tests.Integration
             // without the "initial" arm and prove nothing.
             //
             // 0.604 = 154/255, the darkened face of rgb(238,238,238) - the same byte an unstyled <hr>
-            // paints. The LIT face (0.933) is deliberately not asserted: DrawCollapsedSegment shades
-            // every segment as if it were a top/left edge, so a margin box's bottom border darkens too
-            // and no lit face is produced at all. That is issue #1237, independent of this rule; when
-            // it closes, the bottom edge here becomes 0.933 and this test should gain that assertion.
+            // paints - on the TOP edge, and 0.933 = 238/255, its lit face, on the bottom one (that face
+            // keeps the declared colour rather than lightening, rgb(238,238,238) being past the
+            // near-white threshold). Both are asserted because both used to be 0.604: every edge was
+            // shaded as if it were a top/left one, so no lit face was produced at all (issue #1237).
             var pdfText = await GetPdfText(
                 "<!DOCTYPE html><html><head><style>@page { @bottom-center { content: \"x\"; width: 200pt; " +
-                "color: rgb(255,0,0); border-top: 4pt inset; } }</style></head>" +
+                "color: rgb(255,0,0); border-top: 4pt inset; border-bottom: 4pt inset; } }</style></head>" +
                 "<body><p>short</p></body></html>");
 
             Assert.Contains("0.604 0.604 0.604 rg", pdfText);
+            Assert.Contains("0.933 0.933 0.933 rg", pdfText);
             // ...and emphatically neither the shaded red nor the shaded black it produced before.
             Assert.DoesNotContain("0.671 0 0 rg", pdfText);
             Assert.DoesNotContain("0.329 0.329 0.329 rg", pdfText);
@@ -172,6 +188,125 @@ namespace PeachPDF.Tests.Integration
             // 0.933 = 238/255: the base must not reach a flat edge at all.
             Assert.DoesNotContain("0.933 0.933 0.933 rg", pdfText);
             Assert.DoesNotContain("0.604 0.604 0.604 rg", pdfText);
+        }
+
+        // ── Per-side bevel faces (issue #1237) ───────────────────────────────────────────────────
+        //
+        // Painted through TestRecordingGraphics rather than the content stream: these assert which
+        // FACE each edge takes, and an exact RColor says that where a rounded 3-decimal "rg" operator
+        // only says it approximately.
+
+        /// <summary>A 100×50 border box with a 10pt border on every side, painted directly.</summary>
+        private static List<TestRecordingGraphics.FilledShape> PaintMarginBoxBorder(string declarations)
+        {
+            var style = new StylesheetParser()
+                .Parse($"@page {{ @top-center {{ content: \"x\"; {declarations} }} }}")
+                .Rules.OfType<PageRule>().Single().Margins.Single().Style;
+
+            var g = new TestRecordingGraphics();
+            MarginBoxRenderer.PaintBorder(
+                g, new RRect(0, 0, 100, 50), style, emPt: 16, remPt: 16, pixelsPerPoint: 1.0,
+                adapter: new PdfSharpAdapter());
+
+            // FilledShapes rather than DrawPolygonCall: a fill is a fill whichever primitive made it,
+            // so a future ring-path fast path here would not silently read as "nothing painted".
+            return [.. g.FilledShapes];
+        }
+
+        /// <summary>
+        /// The colour of the one band covering exactly the given rect, with a failure that names every
+        /// band it did find - an exact-rect dictionary lookup would throw KeyNotFound and say nothing
+        /// about what moved.
+        /// </summary>
+        private static RColor FaceAt(
+            IReadOnlyList<TestRecordingGraphics.FilledShape> bands,
+            double left, double top, double right, double bottom)
+        {
+            var want = RRect.FromLTRB(left, top, right, bottom);
+            var matches = bands.Where(b => Matches(b.Bounds, want)).ToList();
+
+            Assert.True(matches.Count == 1,
+                $"expected exactly one band at {want}, found {matches.Count} among: " +
+                string.Join(", ", bands.Select(b => b.Bounds)));
+
+            return matches[0].Color;
+        }
+
+        /// <summary>Whether two rects name the same band, to within paint-coordinate noise.</summary>
+        private static bool Matches(RRect actual, RRect expected) =>
+            Math.Abs(actual.Left - expected.Left) < 0.001 && Math.Abs(actual.Top - expected.Top) < 0.001 &&
+            Math.Abs(actual.Right - expected.Right) < 0.001 && Math.Abs(actual.Bottom - expected.Bottom) < 0.001;
+
+        [Fact]
+        public void ABevelledMarginBoxBorder_TakesEachSidesOwnFace()
+        {
+            // A margin box is a real box with four real sides, unlike a collapsed table's grid lines,
+            // so inset darkens top and left and lights bottom and right the way any other box's border
+            // does. Before #1237 all four darkened - the frame came out flat, with no bevel at all.
+            var bands = PaintMarginBoxBorder("border: 10pt inset rgb(128,128,128)");
+
+            var color = RColor.FromArgb(128, 128, 128);
+            var dark = BorderBevelColors.Shade(color, darken: true);
+            var light = BorderBevelColors.Shade(color, darken: false);
+            Assert.NotEqual(dark, light);
+
+            Assert.Equal(4, bands.Count);
+
+            Assert.Equal(dark, FaceAt(bands, 0, 0, 100, 10));    // top
+            Assert.Equal(light, FaceAt(bands, 0, 40, 100, 50));  // bottom
+            Assert.Equal(dark, FaceAt(bands, 0, 0, 10, 50));     // left
+            Assert.Equal(light, FaceAt(bands, 90, 0, 100, 50));  // right
+        }
+
+        [Fact]
+        public void AnOutsetMarginBoxBorder_TakesTheMirrorFaceOfInset()
+        {
+            // The other half of the same rule: outset must not be "inset for every side" either.
+            var bands = PaintMarginBoxBorder("border: 10pt outset rgb(128,128,128)");
+
+            var color = RColor.FromArgb(128, 128, 128);
+            var dark = BorderBevelColors.Shade(color, darken: true);
+            var light = BorderBevelColors.Shade(color, darken: false);
+
+            Assert.Equal(4, bands.Count);
+
+            Assert.Equal(light, FaceAt(bands, 0, 0, 100, 10));   // top
+            Assert.Equal(dark, FaceAt(bands, 0, 40, 100, 50));   // bottom
+            Assert.Equal(light, FaceAt(bands, 0, 0, 10, 50));    // left
+            Assert.Equal(dark, FaceAt(bands, 90, 0, 100, 50));   // right
+        }
+
+        [Fact]
+        public void AGrooveMarginBoxBorder_PutsItsInsetFaceOnTheOuterHalfOfEverySide()
+        {
+            // groove's outer half is its inset face (CSS 2.1 §8.5.3) - and "outer" is the half at the
+            // SMALLER coordinate on a top/left edge but the larger one on a bottom/right edge. Both
+            // flips together are what make a bottom edge come out the way it does, and they cancel: a
+            // bottom edge's bands are the same two colours in the same order as a top edge's, which is
+            // why groove/ridge survived #1237's side-blind shading unharmed where inset/outset did not.
+            // Pinned here so that a change teaching this path about sides cannot flip one without the
+            // other and still look right.
+            var bands = PaintMarginBoxBorder("border: 10pt groove rgb(128,128,128)");
+
+            var color = RColor.FromArgb(128, 128, 128);
+            var dark = BorderBevelColors.Shade(color, darken: true);
+            var light = BorderBevelColors.Shade(color, darken: false);
+
+            Assert.Equal(8, bands.Count);
+
+            // Top: outer band first, and it is the inset face of a top edge - darkened.
+            Assert.Equal(dark, FaceAt(bands, 0, 0, 100, 5));
+            Assert.Equal(light, FaceAt(bands, 0, 5, 100, 10));
+
+            // Bottom: the outer band is the LOWER one, and the inset face of a bottom edge is lit.
+            Assert.Equal(dark, FaceAt(bands, 0, 40, 100, 45));
+            Assert.Equal(light, FaceAt(bands, 0, 45, 100, 50));
+
+            Assert.Equal(dark, FaceAt(bands, 0, 0, 5, 50));
+            Assert.Equal(light, FaceAt(bands, 5, 0, 10, 50));
+
+            Assert.Equal(dark, FaceAt(bands, 90, 0, 95, 50));
+            Assert.Equal(light, FaceAt(bands, 95, 0, 100, 50));
         }
     }
 }

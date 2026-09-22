@@ -80,7 +80,9 @@ written down in place of something the engine could derive, and each one broke a
   maps every segment to `Border.Top`/`Border.Left`, both of which darken under `inset`. Measured:
   Chrome splits 5600/5600 px between `#ab0000` and `#ff0000` for a collapsed cell, PeachPDF paints
   8000 px of `#ab0000`. Independent of this change — it reproduces with a declared colour — so it is
-  #1237 with its own gap note.
+  #1237 with its own gap note. **Since closed**, by
+  [2026-09-22-a-collapsed-grid-line-shows-both-bevel-faces.md](2026-09-22-a-collapsed-grid-line-shows-both-bevel-faces.md),
+  which also deleted that gap note; the measurement above is history, not current behaviour.
 - **An out-of-flow table-internal box keeps the exemption** (`position: absolute; display:
   table-cell`), because `BlockifyPositionedBox` does not implement CSS Display 3 §2.7's
   layout-internal arms. #1238.

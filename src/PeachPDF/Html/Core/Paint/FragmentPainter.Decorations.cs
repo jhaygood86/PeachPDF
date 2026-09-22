@@ -1663,7 +1663,10 @@ namespace PeachPDF.Html.Core.Paint
 
                 if (!IsRectVisible(visualRect, clip)) continue;
 
-                BordersDrawHandler.DrawCollapsedSegment(g, segment.IsHorizontal, visualRect, segment.Style, segment.Color, segment.Width);
+                // side: null - a grid line is shared by the boxes on both sides of it and so is not any
+                // one box's edge; that is what gives a bevelled segment both of its faces.
+                BordersDrawHandler.DrawCollapsedSegment(
+                    g, segment.IsHorizontal, visualRect, segment.Style, segment.Color, segment.Width, side: null);
             }
         }
 

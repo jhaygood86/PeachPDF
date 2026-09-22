@@ -555,7 +555,10 @@ namespace PeachPDF.Html.Core.Dom
                     ? BorderBevelColors.IsBeveled(lineStyle) ? BorderBevelColors.CurrentColorBase : textColor
                     : colorParser.GetActualColor(colorValue);
 
-            void PaintEdge(bool isHorizontal, RRect edgeRect, double widthPx, string? styleValue, string? colorValue)
+            // Each edge names the side it is, unlike a table grid line: this box's border really does
+            // have four sides, so a bevelled one shades per side the way an ordinary box's does (issue
+            // #1237 - an inset border used to darken all four edges here, producing no bevel at all).
+            void PaintEdge(Border side, RRect edgeRect, double widthPx, string? styleValue, string? colorValue)
             {
                 if (!Map.LineStyles.TryGetValue(styleValue ?? string.Empty, out var lineStyle))
                     lineStyle = LineStyle.None;
@@ -563,7 +566,9 @@ namespace PeachPDF.Html.Core.Dom
                 if (widthPx <= 0 || lineStyle is LineStyle.None or LineStyle.Hidden)
                     return;
 
-                BordersDrawHandler.DrawCollapsedSegment(g, isHorizontal, edgeRect, lineStyle, ResolveBorderColor(colorValue, lineStyle), widthPx);
+                BordersDrawHandler.DrawCollapsedSegment(
+                    g, side is Border.Top or Border.Bottom, edgeRect, lineStyle,
+                    ResolveBorderColor(colorValue, lineStyle), widthPx, side);
             }
 
             var topWidthPx = ResolveBorderWidthPt(style.BorderTopWidth, style.BorderTopStyle, emPt, remPt) * pixelsPerPoint;
@@ -571,13 +576,13 @@ namespace PeachPDF.Html.Core.Dom
             var leftWidthPx = ResolveBorderWidthPt(style.BorderLeftWidth, style.BorderLeftStyle, emPt, remPt) * pixelsPerPoint;
             var rightWidthPx = ResolveBorderWidthPt(style.BorderRightWidth, style.BorderRightStyle, emPt, remPt) * pixelsPerPoint;
 
-            PaintEdge(true, new RRect(borderBoxRect.Left, borderBoxRect.Top, borderBoxRect.Width, topWidthPx),
+            PaintEdge(Border.Top, new RRect(borderBoxRect.Left, borderBoxRect.Top, borderBoxRect.Width, topWidthPx),
                 topWidthPx, style.BorderTopStyle, style.BorderTopColor);
-            PaintEdge(true, new RRect(borderBoxRect.Left, borderBoxRect.Bottom - bottomWidthPx, borderBoxRect.Width, bottomWidthPx),
+            PaintEdge(Border.Bottom, new RRect(borderBoxRect.Left, borderBoxRect.Bottom - bottomWidthPx, borderBoxRect.Width, bottomWidthPx),
                 bottomWidthPx, style.BorderBottomStyle, style.BorderBottomColor);
-            PaintEdge(false, new RRect(borderBoxRect.Left, borderBoxRect.Top, leftWidthPx, borderBoxRect.Height),
+            PaintEdge(Border.Left, new RRect(borderBoxRect.Left, borderBoxRect.Top, leftWidthPx, borderBoxRect.Height),
                 leftWidthPx, style.BorderLeftStyle, style.BorderLeftColor);
-            PaintEdge(false, new RRect(borderBoxRect.Right - rightWidthPx, borderBoxRect.Top, rightWidthPx, borderBoxRect.Height),
+            PaintEdge(Border.Right, new RRect(borderBoxRect.Right - rightWidthPx, borderBoxRect.Top, rightWidthPx, borderBoxRect.Height),
                 rightWidthPx, style.BorderRightStyle, style.BorderRightColor);
         }
 

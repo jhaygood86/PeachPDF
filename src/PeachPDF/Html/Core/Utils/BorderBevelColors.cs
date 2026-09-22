@@ -149,12 +149,31 @@ namespace PeachPDF.Html.Core.Utils
             Shade(color, (side is Border.Top or Border.Left) == inset);
 
         /// <summary>
-        /// <see cref="ForSide"/> for a collapsed-border segment, which has no owning box and so no real
-        /// side: css-tables-3 grid lines run either along a row (behaves like a top edge) or down a
-        /// column (behaves like a left edge).
+        /// <see cref="ForSide"/> for one half of a collapsed-border segment. A css-tables-3 grid line
+        /// has no owning box and so no single side: it straddles the edge shared by the boxes on either
+        /// side of it, and shows <em>both</em> faces at once - the half at the smaller coordinate is the
+        /// bottom/right edge of whatever lies before the line, the half at the larger coordinate the
+        /// top/left edge of whatever lies after it. Which way the line <em>runs</em> plays no part; a
+        /// horizontal and a vertical grid line of the same style shade identically.
         /// </summary>
-        internal static RColor ForSegment(RColor color, bool isHorizontal, bool inset) =>
-            ForSide(color, isHorizontal ? Border.Top : Border.Left, inset);
+        /// <remarks>
+        /// Measured against Chrome 153 (issue #1237), which paints every collapsed line this way
+        /// whichever box's declaration won it - outer lines included, where the box "before" the line is
+        /// the page rather than a cell. The visible consequence is that a collapsed <c>inset</c> is
+        /// indistinguishable from a <c>ridge</c>, and an <c>outset</c> from a <c>groove</c>; Chrome
+        /// renders those pairs identically too.
+        /// </remarks>
+        /// <param name="color">The resolved color of the segment.</param>
+        /// <param name="inset">Whether the style being asked about is an <c>inset</c>-faced one.</param>
+        /// <returns>
+        /// Both faces at once: <c>Leading</c> for the half at the smaller coordinate (left of a
+        /// vertical line, above a horizontal one) and <c>Trailing</c> for the half at the larger one.
+        /// Returned together rather than one per call with a <c>bool</c> selector, because the selector
+        /// and <c>inset</c> would be interchangeable at every call site and a swapped pair still
+        /// compiles - the two halves are never wanted apart anyway.
+        /// </returns>
+        internal static (RColor Leading, RColor Trailing) ForSegment(RColor color, bool inset) =>
+            (ForSide(color, Border.Bottom, inset), ForSide(color, Border.Top, inset));
 
         private static RColor Scale(RColor c, double multiplier) =>
             RColor.FromArgb(

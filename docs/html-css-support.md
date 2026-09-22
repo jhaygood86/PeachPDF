@@ -313,6 +313,22 @@ produces, so a document proofed in a browser prints the same way:
   darken visibly lightens both faces instead, by differing amounts, while a color too light to lighten
   visibly keeps the declared color on the lit pair rather than being clipped to white.
 
+On a [`border-collapse: collapse`](https://developer.mozilla.org/en-US/docs/Web/CSS/border-collapse)
+table `inset` and `outset` are drawn from the same two faces but pick between them differently,
+because a collapsed grid line is not any one box's edge: it straddles the boundary shared by whatever
+lies on either side of it, so it shows **both** faces at once, one per half. The half at the smaller
+coordinate (the left half of a column line, the upper half of a row line) takes the face a bottom or
+right edge would, and the half at the larger coordinate the face a top or left edge would — on every
+line alike, interior or outermost, whichever cell's, row's or table's declaration won it. A collapsed
+`inset` therefore draws the same two bands as a `ridge`, and a collapsed `outset` the same as a
+`groove`, which is what a browser paints for the same table. `groove` and `ridge` themselves are
+unchanged by this: they already draw two halves, and the rule above happens to pick the same two
+faces in the same order a box edge does, so they look identical either side of `border-collapse`. A page box's or page-margin box's border
+has four real sides and so follows the per-side rule above instead, with one difference from an
+element's: its edges are painted full-width and full-height rather than mitred, so where two of them
+meet, the left or right edge's face covers the corner square outright instead of the two splitting it
+along the diagonal.
+
 A bevelled border side whose color is [`currentcolor`](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value#currentcolor_keyword)
 — which is `border-color`'s initial value, so this covers every `border: 2px inset` that names no
 color — does **not** shade the element's own [`color`](https://developer.mozilla.org/en-US/docs/Web/CSS/color).

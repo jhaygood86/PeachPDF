@@ -114,13 +114,12 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// The declared border width CSS 2.1 §17.6.2 resolution itself needs as an input - deliberately
         /// bypassing <see cref="_actualBorderTopWidth"/>'s cache, which <see cref="SetCollapsedUsedBorderWidths"/>
-        /// overwrites with the box-model *used* half-width for the rest of a collapsed table's layout
-        /// pass. <see cref="CollapsedBorderModel.Resolve"/> itself runs before that override is applied
-        /// (safe to read <see cref="ActualBorderTopWidth"/> directly), but
-        /// <see cref="CollapsedBorderModel.ResolveRepeatedGroupBoundary"/> runs at the very end of the
-        /// pass, once a repeated group's final per-page geometry exists - by then the override is
-        /// already active, and reading the cached property there would resolve against half of an
-        /// earlier, unrelated resolution instead of this cell's real declared border.
+        /// overwrites with the box-model *used* half-width and does not restore while the table stays
+        /// collapsed. Every §17.6.2 candidate reads this instead, including
+        /// <see cref="CollapsedBorderModel.Resolve"/>'s own: a resolution is that override's *input*, so
+        /// reading the cache feeds the previous resolution's output back in - harmless on a table's
+        /// first layout pass, and a silent halving on every pass after it (<c>ShrinkToFit</c>, a §4.3
+        /// relocation and a per-page-width reflow all re-enter the engine over the same boxes).
         /// </summary>
         internal double NaturalBorderTopWidth =>
             Style.Border.BorderTopStyle.Value is LineStyle.None or LineStyle.Hidden
