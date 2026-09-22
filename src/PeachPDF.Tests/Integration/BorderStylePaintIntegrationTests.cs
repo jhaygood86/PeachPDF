@@ -1371,8 +1371,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task CollapsedBorderStyleDouble_StripeWidths_AreInvariantUnderNonDefaultPixelsPerInch()
         {
-            // BordersDrawHandler.DrawDoubleOrGrooveRidgeSegment is the collapsed-table-border twin of
-            // Box-edge groove/ridge painting is covered above - a separate code path (CollapsedBorderModel's
+            // BordersDrawHandler.DrawBandedSegment is the collapsed-table-border twin of the box-edge
+            // double/groove/ridge painting covered above - a separate code path (CollapsedBorderModel's
             // resolved segments, not a box's own DrawBoxBorders) with its own scaling.
             var html = LayoutHarness.Wrap(
                 "<table style='border-collapse:collapse'><tr><td style='border:12pt double rgb(51,51,51)'>x</td></tr></table>");
@@ -1393,13 +1393,58 @@ namespace PeachPDF.Tests.Integration
                 Assert.Equal(bandsDefault[i].Thickness, bandsScaled[i].Thickness / 2.0, 3);
         }
 
-        [Fact]
-        public async Task CollapsedBorderStyleGroove_ShadesARowSegmentLikeATopEdge()
+        [Theory]
+        // A collapsed grid line has no owning box: it straddles the edge shared by whatever lies on
+        // either side of it, so it shows BOTH faces, one per half - the half at the smaller coordinate
+        // being a bottom/right edge and the half at the larger coordinate a top/left one. That makes
+        // inset and ridge the same two bands, and outset and groove the same two (issue #1237),
+        // which is what Chrome 153 paints for all four.
+        [InlineData("inset", false)]
+        [InlineData("ridge", false)]
+        [InlineData("outset", true)]
+        [InlineData("groove", true)]
+        public async Task CollapsedBorderBevel_PaintsBothFaces_OneHalfEach(string style, bool leadingIsDark)
         {
-            // A collapsed segment has no owning box, so css-tables-3's grid lines borrow a box side: a
-            // row (horizontal) line shades like a top edge, a column line like a left one.
             var html = LayoutHarness.Wrap(
-                "<table style='border-collapse:collapse'><tr><td style='border:12pt groove rgb(51,51,51)'>x</td></tr></table>");
+                $"<table style='border-collapse:collapse'><tr>" +
+                $"<td style='width:60pt; height:24pt; border:12pt {style} rgb(51,51,51)'></td></tr></table>");
+
+            var (_, container) = await LayoutHarness.LayoutAsync(html);
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintPage(container, g);
+
+            var dark = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: true);
+            var light = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: false);
+            var leading = leadingIsDark ? dark : light;
+            var trailing = leadingIsDark ? light : dark;
+
+            // Both grid lines on each axis, each as its own leading/trailing pair: the top line's two
+            // halves, then the bottom line's. Asserting only one line would let a "shade the whole
+            // segment one way" regression survive on the other.
+            var horizontal = HorizontalBands(g);
+            Assert.Equal(4, horizontal.Count);
+            Assert.Equal([leading, trailing, leading, trailing], horizontal.Select(b => b.Color));
+
+            // Which way the line RUNS plays no part - a column line shades exactly as a row line does.
+            var vertical = VerticalBands(g);
+            Assert.Equal(4, vertical.Count);
+            Assert.Equal([leading, trailing, leading, trailing], vertical.Select(b => b.Color));
+
+            // Each face is half the line, so neither can be widened into the other unnoticed.
+            Assert.All(horizontal.Concat(vertical), b => Assert.Equal(6, b.Thickness, 2));
+        }
+
+        [Fact]
+        public async Task CollapsedBorderBevel_InteriorGridLineBetweenTwoCells_ShowsBothFacesToo()
+        {
+            // The interior line is the one whose two halves really do belong to two different cells -
+            // the left cell's right edge and the right cell's left edge. It gets the same treatment as
+            // an outer line, which is what makes a collapsed bevel read as a bevel at all. A 2x2 grid,
+            // so the interior ROW line is checked too: nothing in the rule is per-axis, and a
+            // regression that reintroduced a direction test would show up on exactly one of them.
+            var cell = "<td style='width:40pt; height:24pt; border:12pt inset rgb(51,51,51)'></td>";
+            var html = LayoutHarness.Wrap(
+                $"<table style='border-collapse:collapse'><tr>{cell}{cell}</tr><tr>{cell}{cell}</tr></table>");
 
             var (_, container) = await LayoutHarness.LayoutAsync(html);
             var g = new TestRecordingGraphics();
@@ -1408,15 +1453,24 @@ namespace PeachPDF.Tests.Integration
             var dark = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: true);
             var light = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: false);
 
-            var horizontal = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
-                .Select(Band)
-                .Where(b => b.Width > b.Height)
-                .OrderBy(b => b.Top)
-                .ToList();
+            // Three lines per axis now: the two outer ones and the shared interior one between them.
+            foreach (var bands in new[] { VerticalBands(g), HorizontalBands(g) })
+            {
+                Assert.Equal(6, bands.Count);
+                Assert.Equal([light, dark, light, dark, light, dark], bands.Select(b => b.Color));
+                Assert.All(bands, b => Assert.Equal(6, b.Thickness, 2));
+            }
 
-            Assert.NotEmpty(horizontal);
-            Assert.Equal(dark, horizontal[0].Color);
-            Assert.Equal(light, horizontal[1].Color);
+            // The interior pair is ONE line's two halves, not two abutting lines. Contiguity alone
+            // would hold either way, so it is the pair's total extent that says which: 12pt across -
+            // the declared width - rather than two 12pt lines meeting at an edge.
+            var columns = VerticalBands(g);
+            Assert.Equal(columns[2].Right, columns[3].Left, 2);
+            Assert.Equal(12, columns[3].Right - columns[2].Left, 2);
+
+            var rows = HorizontalBands(g);
+            Assert.Equal(rows[2].Bottom, rows[3].Top, 2);
+            Assert.Equal(12, rows[3].Bottom - rows[2].Top, 2);
         }
 
         [Theory]
@@ -1489,6 +1543,14 @@ namespace PeachPDF.Tests.Integration
                 .Select(Band)
                 .Where(b => b.Width > b.Height)
                 .OrderBy(b => b.Top)
+                .ToList();
+
+        /// <summary>Every vertical (left/right edge) band, ordered left to right.</summary>
+        private static List<BandInfo> VerticalBands(TestRecordingGraphics g) =>
+            g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
+                .Select(Band)
+                .Where(b => b.Height > b.Width)
+                .OrderBy(b => b.Left)
                 .ToList();
 
         private static double LeftOf(CssBox box) => box.Location.X;

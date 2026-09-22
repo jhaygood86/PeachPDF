@@ -302,6 +302,29 @@ static string SideSwatch(string desc, string inlineCss) =>
     $"<div class=\"css\">{inlineCss}</div>" +
     "</td>";
 
+/// <summary>
+/// One 2x2 table drawn twice at the same border declaration: collapsed above, separate below. A
+/// collapsed grid line belongs to the boxes on both sides of it, so a bevelled one shows both faces -
+/// which makes the two models legitimately differ, and makes a collapsed <c>inset</c> read as a
+/// <c>ridge</c>. Painting a collapsed <c>inset</c>/<c>outset</c> as one flat face on every side, as
+/// this used to, made the upper table indistinguishable from a <c>solid</c> one for those two
+/// keywords; <c>groove</c>/<c>ridge</c> were already two bands and are shown here for the comparison.
+/// </summary>
+static string CollapsedTableSwatch(string desc, string style)
+{
+    static string Grid(string borderStyle) =>
+        string.Concat(Enumerable.Repeat(
+            $"<tr><td style=\"border: 12px {borderStyle} #4a90d9\"></td>" +
+            $"<td style=\"border: 12px {borderStyle} #4a90d9\"></td></tr>", 2));
+
+    return "<td>" +
+        $"<table class=\"ct\">{Grid(style)}</table>" +
+        $"<table class=\"ct cs\">{Grid(style)}</table>" +
+        $"<div class=\"desc\">{desc}</div>" +
+        $"<div class=\"css\">collapse / separate, border: 12px {style}</div>" +
+        "</td>";
+}
+
 static string RoundedPatternPhaseComparisonSwatch() =>
     "<td>" +
     "<div class=\"phasepair\">" +
@@ -6103,6 +6126,9 @@ const string BorderStyleCss = """
     .phasebox { position: absolute; left: 0; top: 0; height: 48px; border: 14px #d94a4a; border-style: double dotted inset outset; border-radius: 28px; background: #eee; transform: scale(.5); transform-origin: top left }
     .phasebox.second { left: 140px }
     .wbox { height: 16px; background: #eee; margin-bottom: 1px }
+    table.ct { border-collapse: collapse; margin: 0 0 4px }
+    table.ct td { width: 26px; height: 14px; padding: 0; background: #eee }
+    table.cs { border-collapse: separate; border-spacing: 0 }
     .hrbox { height: 58px } .hrbox hr, .hrbox div { margin: 0 0 12px }
     .wlabel { font-size: 6pt; color: #888; margin-bottom: 4px }
     .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
@@ -6218,6 +6244,21 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
         SideSwatch("mixed styles", "border: 14px #4a90d9; border-style: solid dashed double dotted"),
         SideSwatch("mixed everything",
             "border-color: #d94a4a #4ad98a #4a90d9 #d9c74a; border-style: double solid groove dashed; border-width: 18px 6px 14px 10px")
+    ) +
+
+    // A collapsed table's grid lines are not any one box's edges - each is shared by the boxes on
+    // either side of it - so a bevelled line shows BOTH faces, one per half, on every line alike:
+    // interior lines and the outermost ones, whichever cell's declaration won them. That is why the
+    // collapsed table above each separate one below reads as engraved rather than flat, and why its
+    // inset is the same two bands as its ridge. Shading every segment as if it were a top/left edge
+    // instead left the collapsed model unable to tell inset or outset apart from solid; groove and
+    // ridge already painted two bands and are unchanged, which is what the four together show.
+    "<h2>The four bevels on a collapsed table (collapse above, separate below)</h2>" +
+    Row(
+        CollapsedTableSwatch("inset", "inset"),
+        CollapsedTableSwatch("outset", "outset"),
+        CollapsedTableSwatch("groove", "groove"),
+        CollapsedTableSwatch("ridge", "ridge")
     ) +
 
     // A horizontal rule is an ordinary box whose border IS the rule, so every border-style applies to

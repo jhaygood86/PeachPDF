@@ -61,9 +61,27 @@ namespace PeachPDF.Html.Core.Handlers
         /// Draws one CSS 2.1 §17.6.2 collapsed-border segment. A collapsed segment butts against
         /// neighboring grid lines and therefore has no box corner or mitre of its own.
         /// </summary>
+        /// <param name="g">The graphics to paint on.</param>
+        /// <param name="isHorizontal">
+        /// Whether the segment's rect is physically wide rather than tall - which physical primitive to
+        /// draw, not the grid line's topology: a row-boundary line is <c>false</c> under a vertical
+        /// writing mode, where rows stack along physical X.
+        /// </param>
+        /// <param name="rect">The segment's own rect, already in paint space.</param>
+        /// <param name="style">The resolved line style.</param>
+        /// <param name="color">The resolved line color.</param>
+        /// <param name="width">The segment's thickness across its run.</param>
+        /// <param name="side">
+        /// The box edge this stroke <em>is</em>, for a caller that paints a real box's four edges
+        /// through this primitive (<c>MarginBoxRenderer.PaintBorder</c>), or <c>null</c> for a table
+        /// grid line, which belongs to the boxes on both sides of it and so has no single side. It
+        /// decides the bevelled styles only: a box edge takes one face the way
+        /// <see cref="BoxEdgesDrawHandler"/> would, a grid line shows both - see
+        /// <see cref="BorderBevelColors.ForSegment"/>.
+        /// </param>
         internal static void DrawCollapsedSegment(
             RGraphics g, bool isHorizontal, RRect rect,
-            LineStyle style, RColor color, double width)
+            LineStyle style, RColor color, double width, Border? side)
         {
             if (rect is not { Width: > 0, Height: > 0 } || width <= 0 ||
                 style is LineStyle.None or LineStyle.Hidden) return;
@@ -71,7 +89,12 @@ namespace PeachPDF.Html.Core.Handlers
             switch (style)
             {
                 case LineStyle.Double or LineStyle.Groove or LineStyle.Ridge:
-                    DrawDoubleOrGrooveRidgeSegment(g, isHorizontal, rect, style, color, width);
+                // A grid line shows both bevel faces, one per half, so inset/outset paint as two bands
+                // here exactly as groove/ridge do - Chrome renders the two pairs identically (#1237). A
+                // real box edge takes a single face instead, so it fails this section's guard and is
+                // handled by the solid arm below (C# switch sections never fall through).
+                case LineStyle.Inset or LineStyle.Outset when side is null:
+                    DrawBandedSegment(g, isHorizontal, rect, style, color, width, side);
                     break;
 
                 case LineStyle.Dotted or LineStyle.Dashed:
@@ -110,10 +133,9 @@ namespace PeachPDF.Html.Core.Handlers
 
                 default:
                 {
-                    // A segment has no owning box to shade "into", so use the top/left convention.
-                    var resolvedColor = style is LineStyle.Inset or LineStyle.Outset
-                        ? BorderBevelColors.ForSegment(
-                            color, isHorizontal, inset: style == LineStyle.Inset)
+                    // Only reached for a bevel when the caller named a real side (see the case above).
+                    var resolvedColor = (style is LineStyle.Inset or LineStyle.Outset) && side is { } beveledSide
+                        ? BorderBevelColors.ForSide(color, beveledSide, inset: style == LineStyle.Inset)
                         : color;
                     g.DrawPolygon(g.GetSolidBrush(resolvedColor),
                     [
@@ -127,29 +149,53 @@ namespace PeachPDF.Html.Core.Handlers
             }
         }
 
-        private static void DrawDoubleOrGrooveRidgeSegment(
+        /// <summary>
+        /// Draws a segment that is two bands rather than one fill: <c>double</c>'s two strokes, and the
+        /// two faces of <c>groove</c>/<c>ridge</c> - and of <c>inset</c>/<c>outset</c> on a grid line,
+        /// which shows both faces the same way.
+        /// </summary>
+        private static void DrawBandedSegment(
             RGraphics g, bool isHorizontal, RRect rect,
-            LineStyle style, RColor color, double width)
+            LineStyle style, RColor color, double width, Border? side)
         {
             double bandWidth;
-            RColor outerColor;
-            RColor innerColor;
+            RColor leadingColor;
+            RColor trailingColor;
 
             if (style == LineStyle.Double)
             {
                 bandWidth = width / 3;
-                outerColor = innerColor = color;
+                leadingColor = trailingColor = color;
             }
             else
             {
                 bandWidth = width / 2;
-                var outerIsInset = style == LineStyle.Groove;
-                outerColor = BorderBevelColors.ForSegment(color, isHorizontal, outerIsInset);
-                innerColor = BorderBevelColors.ForSegment(color, isHorizontal, !outerIsInset);
+
+                // A grid line's leading half is the bottom/right face and its trailing half the top/left
+                // one, whatever the style's own two halves would be on a box - which makes a collapsed
+                // inset identical to a ridge, and an outset to a groove, as in Chrome (#1237).
+                if (side is not { } boxSide)
+                {
+                    (leadingColor, trailingColor) = BorderBevelColors.ForSegment(
+                        color, inset: style is LineStyle.Inset or LineStyle.Ridge);
+                }
+                else
+                {
+                    // On a real box edge the outer half of a groove is its inset face, and a ridge's its
+                    // outset one - and the outer half is the leading band on a top/left edge, the
+                    // trailing one on a bottom/right edge.
+                    var outerIsInset = style == LineStyle.Groove;
+                    var outerColor = BorderBevelColors.ForSide(color, boxSide, outerIsInset);
+                    var innerColor = BorderBevelColors.ForSide(color, boxSide, !outerIsInset);
+                    var outerLeads = boxSide is Border.Top or Border.Left;
+
+                    leadingColor = outerLeads ? outerColor : innerColor;
+                    trailingColor = outerLeads ? innerColor : outerColor;
+                }
             }
 
-            DrawSegmentBand(g, isHorizontal, rect, outerColor, 0, bandWidth);
-            DrawSegmentBand(g, isHorizontal, rect, innerColor, width - bandWidth, width);
+            DrawSegmentBand(g, isHorizontal, rect, leadingColor, 0, bandWidth);
+            DrawSegmentBand(g, isHorizontal, rect, trailingColor, width - bandWidth, width);
         }
 
         private static void DrawSegmentBand(
