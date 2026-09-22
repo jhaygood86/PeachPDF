@@ -523,6 +523,32 @@ namespace PeachPDF.Fonts.OpenType
         }
 
         /// <summary>
+        /// The OS/2 table's own recommended geometry for synthesizing a subscript or superscript, as
+        /// fractions of the em: the glyph scale factor, and how far the synthesized baseline sits from
+        /// the main one (always positive - in the direction that variant belongs, so the caller decides
+        /// the sign). Returns null when the font leaves the relevant fields at zero, which is the
+        /// caller's signal to fall back to representative ratios.
+        /// </summary>
+        /// <remarks>
+        /// Per the OpenType OS/2 spec these are "recommended" values a UA is meant to use precisely for
+        /// this purpose, so a synthesized sub/superscript follows the type designer's own intent rather
+        /// than one hardcoded ratio for every face. Only the Y size is read: scaling a glyph
+        /// non-uniformly (ySuperscriptXSize differs from ySuperscriptYSize in some faces) would distort
+        /// it, and PeachPDF scales a synthesized run by picking a smaller font, which is uniform.
+        /// </remarks>
+        public (double SizeScale, double BaselineShift)? GetSubSuperscriptMetrics(bool superscript)
+        {
+            if (FontFace.os2 is not { } os2 || UnitsPerEm <= 0) return null;
+
+            var ySize = superscript ? os2.ySuperscriptYSize : os2.ySubscriptYSize;
+            var yOffset = superscript ? os2.ySuperscriptYOffset : os2.ySubscriptYOffset;
+
+            if (ySize <= 0 || yOffset == 0) return null;
+
+            return (ySize / (double)UnitsPerEm, Math.Abs(yOffset) / (double)UnitsPerEm);
+        }
+
+        /// <summary>
         /// Whether this font's GSUB table defines an active lookup for every tag in
         /// <paramref name="requiredTags"/> - checked independently per tag (see
         /// <see cref="GsubTable.SupportsAllFeatureTags"/>), under <see cref="GsubShaper.ScriptPreference"/>

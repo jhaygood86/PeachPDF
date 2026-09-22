@@ -2677,6 +2677,20 @@
       }
     },
     {
+      "name": "font-variant-position",
+      "comment": "CSS Fonts 4 §6.4, single mutually-exclusive keyword like font-variant-caps (not a space-separated combination). sub/super map to the OpenType 'subs'/'sups' GSUB features, with a synthesized fallback when the resolved font lacks them.",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": "keyword",
+      "supportedValues": ["normal", "sub", "super"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "FontVariantPosition",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
       "name": "font-variant-ligatures",
       "comment": "cssDataType 'cssom-grammar' calls Converters.FontVariantLigaturesConverter.Convert directly - the real converter enforces each ligature axis (common/discretionary/historical/contextual) appears at most once, which a naive keyword-set grammar would not; reusing it directly preserves that.",
       "inherited": true,

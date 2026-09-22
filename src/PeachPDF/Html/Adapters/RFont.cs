@@ -90,12 +90,30 @@ namespace PeachPDF.Html.Adapters
         /// <summary>
         /// Whether this font's GSUB table defines an active lookup for every OpenType feature tag
         /// <paramref name="feature"/> needs (e.g. both <c>smcp</c> and <c>c2sc</c> for
-        /// <see cref="FontVariantCapsFeature.AllSmallCaps"/> - see <see cref="GsubShaper.GetFeatureTags"/>).
+        /// <see cref="FontVariantCapsFeature.AllSmallCaps"/> - see <see cref="GsubShaper.GetFeatureTags(FontVariantCapsFeature)"/>).
         /// Called from <c>CssBox.AddWord</c>'s synthesis gate, which runs during DOM/box-tree
         /// parsing - before any <see cref="RGraphics"/> exists - so this lives on <see cref="RFont"/>
         /// itself rather than the graphics abstraction, mirroring <see cref="HasGlyph"/>.
         /// </summary>
         public abstract bool SupportsFontVariantCaps(FontVariantCapsFeature feature);
+
+        /// <summary>
+        /// Whether this font's GSUB table defines an active lookup for the OpenType feature tag
+        /// <paramref name="feature"/> needs (<c>subs</c> or <c>sups</c> - see
+        /// <see cref="GsubShaper.GetFeatureTags(FontVariantPositionFeature)"/>). Answering false is what
+        /// makes a run take the synthesized sub/superscript path instead, which CSS Fonts 4 requires as
+        /// the fallback; like <see cref="SupportsFontVariantCaps"/> this is asked during box-tree parsing,
+        /// before any <see cref="RGraphics"/> exists.
+        /// </summary>
+        public abstract bool SupportsFontVariantPosition(FontVariantPositionFeature feature);
+
+        /// <summary>
+        /// This font's own recommended geometry for a synthesized <paramref name="superscript"/> (or
+        /// subscript), as fractions of the em: the glyph scale factor, and how far the synthesized
+        /// baseline sits from the main one, always positive. Null when the font states nothing usable,
+        /// leaving the caller to fall back to representative ratios.
+        /// </summary>
+        public abstract (double SizeScale, double BaselineShift)? GetSubSuperscriptMetrics(bool superscript);
 
         /// <summary>
         /// A stable identity for the concrete face this font renders with, used only to coalesce adjacent

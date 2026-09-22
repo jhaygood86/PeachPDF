@@ -10432,13 +10432,16 @@ await SaveShowcaseAsync("gsub_ligatures", "Typography & Text", "GSUB Ligatures",
 // approximation on a font that doesn't (Source Code Pro, confirmed to carry zero caps-family GSUB
 // tags) - both are the same CSS, only the resolved font differs. font-variant-numeric activates a
 // font's real numeric-variant GSUB features (oldstyle figures, tabular figures, slashed zero) the
-// same way.
+// same way, and font-variant-position does the same for sups/subs - synthesizing from the font's own
+// OS/2 recommended scale and offset on STIX Two Math, which has no positional features at all.
 var sourceCodeProB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceCodePro-Regular.otf")));
+var stixTwoMathB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "StixTwoMath-Regular.ttf")));
 var fontVariantCapsHtml =
     "<!DOCTYPE html><html><head><style>" +
     "@page { size: a4; margin: 15mm }" +
     $"@font-face {{ font-family: 'SS3'; src: url('data:font/truetype;base64,{sourceSans3B64}') format('truetype'); }}" +
     $"@font-face {{ font-family: 'SCP'; src: url('data:font/opentype;base64,{sourceCodeProB64}') format('opentype'); }}" +
+    $"@font-face {{ font-family: 'STIX'; src: url('data:font/truetype;base64,{stixTwoMathB64}') format('truetype'); }}" +
     "body { font-family: 'SS3', serif; margin: 0; color: #222 }" +
     "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
     "h2 { font-size: 11pt; margin: 1.2em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
@@ -10448,10 +10451,11 @@ var fontVariantCapsHtml =
     "table.caps td { padding: 6px 8px; border-top: 1px solid #ddd }" +
     "table.caps td.label { font-size: 8pt; font-family: Arial, sans-serif; color: #666; vertical-align: middle }" +
     "</style></head><body>" +
-    "<h1>Font Variant: Caps &amp; Numerals</h1>" +
+    "<h1>Font Variant: Caps, Numerals &amp; Position</h1>" +
     "<p class=\"intro\">PeachPDF prefers a font's real OpenType GSUB substitution for " +
-    "<code>font-variant-caps</code> and <code>font-variant-numeric</code>, falling back to a " +
-    "synthesized approximation only where the standard specifically allows one.</p>" +
+    "<code>font-variant-caps</code>, <code>font-variant-numeric</code> and " +
+    "<code>font-variant-position</code>, falling back to a synthesized approximation only where the " +
+    "standard specifically allows one.</p>" +
 
     "<h2>font-variant-caps: real GSUB vs. synthesized fallback</h2>" +
     "<p class=\"intro\">Source Sans 3 has real <code>smcp</code>/<code>c2sc</code>/<code>titl</code> " +
@@ -10488,11 +10492,32 @@ var fontVariantCapsHtml =
     "<tr><td class=\"label\">tabular-nums</td><td style=\"font-variant-numeric: tabular-nums\">1234567890</td></tr>" +
     "<tr><td class=\"label\">slashed-zero</td><td style=\"font-variant-numeric: slashed-zero\">1002000</td></tr>" +
     "</table>" +
+
+    "<h2>font-variant-position: real GSUB vs. synthesized fallback</h2>" +
+    "<p class=\"intro\">Source Sans 3 has real <code>sups</code>/<code>subs</code> data, so its " +
+    "superscripts and subscripts below are the font's own purpose-drawn glyphs. STIX Two Math has " +
+    "neither (28 GSUB features, none of them positional), so the same CSS is synthesized instead - " +
+    "drawn at a reduced size with a shifted baseline, using the scale and offset that font's own OS/2 " +
+    "table recommends. Neither form changes the line's height, unlike vertical-align.</p>" +
+    "<table class=\"caps\" style=\"font-size: 16pt\">" +
+    "<tr><th>font-variant-position</th><th>Source Sans 3 (real GSUB)</th><th>STIX Two Math (synthesized)</th></tr>" +
+    "<tr><td class=\"label\">normal</td>" +
+    "<td style=\"font-family: 'SS3'\">E = mc2 and H2O</td>" +
+    "<td style=\"font-family: 'STIX'\">E = mc2 and H2O</td></tr>" +
+    "<tr><td class=\"label\">super</td>" +
+    "<td style=\"font-family: 'SS3'\">E = mc<span style=\"font-variant-position: super\">2</span></td>" +
+    "<td style=\"font-family: 'STIX'\">E = mc<span style=\"font-variant-position: super\">2</span></td></tr>" +
+    "<tr><td class=\"label\">sub</td>" +
+    "<td style=\"font-family: 'SS3'\">H<span style=\"font-variant-position: sub\">2</span>O</td>" +
+    "<td style=\"font-family: 'STIX'\">H<span style=\"font-variant-position: sub\">2</span>O</td></tr>" +
+    "</table>" +
     "</body></html>";
-await SaveShowcaseAsync("font_variant_caps", "Typography & Text", "Font Variant: Caps & Numerals",
+await SaveShowcaseAsync("font_variant_caps", "Typography & Text", "Font Variant: Caps, Numerals & Position",
     "font-variant-caps prefers a font's real GSUB smcp/c2sc/titl substitution, falling back to a " +
     "synthesized approximation only where the standard allows it; font-variant-numeric activates a " +
-    "font's real oldstyle/tabular/slashed-zero GSUB features the same way.",
+    "font's real oldstyle/tabular/slashed-zero GSUB features the same way, and font-variant-position " +
+    "uses real sups/subs glyphs where a font has them and synthesizes them from its OS/2 metrics " +
+    "where it doesn't.",
     fontVariantCapsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // Bidirectional text: the `dir` global attribute (including `auto`), `<bdo>`/`<bdi>`, CSS
@@ -11231,8 +11256,8 @@ await SaveShowcaseAsync("interactive_pdf_forms", "Interactivity", "Interactive P
     });
 
 // MathML: fractions, radicals, sub/superscripts, stretchy fences, and matrices rendered as real
-// vector PDF content using STIX Two Math's own OpenType MATH table.
-var stixTwoMathB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "StixTwoMath-Regular.ttf")));
+// vector PDF content using STIX Two Math's own OpenType MATH table. (stixTwoMathB64 is already read
+// above, for the font-variant-position showcase.)
 string MathPanel(string title, string mathml) =>
     "<div class=\"mpanel\">" +
     $"<div class=\"mtitle\">{title}</div>" +

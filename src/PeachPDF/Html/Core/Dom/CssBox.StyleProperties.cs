@@ -407,6 +407,15 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public FontVariantCapsFeature ActualFontVariantCaps => DerivedStyle.ActualFontVariantCaps;
 
+        /// <summary>The <c>font-variant-position</c> keyword this box asks for, before capability
+        /// gating - see <see cref="DerivedStyle.RequestedFontVariantPosition"/>.</summary>
+        public FontVariantPositionFeature RequestedFontVariantPosition => DerivedStyle.RequestedFontVariantPosition;
+
+        /// <summary>The position feature real GSUB substitution will handle, or
+        /// <see cref="FontVariantPositionFeature.None"/> when it has to be synthesized instead - see
+        /// <see cref="DerivedStyle.ActualFontVariantPosition"/>.</summary>
+        public FontVariantPositionFeature ActualFontVariantPosition => DerivedStyle.ActualFontVariantPosition;
+
         /// <summary>Gets the resolved explicit OpenType feature tags (CSS <c>font-feature-settings</c>) for this box's text.</summary>
         public IReadOnlyList<(string Tag, int Value)> ActualFontFeatureSettings => DerivedStyle.ActualFontFeatureSettings;
 
@@ -493,6 +502,15 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>font-variant: small-caps</c>.
         /// </summary>
         public RFont ActualSmallCapsFont => DerivedStyle.ActualSmallCapsFont;
+
+        /// <summary>The scaled face a synthesized <c>font-variant-position</c> sub/superscript is drawn
+        /// with - see <see cref="DerivedStyle.ActualSubSuperscriptFont"/>.</summary>
+        public RFont ActualSubSuperscriptFont => DerivedStyle.ActualSubSuperscriptFont;
+
+        /// <summary>The face scale and signed baseline shift for a synthesized <c>font-variant-position</c>
+        /// sub/superscript, or null when none is needed - see
+        /// <see cref="DerivedStyle.SubSuperscriptSynthesis"/>.</summary>
+        public (double SizeScale, double BaselineShift)? SubSuperscriptSynthesis => DerivedStyle.SubSuperscriptSynthesis;
 
         /// <summary>
         /// The font this box uses for <paramref name="codepoint"/> specifically. See

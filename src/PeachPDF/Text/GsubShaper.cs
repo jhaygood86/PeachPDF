@@ -100,6 +100,15 @@ namespace PeachPDF.Text
         TitlingCaps,
     }
 
+    /// <summary>Which CSS <c>font-variant-position</c> keyword <see cref="GsubShaper.Shape"/> should
+    /// apply - like <see cref="FontVariantCapsFeature"/> a single-select property, so not [Flags].</summary>
+    internal enum FontVariantPositionFeature
+    {
+        None,
+        Sub,
+        Super,
+    }
+
     /// <summary>Which GSUB numeric features (CSS <c>font-variant-numeric</c>) <see cref="GsubShaper.Shape"/>
     /// should apply.</summary>
     [Flags]
@@ -170,7 +179,11 @@ namespace PeachPDF.Text
         string? ScriptTag = null,
         IReadOnlyList<ArabicJoiningForm>? JoiningForms = null,
         IReadOnlyList<UseCategory>? UseCategories = null,
-        bool ReverseForDisplay = false)
+        bool ReverseForDisplay = false,
+        // Appended last, and passed by name at every call site: the existing constructions here and in
+        // SvgTreeBuilder are positional, so inserting this next to its font-variant-* siblings would
+        // silently re-bind their arguments rather than fail to compile.
+        FontVariantPositionFeature Position = FontVariantPositionFeature.None)
     {
         // NOT `new()` - for a record struct, a bare `new()` invokes the struct's implicit,
         // zero-initializing parameterless constructor, NOT this primary constructor's own declared
@@ -247,6 +260,7 @@ namespace PeachPDF.Text
             "smcp", "c2sc", "pcap", "c2pc", "unic", "titl",
             "lnum", "onum", "pnum", "tnum", "frac", "afrc", "ordn", "zero",
             "jp78", "jp83", "jp90", "jp04", "smpl", "trad", "fwid", "pwid", "ruby",
+            "subs", "sups",
         };
 
         private static readonly IReadOnlySet<string> EmptyTags = new HashSet<string>();
@@ -256,6 +270,8 @@ namespace PeachPDF.Text
         private static readonly IReadOnlySet<string> AllPetiteCapsTags = new HashSet<string> { "pcap", "c2pc" };
         private static readonly IReadOnlySet<string> UnicaseTags = new HashSet<string> { "unic" };
         private static readonly IReadOnlySet<string> TitlingCapsTags = new HashSet<string> { "titl" };
+        private static readonly IReadOnlySet<string> SubscriptTags = new HashSet<string> { "subs" };
+        private static readonly IReadOnlySet<string> SuperscriptTags = new HashSet<string> { "sups" };
 
         /// <summary>
         /// The GSUB feature tag(s) that implement <paramref name="capsFeature"/> - the single source
@@ -271,6 +287,19 @@ namespace PeachPDF.Text
             FontVariantCapsFeature.AllPetiteCaps => AllPetiteCapsTags,
             FontVariantCapsFeature.Unicase => UnicaseTags,
             FontVariantCapsFeature.TitlingCaps => TitlingCapsTags,
+            _ => EmptyTags,
+        };
+
+        /// <summary>
+        /// The GSUB feature tag(s) that implement <paramref name="positionFeature"/> - the single source
+        /// of truth for the CSS <c>font-variant-position</c> keyword -&gt; OpenType tag mapping, used both
+        /// by <see cref="Shape"/>'s own tag computation and by the capability query that decides whether
+        /// a run gets real substitution or a synthesized sub/superscript.
+        /// </summary>
+        public static IReadOnlySet<string> GetFeatureTags(FontVariantPositionFeature positionFeature) => positionFeature switch
+        {
+            FontVariantPositionFeature.Sub => SubscriptTags,
+            FontVariantPositionFeature.Super => SuperscriptTags,
             _ => EmptyTags,
         };
 
@@ -429,6 +458,7 @@ namespace PeachPDF.Text
             && features.Caps == FontVariantCapsFeature.None
             && features.Numeric == NumericFeatures.None
             && features.EastAsian == EastAsianFeatures.None
+            && features.Position == FontVariantPositionFeature.None
             && (features.ExplicitFeatures is null || features.ExplicitFeatures.Count == 0)
             && (features.JoiningForms is null || features.JoiningForms.Count == 0)
             && (features.UseCategories is null || features.UseCategories.Count == 0);
@@ -509,6 +539,7 @@ namespace PeachPDF.Text
                 if ((key.Ligatures & LigatureFeatures.Contextual) != 0) defaultTags.Add("calt");
 
                 foreach (string tag in GetFeatureTags(key.Caps)) defaultTags.Add(tag);
+                foreach (string tag in GetFeatureTags(key.Position)) defaultTags.Add(tag);
 
                 if ((key.Numeric & NumericFeatures.LiningNums) != 0) defaultTags.Add("lnum");
                 if ((key.Numeric & NumericFeatures.OldstyleNums) != 0) defaultTags.Add("onum");

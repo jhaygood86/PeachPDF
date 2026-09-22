@@ -101,6 +101,17 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.Equal(-2, entry.Value);
         }
 
+        [Fact]
+        public void Parse_ATokenThatIsNeitherAFunctionNorAnIdentifier_IsHandedBackUnchanged()
+        {
+            // Not a counter name any grammar would accept - the reader states what it saw and leaves
+            // rejecting it to the caller rather than silently dropping the entry.
+            var entry = Assert.Single(CounterListGrammar.Parse("%"));
+
+            Assert.Equal("%", entry.Name);
+            Assert.False(entry.IsReversed);
+        }
+
         [Theory]
         [InlineData("footnote", true)]
         [InlineData("FOOTNOTE", true)]

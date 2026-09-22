@@ -359,6 +359,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter VisibilityConverter = Map.Visibilities.ToConverter();
         public static readonly IValueConverter PlayStateConverter = Map.PlayStates.ToConverter();
         public static readonly IValueConverter FontVariantCapsConverter = Map.FontVariantCapsKeywords.ToConverter();
+        public static readonly IValueConverter FontVariantPositionConverter = Map.FontVariantPositionKeywords.ToConverter();
         public static readonly IValueConverter FontVariantCss2Converter = Map.FontVariantCss2Keywords.ToConverter();
         public static readonly IValueConverter FontVariantLigaturesConverter =
             new FontVariantLigaturesValueConverter().Or(Keywords.None).Or(Keywords.Normal);
