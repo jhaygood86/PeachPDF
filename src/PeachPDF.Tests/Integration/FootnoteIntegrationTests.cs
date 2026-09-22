@@ -622,6 +622,38 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FootnotePolicyBlock_ThenClear_ResetsTheForcedBreakFlagAndTrackingCollections()
+        {
+            // Not a WeakReference/GC-based leak test - HtmlContainerInt.FragmentTree (pre-existing,
+            // unrelated to footnote-policy) already keeps the whole box tree reachable after Clear()
+            // regardless of this fix, so nothing here could ever actually become collectible. This
+            // asserts the narrower, deterministic thing Clear() now actually does: the flag this PR
+            // added is reset on every box it was set on, and the two tracking collections are emptied,
+            // exactly like FootnoteCalls/FootnoteAreaHeightsBySlot right next to them already were.
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 20pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p0'>An ordinary paragraph with no footnote of its own.</p>"
+                + "<p id='p1'>Text<sup style='float:footnote; footnote-policy: block;'>This note body is "
+                + "long enough that its own height at the page's content width exceeds the tiny 20pt "
+                + "max-height declared on @footnote, so footnote-policy: block forces this paragraph onto "
+                + "the next page - and so records it as a forced-break box this test then checks Clear() "
+                + "actually resets.</sup></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+            var p1 = FindById(root, "p1")!;
+            Assert.True(container.PageIndexOf(p1.Location.Y) > 0); // sanity: the break was actually taken
+            Assert.True(p1.FootnotePolicyForcedBreakBefore);
+
+            container.Clear();
+
+            Assert.False(p1.FootnotePolicyForcedBreakBefore);
+            Assert.Empty(container.FootnotePolicyForcedLineCalls);
+            Assert.Empty(container.FootnotePolicyLineBreaksTakenThisPass);
+        }
+
+        [Fact]
         public async Task FootnotePolicyAuto_NoteAreaExceedsMaxHeight_StaysOnTheSamePage()
         {
             // Regression: the default policy is unaffected by max-height - it still just overflows,
