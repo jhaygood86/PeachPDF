@@ -300,10 +300,9 @@ produces, so a document proofed in a browser prints the same way:
   always begins and ends flush with the corner rather than being cut off part-way through. Because the
   fit depends on the edge, the spacing changes slightly as a box's width or height changes, and an
   edge's horizontal and vertical runs may use slightly different gaps. An edge too short to hold two
-  dashes is drawn solid. With a translucent color, the corner squares come out slightly darker than
-  the runs: each edge is drawn half a width past its ends so the corners stay covered, and both
-  edges meeting at a corner paint the square. A browser isolates the whole outline in one alpha
-  layer instead, so the translucency stays uniform.
+  dashes is drawn solid. For square-cornered outlines and borders with matching patterned sides,
+  translucent dots and dashes are composited once across adjoining edges, so their corners have the
+  same opacity as the straight runs.
 - **`double`** paints two lines with a gap between them, each exactly one third of the border width.
 - **`groove`** and **`ridge`** each paint two halves of the border: `groove` draws its outer half as
   `inset` and its inner half as `outset`, and `ridge` does the reverse.
