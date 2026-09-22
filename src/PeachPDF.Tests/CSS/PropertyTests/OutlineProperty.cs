@@ -47,6 +47,44 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         }
 
         [Fact]
+        public void CssOutlineStyleHiddenIllegal()
+        {
+            // css-ui-4 §3.3: outline-style is `auto | <'border-style'>` *except* `hidden`. Unlike every
+            // border-*-style, the keyword is invalid here, so the declaration carries no value and the
+            // cascade drops it (see OutlineStylePaintIntegrationTests for what that means at paint time).
+            var snippet = "outline-style   :  hidden";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("outline-style", property.Name);
+            Assert.IsType<OutlineStyleProperty>(property);
+            var concrete = (OutlineStyleProperty)property;
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
+        public void CssOutlineShorthandHiddenIllegal()
+        {
+            // The shorthand takes <'outline-style'> too, so it rejects the same keyword rather than
+            // accepting a value its longhand would not.
+            var snippet = "outline   :  2px hidden red";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("outline", property.Name);
+            var concrete = (OutlineProperty)property;
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
+        public void CssOutlineStyleAutoLegal()
+        {
+            // The one keyword outline-style has that border-style does not - the contrast that makes
+            // OutlineStyle a separate enum from LineStyle in the first place.
+            var snippet = "outline-style   :  auto";
+            var property = ParseDeclaration(snippet);
+            var concrete = (OutlineStyleProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("auto", concrete.Value);
+        }
+
+        [Fact]
         public void CssOutlineColorInvertLegal()
         {
             var snippet = "outline-color :  invert ";

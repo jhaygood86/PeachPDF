@@ -10,7 +10,7 @@ Since #1226 that cache is a function of **four** inputs, not one:
 | input | invalidates the colour cache? |
 | --- | --- |
 | `border-<side>-color` | yes |
-| `border-<side>-style` | **no** — `css-properties.json` gives the style longhands no `invalidates` |
+| `border-<side>-style` | **no** — its `invalidates` hook names `InvalidateBorder<side>Width`, which clears the *width* cache only (see [hidden is zero-width…](css-hidden-is-a-zero-used-width-so-the-style-longhand-must-invalidate-the-width-cache.md)); nothing clears the colour cache |
 | `color` | **no** — `InvalidateColor` clears `_actualColor` only |
 | `display` (via `ActualDisplay`, the table exemption) | **no** — `display` has no `invalidates`, and `ActualDisplay` is itself uncached |
 
@@ -41,6 +41,8 @@ shows up as one box painting `#eeeeee` where its neighbour paints the text colou
 ## If a reader has to move earlier
 
 Give the three missing inputs an `invalidates` hook rather than reaching for the cached property from
-a new place. `border-*-style` and `display` would each need one in `css-properties.json`, and
-`InvalidateColor` would have to clear the four border caches as well as `_actualColor`. That is a
-cheap change; the expensive part is noticing it was needed.
+a new place. `border-*-style` already carries one, so it needs a *second* entry
+(`InvalidateBorder<side>Color` alongside the existing `InvalidateBorder<side>Width` — the schema takes
+a list); `display` would need its first; and `InvalidateColor` would have to clear the four border
+caches as well as `_actualColor`. That is a cheap change; the expensive part is noticing it was
+needed.

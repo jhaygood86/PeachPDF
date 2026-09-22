@@ -1618,6 +1618,14 @@ namespace PeachPDF.Html.Core.Paint
         /// </summary>
         private static void PaintColumnRules(RGraphics g, CssBox box, double originY, RRect clip)
         {
+            // `none` and `hidden` draw nothing. DerivedStyle.ActualColumnRuleWidth already zeroes both,
+            // and the call site's `> 0` check would therefore keep us out - but the dash-style switch
+            // below folds every unhandled style into Solid, so a width that ever reached here non-zero
+            // would paint a solid rule. That is exactly what `column-rule: 16pt hidden` used to do
+            // before the width was zeroed, so state the rule here too rather than inferring it from a
+            // cached width that has no invalidator.
+            if (box.ColumnRuleStyle.Value is LineStyle.None or LineStyle.Hidden) return;
+
             var pen = g.GetPen(box.ActualColumnRuleColor);
             pen.Width = box.ActualColumnRuleWidth;
             pen.DashStyle = box.ColumnRuleStyle.Value switch

@@ -47,7 +47,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (!double.IsNaN(_actualBorderTopWidth)) return _actualBorderTopWidth;
 
                 _actualBorderTopWidth = CssValueParser.GetActualBorderWidth(Style.Border.BorderTopWidth, Owner);
-                if (Style.Border.BorderTopStyle.Value == LineStyle.None)
+                if (Style.Border.BorderTopStyle.Value is LineStyle.None or LineStyle.Hidden)
                     _actualBorderTopWidth = 0f;
 
                 return _actualBorderTopWidth;
@@ -61,7 +61,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (!double.IsNaN(_actualBorderRightWidth)) return _actualBorderRightWidth;
 
                 _actualBorderRightWidth = CssValueParser.GetActualBorderWidth(Style.Border.BorderRightWidth, Owner);
-                if (Style.Border.BorderRightStyle.Value == LineStyle.None)
+                if (Style.Border.BorderRightStyle.Value is LineStyle.None or LineStyle.Hidden)
                     _actualBorderRightWidth = 0f;
 
                 return _actualBorderRightWidth;
@@ -75,7 +75,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (!double.IsNaN(_actualBorderBottomWidth)) return _actualBorderBottomWidth;
 
                 _actualBorderBottomWidth = CssValueParser.GetActualBorderWidth(Style.Border.BorderBottomWidth, Owner);
-                if (Style.Border.BorderBottomStyle.Value == LineStyle.None)
+                if (Style.Border.BorderBottomStyle.Value is LineStyle.None or LineStyle.Hidden)
                     _actualBorderBottomWidth = 0f;
 
                 return _actualBorderBottomWidth;
@@ -89,7 +89,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (!double.IsNaN(_actualBorderLeftWidth)) return _actualBorderLeftWidth;
 
                 _actualBorderLeftWidth = CssValueParser.GetActualBorderWidth(Style.Border.BorderLeftWidth, Owner);
-                if (Style.Border.BorderLeftStyle.Value == LineStyle.None)
+                if (Style.Border.BorderLeftStyle.Value is LineStyle.None or LineStyle.Hidden)
                     _actualBorderLeftWidth = 0f;
 
                 return _actualBorderLeftWidth;
@@ -104,7 +104,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (!double.IsNaN(_actualColumnRuleWidth)) return _actualColumnRuleWidth;
 
                 _actualColumnRuleWidth = CssValueParser.GetActualBorderWidth(Style.MultiColumn.ColumnRuleWidth, Owner);
-                if (Style.MultiColumn.ColumnRuleStyle.Value == LineStyle.None)
+                if (Style.MultiColumn.ColumnRuleStyle.Value is LineStyle.None or LineStyle.Hidden)
                     _actualColumnRuleWidth = 0f;
 
                 return _actualColumnRuleWidth;
@@ -123,19 +123,19 @@ namespace PeachPDF.Html.Core.Dom
         /// earlier, unrelated resolution instead of this cell's real declared border.
         /// </summary>
         internal double NaturalBorderTopWidth =>
-            Style.Border.BorderTopStyle.Value == LineStyle.None
+            Style.Border.BorderTopStyle.Value is LineStyle.None or LineStyle.Hidden
                 ? 0d : CssValueParser.GetActualBorderWidth(Style.Border.BorderTopWidth, Owner);
 
         internal double NaturalBorderRightWidth =>
-            Style.Border.BorderRightStyle.Value == LineStyle.None
+            Style.Border.BorderRightStyle.Value is LineStyle.None or LineStyle.Hidden
                 ? 0d : CssValueParser.GetActualBorderWidth(Style.Border.BorderRightWidth, Owner);
 
         internal double NaturalBorderBottomWidth =>
-            Style.Border.BorderBottomStyle.Value == LineStyle.None
+            Style.Border.BorderBottomStyle.Value is LineStyle.None or LineStyle.Hidden
                 ? 0d : CssValueParser.GetActualBorderWidth(Style.Border.BorderBottomWidth, Owner);
 
         internal double NaturalBorderLeftWidth =>
-            Style.Border.BorderLeftStyle.Value == LineStyle.None
+            Style.Border.BorderLeftStyle.Value is LineStyle.None or LineStyle.Hidden
                 ? 0d : CssValueParser.GetActualBorderWidth(Style.Border.BorderLeftWidth, Owner);
 
         internal void InvalidateBorderTopWidth() { if (!_hasCollapsedUsedBorderWidths) _actualBorderTopWidth = double.NaN; }

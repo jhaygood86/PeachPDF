@@ -387,6 +387,7 @@
       },
       "html": {
         "propertyPath": "BorderBottomStyle",
+        "invalidates": "InvalidateBorderBottomWidth",
         "csharpDataType": "CssProperty<LineStyle>",
         "area": "BorderArea",
         "getterExpression": "{box}.BorderBottomStyle.ToString()"
@@ -404,6 +405,7 @@
       },
       "html": {
         "propertyPath": "BorderLeftStyle",
+        "invalidates": "InvalidateBorderLeftWidth",
         "csharpDataType": "CssProperty<LineStyle>",
         "area": "BorderArea",
         "getterExpression": "{box}.BorderLeftStyle.ToString()"
@@ -421,6 +423,7 @@
       },
       "html": {
         "propertyPath": "BorderRightStyle",
+        "invalidates": "InvalidateBorderRightWidth",
         "csharpDataType": "CssProperty<LineStyle>",
         "area": "BorderArea",
         "getterExpression": "{box}.BorderRightStyle.ToString()"
@@ -438,6 +441,7 @@
       },
       "html": {
         "propertyPath": "BorderTopStyle",
+        "invalidates": "InvalidateBorderTopWidth",
         "csharpDataType": "CssProperty<LineStyle>",
         "area": "BorderArea",
         "getterExpression": "{box}.BorderTopStyle.ToString()"
@@ -656,6 +660,7 @@
       },
       "html": {
         "propertyPath": "OutlineStyle",
+        "invalidates": "InvalidateOutlineWidth",
         "csharpDataType": "CssProperty<OutlineStyle>",
         "area": "BorderArea",
         "getterExpression": "{box}.OutlineStyle.ToString()"

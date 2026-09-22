@@ -1903,6 +1903,60 @@ namespace PeachPDF.Tests.Integration
             return height > width;
         }
 
+        /// <summary>
+        /// <c>outline-style: hidden</c> is **invalid** - css-ui-4 §3.3 defines the property as
+        /// <c>auto | &lt;'border-style'&gt;</c> excluding <c>hidden</c>, unlike every
+        /// <c>border-*-style</c>, where the keyword is both valid and meaningful. An invalid
+        /// declaration is dropped ([CSS Syntax 3 §9](https://www.w3.org/TR/css-syntax-3/)), so an
+        /// earlier declaration in the same rule survives and keeps painting.
+        /// </summary>
+        /// <remarks>
+        /// Regression: <c>Map.OutlineStyles</c> used to map the keyword, which made the declaration
+        /// *win* and then paint nothing (<c>OutlineDrawHandler.TryResolveRing</c> bails on
+        /// <c>OutlineStyle.Hidden</c>) - so the ring silently disappeared instead of the bad
+        /// declaration being ignored. It takes a two-declaration cascade to observe: with only
+        /// <c>outline-style: hidden</c> present, dropping the declaration leaves the initial value
+        /// <c>none</c>, which paints nothing either way.
+        /// </remarks>
+        [Fact]
+        public async Task OutlineStyleHidden_IsInvalidAndDropped_SoAnEarlierOutlineStillPaints()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='b' style='width:50pt; height:30pt; "
+                + "outline: 6pt solid rgb(10,20,30); outline-style: hidden'>x</div>"));
+            var div = LayoutHarness.FindById(root, "b")!;
+
+            Assert.Equal("solid", div.OutlineStyle.ToString());
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                p => !p.Stroked && p.Color == RColor.FromArgb(10, 20, 30));
+        }
+
+        /// <summary>
+        /// The contrast case: a declaration that really does resolve to no outline still paints
+        /// nothing, so the test above is pinned to declaration-dropping rather than to outlines being
+        /// unpaintable in this harness.
+        /// </summary>
+        [Fact]
+        public async Task OutlineStyleNone_IsValidAndWins_SoAnEarlierOutlineStopsPainting()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='b' style='width:50pt; height:30pt; "
+                + "outline: 6pt solid rgb(10,20,30); outline-style: none'>x</div>"));
+            var div = LayoutHarness.FindById(root, "b")!;
+
+            Assert.Equal("none", div.OutlineStyle.ToString());
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
+                p => p.Color == RColor.FromArgb(10, 20, 30));
+        }
+
         private static async Task<string> GetPdfText(string html)
         {
             var generator = new PdfGenerator();
