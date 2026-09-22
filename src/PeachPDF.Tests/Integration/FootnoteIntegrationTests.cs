@@ -479,6 +479,80 @@ namespace PeachPDF.Tests.Integration
             Assert.True(third.Body.Location.Y > second.Body.Location.Y);
         }
 
+        [Fact]
+        public async Task FootnotePolicyBlock_NoteAreaExceedsMaxHeight_MovesTheParagraphToTheNextPage()
+        {
+            // A forced break needs a predecessor in the flow to break away from (css-break-3 §4.4 - the
+            // same reason "the first element of a document" never manufactures a blank leading page for
+            // an author break-before either), so p0 exists purely to give p1 somewhere to break from.
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 20pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p0'>An ordinary paragraph with no footnote of its own.</p>"
+                + "<p id='p1'>Text<sup style='float:footnote; footnote-policy: block;'>This note body is "
+                + "long enough that its own height at the page's content width exceeds the tiny 20pt "
+                + "max-height declared on @footnote, so footnote-policy: block should force this whole "
+                + "paragraph onto the next page instead of overflowing here.</sup></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            // Not container.FootnoteCalls[0].OwnGeometryTop() - ResolveFootnotesForThisAttempt's own last
+            // act on the last convergence pass is re-parsing each call's word (ApplyNumber/ParseToWords),
+            // which leaves that fresh CssRect at its unset default Top until a later pass's real inline
+            // layout would reposition it - one never comes once the loop has exited. Rectangles (updated
+            // by relocation itself, not by re-parsing) and an ordinary block box's own Location stay
+            // reliable read after the fact; only the call's own transient Words don't.
+            var p0 = FindById(root, "p0");
+            var p1 = FindById(root, "p1");
+            Assert.NotNull(p0);
+            Assert.NotNull(p1);
+
+            var p0Slot = container.PageIndexOf(p0!.Location.Y);
+            var paragraphSlot = container.PageIndexOf(p1!.Location.Y);
+
+            Assert.Equal(0, p0Slot);
+            Assert.True(paragraphSlot > p0Slot);
+            Assert.True(container.FragmentTree!.Fragmentainers.Count > 1);
+        }
+
+        [Fact]
+        public async Task FootnotePolicyAuto_NoteAreaExceedsMaxHeight_StaysOnTheSamePage()
+        {
+            // Regression: the default policy is unaffected by max-height - it still just overflows,
+            // exactly as before this feature.
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 20pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p1'>Text<sup style='float:footnote'>This note body is long enough that its own "
+                + "height at the page's content width exceeds the tiny 20pt max-height declared on "
+                + "@footnote, but footnote-policy defaults to auto, which does not force a break.</sup></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            var p1 = FindById(root, "p1");
+            Assert.NotNull(p1);
+            Assert.Equal(0, container.PageIndexOf(p1!.Location.Y));
+        }
+
+        [Fact]
+        public async Task FootnotePolicyBlock_NoteAreaFits_DoesNotForceABreak()
+        {
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 500pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p1'>Text<sup style='float:footnote; footnote-policy: block;'>Short note.</sup></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            var p1 = FindById(root, "p1");
+            Assert.NotNull(p1);
+            Assert.Equal(0, container.PageIndexOf(p1!.Location.Y));
+            Assert.Single(container.FragmentTree!.Fragmentainers);
+        }
+
         [Theory]
         [InlineData("block", "Block")]
         [InlineData("inline", "Inline")]

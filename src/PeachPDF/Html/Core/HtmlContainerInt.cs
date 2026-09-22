@@ -2918,6 +2918,22 @@ namespace PeachPDF.Html.Core
         /// </summary>
         private Dictionary<int, List<CssBoxFootnoteCall>> _footnoteCallsBySlot = [];
 
+        /// <summary>
+        /// Containing blocks <see cref="ResolveFootnotesForThisAttempt"/> has asked for a
+        /// <c>footnote-policy: block</c> forced break-before on, so it can clear
+        /// <see cref="CssBox.FootnotePolicyForcedBreakBefore"/> on each before re-deciding fresh next
+        /// pass rather than letting a stale request from an earlier pass linger.
+        /// </summary>
+        private readonly HashSet<CssBox> _footnotePolicyForcedBreakBoxes = [];
+
+        /// <summary>
+        /// Footnote calls <see cref="ResolveFootnotesForThisAttempt"/> has asked for a
+        /// <c>footnote-policy: line</c> forced break on - consulted by <see cref="CssLayoutEngine.FlowBox"/>'s
+        /// per-word placement loop, the same way <see cref="_footnotePolicyForcedBreakBoxes"/> is consulted
+        /// by <see cref="CssBox.PerformLayoutPrologue"/>. Cleared and re-decided fresh every pass.
+        /// </summary>
+        internal readonly HashSet<CssBoxFootnoteCall> FootnotePolicyForcedLineCalls = [];
+
         /// <summary>Space (layout px, i.e. points) above a page's footnote-area divider rule.</summary>
         private const double FootnoteAreaTopPadding = 4;
 
@@ -3025,6 +3041,16 @@ namespace PeachPDF.Html.Core
             var previous = FootnoteAreaHeightsBySlot;
             var current = new Dictionary<int, double>();
 
+            // Cleared and re-decided fresh every pass, rather than left to accumulate or grow stale - see
+            // the two fields' own remarks.
+            foreach (var box in _footnotePolicyForcedBreakBoxes)
+            {
+                box.FootnotePolicyForcedBreakBefore = false;
+            }
+            _footnotePolicyForcedBreakBoxes.Clear();
+            FootnotePolicyForcedLineCalls.Clear();
+            var policyChanged = false;
+
             if (HasRealPageGrid)
             {
                 var bySlot = new Dictionary<int, List<CssBoxFootnoteCall>>();
@@ -3047,7 +3073,7 @@ namespace PeachPDF.Html.Core
                 {
                     var contentLeft = MarginLeft;
                     var contentWidth = PageContentRightOf(PageTopOf(slot)) - contentLeft;
-                    var (topPadding, dividerThickness, dividerToBodyGap, _, _) = ResolveFootnoteAreaBoxModel(slot, contentWidth);
+                    var (topPadding, dividerThickness, dividerToBodyGap, maxHeightPt, _) = ResolveFootnoteAreaBoxModel(slot, contentWidth);
 
                     var y = 0d;
                     var number = 1;
@@ -3136,6 +3162,43 @@ namespace PeachPDF.Html.Core
                     var totalHeight = y - FootnoteBodySpacing + topPadding + dividerThickness + dividerToBodyGap;
                     if (totalHeight <= 0) continue;
 
+                    // css-gcpm-3 §2.8's footnote-policy: "cannot be placed on the current page due to lack
+                    // of space", operationalized two ways - an author-declared @footnote max-height (see
+                    // ResolveFootnoteAreaBoxModel), or the note area's own natural height alone already
+                    // exceeding the whole page's content band (the same extreme case the "auto" default
+                    // already documents as overflowing, see docs/html-css-support.md's "Footnotes"
+                    // section). Deliberately NOT "does it leave room for the flow content already above
+                    // it" - that would need reasoning about a call's own position relative to content still
+                    // being laid out around it, a materially deeper question than this feature's own scope
+                    // (see the plan this shipped from). Only acted on for a call whose own footnote-policy
+                    // asks for it below - "auto" is silently unaffected, same as before this feature.
+                    var pageBandHeight = PageBottomOf(slot) - PageTopOf(slot);
+                    var doesntFit = totalHeight > pageBandHeight || (maxHeightPt is { } maxH && totalHeight > maxH);
+
+                    if (doesntFit)
+                    {
+                        foreach (var call in calls)
+                        {
+                            switch (call.Body.FootnotePolicy.Value)
+                            {
+                                case FootnotePolicyMode.Block:
+                                    var target = FootnotePolicyContainingBlockOf(call);
+                                    if (_footnotePolicyForcedBreakBoxes.Add(target))
+                                    {
+                                        target.FootnotePolicyForcedBreakBefore = true;
+                                        policyChanged = true;
+                                    }
+                                    break;
+                                case FootnotePolicyMode.Line:
+                                    if (FootnotePolicyForcedLineCalls.Add(call))
+                                    {
+                                        policyChanged = true;
+                                    }
+                                    break;
+                            }
+                        }
+                    }
+
                     // The stacking loop above laid every body out relative to a y=0 baseline; translate the
                     // whole group down so the last body's own bottom edge lands flush with this slot's real
                     // content-band bottom, the same "measure first, then place at the real position" shape
@@ -3157,6 +3220,12 @@ namespace PeachPDF.Html.Core
 
             FootnoteAreaHeightsBySlot = current;
 
+            // policyChanged: a footnote-policy forced break was newly requested this pass, which a bare
+            // height comparison would not otherwise catch - the request itself hasn't yet moved anything
+            // (that happens on the NEXT LayoutDocument call), so this pass's own FootnoteAreaHeightsBySlot
+            // can look identical to the previous pass's even though PerformLayout's convergence loop must
+            // still re-enter LayoutDocument to act on it.
+            if (policyChanged) return true;
             if (current.Count != previous.Count) return true;
             foreach (var (slot, height) in current)
             {
@@ -3164,6 +3233,26 @@ namespace PeachPDF.Html.Core
                     return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// The nearest block-level ancestor of <paramref name="call"/>'s own structural position -
+        /// css-gcpm-3 §2.8's "the paragraph that contains the footnote reference" for
+        /// <c>footnote-policy: block</c>. Walks up from the call's real <see cref="CssBox.ParentBox"/>
+        /// (not <see cref="CssBox.FootnoteSourceBox"/>, which is for selector re-matching only) rather than
+        /// the call itself, since the call is always inline (<see cref="CssBoxFootnoteCall"/>'s own
+        /// remarks) and so is never itself the answer.
+        /// </summary>
+        private static CssBox FootnotePolicyContainingBlockOf(CssBoxFootnoteCall call)
+        {
+            var box = call.ParentBox!;
+
+            while (box.IsInline && box.ParentBox is { } parent)
+            {
+                box = parent;
+            }
+
+            return box;
         }
 
         /// <summary>
