@@ -1004,6 +1004,17 @@ namespace PeachPDF.Html.Core
             FootnoteCalls.Clear();
             FootnoteAreaHeightsBySlot = [];
             _footnoteCallsBySlot = [];
+            // Keyed by CssBox/CssBoxFootnoteCall, same reason ClearBlankSlotReservations() below is -
+            // dropping the tree without this would keep every box in it (and everything it in turn
+            // reaches via ParentBox/Boxes) reachable until the next document's own footnotes happened to
+            // reach ResolveFootnotesForThisAttempt, the only other place these are cleared.
+            foreach (var box in _footnotePolicyForcedBreakBoxes)
+            {
+                box.FootnotePolicyForcedBreakBefore = false;
+            }
+            _footnotePolicyForcedBreakBoxes.Clear();
+            FootnotePolicyForcedLineCalls.Clear();
+            FootnotePolicyLineBreaksTakenThisPass.Clear();
             // New content means new @page rules: drop cached slot geometry, the vertical-override
             // scan, and the captured relative-unit context so nothing consults the previous
             // document's bands before the next layout pass (which resets again defensively).
@@ -2116,6 +2127,14 @@ namespace PeachPDF.Html.Core
                     if (_widowsRewind is { } rewind && TryRewindForWidows(rewind, ref token))
                     {
                         _widowsRewind = null;
+                        // A footnote-policy: line forced break this now-discarded pass took is exactly
+                        // the kind of thing "nothing it produced is kept" (the comment above) refers to -
+                        // the replayed pass needs its own fresh one-shot budget, or a call whose word
+                        // happens to be re-placed during the replay (forced or not, for reasons entirely
+                        // unrelated to it - any widows violation anywhere on the page triggers this) would
+                        // silently see its footnote-policy: line request as already spent and place
+                        // normally instead.
+                        FootnotePolicyLineBreaksTakenThisPass.Clear();
                         continue;
                     }
 
@@ -2127,6 +2146,8 @@ namespace PeachPDF.Html.Core
                     if (_runPullRewind is { } pull && TryRewindForRunPull(pull, ref token, ref slot))
                     {
                         _runPullRewind = null;
+                        // Same reasoning as the widows rewind above.
+                        FootnotePolicyLineBreaksTakenThisPass.Clear();
                         continue;
                     }
 
@@ -3201,7 +3222,15 @@ namespace PeachPDF.Html.Core
                             switch (call.Body.FootnotePolicy.Value)
                             {
                                 case FootnotePolicyMode.Block:
-                                    var target = FootnotePolicyContainingBlockOf(call);
+                                    // AnchorForBreakBefore, not the containing block itself: css-break-3
+                                    // §3.1 propagation means a forced break-before on a box that is the
+                                    // first in-flow child of its own parent is taken by that parent
+                                    // instead (PerformLayoutPrologue's own forcedBefore/propagatesOutward
+                                    // handling) - an author break-before on the containing block would be
+                                    // hoisted the same way, and this needs to travel identically or a
+                                    // decorated wrapper around a single-paragraph containing block would
+                                    // never itself relocate, only its content.
+                                    var target = BreakPropagation.AnchorForBreakBefore(FootnotePolicyContainingBlockOf(call));
                                     if (_footnotePolicyForcedBreakBoxes.Add(target))
                                     {
                                         target.FootnotePolicyForcedBreakBefore = true;

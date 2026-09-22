@@ -1394,6 +1394,18 @@ namespace PeachPDF
             var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
 
+            PaintFootnoteArea(graphicsAdapter, adapter, htmlContainer, footnoteArea);
+        }
+
+        /// <summary>
+        /// The <see cref="RGraphics"/>-level half of <see cref="PaintFootnoteArea(XGraphics, RAdapter, HtmlContainerInt, FootnoteAreaFragment)"/>,
+        /// split out so a test can drive it with a recording <see cref="RGraphics"/> and assert the actual
+        /// draw call sequence (which calls, in what order) rather than only that a full PDF pipeline
+        /// completes without error or that a fragment holds the right data - see this repo's own testing
+        /// conventions on why a token/page-count check alone is not proof a paint path isn't a no-op.
+        /// </summary>
+        internal static void PaintFootnoteArea(RGraphics graphicsAdapter, RAdapter adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
+        {
             // Bypasses FragmentPainter.Paint's own clip push (this is called directly, not through that
             // wrapper), so it needs its own content-area bound - previously provided for free by a raw
             // XGraphics.IntersectClip AddPdfPages applied ahead of this call, removed because it also
