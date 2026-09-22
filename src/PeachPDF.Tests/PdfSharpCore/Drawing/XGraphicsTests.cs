@@ -222,24 +222,42 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         }
 
         [Fact]
-        public void AppendPdfNumber_UsesAllocationFreeFastPathAndPreservesFallbackFormatting()
+        public void AppendPdfNumber_PreservesFastPathAndFallbackFormatting()
         {
             var content = new PdfContentWriter(100_000);
             content.Append('x');
             XGraphicsPdfRenderer.AppendPdfNumber(content, 1.23456, "0.####");
 
-            long before = GC.GetAllocatedBytesForCurrentThread();
             for (int i = 0; i < 10_000; i++)
                 XGraphicsPdfRenderer.AppendPdfNumber(content, 1.23456, "0.####");
-            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
             Assert.Equal("x1.2346" + string.Concat(Enumerable.Repeat("1.2346", 10_000)), content.ToString());
-            Assert.True(allocated < 1_024,
-                $"Formatting 10,000 ordinary coordinates allocated {allocated:N0} bytes.");
 
             var fallback = new PdfContentWriter();
             XGraphicsPdfRenderer.AppendPdfNumber(fallback, double.MaxValue, "0.####");
             Assert.Equal(double.MaxValue.ToString("0.####", CultureInfo.InvariantCulture), fallback.ToString());
+        }
+
+        [Fact]
+        public void AppendPdfNumber_UsesAnAllocationFreeFastPath()
+        {
+            // Through AllocationProbe, never a bare GC.GetAllocatedBytesForCurrentThread() delta around
+            // one loop - see .claude/invariants/testing-an-allocation-guard-measures-steady-state-not-one-loop.md.
+            // This site was missed when the other five were migrated, and it failed exactly as that note
+            // predicts: 1,472 bytes over 10,000 calls (0.15 bytes each) on one leg of a fail-fast: false
+            // matrix, which is a fixed tiered-compilation lump landing inside the counted window rather
+            // than per-call allocation returning.
+            const int iterations = 10_000;
+
+            // Chunked writer: sized so the probe's warm-up and every batch fit without growing, since a
+            // fresh chunk allocated mid-batch is exactly the transient this is trying not to measure.
+            var content = new PdfContentWriter(600_000);
+            var body = () => XGraphicsPdfRenderer.AppendPdfNumber(content, 1.23456, "0.####");
+
+            var allocated = AllocationProbe.Bytes(body, iterations);
+
+            Assert.True(allocated < 1_024,
+                $"Formatting {iterations:N0} ordinary coordinates allocated {allocated:N0} bytes.");
         }
 
         [Fact]
