@@ -401,6 +401,45 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(RColor.FromArgb(r, g, b), resolved);
         }
 
+        [Theory]
+        [InlineData("block", "Block")]
+        [InlineData("inline", "Inline")]
+        [InlineData("compact", "Compact")]
+        public async Task FootnoteDisplay_ParsesAndAppliesToTheDetachedSourceElement(string value, string expected)
+        {
+            var html = Wrap($"<p>Text<sup style='float:footnote; footnote-display: {value};'>Note</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var call = Assert.Single(container.FootnoteCalls);
+            Assert.Equal(expected, call.Body.FootnoteDisplay.Value.ToString());
+        }
+
+        [Fact]
+        public async Task FootnoteDisplay_UndeclaredDefaultsToBlock()
+        {
+            var html = Wrap("<p>Text<sup style='float:footnote'>Note</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var call = Assert.Single(container.FootnoteCalls);
+            Assert.Equal("Block", call.Body.FootnoteDisplay.Value.ToString());
+        }
+
+        [Theory]
+        [InlineData("auto", "Auto")]
+        [InlineData("line", "Line")]
+        [InlineData("block", "Block")]
+        public async Task FootnotePolicy_ParsesAndAppliesToTheDetachedSourceElement(string value, string expected)
+        {
+            var html = Wrap($"<p>Text<sup style='float:footnote; footnote-policy: {value};'>Note</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var call = Assert.Single(container.FootnoteCalls);
+            Assert.Equal(expected, call.Body.FootnotePolicy.Value.ToString());
+        }
+
         private static CssBoxFootnoteCall? FindFootnoteCall(CssBox box)
         {
             if (box is CssBoxFootnoteCall call) return call;

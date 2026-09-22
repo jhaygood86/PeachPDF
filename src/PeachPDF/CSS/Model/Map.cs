@@ -726,6 +726,20 @@ namespace PeachPDF.CSS
                 {Keywords.Right, Floating.Right},
                 {Keywords.Footnote, Floating.Footnote}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, FootnoteDisplayMode> FootnoteDisplayModes =
+            new Dictionary<string, FootnoteDisplayMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Block, FootnoteDisplayMode.Block},
+                {Keywords.Inline, FootnoteDisplayMode.Inline},
+                {Keywords.Compact, FootnoteDisplayMode.Compact}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, FootnotePolicyMode> FootnotePolicyModes =
+            new Dictionary<string, FootnotePolicyMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, FootnotePolicyMode.Auto},
+                {Keywords.Line, FootnotePolicyMode.Line},
+                {Keywords.Block, FootnotePolicyMode.Block}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, DisplayMode> DisplayModes =
             new Dictionary<string, DisplayMode>(StringComparer.OrdinalIgnoreCase)
             {

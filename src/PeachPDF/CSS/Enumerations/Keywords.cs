@@ -44,6 +44,8 @@
         public const string Stretch = "stretch";
         public const string Inline = "inline";
         public const string Block = "block";
+        public const string Compact = "compact";
+        public const string Line = "line";
         public const string InlineBlock = "inline-block";
         public const string ListItem = "list-item";
         public const string InlineTable = "inline-table";
