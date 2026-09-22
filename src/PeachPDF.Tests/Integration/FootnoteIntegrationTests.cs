@@ -583,6 +583,45 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FootnotePolicyBlock_ContainingBlockIsItsWrappersOnlyChild_HoistsTheBreakToTheWrapper()
+        {
+            // css-break-3 §3.1 propagation: a forced break-before on a box that is the first in-flow
+            // child of its own parent is taken by that parent instead (BreakPropagation.AnchorForBreakBefore) -
+            // an author break-before on p1 here would be hoisted to #wrapper the same way. If
+            // footnote-policy: block set its flag on p1 directly without going through the same anchor,
+            // #wrapper would never learn a break landed inside it and would stay on the original page
+            // while p1 (its only child) moved out from under it.
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 20pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p0'>An ordinary paragraph with no footnote of its own.</p>"
+                + "<div id='wrapper' style='border: 1pt solid black;'>"
+                + "<p id='p1'>Text<sup style='float:footnote; footnote-policy: block;'>This note body is "
+                + "long enough that its own height at the page's content width exceeds the tiny 20pt "
+                + "max-height declared on @footnote, so footnote-policy: block should force this whole "
+                + "paragraph - and the wrapper it is the sole child of - onto the next page.</sup></p>"
+                + "</div>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            var p0 = FindById(root, "p0");
+            var wrapper = FindById(root, "wrapper");
+            var p1 = FindById(root, "p1");
+            Assert.NotNull(p0);
+            Assert.NotNull(wrapper);
+            Assert.NotNull(p1);
+
+            Assert.Equal(0, container.PageIndexOf(p0!.Location.Y));
+            // The wrapper itself relocates, not just its content - proves the break was hoisted to the
+            // anchor rather than forced directly on p1 while #wrapper stayed behind. (Not asserting
+            // wrapper.Location.Y == p1.Location.Y exactly - #wrapper's own border/p1's own margin mean
+            // they're offset from each other by a few points, same as any ordinary parent/first-child.)
+            Assert.True(container.PageIndexOf(wrapper!.Location.Y) > 0);
+            Assert.Equal(container.PageIndexOf(wrapper.Location.Y), container.PageIndexOf(p1!.Location.Y));
+        }
+
+        [Fact]
         public async Task FootnotePolicyAuto_NoteAreaExceedsMaxHeight_StaysOnTheSamePage()
         {
             // Regression: the default policy is unaffected by max-height - it still just overflows,
