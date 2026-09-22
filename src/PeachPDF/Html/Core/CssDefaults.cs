@@ -110,10 +110,27 @@ namespace PeachPDF.Html.Core
                (harmless while <hr> ignored border-style, a double darkening the moment it stopped,
                issue #1225), then as the single #eee base they derive from (issue #1226). Keep
                deriving: a colour written here is one the cascade stops being able to reason about,
-               which is what made `hr { border-style: dashed }` paint #eee instead of gray. */
-            hr              { color: gray; border-style: inset; border-width: 1px; }
+               which is what made `hr { border-style: dashed }` paint #eee instead of gray.
+
+               margin is the HTML Standard's own rule for the element (`margin-block: 0.5em;
+               margin-inline: auto`), and the only place a default margin belongs: a declaration here
+               is one an author overrides in the ordinary way, which a substitution applied inside
+               margin collapsing after the cascade had decided could never be (`hr { margin: 0 }` was
+               silently discarded). The `auto` inline margins are what centre a rule narrower than
+               its container.
+
+               Written with the PHYSICAL margin shorthand, not the spec's logical spelling, on purpose:
+               a logical declaration always beats a physical one on the same edge whatever their
+               origin or order (see the logical-properties limitation in html-css-support.md), so a
+               UA `margin-block` would defeat every author `margin` and every `align` hint. Nothing
+               here is writing-mode dependent, since a rule is not laid out vertically.
+
+               background-color: currentcolor fills a flat rule's content box in its own colour, as
+               Blink does: without it a thick <hr size=10 color=red> is two red lines with a white
+               gap between them. A bare rule has no content height, so it changes nothing there. */
+            hr              { color: gray; border-style: inset; border-width: 1px; margin: 0.5em auto; }
             hr[color],
-            hr[noshade]     { border-style: solid; }
+            hr[noshade]     { border-style: solid; background-color: currentcolor; }
             ol, ul, dir,
             menu, dd        { margin-left: 40px }
             ol              { list-style-type: decimal }

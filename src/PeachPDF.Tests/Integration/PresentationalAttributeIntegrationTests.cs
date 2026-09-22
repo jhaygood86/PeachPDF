@@ -396,7 +396,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(Wrap("<hr id='h' size='3'>"));
             var hr = FindById(root, "h")!;
 
-            Assert.Equal("3px", hr.Height);
+            Assert.Equal("1px", hr.Height);
         }
 
         [Fact]

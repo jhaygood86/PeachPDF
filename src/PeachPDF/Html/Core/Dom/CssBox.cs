@@ -8205,12 +8205,6 @@ namespace PeachPDF.Html.Core.Dom
 
             var groupValue = margins.CollapsedValue;
 
-            // fix for hr tag
-            if (groupValue < 0.1 && child.HtmlTag is { Name: "hr" })
-            {
-                groupValue = child.GetEmHeight() * 1.1f;
-            }
-
             child.CollapsedBlockStartMargin = groupValue;
 
             if (prevSibling == null)

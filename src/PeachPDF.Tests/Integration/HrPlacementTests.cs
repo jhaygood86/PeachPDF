@@ -9,8 +9,8 @@ namespace PeachPDF.Tests.Integration
     /// <remarks>
     /// It used to carry a copy of the placement formula, and each of these is a rule that copy had drifted
     /// on. The <c>margin: 0</c> in the fixtures keeps the rule's own default margin out of the arithmetic;
-    /// the assertions are all differences against the predecessor, so the UA's own <c>&lt;hr&gt;</c> margin
-    /// floor never enters them.
+    /// the assertions are all differences against the predecessor, so the UA sheet's default
+    /// <c>0.5em</c> margin never enters them.
     /// </remarks>
     public class HrPlacementTests
     {
