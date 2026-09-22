@@ -2088,7 +2088,7 @@ namespace PeachPDF.Html.Core.Dom
             // the previous order here had it), so min-height can still win on conflict per §10.7.
             if (CssValueParser.IsValidLength(box.Height))
             {
-                if (!heightBasisIsCalculated && box.Height.EndsWith('%'))
+                if (!heightBasisIsCalculated && CssValueParser.DependsOnPercentage(box.Height))
                 {
                     // An indefinite percentage height behaves as automatic (CSS Box Sizing 4 §5): a
                     // preferred aspect ratio sizes the height from the (definite) width if there is one;
@@ -2125,7 +2125,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             if (CssValueParser.IsValidLength(box.MinHeight) &&
-                (heightBasisIsCalculated || !box.MinHeight.EndsWith('%')))
+                (heightBasisIsCalculated || !CssValueParser.DependsOnPercentage(box.MinHeight)))
             {
                 var minHeight = CssValueParser.ParseLength(box.MinHeight, heightBasis, box) + box.ActualBoxSizeIncludedHeight;
 
@@ -2228,7 +2228,7 @@ namespace PeachPDF.Html.Core.Dom
         internal static bool HasDefiniteHeight(CssBox box)
         {
             if (!CssValueParser.IsValidLength(box.Height)) return false;
-            if (!box.Height.EndsWith('%')) return true;
+            if (!CssValueParser.DependsOnPercentage(box.Height)) return true;
 
             // A fixed box's percentage height resolves against the page area (CSS 2.1 §10.1: the initial
             // containing block), which always has a definite height - the same basis GetBoxHeight's own
@@ -2356,7 +2356,7 @@ namespace PeachPDF.Html.Core.Dom
             }
             else if (HasDefiniteHeight(box))
             {
-                if (!box.Height.EndsWith('%'))
+                if (!CssValueParser.DependsOnPercentage(box.Height))
                 {
                     declared = CssValueParser.ParseLength(box.Height, 0, box) + box.ActualBoxSizeIncludedHeight;
                 }
@@ -2389,7 +2389,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (CssValueParser.IsValidLength(box.MinHeight))
             {
-                double? minBasis = box.MinHeight.EndsWith('%') ? PercentageHeightBasis() : 0;
+                double? minBasis = CssValueParser.DependsOnPercentage(box.MinHeight) ? PercentageHeightBasis() : 0;
                 if (minBasis is null) return null;
                 minHeightValue = CssValueParser.ParseLength(box.MinHeight, minBasis.Value, box) + box.ActualBoxSizeIncludedHeight;
             }
@@ -2398,7 +2398,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (CssValueParser.IsValidLength(box.MaxHeight))
             {
-                double? maxBasis = box.MaxHeight.EndsWith('%') ? PercentageHeightBasis() : 0;
+                double? maxBasis = CssValueParser.DependsOnPercentage(box.MaxHeight) ? PercentageHeightBasis() : 0;
                 if (maxBasis is null) return null;
                 var maxHeight = CssValueParser.ParseLength(box.MaxHeight, maxBasis.Value, box) + box.ActualBoxSizeIncludedHeight;
 
@@ -2557,7 +2557,7 @@ namespace PeachPDF.Html.Core.Dom
             var isContainingBlockHeightDefinite = IsHeightDefinite(box.ContainingBlock);
 
             if (CssValueParser.IsValidLength(box.MaxHeight) &&
-                (isContainingBlockHeightDefinite || !box.MaxHeight.EndsWith('%')))
+                (isContainingBlockHeightDefinite || !CssValueParser.DependsOnPercentage(box.MaxHeight)))
             {
                 var maxHeightBasis = ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height;
                 var maxHeight = CssValueParser.ParseLength(box.MaxHeight, maxHeightBasis, box) + box.ActualBoxSizeIncludedHeight;
@@ -2569,7 +2569,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     // min-height wins over max-height on conflict (CSS 2.1 §10.7)
                     if (CssValueParser.IsValidLength(box.MinHeight) &&
-                        (isContainingBlockHeightDefinite || !box.MinHeight.EndsWith('%')))
+                        (isContainingBlockHeightDefinite || !CssValueParser.DependsOnPercentage(box.MinHeight)))
                     {
                         var minHeightBasis = ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height;
                         var minHeight = CssValueParser.ParseLength(box.MinHeight, minHeightBasis, box) + box.ActualBoxSizeIncludedHeight;
@@ -2924,18 +2924,18 @@ namespace PeachPDF.Html.Core.Dom
             double? declared = null;
 
             if (CssValueParser.IsValidLength(box.Height) &&
-                (!box.Height.EndsWith('%') || IsHeightDefinite(box.ContainingBlock)))
+                (!CssValueParser.DependsOnPercentage(box.Height) || IsHeightDefinite(box.ContainingBlock)))
             {
-                var basis = box.Height.EndsWith('%')
+                var basis = CssValueParser.DependsOnPercentage(box.Height)
                     ? ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height
                     : 0; // unused by ParseLength for a non-percentage length
                 declared = CssValueParser.ParseLength(box.Height, basis, box) + box.ActualBoxSizeIncludedHeight;
             }
 
             if (CssValueParser.IsValidLength(box.MinHeight) &&
-                (!box.MinHeight.EndsWith('%') || IsHeightDefinite(box.ContainingBlock)))
+                (!CssValueParser.DependsOnPercentage(box.MinHeight) || IsHeightDefinite(box.ContainingBlock)))
             {
-                var basis = box.MinHeight.EndsWith('%')
+                var basis = CssValueParser.DependsOnPercentage(box.MinHeight)
                     ? ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height
                     : 0;
                 var minHeight = CssValueParser.ParseLength(box.MinHeight, basis, box) + box.ActualBoxSizeIncludedHeight;

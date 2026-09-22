@@ -951,7 +951,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var isContainingBlockHeightDefinite = CssLayoutEngine.IsHeightDefinite(ContainingBlock);
 
-            if (CssValueParser.IsValidLength(MaxHeight) && (isContainingBlockHeightDefinite || !MaxHeight.EndsWith('%')))
+            if (CssValueParser.IsValidLength(MaxHeight) && (isContainingBlockHeightDefinite || !CssValueParser.DependsOnPercentage(MaxHeight)))
             {
                 var maxHeightBasis = CssLayoutEngine.ResolveDefiniteHeightValue(ContainingBlock) ?? ContainingBlock.Size.Height;
                 var maxHeight = CssValueParser.ParseLength(MaxHeight, maxHeightBasis, this) + ActualBoxSizeIncludedHeight;
@@ -960,7 +960,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     height = maxHeight;
 
-                    if (CssValueParser.IsValidLength(MinHeight) && (isContainingBlockHeightDefinite || !MinHeight.EndsWith('%')))
+                    if (CssValueParser.IsValidLength(MinHeight) && (isContainingBlockHeightDefinite || !CssValueParser.DependsOnPercentage(MinHeight)))
                     {
                         var minHeightBasis = CssLayoutEngine.ResolveDefiniteHeightValue(ContainingBlock) ?? ContainingBlock.Size.Height;
                         var minHeight = CssValueParser.ParseLength(MinHeight, minHeightBasis, this) + ActualBoxSizeIncludedHeight;
@@ -8518,7 +8518,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>.empty { height: 10% }</c> is written to exercise exactly that.
         /// </summary>
         private bool HasAutoBlockEndHeight() =>
-            Height == Keywords.Auto || (Height.EndsWith('%') && !CssLayoutEngine.IsHeightDefinite(ContainingBlock));
+            Height == Keywords.Auto || (CssValueParser.DependsOnPercentage(Height) && !CssLayoutEngine.IsHeightDefinite(ContainingBlock));
 
         /// <summary>
         /// Folds into <paramref name="margins"/> this box's own block-end margin and every
@@ -8672,7 +8672,7 @@ namespace PeachPDF.Html.Core.Dom
             // ".empty { margin: 6.25em; height: 10%; }" is written to exercise exactly this: its own
             // comment notes "computes to auto which makes it empty per 8.3.1:7 (own margins)".
             var heightIsAuto = Height == Keywords.Auto ||
-                (Height.EndsWith('%') && !CssLayoutEngine.IsHeightDefinite(ContainingBlock));
+                (CssValueParser.DependsOnPercentage(Height) && !CssLayoutEngine.IsHeightDefinite(ContainingBlock));
             if (!heightIsAuto) return false;
             if (Overflow.Value != PeachPDF.CSS.Overflow.Visible) return false;
             if (!(ActualPaddingTop < 0.1) || !(ActualPaddingBottom < 0.1)) return false;
