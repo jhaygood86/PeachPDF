@@ -164,17 +164,46 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(expected, parent.ActualBottom - parent.Location.Y, 3);
         }
 
-        [Fact]
-        public async Task BorderlessHr_KeepsItsNominalHeight()
+        [Theory]
+        [InlineData("border: none")]
+        [InlineData("border: 0")]
+        public async Task BorderlessHr_HasNoHeight_LikeAnEmptyDiv(string declaration)
         {
-            // The one case that still reaches the hard-coded 2: with neither a height nor a border there
-            // is nothing to derive one from, and a zero-size box emits no fragment at all - it would be
-            // absent from the fragment tree rather than merely invisible. Pinned so the constant is not
-            // mistaken for the defect above and "cleaned up".
-            var (root, container) = await LayoutAsync("border: none");
+            // CSS 2.1 §10.6.3: an auto-height block with no in-flow children, no border and no padding is
+            // 0 tall - which is what an empty <div> is, in this engine and in every browser. The rule used
+            // to be given a nominal 2 units instead, so a wrapper holding only a reset rule was 2pt taller
+            // than a browser draws it, and that shows the moment the wrapper has a background or border.
+            var (root, container) = await LayoutAsync(declaration);
             var hr = LayoutHarness.FindById(root, "hr")!;
+            var wrap = LayoutHarness.FindById(root, "wrap")!;
+            var next = LayoutHarness.FindById(root, "next")!;
 
-            Assert.Equal(2, FragmentPaintHarness.FragmentOf(container, hr).WholeBoxRect.Height, 3);
+            Assert.Equal(0, hr.ActualBottom - hr.Location.Y, 3);
+            Assert.Equal(0, wrap.ActualBottom - wrap.Location.Y, 3);
+            Assert.Equal(wrap.Location.Y, next.Location.Y, 3);
+
+            // A zero-size box occupies no area in any fragmentainer, so it has no fragment - the same
+            // answer as the equivalent empty <div>, and why a rule with nothing to paint needs none.
+            Assert.False(FragmentPaintHarness.HasFragment(container, hr));
+        }
+
+        [Fact]
+        public async Task BorderlessHr_HasTheSameBoxAsTheEquivalentEmptyDiv()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><body>"
+                + "<div id='wrap' style='margin: 0'><hr id='hr' style='margin: 0; border: none'>"
+                + "<div id='div' style='margin: 0'></div></div>"
+                + "<div id='next' style='margin: 0'>after</div></body></html>");
+
+            var hr = LayoutHarness.FindById(root, "hr")!;
+            var div = LayoutHarness.FindById(root, "div")!;
+
+            Assert.Equal(div.ActualBottom - div.Location.Y, hr.ActualBottom - hr.Location.Y, 3);
+            Assert.Equal(div.ActualRight - div.Location.X, hr.ActualRight - hr.Location.X, 3);
+            Assert.Equal(
+                FragmentPaintHarness.HasFragment(container, div),
+                FragmentPaintHarness.HasFragment(container, hr));
         }
 
         private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(string declaration) =>

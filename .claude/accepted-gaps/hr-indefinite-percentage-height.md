@@ -12,25 +12,39 @@ and the currentColor bevel base (#1226). See
 [.claude/recent-fixes/2026-09-21-hr-resolves-a-percentage-width-against-its-containing-block.md](../recent-fixes/2026-09-21-hr-resolves-a-percentage-width-against-its-containing-block.md)
 and
 [.claude/recent-fixes/2026-09-20-a-bevelled-currentcolor-border-shades-a-fixed-base.md](../recent-fixes/2026-09-20-a-bevelled-currentcolor-border-shades-a-fixed-base.md)
-for the mechanisms, all worth reading before touching `CssBoxHr.PerformLayoutImp` or
-`DerivedStyle.ResolveBorderSideColor`.
+for the mechanisms, all worth reading before touching `DerivedStyle.ResolveBorderSideColor` or the shared width/height
+resolvers in `CssLayoutEngine`.
 
 ## A percentage or `calc()` height against an indefinite containing block — issue #1236
 
-`<hr>` is the only box that resolves its own height inside its own layout pass, because it has to: the
-frame commits the *next* sibling's offset against that bottom, and the layout epilogue runs too late
-to be what the sibling sees (see
-[.claude/recent-fixes/2026-09-20-hr-resolves-its-own-used-height.md](../recent-fixes/2026-09-20-hr-resolves-its-own-used-height.md)).
-That means `CssLayoutEngine.GetBoxHeight` is called twice for a rule — once early, once from
-`ApplyHeight` — and against an **indefinite** containing block the two calls do not agree
-(~1.5pt early against ~26.35pt in the epilogue for `height: calc(100% - 5px)`). The rule paints one
-height and the flow reserves another.
+**What changed since this was filed.** `<hr>` no longer resolves its own height inside its own layout pass:
+`CssBoxHr` is gone (see
+[.claude/recent-fixes/2026-09-21-hr-is-an-ordinary-block-not-a-box-class.md](../recent-fixes/2026-09-21-hr-is-an-ordinary-block-not-a-box-class.md)),
+so `GetBoxHeight` is called once for a rule, from `ApplyHeight`, like for any other block. The
+early-call/epilogue split the issue describes therefore cannot occur for a rule any more.
 
-Left out of #1233 because the fix is not in `CssBoxHr`: `GetBoxHeight` should return `null` for a
-percentage against an indefinite containing block — the contract `ApplyHeight` already documents for
-that case, and what [CSS 2.1 §10.5](https://www.w3.org/TR/CSS21/visudet.html#the-height-property)
-means by "computes to `auto`". That reaches every caller of `GetBoxHeight`, so it needs its own
-measurement pass rather than riding along with a rule-specific change.
+**What is still open** is the underlying question, and it is not `<hr>`-specific. The issue's own repro (a
+parent holding only the rule) is consistent now - own height, parent height and the next block's offset all
+agree at 1.5pt - but give the parent any content and the same disagreement shows up on a plain `<div>`, measured
+in a parent that holds a 40pt block before the box:
 
-**Not a new split.** The same class of disagreement predates #1233, which changed which value the
-early call produces without introducing the two-call structure.
+| declaration | painted height | next block placed as if |
+| --- | --- | --- |
+| `height: 50%` | 0 (correct: computes to `auto`) | 0 |
+| `height: calc(50% + 0px)` | 20 | 0 |
+| `height: calc(100% - 5px)` | 36.25 | 0 |
+
+Chrome treats every one of those as `auto` against an indefinite containing block
+([CSS 2.1 §10.5](https://www.w3.org/TR/CSS21/visudet.html#the-height-property)). A `calc()` that contains a
+percentage is resolved against the container's content-driven height instead, and paints at that height while
+the flow reserves none.
+
+**Root cause (confirmed by the table above, not yet fixed):** `CssLayoutEngine` detects "this height is a
+percentage" with `.EndsWith('%')` at a dozen sites (`GetBoxHeight`, `HasDefiniteHeight`,
+`ResolveDefiniteHeightValue`, `ApplyHeight`'s max-height clamp, and the min/max-height reads). A plain `50%` is
+caught; `calc(100% - 5px)` ends in `)`, is read as a definite length, and is resolved against
+`heightCb.Size.Height`. The fix is one helper that answers "does this length depend on a percentage" (a `%`
+suffix, or a `calc()`/`min()`/`max()`/`clamp()` containing one) replacing each `EndsWith('%')`. That reaches every
+`GetBoxHeight` caller, so it needs its own measurement pass rather than riding along with a rule-specific change.
+
+Deleted together with the limitation sentence in the `hr` row of `docs/html-css-support.md` when #1236 closes.

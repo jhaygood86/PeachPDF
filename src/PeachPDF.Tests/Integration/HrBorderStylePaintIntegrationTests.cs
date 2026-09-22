@@ -263,13 +263,18 @@ namespace PeachPDF.Tests.Integration
             // Either spelling used to be rewritten back into a 1px solid top and bottom border, so a
             // rule an author had explicitly switched off still painted two lines.
             var (root, container) = await LayoutHarness.LayoutAsync(
-                $"<!DOCTYPE html><html><body><hr id='el' style='{declaration}'></body></html>");
+                $"<!DOCTYPE html><html><body><hr id='el' style='{declaration}'><p>after</p></body></html>");
 
             var hr = LayoutHarness.FindById(root, "el")!;
             Assert.Equal(LineStyle.None, hr.BorderTopStyle.Value);
 
+            // A rule with no border, padding or height occupies no area, so - like the empty <div> it is
+            // equivalent to - it is absent from the fragment tree and there is nothing for it to paint.
+            // Asserted on the whole page rather than on the rule's own fragment, which does not exist.
+            Assert.False(FragmentPaintHarness.HasFragment(container, hr));
+
             var g = new TestRecordingGraphics();
-            FragmentPaintHarness.PaintBox(container, hr, g);
+            FragmentPaintHarness.PaintPage(container, g);
 
             Assert.Empty(g.FilledShapes);
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());

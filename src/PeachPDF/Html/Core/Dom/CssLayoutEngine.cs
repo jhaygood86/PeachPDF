@@ -2511,27 +2511,10 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            ClampToMaxHeight(box);
-        }
-
-        /// <summary>
-        /// Applies <c>max-height</c>, and <c>min-height</c>'s override of it on conflict, to
-        /// <paramref name="box"/>'s already-resolved <see cref="CssBox.ActualBottom"/> per
-        /// <a href="https://www.w3.org/TR/CSS21/visudet.html#min-max-heights">CSS 2.1 §10.7</a>.
-        /// </summary>
-        /// <remarks>
-        /// Split out of <see cref="ApplyHeight"/> because <c>CssBoxHr</c> needs the same clamp a pass
-        /// earlier: a rule resolves its own height inside its layout so the frame can commit the next
-        /// sibling against a settled bottom, and <see cref="GetBoxHeight"/> — which is what it resolves
-        /// through — deliberately does not consider min/max at all. Running this twice is harmless: it
-        /// only ever shrinks a bottom that exceeds the maximum, so the epilogue's own call is a no-op
-        /// once the rule has already clamped itself (issue #1229).
-        /// </remarks>
-        internal static void ClampToMaxHeight(CssBox box)
-        {
             // Unlike min-height/explicit-height (which only ever grow ActualBottom), max-height must be
             // able to shrink the box below its content's natural extent — content simply overflows past
-            // ActualBottom, mirroring the existing overflow:hidden clip elsewhere in this engine.
+            // ActualBottom, mirroring the existing overflow:hidden clip elsewhere in this engine. Applied
+            // last, and min-height wins over it on conflict (CSS 2.1 §10.7).
             var isContainingBlockHeightDefinite = IsHeightDefinite(box.ContainingBlock);
 
             if (CssValueParser.IsValidLength(box.MaxHeight) &&
