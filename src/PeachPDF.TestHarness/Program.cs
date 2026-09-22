@@ -325,6 +325,37 @@ static string CollapsedTableSwatch(string desc, string style)
         "</td>";
 }
 
+/// <summary>
+/// A 2x2 collapsed table whose row lines and column lines carry different colours, so every crossing
+/// says out loud which of the two lines painted it. Two things are on show and neither is visible on a
+/// single-coloured table: the four corners are painted at all (each run used to stop at the
+/// perpendicular line's centre, leaving a notch), and the square at a crossing goes to exactly one
+/// line - the row line everywhere except along the table's first row line, where a column line takes
+/// it unless it is the one at the table's inline start. <paramref name="rowStyle"/> and
+/// <paramref name="columnStyle"/> carry a bevel, or two differing styles, through the same fixture: a
+/// wrongly-owned bevelled joint bands the wrong way rather than merely taking the wrong colour.
+/// </summary>
+/// <param name="desc">The swatch's own caption.</param>
+/// <param name="rowStyle">The <c>border-style</c> every row (block-axis) line carries.</param>
+/// <param name="columnStyle">The <c>border-style</c> every column (inline-axis) line carries.</param>
+static string CollapsedJointSwatch(string desc, string rowStyle, string columnStyle)
+{
+    const string RowColor = "#d94a4a";
+    const string ColumnColor = "#4a90d9";
+
+    var cell =
+        $"<td style=\"border-top: 12px {rowStyle} {RowColor}; border-bottom: 12px {rowStyle} {RowColor}; " +
+        $"border-left: 12px {columnStyle} {ColumnColor}; border-right: 12px {columnStyle} {ColumnColor}\"></td>";
+
+    var row = $"<tr>{cell}{cell}</tr>";
+
+    return "<td>" +
+        $"<table class=\"ct\">{row}{row}</table>" +
+        $"<div class=\"desc\">{desc}</div>" +
+        $"<div class=\"css\">collapse, rows 12px {rowStyle} / columns 12px {columnStyle}</div>" +
+        "</td>";
+}
+
 static string RoundedPatternPhaseComparisonSwatch() =>
     "<td>" +
     "<div class=\"phasepair\">" +
@@ -6259,6 +6290,22 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
         CollapsedTableSwatch("outset", "outset"),
         CollapsedTableSwatch("groove", "groove"),
         CollapsedTableSwatch("ridge", "ridge")
+    ) +
+
+    // Where two collapsed grid lines cross, one of them paints the whole square they share - never
+    // both, and never split along a diagonal. Giving the rows and columns different colours is what
+    // makes that legible: the row line takes every crossing except along the table's own first row
+    // line, where the column lines take it unless they are the table's first column line. The four
+    // corners are crossings too, which is why they are filled rather than notched - each run used to
+    // stop at the perpendicular line's centre from both directions at once. The bevels repeat the
+    // fixture because a wrongly-owned joint there bands across instead of down, which reads as a
+    // broken frame rather than as an off colour.
+    "<h2>Which grid line paints a crossing, and the corners that used to go unpainted</h2>" +
+    Row(
+        CollapsedJointSwatch("equal: rows take all but the first row line", "solid", "solid"),
+        CollapsedJointSwatch("double columns outrank solid rows, and take every crossing", "solid", "double"),
+        CollapsedJointSwatch("inset", "inset", "inset"),
+        CollapsedJointSwatch("outset", "outset", "outset")
     ) +
 
     // A horizontal rule is an ordinary box whose border IS the rule, so every border-style applies to

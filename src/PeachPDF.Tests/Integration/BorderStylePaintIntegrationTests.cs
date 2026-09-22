@@ -1420,18 +1420,24 @@ namespace PeachPDF.Tests.Integration
 
             // Both grid lines on each axis, each as its own leading/trailing pair: the top line's two
             // halves, then the bottom line's. Asserting only one line would let a "shade the whole
-            // segment one way" regression survive on the other.
-            var horizontal = HorizontalBands(g);
+            // segment one way" regression survive on the other. Grouped by the band's own position
+            // across the line rather than counted as draw calls, because a joint square (issue #1257 -
+            // the block-start line's crossing with a non-inline-start column line) draws its own pair
+            // at a column line's position, in that line's own two faces.
+            var horizontal = FacesByPosition(HorizontalBands(g), b => b.Top);
             Assert.Equal(4, horizontal.Count);
-            Assert.Equal([leading, trailing, leading, trailing], horizontal.Select(b => b.Color));
+            Assert.Equal([leading, trailing, leading, trailing], horizontal.Select(f => f.First().Color));
 
             // Which way the line RUNS plays no part - a column line shades exactly as a row line does.
-            var vertical = VerticalBands(g);
+            var vertical = FacesByPosition(VerticalBands(g), b => b.Left);
             Assert.Equal(4, vertical.Count);
-            Assert.Equal([leading, trailing, leading, trailing], vertical.Select(b => b.Color));
+            Assert.Equal([leading, trailing, leading, trailing], vertical.Select(f => f.First().Color));
+
+            // A split never splits a face's colour, whatever draws the pieces at one position.
+            Assert.All(horizontal.Concat(vertical), f => Assert.Single(f.Select(b => b.Color).Distinct()));
 
             // Each face is half the line, so neither can be widened into the other unnoticed.
-            Assert.All(horizontal.Concat(vertical), b => Assert.Equal(6, b.Thickness, 2));
+            Assert.All(horizontal.Concat(vertical).SelectMany(f => f), b => Assert.Equal(6, b.Thickness, 2));
         }
 
         [Fact]
@@ -1453,24 +1459,34 @@ namespace PeachPDF.Tests.Integration
             var dark = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: true);
             var light = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: false);
 
-            // Three lines per axis now: the two outer ones and the shared interior one between them.
-            foreach (var bands in new[] { VerticalBands(g), HorizontalBands(g) })
+            // Three lines per axis: the two outer ones and the shared interior one between them, six
+            // faces in all. Grouped by the band's own position across the line rather than counted as
+            // draw calls, because a line is emitted in pieces either side of any joint the crossing line
+            // owns - here the table's block-start line, the one case where an inline-axis line takes a
+            // joint at equal width and style (issue #1257, InlineLineOwnsJoint).
+            foreach (var (bands, position) in new (List<BandInfo> Bands, Func<BandInfo, double> Position)[]
+                     {
+                         (VerticalBands(g), b => b.Left),
+                         (HorizontalBands(g), b => b.Top),
+                     })
             {
-                Assert.Equal(6, bands.Count);
-                Assert.Equal([light, dark, light, dark, light, dark], bands.Select(b => b.Color));
-                Assert.All(bands, b => Assert.Equal(6, b.Thickness, 2));
+                var faces = FacesByPosition(bands, position);
+
+                Assert.Equal(6, faces.Count);
+                Assert.Equal([light, dark, light, dark, light, dark], faces.Select(f => f.First().Color));
+                Assert.All(faces, f => Assert.All(f, b => Assert.Equal(6, b.Thickness, 2)));
+
+                // A split never splits a band's colour - every piece of one face is that one face.
+                Assert.All(faces, f => Assert.Single(f.Select(b => b.Color).Distinct()));
+
+                // The interior pair is ONE line's two halves, not two abutting lines. Contiguity alone
+                // would hold either way, so it is the pair's total extent that says which: 12pt across -
+                // the declared width - rather than two 12pt lines meeting at an edge.
+                var near = faces[2].First();
+                var far = faces[3].First();
+                Assert.Equal(position(near) + near.Thickness, position(far), 2);
+                Assert.Equal(12, position(far) + far.Thickness - position(near), 2);
             }
-
-            // The interior pair is ONE line's two halves, not two abutting lines. Contiguity alone
-            // would hold either way, so it is the pair's total extent that says which: 12pt across -
-            // the declared width - rather than two 12pt lines meeting at an edge.
-            var columns = VerticalBands(g);
-            Assert.Equal(columns[2].Right, columns[3].Left, 2);
-            Assert.Equal(12, columns[3].Right - columns[2].Left, 2);
-
-            var rows = HorizontalBands(g);
-            Assert.Equal(rows[2].Bottom, rows[3].Top, 2);
-            Assert.Equal(12, rows[3].Bottom - rows[2].Top, 2);
         }
 
         [Theory]
@@ -1536,6 +1552,16 @@ namespace PeachPDF.Tests.Integration
             var top = p.Points.Min(pt => pt.Y);
             return new BandInfo(p.Color, left, top, p.Points.Max(pt => pt.X) - left, p.Points.Max(pt => pt.Y) - top);
         }
+
+        /// <summary>
+        /// One entry per distinct band <i>position</i> across its line, ordered along that axis - the
+        /// face each position shows, rather than the draw calls that produced it. One face can be drawn
+        /// in several pieces (a collapsed line split by a joint square, or by a run boundary), and a
+        /// count of draw calls would report that as extra faces.
+        /// </summary>
+        private static List<IGrouping<double, BandInfo>> FacesByPosition(
+            List<BandInfo> bands, Func<BandInfo, double> position) =>
+            bands.GroupBy(b => Math.Round(position(b), 2)).OrderBy(f => f.Key).ToList();
 
         /// <summary>Every horizontal (top/bottom edge) band, ordered top to bottom.</summary>
         private static List<BandInfo> HorizontalBands(TestRecordingGraphics g) =>

@@ -285,7 +285,7 @@ Each logical longhand keeps its own identity through the cascade and is resolved
 | `border-width` | [border-width](https://developer.mozilla.org/en-US/docs/Web/CSS/border-width) | Shorthand and all four longhands supported |
 | `border-style` | [border-style](https://developer.mozilla.org/en-US/docs/Web/CSS/border-style) | Shorthand and all four longhands supported; values: `none`, `hidden`, `solid`, `dashed`, `dotted`, `double`, `inset`, `outset`, `groove`, `ridge`. `hidden` behaves exactly like `none` — the used [`border-width`](https://developer.mozilla.org/en-US/docs/Web/CSS/border-width) of that side is 0, so the edge is neither painted nor given any space in the box model — except inside a `border-collapse: collapse` table, where it also suppresses the shared grid line outright and beats every competing declaration ([CSS 2.1 §17.6.2](https://www.w3.org/TR/CSS21/tables.html#border-conflict-resolution), clause 1 — see the `border-collapse` row below). See [How each border style is drawn](#how-each-border-style-is-drawn) below |
 | `border-color` | [border-color](https://developer.mozilla.org/en-US/docs/Web/CSS/border-color) | Shorthand and all four longhands supported |
-| `border-collapse` | [border-collapse](https://developer.mozilla.org/en-US/docs/Web/CSS/border-collapse) | `collapse` resolves borders per CSS 2.1 [§17.6.2](https://www.w3.org/TR/CSS21/tables.html#border-conflict-resolution) (width, then style, then cell/row/row-group/column/column-group/table origin, then position), including on a repeated `<thead>`/`<tfoot>` across pages; `border-radius` is undefined by the spec on a collapsed table and is not drawn there, matching common browser behavior |
+| `border-collapse` | [border-collapse](https://developer.mozilla.org/en-US/docs/Web/CSS/border-collapse) | `collapse` resolves borders per CSS 2.1 [§17.6.2](https://www.w3.org/TR/CSS21/tables.html#border-conflict-resolution) (width, then style, then cell/row/row-group/column/column-group/table origin, then position), including on a repeated `<thead>`/`<tfoot>` across pages. The table's own border box contains each outermost grid line whole rather than the half §17.6.2 describes, and where two grid lines cross, one of them paints the whole square they share — both matching browsers; see [How each border style is drawn](#how-each-border-style-is-drawn). `border-radius` is undefined by the spec on a collapsed table and is not drawn there, matching common browser behavior |
 | `border-spacing` | [border-spacing](https://developer.mozilla.org/en-US/docs/Web/CSS/border-spacing) | Full support for tables |
 
 #### How each border style is drawn
@@ -328,6 +328,26 @@ has four real sides and so follows the per-side rule above instead, with one dif
 element's: its edges are painted full-width and full-height rather than mitred, so where two of them
 meet, the left or right edge's face covers the corner square outright instead of the two splitting it
 along the diagonal.
+
+Where two collapsed grid lines cross, the square they share is painted whole by one of them, and never
+split along a diagonal. The wider line takes it; at equal width, the one whose style ranks higher
+in [§17.6.2](https://www.w3.org/TR/CSS21/tables.html#border-conflict-resolution)'s order
+(`hidden`, `double`, `solid`, `dashed`, `dotted`, `ridge`, `outset`, `groove`, `inset`); and failing
+both, the row line, except on the table's first row line, where the column line takes it unless that
+column line is the one at the table's inline start (its leftmost, in a left-to-right table). The four
+corners of the table are crossings like any other and are filled accordingly, rather than left blank.
+This is what a browser paints for the same table; CSS 2.1 resolves a border per grid-line *segment* and
+says nothing about the square two crossing segments share. The one case where a square is still shared
+is a crossing where a line's own resolved border changes from one side of it to the other — the two
+runs meeting there split it between them rather than one taking it whole.
+
+A collapsed table's own border box contains each outermost grid line **whole**. §17.6.2 instead puts
+only half of it inside ("the width of the table includes half the table border"), which paints the
+other half outside the table — over whatever precedes it, or clipped away entirely at a page or
+container edge, so an outer line comes out thinner than an interior one. PeachPDF follows browsers
+here, so no part of a collapsed border is ever painted outside the table it belongs to: a 2×2 table of
+60×40px cells whose every border is `20px` occupies exactly 180×140px — 20 + 60 + 20 + 60 + 20 across
+— rather than the 160×120px §17.6.2's half-line box would give it.
 
 A bevelled border side whose color is [`currentcolor`](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value#currentcolor_keyword)
 — which is `border-color`'s initial value, so this covers every `border: 2px inset` that names no

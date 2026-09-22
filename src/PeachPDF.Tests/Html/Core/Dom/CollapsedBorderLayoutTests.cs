@@ -119,14 +119,14 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
-        public async Task TableOuterEdges_CoincideWithTheFirstCellsOwnEdges()
+        public async Task TableOuterEdges_SitHalfAGridLineOutsideTheFirstCellsOwnEdges()
         {
-            // Per CollapsedBorderModel's own geometric model, the table's own border box and the first
-            // cell's own border box are the SAME edge (X_0 - VW[0]/2 both), not two edges VW[0]/2 apart -
-            // the shared outer border is one physical sliver of space, viewed from the table's side and
-            // the cell's side at once, not two separate reservations stacked. Verified against
-            // GetWidthSum's own independently-derived total, not just asserted (see StartXSpacing's
-            // remarks in CssLayoutEngineTable for the exact numeric residual this caught).
+            // The table's own border box holds the WHOLE outermost grid line and the first cell holds
+            // its inner half, so the two edges are exactly half a line apart. Issue #1257: the table's
+            // edge used to sit on the line's centre, coinciding with the cell's, which painted the
+            // line's outer half outside the table - over whatever preceded it, or clipped away at a page
+            // edge. Verified against GetWidthSum's own independently-derived total, not just asserted
+            // (see StartXSpacing's remarks in CssLayoutEngineTable).
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(@"
                 <table id='t' style='border-collapse:collapse;border:6pt solid black'>
                     <tr><td id='a' style='border-top:6pt solid black;border-left:6pt solid black'>a</td></tr>
@@ -135,19 +135,23 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var table = FindById(root, "t");
             var a = FindById(root, "a");
 
-            Assert.Equal(0, a.Location.Y - table.Location.Y, 1);
-            Assert.Equal(0, a.Location.X - table.Location.X, 1);
+            Assert.Equal(3, a.Location.Y - table.Location.Y, 1);
+            Assert.Equal(3, a.Location.X - table.Location.X, 1);
+
+            // The other half is the used border width the table itself took - the whole 6pt line, not
+            // CSS 2.1 §17.6.2's "half of the maximum collapsed border".
+            Assert.Equal(6, table.ActualBorderTopWidth, 1);
+            Assert.Equal(6, table.ActualBorderLeftWidth, 1);
         }
 
         [Fact]
-        public async Task TableOuterEdge_WonByACellAlone_StillCoincides()
+        public async Task TableOuterEdge_WonByACellAlone_StillTakesTheWholeLine()
         {
             // The table itself declares no border at all - only the cell touching the outer edge does.
-            // Without DerivedStyle.SetCollapsedUsedBorderWidths, the table's own (still-computed-from-its-
-            // own-declared-style) ActualBorderTopWidth/ActualBorderLeftWidth would stay 0, which happens
-            // to already coincide by accident here - the real point of this test is
-            // TableWidthMatchesGetWidthSum below, which fails without the override regardless of which
-            // box's declared border happens to be nonzero.
+            // Without DerivedStyle.SetCollapsedUsedBorderWidths the table's own (still-computed-from-its-
+            // own-declared-style) ActualBorderTopWidth/ActualBorderLeftWidth would stay 0, which is
+            // exactly what this asserts is overridden: the table takes the whole resolved line even
+            // though it declared none of it.
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(@"
                 <table id='t' style='border-collapse:collapse'>
                     <tr><td id='a' style='border-top:6pt solid black;border-left:6pt solid black'>a</td></tr>
@@ -156,8 +160,11 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var table = FindById(root, "t");
             var a = FindById(root, "a");
 
-            Assert.Equal(0, a.Location.Y - table.Location.Y, 1);
-            Assert.Equal(0, a.Location.X - table.Location.X, 1);
+            Assert.Equal(3, a.Location.Y - table.Location.Y, 1);
+            Assert.Equal(3, a.Location.X - table.Location.X, 1);
+
+            Assert.Equal(6, table.ActualBorderTopWidth, 1);
+            Assert.Equal(6, table.ActualBorderLeftWidth, 1);
         }
 
         [Fact]
@@ -258,7 +265,14 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.Equal(row1.ActualBottom, row2.Location.Y, 1);
             Assert.Equal(row2.ActualBottom, row3.Location.Y, 1);
 
-            Assert.Equal(3 * rowHeight, table.ActualBottom - table.Location.Y, 1);
+            // The rows meet centre-to-centre and so sum to their own three heights exactly; the table's
+            // border box then adds the outer half of the outermost grid line at each end, which is the
+            // whole of what separates its own edge from the first row's (issue #1257). A 1px line is
+            // 0.75pt, so each end adds 0.375pt.
+            var halfOuterLine = row1.Location.Y - table.Location.Y;
+            Assert.Equal(0.375, halfOuterLine, 3);
+
+            Assert.Equal(3 * rowHeight + 2 * halfOuterLine, table.ActualBottom - table.Location.Y, 1);
         }
 
         [Fact]
@@ -288,7 +302,12 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.Equal(col1.ActualRight, col2.Location.X, 1);
             Assert.Equal(col2.ActualRight, col3.Location.X, 1);
 
-            Assert.Equal(3 * colWidth, table.ActualRight - table.Location.X, 1);
+            // See MultiRowTable_RowHeightsSumExactly_NoCompoundingDrift's own remark for the two outer
+            // half-lines - the same term, on the column axis.
+            var halfOuterLine = col1.Location.X - table.Location.X;
+            Assert.Equal(0.375, halfOuterLine, 3);
+
+            Assert.Equal(3 * colWidth + 2 * halfOuterLine, table.ActualRight - table.Location.X, 1);
         }
     }
 }
