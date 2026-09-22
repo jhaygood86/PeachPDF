@@ -517,6 +517,35 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FootnotePolicyBlock_CallNestedInsideAnInlineSpan_StillMovesTheParagraphNotTheSpan()
+        {
+            // The call's structural ParentBox is the inline <span>, not the <p> - FootnotePolicyContainingBlockOf
+            // has to walk up past it to find the real "paragraph that contains the footnote reference"
+            // css-gcpm-3 §2.8 asks for, rather than trying (and failing, since a plain <span> never takes
+            // a forced break on its own) to move the span itself.
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 20pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p0'>An ordinary paragraph with no footnote of its own.</p>"
+                + "<p id='p1'>Text <span id='wrapper'>nested text<sup style='float:footnote; footnote-policy: block;'>"
+                + "This note body is long enough that its own height at the page's content width exceeds "
+                + "the tiny 20pt max-height declared on @footnote, so footnote-policy: block should force "
+                + "the whole paragraph - not the inline span - onto the next page.</sup></span></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            var p0 = FindById(root, "p0");
+            var p1 = FindById(root, "p1");
+            Assert.NotNull(p0);
+            Assert.NotNull(p1);
+
+            Assert.Equal(0, container.PageIndexOf(p0!.Location.Y));
+            Assert.True(container.PageIndexOf(p1!.Location.Y) > 0);
+            Assert.True(container.FragmentTree!.Fragmentainers.Count > 1);
+        }
+
+        [Fact]
         public async Task FootnotePolicyAuto_NoteAreaExceedsMaxHeight_StaysOnTheSamePage()
         {
             // Regression: the default policy is unaffected by max-height - it still just overflows,
