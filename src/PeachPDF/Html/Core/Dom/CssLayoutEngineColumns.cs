@@ -594,7 +594,7 @@ namespace PeachPDF.Html.Core.Dom
                     inheritsSuppression: true);
 
                 var columnInlineLeftForKey = columnLeft + col * pitch;
-                var columnKey = new ColumnAreaKey(columnsBox, startSlot, col, columnInlineLeftForKey);
+                var columnKey = ColumnAreaKey.For(columnsBox, startSlot, col, columnInlineLeftForKey);
 
                 // A column-scoped footnote area (float-reference: column) sits at this column's own band
                 // bottom, so ReserveBandEnd - which insets from the context's own band - is the right

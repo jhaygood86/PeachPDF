@@ -35,7 +35,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         double BandBottom)
     {
         /// <summary>This column's identity as a dictionary key.</summary>
-        internal ColumnAreaKey Key => new(ColumnsBox, Slot, ColumnIndex, InlineLeft);
+        internal ColumnAreaKey Key => ColumnAreaKey.For(ColumnsBox, Slot, ColumnIndex, InlineLeft);
 
         /// <summary>Whether <paramref name="inlineLeft"/> falls within this column's inline span.</summary>
         internal bool ContainsInline(double inlineLeft) =>
@@ -51,22 +51,18 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// here only to tell two fills of the same nested container apart and must survive being recomputed
     /// to the last floating-point bit.
     /// </summary>
-    internal readonly record struct ColumnAreaKey
+    internal readonly record struct ColumnAreaKey(
+        CssBox ColumnsBox,
+        int Slot,
+        int ColumnIndex,
+        double InlineLeft)
     {
-        internal ColumnAreaKey(CssBox columnsBox, int slot, int columnIndex, double inlineLeft)
-        {
-            ColumnsBox = columnsBox;
-            Slot = slot;
-            ColumnIndex = columnIndex;
-            InlineLeft = System.Math.Round(inlineLeft, 2);
-        }
-
-        internal CssBox ColumnsBox { get; }
-
-        internal int Slot { get; }
-
-        internal int ColumnIndex { get; }
-
-        internal double InlineLeft { get; }
+        /// <summary>
+        /// Builds a key from a column's raw inline offset, quantizing it - the offset is recomputed from
+        /// the gap and pitch on every pass, so keying on its full precision would miss a match over a
+        /// difference of no consequence.
+        /// </summary>
+        internal static ColumnAreaKey For(CssBox columnsBox, int slot, int columnIndex, double inlineLeft) =>
+            new(columnsBox, slot, columnIndex, System.Math.Round(inlineLeft, 2));
     }
 }

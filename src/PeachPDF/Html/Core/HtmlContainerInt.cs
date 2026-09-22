@@ -3651,11 +3651,9 @@ namespace PeachPDF.Html.Core
                     }
                 }
             }
-            else
-            {
-                _footnoteAreasBySlot = [];
-            }
 
+            // areasBySlot is simply empty when there is no real page grid, so this one assignment covers
+            // both arms.
             _footnoteAreasBySlot = areasBySlot;
             FootnoteAreaHeightsBySlot = current;
             FootnoteAreaHeightsByColumn = currentByColumn;
