@@ -990,6 +990,12 @@ namespace PeachPDF.Html.Core
 
             Root.Dispose();
             Root = null;
+            // Built once at the end of layout and read only by PdfGenerator (container.HtmlContainerInt.FragmentTree?.Fragmentainers,
+            // already null-safe there) - but its BoxFragments reference the same CssBox tree Root does,
+            // so leaving this set would keep the whole disposed tree reachable until the next document's
+            // own layout overwrites it, the same reference-leak shape ClearBlankSlotReservations() and
+            // the footnote tracking resets below already exist to avoid.
+            FragmentTree = null;
             DocumentLanguage = null;
             // Dropped with the tree it was keyed on, so a disposed tree is not kept reachable by the memo
             // until the next document happens to read through it.
@@ -998,6 +1004,17 @@ namespace PeachPDF.Html.Core
             // Keyed to the (now-disposed) Root it indexed - a stale registry would resolve clip-path:
             // url(#id) against the previous document's clipPath ids instead of the new one's.
             _svgClipPathRegistry = null;
+            // Same shape again: GetBoxById only rebuilds this when _idIndexRoot != the current Root
+            // (already null-safe either side of that comparison), but left alone it would hold every
+            // id-tagged box of the disposed tree - plausibly the largest of these leaks, since any
+            // document with ids anywhere builds one - until the next GetBoxById call for the new
+            // document happens to rebuild it.
+            _idIndex = null;
+            _idIndexRoot = null;
+            // Read only by PdfGenerator during this same render's own paint phase, always after
+            // ResolveCanvasBackground has freshly reassigned it - never read in the window between
+            // Clear() and the next completed layout, so nulling it here is safe as well as consistent.
+            CanvasBackgroundBox = null;
             ClearNamedStrings();
             ClearRunningElements();
             ClearNamedPageElements();
