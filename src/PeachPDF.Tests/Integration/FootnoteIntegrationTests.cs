@@ -1,4 +1,6 @@
 using PeachPDF;
+using PeachPDF.Adapters;
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore;
 using System.IO;
@@ -282,6 +284,121 @@ namespace PeachPDF.Tests.Integration
             using var ms = new MemoryStream();
             doc.Save(ms);
             Assert.True(ms.Length > 0);
+        }
+
+        [Fact]
+        public async Task AtFootnote_NoRuleDeclared_ResolvesTheUaDefaultBoxModel()
+        {
+            var html = Wrap("<p>Text<sup style='float:footnote'>Note body</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var (topPadding, dividerThickness, dividerToBodyGap, maxHeight, dividerColor) =
+                container.ResolveFootnoteAreaBoxModel(0, 400);
+
+            Assert.Equal(4, topPadding);
+            Assert.Equal(1, dividerThickness);
+            Assert.Equal(4, dividerToBodyGap);
+            Assert.Null(maxHeight);
+            Assert.Null(dividerColor);
+        }
+
+        [Fact]
+        public async Task AtFootnote_DeclaredInsidePage_OverridesTheDeclaredLonghandsOnly()
+        {
+            // Only border-top and padding-top are declared - margin-top (this method's "TopPadding")
+            // must still fall back to the UA default, proving the cascade-style per-longhand fallback
+            // (not "any @footnote rule replaces the whole box model").
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { border-top: 3pt solid rgb(255, 0, 0); padding-top: 12pt; max-height: 90pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p>Text<sup style='float:footnote'>Note body</sup></p>"
+                + "</body></html>";
+
+            var (_, container) = await LayoutAsync(html);
+
+            var (topPadding, dividerThickness, dividerToBodyGap, maxHeight, dividerColor) =
+                container.ResolveFootnoteAreaBoxModel(0, 400);
+
+            Assert.Equal(4, topPadding); // undeclared margin-top: still the UA default
+            Assert.Equal(3, dividerThickness);
+            Assert.Equal(12, dividerToBodyGap);
+            Assert.Equal(90, maxHeight);
+            Assert.Equal("rgb(255, 0, 0)", dividerColor);
+        }
+
+        [Fact]
+        public async Task AtFootnote_BorderTopNone_ZeroesTheDividerAndReturnsNoColor()
+        {
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { border-top: none; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p>Text<sup style='float:footnote'>Note body</sup></p>"
+                + "</body></html>";
+
+            var (_, container) = await LayoutAsync(html);
+
+            var (_, dividerThickness, _, _, dividerColor) = container.ResolveFootnoteAreaBoxModel(0, 400);
+
+            Assert.Equal(0, dividerThickness);
+            // The raw declared color slot ("initial" - the border-top shorthand's own unfilled-color
+            // sentinel, see MarginBoxRenderer.PaintBorder's remarks) is carried through as-is; it's
+            // PdfGenerator.ResolveFootnoteDividerColor, not this method, that turns it into black -
+            // moot here anyway, since a zero-thickness divider never paints regardless of its color.
+            Assert.Equal(RColor.Black, PdfGenerator.ResolveFootnoteDividerColor(dividerColor, new PdfSharpAdapter()));
+        }
+
+        [Fact]
+        public async Task AtFootnote_StyledBoxModel_ChangesTheReservedHeightByExactlyTheDelta()
+        {
+            var styled = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { border-top: 5pt solid black; padding-top: 10pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p>Text<sup style='float:footnote'>Note body</sup></p>"
+                + "</body></html>";
+            var plain = Wrap("<p>Text<sup style='float:footnote'>Note body</sup></p>");
+
+            var (_, styledContainer) = await LayoutAsync(styled);
+            var (_, plainContainer) = await LayoutAsync(plain);
+
+            var styledReservation = styledContainer.FootnoteAreaHeightsBySlot[0];
+            var plainReservation = plainContainer.FootnoteAreaHeightsBySlot[0];
+
+            // UA default is 1pt divider + 4pt gap = 5pt; styled is 5pt divider + 10pt gap = 15pt - a
+            // 10pt delta, independent of the (identical) body content height both share.
+            Assert.Equal(plainReservation + 10, styledReservation, 0.01);
+        }
+
+        [Fact]
+        public async Task AtFootnote_DividerRectMirrorsResolvedBoxModel_AcrossResolveAndAttach()
+        {
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { border-top: 6pt solid rgb(0, 128, 0); } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p>Text<sup style='float:footnote'>Note body</sup></p>"
+                + "</body></html>";
+
+            var (_, container) = await LayoutAsync(html);
+
+            var page = Assert.Single(container.FragmentTree!.Fragmentainers);
+            Assert.NotNull(page.FootnoteArea);
+            var footnoteArea = page.FootnoteArea!;
+            Assert.Equal(6, footnoteArea.DividerRect.Height, 0.01);
+            Assert.Equal("rgb(0, 128, 0)", footnoteArea.DividerColor);
+        }
+
+        [Theory]
+        [InlineData(null, 0, 0, 0)]
+        [InlineData("currentcolor", 0, 0, 0)]
+        [InlineData("initial", 0, 0, 0)]
+        [InlineData("rgb(255, 0, 0)", 255, 0, 0)]
+        public void ResolveFootnoteDividerColor_FallsBackToBlack_ForNoRealColor(string? declared, byte r, byte g, byte b)
+        {
+            var adapter = new PdfSharpAdapter();
+
+            var resolved = PdfGenerator.ResolveFootnoteDividerColor(declared, adapter);
+
+            Assert.Equal(RColor.FromArgb(r, g, b), resolved);
         }
 
         private static CssBoxFootnoteCall? FindFootnoteCall(CssBox box)

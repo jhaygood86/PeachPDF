@@ -1910,10 +1910,14 @@ namespace PeachPDF.Html.Core
 
                 var contentLeft = MarginLeft;
                 var contentWidth = PageContentRightOf(PageTopOf(fragmentainer.SlotIndex)) - contentLeft;
-                // Mirrors ResolveFootnotesForThisAttempt's own areaTop/finalBodiesTop geometry exactly:
-                // the divider sits after the top padding, before the gap that precedes the first body.
+                // Mirrors ResolveFootnotesForThisAttempt's own areaTop/finalBodiesTop geometry exactly -
+                // both resolve @footnote's box model through the same ResolveFootnoteAreaBoxModel call,
+                // so the two can never disagree about the divider's thickness or position. The divider
+                // sits after the top padding, before the gap that precedes the first body.
+                var (topPadding, dividerThickness, _, _, dividerColor) =
+                    ResolveFootnoteAreaBoxModel(fragmentainer.SlotIndex, contentWidth);
                 var areaTop = PageBottomOf(fragmentainer.SlotIndex) - totalHeight;
-                var dividerTop = areaTop + FootnoteAreaTopPadding;
+                var dividerTop = areaTop + topPadding;
 
                 // Bodies were laid out (and are still positioned) in document space - the coordinate
                 // space ReserveBandEnd/PageBottomOf's own reservation math needs, since it has to agree
@@ -1932,10 +1936,10 @@ namespace PeachPDF.Html.Core
                     call.Body.OffsetTop(-localOriginY);
                 }
 
-                var dividerRect = new RRect(contentLeft, dividerTop - localOriginY, contentWidth, FootnoteDividerThickness);
+                var dividerRect = new RRect(contentLeft, dividerTop - localOriginY, contentWidth, dividerThickness);
                 var bodies = calls.Select(call => MarginBoxContentFragmentBuilder.Build(call.Body)).ToList();
 
-                updated.Add(fragmentainer with { FootnoteArea = new FootnoteAreaFragment(dividerRect, bodies) });
+                updated.Add(fragmentainer with { FootnoteArea = new FootnoteAreaFragment(dividerRect, bodies, dividerColor) });
             }
 
             return tree with { Fragmentainers = updated };
@@ -2927,6 +2931,78 @@ namespace PeachPDF.Html.Core
         private const double FootnoteBodySpacing = 4;
 
         /// <summary>
+        /// Resolves css-gcpm-3 §2.4's <c>@footnote</c> area rule's box model for pagination slot
+        /// <paramref name="slot"/> - the single place both <see cref="ResolveFootnotesForThisAttempt"/>
+        /// (which needs it for height math) and <see cref="AttachFootnoteAreas"/> (which needs the
+        /// identical numbers to build a byte-for-byte matching rect, per that method's own remarks on why
+        /// the two must never disagree) resolve it, so the two can never drift apart. Falls back to
+        /// PeachPDF's own UA default (<see cref="FootnoteAreaTopPadding"/>/<see cref="FootnoteDividerThickness"/>/
+        /// <see cref="FootnoteAreaDividerToBodyGap"/>) per longhand, exactly as an unset property falls
+        /// back to its initial value in a real cascade - an author who declares only <c>border-top</c>
+        /// still gets the default top padding and divider-to-body gap. <c>max-height</c> is resolved but
+        /// never changes this method's own height math - it is purely a signal <c>footnote-policy</c>
+        /// reads to decide whether a page's note area "fits" (see the "Footnotes" section of
+        /// docs/html-css-support.md); under the default <c>footnote-policy: auto</c> a too-tall note area
+        /// still simply overflows, same as an over-tall single footnote body already does.
+        /// </summary>
+        /// <remarks>
+        /// Uses <see cref="PageRuleResolver.ActiveNameAtSlotStart"/> (not <c>ActiveNameAtPageEnd</c>,
+        /// which paint-time margin-box resolution uses) and <c>slot + 1</c> as the page number - the same
+        /// slot-start attribution <c>PageGeometryTable</c>'s own per-page geometry resolution uses, since
+        /// resolving this during the footnote convergence loop (before the fragment tree, and so before a
+        /// materialized page number, exists) has only a raw slot to work from. This can disagree with the
+        /// true materialized page number only in the narrow case a content-empty page was skipped earlier
+        /// in the document (issue #148) - a pre-existing limitation of the whole footnote-slot subsystem
+        /// (<see cref="ResolveFootnotesForThisAttempt"/> already groups footnote calls by raw slot the
+        /// same way), not a new one this introduces.
+        /// </remarks>
+        internal (double TopPadding, double DividerThickness, double DividerToBodyGap, double? MaxHeight, string? DividerColor)
+            ResolveFootnoteAreaBoxModel(int slot, double contentWidth)
+        {
+            if (PageRules.Count == 0)
+                return (FootnoteAreaTopPadding, FootnoteDividerThickness, FootnoteAreaDividerToBodyGap, null, null);
+
+            var pageNumber = slot + 1;
+            var activeName = PageRuleResolver.ActiveNameAtSlotStart(_namedPageElements, PageTopOf(slot));
+            var rule = PageRuleResolver.SelectApplicableMarginRules(PageRules, pageNumber, activeName)
+                .FirstOrDefault(m => string.Equals(m.Selector?.Text?.Trim(), "footnote", StringComparison.OrdinalIgnoreCase));
+
+            if (rule is null)
+                return (FootnoteAreaTopPadding, FootnoteDividerThickness, FootnoteAreaDividerToBodyGap, null, null);
+
+            var pageStyle = PageRuleResolver.SelectApplicablePageStyle(PageRules, pageNumber, activeName);
+            var remPt = PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
+
+            var topPadding = string.IsNullOrWhiteSpace(rule.Style.MarginTop)
+                ? FootnoteAreaTopPadding
+                : MarginBoxRenderer.MarginExtent(rule, pageStyle, remPt, contentWidth, horizontal: false).Start;
+
+            var dividerThickness = string.IsNullOrWhiteSpace(rule.Style.BorderTopStyle)
+                ? FootnoteDividerThickness
+                : MarginBoxRenderer.BorderExtent(rule, pageStyle, remPt, horizontal: false).Start;
+
+            var dividerToBodyGap = string.IsNullOrWhiteSpace(rule.Style.PaddingTop)
+                ? FootnoteAreaDividerToBodyGap
+                : MarginBoxRenderer.PaddingExtent(rule, pageStyle, remPt, contentWidth, horizontal: false).Start;
+
+            double? maxHeight = null;
+            if (!string.IsNullOrWhiteSpace(rule.Style.MaxHeight))
+            {
+                var emPt = MarginBoxRenderer.ResolveFontSizePt(rule.Style, pageStyle);
+                maxHeight = DomParser.ParseLengthToPdfPoints(rule.Style.MaxHeight, new PageLengthContext(emPt, remPt, contentWidth));
+            }
+
+            // A divider only paints when @footnote declares a real border-top (dividerThickness > 0
+            // handles the "declared but none/hidden/zero-width" cases); null means "use the UA default
+            // black" the same way an ordinary box's unset border-*-color falls back through currentcolor.
+            var dividerColor = string.IsNullOrWhiteSpace(rule.Style.BorderTopStyle)
+                ? null
+                : rule.Style.BorderTopColor;
+
+            return (topPadding, dividerThickness, dividerToBodyGap, maxHeight, dividerColor);
+        }
+
+        /// <summary>
         /// This layout attempt's per-page footnote resolution. For every pagination slot at least one
         /// <see cref="CssBoxFootnoteCall"/> landed on (by its own, now-settled <c>Location.Y</c>):
         /// numbers its footnotes in document order starting at 1 (the UA default's implicit per-page
@@ -2971,6 +3047,7 @@ namespace PeachPDF.Html.Core
                 {
                     var contentLeft = MarginLeft;
                     var contentWidth = PageContentRightOf(PageTopOf(slot)) - contentLeft;
+                    var (topPadding, dividerThickness, dividerToBodyGap, _, _) = ResolveFootnoteAreaBoxModel(slot, contentWidth);
 
                     var y = 0d;
                     var number = 1;
@@ -2995,7 +3072,7 @@ namespace PeachPDF.Html.Core
                         y += (call.Body.ActualBottom - call.Body.Location.Y) + FootnoteBodySpacing;
                     }
 
-                    var totalHeight = y - FootnoteBodySpacing + FootnoteAreaTopPadding + FootnoteDividerThickness + FootnoteAreaDividerToBodyGap;
+                    var totalHeight = y - FootnoteBodySpacing + topPadding + dividerThickness + dividerToBodyGap;
                     if (totalHeight <= 0) continue;
 
                     // The stacking loop above laid every body out relative to a y=0 baseline; translate the
@@ -3003,7 +3080,7 @@ namespace PeachPDF.Html.Core
                     // content-band bottom, the same "measure first, then place at the real position" shape
                     // CssLayoutEngineColumns already uses for column-fill balancing.
                     var areaTop = PageBottomOf(slot) - totalHeight;
-                    var finalBodiesTop = areaTop + FootnoteAreaTopPadding + FootnoteDividerThickness + FootnoteAreaDividerToBodyGap;
+                    var finalBodiesTop = areaTop + topPadding + dividerThickness + dividerToBodyGap;
                     foreach (var call in calls)
                     {
                         call.Body.OffsetTop(finalBodiesTop);

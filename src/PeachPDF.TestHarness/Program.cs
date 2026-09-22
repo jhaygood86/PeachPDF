@@ -2042,6 +2042,13 @@ var footnotesHtml = """
       size: A4 portrait;
       margin: 25mm 20mm;
       @bottom-center { content: counter(page); font-size: 8pt; font-family: Arial; color: #888; }
+      /* @footnote styles the note area itself - here, a heavier colored divider with extra
+         room above and below it, instead of PeachPDF's default thin black rule. */
+      @footnote {
+        border-top: 2pt solid #2563eb;
+        margin-top: 10pt;
+        padding-top: 8pt;
+      }
     }
     body { font: 11pt Georgia, serif; margin: 0; color: #222; }
     h1 { font-size: 20pt; margin: 0 0 14pt; }
@@ -2082,7 +2089,7 @@ var footnotesHtml = """
     """;
 
 await SaveShowcaseAsync("paged_media_footnotes", "Paged Media", "Footnotes",
-    "css-gcpm-3's float: footnote: a numbered in-flow reference, a note area whose height is reserved dynamically per page based on how many footnotes land there, and break-inside: avoid content correctly kept clear of the reserved strip.",
+    "css-gcpm-3's float: footnote: a numbered in-flow reference, a note area whose height is reserved dynamically per page based on how many footnotes land there, break-inside: avoid content correctly kept clear of the reserved strip, and an @footnote rule styling the note area's own divider.",
     footnotesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──

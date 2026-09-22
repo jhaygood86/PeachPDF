@@ -1567,7 +1567,20 @@ The `<h1>` no longer appears at its original position in the document; instead, 
   ::footnote-marker { font-weight: bold; }
   ```
   Both pseudo-elements support the same style properties `::marker` does (`color`, font properties, `direction`) — see [`::marker`](#pseudo-elements) above. An explicit `content` override on either replaces the automatic number (a literal string, `attr()`, or an image all work; `counter(footnote)` does not — see the numbering note above).
-- **The note area** — a thin divider rule above the stacked footnote bodies, in document order. Its own appearance (the divider, spacing) is a fixed PeachPDF default and isn't currently styled by author CSS.
+- **The note area** — a thin divider rule above the stacked footnote bodies, in document order.
+- **The `@footnote` area rule** — style the note area itself with an `@footnote` block nested inside `@page`, the same way you'd declare `@top-center` or another page margin box:
+  ```css
+  @page {
+    @footnote {
+      border-top: 2pt solid #2563eb;
+      margin-top: 8pt;
+      padding-top: 6pt;
+    }
+  }
+  ```
+  `border-top` styles the divider rule (only a solid divider is painted — a declared `border-top-style` other than `none`/`hidden` still paints as a solid line, and `none`/`hidden` removes the divider entirely); `margin-top` is the space above the divider; `padding-top` is the gap between the divider and the first footnote body. Any longhand left undeclared falls back to PeachPDF's own default (a 1pt solid black divider, 4pt above it, 4pt below it) exactly as an ordinary CSS cascade fills in an unset property — declaring only `border-top` still gets the default margin/padding. `max-height` is also accepted; on its own (under the default `footnote-policy: auto`) it does not shrink or clip the note area — see `footnote-policy` below for what makes it take effect.
+
+**`footnote-display`** and **`footnote-policy`** — see below.
 
 **Limitations:**
 - `float: inline-footnote` and column-scoped footnote areas (multi-column containers) are not supported.
