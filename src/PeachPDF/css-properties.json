@@ -1544,6 +1544,24 @@
       }
     },
     {
+      "name": "footnote-policy",
+      "comment": "css-gcpm-3 §2.8 - forces a break when a footnote's own note area can't be placed on the page its call landed on.",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FootnotePolicyMode",
+        "keywordMap": "Map.FootnotePolicyModes",
+        "fallback": "FootnotePolicyMode.Auto"
+      },
+      "html": {
+        "propertyPath": "FootnotePolicy",
+        "csharpDataType": "CssProperty<FootnotePolicyMode>",
+        "area": "PaginationArea",
+        "getterExpression": "{box}.FootnotePolicy.ToString()"
+      }
+    },
+    {
       "name": "background-position",
       "comment": "background-position is <position># (comma-separated per layer), so cssDataType 'cssom-grammar' calls BackgroundPositionProperty.ValueGrammar.Convert directly - the real Converters.PointConverter.FromList() composition, exposed alongside the property's own .OrDefault()-wrapped Converter - instead of the full cssom round trip. (BackgroundPositionGrammar.TryParse alone only understands a single position, not the comma list; BackgroundPositionValueConverter/BackgroundLayerResolver call it per-layer after FromList() has already split the groups.)",
       "inherited": false,
@@ -1757,6 +1775,24 @@
         "csharpDataType": "CssProperty<Floating>",
         "area": "DisplayPositioningArea",
         "getterExpression": "{box}.Float.ToString()"
+      }
+    },
+    {
+      "name": "footnote-display",
+      "comment": "css-gcpm-3 §2.3 - how an already-detached float: footnote body stacks inside the note area.",
+      "inherited": false,
+      "initialValue": "block",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FootnoteDisplayMode",
+        "keywordMap": "Map.FootnoteDisplayModes",
+        "fallback": "FootnoteDisplayMode.Block"
+      },
+      "html": {
+        "propertyPath": "FootnoteDisplay",
+        "csharpDataType": "CssProperty<FootnoteDisplayMode>",
+        "area": "DisplayPositioningArea",
+        "getterExpression": "{box}.FootnoteDisplay.ToString()"
       }
     },
     {

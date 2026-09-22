@@ -1,6 +1,11 @@
 using PeachPDF;
+using PeachPDF.Adapters;
+using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Fragments;
 using PeachPDF.PdfSharpCore;
+using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -282,6 +287,506 @@ namespace PeachPDF.Tests.Integration
             using var ms = new MemoryStream();
             doc.Save(ms);
             Assert.True(ms.Length > 0);
+        }
+
+        [Fact]
+        public async Task AtFootnote_NoRuleDeclared_ResolvesTheUaDefaultBoxModel()
+        {
+            var html = Wrap("<p>Text<sup style='float:footnote'>Note body</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var (topPadding, dividerThickness, dividerToBodyGap, maxHeight, dividerColor) =
+                container.ResolveFootnoteAreaBoxModel(0, 400);
+
+            Assert.Equal(4, topPadding);
+            Assert.Equal(1, dividerThickness);
+            Assert.Equal(4, dividerToBodyGap);
+            Assert.Null(maxHeight);
+            Assert.Null(dividerColor);
+        }
+
+        [Fact]
+        public async Task AtFootnote_DeclaredInsidePage_OverridesTheDeclaredLonghandsOnly()
+        {
+            // Only border-top and padding-top are declared - margin-top (this method's "TopPadding")
+            // must still fall back to the UA default, proving the cascade-style per-longhand fallback
+            // (not "any @footnote rule replaces the whole box model").
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { border-top: 3pt solid rgb(255, 0, 0); padding-top: 12pt; max-height: 90pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p>Text<sup style='float:footnote'>Note body</sup></p>"
+                + "</body></html>";
+
+            var (_, container) = await LayoutAsync(html);
+
+            var (topPadding, dividerThickness, dividerToBodyGap, maxHeight, dividerColor) =
+                container.ResolveFootnoteAreaBoxModel(0, 400);
+
+            Assert.Equal(4, topPadding); // undeclared margin-top: still the UA default
+            Assert.Equal(3, dividerThickness);
+            Assert.Equal(12, dividerToBodyGap);
+            Assert.Equal(90, maxHeight);
+            Assert.Equal("rgb(255, 0, 0)", dividerColor);
+        }
+
+        [Fact]
+        public async Task AtFootnote_BorderTopNone_ZeroesTheDividerAndReturnsNoColor()
+        {
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { border-top: none; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p>Text<sup style='float:footnote'>Note body</sup></p>"
+                + "</body></html>";
+
+            var (_, container) = await LayoutAsync(html);
+
+            var (_, dividerThickness, _, _, dividerColor) = container.ResolveFootnoteAreaBoxModel(0, 400);
+
+            Assert.Equal(0, dividerThickness);
+            // The raw declared color slot ("initial" - the border-top shorthand's own unfilled-color
+            // sentinel, see MarginBoxRenderer.PaintBorder's remarks) is carried through as-is; it's
+            // PdfGenerator.ResolveFootnoteDividerColor, not this method, that turns it into black -
+            // moot here anyway, since a zero-thickness divider never paints regardless of its color.
+            Assert.Equal(RColor.Black, PdfGenerator.ResolveFootnoteDividerColor(dividerColor, new PdfSharpAdapter()));
+        }
+
+        [Fact]
+        public async Task AtFootnote_StyledBoxModel_ChangesTheReservedHeightByExactlyTheDelta()
+        {
+            var styled = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { border-top: 5pt solid black; padding-top: 10pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p>Text<sup style='float:footnote'>Note body</sup></p>"
+                + "</body></html>";
+            var plain = Wrap("<p>Text<sup style='float:footnote'>Note body</sup></p>");
+
+            var (_, styledContainer) = await LayoutAsync(styled);
+            var (_, plainContainer) = await LayoutAsync(plain);
+
+            var styledReservation = styledContainer.FootnoteAreaHeightsBySlot[0];
+            var plainReservation = plainContainer.FootnoteAreaHeightsBySlot[0];
+
+            // UA default is 1pt divider + 4pt gap = 5pt; styled is 5pt divider + 10pt gap = 15pt - a
+            // 10pt delta, independent of the (identical) body content height both share.
+            Assert.Equal(plainReservation + 10, styledReservation, 0.01);
+        }
+
+        [Fact]
+        public async Task AtFootnote_DividerRectMirrorsResolvedBoxModel_AcrossResolveAndAttach()
+        {
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { border-top: 6pt solid rgb(0, 128, 0); } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p>Text<sup style='float:footnote'>Note body</sup></p>"
+                + "</body></html>";
+
+            var (_, container) = await LayoutAsync(html);
+
+            var page = Assert.Single(container.FragmentTree!.Fragmentainers);
+            Assert.NotNull(page.FootnoteArea);
+            var footnoteArea = page.FootnoteArea!;
+            Assert.Equal(6, footnoteArea.DividerRect.Height, 0.01);
+            Assert.Equal("rgb(0, 128, 0)", footnoteArea.DividerColor);
+        }
+
+        [Theory]
+        [InlineData(null, 0, 0, 0)]
+        [InlineData("currentcolor", 0, 0, 0)]
+        [InlineData("initial", 0, 0, 0)]
+        [InlineData("rgb(255, 0, 0)", 255, 0, 0)]
+        public void ResolveFootnoteDividerColor_FallsBackToBlack_ForNoRealColor(string? declared, byte r, byte g, byte b)
+        {
+            var adapter = new PdfSharpAdapter();
+
+            var resolved = PdfGenerator.ResolveFootnoteDividerColor(declared, adapter);
+
+            Assert.Equal(RColor.FromArgb(r, g, b), resolved);
+        }
+
+        [Fact]
+        public void PaintFootnoteArea_DrawsTheDividerAtItsResolvedRectBeforeTheBodies()
+        {
+            // The RGraphics-level overload, driven directly with a recording mock - per this repo's own
+            // testing conventions, a page-count/stream-length check (as the full-pipeline tests above
+            // use) cannot tell a real divider draw call apart from a silently no-op one.
+            var container = new HtmlContainerInt(new PdfSharpAdapter());
+            var g = new RecordingGraphics(new PdfSharpAdapter());
+            var dividerRect = new RRect(10, 20, 300, 3);
+            var footnoteArea = new FootnoteAreaFragment(dividerRect, [], "rgb(0, 128, 0)");
+
+            PdfGenerator.PaintFootnoteArea(g, new PdfSharpAdapter(), container, footnoteArea);
+
+            var opKinds = g.Log.Select(op => op.Kind).ToList();
+            Assert.Equal(
+                [PaintOpKind.PushClip, PaintOpKind.FillRect, PaintOpKind.PopClip],
+                opKinds);
+            Assert.Equal(dividerRect, g.Log.Single(op => op.Kind == PaintOpKind.FillRect).Bounds);
+        }
+
+        [Fact]
+        public void PaintFootnoteArea_SkipsTheDividerDrawCall_WhenThicknessIsZero()
+        {
+            // border-top: none/hidden (or no @footnote rule declaring one at all, on a page where the
+            // resolved thickness happens to be zero) must not draw a phantom zero-height rectangle.
+            var container = new HtmlContainerInt(new PdfSharpAdapter());
+            var g = new RecordingGraphics(new PdfSharpAdapter());
+            var footnoteArea = new FootnoteAreaFragment(new RRect(10, 20, 300, 0), [], null);
+
+            PdfGenerator.PaintFootnoteArea(g, new PdfSharpAdapter(), container, footnoteArea);
+
+            Assert.DoesNotContain(g.Log, op => op.Kind == PaintOpKind.FillRect);
+        }
+
+        [Fact]
+        public async Task FootnoteDisplayBlock_MultipleBodies_EachStartsItsOwnRow()
+        {
+            var html = Wrap(@"
+                <p>One<sup id='fn1' style='float:footnote; footnote-display: block;'>First</sup>
+                Two<sup id='fn2' style='float:footnote; footnote-display: block;'>Second</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var first = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn1");
+            var second = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn2");
+
+            Assert.True(second.Body.Location.Y > first.Body.Location.Y);
+            Assert.Equal(first.Body.Location.X, second.Body.Location.X, 0.01);
+        }
+
+        [Fact]
+        public async Task FootnoteDisplayInline_TwoShortBodies_PackOntoTheSameRow()
+        {
+            var html = Wrap(@"
+                <p>One<sup id='fn1' style='float:footnote; footnote-display: inline;'>First</sup>
+                Two<sup id='fn2' style='float:footnote; footnote-display: inline;'>Second</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var first = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn1");
+            var second = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn2");
+
+            // Same row: identical Y, second body positioned strictly to the right of the first.
+            Assert.Equal(first.Body.Location.Y, second.Body.Location.Y, 0.01);
+            Assert.True(second.Body.Location.X > first.Body.Location.X);
+
+            // Packed onto one row is shorter overall than the block default's two stacked rows.
+            var reservation = container.FootnoteAreaHeightsBySlot[0];
+            Assert.True(reservation > 0);
+        }
+
+        [Fact]
+        public async Task FootnoteDisplayInline_NarrowerThanBlockDefault_ForTheSameContent()
+        {
+            var inlineHtml = Wrap(@"
+                <p>One<sup id='fn1' style='float:footnote; footnote-display: inline;'>First</sup>
+                Two<sup id='fn2' style='float:footnote; footnote-display: inline;'>Second</sup></p>");
+            var blockHtml = Wrap(@"
+                <p>One<sup id='fn1' style='float:footnote;'>First</sup>
+                Two<sup id='fn2' style='float:footnote;'>Second</sup></p>");
+
+            var (_, inlineContainer) = await LayoutAsync(inlineHtml);
+            var (_, blockContainer) = await LayoutAsync(blockHtml);
+
+            // Two short notes packed onto one row reserve less height than the same two notes
+            // stacked as two full-width block rows.
+            Assert.True(inlineContainer.FootnoteAreaHeightsBySlot[0] < blockContainer.FootnoteAreaHeightsBySlot[0]);
+        }
+
+        [Fact]
+        public async Task FootnoteDisplayCompact_ShortBodyPacksInline_LongBodyTakesItsOwnRow()
+        {
+            var longNote = string.Join(" ", Enumerable.Repeat("word", 60));
+            var html = Wrap($@"
+                <p>One<sup id='fn1' style='float:footnote; footnote-display: compact;'>Short</sup>
+                Two<sup id='fn2' style='float:footnote; footnote-display: compact;'>{longNote}</sup>
+                Three<sup id='fn3' style='float:footnote; footnote-display: compact;'>Also short</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var first = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn1");
+            var second = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn2");
+            var third = container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == "fn3");
+
+            // fn2 wraps at full content width (many words), so compact falls back to a full-width row
+            // for it - a new row below fn1's, and fn3 (short again) starts yet another row rather than
+            // packing beside the wrapped fn2.
+            Assert.True(second.Body.Location.Y > first.Body.Location.Y);
+            Assert.Equal(0, second.Body.Location.X - container.MarginLeft, 0.01);
+            Assert.True(third.Body.Location.Y > second.Body.Location.Y);
+        }
+
+        [Fact]
+        public async Task FootnotePolicyBlock_NoteAreaExceedsMaxHeight_MovesTheParagraphToTheNextPage()
+        {
+            // A forced break needs a predecessor in the flow to break away from (css-break-3 §4.4 - the
+            // same reason "the first element of a document" never manufactures a blank leading page for
+            // an author break-before either), so p0 exists purely to give p1 somewhere to break from.
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 20pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p0'>An ordinary paragraph with no footnote of its own.</p>"
+                + "<p id='p1'>Text<sup style='float:footnote; footnote-policy: block;'>This note body is "
+                + "long enough that its own height at the page's content width exceeds the tiny 20pt "
+                + "max-height declared on @footnote, so footnote-policy: block should force this whole "
+                + "paragraph onto the next page instead of overflowing here.</sup></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            // Not container.FootnoteCalls[0].OwnGeometryTop() - ResolveFootnotesForThisAttempt's own last
+            // act on the last convergence pass is re-parsing each call's word (ApplyNumber/ParseToWords),
+            // which leaves that fresh CssRect at its unset default Top until a later pass's real inline
+            // layout would reposition it - one never comes once the loop has exited. Rectangles (updated
+            // by relocation itself, not by re-parsing) and an ordinary block box's own Location stay
+            // reliable read after the fact; only the call's own transient Words don't.
+            var p0 = FindById(root, "p0");
+            var p1 = FindById(root, "p1");
+            Assert.NotNull(p0);
+            Assert.NotNull(p1);
+
+            var p0Slot = container.PageIndexOf(p0!.Location.Y);
+            var paragraphSlot = container.PageIndexOf(p1!.Location.Y);
+
+            Assert.Equal(0, p0Slot);
+            Assert.True(paragraphSlot > p0Slot);
+            Assert.True(container.FragmentTree!.Fragmentainers.Count > 1);
+        }
+
+        [Fact]
+        public async Task FootnotePolicyBlock_CallNestedInsideAnInlineSpan_StillMovesTheParagraphNotTheSpan()
+        {
+            // The call's structural ParentBox is the inline <span>, not the <p> - FootnotePolicyContainingBlockOf
+            // has to walk up past it to find the real "paragraph that contains the footnote reference"
+            // css-gcpm-3 §2.8 asks for, rather than trying (and failing, since a plain <span> never takes
+            // a forced break on its own) to move the span itself.
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 20pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p0'>An ordinary paragraph with no footnote of its own.</p>"
+                + "<p id='p1'>Text <span id='wrapper'>nested text<sup style='float:footnote; footnote-policy: block;'>"
+                + "This note body is long enough that its own height at the page's content width exceeds "
+                + "the tiny 20pt max-height declared on @footnote, so footnote-policy: block should force "
+                + "the whole paragraph - not the inline span - onto the next page.</sup></span></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            var p0 = FindById(root, "p0");
+            var p1 = FindById(root, "p1");
+            Assert.NotNull(p0);
+            Assert.NotNull(p1);
+
+            Assert.Equal(0, container.PageIndexOf(p0!.Location.Y));
+            Assert.True(container.PageIndexOf(p1!.Location.Y) > 0);
+            Assert.True(container.FragmentTree!.Fragmentainers.Count > 1);
+        }
+
+        [Fact]
+        public async Task FootnotePolicyBlock_ContainingBlockIsItsWrappersOnlyChild_HoistsTheBreakToTheWrapper()
+        {
+            // css-break-3 §3.1 propagation: a forced break-before on a box that is the first in-flow
+            // child of its own parent is taken by that parent instead (BreakPropagation.AnchorForBreakBefore) -
+            // an author break-before on p1 here would be hoisted to #wrapper the same way. If
+            // footnote-policy: block set its flag on p1 directly without going through the same anchor,
+            // #wrapper would never learn a break landed inside it and would stay on the original page
+            // while p1 (its only child) moved out from under it.
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 20pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p0'>An ordinary paragraph with no footnote of its own.</p>"
+                + "<div id='wrapper' style='border: 1pt solid black;'>"
+                + "<p id='p1'>Text<sup style='float:footnote; footnote-policy: block;'>This note body is "
+                + "long enough that its own height at the page's content width exceeds the tiny 20pt "
+                + "max-height declared on @footnote, so footnote-policy: block should force this whole "
+                + "paragraph - and the wrapper it is the sole child of - onto the next page.</sup></p>"
+                + "</div>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            var p0 = FindById(root, "p0");
+            var wrapper = FindById(root, "wrapper");
+            var p1 = FindById(root, "p1");
+            Assert.NotNull(p0);
+            Assert.NotNull(wrapper);
+            Assert.NotNull(p1);
+
+            Assert.Equal(0, container.PageIndexOf(p0!.Location.Y));
+            // The wrapper itself relocates, not just its content - proves the break was hoisted to the
+            // anchor rather than forced directly on p1 while #wrapper stayed behind. (Not asserting
+            // wrapper.Location.Y == p1.Location.Y exactly - #wrapper's own border/p1's own margin mean
+            // they're offset from each other by a few points, same as any ordinary parent/first-child.)
+            Assert.True(container.PageIndexOf(wrapper!.Location.Y) > 0);
+            Assert.Equal(container.PageIndexOf(wrapper.Location.Y), container.PageIndexOf(p1!.Location.Y));
+        }
+
+        [Fact]
+        public async Task FootnotePolicyBlock_ThenClear_ResetsTheForcedBreakFlagAndTrackingCollections()
+        {
+            // Not a WeakReference/GC-based leak test - HtmlContainerInt.FragmentTree (pre-existing,
+            // unrelated to footnote-policy) already keeps the whole box tree reachable after Clear()
+            // regardless of this fix, so nothing here could ever actually become collectible. This
+            // asserts the narrower, deterministic thing Clear() now actually does: the flag this PR
+            // added is reset on every box it was set on, and the two tracking collections are emptied,
+            // exactly like FootnoteCalls/FootnoteAreaHeightsBySlot right next to them already were.
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 20pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p0'>An ordinary paragraph with no footnote of its own.</p>"
+                + "<p id='p1'>Text<sup style='float:footnote; footnote-policy: block;'>This note body is "
+                + "long enough that its own height at the page's content width exceeds the tiny 20pt "
+                + "max-height declared on @footnote, so footnote-policy: block forces this paragraph onto "
+                + "the next page - and so records it as a forced-break box this test then checks Clear() "
+                + "actually resets.</sup></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+            var p1 = FindById(root, "p1")!;
+            Assert.True(container.PageIndexOf(p1.Location.Y) > 0); // sanity: the break was actually taken
+            Assert.True(p1.FootnotePolicyForcedBreakBefore);
+
+            container.Clear();
+
+            Assert.False(p1.FootnotePolicyForcedBreakBefore);
+            Assert.Empty(container.FootnotePolicyForcedLineCalls);
+            Assert.Empty(container.FootnotePolicyLineBreaksTakenThisPass);
+        }
+
+        [Fact]
+        public async Task FootnotePolicyAuto_NoteAreaExceedsMaxHeight_StaysOnTheSamePage()
+        {
+            // Regression: the default policy is unaffected by max-height - it still just overflows,
+            // exactly as before this feature.
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 20pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p1'>Text<sup style='float:footnote'>This note body is long enough that its own "
+                + "height at the page's content width exceeds the tiny 20pt max-height declared on "
+                + "@footnote, but footnote-policy defaults to auto, which does not force a break.</sup></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            var p1 = FindById(root, "p1");
+            Assert.NotNull(p1);
+            Assert.Equal(0, container.PageIndexOf(p1!.Location.Y));
+        }
+
+        [Fact]
+        public async Task FootnotePolicyBlock_NoteAreaFits_DoesNotForceABreak()
+        {
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 500pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p1'>Text<sup style='float:footnote; footnote-policy: block;'>Short note.</sup></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            var p1 = FindById(root, "p1");
+            Assert.NotNull(p1);
+            Assert.Equal(0, container.PageIndexOf(p1!.Location.Y));
+            Assert.Single(container.FragmentTree!.Fragmentainers);
+        }
+
+        [Fact]
+        public async Task FootnotePolicyLine_NoteAreaExceedsMaxHeight_ForcesAnExtraPageComparedToAuto()
+        {
+            // A raw CssBox's own Rectangles/Words are only a reliable read within the single pass that
+            // set them - HtmlContainerInt's footnote-policy: line handling (like every other multi-pass
+            // mechanism in this codebase) can re-lay the whole document out several times, and each pass
+            // creates fresh CssLineBox keys rather than overwriting the previous pass's entries (see
+            // docs/architecture.md §6: only the materialized FragmentTree is a reliable post-layout
+            // source, never CssBox geometry directly). So this compares page COUNT against the identical
+            // markup under the default footnote-policy: auto, rather than asserting exactly which page a
+            // particular line landed on - line and auto must disagree on page count, or nothing forced
+            // anything.
+            // The call sits after enough of its own paragraph's text that it lands on a LATER line, not
+            // the first - a forced break needs a predecessor to break away from (css-break-3 §4.4, the
+            // same reason footnote-policy: block's own test needs a preceding paragraph), and for an
+            // inline break that predecessor can be an earlier line of the very same paragraph. A narrow
+            // page forces the wrap.
+            var leading = string.Join(" ", Enumerable.Repeat("word", 10));
+            static string Markup(string leading, string policyDeclaration) =>
+                "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 10pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + $"<p id='p1'>{leading} <sup style='float:footnote;{policyDeclaration}'>This footnote's "
+                + "own body text is long enough that, combined with the tiny max-height declared on "
+                + "@footnote, its note area does not fit.</sup> more text.</p>"
+                + "</body></html>";
+
+            var (rootLine, containerLine) = await LayoutAsync(
+                Markup(leading, " footnote-policy: line;"), pageWidth: 120, margin: 10);
+            var (rootAuto, containerAuto) = await LayoutAsync(
+                Markup(leading, ""), pageWidth: 120, margin: 10);
+
+            var p1Line = FindById(rootLine, "p1");
+            Assert.NotNull(p1Line);
+
+            // Unlike footnote-policy: block, the paragraph box itself never relocates - only the specific
+            // line carrying the call does.
+            Assert.Equal(0, containerLine.PageIndexOf(p1Line!.Location.Y));
+
+            Assert.True(
+                containerLine.FragmentTree!.Fragmentainers.Count > containerAuto.FragmentTree!.Fragmentainers.Count);
+        }
+
+        [Fact]
+        public async Task FootnotePolicyLine_NoteAreaFits_DoesNotForceABreak()
+        {
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { max-height: 500pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p1'>Text<sup style='float:footnote; footnote-policy: line;'>Short note.</sup></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            var p1 = FindById(root, "p1");
+            Assert.NotNull(p1);
+            Assert.Equal(0, container.PageIndexOf(p1!.Location.Y));
+            Assert.Single(container.FragmentTree!.Fragmentainers);
+        }
+
+        [Theory]
+        [InlineData("block", "Block")]
+        [InlineData("inline", "Inline")]
+        [InlineData("compact", "Compact")]
+        public async Task FootnoteDisplay_ParsesAndAppliesToTheDetachedSourceElement(string value, string expected)
+        {
+            var html = Wrap($"<p>Text<sup style='float:footnote; footnote-display: {value};'>Note</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var call = Assert.Single(container.FootnoteCalls);
+            Assert.Equal(expected, call.Body.FootnoteDisplay.Value.ToString());
+        }
+
+        [Fact]
+        public async Task FootnoteDisplay_UndeclaredDefaultsToBlock()
+        {
+            var html = Wrap("<p>Text<sup style='float:footnote'>Note</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var call = Assert.Single(container.FootnoteCalls);
+            Assert.Equal("Block", call.Body.FootnoteDisplay.Value.ToString());
+        }
+
+        [Theory]
+        [InlineData("auto", "Auto")]
+        [InlineData("line", "Line")]
+        [InlineData("block", "Block")]
+        public async Task FootnotePolicy_ParsesAndAppliesToTheDetachedSourceElement(string value, string expected)
+        {
+            var html = Wrap($"<p>Text<sup style='float:footnote; footnote-policy: {value};'>Note</sup></p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var call = Assert.Single(container.FootnoteCalls);
+            Assert.Equal(expected, call.Body.FootnotePolicy.Value.ToString());
         }
 
         private static CssBoxFootnoteCall? FindFootnoteCall(CssBox box)

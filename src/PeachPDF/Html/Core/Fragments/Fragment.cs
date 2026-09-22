@@ -313,9 +313,16 @@ namespace PeachPDF.Html.Core.Fragments
     /// page position, and never fragments (an accepted gap, see docs/html-css-support.md's "Footnotes"
     /// section).
     /// </summary>
-    /// <param name="DividerRect">The thin rule painted above the first body.</param>
+    /// <param name="DividerRect">The thin rule painted above the first body, already sized to the
+    /// resolved <c>@footnote</c> <c>border-top-width</c> (or the UA default when undeclared) - its own
+    /// height needs no further resolution at paint time.</param>
     /// <param name="Bodies">Each footnote's own laid-out body, in document (and so numbering) order.</param>
-    internal sealed record FootnoteAreaFragment(RRect DividerRect, IReadOnlyList<BoxFragment> Bodies) : Fragment(DividerRect);
+    /// <param name="DividerColor">The resolved <c>@footnote</c> <c>border-top-color</c>, or null when
+    /// <c>@footnote</c> declares no <c>border-top</c> (paint falls back to the UA default black) - see
+    /// <see cref="HtmlContainerInt.ResolveFootnoteAreaBoxModel"/>. Only a solid divider is supported
+    /// (an author <c>border-top-style</c> other than <c>none</c>/<c>hidden</c> still paints solid); the
+    /// line style itself is not carried through.</param>
+    internal sealed record FootnoteAreaFragment(RRect DividerRect, IReadOnlyList<BoxFragment> Bodies, string? DividerColor = null) : Fragment(DividerRect);
 
     /// <summary>
     /// The complete immutable result of laying out one document: its fragmentainers, in page order.

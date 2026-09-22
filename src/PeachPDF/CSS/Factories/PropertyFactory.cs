@@ -313,6 +313,8 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FontWeight, () => new FontWeightProperty(), true, true);
             AddLonghand(PropertyNames.FontStretch, () => new FontStretchProperty(), true, true);
             AddLonghand(PropertyNames.FontPalette, () => new FontPaletteProperty());
+            AddLonghand(PropertyNames.FootnoteDisplay, () => new FootnoteDisplayProperty());
+            AddLonghand(PropertyNames.FootnotePolicy, () => new FootnotePolicyProperty());
 
             AddShorthand(PropertyNames.Gap, () => new GapProperty(),
                 PropertyNames.RowGap,

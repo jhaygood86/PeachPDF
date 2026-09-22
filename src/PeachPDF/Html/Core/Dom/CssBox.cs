@@ -2300,6 +2300,20 @@ namespace PeachPDF.Html.Core.Dom
         private bool _isForcedBreak;
 
         /// <summary>
+        /// Set externally by <see cref="HtmlContainerInt.ResolveFootnotesForThisAttempt"/> when
+        /// css-gcpm-3's <c>footnote-policy: block</c> requires a page break before this box (the
+        /// containing block of a footnote call whose note area no longer fits its landing page) - folded
+        /// into <see cref="PerformLayoutPrologue"/>'s own forced-break computation exactly like an author
+        /// <c>break-before</c> value, so the rest of the forced-break machinery (propagation, margin
+        /// truncation, blank-page reservation) treats it identically without any code of its own. Persists
+        /// across layout generations the same way <see cref="BreakBefore"/> itself does (it is decided
+        /// once per footnote-convergence pass, not once per layout generation) - <c>ResolveFootnotesForThisAttempt</c>
+        /// owns clearing it before re-deciding each pass, the same way it owns every other piece of
+        /// footnote-policy state.
+        /// </summary>
+        internal bool FootnotePolicyForcedBreakBefore { get; set; }
+
+        /// <summary>
         /// Whether the break point before this box carries a forced break value at all, whether or not
         /// <i>this</i> box is the one that takes it. Wider than <see cref="_isForcedBreak"/> by exactly the
         /// §3.1 propagation case: a first in-flow child's own <c>break-before</c> is taken by the container
@@ -3763,7 +3777,8 @@ namespace PeachPDF.Html.Core.Dom
                 ? null
                 : BreakPropagation.ForcedBreakAfterAt(previousSiblingForBreak, FragmentationContext.Page);
 
-            _isForcedBreak = forcedBefore is not null || forcedAfter is not null || pageNameChanged;
+            _isForcedBreak = forcedBefore is not null || forcedAfter is not null || pageNameChanged
+                || FootnotePolicyForcedBreakBefore;
 
             // The value still governs this break point even where the container is what acts on it, so §5.2
             // leaves this box's margin alone either way. Without this, hoisting the break changed a stated

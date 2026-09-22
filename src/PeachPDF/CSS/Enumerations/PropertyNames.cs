@@ -133,6 +133,8 @@
         public static readonly string FontVariantEastAsian = "font-variant-east-asian";
         public static readonly string FontWeight = "font-weight";
         public static readonly string Font = "font";
+        public static readonly string FootnoteDisplay = "footnote-display";
+        public static readonly string FootnotePolicy = "footnote-policy";
         public static readonly string Gap = "gap";
         public static readonly string Grid = "grid";
         public static readonly string GridTemplate = "grid-template";

@@ -1376,10 +1376,14 @@ namespace PeachPDF
         }
 
         /// <summary>
-        /// Paints one page's css-gcpm-3 <c>float: footnote</c> note area - a hard-coded UA divider rule
-        /// (no author styling of the area itself in this version; see docs/html-css-support.md's
-        /// "Footnotes" section), then each footnote body. Mirrors <see cref="PaintElementMarginBoxes"/>
-        /// exactly for the bodies (real, laid-out <see cref="CssBox"/> subtrees reused unmodified through
+        /// Paints one page's css-gcpm-3 <c>float: footnote</c> note area - a divider rule above the
+        /// stacked footnote bodies, then each body. The divider's own geometry and color were already
+        /// resolved at layout time (<see cref="HtmlContainerInt.ResolveFootnoteAreaBoxModel"/>, via
+        /// <see cref="FootnoteAreaFragment.DividerRect"/>/<see cref="FootnoteAreaFragment.DividerColor"/>)
+        /// - this reads that resolved data rather than re-resolving <c>@footnote</c>'s cascade itself, the
+        /// same "paint consumes only the fragment tree" division of labor every other paint code in this
+        /// file follows. Mirrors <see cref="PaintElementMarginBoxes"/> exactly for the bodies (real,
+        /// laid-out <see cref="CssBox"/> subtrees reused unmodified through
         /// <see cref="FragmentPainter.PaintFragment"/> - backgrounds/borders/nested styling and tagged-PDF
         /// structure attach for free, same reasoning) - the divider alone is drawn directly, as a simple
         /// filled rectangle: it is a UA-drawn separator with no box of its own, not an <c>&lt;hr&gt;</c>
@@ -1390,6 +1394,18 @@ namespace PeachPDF
             var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
 
+            PaintFootnoteArea(graphicsAdapter, adapter, htmlContainer, footnoteArea);
+        }
+
+        /// <summary>
+        /// The <see cref="RGraphics"/>-level half of <see cref="PaintFootnoteArea(XGraphics, RAdapter, HtmlContainerInt, FootnoteAreaFragment)"/>,
+        /// split out so a test can drive it with a recording <see cref="RGraphics"/> and assert the actual
+        /// draw call sequence (which calls, in what order) rather than only that a full PDF pipeline
+        /// completes without error or that a fragment holds the right data - see this repo's own testing
+        /// conventions on why a token/page-count check alone is not proof a paint path isn't a no-op.
+        /// </summary>
+        internal static void PaintFootnoteArea(RGraphics graphicsAdapter, RAdapter adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
+        {
             // Bypasses FragmentPainter.Paint's own clip push (this is called directly, not through that
             // wrapper), so it needs its own content-area bound - previously provided for free by a raw
             // XGraphics.IntersectClip AddPdfPages applied ahead of this call, removed because it also
@@ -1397,7 +1413,11 @@ namespace PeachPDF
             graphicsAdapter.PushClip(htmlContainer.PageClipOverride ?? htmlContainer.PageBoxRect);
 
             var rect = footnoteArea.DividerRect;
-            graphicsAdapter.DrawRectangle(graphicsAdapter.GetSolidBrush(RColor.Black), rect.X, rect.Y, rect.Width, rect.Height);
+            if (rect.Height > 0)
+            {
+                var dividerColor = ResolveFootnoteDividerColor(footnoteArea.DividerColor, adapter);
+                graphicsAdapter.DrawRectangle(graphicsAdapter.GetSolidBrush(dividerColor), rect.X, rect.Y, rect.Width, rect.Height);
+            }
 
             var painter = new FragmentPainter(htmlContainer);
             foreach (var body in footnoteArea.Bodies)
@@ -1407,6 +1427,20 @@ namespace PeachPDF
 
             graphicsAdapter.PopClip();
         }
+
+        /// <summary>
+        /// The <c>@footnote</c> divider's resolved paint color - black when <paramref name="declaredColor"/>
+        /// is null (no <c>border-top</c> declared, see <see cref="HtmlContainerInt.ResolveFootnoteAreaBoxModel"/>)
+        /// or resolves to no real color of its own (<c>currentcolor</c>/<c>initial</c> - the divider is a
+        /// UA-drawn separator with no element of its own to inherit a text color from), otherwise the
+        /// declared color parsed the same way any other CSS color value is.
+        /// </summary>
+        internal static RColor ResolveFootnoteDividerColor(string? declaredColor, RAdapter adapter) =>
+            string.IsNullOrWhiteSpace(declaredColor) ||
+            declaredColor.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase) ||
+            declaredColor.Equals(Keywords.Initial, StringComparison.OrdinalIgnoreCase)
+                ? RColor.Black
+                : new CssValueParser(adapter).GetActualColor(declaredColor);
 
         /// <summary>
         /// Handle HTML links by create PDF Documents link either to external URL or to another page in the document.

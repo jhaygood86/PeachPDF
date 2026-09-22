@@ -43,7 +43,15 @@ namespace PeachPDF.Html.Core.Dom
         /// why an explicit author <c>content: counter(footnote)</c> is not supported. Does not itself
         /// call <see cref="CssBox.ParseToWords"/> - the caller re-parses once the whole page's calls
         /// have all been renumbered, the same "apply then re-parse words" contract
-        /// <c>HtmlContainerInt.ReapplyPseudoElementContent</c> already follows.
+        /// <c>HtmlContainerInt.ReapplyPseudoElementContent</c> already follows. That re-parse leaves a
+        /// fresh <see cref="CssRect"/> word at its unset default <c>Top</c> until real inline layout
+        /// repositions it - which happens on a later pass within <c>HtmlContainerInt</c>'s footnote
+        /// convergence loop, but never again once that loop exits. So <see cref="CssBox.OwnGeometryTop"/>
+        /// on this box is reliable to read only <i>before</i> this method runs on the pass that reads it
+        /// (<c>HtmlContainerInt.ResolveFootnotesForThisAttempt</c>'s own grouping step does exactly that);
+        /// a caller needing this call's final position after layout has fully settled should read
+        /// <see cref="Body"/>'s own <see cref="CssBox.Location"/> (an ordinary block box, unaffected) or
+        /// this box's own <see cref="CssBox.Rectangles"/> (updated by relocation, not by re-parsing).
         /// </summary>
         internal void ApplyNumber(int number)
         {
