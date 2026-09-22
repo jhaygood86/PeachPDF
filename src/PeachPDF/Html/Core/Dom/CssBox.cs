@@ -5429,8 +5429,43 @@ namespace PeachPDF.Html.Core.Dom
             // that placed it survives untouched - which is precisely §2's one-inline-size rule.
             var top = ContentTopOfTheContainingBlockIn(fragmentainer, ContainingBlock);
 
-            Location = new RPoint(ContainingBlock.ClientLeft + ActualMarginLeft, top);
+            Location = new RPoint(ResolveBlockInlineStart(ContainingBlock.ClientLeft, top), top);
             ActualBottom = Location.Y;
+        }
+
+        /// <summary>
+        /// The left edge of this in-flow block's border box within its containing block, resolved against
+        /// the inline size it has already been given.
+        /// </summary>
+        /// <param name="contentLeft">the containing block's content left edge</param>
+        /// <param name="blockTop">the border-box top this box lands at, which names the page whose measure applies</param>
+        /// <remarks>
+        /// <para>
+        /// In an <c>ltr</c> containing block the edge is the content left edge plus the left margin, and any
+        /// slack is absorbed on the right - <see href="https://www.w3.org/TR/CSS21/visudet.html#blockwidth">CSS 2.1
+        /// §10.3.3</see> ignores <c>margin-right</c> when the box is over-constrained. In an <c>rtl</c> one the
+        /// rule is mirrored: <c>margin-left</c> is the ignored margin, so the box is anchored to the content
+        /// <i>right</i> edge, less its right margin and its own width. That is what end-aligns a narrower box
+        /// and sends an over-wide one overflowing toward the start edge.
+        /// </para>
+        /// <para>
+        /// The two agree exactly for a box that fills its containing block - the right edge less the margins
+        /// and the width is the left edge plus the left margin - so an <c>rtl</c> document of full-width blocks
+        /// is unchanged. Only boxes ordinary block layout leaves narrower than their container move, which is
+        /// the point. Horizontal writing modes only: a vertical containing block's inline axis is the other one.
+        /// </para>
+        /// </remarks>
+        private double ResolveBlockInlineStart(double contentLeft, double blockTop)
+        {
+            if (ParentBox is not null
+                && ContainingBlock is { Direction.Value: DirectionMode.Rtl }
+                && ContainingBlock.WritingMode.Value is CSS.WritingMode.HorizontalTb
+                && CssLayoutEngine.IsInFlowBlockLevel(this))
+            {
+                return CssLayoutEngine.ContentRightOf(ContainingBlock, blockTop) - ActualMarginRight - ActualBoxSizingWidth;
+            }
+
+            return contentLeft + ActualMarginLeft;
         }
 
         /// <summary>
@@ -6183,7 +6218,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     var top = FloatLineTop(child, offset.Top) ?? offset.Top;
 
-                    child.Location = new RPoint(offset.Left + child.ActualMarginLeft, top);
+                    child.Location = new RPoint(child.ResolveBlockInlineStart(offset.Left, top), top);
                     child.ActualBottom = top;
 
                     // Stamped on every block-flow placement, not only a run head's - a box's own record

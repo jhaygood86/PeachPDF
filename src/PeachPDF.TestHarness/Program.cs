@@ -6305,6 +6305,51 @@ await SaveShowcaseAsync("border_style", "Backgrounds & Borders", "Border Styles"
     "The full set of CSS border styles, from solid and dashed to groove, ridge, inset, and outset.",
     borderStyleHtml, pdfConfig);
 
+// --- block inline placement showcase ---
+
+// One row per declaration, each shown in an ltr and an rtl container of the same width. The container is a
+// plain grey band and the box a coloured bar, so where the box lands against the band's two edges is the
+// whole picture: which edge a narrower box sits against, which side an over-constrained box overflows, and
+// where an auto margin sends it.
+static string PlacementRow(string label, string boxCss) =>
+    $"<div class=\"row\"><div class=\"label\">{label}</div>" +
+    $"<div class=\"band\" style=\"direction: ltr\"><div class=\"bar\" style=\"{boxCss}\"></div></div>" +
+    $"<div class=\"band\" style=\"direction: rtl\"><div class=\"bar\" style=\"{boxCss}\"></div></div></div>";
+
+var blockPlacementHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a4; margin: 15mm }
+    body { font-family: Arial, sans-serif; font-size: 11px; margin: 0 }
+    h1 { font-size: 15px; margin: 0 0 4px }
+    p.note { margin: 0 0 10px; color: #555 }
+    .head, .row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px }
+    .head div { font-weight: bold; color: #333 }
+    .label { width: 190px; font-family: monospace; font-size: 10px; color: #333 }
+    .head .col, .band { width: 160px }
+    .head .col + .col, .band + .band { margin-left: 82px }
+    .band { background: #ddd; border-left: 2px solid #999; border-right: 2px solid #999; box-sizing: content-box }
+    .bar { height: 12px; background: #e8804a; margin: 0 }
+    </style></head><body>
+    <h1>Where a narrow block sits: ltr and rtl</h1>
+    <p class="note">The grey band is the containing block. Each bar is a block-level box with the declaration on
+    the left. An rtl block end-aligns; an over-wide one overflows toward the start edge; a single auto margin
+    takes all of the slack.</p>
+    <div class="head"><div class="label">declaration</div><div class="col">direction: ltr</div><div class="col">direction: rtl</div></div>
+    """
+    + PlacementRow("width: 64px", "width: 64px")
+    + PlacementRow("width: 64px; margin: 0 auto", "width: 64px; margin: 0 auto")
+    + PlacementRow("margin-left: auto", "width: 64px; margin-left: auto; margin-right: 0")
+    + PlacementRow("margin-right: auto", "width: 64px; margin-left: 0; margin-right: auto")
+    + PlacementRow("margin-left: auto; margin-right: 30px", "width: 64px; margin-left: auto; margin-right: 30px")
+    + PlacementRow("margin-right: 30px", "width: 64px; margin-right: 30px")
+    + PlacementRow("width: 120%; margin-left: 20px", "width: 120%; margin-left: 20px")
+    + PlacementRow("max-width: 64px (auto width)", "max-width: 64px")
+    + "</body></html>";
+
+await SaveShowcaseAsync("block_inline_placement", "Layout", "Block Placement in ltr and rtl",
+    "Where a narrower block-level box sits in a left-to-right and a right-to-left container, including auto margins and overflow.",
+    blockPlacementHtml, pdfConfig);
+
 // --- outline showcase ---
 
 const string OutlineCss = """

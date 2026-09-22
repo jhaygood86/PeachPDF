@@ -1445,7 +1445,13 @@ namespace PeachPDF.Html.Core.Dom
                 return CssValueParser.ParseLength(marginLeft.Value!.Value, box.ContainingBlock.AvailableWidth, box);
             }
 
-            if (box.MarginRight.Value.IsValue) return 0;
+            // Exactly one auto margin: it takes whatever the other margin, the borders, the padding and
+            // the width leave over (CSS 2.1 §10.3.3, "its used value follows from the equality"). Left at 0
+            // this pinned `margin-left: auto` boxes - and so `<hr align=right>`'s mapping - to the start edge.
+            if (box.MarginRight.Value.IsValue)
+            {
+                return IsInFlowBlockLevel(box) ? ResolveSingleAutoHorizontalMargin(box, box.ActualMarginRight) : 0;
+            }
 
             if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != Keywords.TableCaption)
             {
@@ -1476,7 +1482,10 @@ namespace PeachPDF.Html.Core.Dom
                 return CssValueParser.ParseLength(marginRight.Value!.Value, box.ContainingBlock.AvailableWidth, box);
             }
 
-            if (box.MarginLeft.Value.IsValue) return 0;
+            if (box.MarginLeft.Value.IsValue)
+            {
+                return IsInFlowBlockLevel(box) ? ResolveSingleAutoHorizontalMargin(box, box.ActualMarginLeft) : 0;
+            }
 
             if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != Keywords.TableCaption)
             {
@@ -1509,7 +1518,40 @@ namespace PeachPDF.Html.Core.Dom
         /// only starts centering once the page grows past the <c>max-width</c> (which clamps the used
         /// width, making it definite again).
         /// </summary>
-        private static double ResolveAutoHorizontalMargin(CssBox box)
+        private static double ResolveAutoHorizontalMargin(CssBox box) =>
+            Math.Max(0, FreeInlineSpace(box)) / 2;
+
+        /// <summary>
+        /// The used value of a horizontal <c>margin: auto</c> when <b>exactly one</b> of the two margins is
+        /// <c>auto</c> (CSS 2.1 §10.3.3): it takes everything the box's other margin, borders, padding and
+        /// width leave over, which is what pushes a <c>margin-left: auto</c> box to the end edge.
+        /// </summary>
+        /// <param name="box">the box whose <c>auto</c> margin is being resolved</param>
+        /// <param name="otherMargin">the used value of its other, non-<c>auto</c> margin</param>
+        /// <remarks>
+        /// Clamped at 0: an over-constrained box has no negative slack for an <c>auto</c> margin to take, and
+        /// browsers resolve it to 0 rather than shifting the box. An <c>auto</c> width fills the containing
+        /// block, so its slack is 0 unless a <c>max-width</c> narrows it - the same "definite" test the
+        /// both-<c>auto</c> case makes.
+        /// </remarks>
+        private static double ResolveSingleAutoHorizontalMargin(CssBox box, double otherMargin) =>
+            Math.Max(0, FreeInlineSpace(box) - otherMargin);
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is an ordinary in-flow, block-level box - the only kind CSS 2.1
+        /// §10.3.3's margin resolution applies to as written. A float, an absolutely-positioned box, a table,
+        /// a flex/grid item or an inline-level box has margin rules of its own.
+        /// </summary>
+        internal static bool IsInFlowBlockLevel(CssBox box) =>
+            FillsContainingBlockWidth(box)
+            && box.DerivedStyle.ActualDisplay is Keywords.Block or Keywords.ListItem;
+
+        /// <summary>
+        /// The room left in <paramref name="box"/>'s containing block once its own border box is placed in
+        /// it, ignoring its margins: the quantity <c>auto</c> margins are resolved from. Negative when the
+        /// box is wider than the block, which callers clamp.
+        /// </summary>
+        private static double FreeInlineSpace(CssBox box)
         {
             // The containing block's CONTENT width, which is what §10.3.3's constraint is stated over
             // (§10.1 puts the containing block at the content edge of the nearest block container
@@ -1554,8 +1596,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 var replacedUsedWidth = replacedContentWidth + box.ActualBoxSizeIncludedWidth;
-                var replacedRemaining = containingWidth - replacedUsedWidth;
-                return replacedRemaining > 0 ? replacedRemaining / 2 : 0;
+                return containingWidth - replacedUsedWidth;
             }
 
             if (box.Width == Keywords.Auto || string.IsNullOrEmpty(box.Width))
@@ -1579,14 +1620,12 @@ namespace PeachPDF.Html.Core.Dom
                         CssValueParser.ParseLength(box.MinWidth, containingWidth, box));
                 }
 
-                var clampedRemaining = containingWidth - (usedContentWidth + box.ActualBoxSizeIncludedWidth);
-                return clampedRemaining > 0 ? clampedRemaining / 2 : 0;
+                return containingWidth - (usedContentWidth + box.ActualBoxSizeIncludedWidth);
             }
 
             // Definite width: split the genuine free space, accounting for the box's own
             // border/padding (ActualBoxSizingWidth is the used border-box width, already min/max-clamped).
-            var remaining = containingWidth - box.ActualBoxSizingWidth;
-            return remaining > 0 ? remaining / 2 : 0;
+            return containingWidth - box.ActualBoxSizingWidth;
         }
 
         /// <summary>
@@ -1715,7 +1754,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="FloatBox"/>'s displacement scan, rather than each re-deriving the same
         /// page-area-minus-inset expression independently.
         /// </summary>
-        private static double ContentRightOf(CssBox containingBlock, double blockTop)
+        internal static double ContentRightOf(CssBox containingBlock, double blockTop)
         {
             if (containingBlock.HtmlContainer is { UseVariableInlineMeasure: true } htmlContainer
                 && IsUnconstrainedMainColumn(containingBlock))
