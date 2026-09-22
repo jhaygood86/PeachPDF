@@ -549,6 +549,36 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(expected, container.ResolveFootnoteAreaRule(0, 400).Step);
         }
 
+        [Fact]
+        public async Task FootnoteCall_ContentImageOverride_LaysOutWithoutThrowing()
+        {
+            // ResolveFootnotesForThisAttempt re-parses each call's words every convergence pass; a
+            // content override that leaves Text null (an image, or `none`) must not blow up there.
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "::footnote-call { content: url('data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'); }"
+                + "</style></head><body style='margin:0'>"
+                + "<p>Text<sup style='float:footnote'>Note body</sup></p>"
+                + "</body></html>";
+
+            var (_, container) = await LayoutAsync(html);
+
+            Assert.Single(container.FootnoteCalls);
+        }
+
+        [Fact]
+        public async Task FootnoteCall_ContentNoneOverride_LaysOutWithoutThrowing()
+        {
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "::footnote-call { content: none; }"
+                + "</style></head><body style='margin:0'>"
+                + "<p>Text<sup style='float:footnote'>Note body</sup></p>"
+                + "</body></html>";
+
+            var (_, container) = await LayoutAsync(html);
+
+            Assert.Single(container.FootnoteCalls);
+        }
+
         private static string HeightHtml(string? height, string noteBody)
         {
             var rule = height is null ? string.Empty : $"@page {{ @footnote {{ height: {height}; }} }}";

@@ -115,8 +115,12 @@ namespace PeachPDF.CSS
             var name = IdentifierConverter.Required();
             var kind = IdentifierConverter.Option(Keywords.Decimal);
             var def = StringConverter.Required();
-            return new FunctionValueConverter(FunctionNames.Counter, WithArgs(name, kind)
-                .Or(new FunctionValueConverter(FunctionNames.Counters, WithArgs(name, def, kind))));
+            // The .Or is between the two FUNCTIONS, not between counter()'s own argument forms: written
+            // the other way (the closing paren one place further right) it says "a counter() whose
+            // arguments are either <name> <style> or a nested counters(...)", which accepts nothing
+            // useful and rejects a top-level counters() outright.
+            return new FunctionValueConverter(FunctionNames.Counter, WithArgs(name, kind))
+                .Or(new FunctionValueConverter(FunctionNames.Counters, WithArgs(name, def, kind)));
         });
 
         // The subset of the <content-list> grammar (CSS Generated Content 3 §2) shared between `content`

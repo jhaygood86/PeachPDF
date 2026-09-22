@@ -1021,6 +1021,8 @@ namespace PeachPDF.Html.Core
             FootnoteCalls.Clear();
             FootnoteAreaHeightsBySlot = [];
             _footnoteCallsBySlot = [];
+            FootnoteNumberContext = null;
+            _footnoteNumberingSignature = string.Empty;
             // Keyed by CssBox/CssBoxFootnoteCall, same reason ClearBlankSlotReservations() below is -
             // dropping the tree without this would keep every box in it (and everything it in turn
             // reaches via ParentBox/Boxes) reachable until the next document's own footnotes happened to
@@ -2992,6 +2994,27 @@ namespace PeachPDF.Html.Core
         internal readonly HashSet<CssBoxFootnoteCall> FootnotePolicyLineBreaksTakenThisPass = [];
 
         /// <summary>
+        /// The footnote number currently being applied to a <see cref="CssBoxFootnoteCall"/> or its
+        /// marker, and null outside that one moment. <see cref="CssContentEngine"/> consults it before
+        /// falling through to <see cref="CssCounterEngine"/>, which is what makes an author's
+        /// <c>content: counter(footnote)</c> resolve to the live, pagination-resolved number.
+        /// </summary>
+        /// <remarks>
+        /// The same ambient, scoped shape as <see cref="RunningElementPageContext"/>, and for the same
+        /// reason: a footnote's number depends on which page its call landed on, which the DOM-position
+        /// counter engine has no notion of. Set inside a try/finally around the apply, so nothing outside
+        /// that window ever sees it - <c>counter(footnote)</c> on an ordinary element still resolves
+        /// through the document counter exactly as before.
+        /// </remarks>
+        internal int? FootnoteNumberContext { get; set; }
+
+        /// <summary>
+        /// Every footnote number and the exact call/marker text it produced on the previous convergence
+        /// pass, in document order - the fixpoint test for numbering, alongside the reserved-height one.
+        /// </summary>
+        private string _footnoteNumberingSignature = string.Empty;
+
+        /// <summary>
         /// Space between two stacked footnote bodies on the same page. Stays here rather than moving to
         /// <see cref="FootnoteAreaRule"/> with the area's other spacing: this is how bodies stack
         /// <em>within</em> the area's content box, not part of the box model <c>@footnote</c> styles.
@@ -3103,6 +3126,99 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
+        /// What the footnote counter resets to at the start of pagination slot <paramref name="slot"/>,
+        /// or null when that page resets nothing - which is what gives numbering that runs continuously
+        /// across pages.
+        /// </summary>
+        /// <remarks>
+        /// This is ordinary cascade, not a special case. <c>counter-reset</c> is one property, so an
+        /// author declaration on an applicable <c>@page</c> replaces the UA sheet's own
+        /// <c>counter-reset: footnote</c> wholesale - which is why <c>counter-reset: none</c>, and
+        /// equally a <c>counter-reset</c> that only names some other counter, both stop the per-page
+        /// reset and give continuous numbering. A page with no applicable rule at all falls back to the
+        /// UA default of resetting to zero, so the first note on it is numbered one.
+        /// </remarks>
+        private int? ResolveFootnoteCounterResetForSlot(int slot)
+        {
+            if (PageRules.Count == 0) return 0;
+
+            var pageNumber = slot + 1;
+            var activeName = PageRuleResolver.ActiveNameAtSlotStart(_namedPageElements, PageTopOf(slot));
+            var declaration = PageRuleResolver.SelectApplicablePageStyle(PageRules, pageNumber, activeName)?.CounterReset;
+
+            if (string.IsNullOrWhiteSpace(declaration)) return 0;
+
+            return CounterListGrammar.TryGetValue(declaration, Keywords.Footnote, 0, out var reset)
+                ? reset
+                : null;
+        }
+
+        /// <summary>
+        /// Applies <paramref name="number"/> to <paramref name="call"/> and its marker, and records both
+        /// in <paramref name="signature"/> for the convergence loop's own change detection.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="FootnoteNumberContext"/> is set across the apply and restored after, so an author's
+        /// <c>content: counter(footnote)</c> on either pseudo-element resolves against this number, and
+        /// nothing outside the window can see it.
+        /// </para>
+        /// <para>
+        /// See <see cref="ReparseFootnoteText"/> for the two things that have to happen around the
+        /// re-parse, both of which have thrown for real when they were missing.
+        /// </para>
+        /// </remarks>
+        private void ApplyFootnoteNumber(CssBoxFootnoteCall call, int number, StringBuilder signature)
+        {
+            var marker = (CssBoxFootnoteMarker)call.Body.Boxes[0];
+
+            var previous = FootnoteNumberContext;
+            FootnoteNumberContext = number;
+            try
+            {
+                call.ApplyNumber(number);
+                marker.ApplyNumber(number);
+            }
+            finally
+            {
+                FootnoteNumberContext = previous;
+            }
+
+            ReparseFootnoteText(call);
+            ReparseFootnoteText(marker);
+
+            signature.Append(number).Append('')
+                     .Append(call.Text).Append('')
+                     .Append(marker.Text).Append('');
+        }
+
+        /// <summary>
+        /// Rebuilds one renumbered footnote box's words from its new text.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The bidi re-resolve is mandatory, not cosmetic: <c>BidiLevels</c> is indexed against whatever
+        /// text was there before, so a number that merely changes width - "9" to "10", which continuous
+        /// numbering reaches immediately and per-page numbering reaches on any page with ten notes -
+        /// indexes past the end of that array inside <c>ParseToWords</c> and throws
+        /// <see cref="IndexOutOfRangeException"/>.
+        /// </para>
+        /// <para>
+        /// The emptiness guard mirrors <c>DomParser.DetachOneFootnoteBody</c>'s own: a <c>content</c>
+        /// override resolving to an image or to <c>none</c> leaves <c>Text</c> null, and the word-building
+        /// walk dereferences it - which threw <see cref="NullReferenceException"/> on every pass after the
+        /// first before this guard existed.
+        /// </para>
+        /// </remarks>
+        private static void ReparseFootnoteText(CssBox box)
+        {
+            if (string.IsNullOrEmpty(box.Text)) return;
+
+            CssBidiParagraphResolver.ResolveOwnTextAsParagraph(box);
+            box.ParseToWords();
+        }
+
+        /// <summary>
         /// This layout attempt's per-page footnote resolution. For every pagination slot at least one
         /// <see cref="CssBoxFootnoteCall"/> landed on (by its own, now-settled <c>Location.Y</c>):
         /// numbers its footnotes in document order starting at 1 (the UA default's implicit per-page
@@ -3134,6 +3250,7 @@ namespace PeachPDF.Html.Core
             _footnotePolicyForcedBreakBoxes.Clear();
             FootnotePolicyForcedLineCalls.Clear();
             var policyChanged = false;
+            var numberingSignature = new StringBuilder();
 
             if (HasRealPageGrid)
             {
@@ -3153,27 +3270,34 @@ namespace PeachPDF.Html.Core
 
                 _footnoteCallsBySlot = bySlot;
 
-                foreach (var (slot, calls) in bySlot)
+                // Ascending slot order, and every slot up to the last one carrying a call - not
+                // `foreach (var (slot, calls) in bySlot)`. A Dictionary enumerates in insertion order,
+                // which is document order of *calls* and so not slot order once a footnote-policy forced
+                // break has moved one; a running counter across pages makes that ordering load-bearing.
+                // Visiting slots with no footnotes of their own matters too: a counter-reset declared on
+                // such a page still takes effect there, as it would for any other counter.
+                var maxSlot = bySlot.Count == 0 ? -1 : bySlot.Keys.Max();
+                var runningNumber = 0;
+
+                for (var slot = 0; slot <= maxSlot; slot++)
                 {
+                    if (ResolveFootnoteCounterResetForSlot(slot) is { } resetTo) runningNumber = resetTo;
+
+                    if (!bySlot.TryGetValue(slot, out var calls)) continue;
+
                     var contentLeft = MarginLeft;
                     var contentWidth = PageContentRightOf(PageTopOf(slot)) - contentLeft;
                     var areaRule = ResolveFootnoteAreaRule(slot, contentWidth);
 
                     var y = 0d;
-                    var number = 1;
                     var rowStarted = false;
                     var rowX = 0d;
                     var rowHeight = 0d;
 
                     foreach (var call in calls)
                     {
-                        call.ApplyNumber(number);
-                        call.ParseToWords();
-
-                        var marker = (CssBoxFootnoteMarker)call.Body.Boxes[0];
-                        marker.ApplyNumber(number);
-                        marker.ParseToWords();
-                        number++;
+                        runningNumber += areaRule.Step;
+                        ApplyFootnoteNumber(call, runningNumber, numberingSignature);
 
                         var displayMode = call.Body.FootnoteDisplay.Value;
                         double? naturalWidth = null;
@@ -3326,6 +3450,16 @@ namespace PeachPDF.Html.Core
             }
 
             FootnoteAreaHeightsBySlot = current;
+
+            var previousNumbering = _footnoteNumberingSignature;
+            _footnoteNumberingSignature = numberingSignature.ToString();
+
+            // A number that changes width ("9" -> "10") changes the CALL's own inline width, which moves
+            // the flow around it and so can move the call itself onto another page - but it need not
+            // change any note area's reserved height at all, so the comparison below would see nothing
+            // and let the loop exit a pass early with stale numbers. Same fixpoint discipline as the
+            // target-counter loop's own text signature.
+            if (!string.Equals(previousNumbering, _footnoteNumberingSignature, StringComparison.Ordinal)) return true;
 
             // policyChanged: a footnote-policy forced break was newly requested this pass, which a bare
             // height comparison would not otherwise catch - the request itself hasn't yet moved anything

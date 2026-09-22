@@ -186,47 +186,12 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Evaluates counters() function - returns all counter values with separator.
-        /// Syntax: counters(name, separator) or counters(name, separator, style)
+        /// Evaluates a <c>counters()</c> function. Delegates to <see cref="CssContentEngine.ResolveCounters"/>
+        /// - the one implementation, shared with the <c>content</c> property, rather than a second copy
+        /// that would drift (this one used to ignore the counter-style argument entirely).
         /// </summary>
-        private static string EvaluateCountersFunction(CssBox cssBox, Token functionToken)
-        {
-            var arguments = functionToken.ArgumentTokens
-                .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
-                  .ToArray();
-
-            if (arguments.Length < 2)
-            {
-                return string.Empty;
-            }
-
-            // First argument is the counter name
-            if (arguments[0] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } counterNameToken)
-            {
-                return string.Empty;
-            }
-
-            // Second argument is the separator string
-            var separator = arguments[1] is { Type: TokenType.String } separatorToken
-              ? separatorToken.Data.ToString()
-                         : ".";
-
-            // Collect all counter values in the scope chain
-            var values = new System.Collections.Generic.List<int>();
-            var counter = CssCounterEngine.GetCounter(cssBox, counterNameToken.Data.ToString());
-
-            while (counter != null)
-            {
-                values.Insert(0, counter.Value); // Insert at beginning to get correct order
-                counter = counter.ParentScope;
-            }
-
-            // TODO: Third argument would be the list-style (decimal, roman, etc.)
-            // For now, just return the numeric values joined by separator
-            return values.Count > 0
-         ? string.Join(separator, values)
-                  : "0";
-        }
+        private static string EvaluateCountersFunction(CssBox cssBox, Token functionToken) =>
+            CssContentEngine.ResolveCounters(cssBox, functionToken);
 
         /// <summary>
         /// Evaluates attr() function - returns the value of an element attribute.

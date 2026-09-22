@@ -18,4 +18,10 @@ shifts a page break near a footnote. Properly closing this means re-running the 
 after the target-counter loop too (or merging the two into one combined fixpoint), which risks its own new
 interaction bugs between two already-nontrivial convergence loops - judged out of scope for this change.
 
+Continuous footnote numbering (an author `@page { counter-reset: none }`, or any `counter-reset`
+that does not name `footnote`) makes this symptom sharper than it used to be. With the default
+per-page reset every number is small and usually 1, so a call that ends up attributed to the wrong
+slot rarely shows a visibly wrong *number*; with continuous numbering it does, because the number
+encodes how many notes preceded it across the whole document.
+
 Filed as [issue #757](https://github.com/jhaygood86/PeachPDF/issues/757).
