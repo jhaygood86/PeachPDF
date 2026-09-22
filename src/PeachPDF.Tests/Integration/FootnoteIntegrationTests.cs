@@ -296,14 +296,9 @@ namespace PeachPDF.Tests.Integration
 
             var (_, container) = await LayoutAsync(html);
 
-            var (topPadding, dividerThickness, dividerToBodyGap, maxHeight, dividerColor) =
-                container.ResolveFootnoteAreaBoxModel(0, 400);
+            var rule = container.ResolveFootnoteAreaRule(0, 400);
 
-            Assert.Equal(4, topPadding);
-            Assert.Equal(1, dividerThickness);
-            Assert.Equal(4, dividerToBodyGap);
-            Assert.Null(maxHeight);
-            Assert.Null(dividerColor);
+            Assert.Equal(FootnoteAreaRule.Ua, rule);
         }
 
         [Fact]
@@ -320,14 +315,14 @@ namespace PeachPDF.Tests.Integration
 
             var (_, container) = await LayoutAsync(html);
 
-            var (topPadding, dividerThickness, dividerToBodyGap, maxHeight, dividerColor) =
-                container.ResolveFootnoteAreaBoxModel(0, 400);
+            var rule = container.ResolveFootnoteAreaRule(0, 400);
 
-            Assert.Equal(4, topPadding); // undeclared margin-top: still the UA default
-            Assert.Equal(3, dividerThickness);
-            Assert.Equal(12, dividerToBodyGap);
-            Assert.Equal(90, maxHeight);
-            Assert.Equal("rgb(255, 0, 0)", dividerColor);
+            Assert.Equal(4, rule.TopPadding); // undeclared margin-top: still the UA default
+            Assert.Equal(3, rule.DividerThickness);
+            Assert.Equal(12, rule.DividerToBodyGap);
+            Assert.Equal(90, rule.MaxHeight);
+            Assert.Null(rule.Height); // undeclared height: still content-sized
+            Assert.Equal("rgb(255, 0, 0)", rule.DividerColor);
         }
 
         [Fact]
@@ -341,14 +336,14 @@ namespace PeachPDF.Tests.Integration
 
             var (_, container) = await LayoutAsync(html);
 
-            var (_, dividerThickness, _, _, dividerColor) = container.ResolveFootnoteAreaBoxModel(0, 400);
+            var rule = container.ResolveFootnoteAreaRule(0, 400);
 
-            Assert.Equal(0, dividerThickness);
+            Assert.Equal(0, rule.DividerThickness);
             // The raw declared color slot ("initial" - the border-top shorthand's own unfilled-color
             // sentinel, see MarginBoxRenderer.PaintBorder's remarks) is carried through as-is; it's
             // PdfGenerator.ResolveFootnoteDividerColor, not this method, that turns it into black -
             // moot here anyway, since a zero-thickness divider never paints regardless of its color.
-            Assert.Equal(RColor.Black, PdfGenerator.ResolveFootnoteDividerColor(dividerColor, new PdfSharpAdapter()));
+            Assert.Equal(RColor.Black, PdfGenerator.ResolveFootnoteDividerColor(rule.DividerColor, new PdfSharpAdapter()));
         }
 
         [Fact]
@@ -370,6 +365,197 @@ namespace PeachPDF.Tests.Integration
             // UA default is 1pt divider + 4pt gap = 5pt; styled is 5pt divider + 10pt gap = 15pt - a
             // 10pt delta, independent of the (identical) body content height both share.
             Assert.Equal(plainReservation + 10, styledReservation, 0.01);
+        }
+
+        [Fact]
+        public async Task AtFootnoteHeight_ReservesThatContentBandRegardlessOfHowTallTheBodyIs()
+        {
+            // The declared height sizes the band the bodies stack in, not the area including its own
+            // chrome - so the reservation is height + the UA chrome (4pt margin + 1pt divider + 4pt gap),
+            // and a longer body does not change it.
+            const string shortNote = "Note";
+            const string longNote = "A considerably longer footnote body that would otherwise wrap onto "
+                + "several lines and so reserve a good deal more room than the short one does.";
+
+            var (_, shortContainer) = await LayoutAsync(HeightHtml("60pt", shortNote));
+            var (_, longContainer) = await LayoutAsync(HeightHtml("60pt", longNote));
+
+            Assert.Equal(60 + 9, shortContainer.FootnoteAreaHeightsBySlot[0], 0.01);
+            Assert.Equal(60 + 9, longContainer.FootnoteAreaHeightsBySlot[0], 0.01);
+        }
+
+        [Fact]
+        public async Task AtFootnoteHeight_TallerThanItsContent_LeavesTheSlackBelowTheLastBody()
+        {
+            var (_, container) = await LayoutAsync(HeightHtml("60pt", "Note"));
+
+            var call = Assert.Single(container.FootnoteCalls);
+            var areaTop = container.PageBottomOf(0) - container.FootnoteAreaHeightsBySlot[0];
+
+            // Bodies start at the content-box top (after the 9pt of UA chrome), exactly as a fixed-height
+            // block box top-aligns its content...
+            Assert.Equal(areaTop + 9, call.Body.Location.Y, 0.01);
+            // ...so the unused part of the band is below the last body, not above the first.
+            Assert.True(call.Body.ActualBottom < container.PageBottomOf(0) - 1);
+        }
+
+        [Fact]
+        public async Task AtFootnoteHeight_PushesFollowingFlowContentUpByTheWholeBand()
+        {
+            var withHeight = await LayoutAsync(HeightHtml("60pt", "Note"));
+            var withoutHeight = await LayoutAsync(HeightHtml(null, "Note"));
+
+            var reservedWith = withHeight.Container.FootnoteAreaHeightsBySlot[0];
+            var reservedWithout = withoutHeight.Container.FootnoteAreaHeightsBySlot[0];
+
+            // The whole declared band is reserved from the flow, not just the part the body fills.
+            Assert.True(reservedWith > reservedWithout);
+            Assert.Equal(60 + 9, reservedWith, 0.01);
+        }
+
+        [Fact]
+        public async Task AtFootnoteHeight_Percentage_ResolvesAgainstThePageContentBand()
+        {
+            // height is a block-axis length, so its percentage basis is the page's own content band -
+            // not the content width that margin-top/padding-top percentages resolve against.
+            var (_, container) = await LayoutAsync(HeightHtml("10%", "Note"));
+
+            var band = container.PageBottomOf(0) - container.PageTopOf(0);
+            var rule = container.ResolveFootnoteAreaRule(0, 400);
+
+            Assert.Equal(band * 0.10, rule.Height!.Value, 0.01);
+            Assert.Equal(band * 0.10 + 9, container.FootnoteAreaHeightsBySlot[0], 0.01);
+        }
+
+        [Fact]
+        public async Task AtFootnoteHeightAuto_IsTheSameAsNotDeclaringIt()
+        {
+            var auto = await LayoutAsync(HeightHtml("auto", "Note"));
+            var undeclared = await LayoutAsync(HeightHtml(null, "Note"));
+
+            Assert.Null(auto.Container.ResolveFootnoteAreaRule(0, 400).Height);
+            Assert.Equal(
+                undeclared.Container.FootnoteAreaHeightsBySlot[0],
+                auto.Container.FootnoteAreaHeightsBySlot[0],
+                0.01);
+        }
+
+        [Fact]
+        public async Task AtFootnoteFloatAndColumnSpan_AreParsedAndIgnored()
+        {
+            // The spec's own default @footnote stylesheet declares both; PeachPDF's note area is always
+            // page-bottom and full-width, so they must change nothing rather than half-apply.
+            var declared = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { float: bottom; column-span: all; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p>Text<sup style='float:footnote'>Note body</sup></p>"
+                + "</body></html>";
+            var plain = Wrap("<p>Text<sup style='float:footnote'>Note body</sup></p>");
+
+            var (_, declaredContainer) = await LayoutAsync(declared);
+            var (_, plainContainer) = await LayoutAsync(plain);
+
+            Assert.Equal(
+                plainContainer.FootnoteAreaHeightsBySlot[0],
+                declaredContainer.FootnoteAreaHeightsBySlot[0],
+                0.01);
+
+            var declaredArea = Assert.Single(declaredContainer.FragmentTree!.Fragmentainers).FootnoteArea!;
+            var plainArea = Assert.Single(plainContainer.FragmentTree!.Fragmentainers).FootnoteArea!;
+            Assert.Equal(plainArea.DividerRect.X, declaredArea.DividerRect.X, 0.01);
+            Assert.Equal(plainArea.DividerRect.Y, declaredArea.DividerRect.Y, 0.01);
+            Assert.Equal(plainArea.DividerRect.Width, declaredArea.DividerRect.Width, 0.01);
+        }
+
+        [Fact]
+        public async Task AtFootnoteHeight_DividerRectStillMatchesTheReservedBand()
+        {
+            // The byte-identical-geometry invariant, under the fixed-height path: the divider the
+            // fragment tree paints has to sit inside the band the convergence loop reserved.
+            var (_, container) = await LayoutAsync(HeightHtml("60pt", "Note"));
+
+            var page = Assert.Single(container.FragmentTree!.Fragmentainers);
+            var areaTop = container.PageBottomOf(0) - container.FootnoteAreaHeightsBySlot[0];
+
+            // 4pt of UA margin-top sits above the divider.
+            Assert.Equal(areaTop + 4 - page.LocalOriginY, page.FootnoteArea!.DividerRect.Y, 0.01);
+        }
+
+        [Fact]
+        public async Task AtFootnoteHeight_ContentOverflowingIt_CountsAsNotFittingForFootnotePolicy()
+        {
+            // Overflowing a height the author declared is css-gcpm-3's own "cannot be placed on the
+            // current page due to lack of space": the note area is full whatever room the page has left.
+            // p0 gives p1 a predecessor to break away from (css-break-3 4.4).
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { height: 12pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p0'>An ordinary paragraph with no footnote of its own.</p>"
+                + "<p id='p1'>Text<sup style='float:footnote; footnote-policy: block;'>This note body is "
+                + "far longer than the 12pt band declared for the note area, so it overflows that band "
+                + "and footnote-policy: block should move this whole paragraph to the next page.</sup></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            var p0 = FindById(root, "p0");
+            var p1 = FindById(root, "p1");
+            Assert.NotNull(p0);
+            Assert.NotNull(p1);
+
+            Assert.True(
+                container.PageIndexOf(p1!.Location.Y) > container.PageIndexOf(p0!.Location.Y),
+                "footnote-policy: block should have moved the paragraph off p0's page");
+        }
+
+        [Fact]
+        public async Task AtFootnoteHeight_ContentOverflowingIt_UnderPolicyAuto_JustOverflows()
+        {
+            // The default policy is unaffected - a too-tall stack overflows the declared band exactly as
+            // an over-tall body already overflows a content-sized one.
+            var html = "<!DOCTYPE html><html><head><style>"
+                + "@page { @footnote { height: 12pt; } }"
+                + "</style></head><body style='margin:0'>"
+                + "<p id='p0'>An ordinary paragraph with no footnote of its own.</p>"
+                + "<p id='p1'>Text<sup style='float:footnote'>This note body is far longer than the 12pt "
+                + "band declared for the note area, and under the default footnote-policy: auto it simply "
+                + "overflows rather than forcing anything to move.</sup></p>"
+                + "</body></html>";
+
+            var (root, container) = await LayoutAsync(html);
+
+            var p0 = FindById(root, "p0");
+            var p1 = FindById(root, "p1");
+
+            Assert.Equal(container.PageIndexOf(p0!.Location.Y), container.PageIndexOf(p1!.Location.Y));
+            // Still only the declared band is reserved, even though the body needs more.
+            Assert.Equal(12 + 9, container.FootnoteAreaHeightsBySlot[0], 0.01);
+        }
+
+        [Theory]
+        [InlineData(null, 1)]                       // no @footnote rule at all
+        [InlineData("counter-increment: footnote", 1)]
+        [InlineData("counter-increment: footnote 3", 3)]
+        [InlineData("counter-increment: none", 0)]
+        [InlineData("counter-increment: chapter 2", 0)]   // declared, but not for this counter
+        public async Task AtFootnoteCounterIncrement_ResolvesTheFootnoteCountersStep(string? declaration, int expected)
+        {
+            var rule = declaration is null ? string.Empty : $"@page {{ @footnote {{ {declaration}; }} }}";
+            var html = "<!DOCTYPE html><html><head><style>" + rule + "</style></head><body style='margin:0'>"
+                + "<p>Text<sup style='float:footnote'>Note body</sup></p></body></html>";
+
+            var (_, container) = await LayoutAsync(html);
+
+            Assert.Equal(expected, container.ResolveFootnoteAreaRule(0, 400).Step);
+        }
+
+        private static string HeightHtml(string? height, string noteBody)
+        {
+            var rule = height is null ? string.Empty : $"@page {{ @footnote {{ height: {height}; }} }}";
+            return "<!DOCTYPE html><html><head><style>" + rule + "</style></head><body style='margin:0'>"
+                + $"<p>Text<sup style='float:footnote'>{noteBody}</sup></p>"
+                + "<p id='after'>Following flow content.</p>"
+                + "</body></html>";
         }
 
         [Fact]
