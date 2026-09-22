@@ -186,6 +186,41 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
+        /// Whether <paramref name="value"/>'s resolved length depends on the containing block's size at
+        /// all - a bare percentage, or a <c>calc()</c>/<c>min()</c>/<c>max()</c>/<c>clamp()</c> expression
+        /// that contains a percentage anywhere in its tree (e.g. <c>calc(100% - 5px)</c>).
+        /// </summary>
+        /// <remarks>
+        /// <c>EndsWith('%')</c> alone - what every caller in <c>CssLayoutEngine</c>'s height resolution used
+        /// to check - catches a bare percentage but not a percentage buried inside a calc-family expression,
+        /// which ends in <c>)</c>. Such a value was read as a definite length and resolved against whatever
+        /// the containing block's height happened to be at that moment, rather than treated as <c>auto</c>
+        /// against an indefinite one (CSS 2.1 §10.5, css-values-4 §10.2's clamping-to-a-known-range rule for
+        /// a calc() that mixes types cannot apply until the percentage itself is resolved). One shared walk
+        /// of the already-parsed <see cref="CalcNode"/> tree, rather than a second, textual "does this string
+        /// contain a %" check that would also match one inside a quoted <c>content</c> value if ever reused
+        /// there.
+        /// </remarks>
+        internal static bool DependsOnPercentage(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return false;
+            if (value.EndsWith('%')) return true;
+
+            return TryGetCalcFunction(value, out var function) && function is { } fn
+                   && CalcParser.Parse(fn) is { } node
+                   && CalcNodeContainsPercentage(node);
+        }
+
+        private static bool CalcNodeContainsPercentage(CalcNode node) => node switch
+        {
+            PercentageCalcNode => true,
+            UnaryCalcNode unary => CalcNodeContainsPercentage(unary.Operand),
+            BinaryCalcNode binary => CalcNodeContainsPercentage(binary.Left) || CalcNodeContainsPercentage(binary.Right),
+            CallCalcNode call => call.Arguments.Any(CalcNodeContainsPercentage),
+            _ => false,
+        };
+
+        /// <summary>
         /// Recognizes a length string that is a single calc-family (calc/min/max/clamp) function, e.g. for
         /// the syntactic gate in <see cref="IsValidLength"/> and the evaluation branch in
         /// <see cref="ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double)"/>. Real
