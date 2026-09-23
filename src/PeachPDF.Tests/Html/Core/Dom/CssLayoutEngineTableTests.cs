@@ -1786,6 +1786,62 @@ Assert.NotNull(tbody);
         }
 
         [Fact]
+        public async Task TableLayout_NestedPercentWidthSeparateBorders_FitsCellAcrossRelayouts()
+        {
+            var html = @"
+<html><body style='width: 400pt; margin: 0'>
+<table style='border-collapse: collapse; width: 100%'><tr>
+  <td style='padding: 3pt; width: 25%'><div style='height: 36pt'></div></td>
+  <td id='host' style='padding: 3pt; width: 25%'>
+    <table id='nested' style='border: 12pt inset; border-collapse: separate; border-spacing: 0; width: 100%'>
+      <tr><td style='height: 36pt'></td></tr>
+    </table>
+  </td>
+  <td id='neighbor' style='padding: 3pt; width: 25%'><div style='height: 36pt'></div></td>
+  <td style='padding: 3pt; width: 25%'><div style='height: 36pt'></div></td>
+</tr></table>
+</body></html>";
+
+            // PdfGenerator lays the same box tree out more than once (a measure pass, then the final
+            // one), so the nested table's width must come out the same on every pass. It used to grow
+            // by its own 12pt right border per re-layout, overrunning the next cell (issue #1267).
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            for (var pass = 0; pass < 3; pass++)
+            {
+                if (pass > 0)
+                {
+                    var measure = XGraphics.CreateMeasureContext(new XSize(595, 842), XGraphicsUnit.Point, XPageDirection.Downwards);
+                    using var graphics = new GraphicsAdapter((PdfSharpAdapter)container.Adapter, measure, 1.0);
+                    await container.PerformLayout(graphics);
+                }
+
+                var host = FindById(rootBox, "host")!;
+                var nested = FindById(rootBox, "nested")!;
+                var neighbor = FindById(rootBox, "neighbor")!;
+
+                Assert.Equal(host.ClientLeft, nested.Location.X, precision: 2);
+                Assert.Equal(host.ClientRight, nested.ActualRight, precision: 2);
+                Assert.True(nested.ActualRight <= neighbor.Location.X,
+                    $"Pass {pass}: nested table right {nested.ActualRight} overlaps the next cell at {neighbor.Location.X}");
+            }
+        }
+
+        [Fact]
+        public async Task TableLayout_TrailingColOnlyColumns_AddNoSpacing()
+        {
+            // Chromium leaves the border-spacing of trailing <col>-only columns no cell reaches out of
+            // the table's width, so both tables measure the same. Guards the #1267 fix against settling
+            // the table's inline-end edge from the full column grid (GetWidthSum), which counts them.
+            var html = @"<html><body style='margin:0'>
+<table id='cols' style='border: 2pt solid; border-spacing: 4pt'><col><col><col><tr><td>x</td></tr></table>
+<table id='plain' style='border: 2pt solid; border-spacing: 4pt'><tr><td>x</td></tr></table>
+</body></html>";
+            var (rootBox, _) = await BuildCssBoxTree(html);
+
+            Assert.Equal(Width(FindById(rootBox, "plain")!), Width(FindById(rootBox, "cols")!), precision: 2);
+        }
+
+        [Fact]
         public async Task TableLayout_MaxWidthCalc_ClipsExplicitWidth()
         {
             // Sibling to TableLayout_MaxWidthNarrowerThanExplicitWidth_RespectsMaxWidth above, but for
