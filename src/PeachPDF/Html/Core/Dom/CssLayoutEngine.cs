@@ -439,6 +439,7 @@ namespace PeachPDF.Html.Core.Dom
                     word.AwaitsTheNextFragmentainer = true;
                 }
 
+                AnchorSetAsideBoxes(coordinates);
                 FinalizeLineBoxes(blockBox, completedLines, blockFinished: false);
 
                 // The ones on the discarded line are reached again by the resumed pass.
@@ -459,6 +460,7 @@ namespace PeachPDF.Html.Core.Dom
 
             DropATrailingForcedBreaksOwnLine(blockBox, coordinates);
 
+            AnchorSetAsideBoxes(coordinates);
             FinalizeLineBoxes(blockBox, completedLines);
 
             blockBox.ActualBottom = coordinates.MaxBottom + blockBox.ActualPaddingBottom + blockBox.ActualBorderBottomWidth;
@@ -483,8 +485,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// <para>
         /// Run after the lines are final: the box's containing block can be an inline ancestor, which
-        /// CSS 2.1 §10.1 forms from that inline's first and last fragments, and those only exist once
-        /// every line holding the inline has been built and aligned.
+        /// CSS Positioned Layout 3 §2.1 forms from that inline's first and last fragments (CSS 2.1 §10.1
+        /// for one on a single line), and those only exist once every line holding the inline has been
+        /// built and aligned.
         /// </para>
         /// <para>
         /// Laid out with breaking detached, as <c>CssBox.LayoutEngineContent</c> lays out an engine
@@ -500,10 +503,12 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (coordinates.AbsolutelyPositioned is not { } boxes) return;
 
-            foreach (var (box, ordinal) in boxes)
+            foreach (var setAside in boxes)
             {
-                if (ordinal >= beforeOrdinal) continue;
+                if (setAside.Ordinal >= beforeOrdinal) continue;
 
+                var box = setAside.Box;
+                var emptyInline = EmptyInlineContainingBlockFor(setAside);
                 var previous = box.HtmlContainer?.DetachFragmentainer();
 
                 try
@@ -513,8 +518,168 @@ namespace PeachPDF.Html.Core.Dom
                 finally
                 {
                     box.HtmlContainer?.RestoreFragmentainer(previous);
+                    if (emptyInline is not null) emptyInline.EmptyInlineContainingBlock = null;
                 }
             }
+        }
+
+        /// <summary>
+        /// Gives <paramref name="setAside"/>'s nearest positioned ancestor a zero-width containing block at
+        /// the box's place on the line when that ancestor is an inline with no fragment of its own, and
+        /// returns it so the caller can take it back; null for any other ancestor.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// An inline holding nothing but absolutely positioned boxes places no word, so it has no line
+        /// fragments to form a containing block from (<see cref="DomUtils.InlineContainingBlockOf"/>), and
+        /// its descendants fell back to its line-local <see cref="CssBox.Location"/>: the sheet origin. An
+        /// empty inline element still generates an inline box in its line box
+        /// (<see href="https://www.w3.org/TR/CSS21/visuren.html#inline-formatting">CSS 2.1 §9.4.2</see>,
+        /// CSS Inline 3), and browsers anchor the descendants to that zero-width box.
+        /// </para>
+        /// <para>
+        /// Its inline position is where the walk passed the box, carried through alignment and bidi
+        /// reordering by an adjacent word (<see cref="PlaceOnFinalLine"/>). Its block extent is the content
+        /// area a word in the inline's own font has on the line (baseline less ascent, one font height),
+        /// plus the inline's padding; on a line with no word, it starts at the line's top. The inline's own
+        /// <c>vertical-align</c> is not applied, so a raised empty inline sits on the line's baseline. Held
+        /// only for the duration of the box's layout: nothing later reads it, and the line it describes is
+        /// moved afterwards (a table cell's alignment, say) without it.
+        /// </para>
+        /// </remarks>
+        /// <param name="setAside">the set-aside box about to be laid out</param>
+        /// <returns>the inline given the containing block, or null</returns>
+        private static CssBox? EmptyInlineContainingBlockFor(SetAsideBox setAside)
+        {
+            var ancestor = DomUtils.GetNearestPositionedAncestor(setAside.Box);
+            var line = setAside.Line;
+
+            if (!ancestor.IsInline || DomUtils.IsAtomicInline(ancestor) || ancestor.Rectangles.Count > 0) return null;
+
+            // Only an inline in this flow is known to be empty. One outside it - the box sits in a float or
+            // inline-block inside that inline - merely has not got its fragments yet, since its own line is
+            // still being built, and the box's place in the inner flow is not a place on that line.
+            if (!DomUtils.IsSelfOrDescendantOf(ancestor, line.OwnerBox)) return null;
+
+            var x = PlaceOnFinalLine(setAside);
+            var font = ancestor.ActualFont;
+            var contentTop = line.Words.Count > 0 && line.BaselineY is { } baseline
+                ? baseline - font.Ascent
+                : setAside.Y;
+
+            ancestor.EmptyInlineContainingBlock = RRect.FromLTRB(
+                x - ancestor.ActualPaddingLeft,
+                contentTop - ancestor.ActualPaddingTop,
+                x + ancestor.ActualPaddingRight,
+                contentTop + font.Height + ancestor.ActualPaddingBottom);
+
+            return ancestor;
+        }
+
+        /// <summary>
+        /// Gives each set-aside box that had no word before it on its line the word after it as its anchor,
+        /// with that word's position before <see cref="FinalizeLineBoxes"/> moves it.
+        /// </summary>
+        /// <remarks>
+        /// Run just before the lines are finalized: the word after a box is only placed once the walk has
+        /// passed it, and alignment and bidi reordering move it straight after. Without it, a badge at the
+        /// start of a centred line stayed at the line's left edge while the words moved to the middle. The
+        /// word after is also preferred when a space separates the word before from the place, since
+        /// <c>text-align: justify</c> widens that space and so moves the place as far as the word after.
+        /// </remarks>
+        /// <param name="coordinates">the flow that set the boxes aside</param>
+        private static void AnchorSetAsideBoxes(CssLineBoxCoordinates coordinates)
+        {
+            if (coordinates.AbsolutelyPositioned is not { } boxes) return;
+
+            for (var i = 0; i < boxes.Count; i++)
+            {
+                var setAside = boxes[i];
+
+                // A space between the word before and the place is widened by justification, which moves
+                // the place with the word after it, not with the word before.
+                var spaceBefore = setAside.Anchor is { } preceding
+                                  && setAside.X - (setAside.AnchorLeft + preceding.Width) > 0.001;
+
+                if ((setAside.Anchor is not null && !spaceBefore) || setAside.WordIndex >= setAside.Line.Words.Count) continue;
+
+                var following = setAside.Line.Words[setAside.WordIndex];
+                boxes[i] = setAside with { Anchor = following, AnchorLeft = following.Left };
+            }
+        }
+
+        /// <summary>
+        /// Where the place <paramref name="setAside"/> was passed at on its line ends up once the line is
+        /// final: moved as its anchor word was, which is a translation for text-align and a left-to-right
+        /// run, and a reflection within the run for a right-to-left one (<see cref="ApplyBidiReordering"/>
+        /// reverses such a run within its span). So a place just after a word in an <c>rtl</c> run lands on
+        /// that word's left edge, where the next word in reading order begins.
+        /// </summary>
+        /// <param name="setAside">the set-aside box</param>
+        /// <returns>the place's inline position on the final line</returns>
+        private static double PlaceOnFinalLine(SetAsideBox setAside)
+        {
+            if (setAside.Anchor is not { } word) return PlaceOnWordlessLine(setAside);
+
+            var offset = setAside.X - setAside.AnchorLeft;
+
+            return ReorderedLevelOf(word, setAside.Line) % 2 == 1
+                ? word.Left + word.Width - offset
+                : word.Left + offset;
+        }
+
+        /// <summary>
+        /// Where the place <paramref name="setAside"/> was passed at ends up on a line holding no word, which
+        /// nothing in <see cref="FinalizeLineBoxes"/> moves: the walk's cursor starts at the left edge
+        /// whatever the line's direction and alignment. The line's content is taken as the zero-width place
+        /// plus whatever the walk put before it (a <c>text-indent</c>, the inline's own start spacing), on
+        /// the start side, and aligned as the line would align words: flush left, flush right or centred.
+        /// </summary>
+        /// <param name="setAside">the set-aside box, on a line with no word</param>
+        /// <returns>the place's inline position on the line</returns>
+        private static double PlaceOnWordlessLine(SetAsideBox setAside)
+        {
+            var line = setAside.Line;
+            var isRtl = line.OwnerBox.Direction.Value == DirectionMode.Rtl;
+            var towardStart = isRtl ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+            var towardEnd = isRtl ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+
+            // A line with no word has no justification opportunity, so it takes text-align-last, as the
+            // last line of a paragraph does.
+            var declared = ResolveLogicalAlignment(line.OwnerBox.ActualTextAlignAll, towardStart, towardEnd);
+            var (alignment, _) = ResolveUsedAlignment(line, endsAParagraph: true, declared, towardStart, towardEnd);
+
+            var lead = setAside.X - line.ContentLeft;
+            var flushLeft = isRtl ? line.ContentLeft : setAside.X;
+            var flushRight = isRtl ? line.ContentRight - lead : line.ContentRight;
+
+            return alignment switch
+            {
+                HorizontalAlignment.Left => flushLeft,
+                HorizontalAlignment.Right => flushRight,
+                HorizontalAlignment.Center => (flushLeft + flushRight) / 2,
+                _ => isRtl ? flushRight : flushLeft
+            };
+        }
+
+        /// <summary>
+        /// The bidi level <see cref="ApplyBidiReordering"/> reordered <paramref name="word"/> at: its own,
+        /// except in the run of space words that ends the line, which UAX #9 L1 resets to the paragraph's
+        /// level. That reset is applied to the reordering's local copy of the levels only, so the word's
+        /// own <see cref="CssRect.BidiLevel"/> still says rtl for a trailing space after rtl text.
+        /// </summary>
+        /// <param name="word">a word on <paramref name="line"/></param>
+        /// <param name="line">the line holding it</param>
+        /// <returns>the level the word was placed at</returns>
+        private static byte ReorderedLevelOf(CssRect word, CssLineBox line)
+        {
+            for (var i = line.Words.Count - 1; i >= 0 && line.Words[i].IsSpaces; i--)
+            {
+                if (ReferenceEquals(line.Words[i], word))
+                    return line.OwnerBox.Direction.Value == DirectionMode.Rtl ? (byte)1 : (byte)0;
+            }
+
+            return word.BidiLevel;
         }
 
         /// <summary>
@@ -1419,9 +1584,15 @@ namespace PeachPDF.Html.Core.Dom
             // passing the cell as startBox would clamp the measured edge to cellFarEdge and always compute
             // a zero offset whenever the cell also carries a CSS height/width (issue found via `height` +
             // `vertical-align: middle`).
+            //
+            // An absolutely positioned child is never measured: it is not content of the cell (CSS 2.1
+            // §10.6.3). Measured, a `top: 100%` child below the text pushed that text above the cell.
+            // GetMaximumBottom/GetMaximumRight skip such boxes further down the same way.
             var farEdge = isVertical ? cell.ClientLeft : cell.ClientTop;
             foreach (var b in cell.Boxes)
             {
+                if (b.IsAbsolutelyPositioned) continue;
+
                 farEdge = isVertical ? CssBox.GetMaximumRight(b, farEdge) : CssBox.GetMaximumBottom(b, farEdge);
             }
 
@@ -1434,12 +1605,35 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var b in cell.Boxes)
             {
+                if (IsPlacedByItsContainingBlockAlong(b, isVertical)) continue;
+
                 if (isVertical) b.OffsetLeft(dist);
                 else b.OffsetTop(dist);
             }
 
             return dist;
         }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is absolutely positioned with an offset set on the axis a table cell
+        /// aligns its content along (`top`/`bottom`, or `left`/`right` in a vertical table), so its place
+        /// on that axis comes from its containing block alone.
+        /// </summary>
+        /// <remarks>
+        /// Such a box does not move with the cell's aligned content: its containing block is the cell or
+        /// something outside it, which the alignment does not move. One with both offsets `auto` belongs at
+        /// its static position (CSS 2.1 §10.6.4), which is in the content and moves with it. The static
+        /// position itself is not computed (#1303), so the box starts at its containing block's corner, and
+        /// moving it with the content keeps it nearer where it belongs.
+        /// </remarks>
+        /// <param name="box">a child of the cell being aligned</param>
+        /// <param name="isVertical">whether the cell's table is vertical, which makes X the alignment axis</param>
+        /// <returns>true to leave the box where it is</returns>
+        private static bool IsPlacedByItsContainingBlockAlong(CssBox box, bool isVertical) =>
+            box.IsAbsolutelyPositioned
+            && (isVertical
+                ? box.Left.Value.IsValue || box.Right.Value.IsValue
+                : box.Top.Value.IsValue || box.Bottom.Value.IsValue);
 
         public static void FloatBox(CssBox box)
         {
@@ -4184,7 +4378,14 @@ namespace PeachPDF.Html.Core.Dom
                 if (b.IsAbsolutelyPositioned && !b.IsInline && !ReferenceEquals(b, box))
                 {
                     if (childOpensHere && b.DerivedStyle.ActualDisplay != Keywords.None)
-                        (coordinates.AbsolutelyPositioned ??= []).Add((b, childStartOrdinal));
+                    {
+                        var words = coordinates.Line.Words;
+                        var preceding = words.Count > 0 ? words[^1] : null;
+                        (coordinates.AbsolutelyPositioned ??= []).Add(new SetAsideBox(
+                            b, childStartOrdinal, coordinates.Line, coordinates.CurrentX, coordinates.CurrentY,
+                            words.Count, preceding, preceding?.Left ?? 0));
+                    }
+
                     continue;
                 }
 
@@ -7690,6 +7891,11 @@ namespace PeachPDF.Html.Core.Dom
         {
             foreach (var childBox in box.Boxes)
             {
+                // An absolutely positioned descendant contributes nothing to its ancestors' intrinsic sizes
+                // (CSS Sizing 3 §5.1). Measured here, a nowrap badge inside a shrink-to-fit float widened
+                // the float to the badge's own width.
+                if (childBox.IsAbsolutelyPositioned) continue;
+
                 var childBoxWidth = await GetBoxWidth(g, childBox);
                 childBoxWidth = await GetLargestChildWidth(g, childBox, Math.Max(currentSize, childBoxWidth));
                 currentSize = childBoxWidth > currentSize ? childBoxWidth : currentSize;

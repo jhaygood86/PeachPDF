@@ -1402,6 +1402,14 @@ namespace PeachPDF.Html.Core.Dom
         internal CssRect FirstWord => Words[0];
 
         /// <summary>
+        /// The padding rectangle this inline forms as a containing block when it has no line fragment of its
+        /// own, set only while an absolutely positioned descendant is laid out
+        /// (<c>CssLayoutEngine.EmptyInlineContainingBlockFor</c>, read by
+        /// <see cref="DomUtils.InlineContainingBlockOf"/>).
+        /// </summary>
+        internal RRect? EmptyInlineContainingBlock { get; set; }
+
+        /// <summary>
         /// Gets or sets the first linebox where content of this box appear
         /// </summary>
         internal CssLineBox? FirstHostingLineBox { get; set; }
@@ -7421,6 +7429,12 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var b in startBox.Boxes)
             {
+                // Out of flow (CSS 2.1 §10.6.3): not part of the content a cell's height and vertical
+                // alignment are measured from. One nested in an inline hangs off the line (#1299), and a
+                // `top: 100%` badge counted here pushed a middle-aligned header's text above its cell,
+                // off every repeated header's page.
+                if (b.IsAbsolutelyPositioned) continue;
+
                 currentMaxBottom = Math.Max(currentMaxBottom, GetMaximumBottom(b, currentMaxBottom));
             }
 
@@ -7450,6 +7464,9 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var b in startBox.Boxes)
             {
+                // Out of flow, as in GetMaximumBottom.
+                if (b.IsAbsolutelyPositioned) continue;
+
                 currentMaxRight = Math.Max(currentMaxRight, GetMaximumRight(b, currentMaxRight));
             }
 

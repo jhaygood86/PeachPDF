@@ -6687,6 +6687,12 @@ var positionedInlineHtml = """
     <span class="pin" style="left: -3pt; top: -3pt"></span><span class="pin" style="right: -3pt; bottom: -3pt"></span></span>
     and text after it.</div>
 
+    <h2>An inline holding only the positioned box</h2>
+    <p class="note">Each badge's inline wrapper has no text of its own, so it is a zero-width box between the words,
+    and the badge hangs from that point.</p>
+    <p style="margin-top: 20pt">Status: shipped<span style="position: relative"><span class="tag">new</span></span>
+    and reviewed<span style="position: relative"><span class="tag">2 comments</span></span> this week.</p>
+
     <h2>The line is not broken</h2>
     <div style="position: relative; width: 300pt; padding-right: 80pt">The words after a positioned note
     <span class="aside">A note placed at the top right of the paragraph.</span>continue on the same line,

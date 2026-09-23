@@ -144,10 +144,28 @@ namespace PeachPDF.Html.Core.Entities
 
         /// <summary>
         /// Absolutely positioned boxes <see cref="CssLayoutEngine.FlowBox"/> passed among the block's
-        /// inline content, each with the word ordinal the walk had reached there. They take no part in
-        /// the line boxes, so they are laid out once the lines are final, which is also when an inline
-        /// containing block's fragments all exist (<see cref="CssLayoutEngine.CreateLineBoxes"/>).
+        /// inline content, each with where the walk had reached there. They take no part in the line
+        /// boxes, so they are laid out once the lines are final, which is also when an inline containing
+        /// block's fragments all exist (<see cref="CssLayoutEngine.CreateLineBoxes"/>).
         /// </summary>
-        public List<(CssBox Box, int Ordinal)>? AbsolutelyPositioned { get; set; }
+        public List<SetAsideBox>? AbsolutelyPositioned { get; set; }
     }
+
+    /// <summary>
+    /// An absolutely positioned box <see cref="CssLayoutEngine.FlowBox"/> set aside, and the place on the
+    /// line it was passed at.
+    /// </summary>
+    /// <param name="Box">the absolutely positioned box</param>
+    /// <param name="Ordinal">the word ordinal the walk had reached</param>
+    /// <param name="Line">the line being built when the walk reached it</param>
+    /// <param name="X">the cursor's inline position there</param>
+    /// <param name="Y">the cursor's block position there, the line's top while it holds no word</param>
+    /// <param name="WordIndex">how many words <paramref name="Line"/> held then</param>
+    /// <param name="Anchor">
+    /// a word on <paramref name="Line"/> next to the place - the one before it, or failing that the one after
+    /// it - whose later move by alignment and bidi reordering the place moves by; null until one is known
+    /// </param>
+    /// <param name="AnchorLeft">where <paramref name="Anchor"/> sat before that move</param>
+    internal readonly record struct SetAsideBox(
+        CssBox Box, int Ordinal, CssLineBox Line, double X, double Y, int WordIndex, CssRect? Anchor, double AnchorLeft);
 }

@@ -744,16 +744,20 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// The containing block a positioned <b>inline</b> ancestor forms for an absolutely positioned
         /// descendant, or null when <paramref name="ancestor"/> is not a non-atomic inline with laid-out
-        /// fragments. Every other ancestor forms it from its own padding box, which its callers already
-        /// read off the box itself.
+        /// fragments (or, for an empty one, a <see cref="CssBox.EmptyInlineContainingBlock"/>). Every other
+        /// ancestor forms it from its own padding box, which its callers already read off the box itself.
         /// </summary>
         /// <remarks>
         /// <para>
         /// <see href="https://www.w3.org/TR/CSS21/visudet.html#containing-block-details">CSS 2.1 §10.1</see>
-        /// (4.1): in <c>ltr</c> the top and left of the containing block are the top and left padding edges
-        /// of the ancestor's first box, and the bottom and right are the bottom and right padding edges of
-        /// its last box; in <c>rtl</c> the left and right come from the last and first box instead. A
-        /// resulting negative width or height, which a wrapped inline can produce, is clamped to zero.
+        /// (4.1) defines this only for an inline on one line: the bounding box of the padding boxes of its
+        /// first and last inline boxes. It leaves a multi-line inline undefined. The rule used for that is
+        /// <see href="https://www.w3.org/TR/css-position-3/#def-cb">CSS Positioned Layout 3 §2.1</see>'s:
+        /// the start-most padding edges of the first fragment and the end-most padding edges of the last,
+        /// in the inline's own writing mode. So in <c>ltr</c> the top and left come from the first fragment
+        /// and the bottom and right from the last, and in <c>rtl</c> the left and right swap. Chromium uses
+        /// the padding edges the same way. A resulting negative width or height, which a wrapped inline can
+        /// produce, is clamped to zero.
         /// </para>
         /// <para>
         /// An inline's own <see cref="CssBox.Location"/> is a line-local value layout never updates, so
@@ -765,7 +769,11 @@ namespace PeachPDF.Html.Core.Utils
         /// <returns>the containing block's padding rectangle, or null</returns>
         internal static RRect? InlineContainingBlockOf(CssBox ancestor)
         {
-            if (!ancestor.IsInline || IsAtomicInline(ancestor) || ancestor.Rectangles.Count == 0) return null;
+            if (!ancestor.IsInline || IsAtomicInline(ancestor)) return null;
+
+            // An inline with no fragment - one holding only absolutely positioned boxes - is given a
+            // zero-width one at their place on the line while they are laid out.
+            if (ancestor.Rectangles.Count == 0) return ancestor.EmptyInlineContainingBlock;
 
             var rectangles = ancestor.Rectangles;
             var first = ancestor.FirstHostingLineBox is { } firstLine && rectangles.TryGetValue(firstLine, out var f)
