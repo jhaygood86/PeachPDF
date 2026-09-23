@@ -92,6 +92,43 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task OutlineCollectedBeforeANestedScope_StillPaintsUnderALaterOverlay()
+        {
+            // The positioned box between the two opens and closes a scope of its own. Closing it has to
+            // hand the root's scope back to the root, or the root no longer recognises itself as the
+            // scope to draw ahead of its raised layers, and the ring is drawn over the overlay instead.
+            var g = await PaintAsync(
+                $"<div style='{Outline}; margin: 40pt'>outlined</div>" +
+                "<div style='position: relative; background: rgb(238,238,238)'>nested scope</div>" +
+                "<div style='position: absolute; top: 0; left: 0; width: 300pt; height: 100pt; z-index: 5; background: rgb(10,20,200)'>overlay</div>");
+
+            var ring = IndexOfFill(g, Ring);
+            Assert.True(ring > IndexOfFill(g, Gray), "the nested scope painted over the outline");
+            Assert.True(ring < IndexOfFill(g, Blue), "the outline was drawn over a z-index: 5 overlay");
+        }
+
+        [Fact]
+        public async Task DeferredOutlines_KeepTheOrderTheirBoxesPaintedIn()
+        {
+            // Siblings in document order; a descendant's ring before its ancestor's, since each box's
+            // outline was drawn as the last step of its own paint.
+            var second = RColor.FromArgb(40, 160, 60);
+            var inner = RColor.FromArgb(200, 120, 0);
+            var g = await PaintAsync(
+                $"<div style='{Outline}'>first</div>" +
+                "<div style='outline: 4pt solid rgb(40,160,60)'>" +
+                "<span style='outline: 2pt solid rgb(200,120,0)'>inner</span></div>");
+
+            var firstRing = IndexOfFill(g, Ring);
+            var innerRing = IndexOfFill(g, inner);
+            var secondRing = IndexOfFill(g, second);
+
+            Assert.True(firstRing >= 0 && innerRing >= 0 && secondRing >= 0);
+            Assert.True(firstRing < innerRing, "a later sibling's outlines were drawn before an earlier one's");
+            Assert.True(innerRing < secondRing, "an ancestor's outline was drawn before its descendant's");
+        }
+
+        [Fact]
         public async Task StackingContext_DrawsItsOwnOutlineUnderItsPositiveZIndexChildren()
         {
             var g = await PaintAsync(

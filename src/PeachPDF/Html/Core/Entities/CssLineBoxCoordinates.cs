@@ -141,5 +141,13 @@ namespace PeachPDF.Html.Core.Entities
         /// for the nearest intersecting float, so whichever of the two is more restrictive wins.
         /// </summary>
         public List<CssBox>? InlineFloats { get; set; }
+
+        /// <summary>
+        /// Absolutely positioned boxes <see cref="CssLayoutEngine.FlowBox"/> passed among the block's
+        /// inline content, each with the word ordinal the walk had reached there. They take no part in
+        /// the line boxes, so they are laid out once the lines are final, which is also when an inline
+        /// containing block's fragments all exist (<see cref="CssLayoutEngine.CreateLineBoxes"/>).
+        /// </summary>
+        public List<(CssBox Box, int Ordinal)>? AbsolutelyPositioned { get; set; }
     }
 }

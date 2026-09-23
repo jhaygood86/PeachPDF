@@ -441,6 +441,9 @@ namespace PeachPDF.Html.Core.Dom
 
                 FinalizeLineBoxes(blockBox, completedLines, blockFinished: false);
 
+                // The ones on the discarded line are reached again by the resumed pass.
+                await LayoutAbsolutelyPositioned(g, coordinates, stopped.ResumeWordIndex);
+
                 return stopped with
                 {
                     CompletedLineCount = blockBox.LineBoxes.Count,
@@ -466,7 +469,52 @@ namespace PeachPDF.Html.Core.Dom
                 blockBox.ActualBottom = blockBox.Location.Y + blockBox.ActualHeight + blockBox.ActualPaddingBottom + blockBox.ActualPaddingTop;
             }
 
+            await LayoutAbsolutelyPositioned(g, coordinates, int.MaxValue);
+
             return null;
+        }
+
+        /// <summary>
+        /// Lays out the absolutely positioned boxes <see cref="FlowBox"/> set aside among the block's inline
+        /// content, through the same frame entry a block-level child takes, so the containing block
+        /// resolution and positioning are the ones <see cref="CssBox.LayoutBlockChild"/> gives any
+        /// absolutely positioned box.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Run after the lines are final: the box's containing block can be an inline ancestor, which
+        /// CSS 2.1 §10.1 forms from that inline's first and last fragments, and those only exist once
+        /// every line holding the inline has been built and aligned.
+        /// </para>
+        /// <para>
+        /// Laid out with breaking detached, as <c>CssBox.LayoutEngineContent</c> lays out an engine
+        /// container's absolutely positioned children: nothing up this inline flow resumes a record such a
+        /// box leaves behind, so a break inside it would drop the content after the break. Its lines are
+        /// still distributed over the pages they reach, as the block-flow path's are.
+        /// </para>
+        /// </remarks>
+        /// <param name="g">the device context</param>
+        /// <param name="coordinates">the flow that set the boxes aside</param>
+        /// <param name="beforeOrdinal">only boxes the flow reached before this word ordinal are laid out</param>
+        private static async ValueTask LayoutAbsolutelyPositioned(RGraphics g, CssLineBoxCoordinates coordinates, int beforeOrdinal)
+        {
+            if (coordinates.AbsolutelyPositioned is not { } boxes) return;
+
+            foreach (var (box, ordinal) in boxes)
+            {
+                if (ordinal >= beforeOrdinal) continue;
+
+                var previous = box.HtmlContainer?.DetachFragmentainer();
+
+                try
+                {
+                    await box.ParentBox!.LayoutBlockChild(g, box);
+                }
+                finally
+                {
+                    box.HtmlContainer?.RestoreFragmentainer(previous);
+                }
+            }
         }
 
         /// <summary>
@@ -1148,13 +1196,10 @@ namespace PeachPDF.Html.Core.Dom
                 // own tail) rather than here, since a same-box positioned ancestor must not resolve its
                 // offsets against this box's not-yet-final ClientLeft/Top/Width/Height.
                 //
-                // A defensive backstop, not a path real content reaches today: DomParser.BlockifyPositionedBox
-                // (position:absolute/fixed) and Float-based blockification (DerivedStyle.ActualDisplay) both
-                // force a block-level Display before ContainsInlinesOnly is ever checked, so a genuinely
-                // out-of-flow box can never survive as a descendant of a box this method is called on -
-                // DomParser.CorrectBlockInsideInline promotes it up to an ordinary sibling first. Kept
-                // in case a future parser change leaves a gap, since folding an out-of-flow box's words
-                // into ordinary column flow would be a silent correctness bug, not a crash.
+                // Reached by real content: DomParser leaves a float (#1038) or an absolutely positioned box
+                // (#1299) among the inline content it sits in rather than splitting that content around it,
+                // so one can be a descendant of a box this method is called on. Folding its words into the
+                // column flow would place its content inline.
                 if (child.IsOutOfFlow)
                 {
                     outOfFlowDescendants.Add(child);
@@ -1955,7 +2000,7 @@ namespace PeachPDF.Html.Core.Dom
                 var resolvedBlockTop = blockTop ?? box.Location.Y;
                 var widthBasis = box.Position.Value is PositionMode.Fixed && box.HtmlContainer is { } wfc
                     ? wfc.PageContentRightOf(resolvedBlockTop) - wfc.MarginLeft
-                    : PageAwareWidthBasis(PercentageBase(box), resolvedBlockTop);
+                    : InlinePercentageBase(box)?.Width ?? PageAwareWidthBasis(PercentageBase(box), resolvedBlockTop);
                 width = CssValueParser.ParseLength(box.Width, widthBasis, box);
             }
 
@@ -1986,18 +2031,18 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box is { Width: Keywords.Auto, Position.Value: PositionMode.Absolute })
             {
-                var absCb = PercentageBase(box);
+                var absCbWidth = InlinePercentageBase(box)?.Width ?? PercentageBase(box).Size.Width;
                 if (box.Left.Value.IsValue && box.Right.Value.IsValue)
                 {
                     // CSS 2.1 §10.3.7: an absolutely-positioned box with auto width but both `left` and
                     // `right` set fills the space between them in the containing block (rather than shrinking
                     // to fit its content). This is what sizes a Charts.css area/line `td::before` (auto width,
                     // `inset: 0`) to cover its cell.
-                    var left = CssValueParser.ParseLength(box.Left.Value.Value!.Value, absCb.Size.Width, box);
-                    var right = CssValueParser.ParseLength(box.Right.Value.Value!.Value, absCb.Size.Width, box);
+                    var left = CssValueParser.ParseLength(box.Left.Value.Value!.Value, absCbWidth, box);
+                    var right = CssValueParser.ParseLength(box.Right.Value.Value!.Value, absCbWidth, box);
                     // An over-constrained fill (left + right wider than the containing block) clamps to 0, per
                     // CSS 2.1 §10.3.7 (a used width is never negative).
-                    width = Math.Max(0, absCb.Size.Width - left - right - box.ActualMarginLeft - box.ActualMarginRight - box.ActualBoxSizeIncludedWidth);
+                    width = Math.Max(0, absCbWidth - left - right - box.ActualMarginLeft - box.ActualMarginRight - box.ActualBoxSizeIncludedWidth);
                 }
                 else if (TryGetAspectRatioWidth(box, out var ratioWidth))
                 {
@@ -2022,7 +2067,7 @@ namespace PeachPDF.Html.Core.Dom
                     // measured 144px instead of 96px, putting the face's second row an em and a half too
                     // wide on each side. A no-op under `box-sizing: border-box`, as it is there.
                     var fit = Math.Max(
-                        await GetFitContentWidth(g, box, absCb.Size.Width),
+                        await GetFitContentWidth(g, box, absCbWidth),
                         await GetMinContentWidth(g, box));
 
                     width = fit - box.ActualBoxSizeIncludedWidth;
@@ -2071,6 +2116,16 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static CssBox PercentageBase(CssBox box) =>
             box.Position.Value is PositionMode.Absolute ? DomUtils.GetNearestPositionedAncestor(box) : box.ContainingBlock;
+
+        /// <summary>
+        /// The containing block of an absolutely positioned <paramref name="box"/> whose nearest positioned
+        /// ancestor is an inline (<see cref="DomUtils.InlineContainingBlockOf"/>), or null. Consulted ahead of
+        /// <see cref="PercentageBase"/>, whose box an inline's sizes would be read off meaninglessly.
+        /// </summary>
+        private static RRect? InlinePercentageBase(CssBox box) =>
+            box.Position.Value is PositionMode.Absolute
+                ? DomUtils.InlineContainingBlockOf(DomUtils.GetNearestPositionedAncestor(box))
+                : null;
 
         public static double? GetBoxHeight(CssBox box)
         {
@@ -2123,7 +2178,7 @@ namespace PeachPDF.Html.Core.Dom
                 || IsHeightDefinite(heightCb);
             var heightBasis = isFixedToPage
                 ? box.HtmlContainer!.PageGeometry.GetPage(0).BandHeight
-                : ResolveDefiniteHeightValue(heightCb) ?? heightCb.Size.Height;
+                : InlinePercentageBase(box)?.Height ?? ResolveDefiniteHeightValue(heightCb) ?? heightCb.Size.Height;
 
             // CSS 2.1 §10.6.3: a definite (non-auto) `height` is the used height regardless of
             // content - content taller than it overflows past ActualBottom (clipped or not per
@@ -4119,6 +4174,19 @@ namespace PeachPDF.Html.Core.Dom
                 // fragmentainer placed?
                 var childStartOrdinal = coordinates.WordOrdinal;
                 var childOpensHere = childStartOrdinal >= coordinates.ResumeOrdinal;
+
+                // An absolutely positioned box is out of flow (CSS 2.1 §9.6): nothing of it sits on a line,
+                // so it is set aside here and laid out by CreateLineBoxes once the lines are final. It is
+                // not flowed further, which would have placed its content inline, nor is any ::first-line
+                // style or line spacing applied to it. A box already placed on an earlier fragmentainer
+                // (!childOpensHere) keeps that placement. An inline-level one - a replaced element the
+                // cascade does not blockify - is still flowed as the word it always was.
+                if (b.IsAbsolutelyPositioned && !b.IsInline && !ReferenceEquals(b, box))
+                {
+                    if (childOpensHere && b.DerivedStyle.ActualDisplay != Keywords.None)
+                        (coordinates.AbsolutelyPositioned ??= []).Add((b, childStartOrdinal));
+                    continue;
+                }
 
                 // CSS2.1 §8.1 box model: an atomic inline-level box's (display:inline-block) content sits
                 // inside its padding box, border-top+padding-top below its own top edge. Applied here,

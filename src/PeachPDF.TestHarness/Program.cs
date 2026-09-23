@@ -6647,6 +6647,57 @@ await SaveShowcaseAsync("block_inline_placement", "Layout", "Block Placement in 
     "Where a narrower block-level box sits in a left-to-right and a right-to-left container, including auto margins and overflow.",
     blockPlacementHtml, pdfConfig);
 
+// --- positioned inline showcase ---
+
+// An absolutely positioned box sitting among inline text stays out of the line: the text around it reads on
+// as one line, and a positioned inline around it is its containing block, formed from that inline's first and
+// last line fragments.
+var positionedInlineHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a4; margin: 15mm }
+    body { font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.6; margin: 0; color: #222 }
+    h1 { font-size: 16pt; margin: 0 0 4pt }
+    h2 { font-size: 12pt; margin: 18pt 0 6pt; color: #1a6b8a }
+    p.note { margin: 0 0 8pt; color: #555; font-size: 10pt }
+    .term { position: relative; background: #fdf1d6; padding: 0 2pt; border-bottom: 1.5pt solid #e0a42a }
+    .tag { position: absolute; left: 0; bottom: 100%; margin-bottom: 2pt; white-space: nowrap; font-size: 7pt;
+           line-height: 1; padding: 2pt 4pt; background: #1a6b8a; color: #fff; border-radius: 3pt }
+    .corner { position: absolute; right: -5pt; top: -5pt; width: 9pt; height: 9pt; border-radius: 50%; background: #d94a4a }
+    .wrap { width: 250pt; padding: 8pt; background: #f4f4f4 }
+    .span-box { position: relative; background: rgba(74,144,217,.18) }
+    .pin { position: absolute; width: 6pt; height: 6pt; background: #d94a4a }
+    .ring { outline: 2pt solid #d94a4a; outline-offset: 2pt }
+    .aside { position: absolute; top: 0; right: 0; width: 70pt; font-size: 8pt; line-height: 1.2; color: #777 }
+    </style></head><body>
+    <h1>Absolutely positioned boxes inside inline text</h1>
+    <p class="note">An absolutely positioned box among inline content is taken out of the line, so the text around it
+    carries on as if it were not there. When its nearest positioned ancestor is an inline, that inline is its
+    containing block.</p>
+
+    <h2>Anchored to a word</h2>
+    <p style="margin-top: 20pt">The contract renews on the
+    <span class="term">anniversary date<span class="tag">see clause 4.2</span></span> unless either party gives
+    <span class="term">written notice<span class="corner"></span></span> ninety days before it.</p>
+
+    <h2>An inline that wraps</h2>
+    <p class="note">The pins sit at the top-left of the inline's first line and the bottom-right of its last line: the
+    corners of the containing block the two fragments form.</p>
+    <div class="wrap">Text before the
+    <span class="span-box">positioned inline, long enough to wrap onto a second line
+    <span class="pin" style="left: -3pt; top: -3pt"></span><span class="pin" style="right: -3pt; bottom: -3pt"></span></span>
+    and text after it.</div>
+
+    <h2>The line is not broken</h2>
+    <div style="position: relative; width: 300pt; padding-right: 80pt">The words after a positioned note
+    <span class="aside">A note placed at the top right of the paragraph.</span>continue on the same line,
+    and an outlined span holding one <span class="ring">keeps its outline<span class="aside" style="top: 44pt">A second note.</span></span>.</div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("positioned_inline", "Layout", "Positioned Boxes in Inline Text",
+    "Absolutely positioned boxes anchored to a word or a wrapped inline, with the text around them left on one line.",
+    positionedInlineHtml, pdfConfig);
+
 // --- horizontal rule attributes showcase ---
 
 // One row per <hr>, each in a fixed-width band so where the rule sits between the band's edges is the whole

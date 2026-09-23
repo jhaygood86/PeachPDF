@@ -66,10 +66,13 @@ namespace PeachPDF.Html.Core.Utils
         /// (<c>CssLayoutEngine.CreateLineBoxes</c>/<c>FlowBox</c>, which has its own dispatch branch for a
         /// floated child) rather than the block-children path - see <c>DomParser.JoinsTheInlineRun</c>'s
         /// own remarks and <see href="https://github.com/jhaygood86/PeachPDF/issues/1038">#1038</see>.
+        /// An absolutely positioned child is inline-compatible for the same reason: it is out of flow, so
+        /// it is not the block-level content CSS 2.1 §9.2.1.1 separates inline content from, and
+        /// <c>FlowBox</c> has a dispatch branch for it too.
         /// </remarks>
         public static bool ContainsInlinesOnly(CssBox box)
         {
-            return box.Boxes.All(b => b.IsInline || b.IsFloated);
+            return box.Boxes.All(b => b.IsInline || b.IsFloated || b.IsAbsolutelyPositioned);
         }
 
         /// <summary>
@@ -736,6 +739,49 @@ namespace PeachPDF.Html.Core.Utils
             } while (currentBox is { IsPositioned: false, EffectiveParentBox: not null });
 
             return currentBox!;
+        }
+
+        /// <summary>
+        /// The containing block a positioned <b>inline</b> ancestor forms for an absolutely positioned
+        /// descendant, or null when <paramref name="ancestor"/> is not a non-atomic inline with laid-out
+        /// fragments. Every other ancestor forms it from its own padding box, which its callers already
+        /// read off the box itself.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see href="https://www.w3.org/TR/CSS21/visudet.html#containing-block-details">CSS 2.1 §10.1</see>
+        /// (4.1): in <c>ltr</c> the top and left of the containing block are the top and left padding edges
+        /// of the ancestor's first box, and the bottom and right are the bottom and right padding edges of
+        /// its last box; in <c>rtl</c> the left and right come from the last and first box instead. A
+        /// resulting negative width or height, which a wrapped inline can produce, is clamped to zero.
+        /// </para>
+        /// <para>
+        /// An inline's own <see cref="CssBox.Location"/> is a line-local value layout never updates, so
+        /// reading it the way a block's is read put such a descendant at the page origin. The per-line
+        /// rectangles are border boxes (<see cref="CssLineBox.UpdateRectangle"/>), so the borders come off.
+        /// </para>
+        /// </remarks>
+        /// <param name="ancestor">the nearest positioned ancestor of the absolutely positioned box</param>
+        /// <returns>the containing block's padding rectangle, or null</returns>
+        internal static RRect? InlineContainingBlockOf(CssBox ancestor)
+        {
+            if (!ancestor.IsInline || IsAtomicInline(ancestor) || ancestor.Rectangles.Count == 0) return null;
+
+            var rectangles = ancestor.Rectangles;
+            var first = ancestor.FirstHostingLineBox is { } firstLine && rectangles.TryGetValue(firstLine, out var f)
+                ? f
+                : rectangles.Values.MinBy(r => r.Top);
+            var last = ancestor.LastHostingLineBox is { } lastLine && rectangles.TryGetValue(lastLine, out var l)
+                ? l
+                : rectangles.Values.MaxBy(r => r.Bottom);
+
+            var rtl = ancestor.Direction.Value == DirectionMode.Rtl;
+            var left = (rtl ? last : first).Left + ancestor.ActualBorderLeftWidth;
+            var right = (rtl ? first : last).Right - ancestor.ActualBorderRightWidth;
+            var top = first.Top + ancestor.ActualBorderTopWidth;
+            var bottom = last.Bottom - ancestor.ActualBorderBottomWidth;
+
+            return new RRect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
         }
 
         /// <summary>
