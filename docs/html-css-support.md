@@ -636,8 +636,8 @@ Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks 
 |----------|--------------|-------|
 | `display` | [display](https://developer.mozilla.org/en-US/docs/Web/CSS/display) | `block`, `inline`, `inline-block`, `none`, `flex`, `inline-flex`, `grid`, `inline-grid`, `table`, `table-row`, `table-cell`, `table-header-group`, `table-footer-group`, `table-row-group`, `table-column`, `table-column-group`, `table-caption`, `list-item` |
 | `position` | [position](https://developer.mozilla.org/en-US/docs/Web/CSS/position) | `static`, `relative`, `absolute`, `fixed`. A fixed box's containing block is the **page area** ([CSS 2.1 §10.1](https://www.w3.org/TR/CSS21/visudet.html#containing-block-details): the viewport in continuous media, the page area in paged media), so `top`/`left` are measured from the page's content corner — `top: 0; left: 0` sits at the top-left of the content area, inside the `@page` margins, and `left: 0; right: 0` spans the full measure. Percentages resolve against that same area, per page: on a document whose pages have different margins or sizes, a fixed box follows each page's own area rather than holding one absolute position on the sheet. `sticky` is treated as `relative` with a zero offset, since there is no scroll to ever cross a sticky threshold against — it participates in normal flow and in stacking/z-index like a positioned box, but its `top`/`right`/`bottom`/`left` values (the scroll-threshold parameters, not a static offset) never shift it. `running(<custom-ident>)` ([css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#running-syntax)) removes the element from normal flow entirely, making it available to a page margin box via `content: element(<custom-ident>)` — see [Running elements](#running-elements-position-running--element) |
-| `float` | [float](https://developer.mozilla.org/en-US/docs/Web/CSS/float) | `left`, `right`, `none`, `footnote` ([css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#footnotes)) — removes an inline-level element from normal flow entirely and routes its content to the page's - or, with [`float-reference: column`](#footnotes-float-footnote), its own column's - footnote area, the same "remove from flow" idea `position: running()` uses for margin boxes; see [Footnotes](#footnotes-float-footnote). A `left`/`right` float shares one inline formatting context with the surrounding inline content of the block it is in regardless of source order — placed beside that content's line boxes, with text wrapping around it, whether the float **precedes or follows** the content on the same line ([CSS 2.1 §9.5](https://www.w3.org/TR/CSS21/visuren.html#floats), [§9.5.1 rule 6](https://www.w3.org/TR/CSS21/visuren.html#float-position)). A shrink-to-fit box holding both (a float, an auto-width `position: absolute` box, an auto table column) is sized for the text and the float side by side, as are two adjacent floats — which are themselves placed side by side correctly. A box that establishes its own formatting context and takes its height from content — a float, an `overflow` other than `visible`, an `inline-block`, an absolutely/fixed-positioned box, a table cell or caption, a flex or grid item — **contains** its floats: its height grows to cover any floating descendant hanging below its content ([CSS 2.1 §10.6.7](https://www.w3.org/TR/CSS21/visudet.html#root-height)), which is what makes the `overflow: hidden` containment idiom work. An ordinary block correctly does not, so a float still overhangs it. `display: flow-root`, css-display-3's dedicated way to ask for containment, is not implemented and computes as `block`. A float whose own content is taller than fits the remaining page overflows that page rather than continuing its own content onto a later one — the page it starts on simply shows as much of it as fits, and everything else in the document around it still lays out and paginates normally either way |
-| `float-reference` | [css-page-floats](https://drafts.csswg.org/css-page-floats/) | `inline` (initial), `column`, `region`, `page` - which fragmentation context a float is positioned relative to. Consumed today only by a `float: footnote` source, where `column` routes the note into the note area of the column its reference landed in rather than the page's (see [Footnotes](#footnotes-float-footnote)); `page` is the same page-level behavior as the default, and `inline`/`region` behave as `page` there - a footnote has no inline note area to fall back to, and PeachPDF implements no part of CSS Regions. On any other element the property parses and cascades but has no effect, since PeachPDF implements no page floats (`float: top`/`bottom`). MDN has no page for this property, so the specification is linked directly |
+| `float` | [float](https://developer.mozilla.org/en-US/docs/Web/CSS/float) | `left`, `right`, `none`, `footnote` ([css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#footnotes)), `top`, `bottom`, `top-bottom`, `snap`, `inside`, `outside` ([css-page-floats](https://www.w3.org/TR/css-page-floats-3/)) — see [Page floats](#page-floats-float-topbottomtop-bottomsnapinsideoutside) for the last six. `footnote` removes an inline-level element from normal flow entirely and routes its content to the page's - or, with [`float-reference: column`](#footnotes-float-footnote), its own column's - footnote area, the same "remove from flow" idea `position: running()` uses for margin boxes; see [Footnotes](#footnotes-float-footnote). A `left`/`right`/`inside`/`outside` float shares one inline formatting context with the surrounding inline content of the block it is in regardless of source order — placed beside that content's line boxes, with text wrapping around it, whether the float **precedes or follows** the content on the same line ([CSS 2.1 §9.5](https://www.w3.org/TR/CSS21/visuren.html#floats), [§9.5.1 rule 6](https://www.w3.org/TR/CSS21/visuren.html#float-position)). A shrink-to-fit box holding both (a float, an auto-width `position: absolute` box, an auto table column) is sized for the text and the float side by side, as are two adjacent floats — which are themselves placed side by side correctly. A box that establishes its own formatting context and takes its height from content — a float, an `overflow` other than `visible`, an `inline-block`, an absolutely/fixed-positioned box, a table cell or caption, a flex or grid item — **contains** its floats: its height grows to cover any floating descendant hanging below its content ([CSS 2.1 §10.6.7](https://www.w3.org/TR/CSS21/visudet.html#root-height)), which is what makes the `overflow: hidden` containment idiom work. An ordinary block correctly does not, so a float still overhangs it. `display: flow-root`, css-display-3's dedicated way to ask for containment, is not implemented and computes as `block`. A `left`/`right`/`inside`/`outside` float whose own content is taller than fits the remaining page overflows that page rather than continuing its own content onto a later one — the page it starts on simply shows as much of it as fits, and everything else in the document around it still lays out and paginates normally either way |
+| `float-reference` | [css-page-floats](https://www.w3.org/TR/css-page-floats-3/) | `inline` (initial), `column`, `region`, `page` - which fragmentation context a float is positioned relative to. Consumed today only by a `float: footnote` source, where `column` routes the note into the note area of the column its reference landed in rather than the page's (see [Footnotes](#footnotes-float-footnote)); `page` is the same page-level behavior as the default, and `inline`/`region` behave as `page` there - a footnote has no inline note area to fall back to, and PeachPDF implements no part of CSS Regions. A `top`/`bottom`/`top-bottom`/`snap` page float (see [Page floats](#page-floats-float-topbottomtop-bottomsnapinsideoutside)) does not consume this property either — it always resolves against the page, regardless of its own `float-reference` value, including `column`. MDN has no page for this property, so the specification is linked directly |
 | `footnote-display` | [css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#footnote-display) | `block`, `inline`, `compact` — how a `float: footnote` body stacks in the note area; see [Footnotes](#footnotes-float-footnote) |
 | `footnote-policy` | [css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#footnote-policy) | `auto`, `line`, `block` — forces a page break when a footnote's own note area can't be placed on the page its call landed on; see [Footnotes](#footnotes-float-footnote) |
 | `clear` | [clear](https://developer.mozilla.org/en-US/docs/Web/CSS/clear) | `left`, `right`, `both`, `none` |
@@ -1654,7 +1654,7 @@ The `<h1>` no longer appears at its original position in the document; instead, 
 
 - **Column-scoped areas** (`float-reference: column`) — a footnote whose reference lands inside a
   multi-column container can have its note placed at the foot of *that column* rather than the foot of
-  the page, using [css-page-floats](https://drafts.csswg.org/css-page-floats/)' `float-reference`:
+  the page, using [css-page-floats](https://www.w3.org/TR/css-page-floats-3/)' `float-reference`:
   ```css
   sup { float: footnote; float-reference: column; }
   ```
@@ -1678,6 +1678,52 @@ The `<h1>` no longer appears at its original position in the document; instead, 
 - A footnote authored inside another footnote's body is inert — it renders as ordinary text rather than becoming a second footnote.
 - A footnote body taller than a whole page's content band overflows the note area rather than splitting across pages.
 - Links and bookmark-candidate headings inside a footnote body are not collected into the PDF's outline or link annotations.
+
+### Page floats (`float: top`/`bottom`/`top-bottom`/`snap`/`inside`/`outside`)
+
+[CSS Page Floats](https://www.w3.org/TR/css-page-floats-3/) — the module the `css-gcpm-3` floats section
+now points to — extends `float` past the inline `left`/`right` edges to the page (or column) itself: a
+figure or callout floated to the top or bottom edge of whichever page its source position lands on,
+rather than positioned inline with the text around it. This is the CSS-only way to pin content to a
+page edge without manual, page-aware absolute positioning.
+
+```html
+<div style="float: top; border: 1pt solid; padding: 8pt;">
+  This box floats to the top of whichever page it lands on.
+</div>
+<p>The surrounding text flows around it, starting below the reserved strip.</p>
+```
+
+- **`top` / `bottom`** — floats to the block-start or block-end edge of the page the element's own
+  (ordinary, block-flow) position falls on. Unlike `left`/`right`, this removes the element from the
+  inline formatting context entirely — nothing wraps beside it — and instead reserves room at that
+  edge of the page, the same "reserve space, shrink the usable content band" mechanism `float: footnote`
+  already uses for its note area (see [Footnotes](#footnotes-float-footnote)). Multiple floats on the
+  same edge of the same page stack in document order, the first nearest the flow content.
+- **`top-bottom`** — tries `top`; if the float doesn't fit in the room still available at the page's top
+  edge, falls back to `bottom`.
+- **`snap`** — floats to whichever edge (top or bottom) the element's own natural position is nearer to.
+- **`inside` / `outside`** — like `left`/`right`, but resolved against a two-sided document's binding
+  rather than a fixed physical side: `inside` is the edge nearest the spine (left on a right-hand/recto
+  page, right on a left-hand/verso page — the same page-parity rule `@page :left`/`:right` uses),
+  `outside` is the mirror. These two behave exactly like `left`/`right` otherwise — text wraps beside
+  them, and every `left`/`right` rule above (shrink-to-fit, containment, overflow) applies unchanged.
+- **`top-bottom`/`snap` are this implementation's own interpretation.** No currently published
+  specification defines these two keywords' disambiguation rule under this name — they come from the
+  historical keyword vocabulary this feature targets, not from a rule this implementation can cite.
+
+**Limitations:**
+- A page float taller than the whole page's content band overflows the page rather than splitting
+  across pages, the same accepted limitation `float: footnote` and `position: running()` already carry.
+- `float-reference: column` is not honored for a page float — it always resolves against the page, even
+  inside a multi-column container, and a page float placed directly as a multi-column container's own
+  child is not laid out at all.
+- The top-edge reservation is honored by ordinary block-level placement, but not by inline content that
+  is still flowing (mid-paragraph) when it crosses onto a page that reserves top space — such content
+  may render into the reserved strip instead of below it.
+- Prince's own extensions on top of this keyword set (`-prince-float-reference`, `-prince-float-policy`,
+  `top-corner`/`bottom-corner`, `sidenote`/`wide` reference targets, `align-top`/`align-bottom`,
+  `inline-footnote`) are not implemented.
 
 ### Headers and footers — complete example
 

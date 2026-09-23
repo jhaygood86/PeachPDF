@@ -548,9 +548,58 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public bool IsBlock => DerivedStyle.ActualDisplay == Keywords.Block;
 
-        public bool IsFloated => Float.Value is Floating.Left or Floating.Right;
+        public bool IsFloated => Float.Value is Floating.Left or Floating.Right or Floating.Inside or Floating.Outside;
 
-        public bool IsOutOfFlow => IsFloated || Position.Value is PositionMode.Absolute or PositionMode.Fixed;
+        /// <summary>
+        /// CSS Page Floats: <c>float: top/bottom/top-bottom/snap</c> - floats to the block-start/block-end
+        /// edge of a page or column rather than wrapping inline content beside it like <see cref="IsFloated"/>'s
+        /// values do. A separate predicate rather than folded into <see cref="IsFloated"/> because these four
+        /// values never call <c>CssLayoutEngine.FloatBoxLeft</c>/<c>FloatBoxRight</c> or share a line with
+        /// inline content - see <c>CssLayoutEngine.FloatBox</c>'s own dispatch.
+        /// </summary>
+        public bool IsPageFloated => Float.Value is Floating.Top or Floating.Bottom or Floating.TopBottom or Floating.Snap;
+
+        /// <summary>
+        /// This box's <see cref="Floating"/> value resolved to the physical <see cref="Floating.Left"/>/
+        /// <see cref="Floating.Right"/> side every float-interaction algorithm (collision scanning,
+        /// <c>clear</c>, inline wrap-around) actually needs - <see cref="Floating.Left"/>/<see cref="Floating.Right"/>
+        /// pass through unchanged, <see cref="Floating.Inside"/>/<see cref="Floating.Outside"/> resolve via
+        /// <see cref="PageRuleResolver.IsRightPage"/> against this box's own current <see cref="Location"/>
+        /// (the same primitive <c>@page :left</c>/<c>:right</c> selection uses: odd 1-based page number =
+        /// right/recto page - <c>inside</c> is the edge nearest the spine, so it resolves to left on a
+        /// right page and right on a left page; <c>outside</c> is the mirror), and everything else
+        /// (<see cref="Floating.None"/>, <see cref="Floating.Footnote"/>, a page-area value) answers
+        /// <see cref="Floating.None"/> since none of them are a physical side at all.
+        /// </summary>
+        /// <remarks>
+        /// A computed property rather than a value <c>CssLayoutEngine.FloatBox</c> caches once, because
+        /// every consumer below needs the CURRENT resolution against this box's own (already-settled, for
+        /// an already-placed float) <see cref="Location"/> - caching would have to be invalidated exactly
+        /// when a re-layout pass moves the box to a different-parity page, which a plain field can't do
+        /// safely without also tracking the layout generation it was cached against. Reading <see cref="Float"/>
+        /// itself never gets rewritten to the resolved side for the same reason: a permanent rewrite would
+        /// survive into a LATER layout attempt (this document is laid out more than once - convergence
+        /// loops, per-page reflow) and could no longer be re-resolved if the box's landing page's parity
+        /// changed between attempts.
+        /// </remarks>
+        internal Floating EffectiveFloatSide =>
+            Float.Value switch
+            {
+                Floating.Left => Floating.Left,
+                Floating.Right => Floating.Right,
+                Floating.Inside or Floating.Outside => ResolveInsideOutsideSide(),
+                _ => Floating.None
+            };
+
+        private Floating ResolveInsideOutsideSide()
+        {
+            var onRightPage = HtmlContainer is { HasRealPageGrid: true } container &&
+                               PageRuleResolver.IsRightPage(container.SlotStartingAt(Location.Y) + 1);
+            var isRight = Float.Value == Floating.Inside ? !onRightPage : onRightPage;
+            return isRight ? Floating.Right : Floating.Left;
+        }
+
+        public bool IsOutOfFlow => IsFloated || IsPageFloated || Position.Value is PositionMode.Absolute or PositionMode.Fixed;
 
         /// <summary>
         /// <see cref="IsOutOfFlow"/> plus <see cref="IsRunningPositioned"/> - every reason a box
@@ -6106,6 +6155,31 @@ namespace PeachPDF.Html.Core.Dom
                             child.HtmlContainer.CurrentFragmentainer?.StepOverTo(
                                 child.HtmlContainer.SlotStartingAt(newTop));
                             top = newTop;
+                        }
+                    }
+
+                    // css-page-floats' float: top/top-bottom/snap reserves room at the head of whichever
+                    // page it lands on (HtmlContainerInt.TopFloatAreaHeightsBySlot, seeded into
+                    // ReserveBandStart by LayoutDocument once ResolvePageFloatsForThisAttempt has decided
+                    // it). Applied as an unconditional floor rather than only when this child is detected
+                    // to be "the first thing on a fresh page": for a box comfortably mid-page,
+                    // PageTopOf(slot) + inset is always far below its own top already, so the Math.Max is
+                    // a no-op everywhere except exactly where top would otherwise land inside the reserved
+                    // strip at a page's own start - which this reaches without needing to detect that case
+                    // directly. Pages tile with no gap (PageBottomOf(k) == PageTopOf(k+1)), so this same
+                    // floor also covers a resumed pass's or a forced/margin-truncated break's target: every
+                    // one of those computed `top` above as some page's own content-band top, and this only
+                    // ever pushes it further down, never back up, so it cannot undo any of those decisions.
+                    if (child.HtmlContainer is { HasRealPageGrid: true, TopFloatAreaHeightsBySlot.Count: > 0 } topFloatContainer)
+                    {
+                        // SlotStartingAt, not PageIndexOf: `top` is a top edge, and PageIndexOf applies no
+                        // boundary convention of its own - a top edge landing exactly on (or within
+                        // floating-point noise above) a boundary belongs to the slot it opens, not the one
+                        // it closes (HtmlContainerInt.SlotStartingAt's own remarks).
+                        var landingSlot = topFloatContainer.SlotStartingAt(top);
+                        if (topFloatContainer.TopFloatAreaHeightsBySlot.TryGetValue(landingSlot, out var topInset) && topInset > 0)
+                        {
+                            top = Math.Max(top, topFloatContainer.PageTopOf(landingSlot) + topInset);
                         }
                     }
 

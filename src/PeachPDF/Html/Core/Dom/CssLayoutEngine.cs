@@ -1413,28 +1413,71 @@ namespace PeachPDF.Html.Core.Dom
 
             switch (box.Float.Value)
             {
-                case Floating.Left:
-                    FloatBoxLeft(box, containingBox, startX, startY);
+                case Floating.Left or Floating.Right or Floating.Inside or Floating.Outside:
+                    // CSS Page Floats' inside/outside resolve to an effective left/right based on which
+                    // physical side of a two-page spread the float's landing page is (CssBox.EffectiveFloatSide);
+                    // left/right pass through unchanged. Once resolved, every left/right code path
+                    // (collision scanning, line wrapping, shrink-to-fit, "floats share the line") reads
+                    // EffectiveFloatSide rather than the raw Float value, so it applies to all four the
+                    // same way.
+                    if (box.EffectiveFloatSide == Floating.Right) FloatBoxRight(box, containingBox, startX, startY);
+                    else FloatBoxLeft(box, containingBox, startX, startY);
                     break;
-                case Floating.Right:
-                    FloatBoxRight(box, containingBox, startX, startY);
+                case Floating.Top or Floating.Bottom or Floating.TopBottom or Floating.Snap:
+                    FloatBoxPageArea(box);
                     break;
             }
 
-            if (box.Clear.Value is not ClearMode.None)
+            // `clear` has no meaning for a page float (css-page-floats-3): it never wraps inline content
+            // or shares a line, so there is nothing for it to clear past, and ClearBox's containing-block-
+            // relative clearance would clobber the page-edge position FloatBoxPageArea just resolved with
+            // nothing to re-apply it afterward (unlike left/right/inside/outside below, which handles
+            // exactly that).
+            if (box.Clear.Value is not ClearMode.None && !box.IsPageFloated)
             {
                 ClearBox(box, currentBoxIdx, containingBox);
 
                 // css-break-3 §5.1: clearance can carry the float several bands down, onto a
                 // fragmentainer whose inline-end edge differs from the one the scan above placed it
-                // against - and ClearBox rewrites Location wholesale, so a right float has lost its
-                // inline-end placement entirely by this point. Re-place it, once, at the clearance it
-                // landed on. Bounded by construction: ClearBox itself is not re-run.
-                if (box.Float.Value is Floating.Right)
+                // against - and ClearBox rewrites Location wholesale, so a float (including inside/outside,
+                // whose EffectiveFloatSide is re-resolved against the clearance's own, possibly different,
+                // page) has lost its inline-end placement entirely by this point. Re-place it, once, at the
+                // clearance it landed on. Bounded by construction: ClearBox itself is not re-run.
+                if (box.EffectiveFloatSide == Floating.Right)
                     FloatBoxRight(box, containingBox, startX, box.Location.Y);
-                else if (box.Float.Value is Floating.Left)
+                else if (box.EffectiveFloatSide == Floating.Left)
                     FloatBoxLeft(box, containingBox, startX, box.Location.Y);
             }
+        }
+
+        /// <summary>
+        /// CSS Page Floats (<c>float: top/bottom/top-bottom/snap</c>): moves <paramref name="box"/> to the
+        /// block-start/block-end edge of the page its natural (ordinary block-flow) position landed it on,
+        /// once <see cref="HtmlContainerInt.ResolvePageFloatsForThisAttempt"/> has decided where that is.
+        /// </summary>
+        /// <remarks>
+        /// This is deliberately a two-attempt convergence, the same shape <c>float: footnote</c> already
+        /// uses (<c>HtmlContainerInt.ResolveFootnotesForThisAttempt</c>): which edge a box belongs on
+        /// (<c>top-bottom</c>/<c>snap</c>) and how much room every page float on the same edge of the same
+        /// page needs both depend on every page float's own measured height, which is only known after a
+        /// full layout attempt has already run. So the <b>first</b> attempt leaves <paramref name="box"/>
+        /// at the ordinary position <see cref="FloatBox"/> already resolved for it (the position it would
+        /// have if <c>Float</c> were <c>none</c>) - which is exactly what
+        /// <see cref="HtmlContainerInt.ResolvePageFloatsForThisAttempt"/> reads afterward to discover which
+        /// page it lands on. Once that attempt records a decision in
+        /// <see cref="HtmlContainerInt.PageFloatPlacements"/> and the document is laid out again, this
+        /// method moves the box to its final position before its own content
+        /// (<see cref="CssBox.LayoutContents"/>, which runs after <see cref="CssBox.PerformLayoutImp"/>'s
+        /// placement phase) lays out - so content lays out directly at the reserved position, with no
+        /// separate detached re-layout pass needed the way a footnote body's does.
+        /// </remarks>
+        private static void FloatBoxPageArea(CssBox box)
+        {
+            if (box.HtmlContainer is not { HasRealPageGrid: true } container) return;
+            if (!container.PageFloatPlacements.TryGetValue(box, out var top)) return;
+
+            box.Location = new RPoint(box.Location.X, top);
+            box.ActualBottom = top;
         }
 
         public static double GetActualMarginLeft(CssBox box, double? boxWidth = null)
@@ -2598,7 +2641,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (!siblingBox.IsFloated) continue;
 
-                switch (siblingBox.Float.Value)
+                switch (siblingBox.EffectiveFloatSide)
                 {
                     case Floating.Left when box.Clear.Value is ClearMode.Right:
                     case Floating.Right when box.Clear.Value is ClearMode.Left:
@@ -2636,7 +2679,7 @@ namespace PeachPDF.Html.Core.Dom
                 // clearPropValue (the CLEARING box's own `clear` value, passed down through the
                 // recursion) - not box.Clear, which is the container being searched and is usually
                 // "none", never filtering anything.
-                switch (childBox.Float.Value)
+                switch (childBox.EffectiveFloatSide)
                 {
                     case Floating.Left when clearPropValue is ClearMode.Right:
                     case Floating.Right when clearPropValue is ClearMode.Left:
@@ -2668,11 +2711,11 @@ namespace PeachPDF.Html.Core.Dom
 
             do
             {
-                var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.Float.Value);
+                var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.EffectiveFloatSide);
 
                 if (intersectingFloat is null) break;
 
-                switch (intersectingFloat.Float.Value)
+                switch (intersectingFloat.EffectiveFloatSide)
                 {
                     case Floating.Left:
                         coordinates.Left = intersectingFloat.ActualRight + intersectingFloat.ActualMarginRight + box.ActualMarginLeft;
@@ -2722,11 +2765,11 @@ namespace PeachPDF.Html.Core.Dom
 
             do
             {
-                var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.Float.Value);
+                var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.EffectiveFloatSide);
 
                 if (intersectingFloat is null) break;
 
-                switch (intersectingFloat.Float.Value)
+                switch (intersectingFloat.EffectiveFloatSide)
                 {
                     case Floating.Left:
                         coordinates.Left = intersectingFloat.ActualRight;

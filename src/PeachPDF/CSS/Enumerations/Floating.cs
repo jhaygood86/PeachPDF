@@ -14,6 +14,44 @@ namespace PeachPDF.CSS
         /// <c>CssBox.IsFloated</c>/<c>CssLayoutEngine.FloatBox</c>, which only ever handle
         /// <see cref="Left"/>/<see cref="Right"/>.
         /// </summary>
-        Footnote
+        Footnote,
+
+        /// <summary>
+        /// CSS Page Floats: floats to the block-start edge of its <c>float-reference</c> (page or
+        /// column). See <c>CssBox.IsPageFloated</c>.
+        /// </summary>
+        Top,
+
+        /// <summary>
+        /// CSS Page Floats: floats to the block-end edge of its <c>float-reference</c>.
+        /// </summary>
+        Bottom,
+
+        /// <summary>
+        /// CSS Page Floats: tries <see cref="Top"/> first; falls back to <see cref="Bottom"/> when the
+        /// float does not fit in the remaining top-reservable space.
+        /// </summary>
+        TopBottom,
+
+        /// <summary>
+        /// CSS Page Floats: floats to whichever of the block-start/block-end edges its own natural
+        /// (in-flow) position is nearer to.
+        /// </summary>
+        Snap,
+
+        /// <summary>
+        /// CSS Page Floats: floats to the inline edge nearest the binding (the left edge on a right-hand
+        /// page, the right edge on a left-hand page) - resolves to an effective <see cref="Left"/>/
+        /// <see cref="Right"/> via <see cref="PeachPDF.Html.Core.Dom.PageRuleResolver.IsRightPage"/> and
+        /// is included in <c>CssBox.IsFloated</c>, unlike <see cref="Top"/>/<see cref="Bottom"/>/
+        /// <see cref="TopBottom"/>/<see cref="Snap"/>.
+        /// </summary>
+        Inside,
+
+        /// <summary>
+        /// CSS Page Floats: floats to the inline edge farthest from the binding - the mirror of
+        /// <see cref="Inside"/>.
+        /// </summary>
+        Outside
     }
 }

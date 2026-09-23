@@ -733,7 +733,13 @@ namespace PeachPDF.CSS
                 {Keywords.None, Floating.None},
                 {Keywords.Left, Floating.Left},
                 {Keywords.Right, Floating.Right},
-                {Keywords.Footnote, Floating.Footnote}
+                {Keywords.Footnote, Floating.Footnote},
+                {Keywords.Top, Floating.Top},
+                {Keywords.Bottom, Floating.Bottom},
+                {Keywords.TopBottom, Floating.TopBottom},
+                {Keywords.Snap, Floating.Snap},
+                {Keywords.Inside, Floating.Inside},
+                {Keywords.Outside, Floating.Outside}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         // Named *References (plural), not FloatReference, to avoid colliding with the FloatReference
         // enum type itself - same convention as FloatingModes above.

@@ -2245,6 +2245,109 @@ await SaveShowcaseAsync("paged_media_footnotes", "Paged Media", "Footnotes",
     "css-gcpm-3's float: footnote: a numbered in-flow reference, a note area whose height is reserved dynamically per page based on how many footnotes land there, break-inside: avoid content correctly kept clear of the reserved strip, an @footnote rule styling the note area's own divider and giving it a fixed height, a real cascaded footnote counter (continuous numbering via @page counter-reset), column-scoped areas via float-reference: column, footnote-display: compact packing short notes onto one row, and footnote-policy: block/line forcing a page break when a note doesn't fit.",
     footnotesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── CSS Page Floats showcase — float: top/bottom/top-bottom/snap/inside/outside ──
+// Demonstrates: a float: top figure landing flush at the true top of the page its source position
+// falls on, with ordinary flow content starting below the reserved strip rather than overlapping it;
+// a float: bottom callout landing flush at the true bottom, with flow content stopping above it;
+// float: top-bottom falling back to the bottom edge once the top edge has no room left; and
+// inside/outside resolving to opposite physical sides on a right-hand versus a left-hand page.
+var pageFloatsHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: A4 portrait;
+      margin: 25mm 20mm;
+      @bottom-center { content: counter(page); font-size: 8pt; font-family: Arial; color: #888; }
+    }
+    body { font: 11pt Georgia, serif; margin: 0; color: #222; }
+    h1 { font-size: 20pt; margin: 0 0 14pt; }
+    p { line-height: 1.6; margin: 0 0 10pt; }
+    .figure {
+      float: top;
+      border: 1pt solid #2563eb;
+      background: #eff6ff;
+      padding: 10pt;
+      margin: 0 0 12pt;
+      font-size: 9pt;
+    }
+    .callout {
+      float: bottom;
+      border: 1pt solid #b45309;
+      background: #fffbeb;
+      padding: 10pt;
+      margin: 12pt 0 0;
+      font-size: 9pt;
+    }
+    .side-note {
+      width: 140pt;
+      border: 1pt solid #15803d;
+      background: #f0fdf4;
+      padding: 8pt;
+      font-size: 9pt;
+      margin: 0 0 10pt;
+    }
+    </style>
+    </head>
+    <body>
+
+    <h1>Page floats</h1>
+    <p>css-page-floats extends float past the inline left/right edges to the page itself.
+    float: top below pins this figure to the true top edge of whichever page its source position
+    lands on - ordinary flow content, including this paragraph, starts below the reserved strip
+    rather than overlapping it.</p>
+
+    <div class="figure">float: top - pinned to this page's top edge, not to where it appears in the
+    source order.</div>
+
+    <p>Because the reservation is dynamic (the same mechanism float: footnote already uses for its
+    note area), the figure's own height is measured once and fed back in, so the flow content below
+    it always starts exactly where the figure ends.</p>
+
+    <div class="callout">float: bottom - pinned to this page's bottom edge. Flow content above stops
+    short of the reserved strip instead of running into it.</div>
+
+    <div style="break-before: page;">
+    <h1>top-bottom: falls back once the top has no room</h1>
+    <p>float: top-bottom tries the top edge first; once an earlier float has already claimed the room
+    there, a later one falls back to the bottom edge instead:</p>
+    <div style="float:top; border:1pt solid #2563eb; background:#eff6ff; padding:8pt; height:480pt; font-size:9pt;">
+    float: top - a tall figure that claims most of the page's top-reservable room.</div>
+    <div style="float:top-bottom; border:1pt solid #7c3aed; background:#f5f3ff; padding:8pt; font-size:9pt;">
+    float: top-bottom - with no room left at the top, this one lands at the bottom edge instead.</div>
+    <p>The two floats above never overlap: the second one's own height was measured, found not to fit
+    in what remained at the top, and reserved from the bottom edge instead.</p>
+    </div>
+
+    <div style="break-before: page;">
+    <h1>inside / outside on a right-hand (recto) page</h1>
+    <p>This is an odd-numbered page - the same "recto" side @page :right selects. inside floats to the
+    edge nearest the spine (left, here); outside floats to the far edge (right):</p>
+    <div class="side-note" style="float:inside;">float: inside - nearest the spine on this recto page.</div>
+    <div class="side-note" style="float:outside;">float: outside - the far edge on this recto page.</div>
+    <p style="clear:both;">Turning the page flips which physical side each one resolves to, since both
+    are relative to the binding rather than a fixed left or right.</p>
+    </div>
+
+    <div style="break-before: page;">
+    <h1>inside / outside on a left-hand (verso) page</h1>
+    <p>This is an even-numbered page - inside and outside now resolve to the opposite physical sides
+    from the recto page before it:</p>
+    <div class="side-note" style="float:inside;">float: inside - now on the right, nearest the spine on
+    this verso page.</div>
+    <div class="side-note" style="float:outside;">float: outside - now on the left, the far edge on this
+    verso page.</div>
+    </div>
+
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("paged_media_page_floats", "Paged Media", "Page floats",
+    "css-page-floats' float: top/bottom/top-bottom/snap/inside/outside: a float: top figure landing flush at the true top of its landing page with flow content starting below the reserved strip, a float: bottom callout landing flush at the true bottom with flow content stopping above it, float: top-bottom falling back to the bottom edge once the top edge has no room left, and inside/outside resolving to opposite physical sides depending on whether the landing page is a right-hand (recto) or left-hand (verso) page.",
+    pageFloatsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──
 // The classic hand-authored table of contents: leader() fills the gap between a chapter
 // title and its page number with a dotted rule, and target-counter(attr(href), page)

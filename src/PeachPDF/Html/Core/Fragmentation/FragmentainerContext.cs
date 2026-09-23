@@ -318,6 +318,42 @@ namespace PeachPDF.Html.Core.Fragmentation
             _bandEndReservation = reservation;
 
         /// <summary>
+        /// The room a page float pinned to a page's block-start edge (css-page-floats' <c>float: top</c>)
+        /// has claimed at the <b>start</b> of every fragmentainer from <c>FromSlot</c> on - the mirror of
+        /// <see cref="_bandEndReservation"/>, at the other end of the band.
+        /// </summary>
+        private (int FromSlot, int MadeAtSlot, double Amount)? _bandStartReservation;
+
+        /// <summary>
+        /// How far below fragmentainer <paramref name="slot"/>'s band top content in the subtree being
+        /// laid out has to start, because a page float drawn at that fragmentainer's head has already
+        /// claimed the space. Zero for every document that uses no <c>float: top</c>/<c>top-bottom</c>/
+        /// <c>snap</c> - see <see cref="BandEndInsetOf"/> for the shape this mirrors and
+        /// <c>HtmlContainerInt.ResolvePageFloatsForThisAttempt</c> for where the reservation is discovered.
+        /// </summary>
+        /// <param name="slot">the fragmentainer being asked about, which the caller already knows</param>
+        internal double BandStartInsetOf(int slot) =>
+            _bandStartReservation is { } reservation
+            && slot >= reservation.FromSlot
+            && SlotIndex <= reservation.MadeAtSlot
+                ? reservation.Amount
+                : 0;
+
+        /// <summary>
+        /// Records that <paramref name="amount"/> at the start of fragmentainer <paramref name="fromSlot"/>
+        /// and of every fragmentainer after it is spoken for. Composes with any reservation already in
+        /// force at <paramref name="fromSlot"/>, the same as <see cref="ReserveBandEnd"/> - two page floats
+        /// pinned to the same page's top edge both claim room there, neither replacing the other's claim.
+        /// Unlike <see cref="ReserveBandEnd"/>, no caller needs to restore a previous value - every seed
+        /// site (<c>HtmlContainerInt.LayoutDocument</c>/<c>LayoutTheRemainderMonolithically</c>) seeds a
+        /// fresh context that is discarded when the pass ends, so there is nothing to put back.
+        /// </summary>
+        /// <param name="fromSlot">the first fragmentainer this claim applies to</param>
+        /// <param name="amount">how much room the caller has taken at that fragmentainer's head</param>
+        internal void ReserveBandStart(int fromSlot, double amount) =>
+            _bandStartReservation = (fromSlot, SlotIndex, BandStartInsetOf(fromSlot) + amount);
+
+        /// <summary>
         /// Where a resumed pass starts flowing: this fragmentainer's own content edge, per
         /// <see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>, below anything
         /// <see cref="ResumeContentInset"/> says this fragmentainer repeats above it.

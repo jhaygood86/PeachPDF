@@ -162,12 +162,12 @@ namespace PeachPDF.Html.Core.Utils
             var diff = 1;
             var sib = b.ParentBox.Boxes[index - diff];
 
-            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib) || sib.IsTableGridDecorationBox) && index - diff - 1 >= 0)
+            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || sib.IsPageFloated || CssBox.IsOutsideMarker(sib) || sib.IsTableGridDecorationBox) && index - diff - 1 >= 0)
             {
                 sib = b.ParentBox.Boxes[index - ++diff];
             }
 
-            sib = sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib) || sib.IsTableGridDecorationBox ? null : sib;
+            sib = sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || sib.IsPageFloated || CssBox.IsOutsideMarker(sib) || sib.IsTableGridDecorationBox ? null : sib;
 
             return sib;
         }
@@ -774,7 +774,7 @@ namespace PeachPDF.Html.Core.Utils
         internal static bool EstablishesIndependentFormattingContext(CssBox box)
         {
             if (box.ParentBox is null) return true;
-            if (box.IsFloated) return true;
+            if (box.IsFloated || box.IsPageFloated) return true;
             if (box.Position.Value is PositionMode.Absolute or PositionMode.Fixed) return true;
             if (box.Overflow.Value is not Overflow.Visible) return true;
 
@@ -918,7 +918,7 @@ namespace PeachPDF.Html.Core.Utils
         {
             boxesVisited++;
 
-            if (box.Float.Value == Floating.Right && box.Location.Y <= top && top < box.ActualBottom)
+            if (box.EffectiveFloatSide == Floating.Right && box.Location.Y <= top && top < box.ActualBottom)
             {
                 var left = box.Location.X - box.ActualMarginLeft;
 

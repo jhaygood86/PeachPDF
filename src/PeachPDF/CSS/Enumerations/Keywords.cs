@@ -15,6 +15,8 @@
         public const string Left = "left";
         public const string Right = "right";
         public const string Footnote = "footnote";
+        public const string TopBottom = "top-bottom";
+        public const string Snap = "snap";
         public const string Both = "both";
         public const string Forwards = "forwards";
         public const string Backwards = "backwards";

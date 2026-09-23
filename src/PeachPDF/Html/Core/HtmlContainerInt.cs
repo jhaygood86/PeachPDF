@@ -121,6 +121,62 @@ namespace PeachPDF.Html.Core
         internal Dictionary<int, double> FootnoteAreaHeightsBySlot { get; private set; } = [];
 
         /// <summary>
+        /// Every CSS Page Floats <c>float: top/bottom/top-bottom/snap</c> box in the document, in document
+        /// order - built once by <c>DomParser.CollectPageFloats</c> when the tree is parsed. Unlike
+        /// <c>float: footnote</c>, a page float is never detached from the tree (it has no numbered call
+        /// to leave behind), so this is a plain discovery list, not a structural rewrite - cleared and
+        /// rebuilt on every <see cref="SetHtml"/>/re-parse, never mid-layout.
+        /// </summary>
+        internal List<CssBox> PageFloats { get; } = [];
+
+        /// <summary>
+        /// Whether this document has any page float at all - gates <see cref="PerformLayout"/>'s page-float
+        /// convergence loop the same way <see cref="HasFootnotes"/> gates the footnote one.
+        /// </summary>
+        internal bool HasPageFloats => PageFloats.Count > 0;
+
+        /// <summary>
+        /// This layout attempt's discovered reservation for page floats pinned to a page's block-start
+        /// edge (<c>float: top</c>, or <c>top-bottom</c>/<c>snap</c> resolving to <c>top</c>), per slot -
+        /// the band-start analogue of <see cref="FootnoteAreaHeightsBySlot"/>. Seeded into that slot's
+        /// <see cref="Fragmentation.FragmentainerContext"/> via <c>ReserveBandStart</c> in
+        /// <see cref="LayoutDocument"/>. Only page-level (<c>float-reference: column</c> page floats are
+        /// not reserved per column - see <c>.claude/accepted-gaps/page-floats-are-not-column-scoped.md</c>).
+        /// </summary>
+        internal Dictionary<int, double> TopFloatAreaHeightsBySlot { get; private set; } = [];
+
+        /// <summary>
+        /// This layout attempt's discovered reservation for page floats pinned to a page's block-end edge
+        /// (<c>float: bottom</c>, or <c>top-bottom</c>/<c>snap</c> resolving to <c>bottom</c>), per slot.
+        /// Composed with <see cref="FootnoteAreaHeightsBySlot"/> into one <c>ReserveBandEnd</c> call in
+        /// <see cref="LayoutDocument"/> - a page float sits outermost (closest to the physical page edge),
+        /// the footnote area innermost (closest to flow content), a placement choice this implementation
+        /// makes since neither module specifies how the two interact.
+        /// </summary>
+        internal Dictionary<int, double> BottomFloatAreaHeightsBySlot { get; private set; } = [];
+
+        /// <summary>
+        /// Every page float's decided final position, once <see cref="ResolvePageFloatsForThisAttempt"/>
+        /// has resolved it - the document-space Y its content-box top belongs at. Read by
+        /// <see cref="CssLayoutEngine.FloatBoxPageArea"/>: absent (the common case on a document's first
+        /// layout attempt, before any reservation has been discovered) leaves the box at the ordinary
+        /// block-flow position <see cref="CssLayoutEngine.FloatBox"/> already resolved for it, which is
+        /// exactly the position <see cref="ResolvePageFloatsForThisAttempt"/> reads to discover which page
+        /// it lands on.
+        /// </summary>
+        internal Dictionary<CssBox, double> PageFloatPlacements { get; private set; } = [];
+
+        /// <summary>
+        /// The total band-end reservation <paramref name="slot"/> needs seeded into its
+        /// <see cref="Fragmentation.FragmentainerContext"/> - a page float pinned to the bottom edge
+        /// composed with any footnote area on the same slot, since <c>ReserveBandEnd</c> takes one amount
+        /// and the two must never be seeded separately (they would then compose a second time inside the
+        /// context and double-count).
+        /// </summary>
+        internal double TotalBandEndReservationFor(int slot) =>
+            FootnoteAreaHeightsBySlot.GetValueOrDefault(slot) + BottomFloatAreaHeightsBySlot.GetValueOrDefault(slot);
+
+        /// <summary>
         /// Lazily-built id -&gt; box index backing <see cref="GetBoxById(CssBox, string)"/>
         /// (<c>target-counter()</c>/<c>target-text()</c> resolution, which can look up many ids across
         /// one document - see <see cref="DomUtils.BuildIdIndex"/>). Rebuilt whenever the tree's topmost
@@ -1025,6 +1081,11 @@ namespace PeachPDF.Html.Core
             _footnoteNumberingSignature = string.Empty;
             ColumnFragmentainers.Clear();
             FootnoteAreaHeightsByColumn = [];
+            PageFloats.Clear();
+            TopFloatAreaHeightsBySlot = [];
+            BottomFloatAreaHeightsBySlot = [];
+            // Keyed by CssBox, same reference-leak reason as the footnote dictionaries above.
+            PageFloatPlacements = [];
             // Keyed by CssBox/CssBoxFootnoteCall, same reason ClearBlankSlotReservations() below is -
             // dropping the tree without this would keep every box in it (and everything it in turn
             // reaches via ParentBox/Boxes) reachable until the next document's own footnotes happened to
@@ -1431,22 +1492,35 @@ namespace PeachPDF.Html.Core
             // in (see LayoutDocument's own ReserveBandEnd seed), and repeat until a round's per-page totals
             // stop changing. Runs before the target-counter(_, page)/ReapplyPseudoElementContent work below
             // so those resolve against footnotes' own, already-settled page breaks rather than the other
-            // way around. Only entered for documents that actually use float: footnote - HasFootnotes is a
-            // plain list-count check, not a tree walk, so it costs nothing for the common case.
-            if (HasFootnotes)
+            // way around. Only entered for documents that actually use float: footnote or a page float -
+            // HasFootnotes/HasPageFloats are plain list-count checks, not tree walks, so this costs
+            // nothing for the common case.
+            //
+            // Page floats (css-page-floats' float: top/bottom/top-bottom/snap) share this exact loop
+            // rather than getting one of their own: a page float and a footnote can legitimately land on
+            // the same page's bottom edge, and BottomFloatAreaHeightsBySlot/FootnoteAreaHeightsBySlot are
+            // composed into one ReserveBandEnd call in LayoutDocument, so both must be resolved against
+            // the same settled layout before either seeds the next attempt.
+            if (HasFootnotes || HasPageFloats)
             {
                 var footnoteRootWidth = IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width));
                 const int maxFootnotePasses = 6;
 
                 for (var pass = 0; pass < maxFootnotePasses; pass++)
                 {
-                    var changed = await ResolveFootnotesForThisAttempt(g);
+                    // Gated independently, not just by the outer HasFootnotes || HasPageFloats: a document
+                    // using only one of the two features must not pay the other resolver's own dictionary
+                    // allocations and bookkeeping on every one of up to 6 passes.
+                    var footnotesChanged = HasFootnotes && await ResolveFootnotesForThisAttempt(g);
+                    var pageFloatsChanged = HasPageFloats && ResolvePageFloatsForThisAttempt();
+                    var changed = footnotesChanged || pageFloatsChanged;
 
                     // The bound below is a last resort, not the ordinary exit - resolving must always be
-                    // the last thing this loop does before FootnoteAreaHeightsBySlot/_footnoteAreasBySlot
-                    // are read by AttachFootnoteAreas, or they describe a Root tree an earlier LayoutDocument
-                    // call already left behind: reaching the cap with changed still true and relaying out
-                    // one further time, unresolved, is exactly what would do that.
+                    // the last thing this loop does before FootnoteAreaHeightsBySlot/_footnoteAreasBySlot/
+                    // TopFloatAreaHeightsBySlot/BottomFloatAreaHeightsBySlot/PageFloatPlacements are read,
+                    // or they describe a Root tree an earlier LayoutDocument call already left behind:
+                    // reaching the cap with changed still true and relaying out one further time,
+                    // unresolved, is exactly what would do that.
                     if (!changed || pass == maxFootnotePasses - 1) break;
 
                     Root.Size = new RSize(footnoteRootWidth, 0);
@@ -2040,7 +2114,7 @@ namespace PeachPDF.Html.Core
 
                 if (child.DerivedStyle.ActualDisplay == Keywords.None
                     || child.Position.Value is PositionMode.Absolute or PositionMode.Fixed or PositionMode.Running
-                    || child.IsFloated)
+                    || child.IsFloated || child.IsPageFloated)
                 {
                     continue;
                 }
@@ -2126,15 +2200,22 @@ namespace PeachPDF.Html.Core
                     var context = new FragmentainerContext(this, Root!, slot);
                     CurrentFragmentainer = context;
 
-                    // Seeded from the previous attempt's own resolution (ResolveFootnotesForThisAttempt) -
-                    // a footnote's presence on this slot is discovered only once its call's Location has
-                    // already settled, so the very first attempt always seeds zero here; the footnote
-                    // convergence loop in PerformLayout re-enters LayoutDocument with the newly-discovered
-                    // amount until it stops changing. No RestoreBandEnd: this context is fresh, discarded
-                    // when the pass ends, so there is nothing to unwind.
-                    if (FootnoteAreaHeightsBySlot.TryGetValue(slot, out var footnoteAreaHeight) && footnoteAreaHeight > 0)
+                    // Seeded from the previous attempt's own resolution (ResolveFootnotesForThisAttempt/
+                    // ResolvePageFloatsForThisAttempt) - a footnote's or page float's presence on this slot
+                    // is discovered only once its natural Location has already settled, so the very first
+                    // attempt always seeds zero here; the convergence loop in PerformLayout re-enters
+                    // LayoutDocument with the newly-discovered amount until it stops changing. No
+                    // RestoreBandEnd/RestoreBandStart: this context is fresh, discarded when the pass ends,
+                    // so there is nothing to unwind.
+                    var bandEndReservation = TotalBandEndReservationFor(slot);
+                    if (bandEndReservation > 0)
                     {
-                        context.ReserveBandEnd(slot, footnoteAreaHeight);
+                        context.ReserveBandEnd(slot, bandEndReservation);
+                    }
+
+                    if (TopFloatAreaHeightsBySlot.TryGetValue(slot, out var topFloatAreaHeight) && topFloatAreaHeight > 0)
+                    {
+                        context.ReserveBandStart(slot, topFloatAreaHeight);
                     }
 
                     // A translation, refill, or rectangle reset since the last iteration may have reopened an
@@ -2288,11 +2369,17 @@ namespace PeachPDF.Html.Core
             CurrentFragmentainer = relaxed;
 
             // A fresh context starts with no reservation of its own - without this, content laid out by
-            // this last-resort fallback would be unaware of a footnote area reserved for this same slot
-            // (see LayoutDocument's own identical seed) and could overlap it.
-            if (FootnoteAreaHeightsBySlot.TryGetValue(slot, out var footnoteAreaHeight) && footnoteAreaHeight > 0)
+            // this last-resort fallback would be unaware of a footnote/page-float area reserved for this
+            // same slot (see LayoutDocument's own identical seed) and could overlap it.
+            var relaxedBandEndReservation = TotalBandEndReservationFor(slot);
+            if (relaxedBandEndReservation > 0)
             {
-                relaxed.ReserveBandEnd(slot, footnoteAreaHeight);
+                relaxed.ReserveBandEnd(slot, relaxedBandEndReservation);
+            }
+
+            if (TopFloatAreaHeightsBySlot.TryGetValue(slot, out var relaxedTopFloatAreaHeight) && relaxedTopFloatAreaHeight > 0)
+            {
+                relaxed.ReserveBandStart(slot, relaxedTopFloatAreaHeight);
             }
 
             Root!.ResumeAt(token, resumeTopOverride: null);
@@ -3687,6 +3774,173 @@ namespace PeachPDF.Html.Core
                 if (!previous.TryGetValue(slot, out var previousHeight) || Math.Abs(previousHeight - height) > 0.01)
                     return true;
             }
+            return false;
+        }
+
+        /// <summary>
+        /// This layout attempt's page-float resolution (css-page-floats' <c>float: top/bottom/top-bottom/
+        /// snap</c>). For every pagination slot at least one page float's own, now-settled
+        /// <see cref="CssBox.Location"/> landed on: decides which block edge each one belongs to, stacks
+        /// same-edge floats in document order, and records each float's final position into
+        /// <see cref="PageFloatPlacements"/> plus the total room each edge needs into
+        /// <see cref="TopFloatAreaHeightsBySlot"/>/<see cref="BottomFloatAreaHeightsBySlot"/> for
+        /// <see cref="LayoutDocument"/> to seed via <c>ReserveBandStart</c>/<c>ReserveBandEnd</c> on the
+        /// *next* attempt - the same "resolve once layout settles, feed the result back in, repeat" shape
+        /// <see cref="ResolveFootnotesForThisAttempt"/> already uses, and for the same reason: which edge
+        /// a <c>top-bottom</c>/<c>snap</c> float belongs on, and how much room it needs, both depend on
+        /// every page float's own measured height, which is only known once a full attempt has already
+        /// laid it out.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Unlike a footnote body, a page float is never detached from the tree and never rewritten by a
+        /// separate layout pass of its own - the first attempt simply leaves it at the ordinary block-flow
+        /// position <see cref="CssLayoutEngine.FloatBox"/> already resolved for it (the position it would
+        /// have if <c>float</c> were <c>none</c>), which is exactly the position read here to discover
+        /// which page it lands on. <see cref="CssLayoutEngine.FloatBoxPageArea"/> moves it to its final,
+        /// decided position on the next attempt, before its own content lays out - so no synthetic
+        /// containing block or detached re-layout is needed the way a footnote body's is.
+        /// </para>
+        /// <para>
+        /// <c>float-reference</c> is not consulted: every page float resolves against the page, regardless
+        /// of its own <c>float-reference</c> value, including <c>column</c> - see
+        /// <c>.claude/accepted-gaps/page-floats-are-not-column-scoped.md</c>.
+        /// </para>
+        /// </remarks>
+        private bool ResolvePageFloatsForThisAttempt()
+        {
+            var previousTop = TopFloatAreaHeightsBySlot;
+            var previousBottom = BottomFloatAreaHeightsBySlot;
+            var previousPlacements = PageFloatPlacements;
+
+            var currentTop = new Dictionary<int, double>();
+            var currentBottom = new Dictionary<int, double>();
+            var currentPlacements = new Dictionary<CssBox, double>();
+
+            if (HasRealPageGrid)
+            {
+                var bySlot = new Dictionary<int, List<CssBox>>();
+
+                foreach (var box in PageFloats)
+                {
+                    if (!IsInRenderedTree(box)) continue;
+
+                    // SlotStartingAt, not PageIndexOf: Location.Y is a top edge (see CssBox's own floor-
+                    // clamp, which reads the resulting slot the same way) - PageIndexOf applies no boundary
+                    // convention and a top edge exactly on a boundary belongs to the slot it opens.
+                    var slot = SlotStartingAt(box.Location.Y);
+                    if (!bySlot.TryGetValue(slot, out var list))
+                        bySlot[slot] = list = [];
+                    list.Add(box);
+                }
+
+                foreach (var (slot, boxes) in bySlot)
+                {
+                    var pageTop = PageTopOf(slot);
+                    var pageBottom = PageBottomOf(slot);
+                    var bandHeight = pageBottom - pageTop;
+
+                    // A footnote area on this same slot (if any) already claims room at the true bottom
+                    // edge, resolved earlier this same attempt (ResolveFootnotesForThisAttempt runs first
+                    // in PerformLayout's convergence loop) - page floats stack outside it (see the class
+                    // remarks and TotalBandEndReservationFor), so both the top-bottom fit check and the
+                    // bottom-edge anchor below have to know how much of the bottom it has already spent.
+                    var footnoteHeight = FootnoteAreaHeightsBySlot.GetValueOrDefault(slot);
+                    var bottomEdge = pageBottom - footnoteHeight;
+
+                    // First pass, in document order: decide which edge each float belongs to and total up
+                    // both edges. top-bottom's "does it fit at top" and snap's "which edge is nearer" both
+                    // need this walked in document order, since top-bottom's decision for one float depends
+                    // on every earlier float on the same slot (either edge) already having claimed its
+                    // share - the check below is against the room actually left over both edges, not
+                    // against the whole band as if nothing else on this slot existed.
+                    var atBottom = new Dictionary<CssBox, bool>();
+                    double topTotal = 0, bottomTotal = 0;
+
+                    foreach (var box in boxes)
+                    {
+                        var height = Math.Max(0, box.ActualBottom - box.Location.Y);
+                        if (height <= 0) continue;
+
+                        var placeAtBottom = box.Float.Value switch
+                        {
+                            Floating.Bottom => true,
+                            Floating.Top => false,
+                            // Prince's documented float-placement behavior for this historical keyword set
+                            // (no current TR defines top-bottom/snap under these names - see
+                            // docs/html-css-support.md's float row): try top; fall back to bottom once the
+                            // top edge has no room left for it - "room left" meaning what remains of the
+                            // whole band once every other top float, bottom float, and the footnote area
+                            // already on this slot have claimed theirs.
+                            Floating.TopBottom => topTotal + height + bottomTotal + footnoteHeight > bandHeight,
+                            // Whichever edge the float's own natural (static) position is nearer to.
+                            Floating.Snap => (box.Location.Y - pageTop) > (pageBottom - box.Location.Y),
+                            _ => false
+                        };
+
+                        atBottom[box] = placeAtBottom;
+                        if (placeAtBottom) bottomTotal += height; else topTotal += height;
+                    }
+
+                    // Second pass: place each float within its edge's own strip, in document order - the
+                    // first float on an edge sits closest to the flow content (the page's own top edge for
+                    // a top float, the boundary with whatever else already reserves this slot's bottom -
+                    // a footnote area, see TotalBandEndReservationFor - for a bottom float), later floats
+                    // on the same edge stack further from flow content, and the last one is flush with the
+                    // page's own physical edge (or, for a bottom float, the footnote area's own top edge,
+                    // via bottomEdge above).
+                    double topRunning = 0, bottomRunning = 0;
+
+                    foreach (var box in boxes)
+                    {
+                        var height = Math.Max(0, box.ActualBottom - box.Location.Y);
+                        if (height <= 0) continue;
+
+                        if (atBottom[box])
+                        {
+                            currentPlacements[box] = bottomEdge - bottomTotal + bottomRunning;
+                            bottomRunning += height;
+                        }
+                        else
+                        {
+                            currentPlacements[box] = pageTop + topRunning;
+                            topRunning += height;
+                        }
+                    }
+
+                    if (topTotal > 0) currentTop[slot] = topTotal;
+                    if (bottomTotal > 0) currentBottom[slot] = bottomTotal;
+                }
+            }
+
+            TopFloatAreaHeightsBySlot = currentTop;
+            BottomFloatAreaHeightsBySlot = currentBottom;
+            PageFloatPlacements = currentPlacements;
+
+            var changed = DictionaryValuesChanged(previousTop, currentTop)
+                          || DictionaryValuesChanged(previousBottom, currentBottom)
+                          || DictionaryValuesChanged(previousPlacements, currentPlacements);
+
+            return changed;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="current"/> differs from <paramref name="previous"/> - a different key
+        /// count, or any shared key's value moved by more than the convergence-loop tolerance every
+        /// resolver in this file settles for (footnote areas, page-float areas/placements) - for
+        /// <see cref="PerformLayout"/>'s convergence loop to know whether another attempt is needed.
+        /// </summary>
+        private static bool DictionaryValuesChanged<TKey>(Dictionary<TKey, double> previous, Dictionary<TKey, double> current)
+            where TKey : notnull
+        {
+            if (current.Count != previous.Count) return true;
+
+            foreach (var (key, value) in current)
+            {
+                if (!previous.TryGetValue(key, out var previousValue) || Math.Abs(previousValue - value) > 0.01)
+                    return true;
+            }
+
             return false;
         }
 
