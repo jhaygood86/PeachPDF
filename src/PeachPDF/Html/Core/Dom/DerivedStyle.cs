@@ -28,7 +28,7 @@ namespace PeachPDF.Html.Core.Dom
     /// so they remain plain members on <see cref="CssBox"/>.
     /// </para>
     /// </summary>
-    internal sealed record DerivedStyle(CssBox Owner)
+    internal sealed record DerivedStyle(CssBox Owner) : IFontMetricSource
     {
         private ComputedStyle Style => Owner.ComputedStyle;
 
@@ -1275,9 +1275,17 @@ namespace PeachPDF.Html.Core.Dom
                 // .claude/accepted-gaps/font-size-container-relative-units-resolve-to-zero-for-text-content.md.
                 var (containerWidthPt, containerHeightPt, containerInlinePt, containerBlockPt) = Owner.GetContainerRelativeUnitBasis();
                 var (viewportWidthPt, viewportHeightPt, viewportInlinePt, viewportBlockPt) = Owner.GetViewportUnitBasis();
+                // A font-size's ex/ch/cap/ic/lh refer to the PARENT's font and its root-element variants to the
+                // root's (CSS Values 4 §6.1.1). By this point only a calc() or a root-element variant can
+                // still be font-relative (the rest were resolved eagerly - see ResolveFontSizeValueComputation),
+                // so the scoping wrapper is only allocated for those.
+                IFontMetricSource? sizeFonts = Style.Font.FontSize.Value.Value is { } sizeValue
+                                               && (sizeValue.IsCalc || sizeValue.Length!.Value.IsFontRelative)
+                    ? new ParentScopedFontMetrics(parentBox?.DerivedStyle, this)
+                    : null;
                 var fsize = FontSizeResolver.Resolve(Style.Font.FontSize.Value, parentSize, remSize,
                     containerInlinePt, containerBlockPt, viewportWidthPt, viewportHeightPt,
-                    containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt);
+                    containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt, sizeFonts);
 
                 _actualFont = Owner.GetCachedFont(Style.Font.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
                               ?? Owner.GetCachedFont(DefaultFontResolver.DefaultFont, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus);
@@ -1552,15 +1560,125 @@ namespace PeachPDF.Html.Core.Dom
 
         #endregion
 
+        #region Font-relative units (ex/ch/cap/ic/lh and their root-element counterparts)
+
+        private double?[]? _fontRatioCache;
+
+        /// <summary>Set while this box's own <c>line-height</c> is being resolved - see <see cref="ActualLineHeight"/>.</summary>
+        private bool _resolvingLineHeight;
+
+        /// <summary>
+        /// Supplies <see cref="Length.ToPixels"/> with the font measurements <c>ex</c>/<c>ch</c>/<c>cap</c>/
+        /// <c>ic</c>/<c>lh</c> are defined by, each as a fraction of the em of the font it was measured
+        /// from - so the caller keeps scaling it by the same em basis it already carries. The root-element
+        /// variants read the root element's font, found the way <see cref="GetRemHeight"/> finds it: with no
+        /// root element above this box (the root resolving its own font-size) they take the spec's fallback,
+        /// which is also what keeps that resolution from recursing into itself.
+        /// </summary>
+        double IFontMetricSource.GetRatio(FontMetric metric, bool rootElement)
+        {
+            var style = rootElement ? FindRootElementStyle() : this;
+            return style is null ? FontMetricRatios.Approximate(metric) : style.OwnFontRatio(metric);
+        }
+
+        /// <summary>
+        /// The font basis of a <c>font-size</c> declaration: <c>ex</c>/<c>ch</c>/... resolve against the
+        /// parent's font (this box's own is what is being computed), the root-element variants against the
+        /// root's, found from this box.
+        /// </summary>
+        private sealed class ParentScopedFontMetrics(DerivedStyle? parent, DerivedStyle owner) : IFontMetricSource
+        {
+            public double GetRatio(FontMetric metric, bool rootElement) =>
+                rootElement
+                    ? ((IFontMetricSource)owner).GetRatio(metric, true)
+                    : parent is null ? FontMetricRatios.Approximate(metric) : ((IFontMetricSource)parent).GetRatio(metric, false);
+        }
+
+        private DerivedStyle? FindRootElementStyle()
+        {
+            CssBox? rootElement = null;
+
+            for (var parentBox = Owner.ParentBox; parentBox is not null; parentBox = parentBox.ParentBox)
+            {
+                if (parentBox.HtmlTag is not null)
+                    rootElement = parentBox;
+            }
+
+            return rootElement?.DerivedStyle;
+        }
+
+        private double OwnFontRatio(FontMetric metric)
+        {
+            var pixelsPerPoint = (Owner.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+
+            if (metric == FontMetric.Lh)
+                return LineHeightRatio(pixelsPerPoint);
+
+            // Measured once per box, like ActualFont itself: the font it reads never changes after the first read.
+            var cache = _fontRatioCache ??= new double?[4];
+            if (cache[(int)metric] is { } cached) return cached;
+
+            // ic is the advance of the ideograph in the font that actually renders it - the primary face
+            // only when that one covers it - and 1em when no font does (Ratio's fallback for a missing glyph).
+            var font = metric == FontMetric.Ic ? ActualFontForCodepoint(FontMetricMeasurement.WaterIdeograph) : ActualFont;
+            return (cache[(int)metric] = FontMetricMeasurement.Ratio(font, metric)).Value;
+        }
+
+        /// <summary>
+        /// This box's used line-height as a multiple of its em, defined so that <c>1lh</c> lands exactly on
+        /// <see cref="ActualLineHeight"/> once <see cref="Length.ToPixels"/> multiplies by the true-point em and
+        /// the caller's <c>PixelsPerPoint</c> catch-up reapplies the second factor.
+        /// </summary>
+        private double LineHeightRatio(double pixelsPerPoint)
+        {
+            var font = ActualFont;
+            var em = font.Size * pixelsPerPoint * pixelsPerPoint;
+            if (em <= 0) return FontMetricRatios.Approximate(FontMetric.Lh);
+
+            // CSS Values 4 §6.1.1: in the line-height property itself, lh is the PARENT's line-height (a box's
+            // own line-height is what is being computed). The top box has no parent and the initial value is normal.
+            var lineHeight = _resolvingLineHeight
+                ? Owner.ParentBox?.DerivedStyle.ActualLineHeight ?? font.NormalLineHeight
+                : ActualLineHeight;
+
+            return lineHeight > 0 ? lineHeight / em : FontMetricRatios.Approximate(FontMetric.Lh);
+        }
+
+        #endregion
+
         #region Line-height
 
         /// <summary>Gets the line height. Recomputed fresh every call, not cached.</summary>
-        public double ActualLineHeight => Style.Text.LineHeight.Value.Value is { } lineHeight
-            ? CssValueParser.ParseLength(lineHeight, Owner.Size.Height, Owner)
-            // `normal` (CSS 2.1 §10.8.1) resolves from the used font's own metrics, matching browsers -
-            // see RFont.NormalLineHeight (issue #956). Already fully scaled, same convention as
-            // ActualFont.Ascent/Height elsewhere - no further PixelsPerPoint correction here.
-            : ActualFont.NormalLineHeight;
+        public double ActualLineHeight
+        {
+            get
+            {
+                if (Style.Text.LineHeight.Value.Value is not { } lineHeight)
+                    // `normal` (CSS 2.1 §10.8.1) resolves from the used font's own metrics, matching browsers -
+                    // see RFont.NormalLineHeight (issue #956). Already fully scaled, same convention as
+                    // ActualFont.Ascent/Height elsewhere - no further PixelsPerPoint correction here.
+                    return ActualFont.NormalLineHeight;
+
+                // Only a line-height that can itself contain lh (a calc might) needs the guard: there lh means
+                // the parent's, and reading this box's own would recurse. rlh reads the root's, which is never
+                // this box's own unless it is the root - and then there is no root above to consult. The
+                // unitless/absolute majority skips the guard entirely.
+                if (lineHeight.LengthOrCalc is not { } lengthOrCalc
+                    || (!lengthOrCalc.IsCalc && lengthOrCalc.Length!.Value.Type != Length.Unit.Lh))
+                    return CssValueParser.ParseLength(lineHeight, Owner.Size.Height, Owner);
+
+                var wasResolving = _resolvingLineHeight;
+                _resolvingLineHeight = true;
+                try
+                {
+                    return CssValueParser.ParseLength(lineHeight, Owner.Size.Height, Owner);
+                }
+                finally
+                {
+                    _resolvingLineHeight = wasResolving;
+                }
+            }
+        }
 
         #endregion
 

@@ -226,5 +226,34 @@ namespace PeachPDF.Html.Adapters
         /// source for the actual space it needs when drawn. 0 when this font can't resolve one (no
         /// descriptor).</summary>
         public virtual int GetGlyphAdvanceWidthDesignUnits(int glyphIndex) => 0;
+
+        // ---- Font-relative CSS units (CSS Values and Units 4 §6.1.1) ---------------------------
+        // The measurements ex/ch/cap/ic are defined by, each as a fraction of the em, so a caller can
+        // scale it by whatever em it carries without knowing this font's size space. Null means "not
+        // determinable" and lets the caller take the spec's fallback (see FontMetricRatios.Approximate).
+
+        /// <summary>The font's real x-height as a fraction of the em, or null when it doesn't carry one.</summary>
+        public virtual double? XHeightEm => null;
+
+        /// <summary>The font's cap height as a fraction of the em, or null when unknown.</summary>
+        public virtual double? CapHeightEm => null;
+
+        /// <summary>
+        /// The advance width of <paramref name="rune"/>'s glyph as a fraction of the em, or null when
+        /// this font has no glyph for it (or no metrics at all). Built from <see cref="GetGlyphIndex"/>/
+        /// <see cref="GetGlyphAdvanceWidthDesignUnits"/>/<see cref="FontUnitsPerEm"/>, so it needs no
+        /// override of its own.
+        /// </summary>
+        public double? GetAdvanceEm(System.Text.Rune rune)
+        {
+            var unitsPerEm = FontUnitsPerEm;
+            if (unitsPerEm <= 0) return null;
+
+            var glyph = GetGlyphIndex(rune);
+            if (glyph == 0) return null;
+
+            var advance = GetGlyphAdvanceWidthDesignUnits(glyph);
+            return advance > 0 ? advance / unitsPerEm : null;
+        }
     }
 }

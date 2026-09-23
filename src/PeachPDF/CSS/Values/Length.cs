@@ -81,8 +81,17 @@ namespace PeachPDF.CSS
         /// call site (<c>CssValueParser.ParseLength</c>'s typed-<c>Length</c> and raw-<c>string</c>
         /// overloads, and <c>CalcEvaluator.Evaluate</c>'s per-leaf calc() scaling, issue #829) applies.
         /// </summary>
-        internal bool NeedsPixelsPerPointCatchUp =>
-            IsAbsolute || Type is Unit.Em or Unit.Rem or Unit.Ex or Unit.Ch;
+        internal bool NeedsPixelsPerPointCatchUp => IsAbsolute || IsFontRelative;
+
+        /// <summary>
+        /// Whether this length is relative to the font: <c>em</c>/<c>ex</c>/<c>ch</c>/<c>cap</c>/<c>ic</c>/
+        /// <c>lh</c> (the element's own font) or their root-element counterparts <c>rem</c>/<c>rex</c>/
+        /// <c>rch</c>/<c>rcap</c>/<c>ric</c>/<c>rlh</c> (CSS Values and Units 4 §6.1). The one shared
+        /// predicate for "resolves against a font basis", so no call site keeps its own list of them.
+        /// </summary>
+        internal bool IsFontRelative =>
+            Type is Unit.Em or Unit.Ex or Unit.Ch or Unit.Cap or Unit.Ic or Unit.Lh
+                or Unit.Rem or Unit.Rex or Unit.Rch or Unit.Rcap or Unit.Ric or Unit.Rlh;
 
         /// <summary>
         /// Whether <see cref="ToPixels"/> actually reads its <c>containerWidthPt</c>/<c>containerHeightPt</c>/
@@ -134,6 +143,22 @@ namespace PeachPDF.CSS
                         return UnitNames.Ch;
                     case Unit.Rem:
                         return UnitNames.Rem;
+                    case Unit.Cap:
+                        return UnitNames.Cap;
+                    case Unit.Ic:
+                        return UnitNames.Ic;
+                    case Unit.Lh:
+                        return UnitNames.Lh;
+                    case Unit.Rex:
+                        return UnitNames.Rex;
+                    case Unit.Rch:
+                        return UnitNames.Rch;
+                    case Unit.Rcap:
+                        return UnitNames.Rcap;
+                    case Unit.Ric:
+                        return UnitNames.Ric;
+                    case Unit.Rlh:
+                        return UnitNames.Rlh;
                     case Unit.Vw:
                         return UnitNames.Vw;
                     case Unit.Vh:
@@ -289,6 +314,14 @@ namespace PeachPDF.CSS
                 "pt" => Unit.Pt,
                 "px" => Unit.Px,
                 "rem" => Unit.Rem,
+                "cap" => Unit.Cap,
+                "ic" => Unit.Ic,
+                "lh" => Unit.Lh,
+                "rex" => Unit.Rex,
+                "rch" => Unit.Rch,
+                "rcap" => Unit.Rcap,
+                "ric" => Unit.Ric,
+                "rlh" => Unit.Rlh,
                 "vh" => Unit.Vh,
                 "vmax" => Unit.Vmax,
                 "vmin" => Unit.Vmin,
@@ -378,11 +411,16 @@ namespace PeachPDF.CSS
         /// in points (the physical axis orthogonal to <paramref name="viewportInlineSizePt"/>), for
         /// <c>vb</c> and its <c>sv*</c>/<c>lv*</c>/<c>dv*</c> variants, and as the <c>cqb</c> no-container
         /// fallback - <c>null</c> when no page context is available.</param>
+        /// <param name="fonts">Where <c>ex</c>/<c>ch</c>/<c>cap</c>/<c>ic</c>/<c>lh</c> (and the root-element
+        /// <c>rex</c>/<c>rch</c>/<c>rcap</c>/<c>ric</c>/<c>rlh</c>) read the used font's measurements, as ratios
+        /// of that font's em. <c>null</c> for a caller with no font in scope, which takes the spec's fallback
+        /// for each (<see cref="FontMetricRatios.Approximate"/>).</param>
         internal double ToPixels(double emFactor, double remFactor, double hundredPercent,
             double? containerInlineSizePt = null, double? containerBlockSizePt = null,
             double? viewportWidthPt = null, double? viewportHeightPt = null,
             double? containerWidthPt = null, double? containerHeightPt = null,
-            double? viewportInlineSizePt = null, double? viewportBlockSizePt = null)
+            double? viewportInlineSizePt = null, double? viewportBlockSizePt = null,
+            IFontMetricSource fonts = null)
         {
             // The engine's internal layout unit is 1 point (PixelsPerInch defaults to 72), so
             // physical units (in/cm/mm/pc/pt) resolve directly against points. CSS px resolves
@@ -392,13 +430,21 @@ namespace PeachPDF.CSS
             {
                 Unit.Em => emFactor * Value,
                 Unit.Rem => remFactor * Value,
-                Unit.Ex => emFactor / 2 * Value,
-                // CSS Values & Units §6.2: "In the cases where it is impossible or impractical to
-                // determine the measure of the '0' glyph, it must be assumed to be 0.5em wide" - the same
-                // spec-sanctioned approximation this engine already uses for ex's x-height above, applied
-                // here rather than threading real per-font glyph measurement through the whole layout
-                // engine's value-resolution pipeline (see the ch accepted-gap note for the reasoning).
-                Unit.Ch => 0.5 * emFactor * Value,
+                // CSS Values and Units 4 §6.1: ex/ch/cap/ic/lh are measured from the used font. Each is
+                // expressed as a ratio of that font's em (IFontMetricSource) so it scales by the same
+                // emFactor every other relative unit uses - which keeps every caller's basis override and
+                // the PixelsPerPoint catch-up untouched. With no source the spec's own "impossible or
+                // impractical to determine" fallback applies (FontMetricRatios.Approximate).
+                Unit.Ex => FontRatio(fonts, FontMetric.Ex, false) * emFactor * Value,
+                Unit.Ch => FontRatio(fonts, FontMetric.Ch, false) * emFactor * Value,
+                Unit.Cap => FontRatio(fonts, FontMetric.Cap, false) * emFactor * Value,
+                Unit.Ic => FontRatio(fonts, FontMetric.Ic, false) * emFactor * Value,
+                Unit.Lh => FontRatio(fonts, FontMetric.Lh, false) * emFactor * Value,
+                Unit.Rex => FontRatio(fonts, FontMetric.Ex, true) * remFactor * Value,
+                Unit.Rch => FontRatio(fonts, FontMetric.Ch, true) * remFactor * Value,
+                Unit.Rcap => FontRatio(fonts, FontMetric.Cap, true) * remFactor * Value,
+                Unit.Ric => FontRatio(fonts, FontMetric.Ic, true) * remFactor * Value,
+                Unit.Rlh => FontRatio(fonts, FontMetric.Lh, true) * remFactor * Value,
                 Unit.Px => PointsPerPx * Value,
                 Unit.In => // 1 in = 72 pt
                     72d * Value,
@@ -434,6 +480,9 @@ namespace PeachPDF.CSS
                 _ => 0d
             };
         }
+
+        private static double FontRatio(IFontMetricSource fonts, FontMetric metric, bool rootElement) =>
+            fonts?.GetRatio(metric, rootElement) ?? FontMetricRatios.Approximate(metric);
 
         public float To(Unit unit)
         {
@@ -515,7 +564,17 @@ namespace PeachPDF.CSS
             Dvi,
             Dvb,
             Dvmin,
-            Dvmax
+            Dvmax,
+            // CSS Values and Units 4 §6.1 font-relative units measured from the used font (cap height,
+            // the "水" advance, the used line-height) and the root-element counterparts of ex/ch/cap/ic/lh.
+            Cap,
+            Ic,
+            Lh,
+            Rex,
+            Rch,
+            Rcap,
+            Ric,
+            Rlh
         }
 
         /// <summary>

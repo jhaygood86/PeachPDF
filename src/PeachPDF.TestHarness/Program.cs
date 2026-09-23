@@ -12332,6 +12332,76 @@ await SaveShowcaseAsync("vertical_writing_mode_background_clip_text", "Typograph
     "a plain border-box fill.",
     verticalBackgroundClipTextHtml, pdfConfig);
 
+// --- Font-relative units showcase: ex/ch/cap/ic/lh measured from the font, plus the root-element forms ---
+//
+// The units are measured from the used font (CSS Values and Units 4 section 6.1), not a fixed fraction of the font
+// size, so every bar below is sized by a unit and lines up with the text or the ruler it claims to measure. Source
+// Code Pro is monospace (its "0" is exactly 0.6em); Source Sans 3 is proportional, so the same 20ch is a different
+// width in each. The grey "0.5em" bars are what these units resolved to before they were measured.
+var fontRelativeUnitsHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'SS3'; src: url('data:font/truetype;base64,{sourceSans3B64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'SCP'; src: url('data:font/opentype;base64,{sourceCodeProB64}') format('opentype'); }}" +
+    $"@font-face {{ font-family: 'STIX'; src: url('data:font/truetype;base64,{stixTwoMathB64}') format('truetype'); }}" +
+    "html { font-size: 12pt } body { font-family: 'SS3', serif; margin: 0; color: #222 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { font-size: 9pt; margin: 0 0 0.6em; color: #555; font-family: Arial, sans-serif }" +
+    ".lab { font: 7pt Arial, sans-serif; color: #666; margin: 5px 0 1px }" +
+    ".bar { height: 8px; background: steelblue; margin: 0 0 2px } .old { height: 4px; background: #bbb; margin: 0 0 4px }" +
+    ".mono { font-family: 'SCP', monospace } .sans { font-family: 'SS3', serif } .big { font-size: 20pt }" +
+    ".ruler { font-size: 20pt; line-height: 1; white-space: pre; border-bottom: 1px solid #c33 }" +
+    ".capbox { display: inline-block; width: 6ch; height: 1cap; background: #e8a; vertical-align: baseline }" +
+    ".exbox { display: inline-block; width: 6ch; height: 1ex; background: #8ae; vertical-align: baseline }" +
+    ".lhstack div { height: 1lh; border-top: 1px solid #c33; font-size: 10pt }" +
+    "svg { border: 1px solid #ddd }" +
+    "</style></head><body>" +
+    "<h1>Font-relative units</h1>" +
+    "<p class=\"intro\"><code>ex</code>, <code>ch</code>, <code>cap</code>, <code>ic</code> and <code>lh</code> " +
+    "(and the root-element <code>rex</code>/<code>rch</code>/<code>rcap</code>/<code>ric</code>/<code>rlh</code>) are " +
+    "measured from the font an element actually uses.</p>" +
+
+    "<h2>ch: the width of the \"0\" glyph</h2>" +
+    "<div class=\"ruler big mono\">00000000000000000000</div>" +
+    "<div class=\"lab\">Source Code Pro, 20pt, width: 20ch (blue) vs. the old 0.5em approximation (grey)</div>" +
+    "<div class=\"big mono\"><div class=\"bar\" style=\"width: 20ch\"></div><div class=\"old\" style=\"width: 10em\"></div></div>" +
+    "<div class=\"ruler big sans\">00000000000000000000</div>" +
+    "<div class=\"lab\">Source Sans 3, 20pt, width: 20ch - a proportional font, so a different width</div>" +
+    "<div class=\"big sans\"><div class=\"bar\" style=\"width: 20ch\"></div><div class=\"old\" style=\"width: 10em\"></div></div>" +
+
+    "<h2>ex and cap: the x-height and cap height</h2>" +
+    "<div class=\"big sans\"><span class=\"exbox\"></span> <span class=\"capbox\"></span> xxxx HHHH</div>" +
+    "<div class=\"lab\">boxes 1ex tall (blue) and 1cap tall (pink), for comparing their heights with a lowercase x and a capital H</div>" +
+
+    "<h2>lh: the used line-height</h2>" +
+    "<div class=\"lhstack\" style=\"line-height: 18pt\"><div>line-height: 18pt - each row is 1lh tall</div><div>second row</div><div>third row</div></div>" +
+    "<div class=\"lhstack\" style=\"line-height: 1.6\"><div>line-height: 1.6 - each row is 1lh tall</div><div>second row</div><div>third row</div></div>" +
+
+    "<h2>Root-element forms follow the root, not the element</h2>" +
+    "<div class=\"lab\">html is 12pt Source Sans 3. Both bars sit in a 30pt Source Code Pro box, but the blue bar is 10rch - ten of the ROOT's zeros - " +
+    "while the green bar is 10ch of the box's own font</div>" +
+    "<div class=\"mono\" style=\"font-size: 30pt\"><div class=\"bar\" style=\"width: 10rch\"></div><div class=\"bar\" style=\"width: 10ch; background: seagreen\"></div></div>" +
+
+    "<h2>SVG</h2>" +
+    "<svg width=\"400\" height=\"70\" font-family=\"SCP\" font-size=\"20\" viewBox=\"0 0 400 70\">" +
+    "<rect x=\"1ch\" y=\"1ch\" width=\"10ch\" height=\"1cap\" fill=\"steelblue\"/>" +
+    "<rect x=\"1ch\" y=\"3em\" width=\"10ch\" height=\"6\" fill=\"#bbb\" stroke=\"#222\" stroke-width=\"calc(1em / 10)\" stroke-dasharray=\"1ch 1ch\"/>" +
+    "<text x=\"16ch\" y=\"1.2em\" font-size=\"1em\">0000000000</text>" +
+    "</svg>" +
+    "<div class=\"lab\">Widths, heights and the dashed stroke in ch/em/cap against Source Code Pro; the text is ten zeros wide - the same ten as the blue bar's 10ch</div>" +
+
+    "<h2>MathML</h2>" +
+    "<div style=\"font-size: 16pt; font-family: 'STIX'\">" +
+    "<math><mi>a</mi><mspace width=\"4ch\" style=\"background:#fcc\"/><mi>b</mi><mspace width=\"2em\"/><mi>c</mi></math>" +
+    " <span style=\"font: 7pt Arial\">mspace width=\"4ch\" then \"2em\" - measured from the math font</span></div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("font_relative_units", "Typography & Text", "Font-relative units: ex, ch, cap, ic, lh",
+    "ex, ch, cap, ic and lh - and their root-element rex/rch/rcap/ric/rlh forms - measured from the font an element " +
+    "actually uses instead of a fixed 0.5em, in HTML lengths, SVG geometry/stroke/text and MathML spacing.",
+    fontRelativeUnitsHtml, pdfConfig);
+
 const string declarativeApiSource =
     """"
     var generator = new PdfGenerator();

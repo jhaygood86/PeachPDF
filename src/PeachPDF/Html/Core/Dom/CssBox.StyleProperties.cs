@@ -604,8 +604,9 @@ namespace PeachPDF.Html.Core.Dom
         /// reference* - a value left as raw relative text would be re-resolved by every non-overriding
         /// descendant against its own immediate parent, compounding the multiplier once per generation
         /// (the bug fixed by making this eager - see PR #632's own notes for the original investigation).
-        /// <c>ch</c> shares <c>ex</c>'s exact <c>0.5em</c> formula (see <see cref="Length.ToPixels"/>) and
-        /// so needs the exact same eager treatment for the exact same reason.
+        /// <c>ch</c>/<c>cap</c>/<c>ic</c>/<c>lh</c> are measured from the PARENT's font just like <c>ex</c> (see
+        /// <see cref="Length.ToPixels"/>) and so need the exact same eager treatment for the exact same reason;
+        /// the root-element variants (<c>rex</c>/<c>rch</c>/...) are single-reference like <c>rem</c> and stay lazy.
         /// </summary>
         internal string ResolveFontSizeValueComputation(string value)
         {
@@ -617,7 +618,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     List<Token> tokens = pooledTokens;
                     matches = (tokens is [{ Type: TokenType.Dimension or TokenType.Percentage } unitToken] &&
-                        Length.GetUnit(unitToken.Unit) is Length.Unit.Em or Length.Unit.Ex or Length.Unit.Ch or Length.Unit.Percent
+                        Length.GetUnit(unitToken.Unit) is Length.Unit.Em or Length.Unit.Ex or Length.Unit.Ch or Length.Unit.Cap or Length.Unit.Ic or Length.Unit.Lh or Length.Unit.Percent
                      || trimmed.Equals(Keywords.Smaller, StringComparison.OrdinalIgnoreCase)
                      || trimmed.Equals(Keywords.Larger, StringComparison.OrdinalIgnoreCase));
                 }
@@ -627,12 +628,38 @@ namespace PeachPDF.Html.Core.Dom
                     var pixelsPerPoint = (HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
                     var parentSizePt = parent.ActualFont.Size * pixelsPerPoint;
 
-                    var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt);
+                    var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt, fonts: parent.DerivedStyle);
                     return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
                 }
             }
 
             return value;
+        }
+
+        /// <summary>
+        /// <c>line-height</c>'s eager <c>lh</c> resolution, run by <c>RegistryEmitter.BuildHtmlAssignment</c> against
+        /// the raw authored text (the <c>html.valueComputation</c> "line-height" case). <c>lh</c> in the
+        /// <c>line-height</c> property is the PARENT's line-height (CSS Values and Units 4 §6.1.1), and
+        /// <c>line-height</c> is inherited by adopting the specified value: left as "2lh" every descendant would
+        /// re-resolve it against its own parent and compound one factor per generation. Converting it to an
+        /// absolute length here, against the parent, makes children inherit the length instead - the same reason
+        /// <see cref="ResolveFontSizeValueComputation"/> exists. <c>rlh</c> always means the root's, so it can't
+        /// compound and stays lazy, as does a <c>calc()</c> containing <c>lh</c>.
+        /// </summary>
+        internal string ResolveLineHeightValueComputation(string value)
+        {
+            if (ParentBox is not { } parent) return value;
+
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
+            if (tokens is not [{ Type: TokenType.Dimension } dimension] || Length.GetUnit(dimension.Unit) != Length.Unit.Lh)
+                return value;
+
+            // ActualLineHeight is in the container's inflated layout space; the "pt" it is re-parsed as gets the
+            // PixelsPerPoint catch-up multiply back, so divide it out here (see NoEms).
+            var pixelsPerPoint = (HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var points = dimension.Value * parent.ActualLineHeight / pixelsPerPoint;
+            return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
         }
 
         /// <summary>

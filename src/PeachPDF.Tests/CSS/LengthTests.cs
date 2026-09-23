@@ -57,6 +57,14 @@ namespace PeachPDF.Tests.CSS
         [InlineData((int)Length.Unit.Cqb, false)]
         [InlineData((int)Length.Unit.Cqmin, false)]
         [InlineData((int)Length.Unit.Cqmax, false)]
+        [InlineData((int)Length.Unit.Cap, false)]
+        [InlineData((int)Length.Unit.Ic, false)]
+        [InlineData((int)Length.Unit.Lh, false)]
+        [InlineData((int)Length.Unit.Rex, false)]
+        [InlineData((int)Length.Unit.Rch, false)]
+        [InlineData((int)Length.Unit.Rcap, false)]
+        [InlineData((int)Length.Unit.Ric, false)]
+        [InlineData((int)Length.Unit.Rlh, false)]
         public void IsAbsolute_And_IsRelative_MatchUnitCategory(int unitValue, bool expectedAbsolute)
         {
             var length = new Length(1f, (Length.Unit)unitValue);
@@ -106,6 +114,14 @@ namespace PeachPDF.Tests.CSS
         [InlineData((int)Length.Unit.Cqb, "cqb")]
         [InlineData((int)Length.Unit.Cqmin, "cqmin")]
         [InlineData((int)Length.Unit.Cqmax, "cqmax")]
+        [InlineData((int)Length.Unit.Cap, "cap")]
+        [InlineData((int)Length.Unit.Ic, "ic")]
+        [InlineData((int)Length.Unit.Lh, "lh")]
+        [InlineData((int)Length.Unit.Rex, "rex")]
+        [InlineData((int)Length.Unit.Rch, "rch")]
+        [InlineData((int)Length.Unit.Rcap, "rcap")]
+        [InlineData((int)Length.Unit.Ric, "ric")]
+        [InlineData((int)Length.Unit.Rlh, "rlh")]
         [InlineData((int)Length.Unit.Percent, "%")]
         [InlineData((int)Length.Unit.None, "")]
         public void UnitString_MatchesUnitName(int unitValue, string expected)
@@ -156,6 +172,14 @@ namespace PeachPDF.Tests.CSS
         [InlineData("cqb", (int)Length.Unit.Cqb)]
         [InlineData("cqmin", (int)Length.Unit.Cqmin)]
         [InlineData("cqmax", (int)Length.Unit.Cqmax)]
+        [InlineData("cap", (int)Length.Unit.Cap)]
+        [InlineData("ic", (int)Length.Unit.Ic)]
+        [InlineData("lh", (int)Length.Unit.Lh)]
+        [InlineData("rex", (int)Length.Unit.Rex)]
+        [InlineData("rch", (int)Length.Unit.Rch)]
+        [InlineData("rcap", (int)Length.Unit.Rcap)]
+        [InlineData("ric", (int)Length.Unit.Ric)]
+        [InlineData("rlh", (int)Length.Unit.Rlh)]
         [InlineData("%", (int)Length.Unit.Percent)]
         [InlineData("bogus", (int)Length.Unit.None)]
         public void GetUnit_ParsesKnownSuffixes(string suffix, int expectedValue)
@@ -242,6 +266,67 @@ namespace PeachPDF.Tests.CSS
             var length = new Length(2f, Length.Unit.Rem);
 
             Assert.Equal(32d, length.ToPixels(0, 16, 0));
+        }
+
+        /// <summary>A font whose measurements are all distinct, so a unit reading the wrong one shows.</summary>
+        private sealed class FakeFonts : IFontMetricSource
+        {
+            public double GetRatio(FontMetric metric, bool rootElement) => (rootElement ? 10d : 1d) * metric switch
+            {
+                FontMetric.Ex => 0.4,
+                FontMetric.Ch => 0.6,
+                FontMetric.Cap => 0.7,
+                FontMetric.Ic => 1.1,
+                FontMetric.Lh => 1.5,
+                _ => 0,
+            };
+        }
+
+        [Theory]
+        [InlineData((int)Length.Unit.Ex, 20 * 0.4)]
+        [InlineData((int)Length.Unit.Ch, 20 * 0.6)]
+        [InlineData((int)Length.Unit.Cap, 20 * 0.7)]
+        [InlineData((int)Length.Unit.Ic, 20 * 1.1)]
+        [InlineData((int)Length.Unit.Lh, 20 * 1.5)]
+        // The root variants read the ROOT's measurement and scale by the ROOT's em (rem), not the element's.
+        [InlineData((int)Length.Unit.Rex, 100 * 4.0)]
+        [InlineData((int)Length.Unit.Rch, 100 * 6.0)]
+        [InlineData((int)Length.Unit.Rcap, 100 * 7.0)]
+        [InlineData((int)Length.Unit.Ric, 100 * 11.0)]
+        [InlineData((int)Length.Unit.Rlh, 100 * 15.0)]
+        public void ToPixels_MeasuredUnit_ScalesTheFontsRatioByTheRightEm(int unitValue, double expected)
+        {
+            var length = new Length(1f, (Length.Unit)unitValue);
+
+            Assert.Equal(expected, length.ToPixels(emFactor: 20, remFactor: 100, 0, fonts: new FakeFonts()), 6);
+        }
+
+        [Theory]
+        [InlineData((int)Length.Unit.Ex, 0.5)]
+        [InlineData((int)Length.Unit.Ch, 0.5)]
+        [InlineData((int)Length.Unit.Cap, 0.7)]
+        [InlineData((int)Length.Unit.Ic, 1.0)]
+        [InlineData((int)Length.Unit.Lh, 1.2)]
+        public void ToPixels_MeasuredUnitWithNoFont_TakesTheSpecFallback(int unitValue, double ratio)
+        {
+            var length = new Length(2f, (Length.Unit)unitValue);
+
+            Assert.Equal(2 * ratio * 20, length.ToPixels(20, 0, 0), 6);
+        }
+
+        [Theory]
+        [InlineData((int)Length.Unit.Em, false, true)]
+        [InlineData((int)Length.Unit.Ch, false, true)]
+        [InlineData((int)Length.Unit.Rlh, false, true)]
+        [InlineData((int)Length.Unit.Px, true, false)]
+        [InlineData((int)Length.Unit.Percent, false, false)]
+        [InlineData((int)Length.Unit.Cqw, false, false)]
+        public void FontRelative_MatchesTheUnitFamily_AndOnlyItAndAbsoluteNeedThePixelsPerPointCatchUp(int unitValue, bool absolute, bool fontRelative)
+        {
+            var length = new Length(1f, (Length.Unit)unitValue);
+
+            Assert.Equal(fontRelative, length.IsFontRelative);
+            Assert.Equal(absolute || fontRelative, length.NeedsPixelsPerPointCatchUp);
         }
 
         [Fact]

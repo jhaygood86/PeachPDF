@@ -57,6 +57,18 @@ namespace PeachPDF.Svg
         /// </summary>
         private double _rootFontSize = Html.Core.Utils.DefaultFontResolver.FontSize;
 
+        /// <summary>The root element's resolved font context, and the length basis built on it (what the
+        /// root-element units <c>rem</c>/<c>rex</c>/<c>rch</c>/... resolve against). Null until
+        /// <see cref="BuildDocument"/> has computed it, and while it is being computed - so the root's own
+        /// font resolution takes each unit's fallback instead of recursing into itself.</summary>
+        private FontContext? _rootFont;
+        private LengthBasis? _rootBasis;
+
+        /// <summary>The basis of the element currently being built: the font its geometry attributes'
+        /// <c>em</c>/<c>ex</c>/<c>ch</c>/... resolve against. Set (and restored) by <see cref="BuildElement"/>,
+        /// so every length parsed while building an element sees that element's own font.</summary>
+        private LengthBasis? _lengthBasis;
+
 
         /// <summary>
         /// The document's own viewport dimensions (from <c>viewBox</c>, falling back to
@@ -153,7 +165,9 @@ namespace PeachPDF.Svg
         /// <c>&lt;tref&gt;</c> resolve an actual font from it, so non-text elements only propagate the
         /// context, never realize a font. Relative <c>font-size</c> (<c>em</c>/<c>ex</c>/<c>%</c>) resolves
         /// against <see cref="Size"/> (the parent's used size); <c>rem</c> against the root's (see
-        /// <see cref="_rootFontSize"/>).
+        /// <see cref="_rootFontSize"/>). <c>SizeDeclared</c> records whether any element on the way down
+        /// actually declared a <c>font-size</c>: text always has a size (the UA default), but a geometry
+        /// <c>em</c> in an SVG that never mentions one keeps meaning the CSS initial 16px.
         /// </summary>
         private readonly record struct FontContext(
             string Family, double Size, bool Bold, bool Italic, int Stretch,
@@ -161,7 +175,8 @@ namespace PeachPDF.Svg
             LigatureFeatures Ligatures, FontVariantCapsFeature CapsRequested,
             NumericFeatures Numeric, EastAsianFeatures EastAsian,
             IReadOnlyList<(string Tag, int Value)> FeatureSettings, bool Kerning, string? Language = null,
-            FontVariantPositionFeature PositionRequested = FontVariantPositionFeature.None)
+            FontVariantPositionFeature PositionRequested = FontVariantPositionFeature.None,
+            bool SizeDeclared = false)
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
@@ -380,6 +395,17 @@ namespace PeachPDF.Svg
             // still wins over this when present.
             var rootFont = ComputeFontContext(root, FontContext.Default with { Language = root.DocumentLanguageFallback });
             _rootFontSize = rootFont.Size;
+            _rootFont = rootFont;
+            _rootBasis = new LengthBasis(this, rootFont);
+
+            // The root's own width/height were parsed before its font was known (the definitions above need the
+            // viewport); only a font-relative unit can differ now, so re-resolve just those against the root font.
+            if (root.GetAttribute("width") is { } rootWidth && rootWidth.AsSpan().ContainsAny("emxchlcp"))
+                _document.Width = SvgValueParsers.ParseLength(rootWidth, null, _rootBasis);
+            if (root.GetAttribute("height") is { } rootHeight && rootHeight.AsSpan().ContainsAny("emxchlcp"))
+                _document.Height = SvgValueParsers.ParseLength(rootHeight, null, _rootBasis);
+            _viewportWidth = _document.ViewBox?.Width ?? _document.Width;
+            _viewportHeight = _document.ViewBox?.Height ?? _document.Height;
 
             // Unlike gradients/markers/patterns/masks (built eagerly above, inside CollectDefinitions
             // itself, since each is "self-contained" enough not to need the full id registry first), a
@@ -406,7 +432,9 @@ namespace PeachPDF.Svg
             // icon idiom) seed inheritance for the whole tree, like its font-* above. The root has no
             // SvgElement of its own, so they are resolved onto a throwaway group purely for the returned
             // inherited values; its non-inherited properties (opacity/transform/clip-path/...) are unused.
+            _lengthBasis = _rootBasis;
             var rootPaint = ApplyCommon(new SvgGroupElement(), root, InheritedPaint.Initial);
+            _lengthBasis = null;
 
             foreach (var child in root.Children)
             {
@@ -470,6 +498,22 @@ namespace PeachPDF.Svg
         /// &lt;stop&gt;, or any unrecognized element).
         /// </summary>
         private SvgElement? BuildElement(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
+        {
+            // Every length parsed while this element is built (its geometry, its stroke-width, ...) resolves its
+            // font-relative units against THIS element's font; restored so a parent's later attributes see theirs.
+            var outer = _lengthBasis;
+            _lengthBasis = new LengthBasis(this, node, fontContext);
+            try
+            {
+                return BuildElementCore(node, inherited, fontContext);
+            }
+            finally
+            {
+                _lengthBasis = outer;
+            }
+        }
+
+        private SvgElement? BuildElementCore(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
         {
             return node.Name switch
             {
@@ -557,9 +601,9 @@ namespace PeachPDF.Svg
         {
             var circle = new SvgCircleElement
             {
-                Cx = SvgValueParsers.ParseLength(node.GetAttribute("cx"), _viewportWidth) ?? 0,
-                Cy = SvgValueParsers.ParseLength(node.GetAttribute("cy"), _viewportHeight) ?? 0,
-                R = SvgValueParsers.ParseLength(node.GetAttribute("r"), ViewportDiagonal) ?? 0,
+                Cx = SvgValueParsers.ParseLength(node.GetAttribute("cx"), _viewportWidth, _lengthBasis) ?? 0,
+                Cy = SvgValueParsers.ParseLength(node.GetAttribute("cy"), _viewportHeight, _lengthBasis) ?? 0,
+                R = SvgValueParsers.ParseLength(node.GetAttribute("r"), ViewportDiagonal, _lengthBasis) ?? 0,
             };
             ApplyCommon(circle, node, inherited);
             return circle;
@@ -581,20 +625,20 @@ namespace PeachPDF.Svg
 
         private SvgRectElement BuildRect(ISvgSourceNode node, InheritedPaint inherited)
         {
-            var width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth) ?? 0;
-            var height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight) ?? 0;
+            var width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth, _lengthBasis) ?? 0;
+            var height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight, _lengthBasis) ?? 0;
 
             // rx/ry each default to the other when only one is specified; both default to 0 (no
             // rounding) when neither is specified.
-            double? rx = SvgValueParsers.ParseLength(node.GetAttribute("rx"), _viewportWidth);
-            double? ry = SvgValueParsers.ParseLength(node.GetAttribute("ry"), _viewportHeight);
+            double? rx = SvgValueParsers.ParseLength(node.GetAttribute("rx"), _viewportWidth, _lengthBasis);
+            double? ry = SvgValueParsers.ParseLength(node.GetAttribute("ry"), _viewportHeight, _lengthBasis);
             rx ??= ry;
             ry ??= rx;
 
             var rect = new SvgRectElement
             {
-                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth) ?? 0,
-                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight) ?? 0,
+                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth, _lengthBasis) ?? 0,
+                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight, _lengthBasis) ?? 0,
                 Width = width,
                 Height = height,
                 Rx = Math.Clamp(rx ?? 0, 0, Math.Max(0, width / 2)),
@@ -608,10 +652,10 @@ namespace PeachPDF.Svg
         {
             var ellipse = new SvgEllipseElement
             {
-                Cx = SvgValueParsers.ParseLength(node.GetAttribute("cx"), _viewportWidth) ?? 0,
-                Cy = SvgValueParsers.ParseLength(node.GetAttribute("cy"), _viewportHeight) ?? 0,
-                Rx = SvgValueParsers.ParseLength(node.GetAttribute("rx"), _viewportWidth) ?? 0,
-                Ry = SvgValueParsers.ParseLength(node.GetAttribute("ry"), _viewportHeight) ?? 0,
+                Cx = SvgValueParsers.ParseLength(node.GetAttribute("cx"), _viewportWidth, _lengthBasis) ?? 0,
+                Cy = SvgValueParsers.ParseLength(node.GetAttribute("cy"), _viewportHeight, _lengthBasis) ?? 0,
+                Rx = SvgValueParsers.ParseLength(node.GetAttribute("rx"), _viewportWidth, _lengthBasis) ?? 0,
+                Ry = SvgValueParsers.ParseLength(node.GetAttribute("ry"), _viewportHeight, _lengthBasis) ?? 0,
             };
             ApplyCommon(ellipse, node, inherited);
             return ellipse;
@@ -621,10 +665,10 @@ namespace PeachPDF.Svg
         {
             var line = new SvgLineElement
             {
-                X1 = SvgValueParsers.ParseLength(node.GetAttribute("x1"), _viewportWidth) ?? 0,
-                Y1 = SvgValueParsers.ParseLength(node.GetAttribute("y1"), _viewportHeight) ?? 0,
-                X2 = SvgValueParsers.ParseLength(node.GetAttribute("x2"), _viewportWidth) ?? 0,
-                Y2 = SvgValueParsers.ParseLength(node.GetAttribute("y2"), _viewportHeight) ?? 0,
+                X1 = SvgValueParsers.ParseLength(node.GetAttribute("x1"), _viewportWidth, _lengthBasis) ?? 0,
+                Y1 = SvgValueParsers.ParseLength(node.GetAttribute("y1"), _viewportHeight, _lengthBasis) ?? 0,
+                X2 = SvgValueParsers.ParseLength(node.GetAttribute("x2"), _viewportWidth, _lengthBasis) ?? 0,
+                Y2 = SvgValueParsers.ParseLength(node.GetAttribute("y2"), _viewportHeight, _lengthBasis) ?? 0,
             };
             ApplyCommon(line, node, inherited);
             return line;
@@ -643,10 +687,10 @@ namespace PeachPDF.Svg
 
             var use = new SvgUseElement
             {
-                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth) ?? 0,
-                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight) ?? 0,
-                Width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth),
-                Height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight),
+                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth, _lengthBasis) ?? 0,
+                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight, _lengthBasis) ?? 0,
+                Width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth, _lengthBasis),
+                Height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight, _lengthBasis),
             };
             // The <use> element's own resolved paint becomes the inherited context for the
             // (otherwise unstyled) referenced content - e.g. <use fill="none" stroke="red"
@@ -718,10 +762,10 @@ namespace PeachPDF.Svg
 
             var nested = new SvgNestedSvgElement
             {
-                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth) ?? 0,
-                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight) ?? 0,
-                Width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth) ?? _viewportWidth ?? 0,
-                Height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight) ?? _viewportHeight ?? 0,
+                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth, _lengthBasis) ?? 0,
+                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight, _lengthBasis) ?? 0,
+                Width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth, _lengthBasis) ?? _viewportWidth ?? 0,
+                Height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight, _lengthBasis) ?? _viewportHeight ?? 0,
                 ViewBox = viewBox,
                 PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(node.GetAttribute("preserveAspectRatio")),
             };
@@ -758,10 +802,10 @@ namespace PeachPDF.Svg
         {
             var image = new SvgImageElement
             {
-                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth) ?? 0,
-                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight) ?? 0,
-                Width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth) ?? 0,
-                Height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight) ?? 0,
+                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth, _lengthBasis) ?? 0,
+                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight, _lengthBasis) ?? 0,
+                Width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth, _lengthBasis) ?? 0,
+                Height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight, _lengthBasis) ?? 0,
                 PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(node.GetAttribute("preserveAspectRatio")),
             };
             ApplyCommon(image, node, inherited);
@@ -892,7 +936,7 @@ namespace PeachPDF.Svg
             // The context every generated common-property setter needs beyond the raw value: color
             // resolution, the current viewport diagonal (for percentage lengths), and the url()-to-
             // pattern-vs-gradient reclassification ParsePaint can't do on its own (see ResolveUrlPaintKind).
-            var ctx = new SvgPropertyContext(_adapter, _contextColor, ViewportDiagonal, ResolveUrlPaintKind);
+            var ctx = new SvgPropertyContext(_adapter, _contextColor, ViewportDiagonal, ResolveUrlPaintKind, _lengthBasis);
 
             // Each property below keeps ApplyCommon's own null/"inherit"/invalid-value fallback
             // decision (which genuinely differs per property — see css-properties.json's svg.invalidBehavior
@@ -1110,7 +1154,8 @@ namespace PeachPDF.Svg
                 ? inherited.Family
                 : familyAttr.Split(',')[0].Trim().Trim('\'', '"');
 
-            var size = ResolveFontSize(ResolveStyledAttr(node, "font-size"), inherited.Size) ?? inherited.Size;
+            var declaredSize = ResolveFontSize(ResolveStyledAttr(node, "font-size"), inherited);
+            var size = declaredSize ?? inherited.Size;
 
             var weightAttr = ResolveStyledAttr(node, "font-weight");
             var bold = weightAttr switch
@@ -1135,8 +1180,9 @@ namespace PeachPDF.Svg
             // letter-spacing/word-spacing's em/ex resolve against THIS element's own font-size (the
             // just-computed `size` above), unlike font-size's own em/ex (which resolve against the
             // PARENT's) - see ResolveSpacingLength's own remarks.
-            var letterSpacing = ResolveSpacingLength(ResolveStyledAttr(node, "letter-spacing"), size, inherited.LetterSpacing);
-            var wordSpacing = ResolveSpacingLength(ResolveStyledAttr(node, "word-spacing"), size, inherited.WordSpacing);
+            var ownFont = inherited with { Family = family, Size = size, Bold = bold, Italic = italic, Stretch = stretch, SizeDeclared = inherited.SizeDeclared || declaredSize is not null };
+            var letterSpacing = ResolveSpacingLength(ResolveStyledAttr(node, "letter-spacing"), ownFont, inherited.LetterSpacing);
+            var wordSpacing = ResolveSpacingLength(ResolveStyledAttr(node, "word-spacing"), ownFont, inherited.WordSpacing);
 
             var textTransformAttr = ResolveStyledAttr(node, "text-transform");
             var textTransform = textTransformAttr is null || textTransformAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
@@ -1194,19 +1240,21 @@ namespace PeachPDF.Svg
 
             return new FontContext(family, size, bold, italic, stretch, letterSpacing, wordSpacing, textTransform,
                 ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language,
-                positionRequested);
+                positionRequested, ownFont.SizeDeclared);
         }
 
         /// <summary>
         /// Resolves a <c>letter-spacing</c>/<c>word-spacing</c> value: <c>normal</c> is 0, relative
-        /// units (<c>em</c>/<c>ex</c>/<c>rem</c>) resolve against <paramref name="fontSize"/> (the
+        /// units (<c>em</c>/<c>ex</c>/<c>rem</c>) resolve against <paramref name="ownFont"/>'s size (the
         /// current element's own resolved font-size - unlike <see cref="ResolveFontSize"/>'s em/ex,
         /// which resolve against the PARENT's, per each property's own CSS definition), absolute units
-        /// defer to <see cref="SvgValueParsers.ParseLength(string?, double?)"/>. Unset/<c>inherit</c>/
-        /// unparseable all fall back to <paramref name="inheritedValue"/>.
+        /// defer to <see cref="SvgValueParsers.ParseLength"/>. The measured units (<c>ex</c>/<c>ch</c>/<c>cap</c>/
+        /// <c>ic</c>/<c>lh</c> and the root-element variants) are read from <paramref name="ownFont"/>. Unset/
+        /// <c>inherit</c>/unparseable all fall back to <paramref name="inheritedValue"/>.
         /// </summary>
-        private double ResolveSpacingLength(string? value, double fontSize, double inheritedValue)
+        private double ResolveSpacingLength(string? value, FontContext ownFont, double inheritedValue)
         {
+            var fontSize = ownFont.Size;
             if (string.IsNullOrWhiteSpace(value))
                 return inheritedValue;
 
@@ -1223,24 +1271,89 @@ namespace PeachPDF.Svg
                 return Number(t[..^3]) is { } r ? r * _rootFontSize : inheritedValue;
             if (t.EndsWith("em", StringComparison.OrdinalIgnoreCase))
                 return Number(t[..^2]) is { } e ? e * fontSize : inheritedValue;
-            if (t.EndsWith("ex", StringComparison.OrdinalIgnoreCase))
-                return Number(t[..^2]) is { } x ? x * fontSize * 0.5 : inheritedValue;
+            if (SvgValueParsers.TryParseMeasuredUnit(t, out var measured, out var measuredUnit))
+                return SvgValueParsers.ResolveMeasuredUnit(measured, measuredUnit, new LengthBasis(this, ownFont));
 
-            return SvgValueParsers.ParseLength(t) ?? inheritedValue;
+            return SvgValueParsers.ParseLength(t, null, new LengthBasis(this, ownFont)) ?? inheritedValue;
+        }
+
+        /// <summary>
+        /// The font a length is resolved against (<see cref="ISvgLengthBasis"/>): a <see cref="FontContext"/> - the
+        /// element's own, computed on first use when built from a node - realized as an <see cref="RFont"/> only when a
+        /// measured unit actually asks for a measurement, then cached per metric. 1em is the context's size once any
+        /// element on the way down declared a <c>font-size</c>, else the CSS initial 16px.
+        /// </summary>
+        private sealed class LengthBasis : ISvgLengthBasis
+        {
+            private readonly SvgTreeBuilder _builder;
+            private readonly ISvgSourceNode? _node;
+            private readonly FontContext _inherited;
+            private FontContext? _font;
+            private double?[]? _ratios;
+
+            /// <summary>A basis for <paramref name="node"/>'s own font, layered over <paramref name="inherited"/>.</summary>
+            public LengthBasis(SvgTreeBuilder builder, ISvgSourceNode node, FontContext inherited)
+            {
+                _builder = builder;
+                _node = node;
+                _inherited = inherited;
+            }
+
+            /// <summary>A basis for an already-resolved font.</summary>
+            public LengthBasis(SvgTreeBuilder builder, FontContext font)
+            {
+                _builder = builder;
+                _inherited = font;
+                _font = font;
+            }
+
+            private FontContext Font => _font ??= _builder.ComputeFontContext(_node!, _inherited);
+
+            public double EmPx => Font.SizeDeclared ? Font.Size : SvgValueParsers.DefaultEmPx;
+
+            public double RootEmPx => _builder._rootFont is { SizeDeclared: true } root ? root.Size : SvgValueParsers.DefaultEmPx;
+
+            public double GetRatio(FontMetric metric, bool rootElement)
+            {
+                // Null while the root's own font is being computed, which is what keeps that from recursing.
+                if (rootElement)
+                    return _builder._rootBasis?.GetRatio(metric, false) ?? FontMetricRatios.Approximate(metric);
+
+                _ratios ??= new double?[5];
+                if (_ratios[(int)metric] is { } cached) return cached;
+
+                var font = _builder.RealizeFont(Font);
+                var pixelsPerPoint = (_builder._adapter as PeachPDF.Adapters.PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+                return (_ratios[(int)metric] = FontMetricMeasurement.Ratio(font, metric, pixelsPerPoint)).Value;
+            }
+        }
+
+        /// <summary>Realizes <paramref name="font"/> the way a text run does, so a measurement is taken from the very face the run would use.</summary>
+        private RFont? RealizeFont(FontContext font)
+        {
+            var fontStyle = RFontStyle.Regular;
+            if (font.Bold) fontStyle |= RFontStyle.Bold;
+            if (font.Italic) fontStyle |= RFontStyle.Italic;
+
+            var size = Math.Max(font.Size, 1);
+            return _adapter.GetFont(font.Family, size, fontStyle, stretch: font.Stretch)
+                   ?? _adapter.GetFont(Html.Core.Utils.DefaultFontResolver.DefaultFont, size, fontStyle, stretch: font.Stretch);
         }
 
         /// <summary>
         /// Resolves a <c>font-size</c> value in the same unit domain the rest of the text pipeline uses.
-        /// Relative units resolve against the real inherited size: <c>em</c>/<c>%</c>/<c>ex</c> against
-        /// <paramref name="parentSize"/> (the parent's used font-size), <c>rem</c> against the root's
+        /// Relative units resolve against the real inherited size: <c>em</c>/<c>%</c> against
+        /// <paramref name="parent"/>'s size (the parent's used font-size), the measured units (<c>ex</c>/<c>ch</c>/...) from its font,, <c>rem</c> against the root's
         /// (<see cref="_rootFontSize"/>). Absolute units (<c>pt</c>/<c>px</c>/<c>pc</c>/<c>in</c>/<c>cm</c>/
         /// <c>mm</c>), a unitless number, and <c>calc()</c> defer to <see cref="SvgValueParsers.ParseLength"/>.
         /// Returns null for a missing/unparseable value (caller falls back to the inherited size).
         /// </summary>
-        private double? ResolveFontSize(string? value, double parentSize)
+        private double? ResolveFontSize(string? value, FontContext parent)
         {
             if (string.IsNullOrWhiteSpace(value))
                 return null;
+
+            var parentSize = parent.Size;
 
             var t = value.Trim();
 
@@ -1254,13 +1367,16 @@ namespace PeachPDF.Svg
                 return Number(t[..^3]) is { } r ? r * _rootFontSize : null;
             if (t.EndsWith("em", StringComparison.OrdinalIgnoreCase))
                 return Number(t[..^2]) is { } e ? e * parentSize : null;
-            if (t.EndsWith("ex", StringComparison.OrdinalIgnoreCase))
-                return Number(t[..^2]) is { } x ? x * parentSize * 0.5 : null;
+            // ex/ch/cap/ic/lh (and the root-element variants): measured from the PARENT's font, since this element's
+            // own is what is being computed (CSS Values 4 §6.1.1); em is the parent's size, rem the root's.
+            if (SvgValueParsers.TryParseMeasuredUnit(t, out var measured, out var measuredUnit))
+                return SvgValueParsers.ResolveMeasuredUnit(measured, measuredUnit,
+                    new LengthBasis(this, parent with { SizeDeclared = true }));
             if (t.EndsWith('%'))
                 return Number(t[..^1]) is { } p ? p / 100.0 * parentSize : null;
 
             // Absolute units / unitless / calc(). A '%' inside a calc resolves against the parent size.
-            return SvgValueParsers.ParseLength(t, parentSize);
+            return SvgValueParsers.ParseLength(t, parentSize, new LengthBasis(this, parent with { SizeDeclared = true }));
         }
 
         /// <summary>
@@ -1273,12 +1389,28 @@ namespace PeachPDF.Svg
         /// </summary>
         private SvgTextElement BuildTextRun(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext, TextWhitespaceState state)
         {
+            // BuildElement scopes a top-level <text>; a nested run (<tspan>/<tref>/<textPath>) reaches here by
+            // recursion instead, and its x/y/dx/dy and stroke lengths are relative to its own font-size.
+            var outer = _lengthBasis;
+            _lengthBasis = new LengthBasis(this, node, fontContext);
+            try
+            {
+                return BuildTextRunCore(node, inherited, fontContext, state);
+            }
+            finally
+            {
+                _lengthBasis = outer;
+            }
+        }
+
+        private SvgTextElement BuildTextRunCore(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext, TextWhitespaceState state)
+        {
             var xAttr = node.GetAttribute("x");
             var yAttr = node.GetAttribute("y");
-            var xList = SvgValueParsers.ParseLengthList(xAttr, _viewportWidth);
-            var yList = SvgValueParsers.ParseLengthList(yAttr, _viewportHeight);
-            var dxList = SvgValueParsers.ParseLengthList(node.GetAttribute("dx"), _viewportWidth);
-            var dyList = SvgValueParsers.ParseLengthList(node.GetAttribute("dy"), _viewportHeight);
+            var xList = SvgValueParsers.ParseLengthList(xAttr, _viewportWidth, _lengthBasis);
+            var yList = SvgValueParsers.ParseLengthList(yAttr, _viewportHeight, _lengthBasis);
+            var dxList = SvgValueParsers.ParseLengthList(node.GetAttribute("dx"), _viewportWidth, _lengthBasis);
+            var dyList = SvgValueParsers.ParseLengthList(node.GetAttribute("dy"), _viewportHeight, _lengthBasis);
             var rotateList = SvgValueParsers.ParseNumberList(node.GetAttribute("rotate"));
 
             var run = new SvgTextElement
@@ -1469,16 +1601,16 @@ namespace PeachPDF.Svg
         /// the path's total length. A percentage is stored as its 0..1 fraction plus the percent flag,
         /// so the render side can resolve it against the (build-time-unknown) total path length.
         /// </summary>
-        private static (double Offset, bool IsPercent) ParseStartOffset(string? raw)
+        private (double Offset, bool IsPercent) ParseStartOffset(string? raw)
         {
             raw = raw?.Trim();
             if (string.IsNullOrEmpty(raw))
                 return (0, false);
 
             if (raw.EndsWith('%'))
-                return ((SvgValueParsers.ParseLength(raw[..^1]) ?? 0) / 100.0, true);
+                return ((SvgValueParsers.ParseLength(raw[..^1], null, _lengthBasis) ?? 0) / 100.0, true);
 
-            return (SvgValueParsers.ParseLength(raw) ?? 0, false);
+            return (SvgValueParsers.ParseLength(raw, null, _lengthBasis) ?? 0, false);
         }
 
         /// <summary>
@@ -1550,10 +1682,10 @@ namespace PeachPDF.Svg
 
             var marker = new SvgMarkerElement
             {
-                RefX = SvgValueParsers.ParseLength(node.GetAttribute("refX")) ?? 0,
-                RefY = SvgValueParsers.ParseLength(node.GetAttribute("refY")) ?? 0,
-                MarkerWidth = SvgValueParsers.ParseLength(node.GetAttribute("markerWidth")) ?? 3,
-                MarkerHeight = SvgValueParsers.ParseLength(node.GetAttribute("markerHeight")) ?? 3,
+                RefX = SvgValueParsers.ParseLength(node.GetAttribute("refX"), null, _lengthBasis) ?? 0,
+                RefY = SvgValueParsers.ParseLength(node.GetAttribute("refY"), null, _lengthBasis) ?? 0,
+                MarkerWidth = SvgValueParsers.ParseLength(node.GetAttribute("markerWidth"), null, _lengthBasis) ?? 3,
+                MarkerHeight = SvgValueParsers.ParseLength(node.GetAttribute("markerHeight"), null, _lengthBasis) ?? 3,
                 ViewBox = SvgValueParsers.ParseViewBox(node.GetAttribute("viewBox")),
                 PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(node.GetAttribute("preserveAspectRatio")),
                 MarkerUnitsStrokeWidth = !string.Equals(node.GetAttribute("markerUnits"), "userSpaceOnUse", StringComparison.OrdinalIgnoreCase),

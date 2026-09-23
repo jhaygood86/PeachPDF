@@ -6,7 +6,7 @@ namespace PeachPDF.Html.Core.Utils
 {
     /// <summary>
     /// Resolves a CSS font-size value (absolute keyword, <c>smaller</c>/<c>larger</c>, or any length unit
-    /// <see cref="CssValueParser.ParseLength(string, double, double, double, string?, bool, double?, double?, double?, double?, double?, double?, double?, double?, double)"/>
+    /// <see cref="CssValueParser.ParseLength(string, double, double, double, string?, bool, double?, double?, double?, double?, double?, double?, double?, double?, double, IFontMetricSource?)"/>
     /// understands) to a numeric size. Extracted from <c>CssBox.ActualFont</c>'s original inline
     /// switch so in-flow content and <c>MarginBoxRenderer.BuildFont</c> (@page margin boxes, which have no
     /// real inheritance chain and pass <see cref="Utils.DefaultFontResolver.FontSize"/> for both
@@ -45,11 +45,15 @@ namespace PeachPDF.Html.Core.Utils
         /// the same name.</param>
         /// <param name="viewportBlockSizePt">See <see cref="PeachPDF.CSS.Length.ToPixels"/>'s parameter of
         /// the same name.</param>
+        /// <param name="fonts">See <see cref="PeachPDF.CSS.Length.ToPixels"/>'s parameter of the same name -
+        /// scoped, for a <c>font-size</c>, to the PARENT's font for <c>ex</c>/<c>ch</c>/<c>cap</c>/<c>ic</c>/<c>lh</c>
+        /// (CSS Values 4 §6.1.1). <c>null</c> takes each unit's spec fallback.</param>
         internal static double Resolve(string fontSizeValue, double parentSize, double remSize,
             double? containerInlineSizePt = null, double? containerBlockSizePt = null,
             double? viewportWidthPt = null, double? viewportHeightPt = null,
             double? containerWidthPt = null, double? containerHeightPt = null,
-            double? viewportInlineSizePt = null, double? viewportBlockSizePt = null)
+            double? viewportInlineSizePt = null, double? viewportBlockSizePt = null,
+            IFontMetricSource? fonts = null)
         {
             var fsize = fontSizeValue switch
             {
@@ -64,7 +68,7 @@ namespace PeachPDF.Html.Core.Utils
                 Keywords.Larger => parentSize + 2,
                 _ => CssValueParser.ParseLength(fontSizeValue, parentSize, parentSize, remSize, null, true,
                     containerInlineSizePt, containerBlockSizePt, viewportWidthPt, viewportHeightPt,
-                    containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt)
+                    containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt, fonts: fonts)
             };
 
             // A legitimately-parsed font-size of 0 (or any other small value) must be honored, not
@@ -95,11 +99,13 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="containerHeightPt">See the string overload's parameter of the same name.</param>
         /// <param name="viewportInlineSizePt">See the string overload's parameter of the same name.</param>
         /// <param name="viewportBlockSizePt">See the string overload's parameter of the same name.</param>
+        /// <param name="fonts">See the string overload's parameter of the same name.</param>
         internal static double Resolve(CssKeywordOrValue<FontSizeKeyword, LengthOrCalc> fontSize, double parentSize, double remSize,
             double? containerInlineSizePt = null, double? containerBlockSizePt = null,
             double? viewportWidthPt = null, double? viewportHeightPt = null,
             double? containerWidthPt = null, double? containerHeightPt = null,
-            double? viewportInlineSizePt = null, double? viewportBlockSizePt = null)
+            double? viewportInlineSizePt = null, double? viewportBlockSizePt = null,
+            IFontMetricSource? fonts = null)
         {
             double fsize;
             if (fontSize.Value is { } value)
@@ -107,10 +113,10 @@ namespace PeachPDF.Html.Core.Utils
                 fsize = value.IsCalc
                     ? CssValueParser.ParseLength(value.CalcText!, parentSize, parentSize, remSize, null, true,
                         containerInlineSizePt, containerBlockSizePt, viewportWidthPt, viewportHeightPt,
-                        containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt)
+                        containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt, fonts: fonts)
                     : value.Length!.Value.ToPixels(parentSize, remSize, parentSize, containerInlineSizePt, containerBlockSizePt,
                         viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt,
-                        viewportInlineSizePt, viewportBlockSizePt);
+                        viewportInlineSizePt, viewportBlockSizePt, fonts);
             }
             else
             {

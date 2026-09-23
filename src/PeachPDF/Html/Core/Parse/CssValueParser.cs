@@ -177,7 +177,7 @@ namespace PeachPDF.Html.Core.Parse
         /// callers that do their own lightweight text scanning of a length string (like
         /// <see cref="Dom.CssBox"/>'s FontSize setter, which regex-searches for a bare "Nem"
         /// substring to eagerly convert em to points) know to leave a calc() expression alone rather than
-        /// mangling it, deferring to <see cref="ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double)"/>'s
+        /// mangling it, deferring to <see cref="ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double, IFontMetricSource?)"/>'s
         /// real evaluation instead.
         /// </summary>
         public static bool IsCalcFunction(string value)
@@ -223,7 +223,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// Recognizes a length string that is a single calc-family (calc/min/max/clamp) function, e.g. for
         /// the syntactic gate in <see cref="IsValidLength"/> and the evaluation branch in
-        /// <see cref="ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double)"/>. Real
+        /// <see cref="ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double, IFontMetricSource?)"/>. Real
         /// grammar/type validation already happened in Layer A's CalcValueConverter for any value that
         /// didn't arrive via the var() substitution bypass; this is a syntactic recognizer only.
         /// </summary>
@@ -322,7 +322,8 @@ namespace PeachPDF.Html.Core.Parse
             // are in play - those bases are unaffected - so it's safe to always apply.
             var result = length.ToPixels(box.GetEmHeight() * pixelsPerPoint, box.GetRemHeight() * pixelsPerPoint, hundredPercent,
                 containerInlinePt, containerBlockPt,
-                viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt);
+                viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt,
+                box.DerivedStyle);
 
             // An absolute length (px/pt/in/cm/mm/pc) resolves via Length.ToPixels as if the internal
             // layout unit were a true PDF point - correct only when PixelsPerPoint is 1 (PixelsPerInch
@@ -469,7 +470,7 @@ namespace PeachPDF.Html.Core.Parse
             var result = ParseLength(length, hundredPercent, box.GetEmHeight() * pixelsPerPoint, box.GetRemHeight() * pixelsPerPoint, null, false,
                 containerInlinePt, containerBlockPt, viewportWidthPt, viewportHeightPt,
                 containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt, pixelsPerPoint,
-                out var needsPixelsPerPointCatchUp);
+                out var needsPixelsPerPointCatchUp, box.DerivedStyle);
 
             if (IsCalcFunction(length))
             {
@@ -524,17 +525,20 @@ namespace PeachPDF.Html.Core.Parse
         /// <c>PixelsPerPoint</c>-inflated internal layout space (issue #829). <c>1.0</c> (a no-op) for
         /// every call site with no real box/adapter in scope (font-size resolution, <c>@page</c> margins),
         /// which deliberately want the raw, unscaled true-point result.</param>
+        /// <param name="fonts">See <see cref="Length.ToPixels"/>'s <c>fonts</c> parameter. <c>null</c> for
+        /// every call site with no font in scope (media queries, <c>@page</c> geometry), which takes each
+        /// font-relative unit's spec fallback.</param>
         /// <returns>the parsed length value with adjustments</returns>
         public static double ParseLength(string length, double hundredPercent, double emFactor, double remFactor, string? defaultUnit, bool returnPoints,
             double? containerInlineSizePt = null, double? containerBlockSizePt = null,
             double? viewportWidthPt = null, double? viewportHeightPt = null,
             double? containerWidthPt = null, double? containerHeightPt = null,
             double? viewportInlineSizePt = null, double? viewportBlockSizePt = null,
-            double pixelsPerPoint = 1.0)
+            double pixelsPerPoint = 1.0, IFontMetricSource? fonts = null)
             => ParseLength(length, hundredPercent, emFactor, remFactor, defaultUnit, returnPoints,
                 containerInlineSizePt, containerBlockSizePt, viewportWidthPt, viewportHeightPt,
                 containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt, pixelsPerPoint,
-                out _);
+                out _, fonts);
 
         /// <summary>
         /// Same as the public overload above, plus <paramref name="needsPixelsPerPointCatchUp"/>: whether
@@ -553,7 +557,7 @@ namespace PeachPDF.Html.Core.Parse
             double? containerWidthPt, double? containerHeightPt,
             double? viewportInlineSizePt, double? viewportBlockSizePt,
             double pixelsPerPoint,
-            out bool? needsPixelsPerPointCatchUp)
+            out bool? needsPixelsPerPointCatchUp, IFontMetricSource? fonts)
         {
             //Return zero if no length specified, zero specified
             if (string.IsNullOrEmpty(length) || length == "0")
@@ -571,7 +575,7 @@ namespace PeachPDF.Html.Core.Parse
                 var node = CalcParser.Parse(calcFunction!.Value);
                 var context = new CalcContext(hundredPercent, emFactor, remFactor, returnPoints, containerInlineSizePt, containerBlockSizePt,
                     viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt,
-                    pixelsPerPoint);
+                    pixelsPerPoint, fonts);
                 var pixels = node is not null ? CalcEvaluator.Evaluate(node, context) : null;
 
                 needsPixelsPerPointCatchUp = null;
@@ -598,7 +602,8 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             return new Length((float)number!.Value, lengthUnit).ToPixels(emFactor, remFactor, hundredPercent, containerInlineSizePt, containerBlockSizePt,
-                viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt);
+                viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt,
+                fonts);
         }
 
         /// <summary>
@@ -1069,7 +1074,7 @@ namespace PeachPDF.Html.Core.Parse
                 if (args[index] is [{ Type: TokenType.Function } fn] && CalcParser.IsCalcFamily(fn.Data))
                 {
                     var node = CalcParser.Parse(fn);
-                    var context = new CalcContext(1, box.GetEmHeight(), box.GetRemHeight(), false);
+                    var context = new CalcContext(1, box.GetEmHeight(), box.GetRemHeight(), false, fonts: box.DerivedStyle);
                     var value = node is not null ? CalcEvaluator.Evaluate(node, context) : null;
                     return (float?)value ?? 0f;
                 }

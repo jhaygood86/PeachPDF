@@ -55,12 +55,22 @@ namespace PeachPDF.MathML
 
         static readonly (string Suffix, MathLengthUnit Unit)[] UnitSuffixes =
         [
-            // "%" and "pc" must be checked before "px"/"pt"/"p"-prefixed ones only insofar as none of
-            // these suffixes are prefixes of one another except through this ordering being irrelevant -
-            // every suffix here is checked independently via EndsWith, so order doesn't affect matching.
+            // Order doesn't affect matching: a suffix only wins when what precedes it parses as a number, and
+            // every suffix that is itself the tail of another ("em" of "rem", "ex" of "rex", "ch" of "rch",
+            // "ic" of "ric", ...) leaves a trailing "r" behind that no number can end with.
             ("%", MathLengthUnit.Percent),
             ("em", MathLengthUnit.Em),
             ("ex", MathLengthUnit.Ex),
+            ("ch", MathLengthUnit.Ch),
+            ("cap", MathLengthUnit.Cap),
+            ("ic", MathLengthUnit.Ic),
+            ("lh", MathLengthUnit.Lh),
+            ("rem", MathLengthUnit.Rem),
+            ("rex", MathLengthUnit.Rex),
+            ("rch", MathLengthUnit.Rch),
+            ("rcap", MathLengthUnit.Rcap),
+            ("ric", MathLengthUnit.Ric),
+            ("rlh", MathLengthUnit.Rlh),
             ("px", MathLengthUnit.Px),
             ("in", MathLengthUnit.In),
             ("cm", MathLengthUnit.Cm),

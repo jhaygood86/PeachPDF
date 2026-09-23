@@ -15,6 +15,16 @@ namespace PeachPDF.Tests.MathML
         [InlineData("10mm", 10, "Mm")]
         [InlineData("2pc", 2, "Pc")]
         [InlineData("0.5ex", 0.5, "Ex")]
+        [InlineData("2ch", 2, "Ch")]
+        [InlineData("2cap", 2, "Cap")]
+        [InlineData("2ic", 2, "Ic")]
+        [InlineData("1.5lh", 1.5, "Lh")]
+        [InlineData("2rem", 2, "Rem")]
+        [InlineData("2rex", 2, "Rex")]
+        [InlineData("2rch", 2, "Rch")]
+        [InlineData("2rcap", 2, "Rcap")]
+        [InlineData("2ric", 2, "Ric")]
+        [InlineData("2rlh", 2, "Rlh")]
         public void TryParseLength_ParsesNumberAndUnit(string value, double expectedValue, string expectedUnitName)
         {
             var length = MathAttributeParser.TryParseLength(value);

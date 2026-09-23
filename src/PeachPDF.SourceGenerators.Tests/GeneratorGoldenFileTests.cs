@@ -600,8 +600,8 @@ namespace PeachPDF.SourceGenerators.Tests
             var generated = result.Results.Single().GeneratedSources
                 .Single(s => s.HintName == "SvgPropertyRegistry.g.cs").SourceText.ToString();
 
-            Assert.Contains("SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal) is not null", generated);
-            Assert.Contains("var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal);", generated);
+            Assert.Contains("SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal, ctx.LengthBasis) is not null", generated);
+            Assert.Contains("var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal, ctx.LengthBasis);", generated);
             Assert.Contains("element.StrokeWidth = parsed.Value;", generated);
         }
 
@@ -622,8 +622,8 @@ namespace PeachPDF.SourceGenerators.Tests
             var generated = result.Results.Single().GeneratedSources
                 .Single(s => s.HintName == "SvgPropertyRegistry.g.cs").SourceText.ToString();
 
-            Assert.Contains("SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal) is not null", generated);
-            Assert.Contains("var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal);", generated);
+            Assert.Contains("SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal, ctx.LengthBasis) is not null", generated);
+            Assert.Contains("var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal, ctx.LengthBasis);", generated);
             Assert.Contains("element.StrokeDashArray = parsed;", generated);
         }
 

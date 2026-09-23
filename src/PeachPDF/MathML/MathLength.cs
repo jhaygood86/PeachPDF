@@ -16,6 +16,19 @@ namespace PeachPDF.MathML
         Pc,
         Percent,
         Mu,
+        // MathML Core lengths are CSS <length-percentage>s, so the other font-relative units of CSS Values and
+        // Units 4 §6.1 are valid too: measured from the math font (ch/cap/ic/lh) and, for the r* variants and
+        // rem, from the root element's font.
+        Ch,
+        Cap,
+        Ic,
+        Lh,
+        Rem,
+        Rex,
+        Rch,
+        Rcap,
+        Ric,
+        Rlh,
     }
 
     /// <summary>A resolved MathML length: a numeric value plus <see cref="MathLengthUnit"/>. Resolving

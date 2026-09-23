@@ -29,5 +29,12 @@ namespace PeachPDF.MathML
         /// measurement (fraction bars, radicals, stretchy variants) anchored to one MATH table.
         /// </summary>
         public required System.Func<double, RFont> ResolveFont { get; init; }
+
+        /// <summary>The root element's font, for the root-relative units (<c>rem</c>/<c>rex</c>/<c>rch</c>/...).
+        /// Null when the formula was not built from a live HTML box, which takes each unit's spec fallback.</summary>
+        public PeachPDF.CSS.IFontMetricSource? RootFonts { get; set; }
+
+        /// <summary>The root element's font-size in points (what 1rem is), or null to use the formula's own size.</summary>
+        public double? RootFontSizePt { get; set; }
     }
 }
