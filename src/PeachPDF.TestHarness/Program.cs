@@ -10690,6 +10690,59 @@ await SaveShowcaseAsync("font_variant_caps", "Typography & Text", "Font Variant:
     "where it doesn't.",
     fontVariantCapsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// font-variant-alternates + @font-feature-values (CSS Fonts Module 4 §6.8): named aliases for a
+// font's numbered stylistic-set GSUB features. Uses a subset of Recursive (Mono Casual Static
+// Regular), a real display font whose ss01/ss02 features are genuine GSUB Single Substitution data
+// (a -> a.simple, g -> g.simple - confirmed via direct byte inspection), not a synthetic
+// conformance font.
+var recursiveB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "RecursiveSubset.ttf")));
+var fontVariantAlternatesHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'Recursive'; src: url('data:font/truetype;base64,{recursiveB64}') format('truetype'); }}" +
+    "@font-feature-values Recursive { @styleset { simple-a: 1; simple-g: 2; } }" +
+    "body { font-family: Arial, sans-serif; margin: 0; color: #222 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.2em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { font-size: 9pt; margin: 0 0 0.8em; color: #555 }" +
+    "code.rule { display: block; font-size: 8pt; background: #f4f4f4; border: 1px solid #ddd; " +
+    "border-radius: 3px; padding: 8px 10px; margin: 0 0 1em; white-space: pre-wrap }" +
+    "table.alt { border-collapse: collapse; width: 100%; font-size: 24pt; font-family: 'Recursive' }" +
+    "table.alt th { font-size: 8pt; font-family: Arial, sans-serif; color: #666; text-align: left; padding: 4px 8px }" +
+    "table.alt td { padding: 6px 8px; border-top: 1px solid #ddd }" +
+    "table.alt td.label { font-size: 8pt; font-family: Arial, sans-serif; color: #666; vertical-align: middle }" +
+    "</style></head><body>" +
+    "<h1>CSS <code>font-variant-alternates</code> &amp; <code>@font-feature-values</code></h1>" +
+    "<p class=\"intro\"><code>@font-feature-values</code> gives a font's numbered stylistic-set " +
+    "features (<code>ss01</code>–<code>ss20</code>, <code>cv01</code>–<code>cv99</code>, and the " +
+    "single-feature <code>salt</code>, <code>swsh</code>, <code>ornm</code> and <code>nalt</code>) a " +
+    "readable name per font family, so <code>font-variant-alternates</code> can select them by name " +
+    "instead of a raw index. Recursive's <code>ss01</code> swaps a double-story lowercase \"a\" for a " +
+    "simplified single-story form, and its <code>ss02</code> does the same for \"g\" - both real GSUB " +
+    "Single Substitution data, confirmed by direct byte inspection, not an approximation.</p>" +
+    "<code class=\"rule\">@font-feature-values Recursive {\n" +
+    "  @styleset { simple-a: 1; simple-g: 2; }\n" +
+    "}</code>" +
+    "<h2>styleset(): named aliases for ss01/ss02</h2>" +
+    "<p class=\"intro\">Same text, same font - only <code>font-variant-alternates</code> differs:</p>" +
+    "<table class=\"alt\">" +
+    "<tr><th>font-variant-alternates</th><th>Sample</th></tr>" +
+    "<tr><td class=\"label\">normal (default forms)</td><td>agog gala</td></tr>" +
+    "<tr><td class=\"label\">styleset(simple-a)</td>" +
+    "<td style=\"font-variant-alternates: styleset(simple-a)\">agog gala</td></tr>" +
+    "<tr><td class=\"label\">styleset(simple-g)</td>" +
+    "<td style=\"font-variant-alternates: styleset(simple-g)\">agog gala</td></tr>" +
+    "<tr><td class=\"label\">styleset(simple-a, simple-g)</td>" +
+    "<td style=\"font-variant-alternates: styleset(simple-a, simple-g)\">agog gala</td></tr>" +
+    "</table>" +
+    "</body></html>";
+await SaveShowcaseAsync("font_variant_alternates", "Typography & Text", "font-variant-alternates & @font-feature-values",
+    "Named aliases for a font's numbered stylistic-set GSUB features: @font-feature-values maps a " +
+    "readable name to a feature index per font family, and font-variant-alternates's styleset()/" +
+    "character-variant()/swash()/ornaments()/annotation()/stylistic() functions select them by name. " +
+    "Rendered against a subset of Recursive, a real font with genuine ss01/ss02 stylistic-set data.",
+    fontVariantAlternatesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // Bidirectional text: the `dir` global attribute (including `auto`), `<bdo>`/`<bdi>`, CSS
 // direction/unicode-bidi, and a real UAX#9 Unicode Bidi Algorithm - not the old whole-word-mirror
 // approximation. Real Hebrew (strong-R) content, not placeholder boxes, so per-character

@@ -1,0 +1,14 @@
+RecursiveSubset.ttf is a subset (basic Latin letters, digits, and common punctuation) of the
+"Mono Casual Static" Regular instance of "Recursive", Copyright 2020 The Recursive Project
+Authors (https://github.com/arrowtype/recursive), licensed under the SIL Open Font License,
+Version 1.1 (OFL-1.1).
+
+The font is bundled solely as a test/showcase asset to demonstrate and verify the CSS
+`font-variant-alternates` property (specifically `styleset()`) and the `@font-feature-values`
+at-rule against a real font with genuine numbered stylistic-set (`ssNN`) GSUB data - Recursive's
+`ss01` (a -> a.simple, a single-story lowercase "a") and `ss02` (g -> g.simple, a single-story
+lowercase "g") are real GSUB Single Substitution lookups, not a synthetic conformance font. The
+subset was produced with fonttools, keeping every GSUB layout feature and glyph names unchanged.
+See generate_recursive_subset.py.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/

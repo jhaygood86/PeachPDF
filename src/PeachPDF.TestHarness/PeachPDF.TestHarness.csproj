@@ -44,6 +44,9 @@
     <None Include="..\..\assets\fonts\StixTwoMath-Regular.ttf" Link="StixTwoMath-Regular.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\RecursiveSubset.ttf" Link="RecursiveSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\..\assets\fonts\NotoEmoji-Regular.ttf" Link="NotoEmoji-Regular.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

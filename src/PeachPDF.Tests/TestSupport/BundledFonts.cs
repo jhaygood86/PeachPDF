@@ -205,6 +205,17 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Math => Path.Combine(AppContext.BaseDirectory, "StixTwoMath-Regular.ttf");
 
         /// <summary>
+        /// A subset of ArrowType's "Recursive" (see RecursiveSubset.LICENSE.txt), specifically its
+        /// "Mono Casual Static" Regular instance: a real display font with genuine numbered
+        /// stylistic-set GSUB data - <c>ss01</c> (a -&gt; a.simple, a real GSUB <b>Single Substitution</b>,
+        /// Lookup Type 1) and <c>ss02</c> (g -&gt; g.simple). Used to test and showcase the CSS
+        /// <c>font-variant-alternates</c> property's <c>styleset()</c> function and the
+        /// <c>@font-feature-values</c> at-rule end to end against a real font, rather than only against
+        /// <see cref="GsubTestLookup3"/>'s synthetic PASS/FAIL conformance data.
+        /// </summary>
+        internal static string Recursive => Path.Combine(AppContext.BaseDirectory, "RecursiveSubset.ttf");
+
+        /// <summary>
         /// A real font file path: the first one the host OS reports, or the bundled TTF
         /// if the host reports none.
         /// </summary>

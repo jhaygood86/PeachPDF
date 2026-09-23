@@ -22,6 +22,7 @@ namespace PeachPDF.CSS
         private static readonly Func<string, Property> CreateFontProperty = PropertyFactory.Instance.CreateFont;
         private static readonly Func<string, Property> CreatePropertyDescriptorProperty = PropertyFactory.Instance.CreatePropertyDescriptor;
         private static readonly Func<string, Property> CreateFontPaletteDescriptorProperty = PropertyFactory.Instance.CreateFontPaletteDescriptor;
+        private static readonly Func<string, Property> CreateFontFeatureValueDescriptorProperty = PropertyFactory.Instance.CreateFontFeatureValueDescriptor;
 
         // The source index (raw, into _lexer.Source) immediately before the most recently read token.
         // Captured by NextToken so a CSS-Nesting classification look-ahead can rewind to a construct's
@@ -61,6 +62,8 @@ namespace PeachPDF.CSS
             if (token.Data.Is(RuleNames.Property)) return CreateProperty(token);
 
             if (token.Data.Is(RuleNames.FontPaletteValues)) return CreateFontPaletteValues(token);
+
+            if (token.Data.Is(RuleNames.FontFeatureValues)) return CreateFontFeatureValues(token);
 
             if (token.Data.Is(RuleNames.Layer)) return CreateLayer(token);
 
@@ -214,6 +217,141 @@ namespace PeachPDF.CSS
 
             _nodes.Pop();
             return SkipDeclarations(token);
+        }
+
+        public Rule CreateFontFeatureValues(Token current)
+        {
+            var rule = new FontFeatureValuesRule(_parser);
+            var start = current.Position;
+            var token = NextToken();
+            _nodes.Push(rule);
+            ParseComments(ref token);
+            rule.FamilyList = GetRawPreludeText(ref token);
+            ParseComments(ref token);
+
+            if (token.Type == TokenType.CurlyBracketOpen)
+            {
+                var end = FillFontFeatureValueBlocks(rule);
+                rule.StylesheetText = CreateView(start, end);
+                _nodes.Pop();
+                return rule;
+            }
+
+            _nodes.Pop();
+            return SkipDeclarations(token);
+        }
+
+        // The @font-feature-values prelude is a <family-name># list (comma-separated font names, each
+        // possibly multi-word/quoted) rather than the single ident GetRuleName reads for
+        // @font-palette-values/@keyframes - captured here as raw source text and split/normalized later
+        // at Layer B (RegisteredFontFeatureValues), the same division of labor
+        // RegisteredFontPalette.ParseOverrideColors already uses for its own raw descriptor text.
+        private string GetRawPreludeText(ref Token token)
+        {
+            var value = Pool.NewValueBuilder();
+
+            while (token.IsNot(TokenType.CurlyBracketOpen, TokenType.Semicolon, TokenType.EndOfFile))
+            {
+                value.Apply(token);
+                token = NextToken();
+            }
+
+            return value.ToPool().Text.Trim();
+        }
+
+        // Loops consuming one nested @styleset/@character-variant/@swash/@ornaments/@annotation/
+        // @stylistic block per iteration, patterned on FillKeyframeRules - except nested blocks here are
+        // identified by at-rule name, not by a percentage/from/to selector, and an unrecognized at-rule
+        // (or any other stray content) is skipped defensively rather than collected, since CSS Fonts 4
+        // has no "unknown descriptor" fallback the way @font-face/@page do.
+        private TextPosition FillFontFeatureValueBlocks(FontFeatureValuesRule parentRule)
+        {
+            var token = NextToken();
+            ParseComments(ref token);
+
+            while (token.IsNot(TokenType.EndOfFile, TokenType.CurlyBracketClose))
+            {
+                if (token.Type == TokenType.AtKeyword && FontFeatureValueSetRule.TryGetBlockKind(token.Data.ToString(), out _))
+                {
+                    var rule = CreateFontFeatureValueSet(ref token);
+                    if (rule != null) parentRule.Rules.Add(rule);
+                }
+                else
+                {
+                    SkipFontFeatureValueStrayContent(ref token);
+                }
+
+                ParseComments(ref token);
+            }
+
+            return token.Position;
+        }
+
+        // Skips one span of stray content (an unrecognized nested at-rule, a bare declaration, etc.)
+        // inside @font-feature-values's block, tracking its own brace depth from zero rather than reusing
+        // MoveToRuleEnd - that method's "stop at the first scopes<=0 terminator" rule can't distinguish
+        // stray content that ends with its own '}'/';' (safe to consume and keep scanning for more
+        // blocks) from stray content with no terminator of its own that runs directly into
+        // @font-feature-values's own closing '}' (must NOT be consumed - FillFontFeatureValueBlocks's own
+        // loop condition needs to see it to stop correctly). Reusing MoveToRuleEnd either swallowed the
+        // rest of the stylesheet (consuming the outer close as if it belonged to the stray content) or
+        // ended the block early (treating a nested stray '}' as the outer one), depending on which shape
+        // of stray content was hit.
+        private void SkipFontFeatureValueStrayContent(ref Token token)
+        {
+            var depth = 0;
+
+            while (token.Type != TokenType.EndOfFile)
+            {
+                if (token.Type == TokenType.CurlyBracketOpen)
+                {
+                    depth++;
+                }
+                else if (token.Type == TokenType.CurlyBracketClose)
+                {
+                    if (depth == 0) return; // @font-feature-values's own close - leave it for the caller's loop.
+
+                    if (--depth == 0)
+                    {
+                        token = NextToken();
+                        return;
+                    }
+                }
+                else if (token.Type == TokenType.Semicolon && depth == 0)
+                {
+                    token = NextToken();
+                    return;
+                }
+
+                token = NextToken();
+            }
+        }
+
+        // Parses one nested block; current must be positioned at its AtKeyword token on entry and is left
+        // positioned just past its closing '}' (with leading comments consumed) on return, mirroring how
+        // FillDeclarations's own caller loop advances past CreateMarginStyle.
+        private Rule CreateFontFeatureValueSet(ref Token current)
+        {
+            var blockName = current.Data.ToString();
+            var rule = new FontFeatureValueSetRule(_parser, blockName);
+            var start = current.Position;
+            _nodes.Push(rule);
+            var token = NextToken();
+            ParseComments(ref token);
+
+            if (token.Type == TokenType.CurlyBracketOpen)
+            {
+                var end = FillDeclarations(rule, CreateFontFeatureValueDescriptorProperty);
+                rule.StylesheetText = CreateView(start, end);
+                _nodes.Pop();
+                current = NextToken();
+                ParseComments(ref current);
+                return rule;
+            }
+
+            _nodes.Pop();
+            current = token;
+            return null;
         }
 
         public Rule CreateImport(Token current)

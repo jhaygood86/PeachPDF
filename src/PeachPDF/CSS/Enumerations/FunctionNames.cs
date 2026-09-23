@@ -78,5 +78,11 @@ namespace PeachPDF.CSS
         public const string TargetCounter = "target-counter";
         public const string TargetText = "target-text";
         public const string Leader = "leader";
+        public const string Stylistic = "stylistic";
+        public const string Styleset = "styleset";
+        public const string CharacterVariant = "character-variant";
+        public const string Swash = "swash";
+        public const string Ornaments = "ornaments";
+        public const string Annotation = "annotation";
     }
 }

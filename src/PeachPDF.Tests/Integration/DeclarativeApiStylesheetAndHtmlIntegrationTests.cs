@@ -241,6 +241,33 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task DocumentStylesheet_FontFeatureValues_ResolvesThroughTheDeclarativeApi()
+        {
+            // Regression: HtmlContainerInt.SetDeclarativeRoot (the declarative-API parse path) must build
+            // the @font-feature-values registry the same way the HTML-string parse path (DomParser) does
+            // - it previously rebuilt FontPaletteValues but not FontFeatureValues, so styleset()/etc.
+            // silently resolved to nothing on this path.
+            var generator = new PdfGenerator();
+            var stylesheet = await generator.ParseStyleSheet(
+                "@font-feature-values Arial { @styleset { nice-style: 1; } } " +
+                ".alt { font-family: Arial; font-variant-alternates: styleset(nice-style); }");
+
+            CssBox? box = null;
+            await BuildAndLayoutPage(page =>
+            {
+                page.Content(c =>
+                {
+                    var cb = (ContainerBuilder)c.Class("alt");
+                    cb.Text("hello");
+                    box = cb.Box;
+                });
+            }, stylesheet);
+
+            Assert.NotNull(box);
+            Assert.Equal([("ss01", 1)], box!.ActualFontVariantAlternates);
+        }
+
+        [Fact]
         public async Task PeachPdfCssContent_AddStyleSheetReadOnlyMemory_EmptyMemory_IsANoOp()
         {
             var generator = new PdfGenerator();

@@ -289,6 +289,7 @@ namespace PeachPDF.CSS
                 PropertyNames.FontVariantNumeric,
                 PropertyNames.FontVariantEastAsian,
                 PropertyNames.FontVariantPosition,
+                PropertyNames.FontVariantAlternates,
                 PropertyNames.FontKerning,
                 PropertyNames.FontWeight,
                 PropertyNames.LineHeight);
@@ -306,12 +307,14 @@ namespace PeachPDF.CSS
                 PropertyNames.FontVariantNumeric,
                 PropertyNames.FontVariantEastAsian,
                 PropertyNames.FontVariantPosition,
+                PropertyNames.FontVariantAlternates,
                 PropertyNames.FontFeatureSettings);
             AddLonghand(PropertyNames.FontVariantCaps, () => new FontVariantCapsProperty());
             AddLonghand(PropertyNames.FontVariantLigatures, () => new FontVariantLigaturesProperty());
             AddLonghand(PropertyNames.FontVariantNumeric, () => new FontVariantNumericProperty());
             AddLonghand(PropertyNames.FontVariantEastAsian, () => new FontVariantEastAsianProperty());
             AddLonghand(PropertyNames.FontVariantPosition, () => new FontVariantPositionProperty());
+            AddLonghand(PropertyNames.FontVariantAlternates, () => new FontVariantAlternatesProperty());
             AddLonghand(PropertyNames.FontFeatureSettings, () => new FontFeatureSettingsProperty());
             AddLonghand(PropertyNames.FontKerning, () => new FontKerningProperty());
             AddLonghand(PropertyNames.FontWeight, () => new FontWeightProperty(), true, true);
@@ -694,6 +697,15 @@ namespace PeachPDF.CSS
         public Property CreateFontPaletteDescriptor(string name)
         {
             return _fontPaletteDescriptors.TryGetValue(name, out var propertyCreator) ? propertyCreator() : null;
+        }
+
+        // Unlike the fixed @property/@font-palette-values descriptor sets above, a @font-feature-values
+        // nested block's declarations are arbitrary author-chosen feature-value names (e.g. "nice-style:
+        // 12;"), not a fixed descriptor vocabulary - so every ident is accepted here, stored raw via
+        // UnknownProperty and validated/resolved later in Layer B (RegisteredFontFeatureValues.BuildRegistry).
+        public Property CreateFontFeatureValueDescriptor(string name)
+        {
+            return string.IsNullOrEmpty(name) ? null : new UnknownProperty(name);
         }
 
         public Property CreateViewport(string name)

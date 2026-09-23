@@ -419,6 +419,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Gets the resolved explicit OpenType feature tags (CSS <c>font-feature-settings</c>) for this box's text.</summary>
         public IReadOnlyList<(string Tag, int Value)> ActualFontFeatureSettings => DerivedStyle.ActualFontFeatureSettings;
 
+        /// <summary>Gets the resolved OpenType feature tags (CSS <c>font-variant-alternates</c>, resolved
+        /// against the document's <c>@font-feature-values</c> registry) for this box's text.</summary>
+        public IReadOnlyList<(string Tag, int Value)> ActualFontVariantAlternates => DerivedStyle.ActualFontVariantAlternates;
+
         /// <summary>
         /// Gets the single combined GSUB feature request (ligatures + caps + numeric + east-asian +
         /// explicit <c>font-feature-settings</c> tags) for this box's text - the one value actually
