@@ -364,6 +364,32 @@ namespace PeachPDF.Html.Core.Paint
 
             var box = fragment.Box;
             var builder = box.HtmlContainer?.StructureTagBuilder;
+
+            // Outside the structure element this box opens below, so a scope's outlines - which belong
+            // to many boxes, most of them already closed - are never drawn into one box's marked content.
+            var outerOutlineScope = OpenOutlineScope(fragment);
+            var completed = false;
+
+            try
+            {
+                PaintTaggedContent(g, fragment, builder);
+                completed = true;
+            }
+            finally
+            {
+                // PaintFragment can swallow a paint error and carry on with the next sibling; the
+                // enclosing scope must get its own collector back either way, but a failed paint's
+                // outlines are not drawn.
+                CloseOutlineScope(g, outerOutlineScope, builder, draw: completed);
+            }
+        }
+
+        /// <summary>
+        /// <see cref="PaintTagged"/>'s structure-tree bookkeeping around one fragment's content.
+        /// </summary>
+        private void PaintTaggedContent(RGraphics g, BoxFragment fragment, StructureTagBuilder? builder)
+        {
+            var box = fragment.Box;
             if (builder == null)
             {
                 PaintContent(g, fragment);
@@ -500,6 +526,7 @@ namespace PeachPDF.Html.Core.Paint
                 (box.DerivedStyle.ActualDisplay == Keywords.TableCell && box.EmptyCells == Keywords.Hide && box.IsSpaceOrEmpty)) return;
 
             var clipsPushed = RenderUtils.ClipGraphicsByOverflow(g, fragment.OverflowClip, fragment.OverflowClipCurve);
+            var overflowClipRecorded = PushOverflowClip(fragment);
 
             // This fragment's own decoration rectangles - one per line box it spans on this page, or a
             // single whole-border-box rectangle for a block-level box. Already fragmentainer-local.
@@ -507,12 +534,12 @@ namespace PeachPDF.Html.Core.Paint
             var clip = g.GetClip();
 
             // Outline is drawn last - CSS Basic User Interface 4 §3.1: "the outline ... is drawn 'over' a
-            // box, i.e., the outline is always on top" of that box's own content and, per CSS2.1
-            // Appendix E, of its entire stacking context (all its descendants too). So the per-line
+            // box, i.e., the outline is always on top" of that box's own content. So the per-line
             // geometry this box's outline needs is captured here, alongside border's own (which paints
-            // immediately, unlike outline), and the actual outline draw calls are deferred to their own
-            // pass after this box's text/decorations/descendants have all painted, below.
-            List<(RRect Rect, bool HasLeftEdge, bool HasRightEdge, bool HasTopEdge, bool HasBottomEdge)>? outlinePaints = null;
+            // immediately, unlike outline), and handed on once this box's text/decorations/descendants
+            // have all painted, below - to be drawn later still, once the enclosing outline scope has
+            // painted everything else (see FragmentPainter.Outlines.cs).
+            List<OutlineRect>? outlinePaints = null;
 
             for (var i = 0; i < lines.Count; i++)
             {
@@ -630,7 +657,7 @@ namespace PeachPDF.Html.Core.Paint
                 // (issue #769), so closing only the outline there would produce a ring that doesn't
                 // match its own box's inline extent.
                 var closesAtLineWrap = !IsVerticalDecorationGeometry(box);
-                (outlinePaints ??= []).Add((
+                (outlinePaints ??= []).Add(new OutlineRect(
                     outlineRect,
                     geometry.HasLeftEdge || closesAtLineWrap,
                     geometry.HasRightEdge || closesAtLineWrap,
@@ -683,56 +710,16 @@ namespace PeachPDF.Html.Core.Paint
                 }
             }
 
+            // Positive z-index layers are Appendix E step 9: over everything else this box paints - its
+            // collapsed borders and marker below included - so they are set aside and painted last.
+            List<List<StackingOrder.StackingParticipant>>? raisedLayers = null;
+
             foreach (var layerBoxes in StackingOrder.ByLayers(StackingOrder.Flatten(fragment)))
             {
-                // Split paint to handle z-order, per CSS2.1 Appendix E's within-a-stacking-context
-                // order: in-flow block-level descendants, then non-positioned floats, then in-flow
-                // inline-level descendants (text and inline replaced content), then positioned
-                // descendants. Block and inline normal-flow content used to share a single pass here
-                // (painted in tree order with no float-relative ordering guarantee at all) - Acid2's own
-                // ".eyes" trap (a block, a float, and an inline replaced <object> as siblings, each
-                // required to paint in a different layer) depends on inline being its own later pass.
-                //
-                // A plain (non-inline-itself) box whose entire content is inline - e.g. Acid2's own
-                // "#eyes-a" div, a block wrapper around nothing but its resolved inline <object> image -
-                // is treated as belonging to the inline pass too, via StackingOrder.ActsAsInline. Its
-                // own recursive paint call is what actually paints its inline child (through ITS OWN
-                // nested stacking loop), so deferring that whole call to this stacking context's inline
-                // pass is what makes the child paint after this context's float pass, matching Appendix
-                // E, without needing to hoist the descendant out of its normal DOM position/ancestor at
-                // all (unlike the out-of-flow float/absolute/fixed hoisting StackingOrder.Flatten
-                // already does - that mechanism moves a box's paint call across ancestor boundaries
-                // entirely, which isn't needed or wanted here since "#eyes-a" itself already belongs to
-                // this stacking context's own direct children).
-                foreach (var p in layerBoxes)
-                {
-                    if (!StackingOrder.ActsAsInline(p.Box) && !p.Box.IsPositioned && !p.Box.IsFloated)
-                        PaintStackingParticipant(g, p);
-                }
-
-                foreach (var p in layerBoxes)
-                {
-                    // Appendix E step 5 is NON-positioned floats only. A float that is also positioned
-                    // belongs to step 8 below, in tree order with every other positioned box - painting it
-                    // here let a later positioned sibling or ancestor's background cover it.
-                    if (p.Box.IsFloated && !p.Box.IsPositioned)
-                        PaintStackingParticipant(g, p);
-                }
-
-                foreach (var p in layerBoxes)
-                {
-                    if (StackingOrder.ActsAsInline(p.Box) && !p.Box.IsPositioned && !p.Box.IsFloated)
-                        PaintStackingParticipant(g, p);
-                }
-
-                foreach (var p in layerBoxes)
-                {
-                    // CSS 2.1 Appendix E step 8 is one tree-order bucket for every positioned
-                    // descendant at stack level 0. Splitting absolute/fixed/relative into separate
-                    // passes reorders otherwise-equal siblings by positioning scheme.
-                    if (p.Box.IsPositioned)
-                        PaintStackingParticipant(g, p);
-                }
+                if (StackingOrder.LayerOf(layerBoxes[0]) > 0)
+                    (raisedLayers ??= []).Add(layerBoxes);
+                else
+                    PaintLayer(g, layerBoxes);
             }
 
             // CSS 2.1 §17.6.2's resolved borders are drawn once per grid-line run, after every
@@ -745,33 +732,11 @@ namespace PeachPDF.Html.Core.Paint
                 PaintCollapsedTableBorders(g, box, fragment.OriginY, clip);
             }
 
+            // Before this box's own overflow clip is popped: a deferred outline records it for replay.
             if (outlinePaints is not null)
-            {
-                // More than one rectangle is a fragmented box, whose outline CSS UI 4 §3.1 asks be drawn
-                // as one connected shape rather than closed separately around each fragment - see
-                // OutlineDrawHandler.DrawRegionOutline. Every style that paints at all takes that path
-                // (see SupportsRegionOutline); anything else - a single rectangle, vertical-decoration
-                // geometry, a style that paints nothing - keeps the per-fragment rings below. Either way
-                // this stays within the page: these rectangles are one fragmentainer's, so a box
-                // broken across pages still gets one shape per page.
-                if (outlinePaints.Count > 1 &&
-                    !IsVerticalDecorationGeometry(box) &&
-                    OutlineDrawHandler.SupportsRegionOutline(box))
-                {
-                    var rects = new List<RRect>(outlinePaints.Count);
-                    foreach (var paint in outlinePaints) rects.Add(paint.Rect);
+                PaintOrDeferOutline(g, box, outlinePaints);
 
-                    OutlineDrawHandler.DrawRegionOutline(g, box, rects);
-                }
-                else
-                {
-                    foreach (var (paintRect, hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge) in outlinePaints)
-                    {
-                        OutlineDrawHandler.DrawOutline(g, box, paintRect,
-                            hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge);
-                    }
-                }
-            }
+            PopOverflowClip(overflowClipRecorded);
 
             for (var i = 0; i < clipsPushed; i++)
                 g.PopClip();
@@ -786,6 +751,77 @@ namespace PeachPDF.Html.Core.Paint
             }
 
             PaintContentImage(g, box, fragment);
+
+            if (raisedLayers is null) return;
+
+            // The scope this box opened draws its outlines here, under its raised layers - an overlay
+            // covers a ring - and over the rest of its content (see FragmentPainter.Outlines.cs).
+            if (OwnsOutlineScope(fragment))
+                DrawScopeOutlinesSoFar(g, box.HtmlContainer?.StructureTagBuilder);
+
+            var raisedClipsPushed = RenderUtils.ClipGraphicsByOverflow(g, fragment.OverflowClip, fragment.OverflowClipCurve);
+
+            foreach (var layerBoxes in raisedLayers)
+                PaintLayer(g, layerBoxes);
+
+            for (var i = 0; i < raisedClipsPushed; i++)
+                g.PopClip();
+        }
+
+        /// <summary>
+        /// Paints one z-index layer of a stacking context's participants, in CSS 2.1 Appendix E's
+        /// block / float / inline / positioned order.
+        /// </summary>
+        private void PaintLayer(RGraphics g, List<StackingOrder.StackingParticipant> layerBoxes)
+        {
+            // Split paint to handle z-order, per CSS2.1 Appendix E's within-a-stacking-context
+            // order: in-flow block-level descendants, then non-positioned floats, then in-flow
+            // inline-level descendants (text and inline replaced content), then positioned
+            // descendants. Block and inline normal-flow content used to share a single pass here
+            // (painted in tree order with no float-relative ordering guarantee at all) - Acid2's own
+            // ".eyes" trap (a block, a float, and an inline replaced <object> as siblings, each
+            // required to paint in a different layer) depends on inline being its own later pass.
+            //
+            // A plain (non-inline-itself) box whose entire content is inline - e.g. Acid2's own
+            // "#eyes-a" div, a block wrapper around nothing but its resolved inline <object> image -
+            // is treated as belonging to the inline pass too, via StackingOrder.ActsAsInline. Its
+            // own recursive paint call is what actually paints its inline child (through ITS OWN
+            // nested stacking loop), so deferring that whole call to this stacking context's inline
+            // pass is what makes the child paint after this context's float pass, matching Appendix
+            // E, without needing to hoist the descendant out of its normal DOM position/ancestor at
+            // all (unlike the out-of-flow float/absolute/fixed hoisting StackingOrder.Flatten
+            // already does - that mechanism moves a box's paint call across ancestor boundaries
+            // entirely, which isn't needed or wanted here since "#eyes-a" itself already belongs to
+            // this stacking context's own direct children).
+            foreach (var p in layerBoxes)
+            {
+                if (!StackingOrder.ActsAsInline(p.Box) && !p.Box.IsPositioned && !p.Box.IsFloated)
+                    PaintStackingParticipant(g, p);
+            }
+
+            foreach (var p in layerBoxes)
+            {
+                // Appendix E step 5 is NON-positioned floats only. A float that is also positioned
+                // belongs to step 8 below, in tree order with every other positioned box - painting it
+                // here let a later positioned sibling or ancestor's background cover it.
+                if (p.Box.IsFloated && !p.Box.IsPositioned)
+                    PaintStackingParticipant(g, p);
+            }
+
+            foreach (var p in layerBoxes)
+            {
+                if (StackingOrder.ActsAsInline(p.Box) && !p.Box.IsPositioned && !p.Box.IsFloated)
+                    PaintStackingParticipant(g, p);
+            }
+
+            foreach (var p in layerBoxes)
+            {
+                // CSS 2.1 Appendix E step 8 is one tree-order bucket for every positioned
+                // descendant at stack level 0. Splitting absolute/fixed/relative into separate
+                // passes reorders otherwise-equal siblings by positioning scheme.
+                if (p.Box.IsPositioned)
+                    PaintStackingParticipant(g, p);
+            }
         }
 
         /// <summary>

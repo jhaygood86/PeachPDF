@@ -175,6 +175,9 @@ namespace PeachPDF.Html.Core.Handlers
             if (ring.IsInvert) g.PopBlendMode();
         }
 
+        /// <summary>Whether <paramref name="box"/> has an outline that draws anything at all.</summary>
+        internal static bool Paints(RGraphics g, CssBox box) => TryResolveRing(g, box, out _);
+
         #region Private methods
 
         /// <summary>
