@@ -47,6 +47,12 @@ namespace PeachPDF.Html.Core.Handlers
         int _nextMcidOnCurrentPage;
         readonly bool _requireAltText;
 
+        /// <summary>
+        /// How many marked-content sequences (a content element's BDC, an artifact's BMC) this builder
+        /// has opened and not yet closed.
+        /// </summary>
+        int _openSequences;
+
         /// <param name="document">The document to build the structure tree for.</param>
         /// <param name="requireAltText">
         /// When <c>true</c> (only for PDF/A's accessible "A" conformance levels - see
@@ -173,7 +179,8 @@ namespace PeachPDF.Html.Core.Handlers
             // parameter, so both agree exactly (mirrors upstream, whose BDC line is built from
             // reading the struct element's own /S name back out, not from the caller's raw tag text).
             g.BeginMarkedContent(element.StructureType, mcid);
-            return new EndMarkedContentScope(g);
+            _openSequences++;
+            return new EndMarkedContentScope(g, this);
         }
 
         /// <summary>
@@ -207,6 +214,13 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
+        /// Whether content painted now lands inside a marked-content sequence already - a content
+        /// element's or an artifact's. Marked content must not nest, so a caller about to open an
+        /// artifact for paint that may be reached from inside another box's sequence checks this first.
+        /// </summary>
+        public bool IsInMarkedContent => _openSequences > 0;
+
+        /// <summary>
         /// Opens an artifact marked-content sequence around the caller's own paint calls - no
         /// struct element, not part of the logical structure tree (e.g. a decorative &lt;hr&gt;).
         /// </summary>
@@ -216,7 +230,8 @@ namespace PeachPDF.Html.Core.Handlers
                 return NullScope.Instance;
 
             g.BeginArtifact();
-            return new EndMarkedContentScope(g);
+            _openSequences++;
+            return new EndMarkedContentScope(g, this);
         }
 
         /// <summary>
@@ -355,11 +370,13 @@ namespace PeachPDF.Html.Core.Handlers
             }
         }
 
-        sealed class EndMarkedContentScope : IDisposable
+        sealed class EndMarkedContentScope(RGraphics g, StructureTagBuilder builder) : IDisposable
         {
-            readonly RGraphics _g;
-            public EndMarkedContentScope(RGraphics g) => _g = g;
-            public void Dispose() => _g.EndMarkedContent();
+            public void Dispose()
+            {
+                g.EndMarkedContent();
+                builder._openSequences--;
+            }
         }
 
         sealed class NullScope : IDisposable

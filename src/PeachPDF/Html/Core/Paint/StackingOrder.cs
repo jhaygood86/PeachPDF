@@ -186,12 +186,7 @@ namespace PeachPDF.Html.Core.Paint
 
             foreach (var participant in participants)
             {
-                var zIndex = 0;
-
-                if (participant.Box.ZIndex.Value is { IsValue: true } zIndexValue)
-                {
-                    zIndex = zIndexValue.Value.GetValueOrDefault();
-                }
+                var zIndex = LayerOf(participant);
 
                 if (!boxesByLayer.TryGetValue(zIndex, out var layer))
                 {
@@ -204,6 +199,15 @@ namespace PeachPDF.Html.Core.Paint
 
             return boxesByLayer.OrderBy(x => x.Key).Select(x => x.Value);
         }
+
+        /// <summary>
+        /// The z-index layer <paramref name="participant"/> paints in — its own <c>z-index</c>, or 0 for
+        /// <c>auto</c>. Every participant of one <see cref="ByLayers"/> group shares it.
+        /// </summary>
+        internal static int LayerOf(StackingParticipant participant) =>
+            participant.Box.ZIndex.Value is { IsValue: true } zIndexValue
+                ? zIndexValue.Value.GetValueOrDefault()
+                : 0;
 
         /// <summary>
         /// Whether <paramref name="box"/> belongs in the "inline" paint pass of the block/float/inline

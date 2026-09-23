@@ -104,6 +104,66 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains(log, e => e.Item1 == "DrawString");
         }
 
+        [Fact]
+        public async Task Outline_IsAnArtifact_DrawnAfterItsOwnersMarkedContentCloses()
+        {
+            // An outline is drawn once its scope has painted everything else, by when the structure
+            // element owning it has long closed its marked content - so it is marked as decoration,
+            // never nested inside a structure element's sequence.
+            var log = await RecordPaintCalls(
+                "<p style='outline: 2pt solid rgb(200,0,0)'>text</p>", enableTagging: true);
+
+            var textEnd = log.FindIndex(e => e.Item1 == "EndMarkedContent");
+            var artifact = log.FindIndex(e => e.Item1 == "BeginArtifact");
+            var ring = log.FindIndex(e => e.Item1 == "FillPath");
+
+            Assert.True(textEnd >= 0 && artifact > textEnd, "the outline's artifact opened inside the text's marked content");
+            Assert.True(ring > artifact, "the outline was drawn outside its artifact");
+            Assert.Equal("EndMarkedContent", log[ring + 1].Item1);
+        }
+
+        [Theory]
+        // A grouping box: opens no marked content of its own.
+        [InlineData("<div style='position: relative; z-index: 0; background: #eee; outline: 2px solid red'>" +
+                    "text<span style='position: absolute; z-index: 1'>x</span></div>")]
+        // A box tagged as an artifact: its own artifact sequence is open while it paints.
+        [InlineData("<div style='position: relative; z-index: 0; outline: 2px solid red; -peachpdf-pdf-tag-type: artifact'>" +
+                    "text<span style='position: absolute; z-index: 1'>x</span></div>")]
+        public async Task Outline_DrawnUnderAPositiveZIndexChild_IsNeverNestedInMarkedContent(string html)
+        {
+            // The scope's outlines are drawn ahead of its raised layers, inside the scope box's own paint
+            // rather than after it - where the scope box's own sequence may still be open. The outline's
+            // artifact must never open inside it, and every shape the outline draws must still be marked.
+            // (A content element nested in an author's artifact - the artifact case's text - predates this.)
+            var log = await RecordPaintCalls(html, enableTagging: true);
+
+            var depth = 0;
+            var shapes = 0;
+            foreach (var (call, _) in log)
+            {
+                switch (call)
+                {
+                    case "BeginMarkedContent":
+                        depth++;
+                        break;
+                    case "BeginArtifact":
+                        Assert.True(depth == 0, "an artifact was opened inside another marked-content sequence");
+                        depth++;
+                        break;
+                    case "EndMarkedContent":
+                        depth--;
+                        break;
+                    case "FillPath" or "StrokePath" or "FillPolygon":
+                        Assert.True(depth > 0, $"{call} was drawn outside any marked-content sequence");
+                        shapes++;
+                        break;
+                }
+            }
+
+            Assert.Equal(0, depth);
+            Assert.True(shapes > 0, "the outline drew nothing");
+        }
+
         // A 1x1 transparent PNG.
         const string TinyPngBase64 =
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
@@ -197,9 +257,9 @@ namespace PeachPDF.Tests.Integration
             public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) { }
             public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }
             public override void DrawImage(RImage image, RRect destRect) { }
-            public override void DrawPath(RPen pen, RGraphicsPath path) { }
-            public override void DrawPath(RBrush brush, RGraphicsPath path) { }
-            public override void DrawPolygon(RBrush brush, RPoint[] points) { }
+            public override void DrawPath(RPen pen, RGraphicsPath path) => Log.Add(("StrokePath", null));
+            public override void DrawPath(RBrush brush, RGraphicsPath path) => Log.Add(("FillPath", null));
+            public override void DrawPolygon(RBrush brush, RPoint[] points) => Log.Add(("FillPolygon", null));
             public override void Dispose() { }
         }
 
