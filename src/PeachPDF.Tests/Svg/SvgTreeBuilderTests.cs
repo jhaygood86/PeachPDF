@@ -148,6 +148,30 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void Fill_OnRootSvg_IsInheritedByChildren()
+        {
+            // The root <svg> is an ordinary element for inheritance: its fill presentation attribute is
+            // inherited by descendants that don't set their own (SVG 2 §13.2, CSS Cascade 4 §3.3).
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg" fill="#fff" stroke="#0000ff"><path d="M0,0 L10,0 L10,10 Z"/></svg>""");
+
+            var path = Assert.IsType<SvgPathElement>(Assert.Single(document.Children));
+            Assert.Equal(SvgPaintKind.Solid, path.Fill.Kind);
+            Assert.Equal(RColor.FromArgb(0xff, 0xff, 0xff), path.Fill.Color);
+            Assert.Equal(SvgPaintKind.Solid, path.Stroke.Kind);
+            Assert.Equal(RColor.FromArgb(0x00, 0x00, 0xff), path.Stroke.Color);
+        }
+
+        [Fact]
+        public void Fill_OnRootSvgStyle_IsInheritedByChildren()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg" style="fill: #00ff00"><g><path d="M0,0 L10,0 L10,10 Z"/></g></svg>""");
+
+            var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
+            var path = Assert.IsType<SvgPathElement>(Assert.Single(group.Children));
+            Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), path.Fill.Color);
+        }
+
+        [Fact]
         public void Stroke_InvalidValueOnChild_FallsBackToInheritedFromGroup()
         {
             // SVG 1.1 §11.4 / CSS Cascade & Inheritance 4 §3: an invalid value on an inherited

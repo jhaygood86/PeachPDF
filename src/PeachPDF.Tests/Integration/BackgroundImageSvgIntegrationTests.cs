@@ -114,6 +114,26 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task SvgUrlBackground_RootSvgFill_IsInheritedByPath()
+        {
+            // Mirrors a common real-world icon idiom: the only fill is the root <svg fill="#fff">, served
+            // as a base64 data URI with a UTF-8 BOM and an XML declaration. Browsers paint the icon white;
+            // it must not fall back to the initial black fill.
+            const string icon = "77u/PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiID8+DQo8c3ZnIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDMyIDMyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9IiNmZmYiPjxwYXRoIGQ9Ik00IDRoMjR2MjRINHoiIC8+PC9zdmc+";
+
+            var pdfText = await GetPdfText(BoxHtml(
+                $"background-color: #009372; background-image: url('data:image/svg+xml;base64,{icon}'); " +
+                "background-size: 32px auto; background-position: center center; background-repeat: no-repeat;"));
+
+            // The icon tile is a Form XObject: its stream holds the path, and
+            // it must select a white non-stroking color before filling, never the initial black.
+            var tile = Regex.Match(pdfText, @"/BBox \[0 0 24 24\].*?stream\n(.*?)endstream", RegexOptions.Singleline);
+            Assert.True(tile.Success, "expected a 24x24pt SVG background tile");
+            Assert.Matches(new Regex(@"(^|\s)1 1 1 rg\s"), tile.Groups[1].Value);
+            Assert.DoesNotMatch(new Regex(@"(^|\s)0 0 0 rg\s"), tile.Groups[1].Value);
+        }
+
+        [Fact]
         public async Task SvgUrlBackground_MissingFile_RendersWithoutCrash()
         {
             var pdfText = await GetPdfText(BoxHtml("background-image: url('nonexistent.svg');"));
