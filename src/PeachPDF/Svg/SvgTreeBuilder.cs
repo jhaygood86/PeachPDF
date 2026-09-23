@@ -402,9 +402,15 @@ namespace PeachPDF.Svg
                     ResolveClipPath(id);
             }
 
+            // The root <svg>'s own inherited presentation properties (e.g. <svg fill="#fff">, a common
+            // icon idiom) seed inheritance for the whole tree, like its font-* above. The root has no
+            // SvgElement of its own, so they are resolved onto a throwaway group purely for the returned
+            // inherited values; its non-inherited properties (opacity/transform/clip-path/...) are unused.
+            var rootPaint = ApplyCommon(new SvgGroupElement(), root, InheritedPaint.Initial);
+
             foreach (var child in root.Children)
             {
-                var element = BuildElement(child, InheritedPaint.Initial, rootFont);
+                var element = BuildElement(child, rootPaint, rootFont);
                 if (element is not null)
                     _document.Children.Add(element);
             }
