@@ -29,6 +29,7 @@ namespace PeachPDF.Tests.Integration
         [InlineData("Inline-Table", "InlineTable")]
         [InlineData("List-Item", "ListItem")]
         [InlineData("NONE", "None")]
+        [InlineData("CONTENTS", "Contents")]
         public async Task Display_StoresTypedValue_CaseInsensitively(string cssValue, string expectedModeName)
         {
             var expected = System.Enum.Parse<DisplayMode>(expectedModeName);
@@ -64,7 +65,9 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
-            return FindById(container.Root!, "el")!;
+            // A display:contents element is in no box's children - only in the container's shell list.
+            return (FindById(container.Root!, "el")
+                ?? container.DisplayContentsShells.Find(s => s.HtmlTag?.TryGetAttribute("id", "") == "el"))!;
         }
 
         private static CssBox? FindById(CssBox box, string id)

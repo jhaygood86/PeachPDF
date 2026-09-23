@@ -310,11 +310,20 @@ namespace PeachPDF.Tests.CSS
         }
 
         // display's cssDataType is a real keyword list (not 'cssom') - a syntactically-plausible but
-        // unimplemented value like 'contents' must report unsupported.
+        // unimplemented value like 'ruby' must report unsupported, while 'contents' is implemented.
         [Fact]
-        public void SupportsDisplayContentsRule_NotImplemented()
+        public void SupportsDisplayContentsRule_Implemented()
         {
             var source = @"@supports (display: contents) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.True(supports.Condition.Check());
+        }
+
+        [Fact]
+        public void SupportsDisplayRubyRule_NotImplemented()
+        {
+            var source = @"@supports (display: ruby) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.False(supports.Condition.Check());

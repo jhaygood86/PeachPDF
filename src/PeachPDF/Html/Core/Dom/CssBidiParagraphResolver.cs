@@ -95,11 +95,17 @@ namespace PeachPDF.Html.Core.Dom
                 ResolveParagraph(box);
         }
 
+        // A display:contents element generates no box, so its content joins whichever paragraph its
+        // parent's does once DomParser.FlattenDisplayContents splices it in - which happens after this
+        // resolver runs. It is therefore transparent here, like a plain inline (CSS Display 3 §2.5: "as if
+        // it had been replaced in the element tree by its contents"). A block-level child of it still
+        // establishes its own paragraph and reaches the parent's as one placeholder, exactly as a block
+        // inside an inline does.
         private static bool EstablishesOwnParagraph(CssBox box) =>
-            box.IsRoot || box.DerivedStyle.ActualDisplay != Keywords.Inline || box is CssBoxMarker;
+            box.IsRoot || box.DerivedStyle.ActualDisplay is not (Keywords.Inline or Keywords.Contents) || box is CssBoxMarker;
 
         private static bool ParticipatesInParentParagraph(CssBox box) =>
-            box.DerivedStyle.ActualDisplay == Keywords.Inline && box is not (CssBoxImage or CssBoxSvg or CssBoxMarker);
+            box.DerivedStyle.ActualDisplay is (Keywords.Inline or Keywords.Contents) && box is not (CssBoxImage or CssBoxSvg or CssBoxMarker);
 
         private static void ResolveParagraph(CssBox paragraphRoot)
         {
@@ -266,7 +272,13 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else if (ParticipatesInParentParagraph(child))
                 {
-                    var pushes = CssUnicodeBidiMapping.MapToPushes(child.UnicodeBidi.Value, child.Direction.Value);
+                    // unicode-bidi's embed/isolate/override act on an inline box (CSS Writing Modes 4 §2.2:
+                    // "no effect on boxes that are not inline"); a display:contents element has none, so its
+                    // own unicode-bidi contributes no push. Its direction still reaches its children through
+                    // inheritance, which the cascade already resolved.
+                    IReadOnlyList<BidiExplicitPush> pushes = child.DerivedStyle.ActualDisplay == Keywords.Contents
+                        ? []
+                        : CssUnicodeBidiMapping.MapToPushes(child.UnicodeBidi.Value, child.Direction.Value);
 
                     if (pushes.Count == 0)
                     {

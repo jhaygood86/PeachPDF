@@ -540,6 +540,11 @@ namespace PeachPDF
         /// </summary>
         private async Task AddDeclarativePage(PeachPdfDocument document, Action<IPageDescriptor> pageHandler, PdfGenerateConfig config, CssPropertyFactory properties, PeachPdfCssContent? stylesheet)
         {
+            // The factory is shared by every page of the document, and the fragments this page's builder
+            // callback splices deposit their display: contents shells on it - only this page's, so the
+            // previous page's (which belong to a container already disposed) must not come along.
+            properties.DisplayContentsShells.Clear();
+
             var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, properties);
             ResolvePendingAutoDirections(pageDescriptor.RootBox, properties);
 
@@ -572,7 +577,7 @@ namespace PeachPDF
                 sizeIsExplicit: pageDescriptor.PageSizeOverride is not null);
 
             container.PageSize = orgPageSize;
-            await container.SetDeclarativeRoot(pageDescriptor.RootBox, config.DefaultLanguage, stylesheet);
+            await container.SetDeclarativeRoot(pageDescriptor.RootBox, config.DefaultLanguage, stylesheet, properties.DisplayContentsShells);
 
             if (stylesheet is not null)
             {

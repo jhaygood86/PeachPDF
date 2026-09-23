@@ -550,7 +550,7 @@ namespace PeachPDF.Layout
             var wrapper = CssPropertyFactory.CreateAnonymousBox(box);
             properties.Set(wrapper, "display", "block");
 
-            var fragmentRoot = BuildFragmentTree(html, stylesheet);
+            var (fragmentRoot, fragmentShells) = BuildFragmentTree(html, stylesheet);
 
             // Must run before slot processing: a slot's replacement content is built via ordinary
             // ContainerBuilder calls afterward, and those boxes must NOT be flagged - only the fragment's
@@ -560,12 +560,22 @@ namespace PeachPDF.Layout
             ProcessSlots(fragmentRoot, onSlot);
 
             wrapper.SetAllBoxes(fragmentRoot);
+
+            // A shell that was a top-level node of the fragment still names the discarded root as its parent.
+            foreach (var shell in fragmentShells)
+            {
+                if (ReferenceEquals(shell.ParentBox, fragmentRoot)) shell.RetargetShellParent(wrapper);
+            }
         }
 
-        private CssBox BuildFragmentTree(string html, PeachPdfCssContent? stylesheet) =>
-            BuildFragmentTreeAsync(html, stylesheet).GetAwaiter().GetResult();
+        private (CssBox Root, List<CssBox> DisplayContentsShells) BuildFragmentTree(string html, PeachPdfCssContent? stylesheet)
+        {
+            var built = BuildFragmentTreeAsync(html, stylesheet).GetAwaiter().GetResult();
+            properties.DisplayContentsShells.AddRange(built.DisplayContentsShells);
+            return built;
+        }
 
-        private async Task<CssBox> BuildFragmentTreeAsync(string html, PeachPdfCssContent? stylesheet)
+        private async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> BuildFragmentTreeAsync(string html, PeachPdfCssContent? stylesheet)
         {
             var adapter = properties.Adapter;
 

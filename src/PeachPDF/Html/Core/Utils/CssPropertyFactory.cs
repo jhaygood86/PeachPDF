@@ -31,6 +31,14 @@ namespace PeachPDF.Html.Core.Utils
         public RAdapter Adapter => adapter;
 
         /// <summary>
+        /// The <c>display: contents</c> shells every <c>IContainer.Html(...)</c> fragment built against this
+        /// factory already spliced out of its own tree (<see cref="Parse.DomParser.GenerateFragmentCssTree"/>).
+        /// They no longer hang off any box, and the container that will own the finished document does not
+        /// exist yet, so they wait here for <see cref="HtmlContainerInt.SetDeclarativeRoot"/>.
+        /// </summary>
+        public List<CssBox> DisplayContentsShells { get; } = [];
+
+        /// <summary>
         /// Sets <paramref name="box"/>'s <paramref name="propertyName"/> to the raw CSS text
         /// <paramref name="value"/>, and records <paramref name="propertyName"/> in
         /// <see cref="CssBox.BuilderSetProperties"/> so a later document-level stylesheet
