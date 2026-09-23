@@ -1,4 +1,4 @@
-# Root `<svg>` presentation properties seed inheritance
+# Root `<svg>` presentation properties seed inheritance (#1276)
 
 **Symptom:** a real page's header icons (search/cart, `background-image` data-URI SVGs of the form
 `<svg viewBox=… fill="#fff"><path …/></svg>`) rendered black instead of white.
