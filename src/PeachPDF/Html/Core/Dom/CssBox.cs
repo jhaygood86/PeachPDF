@@ -462,8 +462,8 @@ namespace PeachPDF.Html.Core.Dom
         internal bool FirstLineProcessed { get; set; }
 
         /// <summary>
-        /// Set (on the real <c>&lt;body&gt;</c> or <c>&lt;html&gt;</c> box, whichever was chosen) by
-        /// <see cref="HtmlContainerInt.ResolveCanvasBackground"/> per CSS2.1 §14.2: that box's
+        /// Set (on the real <c>&lt;html&gt;</c> or <c>&lt;body&gt;</c> box, whichever was chosen) by
+        /// <see cref="HtmlContainerInt.ResolveCanvasBackground"/> per CSS Backgrounds 3 §2.11.2: that box's
         /// background has been "promoted" to fill the whole page canvas on every page (see
         /// <see cref="FragmentPainter.PaintCanvasBackground"/>), so this box's own normal background
         /// pass must no-op instead of painting the same background a second time at its own (possibly
@@ -533,9 +533,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Whether this box declares any background of its own (a visible <c>background-color</c> and/or
         /// at least one <c>background-image</c>/gradient layer) - used by
-        /// <c>PdfGenerator.ResolveCanvasBackground</c> to decide, per CSS2.1 §14.2, whether
-        /// <c>&lt;body&gt;</c>'s own background should be promoted to fill the page canvas, falling back
-        /// to <c>&lt;html&gt;</c>'s only when body has none.
+        /// <c>HtmlContainerInt.ResolveCanvasBackground</c> to decide, per CSS Backgrounds 3 §2.11.2,
+        /// whether <c>&lt;html&gt;</c>'s own background fills the page canvas, falling back to
+        /// <c>&lt;body&gt;</c>'s only when html has none.
         /// </summary>
         internal bool HasOwnBackground => RenderUtils.IsColorVisible(ActualBackgroundColor) || BackgroundImages is { Count: > 0 };
 

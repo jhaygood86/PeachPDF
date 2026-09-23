@@ -1,5 +1,6 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
+using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -9,11 +10,11 @@ using Xunit;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// CSS2.1 §14.2 canvas background: <c>&lt;body&gt;</c>'s background (if set) fills the whole page
-    /// on every page, not just its own laid-out content rect; falls back to <c>&lt;html&gt;</c>'s when
-    /// body has none. Verified via raw PDF content-stream inspection (uncompressed content streams,
-    /// per this repo's convention for painting-affecting integration tests) rather than rasterization,
-    /// since a solid-color full-page fill's exact operator sequence (<c>rg</c> color set immediately
+    /// CSS Backgrounds 3 §2.11.2 canvas background: <c>&lt;html&gt;</c>'s own background (if set) fills
+    /// the whole page on every page, not just its own laid-out content rect; <c>&lt;body&gt;</c>'s is
+    /// propagated to the canvas only when html has none. Verified via raw PDF content-stream inspection
+    /// (uncompressed content streams, per this repo's convention for painting-affecting integration
+    /// tests) rather than rasterization, since a solid-color full-page fill's exact operator sequence (<c>rg</c> color set immediately
     /// followed by a <c>0 0 W H re f</c> rectangle spanning the full page) is unambiguous and doesn't
     /// suffer from the "content-stream substring" pitfall CLAUDE.md warns about for structural features
     /// like masks/patterns/gradients - a color set + a full-page rect + fill is precisely what "the
@@ -64,17 +65,31 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task BodyAndHtmlBothSet_BodyWins_HtmlNotDoublePainted()
+        public async Task BodyAndHtmlBothSet_HtmlWins_BodyPaintsOverItsOwnBoxOnly()
         {
             var pdfText = await GetPdfText(
                 "<!DOCTYPE html><html style='background-color: rgb(0,0,255)'>" +
-                "<head><style>body { margin: 0; background-color: rgb(255,0,0); }</style></head>" +
+                "<head><style>body { margin: 0; width: 100pt; height: 50pt; background-color: rgb(255,0,0); }</style></head>" +
                 "<body><p>short</p></body></html>");
 
-            // Body's red must appear as the full-page fill; html's blue must not appear as its own
-            // separate full-page fill (or any fill at all) - it was suppressed, not painted twice.
-            Assert.Matches(new Regex(@"1 0 0 rg[\s\S]{0,40}0 0 " + FullPageRectPattern), pdfText);
-            Assert.DoesNotMatch(new Regex(@"0 0 1 rg[\s\S]{0,40}0 0 " + FullPageRectPattern), pdfText);
+            // html's blue is the canvas fill; body's red is not propagated, so it paints only over
+            // body's own small box - never as a full-page fill.
+            Assert.Matches(new Regex(@"0 0 1 rg[\s\S]{0,40}0 0 " + FullPageRectPattern), pdfText);
+            Assert.Matches(new Regex(@"1 0 0 rg[\s\S]{0,40}100(\.\d+)? 50(\.\d+)? re\s*\nf"), pdfText);
+            Assert.DoesNotMatch(new Regex(@"1 0 0 rg[\s\S]{0,40}0 0 " + FullPageRectPattern), pdfText);
+        }
+
+        [Fact]
+        public async Task HtmlBackgroundImageOnly_OwnsCanvas_BodyColorNotPropagated()
+        {
+            // §2.11.2: body propagates only when the root's background-image is none AND its
+            // background-color is transparent - an image-only root background still owns the canvas.
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html style='background-image: linear-gradient(red, blue)'>" +
+                "<head><style>body { background-color: rgb(0,255,0); }</style></head>" +
+                "<body><p>short</p></body></html>");
+
+            Assert.Equal("html", container.CanvasBackgroundBox?.HtmlTag?.Name);
         }
 
         [Fact]

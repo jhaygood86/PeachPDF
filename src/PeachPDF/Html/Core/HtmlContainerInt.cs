@@ -3068,9 +3068,9 @@ namespace PeachPDF.Html.Core
 
         /// <summary>
         /// The box whose background fills the whole page canvas, per
-        /// <see href="https://www.w3.org/TR/CSS21/colors.html#background">CSS 2.1 §14.2</see>:
-        /// <c>body</c>'s background if it declares one, else <c>html</c>'s, else none. Null when
-        /// neither declares a background.
+        /// <see href="https://www.w3.org/TR/css-backgrounds-3/#root-background">CSS Backgrounds 3 §2.11.2</see>:
+        /// the root <c>html</c> element's own background if it declares one, else the background
+        /// propagated from its <c>body</c> child, else none. Null when neither declares a background.
         /// </summary>
         internal CssBox? CanvasBackgroundBox { get; private set; }
 
@@ -3097,8 +3097,10 @@ namespace PeachPDF.Html.Core
             if (html is not null) html.SuppressOwnBackgroundPaint = false;
             if (body is not null) body.SuppressOwnBackgroundPaint = false;
 
-            CanvasBackgroundBox = body is { HasOwnBackground: true } ? body
-                : html is { HasOwnBackground: true } ? html
+            // The root's own background is the canvas background; body's is propagated only when the
+            // root's background-image is none and its background-color is transparent (§2.11.2).
+            CanvasBackgroundBox = html is { HasOwnBackground: true } ? html
+                : body is { HasOwnBackground: true } ? body
                 : null;
 
             if (CanvasBackgroundBox is not null)
