@@ -706,7 +706,10 @@ namespace PeachPDF.Html.Core.Paint
 
                 foreach (var p in layerBoxes)
                 {
-                    if (p.Box.IsFloated)
+                    // Appendix E step 5 is NON-positioned floats only. A float that is also positioned
+                    // belongs to step 8 below, in tree order with every other positioned box - painting it
+                    // here let a later positioned sibling or ancestor's background cover it.
+                    if (p.Box.IsFloated && !p.Box.IsPositioned)
                         PaintStackingParticipant(g, p);
                 }
 
