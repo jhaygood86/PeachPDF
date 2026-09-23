@@ -390,13 +390,23 @@ namespace PeachPDF.Html.Core.Handlers
                 case Length.Unit.Em:
                 case Length.Unit.Ex:
                 case Length.Unit.Ch:
-                    // Defers the actual em/ex/ch formula to Length.ToPixels (the single source of truth
-                    // every other length consumer uses) rather than re-deriving it here - only the
-                    // device-scaling correction below is specific to this call site.
+                case Length.Unit.Cap:
+                case Length.Unit.Ic:
+                case Length.Unit.Lh:
+                    // Defers the actual em/ex/ch/cap/ic/lh formula to Length.ToPixels (the single source of
+                    // truth every other length consumer uses) rather than re-deriving it here - only the
+                    // device-scaling correction below is specific to this call site. The measured units read
+                    // the painting box's own font even when emSizePt overrides the em basis (a margin box):
+                    // the ratio is a property of the font, the override only rescales it.
                     var emBasisPt = emSizePt ?? box.GetEmHeight() * pixelsPerPoint;
-                    return len.ToPixels(emBasisPt, 0, 0.0) * pixelsPerPoint;
+                    return len.ToPixels(emBasisPt, 0, 0.0, fonts: box.DerivedStyle) * pixelsPerPoint;
                 case Length.Unit.Rem:
-                    return len.ToPixels(0, box.GetRemHeight() * pixelsPerPoint, 0.0) * pixelsPerPoint;
+                case Length.Unit.Rex:
+                case Length.Unit.Rch:
+                case Length.Unit.Rcap:
+                case Length.Unit.Ric:
+                case Length.Unit.Rlh:
+                    return len.ToPixels(0, box.GetRemHeight() * pixelsPerPoint, 0.0, fonts: box.DerivedStyle) * pixelsPerPoint;
                 default:
                     return len.IsAbsolute
                         ? len.ToPixel() * pixelsPerPoint

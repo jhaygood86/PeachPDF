@@ -293,6 +293,13 @@ namespace PeachPDF.Fonts.OpenType
         int _xHeight;
 
         /// <summary>
+        /// Whether <see cref="XHeight"/> is the font's own OS/2 <c>sxHeight</c> rather than the
+        /// 0.66 x ascender guess used when the table doesn't carry one - a real measurement is what
+        /// the CSS <c>ex</c> unit wants, a guess is worse than the spec's own 0.5em fallback.
+        /// </summary>
+        public bool HasAuthenticXHeight { get; protected set; }
+
+        /// <summary>
         /// 
         /// </summary>
         public int Ascender

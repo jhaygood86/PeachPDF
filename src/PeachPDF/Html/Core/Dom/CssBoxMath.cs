@@ -107,6 +107,11 @@ namespace PeachPDF.Html.Core.Dom
             var sourceNode = new CssBoxMathSourceNode(this);
             _serializedSource = MathMlSerializer.Serialize(sourceNode);
             _document = MathTreeBuilder.Build(sourceNode, HtmlContainer!.Adapter);
+
+            // The root-relative units (rem/rex/rch/...) are the HTML root element's, found from this box; its size
+            // is in the adapter's device-scaled measurement space, so it takes PixelsPerPoint to reach true points.
+            _document.RootFonts = DerivedStyle;
+            _document.RootFontSizePt = GetRemHeight() * ((HtmlContainer.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0);
             _layout = MathLayoutEngine.Layout(_document, g);
 
             // The parser builds a real (generic) CssBox for every MathML child element so

@@ -26,6 +26,14 @@ namespace PeachPDF.CSS
         public const string Dppx = "dppx";
         public const string Pt = "pt";
         public const string Rem = "rem";
+        public const string Cap = "cap";
+        public const string Ic = "ic";
+        public const string Lh = "lh";
+        public const string Rex = "rex";
+        public const string Rch = "rch";
+        public const string Rcap = "rcap";
+        public const string Ric = "ric";
+        public const string Rlh = "rlh";
         public const string Pc = "pc";
         public const string Percent = "%";
         public const string Cqw = "cqw";

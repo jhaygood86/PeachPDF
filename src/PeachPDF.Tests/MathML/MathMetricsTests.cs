@@ -11,7 +11,9 @@ namespace PeachPDF.Tests.MathML
     /// </summary>
     public class MathMetricsTests
     {
-        static MathMetrics NoMathTableMetrics() => new(mathTable: null, unitsPerEm: 1000, pixelsPerPoint: 1.0, resolveFont: null!, graphics: null!);
+        // No font at all: every measured unit (ex/ch/cap/ic/lh) takes its spec fallback.
+        static MathMetrics NoMathTableMetrics() => new(mathTable: null, unitsPerEm: 1000, pixelsPerPoint: 1.0, resolveFont: static _ => null!, graphics: null!,
+            rootFonts: null, rootSizePt: 20.0);
 
         [Fact]
         public void ScriptPercentScaleDown_FallsBackToSpecSuggestedDefault()
@@ -66,6 +68,25 @@ namespace PeachPDF.Tests.MathML
             Assert.True(metrics.Length(new MathLength(5, MathLengthUnit.Mm), sizePt) > 0);
             Assert.Equal(60, metrics.Length(new MathLength(5, MathLengthUnit.Pc), sizePt));
             Assert.True(metrics.Length(new MathLength(18, MathLengthUnit.Mu), sizePt) > 0);
+        }
+
+        [Fact]
+        public void Length_FontRelativeUnitsWithNoFont_TakeTheirSpecFallbacks()
+        {
+            var metrics = NoMathTableMetrics(); // root size is 20pt
+            const double sizePt = 10.0;
+
+            Assert.Equal(5 * 0.5 * sizePt, metrics.Length(new MathLength(5, MathLengthUnit.Ch), sizePt)); // 0.5em
+            Assert.Equal(5 * 1.0 * sizePt, metrics.Length(new MathLength(5, MathLengthUnit.Ic), sizePt));  // 1em
+            Assert.Equal(5 * 0.7 * sizePt, metrics.Length(new MathLength(5, MathLengthUnit.Cap), sizePt), 6);
+            Assert.Equal(5 * 1.2 * sizePt, metrics.Length(new MathLength(5, MathLengthUnit.Lh), sizePt), 6);
+            // The root variants scale by the ROOT's size (20pt), not the element's.
+            Assert.Equal(5 * 20.0, metrics.Length(new MathLength(5, MathLengthUnit.Rem), sizePt));
+            Assert.Equal(5 * 0.5 * 20.0, metrics.Length(new MathLength(5, MathLengthUnit.Rch), sizePt));
+            Assert.Equal(5 * 0.5 * 20.0, metrics.Length(new MathLength(5, MathLengthUnit.Rex), sizePt));
+            Assert.Equal(5 * 1.0 * 20.0, metrics.Length(new MathLength(5, MathLengthUnit.Ric), sizePt));
+            Assert.Equal(5 * 0.7 * 20.0, metrics.Length(new MathLength(5, MathLengthUnit.Rcap), sizePt), 6);
+            Assert.Equal(5 * 1.2 * 20.0, metrics.Length(new MathLength(5, MathLengthUnit.Rlh), sizePt), 6);
         }
     }
 }

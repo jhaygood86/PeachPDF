@@ -193,6 +193,8 @@ namespace PeachPDF.CSS
                 // layout's own CalcEvaluator can resolve them).
                 case DimensionCalcNode dimension when dimension.Unit is not (Length.Unit.Em or Length.Unit.Rem or
                     Length.Unit.Ex or Length.Unit.Ch or
+                    Length.Unit.Cap or Length.Unit.Ic or Length.Unit.Lh or
+                    Length.Unit.Rex or Length.Unit.Rch or Length.Unit.Rcap or Length.Unit.Ric or Length.Unit.Rlh or
                     Length.Unit.Cqw or Length.Unit.Cqh or Length.Unit.Cqi or Length.Unit.Cqb or
                     Length.Unit.Cqmin or Length.Unit.Cqmax or
                     Length.Unit.Vw or Length.Unit.Vh or Length.Unit.Vi or Length.Unit.Vb or

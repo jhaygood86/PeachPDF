@@ -202,7 +202,10 @@ namespace PeachPDF.Fonts.OpenType
                 CapHeight = Ascender;
 
             if (FontFace.os2.version >= 2 && FontFace.os2.sxHeight != 0)
+            {
                 XHeight = FontFace.os2.sxHeight;
+                HasAuthenticXHeight = true;
+            }
             else
                 XHeight = (int)(0.66 * Ascender);
 

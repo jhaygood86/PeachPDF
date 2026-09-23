@@ -1980,7 +1980,8 @@
         "propertyPath": "LineHeight",
         "csharpDataType": "CssProperty<CssKeywordOrValue<NormalKeyword, LengthOrUnitless>>",
         "area": "TextArea",
-        "getterExpression": "{box}.LineHeight.ToString()"
+        "getterExpression": "{box}.LineHeight.ToString()",
+        "valueComputation": "line-height"
       }
     },
     {

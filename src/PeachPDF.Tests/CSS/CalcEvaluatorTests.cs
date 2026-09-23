@@ -23,6 +23,33 @@ namespace PeachPDF.Tests.CSS
             return CalcEvaluator.Evaluate(node!, new CalcContext(2.0 * Math.PI, 0, 0));
         }
 
+        private sealed class DoubledCh : IFontMetricSource
+        {
+            public double GetRatio(FontMetric metric, bool rootElement) => metric == FontMetric.Ch ? 1.0 : 0.5;
+        }
+
+        [Fact]
+        public void LengthCalc_MeasuredUnitLeaf_ReadsTheContextsFontSource()
+        {
+            var function = CssValueParser.GetCssTokens("calc(2ch + 1rch + 3lh)").Single(t => t.Type == TokenType.Function);
+            var node = CalcParser.Parse(function);
+            Assert.NotNull(node);
+
+            // em = 10, rem = 40: 2ch = 2*1.0*10, 1rch = 1*1.0*40, 3lh = 3*0.5*10.
+            var context = new CalcContext(0, 10, 40, fonts: new DoubledCh());
+            Assert.Equal(20 + 40 + 15, CalcEvaluator.Evaluate(node!, context)!.Value, 6);
+        }
+
+        [Fact]
+        public void LengthCalc_MeasuredUnitLeafWithNoFont_TakesTheSpecFallback()
+        {
+            var function = CssValueParser.GetCssTokens("calc(2ch + 1cap)").Single(t => t.Type == TokenType.Function);
+            var node = CalcParser.Parse(function);
+            Assert.NotNull(node);
+
+            Assert.Equal(2 * 0.5 * 10 + 0.7 * 10, CalcEvaluator.Evaluate(node!, new CalcContext(0, 10, 40))!.Value, 6);
+        }
+
         [Theory]
         [InlineData("calc(1turn * 0.35)", 0.35)]
         [InlineData("calc(1turn * 0.5)", 0.5)]
