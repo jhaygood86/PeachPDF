@@ -264,6 +264,7 @@
         public const string NoDiscretionaryLigatures = "no-discretionary-ligatures";
         public const string HistoricalLigatures = "historical-ligatures";
         public const string NoHistoricalLigatures = "no-historical-ligatures";
+        public const string HistoricalForms = "historical-forms";
         public const string Contextual = "contextual";
         public const string NoContextual = "no-contextual";
         public const string AllSmallCaps = "all-small-caps";

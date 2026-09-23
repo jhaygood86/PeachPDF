@@ -171,6 +171,10 @@ namespace PeachPDF.Html.Core.Dom
         internal IReadOnlyDictionary<(string Name, string Family), RegisteredFontPalette>? FontPaletteValuesRegistry
             => HtmlContainer?.FontPaletteValues;
 
+        /// <summary>The document's <c>@font-feature-values</c> registry, or null when none/unavailable.</summary>
+        internal IReadOnlyDictionary<(string Family, FontFeatureValueBlockKind Kind, string Name), RegisteredFontFeatureValues>? FontFeatureValuesRegistry
+            => HtmlContainer?.FontFeatureValues;
+
         /// <summary>
         /// Gets or sets the parent box of this box
         /// </summary>

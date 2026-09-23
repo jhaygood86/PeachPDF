@@ -147,14 +147,31 @@ namespace PeachPDF.Html.Core
             return -1;
         }
 
-        // Splits on commas that are not inside a function's parentheses, so rgb(0, 255, 0) stays intact.
-        private static IEnumerable<string> SplitTopLevelComma(string value)
+        // Splits on commas that are not inside a function's parentheses or a quoted string, so
+        // "rgb(0, 255, 0)" and "My, Font" (a quoted @font-feature-values family name containing a
+        // literal comma) both stay intact. Internal (not private) so RegisteredFontFeatureValues can
+        // reuse it for its own family-list prelude, rather than a second independently-derived copy of
+        // the same grammar (see CLAUDE.md's "don't write two independent parsers for the same CSS value
+        // grammar" rule) - quote-tracking was added for that reuse, since override-colors (this method's
+        // original and only other caller) never has quoted commas to begin with, so it's unaffected.
+        internal static IEnumerable<string> SplitTopLevelComma(string value)
         {
             int depth = 0, start = 0;
+            char? quote = null;
             for (int i = 0; i < value.Length; i++)
             {
-                switch (value[i])
+                var c = value[i];
+                if (quote is { } q)
                 {
+                    if (c == q) quote = null;
+                    continue;
+                }
+
+                switch (c)
+                {
+                    case '"' or '\'':
+                        quote = c;
+                        break;
                     case '(':
                         depth++;
                         break;

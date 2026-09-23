@@ -2709,6 +2709,18 @@
       }
     },
     {
+      "name": "font-variant-alternates",
+      "comment": "cssDataType 'cssom-grammar' calls FontVariantAlternatesGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip - CSS Fonts 4 §6.8's seven-clause `||` combinator grammar isn't expressible as a plain keyword/value-list. Cross-referencing a clause's ident(s) against an @font-feature-values registration happens later, at resolve time (DerivedStyle.ActualFontVariantAlternates), not here.",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FontVariantAlternatesProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "FontVariantAlternates",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
       "name": "font-variant-ligatures",
       "comment": "cssDataType 'cssom-grammar' calls Converters.FontVariantLigaturesConverter.Convert directly - the real converter enforces each ligature axis (common/discretionary/historical/contextual) appears at most once, which a naive keyword-set grammar would not; reusing it directly preserves that.",
       "inherited": true,

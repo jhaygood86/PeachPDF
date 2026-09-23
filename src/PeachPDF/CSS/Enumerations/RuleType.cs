@@ -23,6 +23,7 @@ namespace PeachPDF.CSS
         Property,
         Layer,
         LayerStatement,
-        FontPaletteValues
+        FontPaletteValues,
+        FontFeatureValueSet
     }
 }

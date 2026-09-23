@@ -1127,6 +1127,18 @@ namespace PeachPDF.Html.Core.Dom
         public IReadOnlyList<(string Tag, int Value)> ActualFontFeatureSettings =>
             _actualFontFeatureSettings ??= TextShapingFeatureResolver.ResolveFeatureSettings(Style.Font.FontFeatureSettings);
 
+        private IReadOnlyList<(string Tag, int Value)>? _actualFontVariantAlternates;
+
+        /// <summary>
+        /// The resolved OpenType feature tags (CSS <c>font-variant-alternates</c>) for this box's text -
+        /// each clause's ident argument(s) looked up against the document's <c>@font-feature-values</c>
+        /// registry for this box's used font family and turned into <c>(tag, value)</c> pairs (see
+        /// <see cref="FontVariantAlternatesResolver"/>). An unmatched name is inert.
+        /// </summary>
+        public IReadOnlyList<(string Tag, int Value)> ActualFontVariantAlternates =>
+            _actualFontVariantAlternates ??= FontVariantAlternatesResolver.Resolve(
+                Style.Font.FontVariantAlternates, Style.Font.FontFamily, Owner.FontFeatureValuesRegistry);
+
         private bool? _actualFontKerning;
 
         /// <summary>
@@ -1145,9 +1157,9 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// The single combined GSUB feature request for this box's text - ligatures, caps, numeric,
-        /// east-asian, position, and explicit <c>font-feature-settings</c> tags all folded into one
-        /// <see cref="TextShapingFeatures"/> value, the one actually threaded into every measure/paint
-        /// call site.
+        /// east-asian, position, and explicit <c>font-feature-settings</c>/<c>font-variant-alternates</c>
+        /// tags all folded into one <see cref="TextShapingFeatures"/> value, the one actually threaded
+        /// into every measure/paint call site.
         /// </summary>
         public TextShapingFeatures ActualTextShapingFeatures
         {
@@ -1160,7 +1172,7 @@ namespace PeachPDF.Html.Core.Dom
                     ActualFontVariantCaps,
                     ActualFontVariantNumeric,
                     ActualFontVariantEastAsian,
-                    ActualFontFeatureSettings,
+                    MergeExplicitFeatures(ActualFontFeatureSettings, ActualFontVariantAlternates),
                     Kerning: ActualFontKerning,
                     Language: Owner.Language,
                     Position: ActualFontVariantPosition);
@@ -1168,6 +1180,31 @@ namespace PeachPDF.Html.Core.Dom
                 _actualTextShapingFeatures = resolved;
                 return resolved;
             }
+        }
+
+        // Combines font-feature-settings and font-variant-alternates into one tag-deduplicated list, an
+        // alternates entry always replacing a feature-settings entry for the same tag (CSS Fonts 4 §6.8:
+        // "a value in font-variant-alternates takes precedence over the value in font-feature-settings")
+        // - done here, as a merge step, rather than by adding the open-ended ssNN/cvNN/salt/swsh/ornm/nalt/
+        // hist tag set to GsubShaper's own fixed ReservedTags (which only covers the closed enum-backed
+        // tag sets the other font-variant-* longhands produce). Deduplicating here also sidesteps a subtler
+        // ordering hazard in GsubShaper.GetActiveLookupIndices: a bare concatenation would let a
+        // feature-settings entry with value >= 2 (routed through its own customAltIndexByTag pass, which
+        // always overwrites last) silently outlast a same-tag alternates entry with value 1 (routed through
+        // defaultTags), regardless of which one was actually appended later.
+        private static IReadOnlyList<(string Tag, int Value)> MergeExplicitFeatures(
+            IReadOnlyList<(string Tag, int Value)> featureSettings, IReadOnlyList<(string Tag, int Value)> alternates)
+        {
+            if (alternates.Count == 0) return featureSettings;
+            if (featureSettings.Count == 0) return alternates;
+
+            var merged = new Dictionary<string, int>(featureSettings.Count + alternates.Count);
+            foreach (var (tag, value) in featureSettings) merged[tag] = value;
+            foreach (var (tag, value) in alternates) merged[tag] = value;
+
+            var result = new List<(string, int)>(merged.Count);
+            foreach (var pair in merged) result.Add((pair.Key, pair.Value));
+            return result;
         }
 
         #endregion

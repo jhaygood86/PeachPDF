@@ -784,6 +784,15 @@ namespace PeachPDF.Html.Core
             = new Dictionary<(string, string), RegisteredFontPalette>();
 
         /// <summary>
+        /// Named OpenType feature-value aliases registered with <c>@font-feature-values</c> at-rules,
+        /// keyed by <c>(normalized-family, block-kind, name)</c>. Consulted when resolving
+        /// <c>font-variant-alternates</c> functions (<c>styleset()</c>, <c>character-variant()</c>, etc.).
+        /// Rebuilt each parse pass.
+        /// </summary>
+        internal IReadOnlyDictionary<(string Family, FontFeatureValueBlockKind Kind, string Name), RegisteredFontFeatureValues> FontFeatureValues { get; set; }
+            = new Dictionary<(string, FontFeatureValueBlockKind, string), RegisteredFontFeatureValues>();
+
+        /// <summary>
         /// The relative-unit resolution context for per-page <c>@page</c> margins, captured by
         /// <c>DomParser.CascadeApplyPageStyles</c> on every parse pass (see
         /// <see cref="Entities.PageLengthContext"/> for why capture-at-parse). Null until a document
@@ -1173,6 +1182,7 @@ namespace PeachPDF.Html.Core
                 var cssValueParser = new CssValueParser(Adapter);
                 RegisteredProperties = RegisteredProperty.BuildRegistry(CssData, cssValueParser);
                 FontPaletteValues = RegisteredFontPalette.BuildRegistry(CssData, cssValueParser);
+                FontFeatureValues = RegisteredFontFeatureValues.BuildRegistry(CssData);
 
                 var media = MediaQueryContext.FromContainer(this, Media);
                 DomParser.ApplyDeclarativeStylesheet(root, CssData, media, Adapter);
