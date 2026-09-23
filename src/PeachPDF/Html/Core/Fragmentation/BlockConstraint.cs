@@ -1,4 +1,5 @@
 using PeachPDF.Html.Core.Dom;
+using System;
 using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Fragmentation
@@ -82,10 +83,39 @@ namespace PeachPDF.Html.Core.Fragmentation
                 ? 0
                 : Fragmentainer.Container.CurrentFragmentainer is { } live && live.SlotIndex == Fragmentainer.SlotIndex
                     ? live.BandEndInsetOf(Fragmentainer.SlotIndex)
-                    : Fragmentainer.Container.FootnoteAreaHeightsBySlot.GetValueOrDefault(Fragmentainer.SlotIndex, 0);
+                    : Fragmentainer.Container.TotalBandEndReservationFor(Fragmentainer.SlotIndex);
 
-        /// <summary>How much of <see cref="Fragmentainer"/>'s band remains below <see cref="BlockOffset"/>, after <see cref="BandEndInset"/>.</summary>
-        internal double RemainingBlockSize => NextBandHeight - BlockOffset - BandEndInset;
+        /// <summary>
+        /// How much of <see cref="Fragmentainer"/>'s band top a page float (css-page-floats' <c>float:
+        /// top</c>) has claimed, honored the same narrow way <see cref="BandEndInset"/> is - only for the
+        /// live pass's own slot, falling back to <c>HtmlContainerInt.TopFloatAreaHeightsBySlot</c> for any
+        /// other (see that member's own remarks on why a non-live slot's answer is necessarily coarser).
+        /// </summary>
+        internal double BandStartInset =>
+            Fragmentainer is null
+                ? 0
+                : Fragmentainer.Container.CurrentFragmentainer is { } live && live.SlotIndex == Fragmentainer.SlotIndex
+                    ? live.BandStartInsetOf(Fragmentainer.SlotIndex)
+                    : Fragmentainer.Container.TopFloatAreaHeightsBySlot.GetValueOrDefault(Fragmentainer.SlotIndex, 0);
+
+        /// <summary>
+        /// How much of <see cref="Fragmentainer"/>'s band remains below <see cref="BlockOffset"/>, after
+        /// <see cref="BandEndInset"/> and whatever part of <see cref="BandStartInset"/>
+        /// <see cref="BlockOffset"/> does not already account for.
+        /// </summary>
+        /// <remarks>
+        /// Not a bare <c>NextBandHeight - BlockOffset - BandEndInset - BandStartInset</c>: a box actually
+        /// placed at the head of a slot with a top-float reservation already has that reservation folded
+        /// into its own <see cref="BlockOffset"/> (<c>CssBox.ResolveBlockChildOffset</c>'s own floor
+        /// against <c>TopFloatAreaHeightsBySlot</c> moves its <c>Location.Y</c> below the reserved strip
+        /// before this is ever asked), so subtracting the full reservation again here would double-count
+        /// it. A box this is asked about <i>before</i> it has been placed there - <see cref="AtNextSlot"/>/
+        /// <see cref="AtSlot"/>'s <c>BlockOffset</c> of 0 - has no such floor applied yet, and needs the
+        /// full amount. <c>Math.Max(0, BandStartInset - BlockOffset)</c> is exactly "whatever of the
+        /// reservation <see cref="BlockOffset"/> has not already spent."
+        /// </remarks>
+        internal double RemainingBlockSize =>
+            NextBandHeight - BlockOffset - BandEndInset - Math.Max(0, BandStartInset - BlockOffset);
 
         /// <summary>
         /// Whether content <paramref name="blockExtent"/> tall, starting at <see cref="BlockOffset"/>,

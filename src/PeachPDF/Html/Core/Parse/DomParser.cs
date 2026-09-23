@@ -180,6 +180,15 @@ namespace PeachPDF.Html.Core.Parse
             htmlContainer.FootnoteCalls.Clear();
             DetachFootnoteBodies(root, htmlContainer, cssValueParser, cssData, media, containerSizes);
 
+            // Unlike a footnote, a css-page-floats box (float: top/bottom/top-bottom/snap) is never
+            // detached - it has no numbered call to leave behind, so it simply stays where the parser put
+            // it and HtmlContainerInt.ResolvePageFloatsForThisAttempt discovers its landing page from its
+            // own (ordinary block-flow) Location once layout has run. This only needs a plain discovery
+            // list, built once here alongside FootnoteCalls for the same reason: cheap to walk once at
+            // parse time versus re-walking the whole tree on every layout attempt.
+            htmlContainer.PageFloats.Clear();
+            CollectPageFloats(root, htmlContainer);
+
             return (root, cssData, metadata);
         }
 
@@ -1282,13 +1291,17 @@ namespace PeachPDF.Html.Core.Parse
             };
 
             // `float` has no effect on a flex/grid item (css-flexbox-1 §4). Coerced to `none` here rather
-            // than merely ignored by the item-collection filter, because IsFloated is read all over layout
-            // - CssLayoutEngine.FloatBox, sibling walks, line-box wrap-around - and a box that is an item
-            // *and* still answers "yes, I float" gets both treatments: the item was collected, then
-            // displaced by the float machinery, landing on its own row with a hole beside it.
+            // than merely ignored by the item-collection filter, because IsFloated/IsPageFloated are read
+            // all over layout - CssLayoutEngine.FloatBox, sibling walks, line-box wrap-around - and a box
+            // that is an item *and* still answers "yes, I float" gets both treatments: the item was
+            // collected, then displaced by the float machinery, landing on its own row with a hole beside
+            // it (or, for a page-float value, simply dropped - IsPageFloated is folded into IsOutOfFlow the
+            // same way IsFloated is, so the item-collection filter excludes it and nothing else lays it
+            // out). Covers every IsFloated/IsPageFloated value (left/right/inside/outside/top/bottom/
+            // top-bottom/snap) for that reason, not just left/right.
             // Floating.Footnote is deliberately not touched: css-gcpm-3 pulls a footnote body out of the
             // flow entirely, so it is not an item at all, which is what IsExcludedFromFlow already says.
-            if (box.Float.Value is Floating.Left or Floating.Right)
+            if (box.IsFloated || box.IsPageFloated)
             {
                 box.Float = CssProperty<Floating>.FromValue(Keywords.None, Floating.None);
             }
@@ -1442,8 +1455,9 @@ namespace PeachPDF.Html.Core.Parse
         /// <c>continue</c> below) - this is also what makes a nested <c>float: footnote</c> (one footnote
         /// body containing another) inert rather than a crash: nothing ever walks into an already-detached
         /// body looking for more footnotes, so a nested one simply renders as ordinary content in place
-        /// (never floated - <see cref="CssBox.IsFloated"/> only recognizes <c>left</c>/<c>right</c> - and
-        /// never blockified, per <see cref="DerivedStyle.ActualDisplay"/>'s own exclusion).
+        /// (never floated - <see cref="CssBox.IsFloated"/>/<see cref="CssBox.IsPageFloated"/> never
+        /// recognize <see cref="Floating.Footnote"/> - and never blockified, per
+        /// <see cref="DerivedStyle.ActualDisplay"/>'s own exclusion).
         /// </para>
         /// </remarks>
         private static void DetachFootnoteBodies(CssBox box, HtmlContainerInt htmlContainer, CssValueParser valueParser, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes)
@@ -1457,6 +1471,27 @@ namespace PeachPDF.Html.Core.Parse
                 }
 
                 DetachFootnoteBodies(child, htmlContainer, valueParser, cssData, media, containerSizes);
+            }
+        }
+
+        /// <summary>
+        /// Depth-first walk collecting every css-page-floats box (<c>float: top/bottom/top-bottom/snap</c>)
+        /// into <see cref="HtmlContainerInt.PageFloats"/>, in document order - the discovery list
+        /// <c>HtmlContainerInt.ResolvePageFloatsForThisAttempt</c> reads once layout has run. Unlike
+        /// <see cref="DetachFootnoteBodies"/>, nothing here rewrites the tree: a page float has no numbered
+        /// call to leave behind, so it stays exactly where the parser put it and this only records where
+        /// it is.
+        /// </summary>
+        private static void CollectPageFloats(CssBox box, HtmlContainerInt htmlContainer)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (child.IsPageFloated)
+                {
+                    htmlContainer.PageFloats.Add(child);
+                }
+
+                CollectPageFloats(child, htmlContainer);
             }
         }
 
