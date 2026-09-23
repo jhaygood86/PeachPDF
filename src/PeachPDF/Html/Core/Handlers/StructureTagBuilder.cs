@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Pdf;
@@ -94,6 +95,35 @@ namespace PeachPDF.Html.Core.Handlers
             var element = GetOrCreateElement(_elementsByBox, box, structureType);
             _parentStack.Push(element);
             return new PopParentScope(_parentStack);
+        }
+
+        /// <summary>
+        /// Re-opens the structure elements of the <c>display: contents</c> elements
+        /// <paramref name="ancestors"/> a box was lifted out of (outermost first), so the box's own element
+        /// still nests inside them. Such an element generates no box, but only the box tree is affected
+        /// (CSS Display 3 §2.5) - the document's semantics, and so its structure, are not. The elements
+        /// are cached by box like any other, so lifted siblings share one <c>/Sect</c> or <c>/L</c>.
+        /// </summary>
+        public IDisposable OpenPhantomAncestors(IReadOnlyList<CssBox> ancestors)
+        {
+            var opened = 0;
+
+            foreach (var ancestor in ancestors)
+            {
+                var classification = StructureTagMapper.Classify(ancestor);
+                if (classification.Kind != StructureTagKind.Grouping) continue;
+
+                _parentStack.Push(GetOrCreateElement(_elementsByBox, ancestor, classification.StructureType!));
+                opened++;
+
+                if (classification.StructureType == Keywords.Li)
+                {
+                    _parentStack.Push(GetOrCreateElement(_lbodyElementsByBox, ancestor, "LBody"));
+                    opened++;
+                }
+            }
+
+            return opened == 0 ? NullScope.Instance : new PopParentsScope(_parentStack, opened);
         }
 
         /// <summary>
@@ -315,6 +345,14 @@ namespace PeachPDF.Html.Core.Handlers
             readonly Stack<PdfStructureElement> _stack;
             public PopParentScope(Stack<PdfStructureElement> stack) => _stack = stack;
             public void Dispose() => _stack.Pop();
+        }
+
+        sealed class PopParentsScope(Stack<PdfStructureElement> stack, int count) : IDisposable
+        {
+            public void Dispose()
+            {
+                for (var i = 0; i < count; i++) stack.Pop();
+            }
         }
 
         sealed class EndMarkedContentScope : IDisposable

@@ -7071,6 +7071,73 @@ await SaveShowcaseAsync("atomic_inline_width", "Layout", "Atomic Inline Sizing",
     "CSS 2.1 §10.3.9/§10.6.3: a declared width, height, or min-height on a display: inline-block sizes the box itself — fixed-width labels, empty checkbox glyphs, percentage sizing, box-sizing, and the block axis.",
     atomicInlineWidthHtml, pdfConfig);
 
+// --- display: contents showcase (CSS Display 3 §2.5) ---
+const string DisplayContentsCss = """
+    <style>
+    @page { size: A4; margin: 60pt 40pt 40pt 40pt;
+            @top-center { content: "Chapter: " string(chapter); font: 10pt sans-serif; color: #7a3b16 } }
+    body { display: contents; background: #fbf5ea; font-family: sans-serif; font-size: 11pt; color: #2a2a2a }
+    h1 { font-size: 20pt; margin: 0 0 8pt 0; color: #7a3b16 }
+    h2 { font-size: 13pt; margin: 14pt 0 4pt 0; color: #7a3b16 }
+    p, .caption { margin: 0 0 6pt 0; line-height: 1.35 }
+    .caption { color: #555; font-size: 9.5pt }
+    .row { display: flex; gap: 6pt; width: 420pt; padding: 6pt; background: #fff; border: 1pt solid #d8c7a8; margin-bottom: 6pt }
+    .row > .item, .item { width: 90pt; height: 28pt; background: #e9a15a; color: #fff; text-align: center; line-height: 28pt }
+    .wrap { display: contents; border: 4pt solid crimson; background: crimson; padding: 30pt; margin: 30pt }
+    table { border-collapse: collapse; margin-bottom: 6pt }
+    td { border: 1pt solid #b89460; padding: 3pt 8pt; background: #fff }
+    .contents-row { display: contents }
+    .flag::before { content: "[!] "; color: #b12b2b }
+    .flag { display: contents }
+    .ruled { border-bottom: 1pt dashed #b89460; padding-bottom: 6pt }
+    section.chap { display: contents }
+    </style>
+    """;
+
+var displayContentsHtml = "<!DOCTYPE html><html><head>" + DisplayContentsCss + "</head><body>" +
+
+    "<section class=\"chap\" style=\"string-set: chapter 'One'\">" +
+    "<h1>display: contents</h1>" +
+    "<p>The element generates no box: its children take part in its parent's formatting context as if it were " +
+    "not there. Everything that is not the box &mdash; its <code>id</code>, its links, its tagged-PDF " +
+    "structure, its <code>string-set</code> &mdash; still belongs to the element.</p>" +
+
+    "<h2>Flex items through a wrapper</h2>" +
+    "<div class=\"caption\">The crimson wrapper below has a 4pt border, padding, margin and a background, and " +
+    "<code>display: contents</code>: none of it is drawn. Its three children are the flex items of the row, " +
+    "spaced by the 6pt gap exactly as if they were direct children.</div>" +
+    "<div class=\"row\"><div class=\"wrap\"><div class=\"item\">one</div><div class=\"item\">two</div></div>" +
+    "<div class=\"item\">three</div></div>" +
+
+    "<h2>Table cells through a row</h2>" +
+    "<div class=\"caption\">Each <code>&lt;tr&gt;</code> is <code>display: contents</code>, so the cells are wrapped " +
+    "in one anonymous row: all four sit on one line.</div>" +
+    "<table><tbody><tr class=\"contents-row\"><td>a1</td><td>a2</td></tr>" +
+    "<tr class=\"contents-row\"><td>b1</td><td>b2</td></tr></tbody></table>" +
+
+    "<h2>Inline content and generated content</h2>" +
+    "<p class=\"ruled\">This sentence has a <span class=\"flag\">flagged phrase whose span is contents, with its own " +
+    "::before still generated</span> in the middle of the line, and it wraps like any other text.</p>" +
+
+    "<h2>The body itself</h2>" +
+    "<p>This page's <code>&lt;body&gt;</code> is <code>display: contents</code> with a cream background: it " +
+    "generates no box, and the background still fills the whole page canvas.</p>" +
+    "</section>" +
+
+    "<section class=\"chap\" style=\"string-set: chapter 'Two'\">" +
+    "<h1 style=\"break-before: page\">Still the same element</h1>" +
+    "<p>The running header above changed from &ldquo;One&rdquo; to &ldquo;Two&rdquo;: each chapter is a " +
+    "<code>&lt;section style=\"display: contents\"&gt;</code> whose <code>string-set</code> is assigned where its " +
+    "content begins. The page break is on the <code>&lt;h1&gt;</code> inside it: a <code>break-before</code> on the " +
+    "<code>display: contents</code> element itself would have no box to break before.</p>" +
+    "</section>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("display_contents", "Layout", "display: contents",
+    "CSS Display 3 §2.5: an element with display: contents generates no box — its children become flex items, table cells and inline content of its parent — while its id, string-set, links and the body's canvas background still work.",
+    displayContentsHtml, pdfConfig);
+
 // --- line-height: normal showcase (CSS 2.1 §10.8.1) ---
 
 const string NormalLineHeightCss = """

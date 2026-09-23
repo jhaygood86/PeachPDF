@@ -1,6 +1,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
+using PeachPDF.Html.Core.Utils;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -174,7 +175,9 @@ namespace PeachPDF.Html.Core.Dom
             // First argument is the counter name
             if (arguments[0] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } counterNameToken)
             {
-                var counter = CssCounterEngine.GetCounter(cssBox, counterNameToken.Data.ToString());
+                // A display:contents element has no counter scope of its own, so it reads the counters in
+                // effect where its content begins.
+                var counter = CssCounterEngine.GetCounter(DomUtils.ResolveCounterAnchor(cssBox), counterNameToken.Data.ToString());
                 var counterValue = counter?.Value ?? 0;
 
                 // TODO: Second argument would be the list-style (decimal, roman, etc.)
@@ -379,9 +382,10 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static void CollectTextFromChildren(CssBox box, StringBuilder builder)
         {
-            foreach (var childBox in box.Boxes)
+            foreach (var childBox in box.ContentChildren)
             {
-                if (childBox.IsPseudoElement)
+                // A lifted child a later pass dropped (a whitespace-only text box) is no longer in the tree.
+                if (childBox.IsPseudoElement || (box.IsDisplayContentsShell && childBox.ParentBox is null))
                 {
                     continue;
                 }
@@ -404,8 +408,9 @@ namespace PeachPDF.Html.Core.Dom
         private static string GetPseudoElementContent(CssBox cssBox, bool isBefore)
         {
             // Look for pseudo-element boxes
-            var pseudoBox = cssBox.Boxes.FirstOrDefault(b =>
-     isBefore ? b.IsBeforePseudoElement : b.IsAfterPseudoElement);
+            // (One lifted out of a display:contents child sits among these too, but is that child's.)
+            var pseudoBox = cssBox.ContentChildren.FirstOrDefault(b =>
+                (isBefore ? b.IsBeforePseudoElement : b.IsAfterPseudoElement) && b.OriginatingElement == cssBox);
 
             return pseudoBox != null ? GetElementText(pseudoBox) : string.Empty;
         }

@@ -203,10 +203,8 @@ namespace PeachPDF.Html.Core.Dom
                                 if (attrNameToken is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
                                 {
                                     var attrName = keywordToken.Data.ToString();
-                                    // Get attribute from parent element if this is a pseudo-element
-                                    var sourceBox = cssBox.IsPseudoElement && cssBox.ParentBox != null
-                                        ? cssBox.ParentBox
-                                        : cssBox;
+                                    // Get attribute from the originating element if this is a pseudo-element
+                                    var sourceBox = cssBox.OriginatingElement;
                                     var attrValue = sourceBox.GetAttribute(attrName, "");
                                     if (!string.IsNullOrEmpty(attrValue))
                                     {
@@ -283,7 +281,8 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (container?.TargetPageMap is { } map)
                 {
-                    var targetRect = CommonUtils.GetFirstValueOrDefault(targetBox.Rectangles, targetBox.Bounds);
+                    var geometryBox = DomUtils.ResolveGeometryBox(targetBox);
+                    var targetRect = CommonUtils.GetFirstValueOrDefault(geometryBox.Rectangles, geometryBox.Bounds);
                     var pageIndex = PageAnchorResolver.ResolvePixelYToPage(
                         container, map.SlotToPage, map.MaxMappedSlot, map.FallbackPageCount, targetRect.Top);
                     sb.Append(CssCounterEngine.FormatCounterValue(pageIndex + 1, style));
@@ -300,7 +299,7 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            var counterValue = CssCounterEngine.GetCounter(targetBox, counterNameToken.Data.ToString())?.Value ?? 1;
+            var counterValue = CssCounterEngine.GetCounter(DomUtils.ResolveCounterAnchor(targetBox), counterNameToken.Data.ToString())?.Value ?? 1;
             sb.Append(CssCounterEngine.FormatCounterValue(counterValue, style));
         }
 
@@ -390,7 +389,7 @@ namespace PeachPDF.Html.Core.Dom
                 return null;
             }
 
-            var sourceBox = cssBox.IsPseudoElement && cssBox.ParentBox != null ? cssBox.ParentBox : cssBox;
+            var sourceBox = cssBox.OriginatingElement;
             var value = sourceBox.GetAttribute(nameToken.Data.ToString(), "");
             return string.IsNullOrEmpty(value) ? null : value;
         }
@@ -957,24 +956,20 @@ namespace PeachPDF.Html.Core.Dom
         internal static string? ExtractText(CssBox cssBox)
         {
             // Get the text content of the element (normalized whitespace)
-            // If this is a pseudo-element, get the parent's text
-            var sourceBox = cssBox.IsPseudoElement && cssBox.ParentBox != null
-                ? cssBox.ParentBox
-                : cssBox;
-
-            return GetTextContent(sourceBox, excludePseudoElements: true);
+            // If this is a pseudo-element, get its originating element's text
+            return GetTextContent(cssBox.OriginatingElement, excludePseudoElements: true);
         }
 
         private static string? ExtractPseudoElementContent(CssBox cssBox, bool isBeforePseudo)
         {
             // Find the pseudo-element box
-            // If we're in a pseudo-element, look at the parent element's pseudo-elements
-            var sourceBox = cssBox.IsPseudoElement && cssBox.ParentBox != null
-                ? cssBox.ParentBox
-                : cssBox;
+            // If we're in a pseudo-element, look at the originating element's pseudo-elements
+            var sourceBox = cssBox.OriginatingElement;
 
-            var pseudoElement = sourceBox.Boxes.FirstOrDefault(b =>
-                isBeforePseudo ? b.IsBeforePseudoElement : b.IsAfterPseudoElement);
+            // A ::before/::after lifted out of a display:contents child sits among this element's own
+            // children but belongs to that child (OriginatingElement), so it is not this element's.
+            var pseudoElement = sourceBox.ContentChildren.FirstOrDefault(b =>
+                (isBeforePseudo ? b.IsBeforePseudoElement : b.IsAfterPseudoElement) && b.OriginatingElement == sourceBox);
 
             if (pseudoElement == null)
             {
@@ -1025,9 +1020,7 @@ namespace PeachPDF.Html.Core.Dom
                                 if (attrNameToken is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
                                 {
                                     var attrName = keywordToken.Data.ToString();
-                                    var targetBox = pseudoElement.IsPseudoElement && pseudoElement.ParentBox != null
-                                        ? pseudoElement.ParentBox
-                                        : pseudoElement;
+                                    var targetBox = pseudoElement.OriginatingElement;
                                     var attrValue = targetBox.GetAttribute(attrName, "");
                                     if (!string.IsNullOrEmpty(attrValue))
                                     {
@@ -1060,8 +1053,14 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var textBuilder = new StringBuilder();
-            foreach (var childBox in box.Boxes)
+            foreach (var childBox in box.ContentChildren)
             {
+                // A lifted child a later pass dropped (a whitespace-only text box) is no longer in the tree.
+                if (box.IsDisplayContentsShell && childBox.ParentBox is null)
+                {
+                    continue;
+                }
+
                 // Skip pseudo-elements when extracting regular text content
                 if (excludePseudoElements && childBox.IsPseudoElement)
                 {

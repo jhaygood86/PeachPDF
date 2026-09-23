@@ -20,6 +20,7 @@ namespace PeachPDF.CSS
         Flex,
         InlineFlex,
         Grid,
-        InlineGrid
+        InlineGrid,
+        Contents
     }
 }

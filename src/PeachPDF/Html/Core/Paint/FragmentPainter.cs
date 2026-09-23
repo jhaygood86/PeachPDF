@@ -370,6 +370,12 @@ namespace PeachPDF.Html.Core.Paint
                 return;
             }
 
+            // The display: contents elements this box was lifted out of still have structure elements of
+            // their own, and this box's must nest inside them.
+            using var phantomAncestors = box.DisplayContentsAncestors is { Count: > 0 } lifted
+                ? builder.OpenPhantomAncestors(lifted)
+                : null;
+
             var classification = StructureTagMapper.Classify(box);
             switch (classification.Kind)
             {

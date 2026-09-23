@@ -635,7 +635,7 @@ Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks 
 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
-| `display` | [display](https://developer.mozilla.org/en-US/docs/Web/CSS/display) | `block`, `inline`, `inline-block`, `none`, `flex`, `inline-flex`, `grid`, `inline-grid`, `table`, `table-row`, `table-cell`, `table-header-group`, `table-footer-group`, `table-row-group`, `table-column`, `table-column-group`, `table-caption`, `list-item` |
+| `display` | [display](https://developer.mozilla.org/en-US/docs/Web/CSS/display) | `block`, `inline`, `inline-block`, `none`, `flex`, `inline-flex`, `grid`, `inline-grid`, `table`, `table-row`, `table-cell`, `table-header-group`, `table-footer-group`, `table-row-group`, `table-column`, `table-column-group`, `table-caption`, `list-item`, `contents` (see [`display: contents`](#display-contents) below) |
 | `position` | [position](https://developer.mozilla.org/en-US/docs/Web/CSS/position) | `static`, `relative`, `absolute`, `fixed`. A fixed box's containing block is the **page area** ([CSS 2.1 §10.1](https://www.w3.org/TR/CSS21/visudet.html#containing-block-details): the viewport in continuous media, the page area in paged media), so `top`/`left` are measured from the page's content corner — `top: 0; left: 0` sits at the top-left of the content area, inside the `@page` margins, and `left: 0; right: 0` spans the full measure. Percentages resolve against that same area, per page: on a document whose pages have different margins or sizes, a fixed box follows each page's own area rather than holding one absolute position on the sheet. `sticky` is treated as `relative` with a zero offset, since there is no scroll to ever cross a sticky threshold against — it participates in normal flow and in stacking/z-index like a positioned box, but its `top`/`right`/`bottom`/`left` values (the scroll-threshold parameters, not a static offset) never shift it. `running(<custom-ident>)` ([css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#running-syntax)) removes the element from normal flow entirely, making it available to a page margin box via `content: element(<custom-ident>)` — see [Running elements](#running-elements-position-running--element) |
 | `float` | [float](https://developer.mozilla.org/en-US/docs/Web/CSS/float) | `left`, `right`, `none`, `footnote` ([css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#footnotes)), `top`, `bottom`, `top-bottom`, `snap`, `inside`, `outside` ([css-page-floats](https://www.w3.org/TR/css-page-floats-3/)) — see [Page floats](#page-floats-float-topbottomtop-bottomsnapinsideoutside) for the last six. `footnote` removes an inline-level element from normal flow entirely and routes its content to the page's - or, with [`float-reference: column`](#footnotes-float-footnote), its own column's - footnote area, the same "remove from flow" idea `position: running()` uses for margin boxes; see [Footnotes](#footnotes-float-footnote). A `left`/`right`/`inside`/`outside` float shares one inline formatting context with the surrounding inline content of the block it is in regardless of source order — placed beside that content's line boxes, with text wrapping around it, whether the float **precedes or follows** the content on the same line ([CSS 2.1 §9.5](https://www.w3.org/TR/CSS21/visuren.html#floats), [§9.5.1 rule 6](https://www.w3.org/TR/CSS21/visuren.html#float-position)). A shrink-to-fit box holding both (a float, an auto-width `position: absolute` box, an auto table column) is sized for the text and the float side by side, as are two adjacent floats — which are themselves placed side by side correctly. A box that establishes its own formatting context and takes its height from content — a float, an `overflow` other than `visible`, an `inline-block`, an absolutely/fixed-positioned box, a table cell or caption, a flex or grid item — **contains** its floats: its height grows to cover any floating descendant hanging below its content ([CSS 2.1 §10.6.7](https://www.w3.org/TR/CSS21/visudet.html#root-height)), which is what makes the `overflow: hidden` containment idiom work. An ordinary block correctly does not, so a float still overhangs it. `display: flow-root`, css-display-3's dedicated way to ask for containment, is not implemented and computes as `block`. A `left`/`right`/`inside`/`outside` float whose own content is taller than fits the remaining page overflows that page rather than continuing its own content onto a later one — the page it starts on simply shows as much of it as fits, and everything else in the document around it still lays out and paginates normally either way |
 | `float-reference` | [css-page-floats](https://www.w3.org/TR/css-page-floats-3/) | `inline` (initial), `column`, `region`, `page` - which fragmentation context a float is positioned relative to. Consumed today only by a `float: footnote` source, where `column` routes the note into the note area of the column its reference landed in rather than the page's (see [Footnotes](#footnotes-float-footnote)); `page` is the same page-level behavior as the default, and `inline`/`region` behave as `page` there - a footnote has no inline note area to fall back to, and PeachPDF implements no part of CSS Regions. A `top`/`bottom`/`top-bottom`/`snap` page float (see [Page floats](#page-floats-float-topbottomtop-bottomsnapinsideoutside)) does not consume this property either — it always resolves against the page, regardless of its own `float-reference` value, including `column`. MDN has no page for this property, so the specification is linked directly |
@@ -645,6 +645,54 @@ Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks 
 | `overflow` | [overflow](https://developer.mozilla.org/en-US/docs/Web/CSS/overflow) | Affects clipping regions; there is no interactive scrolling in PDF output. `hidden` clips descendant content to the padding edge, following any `border-radius` on the clipping box (rather than clipping to a rectangle regardless of rounding) — the curve's own radius is reduced by the border width the same way `background-clip: padding-box` is, above |
 | `visibility` | [visibility](https://developer.mozilla.org/en-US/docs/Web/CSS/visibility) | `visible`, `hidden`, `collapse` — on a table row, row group, column, or column group, `collapse` removes it from the table's geometry entirely (the rows/columns after it shift in to fill the gap), distinct from `hidden`, which reserves the element's layout space and only omits painting it |
 | `z-index` | [z-index](https://developer.mozilla.org/en-US/docs/Web/CSS/z-index) | Full support for positioned elements |
+
+#### `display: contents`
+
+An element with `display: contents` generates no box of its own: for box generation and layout it is
+treated as if it had been replaced by its children and its `::before`/`::after`
+([CSS Display 3 §2.5](https://www.w3.org/TR/css-display-3/#valdef-display-contents)). A flex or grid
+container's items are therefore the children of a `contents` wrapper, a `<tr style="display: contents">`
+hands its cells to the table around it, and a `<span style="display: contents">` inside a paragraph
+disappears from its lines. Only the box tree is affected: selectors, inheritance and the element itself
+still exist, so its children still inherit `color`, `font-size`, `direction` and the rest from it.
+
+What follows from having no box:
+
+- The element's own box-model and painting properties — `margin`, `padding`, `border`, `background`,
+  `opacity`, `transform`, `position`, `float`, `overflow`, `width`/`height` — have nothing to apply to.
+- A `::first-letter` or `::first-line` on the element has no effect, and `text-decoration` on it does not
+  reach its content (decorations propagate through the box tree). A `::first-letter` on an ancestor block
+  still reaches into its text.
+- A `counter-reset`, `counter-increment` or `counter-set` on it has no effect
+  ([CSS Lists 3 §4.5](https://www.w3.org/TR/css-lists-3/#nobox)), including the implicit `list-item`
+  counters of a `<ol style="display: contents">`; its `<li>` children still count and get their markers, but
+  a counter they increment stays in scope for the elements that follow the list (a second `contents` list
+  continues the first one's numbering).
+- `unicode-bidi` on it (so a `<bdi>`, `<bdo>` or `[dir]` element with `display: contents`) does not isolate or
+  override its content, which stays in the surrounding paragraph — `unicode-bidi` acts on an inline box
+  ([CSS Writing Modes 4](https://www.w3.org/TR/css-writing-modes-4/#unicode-bidi)). Its `direction` is still
+  inherited by its children.
+- In a table, cells whose rows are `contents` are wrapped in anonymous rows by the ordinary
+  [table fixup](https://www.w3.org/TR/CSS22/tables.html#anonymous-boxes), so the cells of two consecutive
+  `<tr style="display: contents">` share one row.
+
+What it does *not* lose: the element is still in the document. Its `id` still resolves for `href="#id"`
+links, named destinations, bookmarks and `target-counter()`/`target-text()` (at the place its content
+begins); a link or `bookmark-level` on it works; its `string-set` is assigned where its content begins
+([CSS Generated Content for Paged Media §1.1](https://www.w3.org/TR/css-gcpm-3/#string-set)); and with
+[tagged PDF](#tagged-pdf-pdfua-support) its structure element is kept around its children's (`<ul style="display:
+contents">` is still an `/L`, a `<section>` a `/Sect`). `<body style="display: contents">` still propagates
+its background to the page canvas, and `display: contents` on the root element computes to `block`.
+
+Elements whose rendering CSS does not fully control compute to `display: none` instead
+([Appendix B](https://www.w3.org/TR/css-display-3/#unbox)): `<br>`, `<wbr>`, `<img>`, `<video>`, `<audio>`,
+`<canvas>`, `<iframe>`, `<embed>`, `<object>`, `<meter>`, `<progress>`, `<input>`, `<select>`,
+`<textarea>`, and inline `<svg>` and `<math>` themselves. `<button>`, `<details>`, `<fieldset>` and
+`<legend>` just lose their box. A `::before`/`::after` with `display: contents` is laid out as `inline`.
+
+**Known gaps:** `display: contents` on an element *inside* an inline `<svg>` or `<math>` (`<g>`, `<tspan>`,
+`<use>`, `<mrow>`, …) has no effect, because those renderers do not read the CSS `display` property. A counter
+incremented by a child of a `display: contents` list leaks into the elements after the list (above).
 
 #### Atomic inline-level layout is approximated, not fully atomic
 

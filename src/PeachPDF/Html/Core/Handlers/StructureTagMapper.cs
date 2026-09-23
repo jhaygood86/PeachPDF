@@ -128,6 +128,13 @@ namespace PeachPDF.Html.Core.Handlers
                 _ => null
             };
 
+            // A table part that is itself the child of a <tr>/<td>/... with display: contents got an
+            // anonymous wrapper only because box generation "ignores the elided elements entirely"; the
+            // document's own element - re-opened around the child by StructureTagBuilder.OpenPhantomAncestors -
+            // is the real one, and would otherwise sit inside a second, synthesized one of the same type.
+            if (tableStructureType != null && IsProvidedByDisplayContentsAncestors(box, tableStructureType))
+                return StructureTagClassification.None;
+
             if (tableStructureType != null)
                 return HasOwnPaintedContent(box)
                     ? StructureTagClassification.Content(tableStructureType)
@@ -138,6 +145,32 @@ namespace PeachPDF.Html.Core.Handlers
             return HasOwnPaintedContent(box)
                 ? StructureTagClassification.Content("Span")
                 : StructureTagClassification.None;
+        }
+
+        static bool IsProvidedByDisplayContentsAncestors(CssBox box, string structureType)
+        {
+            if (box.Boxes.Count == 0) return false;
+
+            foreach (var child in box.Boxes)
+            {
+                var provided = false;
+
+                if (child.DisplayContentsAncestors is { } ancestors)
+                {
+                    foreach (var ancestor in ancestors)
+                    {
+                        if (Classify(ancestor) is { Kind: StructureTagKind.Grouping } c && c.StructureType == structureType)
+                        {
+                            provided = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!provided) return false;
+            }
+
+            return true;
         }
 
         /// <summary>

@@ -113,7 +113,9 @@ namespace PeachPDF.Html.Core.Handlers
                 // FragmentPainter itself uses to skip painting a box entirely.
                 if (box.DerivedStyle.ActualDisplay == Keywords.None) return;
 
-                var ownRect = CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
+                // A display:contents element has no geometry of its own: its content's is where it points.
+                var geometryBox = DomUtils.ResolveGeometryBox(box);
+                var ownRect = CommonUtils.GetFirstValueOrDefault(geometryBox.Rectangles, geometryBox.Bounds);
                 rect = PeachPDF.Utilities.Utils.Convert(ownRect, ppp);
             }
             else if (target.Length > 1 && target[0] == '#')
@@ -177,7 +179,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             // Same pseudo-element -> parent redirect CssContentEngine's own attr() handling uses - a
             // pseudo-element's own attributes don't exist, so it must read the real source element's.
-            var sourceBox = box.IsPseudoElement && box.ParentBox != null ? box.ParentBox : box;
+            var sourceBox = box.OriginatingElement;
             var value = sourceBox.GetAttribute(nameToken.Data.ToString(), "");
             return string.IsNullOrEmpty(value) ? null : value;
         }

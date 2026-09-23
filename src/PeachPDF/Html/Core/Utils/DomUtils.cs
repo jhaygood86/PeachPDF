@@ -498,6 +498,11 @@ namespace PeachPDF.Html.Core.Utils
         {
             if (box == null || string.IsNullOrEmpty(id)) return null;
 
+            return FindBoxById(box, id) ?? FindDisplayContentsShellById(box, id);
+        }
+
+        private static CssBox? FindBoxById(CssBox box, string id)
+        {
             if (box.HtmlTag != null && id.Equals(box.HtmlTag.TryGetAttribute("id"), StringComparison.OrdinalIgnoreCase))
             {
                 return box;
@@ -505,9 +510,115 @@ namespace PeachPDF.Html.Core.Utils
 
             foreach (var childBox in box.Boxes)
             {
-                var foundBox = GetBoxById(childBox, id);
+                var foundBox = FindBoxById(childBox, id);
                 if (foundBox != null)
                     return foundBox;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// A <c>display: contents</c> element is in no box's <see cref="CssBox.Boxes"/>, so a walk cannot
+        /// find it; the document's flat shell list (<see cref="HtmlContainerInt.DisplayContentsShells"/>)
+        /// can. Only asked after the walk found nothing, so a duplicate id resolves to the real box.
+        /// </summary>
+        private static CssBox? FindDisplayContentsShellById(CssBox box, string id)
+        {
+            if (box.HtmlContainer is not { DisplayContentsShells.Count: > 0 } container) return null;
+
+            foreach (var shell in container.DisplayContentsShells)
+            {
+                if (id.Equals(shell.HtmlTag?.TryGetAttribute("id"), StringComparison.OrdinalIgnoreCase))
+                    return shell;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// The box that stands in for <paramref name="box"/> wherever its position in the laid-out document
+        /// is asked for - an id link's destination, a bookmark, <c>target-counter(..., page)</c>,
+        /// <c>string-set</c>. Any box but a <c>display: contents</c> shell is its own; a shell has no
+        /// geometry, so this is where its content begins: the first lifted descendant that was laid out
+        /// (a single path down the first children, never a traversal), else - for an element with no
+        /// content, which would have generated a box at that point - the box that received its children.
+        /// </summary>
+        internal static CssBox ResolveGeometryBox(CssBox box)
+        {
+            if (!box.IsDisplayContentsShell) return box;
+
+            if (FirstLaidOut(box.ContentChildren) is { } content) return content;
+
+            var parent = box.ParentBox;
+            while (parent is { IsDisplayContentsShell: true }) parent = parent.ParentBox;
+            return parent ?? box;
+        }
+
+        /// <summary>
+        /// Inserts <paramref name="shell"/> into <paramref name="boxes"/> - a list the tree walk built in
+        /// document order - at the place its content begins: before the first entry laid out below it.
+        /// A <c>display: contents</c> element is in no box's children, so the walk that produced the list
+        /// never met it; ordering by position is what keeps a bookmark outline's nesting right.
+        /// </summary>
+        /// <remarks>
+        /// Placed before whatever else begins at the same Y - its own content (a wrapper and the heading it
+        /// wraps), whose entry follows the wrapper's. <paramref name="floor"/>/<paramref name="floorY"/> carry
+        /// where the previous shell went, so shells sharing a Y keep document order between themselves.
+        /// </remarks>
+        internal static void InsertByDocumentPosition(List<CssBox> boxes, CssBox shell, ref int floor, ref double floorY)
+        {
+            var top = TopOf(shell);
+            var start = Math.Abs(floorY - top) <= HtmlContainerInt.PageBoundaryEpsilon ? floor : 0;
+            var index = boxes.FindIndex(start, b => TopOf(b) >= top - HtmlContainerInt.PageBoundaryEpsilon);
+            index = index < 0 ? boxes.Count : index;
+            boxes.Insert(index, shell);
+
+            floor = index + 1;
+            floorY = top;
+        }
+
+        private static double TopOf(CssBox box)
+        {
+            var geometryBox = ResolveGeometryBox(box);
+            return CommonUtils.GetFirstValueOrDefault(geometryBox.Rectangles, geometryBox.Bounds).Top;
+        }
+
+        /// <summary>
+        /// The box whose counters are those in effect where <paramref name="box"/>'s content begins - what
+        /// <c>target-counter()</c> and <c>string-set</c> read for a <c>display: contents</c> element. It has no
+        /// counter scope of its own (CSS Lists 3 §4.5), and is in no sibling list to read one from, so this is
+        /// the box just before its first lifted child - the previous sibling, else the parent - and not the
+        /// child itself, whose own <c>counter-increment</c> comes after the element's position. Structural, not
+        /// geometric: <c>target-counter()</c> is resolved before layout has run.
+        /// </summary>
+        internal static CssBox ResolveCounterAnchor(CssBox box)
+        {
+            if (!box.IsDisplayContentsShell) return box;
+
+            foreach (var child in box.ContentChildren)
+            {
+                if (child.ParentBox is null || child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
+                return GetPreviousSibling(child) ?? child.ParentBox;
+            }
+
+            var parent = box.ParentBox;
+            while (parent is { IsDisplayContentsShell: true }) parent = parent.ParentBox;
+            return parent ?? box;
+        }
+
+        private static CssBox? FirstLaidOut(IReadOnlyList<CssBox> children)
+        {
+            foreach (var child in children)
+            {
+                // A lifted child a later pass dropped (a whitespace-only text box) has no parent any more.
+                if (child.ParentBox is null || child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
+                if (child.Rectangles.Count > 0 || child.Bounds.Width > 0 || child.Bounds.Height > 0)
+                    return child;
+
+                if (FirstLaidOut(child.Boxes) is { } nested) return nested;
             }
 
             return null;
@@ -525,6 +636,18 @@ namespace PeachPDF.Html.Core.Utils
         {
             var index = new Dictionary<string, CssBox>(StringComparer.OrdinalIgnoreCase);
             CollectIds(root, index);
+
+            // The elements the walk above cannot reach (display: contents), after it so a duplicate id
+            // still resolves to the real box, as GetBoxById's own lookup does.
+            if (root.HtmlContainer is { } container)
+            {
+                foreach (var shell in container.DisplayContentsShells)
+                {
+                    if (shell.HtmlTag?.TryGetAttribute("id") is { Length: > 0 } shellId)
+                        index.TryAdd(shellId, shell);
+                }
+            }
+
             return index;
         }
 

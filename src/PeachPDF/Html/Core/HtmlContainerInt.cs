@@ -101,6 +101,17 @@ namespace PeachPDF.Html.Core
         internal List<CssBoxFootnoteCall> FootnoteCalls { get; } = [];
 
         /// <summary>
+        /// Every <c>display: contents</c> element of the document, in document order - recorded by the
+        /// cascade (<c>DomParser.CascadeApplyStyles</c>, the one walk that visits every box) and spliced
+        /// out of the box tree by <c>DomParser.FlattenDisplayContents</c>. A shell is in no
+        /// <see cref="Dom.CssBox.Boxes"/> list, so this flat list is the only way to reach the element for
+        /// everything that addresses it rather than lays it out: id lookups and the links, bookmarks and
+        /// cross-references built on them, <c>string-set</c>, the tagged-PDF structure tree, and the canvas
+        /// background of a <c>&lt;body&gt;</c>. Rebuilt with every parse.
+        /// </summary>
+        internal List<Dom.CssBox> DisplayContentsShells { get; } = [];
+
+        /// <summary>
         /// Whether this document has any <c>float: footnote</c> call at all - gates
         /// <see cref="PerformLayout"/>'s footnote convergence loop so a document that doesn't use the
         /// feature pays nothing for it. A plain list-count check, not a tree walk, since
@@ -246,6 +257,60 @@ namespace PeachPDF.Html.Core
         /// Used by CSS GCPM string-set and string() functions.
         /// </summary>
         internal IReadOnlyList<NamedString> NamedStrings => _namedStrings;
+
+        /// <summary>
+        /// Assigns the <c>string-set</c> of every <c>display: contents</c> element, which no layout hook
+        /// ever reaches (a shell is in no box's children, so it is never laid out). GCPM 3 §1.1.1 assigns a
+        /// named string "at the point when the content box of the element is first created (or would have
+        /// been created ...)" - for such an element, where its content begins
+        /// (<see cref="DomUtils.ResolveGeometryBox"/>), and this runs once the document's geometry is final,
+        /// before <see cref="LayoutMarginBoxes"/> (the only reader of <see cref="NamedStrings"/>).
+        /// </summary>
+        /// <remarks>
+        /// <c>string()</c> and its <c>first</c>/<c>last</c>/<c>start</c> keywords select by position in
+        /// <see cref="NamedStrings"/>, which layout fills in document order - so each new entry is inserted
+        /// before the first one laid out below it, not appended.
+        /// </remarks>
+        private void RegisterDisplayContentsNamedStrings()
+        {
+            // Where the previous shell's string went, so two shells whose content begins at the same Y (an
+            // element and the element it directly wraps) keep their document order between them.
+            var floor = 0;
+            var floorY = double.NaN;
+
+            foreach (var shell in DisplayContentsShells)
+            {
+                if (shell.StringSet is not { Length: > 0 } stringSet || stringSet == Keywords.None) continue;
+
+                if (shell.NamedStrings.Count > 0)
+                {
+                    UnregisterNamedStrings(shell.NamedStrings.Values);
+                    shell.NamedStrings.Clear();
+                }
+
+                // Evaluates and registers (appending); taken back out to be placed by position instead.
+                CssNamedStringEngine.ApplyStringSet(shell);
+                UnregisterNamedStrings(shell.NamedStrings.Values);
+
+                var geometryBox = DomUtils.ResolveGeometryBox(shell);
+                var top = CommonUtils.GetFirstValueOrDefault(geometryBox.Rectangles, geometryBox.Bounds).Top;
+
+                foreach (var namedString in shell.NamedStrings.Values)
+                {
+                    namedString.Y = top;
+
+                    // Before whatever else begins at this same Y: that is the shell's own content (a wrapper
+                    // and the heading it wraps), and a wrapper's string comes first.
+                    var start = Math.Abs(floorY - top) <= PageBoundaryEpsilon ? floor : 0;
+                    var index = _namedStrings.FindIndex(start, n => n.Y >= top - PageBoundaryEpsilon);
+                    index = index < 0 ? _namedStrings.Count : index;
+                    _namedStrings.Insert(index, namedString);
+
+                    floor = index + 1;
+                    floorY = top;
+                }
+            }
+        }
 
         /// <summary>
         /// Registers a named string at the document level in document order.
@@ -1084,6 +1149,9 @@ namespace PeachPDF.Html.Core
             ClearRunningElements();
             ClearNamedPageElements();
             FootnoteCalls.Clear();
+            // Not reachable from the tree Root.Dispose() above just released, so disposed on their own.
+            foreach (var shell in DisplayContentsShells) shell.Dispose();
+            DisplayContentsShells.Clear();
             FootnoteAreaHeightsBySlot = [];
             _footnoteAreasBySlot = [];
             FootnoteNumberContext = null;
@@ -1154,10 +1222,19 @@ namespace PeachPDF.Html.Core
         /// handled separately by <see cref="PdfGenerator.AddDeclarativePage"/> (whole-document page geometry
         /// needs the page's own <c>PageSize</c>/margins already resolved, and this method runs before that).
         /// </param>
-        internal async ValueTask SetDeclarativeRoot(CssBox root, string? documentLanguage, PeachPdfCssContent? stylesheet = null)
+        /// <param name="fragmentDisplayContentsShells">The <c>display: contents</c> elements
+        /// <c>IContainer.Html(...)</c> fragments already spliced out of their own trees while the document was
+        /// built (<see cref="Utils.CssPropertyFactory.DisplayContentsShells"/>); adopted into
+        /// <see cref="DisplayContentsShells"/> so they stay addressable.</param>
+        internal async ValueTask SetDeclarativeRoot(CssBox root, string? documentLanguage, PeachPdfCssContent? stylesheet = null, IReadOnlyList<CssBox>? fragmentDisplayContentsShells = null)
         {
             Clear();
             CssBox.ClearCounter();
+
+            // Fragments spliced their own display: contents elements out before they were grafted in, so
+            // this is the only place left that still knows about them.
+            if (fragmentDisplayContentsShells is not null)
+                DisplayContentsShells.AddRange(fragmentDisplayContentsShells);
 
             root.IsRoot = true;
             root.HtmlContainer = this;
@@ -1185,13 +1262,19 @@ namespace PeachPDF.Html.Core
                 FontFeatureValues = RegisteredFontFeatureValues.BuildRegistry(CssData);
 
                 var media = MediaQueryContext.FromContainer(this, Media);
-                DomParser.ApplyDeclarativeStylesheet(root, CssData, media, Adapter);
+                DomParser.ApplyDeclarativeStylesheet(root, CssData, media, Adapter, DisplayContentsShells);
             }
 
             // Mirrors DomParser.GenerateCssTree's own ordering (AssignBidiLevels, then the tree walk that
             // calls ParseToWords on every text box) - see this method's own <paramref name="root"/> remarks
             // for why the order matters.
             CssBidiParagraphResolver.AssignBidiLevels(root);
+
+            // After bidi, as in GenerateCssTree: a stylesheet-assigned display: contents is spliced only
+            // once the passes that read the as-authored tree are done. A fragment's own shells were
+            // already spliced when it was built, and are skipped.
+            DomParser.FlattenDisplayContents(DisplayContentsShells, new CssValueParser(Adapter));
+
             ParseToWordsRecursive(root);
         }
 
@@ -1230,6 +1313,30 @@ namespace PeachPDF.Html.Core
                 linkElements.Add(new LinkElementData<RRect>(box.GetAttribute("id"), box.GetAttribute("href"), CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds), box));
             }
 
+            // The elements the walk above cannot reach. A link on a display:contents <a> is still a link
+            // (only the box tree is affected, CSS Display 3 §2.5), and it covers what its content covers:
+            // one rectangle per lifted child. A bookmark is placed by where its content begins.
+            var bookmarkFloor = 0;
+            var bookmarkFloorY = double.NaN;
+
+            foreach (var shell in DisplayContentsShells)
+            {
+                if (shell is { IsClickable: true, Visibility.Value: Visibility.Visible })
+                {
+                    foreach (var child in shell.ContentChildren)
+                    {
+                        if (child.ParentBox is null || child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
+                        linkElements.Add(new LinkElementData<RRect>(shell.GetAttribute("id"), shell.GetAttribute("href"), CommonUtils.GetFirstValueOrDefault(child.Rectangles, child.Bounds), shell));
+                    }
+                }
+
+                if (bookmarkBoxes is not null && shell.BookmarkLevel is { Length: > 0 } level && level != Keywords.None)
+                {
+                    DomUtils.InsertByDocumentPosition(bookmarkBoxes, shell, ref bookmarkFloor, ref bookmarkFloorY);
+                }
+            }
+
             var svgLinks = new List<(RRect Rect, string Href)>();
             DomUtils.GetAllSvgLinks(Root, svgLinks);
 
@@ -1253,7 +1360,10 @@ namespace PeachPDF.Html.Core
             ArgChecker.AssertArgNotNullOrEmpty(elementId, "elementId");
 
             var box = DomUtils.GetBoxById(Root, elementId.ToLower());
-            return box != null ? CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds) : (RRect?)null;
+            if (box is null) return null;
+
+            box = DomUtils.ResolveGeometryBox(box);
+            return CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
         }
 
         /// <summary>
@@ -1459,6 +1569,11 @@ namespace PeachPDF.Html.Core
             // pages the last time the ordering of these two was wrong.)
             ResolveCanvasBackground();
 
+            // Layout only reaches (and so only loads the images of) boxes in the tree, and a boxless
+            // <body>'s background-image is painted on the canvas all the same.
+            if (CanvasBackgroundBox is { IsDisplayContentsShell: true } canvasShell)
+                await canvasShell.EnsureAuxiliaryImagesLoadedAsync();
+
             // if width is not restricted we set it to large value to get the actual later
             Root.Size = new RSize(IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : PageSize.Width), 0);
             Root.Location = Location;
@@ -1620,6 +1735,8 @@ namespace PeachPDF.Html.Core
             // css-gcpm-3's content: element() needs the final page list/count (first/start/last/first-except
             // selection is page-index-based), so it runs here, after the tree above is built, rather than
             // as part of the emitter's own per-pass work.
+            RegisterDisplayContentsNamedStrings();
+
             var treeWithMarginBoxes = await LayoutMarginBoxes(g, tree);
 
             // Pure bookkeeping (the footnote convergence loop above already produced final geometry) - see
@@ -2969,7 +3086,12 @@ namespace PeachPDF.Html.Core
         private void ResolveCanvasBackground()
         {
             var html = DomUtils.GetBoxByTagName(Root, "html");
-            var body = DomUtils.GetBoxByTagName(Root, "body");
+
+            // A <body style="display:contents"> generates no box, but its background still propagates to
+            // the canvas (CSS Backgrounds 3 §2.11.2 excludes only display:none from that rule) - so it is
+            // looked for among the shells as well as the tree.
+            var body = DomUtils.GetBoxByTagName(Root, "body")
+                ?? DisplayContentsShells.Find(s => s.HtmlTag?.Name.Equals("body", StringComparison.OrdinalIgnoreCase) == true);
 
             // Cleared first so a re-layout can never leave a previous winner suppressed.
             if (html is not null) html.SuppressOwnBackgroundPaint = false;
@@ -4487,6 +4609,9 @@ namespace PeachPDF.Html.Core
                 CssData = null;
                 Root?.Dispose();
                 Root = null;
+
+                foreach (var shell in DisplayContentsShells) shell.Dispose();
+                DisplayContentsShells.Clear();
             }
             catch
             { }

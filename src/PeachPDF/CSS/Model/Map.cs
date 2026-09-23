@@ -769,6 +769,7 @@ namespace PeachPDF.CSS
             new Dictionary<string, DisplayMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.None, DisplayMode.None},
+                {Keywords.Contents, DisplayMode.Contents},
                 {Keywords.Inline, DisplayMode.Inline},
                 {Keywords.Block, DisplayMode.Block},
                 {Keywords.InlineBlock, DisplayMode.InlineBlock},

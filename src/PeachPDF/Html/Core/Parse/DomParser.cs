@@ -131,7 +131,10 @@ namespace PeachPDF.Html.Core.Parse
             // can't corrupt the structure SvgTreeBuilder reads. The *restructuring* passes below
             // (block/inline/anonymous-table normalization) DO reparent boxes, so each guards against
             // descending into a CssBoxSvg - see their `if (box is CssBoxSvg) return;` and issue #159.
-            CascadeApplyStyles(cssValueParser, root, cssData, media, containerSizes);
+            // Cleared here rather than by Clear(), which returns early for a container that never had a
+            // tree: the cascade below re-records every display: contents element it meets.
+            htmlContainer.DisplayContentsShells.Clear();
+            CascadeApplyStyles(cssValueParser, root, cssData, media, containerSizes, htmlContainer.DisplayContentsShells);
 
             // vi/vb unit resolution (CssBox.GetViewportUnitBasis) needs the root element's own resolved
             // writing-mode (CSS Values and Units 4 §6.2) - read now, only once per document, reusing the
@@ -152,6 +155,12 @@ namespace PeachPDF.Html.Core.Parse
             // before CorrectTextBoxes (the first place that calls CssBox.ParseToWords, which consults
             // the per-box level arrays this assigns).
             CssBidiParagraphResolver.AssignBidiLevels(root);
+
+            // After everything above, which reads the as-authored tree (selector matching already ran in
+            // the cascade; the table attribute, marker, first-letter and bidi passes each need the
+            // element's own place in it), and before every pass below, which must see the tree as box
+            // generation does: "as if it had been replaced in the element tree by its contents".
+            FlattenDisplayContents(htmlContainer.DisplayContentsShells, cssValueParser);
 
             CorrectTextBoxes(root);
 
@@ -203,7 +212,8 @@ namespace PeachPDF.Html.Core.Parse
         /// counterpart of <see cref="CascadeApplyStyles"/>, but far narrower: it does no defaulting/reset, no
         /// <see cref="CssBox.InheritStyle"/> re-run, no user-agent-rule matching, no presentational-attribute
         /// translation, no inline-<c>style=""</c> phase (a declarative box never has one), no
-        /// display-normalization, and no placeholder/first-line/first-letter/footnote/<c>@page</c> handling -
+        /// display-normalization (beyond settling <c>display: contents</c>, which needs the box tree
+        /// <see cref="FlattenDisplayContents"/> splices), and no placeholder/first-line/first-letter/footnote/<c>@page</c> handling -
         /// every declaratively-built box already carries its own final, directly-assigned style, and this only
         /// layers a caller's own class/id/compound/descendant selector rules on top of it.
         /// <para>
@@ -223,13 +233,13 @@ namespace PeachPDF.Html.Core.Parse
         /// normally.
         /// </para>
         /// </summary>
-        internal static void ApplyDeclarativeStylesheet(CssBox root, CssData cssData, MediaQueryContext media, RAdapter adapter)
+        internal static void ApplyDeclarativeStylesheet(CssBox root, CssData cssData, MediaQueryContext media, RAdapter adapter, List<CssBox> displayContentsShells)
         {
             var valueParser = new CssValueParser(adapter);
-            ApplyDeclarativeStylesheetToBox(valueParser, root, cssData, media);
+            ApplyDeclarativeStylesheetToBox(valueParser, root, cssData, media, displayContentsShells);
         }
 
-        private static void ApplyDeclarativeStylesheetToBox(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media)
+        private static void ApplyDeclarativeStylesheetToBox(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, List<CssBox> displayContentsShells)
         {
             if (!box.IsFragmentStyled)
             {
@@ -261,10 +271,13 @@ namespace PeachPDF.Html.Core.Parse
                     box.ResolveLogicalProperties();
                     CssUtils.ApplyCurrentColor(box, valueParser);
                 }
+
+                // A document stylesheet can hand a declaratively-built box display: contents too.
+                ResolveDisplayContents(box, displayContentsShells);
             }
 
             foreach (var child in box.Boxes)
-                ApplyDeclarativeStylesheetToBox(valueParser, child, cssData, media);
+                ApplyDeclarativeStylesheetToBox(valueParser, child, cssData, media, displayContentsShells);
         }
 
         /// <summary>
@@ -405,9 +418,12 @@ namespace PeachPDF.Html.Core.Parse
         /// <returns>
         /// The fragment's own synthetic root box (<see cref="HtmlParser.ParseDocument(string, CssBox?)"/>'s
         /// default fresh <see cref="CssBox.CreateBlock()"/>) - never itself attached anywhere; the caller
-        /// grafts its children onto the real tree (<see cref="CssBox.SetAllBoxes"/>).
+        /// grafts its children onto the real tree (<see cref="CssBox.SetAllBoxes"/>) - together with the
+        /// <c>display: contents</c> shells the fragment's own splice already removed from it, which no
+        /// tree walk can find any more and the caller has to hand on to the container that will own the
+        /// document (<see cref="HtmlContainerInt.DisplayContentsShells"/>).
         /// </returns>
-        internal async Task<CssBox> GenerateFragmentCssTree(string html, RAdapter adapter, CssData cssData)
+        internal async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> GenerateFragmentCssTree(string html, RAdapter adapter, CssData cssData)
         {
             var root = HtmlParser.ParseDocument(html);
             var cssValueParser = new CssValueParser(adapter);
@@ -423,11 +439,17 @@ namespace PeachPDF.Html.Core.Parse
             var media = MediaQueryContext.TypeOnly("print");
 
             ResolveAutoDirectionality(root);
-            CascadeApplyStyles(cssValueParser, root, cssData, media);
+
+            var displayContentsShells = new List<CssBox>();
+            CascadeApplyStyles(cssValueParser, root, cssData, media, displayContentsShells: displayContentsShells);
 
             ApplyTablePresentationalAttributesToCells(root);
             EnsureListItemMarkers(cssValueParser, root, cssData, media);
             ApplyFirstLetterPseudoElements(cssValueParser, root, cssData, media);
+
+            // No bidi pass runs here (see this method's remarks), so this is spliced against the
+            // as-authored tree exactly as GenerateCssTree's own is, just without a bidi pass before it.
+            FlattenDisplayContents(displayContentsShells, cssValueParser);
 
             CorrectTextBoxes(root);
             CorrectReplacedElementBoxes(root);
@@ -439,7 +461,7 @@ namespace PeachPDF.Html.Core.Parse
             CollapseWhitespaceAcrossInlineBoundaries(root);
             CorrectAnonymousTables(root);
 
-            return root;
+            return (root, displayContentsShells);
         }
 
         #region Private methods
@@ -944,7 +966,11 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="cssData">the style data for the html</param>
         /// <param name="media">The media type to apply styles to</param>
         /// <param name="containerSizes">See <see cref="GenerateCssTree"/>'s parameter of the same name.</param>
-        private static void CascadeApplyStyles(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null)
+        /// <param name="displayContentsShells">Where a <c>display: contents</c> element is recorded, in document
+        /// order (this walk is pre-order), for <see cref="FlattenDisplayContents"/>. Null for a cascade of one
+        /// synthesized box (a marker, a footnote call, a placeholder, a first-letter box), none of which can be
+        /// spliced - <see cref="ResolveDisplayContents"/> computes such a box's <c>contents</c> to <c>inline</c>.</param>
+        private static void CascadeApplyStyles(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null, List<CssBox>? displayContentsShells = null)
         {
             // 1. Defaulting (CSS Cascade & Inheritance 4 §2.1): every property starts at its initial value,
             //    drawn from the single initial-value store. The cascade phases below then override, and the
@@ -1162,6 +1188,10 @@ namespace PeachPDF.Html.Core.Parse
             // reached, so its display is final and can be asked about here.
             NormalizeFlexOrGridItem(box);
 
+            // 12. display: contents (CSS Display 3 §2.5): record the element for the splice that follows
+            // the cascade, or compute it to something a box can actually be.
+            ResolveDisplayContents(box, displayContentsShells);
+
             // Correct current color
             CssUtils.ApplyCurrentColor(box, valueParser);
 
@@ -1182,10 +1212,112 @@ namespace PeachPDF.Html.Core.Parse
                 ResolveFirstLineStyle(valueParser, box, cssData, media, containerSizes);
             }
 
+            // The cascade still recurses into an inline <svg>/<math>, but their internals are not boxes of the
+            // document: an SVG or MathML renderer reads them, and nothing may be lifted out from under it
+            // (a shell recorded here would be spliced out of the tree those renderers read). A
+            // display: contents on one is ignored - see the accepted gap.
+            var childShells = box is CssBoxSvg or CssBoxMath ? null : displayContentsShells;
+
             foreach (var childBox in box.Boxes)
             {
-                CascadeApplyStyles(valueParser, childBox, cssData, media, containerSizes);
+                CascadeApplyStyles(valueParser, childBox, cssData, media, containerSizes, childShells);
             }
+        }
+
+        /// <summary>
+        /// Tags whose <c>display: contents</c> computes to <c>none</c>: replaced elements and form controls,
+        /// whose rendering is not entirely controlled by CSS
+        /// (<see href="https://www.w3.org/TR/css-display-3/#unbox">CSS Display 3 Appendix B</see>).
+        /// <c>button</c>, <c>details</c>, <c>fieldset</c> and <c>legend</c> are deliberately absent: the spec
+        /// lets <c>contents</c> simply remove their principal box.
+        /// </summary>
+        private static readonly FrozenSet<string> DisplayContentsComputesToNoneTags = new[]
+        {
+            "br", "wbr", "meter", "progress", "canvas", "embed", "object", "audio", "iframe", "img", "video",
+            "frame", "frameset", "input", "textarea", "select", "svg", "math"
+        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Settles a box whose computed <c>display</c> is <c>contents</c> (CSS Display 3 §2.5): an element
+        /// Appendix B lists computes to <c>none</c>, the root element to <c>block</c> (§2.8), and any other
+        /// element is recorded so <see cref="FlattenDisplayContents"/> can lift its children into its parent
+        /// once the passes that need it in the tree have run. A box that is not an element in the document
+        /// (a pseudo-element - which has no children to lift, the spec is silent on it, and an inline box
+        /// keeps its generated text - or a box cascaded with nowhere to record it) computes to <c>inline</c>.
+        /// </summary>
+        private static void ResolveDisplayContents(CssBox box, List<CssBox>? shells)
+        {
+            if (box.Display.Value != DisplayMode.Contents) return;
+
+            if (box is CssBoxImage or CssBoxFrame or CssBoxSvg or CssBoxMath or CssBoxObject or CssBoxVideo or CssBoxFormField
+                || (box.HtmlTag is { } tag && DisplayContentsComputesToNoneTags.Contains(tag.Name)))
+            {
+                box.Display = CssProperty<DisplayMode>.FromValue(Keywords.None, DisplayMode.None);
+                return;
+            }
+
+            // The root element - the <html> element, or a declarative page's own content root (§2.8 does not
+            // care which box the document happens to be rooted at).
+            if (box.ParentBox is null || (box.HtmlTag is { } htmlTag && htmlTag.Name.Equals("html", StringComparison.OrdinalIgnoreCase)))
+            {
+                box.Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
+                return;
+            }
+
+            if (shells is null || box.HtmlTag is null || box.IsPseudoElement)
+            {
+                box.Display = CssProperty<DisplayMode>.FromValue(Keywords.Inline, DisplayMode.Inline);
+                return;
+            }
+
+            if (box.IsDisplayContentsShell) return;
+
+            box.IsDisplayContentsShell = true;
+            shells.Add(box);
+        }
+
+        /// <summary>
+        /// Splices every recorded <c>display: contents</c> element's children into its parent
+        /// (<see cref="CssBox.LiftDisplayContentsChildren"/>). Not a tree walk: the cascade already visited
+        /// every box and recorded these in document order, so the list is iterated <b>in reverse</b> - an
+        /// inner shell is lifted into its still-attached outer shell first, which then lifts it along with
+        /// its own children. Each lifted child is re-normalized against its new parent: css-flexbox-1 §4 and
+        /// css-grid-2 §6 blockify an item by its nearest ancestor "skipping display:contents ancestors", and
+        /// the cascade normalized it against the one it had.
+        /// </summary>
+        internal static void FlattenDisplayContents(IReadOnlyList<CssBox> shells, CssValueParser valueParser)
+        {
+            for (var i = shells.Count - 1; i >= 0; i--)
+            {
+                // Already spliced by an earlier splice of the same tree (an IContainer.Html fragment is
+                // flattened before it is grafted into the declarative document that lists it here).
+                if (shells[i].DisplayContentsLiftedChildren is not null) continue;
+
+                if (shells[i].HtmlTag?.Name.Equals("body", StringComparison.OrdinalIgnoreCase) == true)
+                    DropBoxModel(valueParser, shells[i]);
+
+                foreach (var child in shells[i].LiftDisplayContentsChildren())
+                    NormalizeFlexOrGridItem(child);
+            }
+        }
+
+        private static readonly string[] BoxModelLonghands =
+        [
+            "border-top-style", "border-right-style", "border-bottom-style", "border-left-style",
+            "padding-top", "padding-right", "padding-bottom", "padding-left",
+            "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius"
+        ];
+
+        /// <summary>
+        /// An element with no box has no border, padding or corner radius. Nothing lays a shell out, but
+        /// one thing still paints one: a <c>&lt;body&gt;</c>'s background on the canvas
+        /// (<see cref="HtmlContainerInt.CanvasBackgroundBox"/>), whose origin and clip are measured from
+        /// those edges - so only that shell is normalized.
+        /// </summary>
+        private static void DropBoxModel(CssValueParser valueParser, CssBox shell)
+        {
+            foreach (var name in BoxModelLonghands)
+                CssUtils.SetPropertyValue(valueParser, shell, name, name.EndsWith("-style", StringComparison.Ordinal) ? Keywords.None : "0");
         }
 
         /// <summary>
@@ -1415,7 +1547,9 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         private static void ApplyFirstLetterPseudoElements(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null)
         {
-            if (box.MatchesFirstLetterSelector && !box.FirstLetterProcessed)
+            // A display:contents element is not a block container, so ::first-letter has no effect on it
+            // (css-pseudo-4 §2.2); an ancestor block's own ::first-letter still reaches into its text.
+            if (box.MatchesFirstLetterSelector && !box.FirstLetterProcessed && !box.IsDisplayContentsShell)
             {
                 box.FirstLetterProcessed = true;
 
