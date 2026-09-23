@@ -1,4 +1,4 @@
-# Positioned floats paint in Appendix E step 8, not step 5
+# Positioned floats paint in Appendix E step 8, not step 5 (#1279)
 
 **Symptom:** a real page's category sidebar (`#contentleft { float: left; position: relative }`
 inside `#contentcontainer { position: relative; background: #fff }`) was invisible. The text was in
