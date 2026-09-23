@@ -271,6 +271,54 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains(rects, r => r.Color == RColor.FromArgb(11, 22, 33));
         }
 
+        [Fact]
+        public async Task PositionedFloat_PaintsInPositionedPass_AfterPositionedAncestorBackground()
+        {
+            // CSS 2.1 Appendix E step 5 paints only NON-positioned floats; a float that is also
+            // position:relative is a positioned descendant (step 8, tree order). Painting it in the
+            // float pass put it before its own position:relative parent (itself a step-8 box of the
+            // same stacking context), whose opaque background then covered it - a sidebar
+            // `#contentleft { float: left; position: relative }` inside a positioned, white
+            // `#contentcontainer` rendered blank.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div style='position:relative;height:100px;background:rgb(1,2,3);'>" +
+                "<div style='float:left;position:relative;width:50px;height:50px;background:rgb(4,5,6);'></div>" +
+                "</div>"));
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, root, g);
+
+            var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
+            var parentIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(1, 2, 3));
+            var floatIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(4, 5, 6));
+
+            Assert.True(parentIndex >= 0, "positioned parent never painted");
+            Assert.True(floatIndex >= 0, "positioned float never painted");
+            Assert.True(parentIndex < floatIndex,
+                $"the positioned float must paint after its positioned parent's background (parent={parentIndex}, float={floatIndex})");
+        }
+
+        [Fact]
+        public async Task PositionedFloat_PaintsAfterLaterPlainFloatSibling_InPositionedPass()
+        {
+            // Within one stacking context, a positioned float belongs to step 8 and a plain float to
+            // step 5 - so the plain float paints first even though it comes later in tree order.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div style='float:left;position:relative;width:50px;height:50px;background:rgb(7,8,9);'></div>" +
+                "<div style='float:left;width:50px;height:50px;background:rgb(10,11,12);'></div>"));
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, root, g);
+
+            var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
+            var positionedIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(7, 8, 9));
+            var plainIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(10, 11, 12));
+
+            Assert.True(positionedIndex >= 0 && plainIndex >= 0, "one of the floats never painted");
+            Assert.True(plainIndex < positionedIndex,
+                $"the plain float (step 5) must paint before the positioned float (step 8) (plain={plainIndex}, positioned={positionedIndex})");
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static CssBox? FindById(CssBox root, string id) =>
