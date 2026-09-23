@@ -4484,15 +4484,23 @@ namespace PeachPDF.Html.Core.Dom
             // Step 7: Set final table dimensions. cursor.MaxRight tracks the column axis (physical Y for
             // a vertical table, per its own tracking in LayoutBodyRow), so it settles ActualBottom there
             // instead of ActualRight - the column-axis twin of the row-axis settling below.
+            //
+            //
+            // Settled from the cursor alone. This used to be floored at the box's own
+            // ActualWidth/ActualHeight, but nothing sets those before this point in a pass, so they
+            // only ever held the *previous* layout's settled extent, trailing edge included. Whenever
+            // the same tree was laid out again (PdfGenerator's measure pass then its final pass), that
+            // stale extent won and had the trailing edge added on top, growing the table by one
+            // inline-end border + spacing slot per re-layout (issue #1267). Not GetWidthSum() either:
+            // it counts spacing for trailing <col>-only columns no cell reaches, which browsers leave out.
+            var trailingInlineEdge = HorizontalSpacingAt(_columnCount) + TableInlineBorderEnd;
             if (_isVertical)
             {
-                var tableBottom = Math.Max(cursor.MaxRight, _tableBox.Location.Y + _tableBox.ActualHeight);
-                _tableBox.ActualBottom = tableBottom + HorizontalSpacingAt(_columnCount) + TableInlineBorderEnd;
+                _tableBox.ActualBottom = cursor.MaxRight + trailingInlineEdge;
             }
             else
             {
-                var tableRight = Math.Max(cursor.MaxRight, _tableBox.Location.X + _tableBox.ActualWidth);
-                _tableBox.ActualRight = tableRight + HorizontalSpacingAt(_columnCount) + TableInlineBorderEnd;
+                _tableBox.ActualRight = cursor.MaxRight + trailingInlineEdge;
             }
 
             // Computed ahead of ActualBottom rather than only assigned to TableContinuation below,
