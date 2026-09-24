@@ -360,6 +360,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>True when this box has a non-identity CSS transform to apply at paint time.</summary>
         public bool IsTransformed => DerivedStyle.IsTransformed;
 
+        /// <summary>True when the computed <c>transform</c> is not <c>none</c>, even if its matrix is the identity.</summary>
+        public bool HasTransform => DerivedStyle.HasTransform;
+
         /// <summary>The box-local 4x4 the transform was projected from, or null without a <c>transform</c>.</summary>
         public System.Numerics.Matrix4x4? ActualTransform4 => DerivedStyle.ActualTransform4;
 

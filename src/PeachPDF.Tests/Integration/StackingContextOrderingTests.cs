@@ -183,10 +183,13 @@ namespace PeachPDF.Tests.Integration
             // scenario specifically needs two nested ones to exercise the gap. w1 (100x80) is smaller
             // than w2 (200x200) in both dimensions, so if only w2's clip were applied (the pre-fix
             // bug), the narrowest clip actually pushed would be bounded by 200/200, not w1's tighter
-            // 100/80.
+            // 100/80. Both wrappers are position:relative so they are on h's containing-block chain -
+            // CSS Overflow 3 §3 clips only descendants whose containing block chain passes through the
+            // clipping box, and an absolutely positioned box's containing block is its nearest positioned
+            // ancestor.
             var (root, container) = await BuildAndLayout(Wrap(
-                "<div id='w1' style='overflow:hidden;width:100px;height:80px;'>" +
-                "<div id='w2' style='overflow:hidden;width:200px;height:200px;'>" +
+                "<div id='w1' style='position:relative;overflow:hidden;width:100px;height:80px;'>" +
+                "<div id='w2' style='position:relative;overflow:hidden;width:200px;height:200px;'>" +
                 "<div id='h' style='position:absolute;top:0;left:0;z-index:5;width:300px;height:300px;background:rgb(200,0,0);'></div>" +
                 "</div></div>"));
 
@@ -218,9 +221,10 @@ namespace PeachPDF.Tests.Integration
             // Baseline/non-regression companion to the two-ancestor case above: a single intermediate
             // overflow:hidden wrapper between a hoisted box and its true stacking context is already
             // handled correctly by the hoisted box's own natural ClipGraphicsByOverflow call (it finds
-            // the nearest overflow:hidden ancestor regardless of hoisting) - confirm this still works.
+            // the nearest overflow:hidden ancestor on its containing-block chain regardless of hoisting)
+            // - confirm this still works. w1 is positioned, so it is h's containing block.
             var (root, container) = await BuildAndLayout(Wrap(
-                "<div id='w1' style='overflow:hidden;width:100px;height:80px;'>" +
+                "<div id='w1' style='position:relative;overflow:hidden;width:100px;height:80px;'>" +
                 "<div id='h' style='position:absolute;top:0;left:0;z-index:5;width:300px;height:300px;background:rgb(200,0,0);'></div>" +
                 "</div>"));
 

@@ -149,12 +149,23 @@ namespace PeachPDF.Html.Core.Utils
         /// participant inside a repeated table header - whose live box only ever carries whichever page
         /// positioned it last (#345).
         /// </summary>
+        /// <remarks>
+        /// An ancestor that is not on <paramref name="box"/>'s clipping containing-block chain
+        /// (<see cref="DomUtils.IsOnClippingChainOf"/>) is skipped: an <c>overflow: hidden</c> box between
+        /// an absolutely positioned box and its positioned containing block does not clip it.
+        /// </remarks>
+        /// <param name="g">the graphics to clip</param>
+        /// <param name="box">the hoisted box being painted</param>
+        /// <param name="ancestors">the ancestor fragments it was hoisted past, outer to inner</param>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
-        public static int PushAncestorOverflowClips(RGraphics g, IReadOnlyList<BoxFragment> ancestors)
+        public static int PushAncestorOverflowClips(RGraphics g, CssBox box, IReadOnlyList<BoxFragment> ancestors)
         {
             var pushed = 0;
             foreach (var ancestor in ancestors)
             {
+                if (!DomUtils.ClipsItsOverflow(ancestor.Box) || !DomUtils.IsOnClippingChainOf(box, ancestor.Box))
+                    continue;
+
                 pushed += TryPushOverflowClip(g, ancestor);
             }
             return pushed;
