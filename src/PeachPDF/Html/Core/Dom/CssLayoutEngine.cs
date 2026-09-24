@@ -4057,7 +4057,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private static CssBox? LeftFloatAt(CssLineBoxCoordinates coordinates, CssBox reference)
         {
-            var ancestorFloat = DomUtils.GetLastLeftIntersectingFloatBox(reference, coordinates);
+            // The ancestor walk deliberately examines siblings of its starting box so it can also
+            // position a float against earlier floats. For line layout, though, the starting box may
+            // itself establish a formatting context (an absolute box or inline-block). Floats outside
+            // that context must not shift its own content before it is positioned.
+            var ancestorFloat = DomUtils.EstablishesIndependentFormattingContext(reference)
+                ? null
+                : DomUtils.GetLastLeftIntersectingFloatBox(reference, coordinates);
             var inlineFloat = GetIntersectingInlineFloat(coordinates, Floating.Left);
 
             if (ancestorFloat is null) return inlineFloat;

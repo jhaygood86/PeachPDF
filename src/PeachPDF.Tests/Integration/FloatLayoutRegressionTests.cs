@@ -104,13 +104,14 @@ namespace PeachPDF.Tests.Integration
             // Regression guard for the O(document size) walk that GetFirstIntersectingFloatBox used to
             // perform for every box, at every ancestor level, even with zero floats anywhere. This
             // document has no floats, so HasFloatedBoxes should short-circuit the whole thing - which is
-            // an exact, countable statement: the scan is asked its question thousands of times and must
-            // answer every one of them without examining a single box.
+            // an exact, countable statement: the scan is asked its question throughout the document and
+            // must answer every one of them without examining a single box.
             //
             // The count is what is asserted, deliberately, and not the elapsed time: a wall-clock bound
             // cannot be made reliable on a shared CI runner, and every raise of such a bound costs it
             // more of the sensitivity it exists for.
-            var (root, container) = await BuildAndLayout(BuildRepeatedSectionsHtml(sectionCount: 40));
+            const int sectionCount = 40;
+            var (root, container) = await BuildAndLayout(BuildRepeatedSectionsHtml(sectionCount));
             var boxCount = CountBoxes(root);
 
             // Without this, "visited no boxes" could just as well mean layout never asked - and
@@ -126,7 +127,9 @@ namespace PeachPDF.Tests.Integration
                 "so any non-zero count is the O(document size) walk per box returning");
 
             // Sanity: the counted calls really are spread over the whole document, not a handful of boxes.
-            Assert.True(container.FloatScanCalls > boxCount / 2,
+            // Independent formatting contexts now skip the left-float query, so calls no longer track
+            // every box. Each section still produces several queries in its ordinary flow.
+            Assert.True(container.FloatScanCalls > sectionCount * 4,
                 $"{container.FloatScanCalls} float lookups over {boxCount} boxes is far fewer than " +
                 "expected - the fixture has probably stopped laying out the document it means to");
         }
