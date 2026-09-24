@@ -3244,6 +3244,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         internal async ValueTask LayoutBlockChild(RGraphics g, CssBox child, bool framePlacesChild = true)
         {
+            // Left for the inline flow that owns its positioned-inline containing block when that flow is
+            // still mid-walk (issue #1304); it is laid out again from there, once the flow's lines are final.
+            if (framePlacesChild && child.IsAbsolutelyPositioned && CssLayoutEngine.TryDeferToEnclosingInlineFlow(child))
+            {
+                return;
+            }
+
             try
             {
                 await child.PerformLayoutImp(g, this, framePlacesChild);
