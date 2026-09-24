@@ -356,6 +356,20 @@ namespace PeachPDF.CSS
             return null;
         }
 
+        /// <summary>
+        /// <c>[ &lt;angle&gt; | &lt;zero&gt; ]</c> — the argument grammar of the CSS Transforms 1/2 rotate and
+        /// skew functions, which keep the legacy unitless-zero exception (CSS Values 4 §6.1) that the
+        /// general <c>&lt;angle&gt;</c> grammar (<see cref="ToAngle"/>) does not allow.
+        /// </summary>
+        public static Angle? ToAngleOrZero(this IReadOnlyList<Token> value)
+        {
+            var angle = value.ToAngle();
+
+            if (angle.HasValue) return angle;
+
+            return value.OnlyOrDefault() is { Type: TokenType.Number, Value: 0f } ? new Angle(0f, Angle.Unit.Deg) : null;
+        }
+
         public static Angle? ToAngleNumber(this IReadOnlyList<Token> value)
         {
             var angle = value.ToAngle();

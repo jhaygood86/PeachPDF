@@ -49,6 +49,12 @@ namespace PeachPDF.CSS
             AngleConverter = new StructValueConverter<Angle>(ValueExtensions.ToAngle)
                 .Or(new CalcValueConverter(CalcCategory.Angle));
 
+        /// <summary><c>[ &lt;angle&gt; | &lt;zero&gt; ]</c> for the transform functions; the general
+        /// <see cref="AngleConverter"/> stays strict about a unitless zero.</summary>
+        public static readonly IValueConverter TransformAngleConverter =
+            new StructValueConverter<Angle>(ValueExtensions.ToAngleOrZero)
+                .Or(new CalcValueConverter(CalcCategory.Angle));
+
         public static readonly IValueConverter NumberConverter =
             new StructValueConverter<float>(ValueExtensions.ToSingle)
                 .Or(new CalcValueConverter(CalcCategory.Number));
@@ -274,20 +280,21 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter RotateTransformConverter = Construct(() =>
         {
             var number = NumberConverter.Required();
-            return new FunctionValueConverter(FunctionNames.Rotate, WithArgs(AngleConverter)).Or(
+            return new FunctionValueConverter(FunctionNames.Rotate, WithArgs(TransformAngleConverter)).Or(
                 new FunctionValueConverter(FunctionNames.Rotate3d,
-                    WithArgs(number, number, number, AngleConverter.Required()))).Or(
-                new FunctionValueConverter(FunctionNames.RotateX, WithArgs(AngleConverter))).Or(
-                new FunctionValueConverter(FunctionNames.RotateY, WithArgs(AngleConverter))).Or(
-                new FunctionValueConverter(FunctionNames.RotateZ, WithArgs(AngleConverter)));
+                    WithArgs(number, number, number, TransformAngleConverter.Required()))).Or(
+                new FunctionValueConverter(FunctionNames.RotateX, WithArgs(TransformAngleConverter))).Or(
+                new FunctionValueConverter(FunctionNames.RotateY, WithArgs(TransformAngleConverter))).Or(
+                new FunctionValueConverter(FunctionNames.RotateZ, WithArgs(TransformAngleConverter)));
         });
 
         public static readonly IValueConverter SkewTransformConverter = Construct(() =>
         {
-            var angle = AngleConverter.Required();
-            return new FunctionValueConverter(FunctionNames.Skew, WithArgs(angle, angle)).Or(
-                new FunctionValueConverter(FunctionNames.SkewX, WithArgs(AngleConverter))).Or(
-                new FunctionValueConverter(FunctionNames.SkewY, WithArgs(AngleConverter)));
+            var angle = TransformAngleConverter.Required();
+            var optionalAngle = TransformAngleConverter.Option(Angle.Zero);
+            return new FunctionValueConverter(FunctionNames.Skew, WithArgs(angle, optionalAngle)).Or(
+                new FunctionValueConverter(FunctionNames.SkewX, WithArgs(TransformAngleConverter))).Or(
+                new FunctionValueConverter(FunctionNames.SkewY, WithArgs(TransformAngleConverter)));
         });
 
         public static readonly IValueConverter DefaultFontFamiliesConverter = Map.DefaultFontFamilies.ToConverter();
