@@ -83,15 +83,19 @@
       "comment": "Legacy alias of break-after, sharing its storage. Deliberately narrower than break-after's own css-break-3 keyword set: PageBreakAfterProperty/Map.PageBreakModes implement the older CSS2.1 §13.3.1 page-break-after grammar (auto/always/avoid/left/right only), not break-after's full css-break-3 set - see CssPageBreakAfterIllegalAvoidColumn in PeachPDF.Tests/CSS/Property.cs. The CSS2.1 'always' keyword remaps to break-after's 'page'.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "keyword",
-      "supportedValues": ["auto", "always", "avoid", "left", "right"],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BreakMode",
+        "keywordMap": "Map.PageBreakModes",
+        "fallback": "BreakMode.Auto"
+      },
       "aliasOf": "break-after",
       "html": {
         "propertyPath": "BreakAfter",
-        "csharpDataType": "string",
+        "csharpDataType": "CssProperty<BreakMode>",
         "area": "BreakArea",
-        "customSetter": "{box}.BreakAfter = {value} is Keywords.Always ? Keywords.Page : {value};"
+        "getterExpression": "{box}.BreakAfter.ToString()",
+        "customSetter": "{box}.BreakAfter = CssProperty<BreakMode>.FromCssText({value} is Keywords.Always ? Keywords.Page : {value}, Map.BreakModes, BreakMode.Auto);"
       }
     },
     {
@@ -1464,22 +1468,12 @@
       "comment": "cssDataType's own supportedValues includes region/avoid-region because real dispatch stores any css-break-4-valid keyword (CssUtilsTests.Cascade_BreakBefore_StoresOnlySpecValues) even though BreakValues.cs's fragmentation logic doesn't act on them - no FragmentationContext.Region exists, consistent with this repo's lack of multi-column-region support. supportsDataType is the stricter, @supports-only list excluding region/avoid-region for exactly that reason.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "auto",
-        "avoid",
-        "avoid-page",
-        "avoid-column",
-        "avoid-region",
-        "page",
-        "left",
-        "right",
-        "recto",
-        "verso",
-        "column",
-        "region"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BreakMode",
+        "keywordMap": "Map.BreakModes",
+        "fallback": "BreakMode.Auto"
+      },
       "supportsDataType": "keyword",
       "supportsSupportedValues": [
         "auto",
@@ -1495,8 +1489,9 @@
       ],
       "html": {
         "propertyPath": "BreakBefore",
-        "csharpDataType": "string",
-        "area": "BreakArea"
+        "csharpDataType": "CssProperty<BreakMode>",
+        "area": "BreakArea",
+        "getterExpression": "{box}.BreakBefore.ToString()"
       }
     },
     {
@@ -1504,15 +1499,12 @@
       "comment": "avoid-region is stored (real dispatch) like break-before/-after's region/avoid-region, but excluded from supportsDataType's stricter @supports-only list for the same reason - see break-before's comment.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "auto",
-        "avoid",
-        "avoid-page",
-        "avoid-column",
-        "avoid-region"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BreakMode",
+        "keywordMap": "Map.BreakInsideModes",
+        "fallback": "BreakMode.Auto"
+      },
       "supportsDataType": "keyword",
       "supportsSupportedValues": [
         "auto",
@@ -1522,8 +1514,9 @@
       ],
       "html": {
         "propertyPath": "BreakInside",
-        "csharpDataType": "string",
-        "area": "BreakArea"
+        "csharpDataType": "CssProperty<BreakMode>",
+        "area": "BreakArea",
+        "getterExpression": "{box}.BreakInside.ToString()"
       }
     },
     {
@@ -1531,22 +1524,12 @@
       "comment": "cssDataType's own supportedValues includes region/avoid-region because real dispatch stores any css-break-4-valid keyword (CssUtilsTests.Cascade_BreakBefore_StoresOnlySpecValues) even though BreakValues.cs's fragmentation logic doesn't act on them - no FragmentationContext.Region exists, consistent with this repo's lack of multi-column-region support. supportsDataType is the stricter, @supports-only list excluding region/avoid-region for exactly that reason.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "auto",
-        "avoid",
-        "avoid-page",
-        "avoid-column",
-        "avoid-region",
-        "page",
-        "left",
-        "right",
-        "recto",
-        "verso",
-        "column",
-        "region"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BreakMode",
+        "keywordMap": "Map.BreakModes",
+        "fallback": "BreakMode.Auto"
+      },
       "supportsDataType": "keyword",
       "supportsSupportedValues": [
         "auto",
@@ -1562,8 +1545,9 @@
       ],
       "html": {
         "propertyPath": "BreakAfter",
-        "csharpDataType": "string",
-        "area": "BreakArea"
+        "csharpDataType": "CssProperty<BreakMode>",
+        "area": "BreakArea",
+        "getterExpression": "{box}.BreakAfter.ToString()"
       }
     },
     {
@@ -1571,15 +1555,19 @@
       "comment": "Legacy alias of break-before, sharing its storage. Deliberately narrower than break-before's own css-break-3 keyword set - see PageBreakBeforeProperty/Map.PageBreakModes and page-break-after's comment. The CSS2.1 'always' keyword remaps to break-before's 'page'.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "keyword",
-      "supportedValues": ["auto", "always", "avoid", "left", "right"],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BreakMode",
+        "keywordMap": "Map.PageBreakModes",
+        "fallback": "BreakMode.Auto"
+      },
       "aliasOf": "break-before",
       "html": {
         "propertyPath": "BreakBefore",
-        "csharpDataType": "string",
+        "csharpDataType": "CssProperty<BreakMode>",
         "area": "BreakArea",
-        "customSetter": "{box}.BreakBefore = {value} is Keywords.Always ? Keywords.Page : {value};"
+        "getterExpression": "{box}.BreakBefore.ToString()",
+        "customSetter": "{box}.BreakBefore = CssProperty<BreakMode>.FromCssText({value} is Keywords.Always ? Keywords.Page : {value}, Map.BreakModes, BreakMode.Auto);"
       }
     },
     {
@@ -1587,14 +1575,18 @@
       "comment": "Legacy alias of break-inside, sharing its storage - no value remap on this axis. Deliberately narrower than break-inside's own css-break-3 keyword set - see PageBreakInsideProperty/Map.PageBreakInsideModes and page-break-after's comment.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "keyword",
-      "supportedValues": ["auto", "avoid"],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BreakMode",
+        "keywordMap": "Map.PageBreakInsideModes",
+        "fallback": "BreakMode.Auto"
+      },
       "aliasOf": "break-inside",
       "html": {
         "propertyPath": "BreakInside",
-        "csharpDataType": "string",
-        "area": "BreakArea"
+        "csharpDataType": "CssProperty<BreakMode>",
+        "area": "BreakArea",
+        "getterExpression": "{box}.BreakInside.ToString()"
       }
     },
     {

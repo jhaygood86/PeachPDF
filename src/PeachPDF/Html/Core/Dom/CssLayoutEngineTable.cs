@@ -4076,13 +4076,13 @@ namespace PeachPDF.Html.Core.Dom
             _headerRepeats = !_isVertical
                              && HeaderIsDetached
                              && _headerBox is { } header
-                             && BreakValues.AvoidsBreak(header.BreakInside, FragmentationContext.Page)
+                             && BreakValues.AvoidsBreak(header.BreakInside.Value, FragmentationContext.Page)
                              && _headerHeight < quarterOfThePage - epsilon;
 
             _footerRepeats = !_isVertical
                              && FooterIsDetached
                              && _footerBox is { } footer
-                             && BreakValues.AvoidsBreak(footer.BreakInside, FragmentationContext.Page)
+                             && BreakValues.AvoidsBreak(footer.BreakInside.Value, FragmentationContext.Page)
                              && _footerHeight < quarterOfThePage - epsilon;
         }
 

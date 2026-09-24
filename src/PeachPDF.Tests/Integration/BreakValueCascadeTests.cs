@@ -65,9 +65,9 @@ namespace PeachPDF.Tests.Integration
 
             Assert.All(proxies, proxy =>
             {
-                Assert.Equal(expectedInside, proxy.BreakInside);
-                Assert.Equal(expectedBefore, proxy.BreakBefore);
-                Assert.Equal(expectedAfter, proxy.BreakAfter);
+                Assert.Equal(expectedInside, proxy.BreakInside.ToString());
+                Assert.Equal(expectedBefore, proxy.BreakBefore.ToString());
+                Assert.Equal(expectedAfter, proxy.BreakAfter.ToString());
             });
         }
 
@@ -91,9 +91,9 @@ namespace PeachPDF.Tests.Integration
 
             Assert.All(spanBoxes, b =>
             {
-                Assert.Equal(expectedInside, b.BreakInside);
-                Assert.Equal(expectedBefore, b.BreakBefore);
-                Assert.Equal(expectedAfter, b.BreakAfter);
+                Assert.Equal(expectedInside, b.BreakInside.ToString());
+                Assert.Equal(expectedBefore, b.BreakBefore.ToString());
+                Assert.Equal(expectedAfter, b.BreakAfter.ToString());
             });
         }
 
@@ -114,9 +114,9 @@ namespace PeachPDF.Tests.Integration
             var child = LayoutHarness.FindById(root, "child");
             Assert.NotNull(child);
 
-            Assert.Equal(Keywords.Auto, child!.BreakInside);
-            Assert.Equal(Keywords.Auto, child.BreakBefore);
-            Assert.Equal(Keywords.Auto, child.BreakAfter);
+            Assert.Equal(Keywords.Auto, child!.BreakInside.ToString());
+            Assert.Equal(Keywords.Auto, child.BreakBefore.ToString());
+            Assert.Equal(Keywords.Auto, child.BreakAfter.ToString());
         }
 
         // A generated-content box is a real child of the element, not a duplicate of it, and it is created
@@ -138,9 +138,9 @@ namespace PeachPDF.Tests.Integration
             var before = LayoutHarness.Descendants(target!).FirstOrDefault(b => b.IsBeforePseudoElement);
             Assert.NotNull(before);
 
-            Assert.Equal(Keywords.Auto, before!.BreakInside);
-            Assert.Equal(Keywords.Auto, before.BreakBefore);
-            Assert.Equal(Keywords.Auto, before.BreakAfter);
+            Assert.Equal(Keywords.Auto, before!.BreakInside.ToString());
+            Assert.Equal(Keywords.Auto, before.BreakBefore.ToString());
+            Assert.Equal(Keywords.Auto, before.BreakAfter.ToString());
         }
 
         // And the element itself really does hold the values the two negative tests above are checking are
@@ -155,9 +155,9 @@ namespace PeachPDF.Tests.Integration
             var target = LayoutHarness.FindById(root, "target");
             Assert.NotNull(target);
 
-            Assert.Equal(Keywords.Avoid, target!.BreakInside);
-            Assert.Equal(Keywords.Page, target.BreakBefore);
-            Assert.Equal(Keywords.Avoid, target.BreakAfter);
+            Assert.Equal(Keywords.Avoid, target!.BreakInside.ToString());
+            Assert.Equal(Keywords.Page, target.BreakBefore.ToString());
+            Assert.Equal(Keywords.Avoid, target.BreakAfter.ToString());
         }
     }
 }

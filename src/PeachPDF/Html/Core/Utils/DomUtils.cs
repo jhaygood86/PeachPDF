@@ -229,8 +229,8 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 }
 
-                if (!BreakValues.AvoidsBreak(prev.BreakAfter, context)
-                    && !BreakValues.AvoidsBreak(current.BreakBefore, context))
+                if (!BreakValues.AvoidsBreak(prev.BreakAfter.Value, context)
+                    && !BreakValues.AvoidsBreak(current.BreakBefore.Value, context))
                 {
                     break;
                 }

@@ -935,7 +935,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var (box, _) = await FindDivBoxAndParser(css + ";");
 
-            Assert.Equal(expected, box.BreakBefore);
+            Assert.Equal(expected, box.BreakBefore.ToString());
         }
 
         // Regression coverage for the spec-compliance audit's biggest category of finding: a value that's
@@ -994,7 +994,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var (box, _) = await FindDivBoxAndParser("page-break-before: always;");
 
-            Assert.Equal(Keywords.Page, box.BreakBefore);
+            Assert.Equal(Keywords.Page, box.BreakBefore.ToString());
         }
 
         // The CSS-wide keywords have to work on the legacy spelling too - this is what the known-name and
@@ -1010,7 +1010,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var (box, _) = await FindDivBoxAndParser($"break-before: page; page-break-before: {keyword};");
 
-            Assert.Equal(Keywords.Auto, box.BreakBefore);
+            Assert.Equal(Keywords.Auto, box.BreakBefore.ToString());
         }
 
         [Theory]

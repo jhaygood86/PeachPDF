@@ -5254,7 +5254,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private static bool AvoidsBreakingAcrossThisColumn(CssBox childBox) =>
             childBox.PendingBreakToken is not null
-            && BreakValues.AvoidsBreak(childBox.BreakInside, FragmentationContext.Column);
+            && BreakValues.AvoidsBreak(childBox.BreakInside.Value, FragmentationContext.Column);
 
         /// <summary>
         /// The link of the chain to record when <paramref name="childBox"/> raised — or is passing on — a
@@ -6554,7 +6554,7 @@ namespace PeachPDF.Html.Core.Dom
             // mover, because "may not be broken" and "asks not to be broken" want the same relocation. So
             // does a table that did not break between any two of its own rows: it did not fragment, which
             // is what the other two say about themselves in advance rather than after the fact.
-            var avoidsBreak = BreakValues.AvoidsBreak(BreakInside, FragmentationContext.Page);
+            var avoidsBreak = BreakValues.AvoidsBreak(BreakInside.Value, FragmentationContext.Page);
             var monolithic = IsMonolithicBoxThisMoverMayMove() || PaginatedItsOwnContentWithoutBreaking();
 
             // One correction per box per pass (_earlyBreakTaken). Where the box was laid out again

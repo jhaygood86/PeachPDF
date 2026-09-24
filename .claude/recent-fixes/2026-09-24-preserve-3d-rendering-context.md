@@ -61,3 +61,24 @@ planes per pixel in both orders, a perspective reaching a grandchild, a cube, hi
 properties, the vector fast path, a raster-less fallback, nested contexts, planes behind the eye), `WarpKernelsTests`, `WarpCompositeTests`.
 The showcase `preserve_3d_rendering_context` was rasterized with PDFium and MuPDF and the two agree; the existing perspective showcase is
 unchanged.
+
+## Single-keyword properties became enums (same change)
+
+`transform-style` was first written as a `keyword`/`string` entry by copying `backface-visibility`, and its reader did a `Trim()` plus a
+case-insensitive compare on every call, from `DomUtils.IsStackingContextBox` (asked of every box). The rule this repo follows is that a property
+whose value is one keyword from a fixed set is a `CssProperty<enum>` through the `enum-keyword` grammar, so every remaining property of that
+shape was converted, not just this one: `transform-style`, `backface-visibility`, `border-collapse`, `empty-cells`, `caption-side`,
+`table-layout`, `list-style-position`, `text-decoration-style`, `font-kerning`, `font-variant-caps`, `font-variant-position`, `object-fit`, and
+the whole `break-before`/`break-after`/`break-inside` family with its `page-break-*` aliases (which reuse the existing `BreakMode` enum;
+`BreakValues` now takes `BreakMode?`, null still meaning "no value").
+
+- **Read `.Value`, not the property.** `CssProperty<T>.Value` is `default(T)` while the property still holds a CSS-wide keyword or an
+  unresolved `var()`, so a new enum lists its initial value first (`Flat`, `Visible`, `Separate`, `Solid`, ...): that is what a read before
+  resolution sees. `.ToString()` still returns the canonical keyword text, which is what the string-based getters and the tests use.
+- **SVG shares three resolvers with the CSS side** (`TextShapingFeatureResolver`, `TextDecorationStyleMapper`), and SVG reads attribute *text*.
+  Each keeps a `string` overload that maps through the same `Map` and delegates to the enum one, so there is still one switch.
+- **A pre-existing enum was overwritten once while generating these** (`FontKerningMode`, which the CSS-OM already had): the conversion is
+  scripted, so check `git status` for *modified* (not new) enum files before trusting a bulk generation.
+- **Deliberately left as strings, not a gap in the rule:** `background-repeat/-origin/-clip/-attachment` (comma-separated multi-layer lists, so
+  one enum cannot hold a value), and the logical `border-{block,inline}-{start,end}-style` (nullable scratch space that is replayed as text into
+  the physical property by `CssBox.ResolveLogicalProperties`, with no area field and a `null` initial value).

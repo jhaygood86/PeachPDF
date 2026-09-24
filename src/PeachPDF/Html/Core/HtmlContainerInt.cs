@@ -2216,7 +2216,7 @@ namespace PeachPDF.Html.Core
 
             for (var box = last; box is not null && side is PageSide.Any; box = box.ParentBox)
             {
-                side = BreakValues.RequiredSide(null, box.BreakAfter);
+                side = BreakValues.RequiredSide(null, box.BreakAfter.Value);
             }
 
             if (side is PageSide.Any)
