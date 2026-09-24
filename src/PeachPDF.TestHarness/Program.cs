@@ -5653,6 +5653,24 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
         McEntries(6, "after") +
         "</div></div>") +
 
+    // css-multicol-1 §2: a float belongs to the column box it appears in, and the container contains its
+    // floats. The right float sits at the right edge of the first column, not of the container, and the
+    // second column's lines beside its rows are not narrowed by it; the last container holds nothing but
+    // floats, which used to be left at zero size.
+    McSection("14 &mdash; floats inside columns",
+        "<div class=\"frame\"><div class=\"label\">columns: 2; a float: right at the top of the first column &mdash; it stays in its column and shortens only that column's lines</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
+        "<p style=\"margin:0;text-align:left\"><span style=\"float:right;width:40pt;height:30pt;background:#d68910;margin:0 0 4pt 6pt\"></span>" +
+        "Text that wraps around the float in the first column and then carries on into the second column, where the lines run at the full column width because the float is not beside them. " +
+        "More text to fill the columns so that the second column is clearly visible and its lines can be compared with the first.</p>" +
+        "</div></div>" +
+        "<div class=\"frame\"><div class=\"label\">columns: 2; a container of nothing but floats &mdash; laid out in the first column and contained by the box</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-gap:20px;border:0.5pt solid #000\">" +
+        "<div style=\"float:left;width:60pt;height:24pt;background:#2e86c1\"></div>" +
+        "<div style=\"float:left;width:40pt;height:24pt;background:#27ae60\"></div>" +
+        "<div style=\"float:left;width:200pt;height:24pt;background:#d68910\"></div>" +
+        "</div></div>") +
+
     "</body></html>";
 
 await SaveShowcaseAsync("multicol", "Layout", "Multi-column Layout",

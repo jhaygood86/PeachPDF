@@ -2991,7 +2991,7 @@ namespace PeachPDF.Html.Core.Dom
             // it is left alone; the min/max-height clamps below then apply to the result either way, since
             // §10.6.7's increase is
             // part of computing the auto height rather than something that outranks §10.7.
-            if (!isDefiniteHeight && !isRootWithPageHeight && DomUtils.EstablishesIndependentFormattingContext(box))
+            if (!isDefiniteHeight && !isRootWithPageHeight && DomUtils.ContainsItsFloats(box))
             {
                 var lowestFloatBottom = DomUtils.LowestFloatBottomInOwnFormattingContext(box);
 
@@ -4106,9 +4106,12 @@ namespace PeachPDF.Html.Core.Dom
                         best = floatBox;
                     }
                 }
-                else if (best is null || floatBox.Location.X - floatBox.ActualMarginLeft
-                         < best.Location.X - best.ActualMarginLeft)
+                else if (floatBox.ActualRight + floatBox.ActualMarginRight > coordinates.Line.ContentLeft
+                         && (best is null || floatBox.Location.X - floatBox.ActualMarginLeft
+                             < best.Location.X - best.ActualMarginLeft))
                 {
+                    // Not one lying wholly left of the line: a float in an earlier column of a multi-column
+                    // container covers the same rows as this column's lines without being beside them.
                     best = floatBox;
                 }
             }

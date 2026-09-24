@@ -1052,7 +1052,11 @@ namespace PeachPDF.Html.Core.Utils
         /// never reach its lines and its own floats never reach out. The cases that matter here are
         /// a grid or flex ITEM (css-grid-1 §6, css-flexbox-1 §4 — an item does so whatever its own
         /// display), a table cell, an inline-block, a float, an out-of-flow box, and anything with a
-        /// non-visible overflow (CSS 2.1 §9.4.1).
+        /// non-visible overflow (CSS 2.1 §9.4.1). A multi-column container is one too (css-multicol-1 §2) and
+        /// contains its floats (<see cref="ContainsItsFloats"/>), but is deliberately not answered here: this
+        /// predicate also ends the float scans and the margin collapse through a box, and nothing in this
+        /// engine narrows or moves an in-flow multi-column container beside a preceding float, so text in
+        /// its columns has to keep seeing that float.
         /// </summary>
         internal static bool EstablishesIndependentFormattingContext(CssBox box)
         {
@@ -1073,6 +1077,16 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Whether <paramref name="box"/> contains its own floats - grows to cover them
+        /// (<see href="https://www.w3.org/TR/CSS21/visudet.html#root-height">CSS 2.1 §10.6.7</see>) and ends the
+        /// walk in <see cref="LowestFloatBottomInOwnFormattingContext"/> for the box around it: a formatting
+        /// context root (<see cref="EstablishesIndependentFormattingContext"/>) or a multi-column container
+        /// (css-multicol-1 §2, "a multi-column container establishes a new independent formatting context").
+        /// </summary>
+        internal static bool ContainsItsFloats(CssBox box) =>
+            box.EstablishesMultiColumnContext || EstablishesIndependentFormattingContext(box);
+
+        /// <summary>
         /// The lowest bottom margin edge among the floats in <paramref name="box"/>'s <i>own</i> formatting
         /// context, or <see cref="double.NegativeInfinity"/> when it holds none — CSS 2.1
         /// <see href="https://www.w3.org/TR/CSS21/visudet.html#root-height">§10.6.7</see>'s "if the element
@@ -1081,7 +1095,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         /// <remarks>
         /// Only a box that establishes a formatting context of its own
-        /// (<see cref="EstablishesIndependentFormattingContext"/>) asks this: an ordinary block does not
+        /// (<see cref="ContainsItsFloats"/>) asks this: an ordinary block does not
         /// contain its floats, which is why a float can overhang the block it sits in and why
         /// <c>clear</c> and the <c>overflow: hidden</c> containment idiom exist at all.
         /// <para>
@@ -1120,7 +1134,7 @@ namespace PeachPDF.Html.Core.Utils
                         continue;
                     }
 
-                    if (EstablishesIndependentFormattingContext(child)) continue;
+                    if (ContainsItsFloats(child)) continue;
 
                     Walk(child);
                 }
@@ -1151,7 +1165,7 @@ namespace PeachPDF.Html.Core.Utils
             }
 
             var boxesVisited = 0;
-            var narrowest = FindNarrowestRightFloatBox(box, coordinates.CurrentY, ref boxesVisited);
+            var narrowest = FindNarrowestRightFloatBox(box, coordinates.CurrentY, coordinates.Line.ContentLeft, ref boxesVisited);
             container.RecordFloatScanBoxVisits(boxesVisited);
             return narrowest;
         }
@@ -1162,7 +1176,7 @@ namespace PeachPDF.Html.Core.Utils
         /// first hit - the wrap-limit query needs the binding constraint among every float:right box
         /// covering this row, not merely the first one the traversal order happens to reach.
         /// </summary>
-        private static CssBox? FindNarrowestRightFloatBox(CssBox reference, double top, ref int boxesVisited)
+        private static CssBox? FindNarrowestRightFloatBox(CssBox reference, double top, double lineLeft, ref int boxesVisited)
         {
             CssBox? narrowest = null;
             var narrowestLeft = double.PositiveInfinity;
@@ -1188,7 +1202,7 @@ namespace PeachPDF.Html.Core.Utils
 
                 for (var i = 0; i < currentBoxIdx; i++)
                 {
-                    ScanForNarrowestRightFloatBox(reference.ParentBox.Boxes[i], top, ref narrowest, ref narrowestLeft, ref boxesVisited);
+                    ScanForNarrowestRightFloatBox(reference.ParentBox.Boxes[i], top, lineLeft, ref narrowest, ref narrowestLeft, ref boxesVisited);
                 }
 
                 reference = reference.ParentBox;
@@ -1197,11 +1211,16 @@ namespace PeachPDF.Html.Core.Utils
             return narrowest;
         }
 
-        private static void ScanForNarrowestRightFloatBox(CssBox box, double top, ref CssBox? narrowest, ref double narrowestLeft, ref int boxesVisited)
+        private static void ScanForNarrowestRightFloatBox(CssBox box, double top, double lineLeft, ref CssBox? narrowest, ref double narrowestLeft, ref int boxesVisited)
         {
             boxesVisited++;
 
-            if (box.EffectiveFloatSide == Floating.Right && box.Location.Y <= top && top < box.ActualBottom)
+            // A float that lies wholly to the left of the line's content edge is not beside it at all. Only
+            // reachable in a multi-column container, where the float sits in an earlier column but covers
+            // the same block-axis rows as a line in a later one (css-multicol-1 §2: a float belongs to the
+            // column box it appears in).
+            if (box.EffectiveFloatSide == Floating.Right && box.Location.Y <= top && top < box.ActualBottom
+                && box.ActualRight + box.ActualMarginRight > lineLeft)
             {
                 var left = box.Location.X - box.ActualMarginLeft;
 
@@ -1214,7 +1233,7 @@ namespace PeachPDF.Html.Core.Utils
 
             foreach (var childBox in box.Boxes)
             {
-                ScanForNarrowestRightFloatBox(childBox, top, ref narrowest, ref narrowestLeft, ref boxesVisited);
+                ScanForNarrowestRightFloatBox(childBox, top, lineLeft, ref narrowest, ref narrowestLeft, ref boxesVisited);
             }
         }
 
