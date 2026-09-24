@@ -33,9 +33,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <summary>
         /// Whether §2 forbids breaking inside <paramref name="box"/>.
         /// </summary>
+        /// <remarks>
+        /// The block-size test runs before <see cref="BreaksInBlockFlow"/>, which walks the ancestors and
+        /// the subtree: a capped scroll container is monolithic wherever it is placed.
+        /// </remarks>
         internal static bool IsMonolithic(CssBox box) =>
             IsReplaced(box)
-            || (IsScrollContainer(box) && (!BreaksInBlockFlow(box) || HasConstrainedBlockSize(box)));
+            || (IsScrollContainer(box) && (HasConstrainedBlockSize(box) || !BreaksInBlockFlow(box)));
 
         /// <summary>
         /// Whether <paramref name="box"/> is a block box whose breaks its parent's block flow decides, the
@@ -65,12 +69,14 @@ namespace PeachPDF.Html.Core.Fragmentation
             && !IsFloat(box)
             && box.ParentBox?.DerivedStyle.ActualDisplay is not (Keywords.Flex or Keywords.InlineFlex
                 or Keywords.Grid or Keywords.InlineGrid)
-            && EveryAncestorCarriesABreak(box);
+            && EveryAncestorCarriesABreak(box)
+            && EveryDescendantCarriesABreak(box);
 
         /// <summary>
         /// Whether every ancestor of <paramref name="box"/> is a kind known to carry a break taken inside
-        /// it on into the next fragmentainer: an in-flow block or list item, a block-level flex or grid
-        /// container, or a block-level table and its row groups, rows and cells.
+        /// it on into the next fragmentainer: an in-flow block or list item that is not a multi-column
+        /// container, a block-level flex or grid container, or a block-level table and its row groups,
+        /// rows and cells.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -81,6 +87,11 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <see cref="IsUnresumableOrthogonalFlow"/>), an <c>inline-table</c>, and a table caption
         /// (<c>LayoutCaptionGroup</c>). A break taken anywhere inside one loses every line after it. Each
         /// was found only after the previous one was excluded, by measuring lines disappear.
+        /// </para>
+        /// <para>
+        /// A multi-column container is excluded although it is a block. Its columns are fragmentainers
+        /// of their own, and a scroll container that broke inside one lost its lines at the column
+        /// boundary, even on a single page.
         /// </para>
         /// <para>
         /// Anything not listed keeps a scroll container inside it monolithic, which is the behaviour
@@ -97,9 +108,70 @@ namespace PeachPDF.Html.Core.Fragmentation
                         or Keywords.Table or Keywords.TableRowGroup or Keywords.TableHeaderGroup
                         or Keywords.TableFooterGroup or Keywords.TableRow or Keywords.TableCell
                     && !IsFloat(ancestor)
+                    && !ancestor.EstablishesMultiColumnContext
                     && !IsUnresumableOrthogonalFlow(ancestor);
 
                 if (!carriesABreak) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Whether everything inside <paramref name="box"/> is a kind known to carry a break taken inside
+        /// the box on into the next fragmentainer: inline content (floats and atomic inlines included),
+        /// blocks and list items that are not multi-column containers, and tables with their row groups,
+        /// rows, cells and columns.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The counterpart of <see cref="EveryAncestorCarriesABreak"/>, and an allow-list for the same
+        /// reason. A fragmenting box resumes on the next fragmentainer from a break token, and some of its
+        /// contents are laid out by paths that drop that token. A page float is moved to its page edge
+        /// whole. An absolutely or fixed positioned box is laid out after its containing block, against
+        /// geometry the break has already moved on from. A multi-column, flex or grid container runs an
+        /// engine that decides its own breaks, and a table caption is laid out by
+        /// <c>LayoutCaptionGroup</c>. Letting a scroll container break around one of these can lose content
+        /// that the monolithic slice used to draw; a multi-column child lost 29 words on a single page.
+        /// </para>
+        /// <para>
+        /// A float and an atomic inline (<c>inline-block</c>, <c>inline-table</c>) are allowed. The inline
+        /// flow that places one lays its content out unbroken (<c>CssLayoutEngine.LayoutContentUnbroken</c>),
+        /// so it keeps every line whatever breaks around it, the same slice a monolithic wrapper gave it.
+        /// Excluding them kept the commonest clearfix page layout, a floated menu beside a long column of
+        /// text, monolithic, and a line of that text was lost at every page boundary.
+        /// </para>
+        /// <para>
+        /// A box with <c>display: none</c> generates nothing, so neither it nor its subtree is inspected.
+        /// </para>
+        /// </remarks>
+        private static bool EveryDescendantCarriesABreak(CssBox box)
+        {
+            var generation = box.HtmlContainer?.LayoutGeneration ?? -1;
+            if (box.DescendantsCarryABreak is { } cached && cached.Generation == generation) return cached.Value;
+
+            var value = WalkDescendants(box);
+            box.DescendantsCarryABreak = (generation, value);
+            return value;
+        }
+
+        private static bool WalkDescendants(CssBox box)
+        {
+            foreach (var child in box.Boxes)
+            {
+                var display = child.DerivedStyle.ActualDisplay;
+                if (display is Keywords.None) continue;
+
+                var carriesABreak = display
+                        is Keywords.Inline or Keywords.InlineBlock or Keywords.Block or Keywords.ListItem
+                        or Keywords.Table or Keywords.InlineTable or Keywords.TableRowGroup
+                        or Keywords.TableHeaderGroup or Keywords.TableFooterGroup or Keywords.TableRow
+                        or Keywords.TableCell or Keywords.TableColumn or Keywords.TableColumnGroup
+                    && !child.IsAbsolutelyPositioned
+                    && !child.IsPageFloated
+                    && !child.EstablishesMultiColumnContext;
+
+                if (!carriesABreak || !EveryDescendantCarriesABreak(child)) return false;
             }
 
             return true;
@@ -196,10 +268,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </para>
         /// <para>
         /// In a vertical writing mode the logical height is the physical width. Its percentages resolve
-        /// against the containing block's width, which is definite unless that block is itself vertical.
-        /// Most vertical blocks lay their children out at assigned positions and so keep them monolithic
-        /// regardless (<see cref="EveryAncestorCarriesABreak"/>). A vertical multi-column container
-        /// with block children does not, which is why the test is kept here.
+        /// against the containing block's width, which is definite unless that block is itself vertical,
+        /// and a percentage is taken as a cap. A vertical containing block would make it no cap, but no box
+        /// that reaches this question has one: a vertical block lays its children out at assigned
+        /// positions, and a vertical multi-column container is a fragmentainer of its own, so
+        /// <see cref="EveryAncestorCarriesABreak"/> keeps a box under either monolithic before its size is
+        /// asked about.
         /// </para>
         /// </remarks>
         internal static bool HasConstrainedBlockSize(CssBox box)
@@ -220,8 +294,9 @@ namespace PeachPDF.Html.Core.Fragmentation
             bool Constrains(string value, bool isMax) =>
                 CssValueParser.IsValidLength(value)
                 && (!CssValueParser.DependsOnPercentage(value)
+                    || vertical
                     || IsInsideAFlexOrGridItem(box)
-                    || (vertical ? !IsVertical(box.ContainingBlock) : HeightPercentageResolves(isMax)));
+                    || HeightPercentageResolves(isMax));
 
             bool HeightPercentageResolves(bool isMax) => isMax
                 ? CssLayoutEngine.IsHeightDefinite(box.ContainingBlock)

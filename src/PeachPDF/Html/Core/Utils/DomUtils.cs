@@ -162,18 +162,32 @@ namespace PeachPDF.Html.Core.Utils
 
             var index = b.ParentBox.Boxes.IndexOf(b);
             if (index <= 0) return null;
-            var diff = 1;
-            var sib = b.ParentBox.Boxes[index - diff];
-
-            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || sib.IsPageFloated || CssBox.IsOutsideMarker(sib) || sib.IsTableGridDecorationBox) && index - diff - 1 >= 0)
+            for (var i = index - 1; i >= 0; i--)
             {
-                sib = b.ParentBox.Boxes[index - ++diff];
+                var sib = b.ParentBox.Boxes[i];
+                if (!IsSteppedOverAsPreviousSibling(sib, includeFloats)) return sib;
             }
 
-            sib = sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || sib.IsPageFloated || CssBox.IsOutsideMarker(sib) || sib.IsTableGridDecorationBox ? null : sib;
-
-            return sib;
+            return null;
         }
+
+        /// <summary>
+        /// Whether <see cref="GetPreviousSibling"/> steps over <paramref name="sib"/>: a box that takes no
+        /// part in placing its following sibling.
+        /// </summary>
+        /// <remarks>
+        /// One predicate for both the walk and its end. The two used to be separate conditions, and the
+        /// end's omitted <c>position: absolute</c>: an absolutely positioned first child was returned as
+        /// the previous sibling of the box after it, which was then placed below the absolutely
+        /// positioned box rather than at the top of its parent (#1349).
+        /// </remarks>
+        private static bool IsSteppedOverAsPreviousSibling(CssBox sib, bool includeFloats) =>
+            sib.DerivedStyle.ActualDisplay == Keywords.None
+            || sib.Position.Value is PositionMode.Absolute or PositionMode.Fixed or PositionMode.Running
+            || (!includeFloats && sib.IsFloated)
+            || sib.IsPageFloated
+            || CssBox.IsOutsideMarker(sib)
+            || sib.IsTableGridDecorationBox;
 
         /// <summary>
         /// Collects the maximal run of preceding in-flow siblings chained to <paramref name="box"/> by

@@ -498,6 +498,61 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(10, abs.Location.Y, 0.5);
         }
 
+        // ─── An absolute box laid out after the page its containing block is on (issue #1349) ──
+
+        // Thirty 12pt lines push the host block to the third 200pt page. The absolute box's containing
+        // block is the initial one, so `top: 5pt` puts it on the first page, which was already emitted when
+        // the third page's pass reached the box. It was drawn on no page, and the paragraph after it was
+        // placed below it, back on the first page, where it was lost as well.
+        private static string AbsoluteFirstChildAfterPageOne(string absoluteCss) => LayoutHarness.Wrap(
+            "<div style='font-size:10pt;line-height:12pt'>" +
+            "<div>" + string.Join("<br>", Enumerable.Range(1, 30).Select(i => $"P{i}")) + "</div>" +
+            $"<div id='host'><div id='abs' style='position:absolute;{absoluteCss}'>ABS</div>" +
+            "<p id='m' style='margin:0'>" + string.Join("<br>", Enumerable.Range(1, 6).Select(i => $"M{i}")) + "</p></div>" +
+            "<p id='end' style='margin:0'>END</p></div>");
+
+        [Theory]
+        [InlineData("top:5pt;right:0")]
+        [InlineData("right:0")]
+        public async Task AbsoluteFirstChild_LaidOutAfterPageOne_TakesNoPartInPlacingTheBoxAfterIt(string css)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                AbsoluteFirstChildAfterPageOne(css), pageHeight: 200, margin: 20);
+
+            var host = LayoutHarness.FindById(root, "host")!;
+            var paragraph = LayoutHarness.FindById(root, "m")!;
+            var end = LayoutHarness.FindById(root, "end")!;
+
+            Assert.Equal(2, container.PageIndexOf(host.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+            Assert.Equal(host.Location.Y, paragraph.Location.Y, 3);
+            Assert.Equal(paragraph.ActualBottom, end.Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task AbsoluteBoxPlacedOnAnAlreadyEmittedPage_IsDrawnThere()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                AbsoluteFirstChildAfterPageOne("top:5pt;right:0"), pageHeight: 200, margin: 20);
+
+            var pagesByWord = container.FragmentTree!.Fragmentainers
+                .SelectMany((page, index) => FlattenFragments(page.Root)
+                    .SelectMany(f => f.Words)
+                    .Select(w => (Text: w.Word.Text, Page: index, w.Rect)))
+                .ToList();
+
+            var abs = Assert.Single(pagesByWord, w => w.Text == "ABS");
+            Assert.Equal(0, abs.Page);
+            // top: 5pt below the 20pt page margin; the word's own rectangle sits within that first line.
+            Assert.InRange(abs.Rect.Top, 20, 25 + 12);
+
+            Assert.All(Enumerable.Range(1, 6), i =>
+                Assert.Equal(2, Assert.Single(pagesByWord, w => w.Text == $"M{i}").Page));
+        }
+
+        private static System.Collections.Generic.IEnumerable<PeachPDF.Html.Core.Fragments.BoxFragment> FlattenFragments(
+            PeachPDF.Html.Core.Fragments.BoxFragment fragment) =>
+            fragment.Children.SelectMany(FlattenFragments).Prepend(fragment);
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

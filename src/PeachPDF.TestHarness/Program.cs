@@ -2366,6 +2366,112 @@ await SaveShowcaseAsync("paged_media_page_floats", "Paged Media", "Page floats",
     "css-page-floats' float: top/bottom/top-bottom/snap/inside/outside: a float: top figure landing flush at the true top of its landing page with flow content starting below the reserved strip, a float: bottom callout landing flush at the true bottom with flow content stopping above it, float: top-bottom falling back to the bottom edge once the top edge has no room left, and inside/outside resolving to opposite physical sides depending on whether the landing page is a right-hand (recto) or left-hand (verso) page.",
     pageFloatsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── Scroll containers across page breaks ───────────────────────────────────
+// An auto-height overflow: hidden/auto box has nothing to clip on paper, so it breaks between its lines
+// like any block (css-break-3 §2 only permits treating it as monolithic). A capped one (max-height) stays
+// whole. The DRAFT stamp is declared last but positioned against the first page's area, and is drawn there.
+var scrollContainerCodeLines = string.Join("\n", Enumerable.Range(1, 34).Select(i =>
+    $"{i,2}  " + (i % 5) switch
+    {
+        0 => "return total;",
+        1 => "var total = 0;",
+        2 => "foreach (var line in invoice.Lines)",
+        3 => "    total += line.Quantity * line.UnitPrice;",
+        _ => "// apply discounts and taxes per line",
+    }));
+
+var scrollContainersAcrossPagesHtml = $$"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: 105mm 148mm;
+      margin: 12mm 10mm;
+      @bottom-center { content: "Page " counter(page); font-size: 7pt; font-family: Arial; color: #888; }
+    }
+    body { font-family: Arial, sans-serif; font-size: 8.5pt; line-height: 1.35; margin: 0; color: #1f2937; }
+    h1 { font-size: 12pt; margin: 0 0 6pt; padding-right: 48pt; }
+    h2 { font-size: 10pt; margin: 10pt 0 4pt; }
+    pre {
+      overflow: auto;
+      background: #f3f4f6;
+      border: 0.75pt solid #9ca3af;
+      padding: 6pt;
+      font-size: 7.5pt;
+      line-height: 1.3;
+      margin: 0;
+    }
+    .panel {
+      overflow: hidden;
+      border: 0.75pt solid #2563eb;
+      background: #eff6ff;
+      padding: 4pt 8pt;
+    }
+    .panel p { margin: 0 0 4pt; }
+    .capped {
+      overflow: hidden;
+      max-height: 200pt;
+      border: 0.75pt solid #b45309;
+      background: #fffbeb;
+      padding: 4pt 8pt;
+    }
+    .stamp {
+      position: absolute;
+      top: 0;
+      right: 0;
+      border: 1.5pt solid #dc2626;
+      color: #dc2626;
+      font-weight: bold;
+      font-size: 9pt;
+      padding: 2pt 6pt;
+    }
+    </style>
+    </head>
+    <body>
+    <h1>Scroll containers across page breaks</h1>
+    <p>A box with <code>overflow: auto</code> or <code>hidden</code> and no height of its own grows with its
+    content, so on paper it has nothing to clip. It breaks between its lines like any other block, as it
+    does when a browser prints it, instead of being sliced with a line lost at every page edge.</p>
+
+    <h2>A code listing with overflow: auto</h2>
+    <pre>{{scrollContainerCodeLines}}</pre>
+
+    <h2>An overflow: hidden panel</h2>
+    <div class="panel">
+    <p>Every paragraph in this panel is drawn whole on one page or the next. The border and background
+    are sliced at the page edge, as box-decoration-break: slice does for any block.</p>
+    <p>Before this change the panel would have been laid out in one piece and cut into page-sized slices,
+    and the line on each cut drawn on neither page.</p>
+    <p>A wrapper holding absolutely positioned boxes or a multi-column, flex or grid layout still stays in
+    one piece, because those parts cannot yet continue on the next page.</p>
+    <p>Add break-inside: avoid to keep a short panel together instead.</p>
+    <p>This is the case the clearfix idiom produces most often: a long, auto-height wrapper whose only job
+    is to establish a new block formatting context, with ordinary paragraphs inside it.</p>
+    <p>Its height grows with its content, so there is nothing it can clip in the block axis, and the page
+    edge simply falls between two of its lines.</p>
+    <p>The last paragraphs continue on the next page, still inside the same blue panel.</p>
+    </div>
+
+    <h2>A capped box stays whole</h2>
+    <div class="capped">
+    <p>This box has max-height: 200pt, so it can clip its content and is treated as monolithic: it moves
+    whole to the next page when it does not fit where it starts, rather than breaking.</p>
+    </div>
+
+    <p>The DRAFT stamp at the top right of the first page is written at the very end of this document.
+    It has no positioned ancestor, so it is placed against the first page's area and drawn there, and the
+    paragraph after it is not moved by it.</p>
+    <div class="stamp">DRAFT</div>
+    <p>End of document.</p>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("scroll_containers_across_pages", "Paged Media", "Scroll Containers Across Pages",
+    "An auto-height overflow: auto code listing and an overflow: hidden panel breaking cleanly between their lines across page boundaries, a max-height-capped box moving whole to the next page instead, and an absolutely positioned DRAFT stamp declared at the end of the document drawn on the first page.",
+    scrollContainersAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──
 // The classic hand-authored table of contents: leader() fills the gap between a chapter
 // title and its page number with a dotted rule, and target-counter(attr(href), page)

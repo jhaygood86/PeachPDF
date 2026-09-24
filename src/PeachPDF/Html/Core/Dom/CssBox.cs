@@ -2386,6 +2386,15 @@ namespace PeachPDF.Html.Core.Dom
         private int _placedByPassGeneration = -1;
 
         /// <summary>
+        /// <see cref="Fragmentation.MonolithicContent"/>'s answer to whether everything inside this box can
+        /// carry a break on to the next fragmentainer, with the <see cref="HtmlContainerInt.LayoutGeneration"/>
+        /// it was computed in. The answer walks the whole subtree and is asked on every pass that reaches
+        /// the box, and again for each scroll container nested inside another, so it is kept for the
+        /// generation rather than re-derived. A new generation asks again, in case the tree changed.
+        /// </summary>
+        internal (int Generation, bool Value)? DescendantsCarryABreak { get; set; }
+
+        /// <summary>
         /// <see cref="HtmlContainerInt.PassInvalidationCount"/> as it stood when <see cref="_placedByPass"/>
         /// was stamped — what <see cref="PlacedByPassIfStillValid"/> checks the container's
         /// <see cref="Fragmentation.InvalidationHistory"/> against, scoped by this box's own recorded pass
@@ -6778,6 +6787,13 @@ namespace PeachPDF.Html.Core.Dom
             // equation, it just resolves against the page area instead of an ancestor's padding box.
             // The answer can be provisional here - see ResolvePositionedAutoBlockMargins.
             ResolvePositionedAutoBlockMargins();
+
+            // Its position and height are final now. Placed by its offsets, it can land on a fragmentainer
+            // this pass has already emitted, which has to be re-opened to draw it (#1349).
+            if (Position.Value is PositionMode.Absolute)
+            {
+                HtmlContainer?.InvalidateEmittedFragmentainersReceiving(this);
+            }
 
             // Named-page registration tail: block containers already registered before child layout
             // (see the early registration above the layout-engine dispatch); everything else (e.g. a

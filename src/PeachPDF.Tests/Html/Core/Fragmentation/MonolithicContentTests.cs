@@ -115,6 +115,52 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             Assert.Equal(expected, MonolithicContent.IsMonolithic(LayoutHarness.FindById(root, "t")!));
         }
 
+        // An auto-height scroll container fragments only when everything inside it can carry a break on to
+        // the next page, and none of its ancestors is a multi-column container. An absolutely or fixed
+        // positioned box, a page float, a multi-column/flex/grid container or a table caption inside it
+        // keeps it monolithic, and so does a multi-column container above it. A float or an atomic inline
+        // does not: the inline flow that places one lays its content out unbroken, so the clearfix wrapper
+        // around a floated menu fragments and the float keeps every line. display:none content generates
+        // nothing.
+        [Theory]
+        [InlineData("<div id='t' style='overflow:hidden'><div style='float:left'>f</div></div>", false)]
+        [InlineData("<div id='t' style='overflow:hidden'><div><div style='float:right'>f</div></div></div>", false)]
+        [InlineData("<div id='t' style='overflow:hidden'><div style='float:bottom'>f</div>a</div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden;position:relative'>a<div style='position:absolute'>b</div></div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden'>a<div style='position:fixed'>b</div></div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden'>a <span style='display:inline-block'>b</span></div>", false)]
+        [InlineData("<div id='t' style='overflow:hidden'>a <table style='display:inline-table'><tr><td>b</td></tr></table></div>", false)]
+        [InlineData("<div id='t' style='overflow:hidden'><div style='columns:2'>a</div></div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden'><div style='display:flex'>a</div></div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden'><div style='display:grid'><p style='break-inside:avoid'>a</p></div></div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden'><table><caption>c</caption><tr><td>a</td></tr></table></div>", true)]
+        [InlineData("<div style='columns:2'><div id='t' style='overflow:hidden'>a</div></div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden'><p>a <b>b</b></p><ul><li>c</li></ul></div>", false)]
+        [InlineData("<div id='t' style='overflow:hidden'><table><tr><td>a</td></tr></table></div>", false)]
+        [InlineData("<div id='t' style='overflow:hidden'><div style='overflow:auto'><p>a</p></div></div>", false)]
+        [InlineData("<div id='t' style='overflow:hidden'><div style='display:none'><div style='float:left'>f</div></div>a</div>", false)]
+        public async Task AutoHeightScrollContainer_StaysMonolithicAroundContentThatDropsABreak(string markup, bool expected)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup));
+
+            Assert.Equal(expected, MonolithicContent.IsMonolithic(LayoutHarness.FindById(root, "t")!));
+        }
+
+        // The ancestors that carry a break on: a table and its row groups, rows and cells, and a block-level
+        // flex or grid container (below the item, which is itself excluded). A scroll container under each
+        // fragments, which the allow-list must keep; dropping an entry would make these monolithic.
+        [Theory]
+        [InlineData("<table><tr><td><div id='t' style='overflow:hidden'>a</div></td></tr></table>")]
+        [InlineData("<table><tbody><tr><td><div id='t' style='overflow:hidden'>a</div></td></tr></tbody></table>")]
+        [InlineData("<div style='display:flex'><div><div id='t' style='overflow:hidden'>a</div></div></div>")]
+        [InlineData("<div style='display:grid'><div><div id='t' style='overflow:hidden'>a</div></div></div>")]
+        public async Task AutoHeightScrollContainer_UnderAnAncestorThatCarriesABreak_Fragments(string markup)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup));
+
+            Assert.False(MonolithicContent.IsMonolithic(LayoutHarness.FindById(root, "t")!));
+        }
+
         // A vertical box's logical height is its width, whose percentage base is the containing block's
         // width, definite under a horizontal parent. Under a vertical parent block the box is monolithic
         // anyway: that parent lays its children out at assigned positions that cannot carry a break.

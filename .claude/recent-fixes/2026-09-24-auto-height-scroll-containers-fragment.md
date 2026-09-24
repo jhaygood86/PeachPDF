@@ -79,8 +79,7 @@ A third round made "capped" mean what layout actually caps:
 
 A fourth round excluded **floats**. A float computes to `display: block`, but it is placed through
 `LayoutContentAtItsAssignedPosition`, which drops the pending break token
-([the float-pagination gap](../accepted-gaps/a-floats-own-content-taller-than-one-page-overflows.md),
-#1201). Made fragmentable, a straddling `overflow: hidden` float lost every line after the boundary
+(the float-pagination gap, #1201, since closed by #1348). Made fragmentable, a straddling `overflow: hidden` float lost every line after the boundary
 (F4–F12 of 12). On `main` all 12 were placed, with the boundary line drawn past the band. The first
 review's claim that floats "got better" came from a fixture that didn't reach this path. Checking the
 same fixture with `overflow: visible` showed that any float crossing a boundary loses its later lines,
@@ -118,6 +117,53 @@ breaking off. Each earlier round had found the next deny-list gap only by measur
 allow-list inverts the failure mode: an unlisted ancestor keeps `main`'s monolithic behaviour, which can
 leave the fix out but never lose content. `AutoHeightScrollContainerUnderAnyAncestor_PlacesEveryLine`
 pins all nine shapes, and the caption and `inline-table` rows fail on the deny-list version.
+
+A ninth round, from the PR review, found that the allow-list inspected only **ancestors**. A fragmenting
+wrapper also needs its *contents* to carry the break, and several did not:
+
+- A tall float in a clearfix wrapper drew 0 of 30 lines (`main` 30), and a `.row` of two floats 0 of 60.
+- An `overflow: hidden` child of a **multi-column container** lost 29 words on a single page with no page
+  break at all. This one is a paint-time loss: split across the two columns, its first-column fragment
+  got a zero-height clip, so the words were in the fragment tree but never drawn. A test that reads the
+  fragment tree passes against the broken code; `WordsPlaced` now paints each page through
+  `RecordingGraphics` and counts only strings inside every clip in force.
+- An **inline-block** holding block content lost all 14 of its lines (fuzz case 1_72): it is laid out
+  through `FlowAtomicBlockContentChild` → `LayoutContentAtItsAssignedPosition`, the #1201 path.
+- An absolutely positioned badge in a `position: relative; overflow: hidden` wrapper vanished. That turned
+  out to be #1349 (see [its entry](2026-09-24-an-absolute-box-on-an-emitted-page-is-drawn-there.md)),
+  fixed here too, so the exclusion is now a safety margin rather than the fix.
+
+`EveryDescendantCarriesABreak` is the matching allow-list over the subtree (block, list-item, inline,
+atomic inlines, and tables with their parts; not absolutely positioned, page-floated or multi-column;
+`display: none` subtrees skipped), and `EveryAncestorCarriesABreak` now rejects a multi-column ancestor.
+Flex/grid descendants are excluded although the flex probe lost nothing: the review reported a grid
+holding a `break-inside: avoid` paragraph losing words, which did not reproduce here, and an unlisted
+kind costs only the old behaviour.
+
+**Floats and inline-blocks were excluded at first, and are not now.** The float and inline-block losses
+above were #1201, which main closed with #1348 while this was in review: `FlowFloatChild` and
+`FlowAtomicBlockContentChild` now lay the content out unbroken (`CssLayoutEngine.LayoutContentUnbroken`),
+so a float or inline-block keeps every line whatever breaks around it. Excluding them had a real cost,
+found on a customer page (a `#contentcontainer { overflow: hidden }` holding a floated category menu and
+a long text column): the wrapper stayed monolithic and a text line was lost at every page boundary, as on
+`main`. An interim fix laid floats out unbroken here, first for every float (which broke a float holding a
+multi-column container: the columns engine needs the fragmentainer that detaches) and then only for floats
+inside a fragmenting wrapper; #1348 made both unnecessary. `ClearfixWrapperAroundAShortFloat_DrawsEveryTextLineInsideAPageBand`
+fails with the float exclusion back in.
+
+A content-preservation fuzz (random nesting of wrappers, floats, abspos, multicol, grid, flex, tables,
+`break-inside: avoid`, inline-blocks; unique numbered words; 160–260pt pages) compared the branch with
+`main` at b59e736a. The branch recovers 1,509 words in 38 of 91 documents and loses 314 in 22. Every
+loss that was traced came from a pre-existing bug the changed pagination moves content onto, not from a
+wrapper that now fragments: the #1328 slice-boundary line landing on a different line (1_4, 1_36, 1_54,
+1_57, 1_65, 1_75; `main` loses a neighbouring line of the same wrapper instead), and #1358, fragment
+pruning dropping the content after a blank stretch in a multi-column container that holds an absolutely
+positioned box (1_56, 1_64). `main` hides #1358 only while the absolutely positioned box is the first child,
+because #1349 put the content after it back on page 1; with the box anywhere else in the container `main`
+loses the same line. The reducer that minimised them is a render server per build (one process, many
+documents): the CLI's ~1.4s JIT start-up made the first reduction take 11 minutes, the server 12 seconds.
+Two float-sibling bugs found on the way are tracked as #1339 and #1340 and reproduce on `main` with no
+`overflow` at all.
 
 `IsScrollContainer` itself is unchanged, since only `IsMonolithic` calls it. Table cells are unaffected
 either way: `LayoutContents` already excluded them from suppression by display.
