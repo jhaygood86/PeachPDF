@@ -4145,10 +4145,25 @@ namespace PeachPDF.Html.Core
                     var atBottom = new Dictionary<CssBox, bool>();
                     double topTotal = 0, bottomTotal = 0;
 
+                    // A float taller than the room the page has for one is not reserved for and is not
+                    // stacked: an edge strip as tall as the band leaves no room for anything else on the page,
+                    // so a reservation that large stalls the flow (see CssLayoutEngineColumns.FillColumns's
+                    // note on the same shape), and a bottom placement would put its top above the page, where
+                    // its first lines are drawn on no page at all (issue #1332). It starts at the top of its
+                    // page instead and its content carries on past the page's foot like any tall block's,
+                    // css-break-3 §4.4's "avoid losing content off the edge of the fragmentainer".
+                    var oversized = new HashSet<CssBox>();
+
                     foreach (var box in boxes)
                     {
                         var height = Math.Max(0, box.ActualBottom - box.Location.Y);
                         if (height <= 0) continue;
+
+                        if (height > bandHeight - footnoteHeight)
+                        {
+                            oversized.Add(box);
+                            continue;
+                        }
 
                         var placeAtBottom = box.Float.Value switch
                         {
@@ -4183,6 +4198,12 @@ namespace PeachPDF.Html.Core
                     {
                         var height = Math.Max(0, box.ActualBottom - box.Location.Y);
                         if (height <= 0) continue;
+
+                        if (oversized.Contains(box))
+                        {
+                            currentPlacements[box] = pageTop;
+                            continue;
+                        }
 
                         if (atBottom[box])
                         {
