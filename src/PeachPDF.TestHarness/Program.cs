@@ -6703,6 +6703,12 @@ var positionedInlineHtml = """
     <p style="margin-top: 20pt">Status: shipped<span style="position: relative"><span class="tag">new</span></span>
     and reviewed<span style="position: relative"><span class="tag">2 comments</span></span> this week.</p>
 
+    <h2>An empty inline with a larger font</h2>
+    <p class="note">The wrapper holds no text, but it is still an inline box on the line, so its 28pt font makes the
+    line taller and the text sits lower on the shared baseline. The pins mark the top-left and bottom-left of the
+    wrapper's content area, which now lies inside the grey line.</p>
+    <p style="background: #e8e8e8; line-height: 1.2">Before the badge<span style="position: relative; font-size: 28pt"><span class="pin" style="left: 0; top: 0"></span><span class="pin" style="left: 0; bottom: 0"></span></span> and after it.</p>
+
     <h2>The line is not broken</h2>
     <div style="position: relative; width: 300pt; padding-right: 80pt">The words after a positioned note
     <span class="aside">A note placed at the top right of the paragraph.</span>continue on the same line,

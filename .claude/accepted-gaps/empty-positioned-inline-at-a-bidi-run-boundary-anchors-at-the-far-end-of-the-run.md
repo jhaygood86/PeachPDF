@@ -15,6 +15,7 @@ within that word. The empty inline has no level of its own and takes no part in 
 **Why out of scope:** found in review of the #1299 follow-up. The badge-in-one-direction shapes are
 correct without it, and fixing it means giving the empty inline a resolved level and a slot in
 `ApplyBidiReordering`, not a better neighbour. Related:
-[the empty inline's `vertical-align`](empty-positioned-inline-ignores-its-own-vertical-align.md) and
-[its `font-size`](empty-inline-with-a-larger-font-size-does-not-grow-its-line.md) are the same missing
-piece: an empty inline takes no part in the line passes that only see words.
+[the empty inline's `vertical-align`](empty-positioned-inline-ignores-its-own-vertical-align.md) is the
+same missing piece: an empty inline takes no part in the line passes that only see words. (Its
+`font-size` now does grow the line, #1310, through `CssLineBoxCoordinates.PendingEmptyInlineExtent`, which
+still gives it no bidi level or word slot.)
