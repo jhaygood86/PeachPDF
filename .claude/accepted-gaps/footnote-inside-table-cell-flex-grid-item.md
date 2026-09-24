@@ -17,6 +17,8 @@ A footnote inside a table cell, or inside a flex or grid item, needs no special 
 runs over the whole tree before any layout engine starts, so the call is ordinary content of the cell or item
 (`FootnoteIntegrationTests.Footnote_InsideATableCellOrFlexOrGridItem_ReservesANoteAreaOnItsPage`).
 
+Tracked as [#750](https://github.com/jhaygood86/PeachPDF/issues/750), narrowed to this case.
+
 Mirrors the caution in [running-element-inside-table-cells.md](running-element-inside-table-cells.md), a
 different mechanism with the same "per-cell bookkeeping is more invasive to audit than the generic walk"
 caution.
