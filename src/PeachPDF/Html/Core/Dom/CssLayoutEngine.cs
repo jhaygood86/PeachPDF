@@ -357,6 +357,9 @@ namespace PeachPDF.Html.Core.Dom
                     : 0)
                 : blockBox.ClientTop;
 
+            // The last line an earlier fragmentainer kept, read before the seed line joins the list.
+            var lineBeforeResume = resume is not null && blockBox.LineBoxes.Count > 0 ? blockBox.LineBoxes[^1] : null;
+
             // A resumed pass's seed line rebuilds whole the line-in-progress the previous pass discarded
             // (a line box is monolithic, css-break-3 §4.1) - carrying its FollowsForcedBreak bit forward
             // is what lets `text-indent: each-line` (CSS Text 3 §3) still recognize a resumed line that
@@ -393,6 +396,7 @@ namespace PeachPDF.Html.Core.Dom
                 MaxBottom = startY,
                 Fragmentainer = fragmenting ? context : null,
                 ResumeOrdinal = resume?.ResumeWordIndex ?? 0,
+                EmptyInlinesBeforeResume = lineBeforeResume?.EmptyInlines,
                 SuppressLeadingWrap = resume is not null,
                 // hyphenate-limit-lines (CSS Text 4 §6.3.5): a run of consecutive hyphenated lines that
                 // straddles this boundary keeps counting rather than restarting at 0 - see
@@ -402,6 +406,15 @@ namespace PeachPDF.Html.Core.Dom
 
             //Flow words and boxes
             await FlowBox(g, blockBox, blockBox, 0, startX, coordinates);
+
+            // Empty inlines still held for a word that never came sit on the flow's last line. A break
+            // discards the line being built and a line-clamp stop hides what follows, so then they are on no
+            // line this pass keeps.
+            if (coordinates is { Break: null, ClampedStop: false, PendingEmptyInlineExtent: { } trailing })
+            {
+                HandHeldEmptyInlinesToTheLine(coordinates);
+                GrowLineForEmptyInlines(blockBox, coordinates, trailing);
+            }
 
             // A resumed flow's seed line is abandoned when its first word forces a wrap - a <br>, or
             // content that no longer fits. Leaving it behind would put an empty line box in the middle
@@ -4281,6 +4294,193 @@ namespace PeachPDF.Html.Core.Dom
             return extent;
         }
 
+        /// <summary>
+        /// Makes <paramref name="baselineExtent"/> the baseline-aligned extent of the line
+        /// <paramref name="coordinates"/> is on, and grows the flow's <c>MaxBottom</c> to hold the line.
+        /// </summary>
+        /// <param name="coordinates">the flow, on the line being grown</param>
+        /// <param name="baselineExtent">the line's whole baseline-aligned extent, not an increment</param>
+        private static void CommitLineExtent(CssLineBoxCoordinates coordinates, LineBoxExtent baselineExtent)
+        {
+            var line = coordinates.Line;
+            line.BaselineAlignedExtent = baselineExtent;
+            var extent = IncludeEdgeAlignedAtomicHeights(
+                baselineExtent, line.TopAlignedAtomicHeight, line.BottomAlignedAtomicHeight);
+            line.BaselineExtent = extent;
+
+            // The line box's own top, stated while the cursor still names it. Every question about
+            // which fragmentainer a line is in is asked of this, not of a word on it - the two part
+            // company by the half-leading as soon as a word is placed on its baseline.
+            line.FlowTop = line.FlowTop is { } known
+                ? Math.Min(known, coordinates.CurrentY)
+                : coordinates.CurrentY;
+
+            if (coordinates.MaxBottom - coordinates.CurrentY < extent.Height)
+                coordinates.MaxBottom += extent.Height - (coordinates.MaxBottom - coordinates.CurrentY);
+        }
+
+        /// <summary>
+        /// Grows the line <paramref name="coordinates"/> is on, which already holds content, by the empty
+        /// inlines in <paramref name="extent"/>, and takes a break at the line's start if that pushes a word
+        /// on it across the fragmentainer. A line holding no content is left alone: CSS 2.1 §9.4.2 keeps it
+        /// at zero height, empty inlines or not.
+        /// </summary>
+        /// <remarks>
+        /// The break is the one <see cref="FlowBox"/> takes for a word that straddles, asked of the words
+        /// already on the line as the grown line will sit them. They were each asked when they were placed,
+        /// but against the line's smaller extent, and nothing else asks again: a taller word placed later is
+        /// asked itself, and an empty inline has no word to ask.
+        /// </remarks>
+        /// <param name="blockBox">the block whose inline content is being flowed</param>
+        /// <param name="coordinates">the flow, on the line to grow</param>
+        /// <param name="extent">the empty inlines' extent</param>
+        private static void GrowLineForEmptyInlines(CssBox blockBox, CssLineBoxCoordinates coordinates, LineBoxExtent extent)
+        {
+            if (IsAtLineStart(coordinates)) return;
+
+            var line = coordinates.Line;
+            var aboveBefore = line.BaselineExtent?.AboveBaseline;
+            CommitLineExtent(coordinates, line.BaselineAlignedExtent is { } held ? held.Union(extent) : extent);
+
+            if (blockBox.IsFixed || blockBox.HtmlContainer?.SuppressWordPageBreaks == true
+                || coordinates.Fragmentainer is null)
+            {
+                return;
+            }
+
+            var above = line.BaselineExtent!.Value.AboveBaseline;
+            var shift = above - (aboveBefore ?? 0);
+            if (shift <= 0) return;
+
+            var container = blockBox.HtmlContainer!;
+            var lineTop = line.FlowTop!.Value;
+
+            foreach (var word in line.Words)
+            {
+                if (word.IsLineBreak || GrownLineTopOf(word) is not { } grownTop) continue;
+
+                var originalTop = word.Top;
+                word.Top = grownTop;
+                var straddles = word.WouldStraddleFragmentainer();
+                var fitsNowhere = straddles && word.LineFitsNoFragmentainer(lineTop);
+                var resumeSlot = straddles && !fitsNowhere ? word.ResumeSlotForBreakBefore() : 0;
+                word.Top = originalTop;
+
+                if (!straddles || fitsNowhere) continue;
+
+                coordinates.Break = new InlineBreakToken(
+                    blockBox, resumeSlot, [], coordinates.LineStartOrdinal, CompletedLineCount: 0,
+                    FollowsForcedBreak: line.FollowsForcedBreak,
+                    ConsecutiveHyphenatedLines: coordinates.ConsecutiveHyphenatedLines);
+                return;
+            }
+
+            StepOverADeepLine(coordinates, container);
+
+            // Where the grown line puts the word, or null for a word it does not move, asked where
+            // ApplyVerticalAlignment will put it. One aligned to the line's top stays put, and one aligned to
+            // its bottom or middle goes against the grown line box. Otherwise text moves down with the
+            // baseline, and a replaced element, which still sits at the line's top where the flow placed it,
+            // rests its bottom margin edge on the baseline.
+            double? GrownLineTopOf(CssRect word)
+            {
+                var height = line.BaselineExtent!.Value.Height;
+                var marginBottom = word.IsImage ? word.OwnerBox.ActualMarginBottom : 0;
+
+                return EffectiveVerticalAlignOf(word.OwnerBox, line, out _).Value switch
+                {
+                    { IsValue: false, Keyword: VerticalAlignment.Top } => null,
+                    { IsValue: false, Keyword: VerticalAlignment.Bottom } => lineTop + height - marginBottom - word.Height,
+                    { IsValue: false, Keyword: VerticalAlignment.Middle } => lineTop + (height - word.Height) / 2,
+                    _ when word.IsImage => lineTop + above - marginBottom - word.Height,
+                    _ => word.Top + shift
+                };
+            }
+        }
+
+        /// <summary>
+        /// Steps the flow's fragmentainer cursor to where the line it is on ends, when an empty inline has made
+        /// that line too deep for any fragmentainer, as <see cref="FlowBox"/> does for a word too tall for any
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/435">#435</see>).
+        /// </summary>
+        /// <remarks>
+        /// Such a line overflows the fragmentainer it starts in rather than breaking (css-break-3 §2), so the
+        /// content after it flows into a later band without a break recording the crossing. Asked of the line
+        /// and not of a word on it: the words on a deep line need not straddle anything, since the text sits at
+        /// the line's baseline, possibly wholly inside a later band. Unless the cursor follows, every later
+        /// question this pass asks is answered about the band it opened, and the lines after the deep one
+        /// were drawn in its fragmentainer.
+        /// </remarks>
+        /// <param name="coordinates">the flow, on the grown line</param>
+        /// <param name="container">the container being laid out</param>
+        private static void StepOverADeepLine(CssLineBoxCoordinates coordinates, HtmlContainerInt container)
+        {
+            var line = coordinates.Line;
+
+            if (coordinates.Fragmentainer is not { } fragmentainer
+                || line is not { FlowTop: { } top, BaselineExtent: { } extent }
+                || !MonolithicContent.FitsNoFragmentainer(extent.Height, 0, 0, container))
+            {
+                return;
+            }
+
+            fragmentainer.StepOverTo(container.SlotEndingAt(top + extent.Height));
+        }
+
+        /// <summary>
+        /// Gives the empty inlines held for the next word (<see cref="CssLineBoxCoordinates.PendingEmptyInlineExtent"/>)
+        /// to the line an atomic inline (inline-block, inline-flex, inline-table, inline-grid) has just landed
+        /// on instead. Such a box places no word, so without this the held inlines passed it and went to the
+        /// next word's line, which is a later line when that word wraps.
+        /// </summary>
+        /// <param name="blockBox">the block whose inline content is being flowed</param>
+        /// <param name="coordinates">the flow, just after the atomic inline was placed</param>
+        /// <returns>true when growing the line took a break, so the flow has to stop</returns>
+        private static bool FoldHeldEmptyInlinesIntoAtomicInlinesLine(CssBox blockBox, CssLineBoxCoordinates coordinates)
+        {
+            if (coordinates.PendingEmptyInlineExtent is not { } held) return false;
+
+            HandHeldEmptyInlinesToTheLine(coordinates);
+            GrowLineForEmptyInlines(blockBox, coordinates, held);
+
+            return coordinates.Break is not null;
+        }
+
+        /// <summary>
+        /// Records the held empty inlines on the line that has taken their extent
+        /// (<see cref="CssLineBox.EmptyInlines"/>), and clears them from the flow.
+        /// </summary>
+        /// <param name="coordinates">the flow, on the line taking them</param>
+        private static void HandHeldEmptyInlinesToTheLine(CssLineBoxCoordinates coordinates)
+        {
+            if (coordinates.PendingEmptyInlines is { } boxes)
+                (coordinates.Line.EmptyInlines ??= []).AddRange(boxes);
+
+            coordinates.PendingEmptyInlines = null;
+            coordinates.PendingEmptyInlineExtent = null;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> holds in-flow content that places no word of its own: an
+        /// inline-block, inline-flex, inline-table or inline-grid, at any depth through its plain inlines.
+        /// Such an inline is on its line all the same, so it is not an empty inline.
+        /// </summary>
+        /// <param name="box">an inline that consumed no word ordinal</param>
+        /// <returns>true when it holds atomic inline content</returns>
+        private static bool HoldsAtomicInlineContent(CssBox box)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (child.DerivedStyle.ActualDisplay == Keywords.None || child.IsFloated) continue;
+                if (child.IsAbsolutelyPositioned && !child.IsInline) continue;
+
+                if (child.DerivedStyle.ActualDisplay != Keywords.Inline || HoldsAtomicInlineContent(child))
+                    return true;
+            }
+
+            return false;
+        }
+
         private static LineBoxExtent IncludeEdgeAlignedAtomicHeights(
             LineBoxExtent extent, double topAlignedHeight, double bottomAlignedHeight)
         {
@@ -4354,6 +4554,10 @@ namespace PeachPDF.Html.Core.Dom
                     };
                 }
 
+                // Empty inlines passed since the last word go wherever this one lands (PlaceEmptyInline).
+                if (coordinates.PendingEmptyInlineExtent is { } emptyInlines)
+                    baselineExtent = baselineExtent.Union(emptyInlines);
+
                 baselineExtent = line.BaselineAlignedExtent is { } held
                     ? held.Union(baselineExtent)
                     : baselineExtent;
@@ -4386,20 +4590,46 @@ namespace PeachPDF.Html.Core.Dom
                     }
                 }
 
-                line.BaselineAlignedExtent = baselineExtent;
-                var extent = IncludeEdgeAlignedAtomicHeights(
-                    baselineExtent, line.TopAlignedAtomicHeight, line.BottomAlignedAtomicHeight);
-                line.BaselineExtent = extent;
+                CommitLineExtent(coordinates, baselineExtent);
+            }
 
-                // The line box's own top, stated while the cursor still names it. Every question about
-                // which fragmentainer a line is in is asked of this, not of a word on it - the two part
-                // company by the half-leading as soon as a word is placed on its baseline.
-                line.FlowTop = line.FlowTop is { } known
-                    ? Math.Min(known, coordinates.CurrentY)
-                    : coordinates.CurrentY;
+            // An inline box that placed no word still sits on a line, with its own strut: CSS 2.1 §9.4.2
+            // generates it for an empty inline element, and §10.8.1 sizes the line from every inline box
+            // on it. Nothing else would count it, since a line grows per word (GrowLineToItsExtent). Its
+            // inline ancestors are counted too: one whose first word is still to come, on a later line,
+            // has begun on this one all the same. The inline's own vertical-align is not applied (#1308).
+            //
+            // Which line it is on depends on the break opportunity nearest it. With none since the line's
+            // last word it goes with that word, onto the current line. After a space, or at the start of a
+            // line, it comes after the opportunity and goes with the next word, which may wrap, so it is
+            // held for that word (GrowLineToItsExtent).
+            void PlaceEmptyInline(CssBox emptyInline)
+            {
+                // The pass that broke here gave it to the line before the break, and kept that line.
+                if (coordinates.EmptyInlinesBeforeResume?.Contains(emptyInline) == true) return;
 
-                if (coordinates.MaxBottom - coordinates.CurrentY < extent.Height)
-                    coordinates.MaxBottom += extent.Height - (coordinates.MaxBottom - coordinates.CurrentY);
+                var extent = HalfLeadingExtentWithDecoration(emptyInline, g.PixelsPerPoint);
+
+                for (var inline = emptyInline.ParentBox;
+                     inline is not null && !ReferenceEquals(inline, blockBox);
+                     inline = inline.ParentBox)
+                {
+                    extent = extent.Union(HalfLeadingExtentWithDecoration(inline, g.PixelsPerPoint));
+                }
+
+                if (coordinates.PendingWordSeparator || IsAtLineStart(coordinates))
+                {
+                    coordinates.PendingEmptyInlineExtent = coordinates.PendingEmptyInlineExtent is { } held
+                        ? held.Union(extent)
+                        : extent;
+                    (coordinates.PendingEmptyInlines ??= []).Add(emptyInline);
+                    return;
+                }
+
+                var line = coordinates.Line;
+                GrowLineForEmptyInlines(blockBox, coordinates, extent);
+
+                if (coordinates.Break is null) (line.EmptyInlines ??= []).Add(emptyInline);
             }
 
             // text-indent's line-start side is physical-right under RTL (CSS Text 3 §3) - reserved here by
@@ -4803,6 +5033,12 @@ namespace PeachPDF.Html.Core.Dom
                                 coordinates.Line.TopAlignedAtomicHeight = topAlignedAtomicHeightBeforeIncomingWord;
                                 coordinates.Line.BottomAlignedAtomicHeight = bottomAlignedAtomicHeightBeforeIncomingWord;
                             }
+                            else
+                            {
+                                // An empty inline before a forced break stays on the line the break ends,
+                                // which has just taken it along with the break's own extent.
+                                HandHeldEmptyInlinesToTheLine(coordinates);
+                            }
 
                             // line-clamp (CSS Overflow 4 §block-ellipsis / §max-lines): once the block has
                             // already produced as many lines as its declared limit, this new line must never
@@ -5014,6 +5250,10 @@ namespace PeachPDF.Html.Core.Dom
                         // post-wrap CurrentY.
                         GrowLineToItsExtent(word);
 
+                        // Its line now holds the empty inlines passed before it.
+                        var tookEmptyInlines = coordinates.PendingEmptyInlineExtent is not null;
+                        HandHeldEmptyInlinesToTheLine(coordinates);
+
                         // ...then sit it on that line's baseline straight away, rather than leaving it at
                         // the line's top for ApplyVerticalAlignment to move later. CSS 2.1 §10.8.1 puts a
                         // word's content area half a leading below its line box's top, and the questions
@@ -5093,8 +5333,13 @@ namespace PeachPDF.Html.Core.Dom
                             // relocating it and carrying on. The break is taken at the start of the line,
                             // not at this word: a line box is monolithic (css-break-3 §4.1), so the whole
                             // of it moves to the next fragmentainer rather than leaving its shorter words
-                            // behind.
-                            if (word.WouldStraddleFragmentainer() || forcedFootnoteLineBreak)
+                            // behind. A line too deep for any fragmentainer is not moved, since it would
+                            // straddle again on every one (LineFitsNoFragmentainer).
+                            var straddles = word.WouldStraddleFragmentainer();
+                            var lineFitsNowhere = straddles
+                                && word.LineFitsNoFragmentainer(coordinates.Line.FlowTop ?? word.Top);
+
+                            if ((straddles && !lineFitsNowhere) || forcedFootnoteLineBreak)
                             {
                                 // CompletedLineCount is filled in by CreateLineBoxes once the
                                 // in-progress line has been discarded, since that is what fixes how
@@ -5108,7 +5353,7 @@ namespace PeachPDF.Html.Core.Dom
                                     // it doesn't fit, so there is no "where it actually fell" to derive -
                                     // the next slot after the one it's actually sitting in is the only
                                     // coherent answer.
-                                    forcedFootnoteLineBreak && !word.WouldStraddleFragmentainer()
+                                    forcedFootnoteLineBreak && !(straddles && !lineFitsNowhere)
                                         ? box.HtmlContainer!.SlotStartingAt(word.Top) + 1
                                         : word.ResumeSlotForBreakBefore(),
                                     [], coordinates.LineStartOrdinal, CompletedLineCount: 0,
@@ -5126,6 +5371,9 @@ namespace PeachPDF.Html.Core.Dom
                             // break ever recording the crossing. Step the cursor there so any further
                             // fragmentation question this pass asks answers about the band flow has
                             // actually reached, not the one this overflowing word started in - #435.
+                            // So does a line an empty inline this word took has made too deep for any.
+                            if (tookEmptyInlines) StepOverADeepLine(coordinates, box.HtmlContainer!);
+
                             if (word.OverflowsEveryFragmentainer())
                             {
                                 coordinates.Fragmentainer.StepOverTo(box.HtmlContainer!.SlotEndingAt(word.Bottom));
@@ -5268,6 +5516,7 @@ namespace PeachPDF.Html.Core.Dom
                     }
 
                     await FlowAtomicBlockContentChild(g, b, coordinates, resolvedInlineBlockWidth);
+                    if (FoldHeldEmptyInlinesIntoAtomicInlinesLine(blockBox, coordinates)) return;
                 }
                 else if (b.DerivedStyle.ActualDisplay == Keywords.InlineFlex)
                 {
@@ -5302,6 +5551,7 @@ namespace PeachPDF.Html.Core.Dom
                     if (flexFitResult == AtomicInlineLineFit.ClampedStop) return;
 
                     await FlowInlineFlexChild(g, b, coordinates);
+                    if (FoldHeldEmptyInlinesIntoAtomicInlinesLine(blockBox, coordinates)) return;
                 }
                 else
                 {
@@ -5322,6 +5572,16 @@ namespace PeachPDF.Html.Core.Dom
                     if (coordinates.PlacedSince(childStartOrdinal))
                     {
                         ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
+                    }
+
+                    // An inline whose subtree took no word ordinal and holds no atomic inline is empty on its
+                    // line, and still sizes it.
+                    if (childOpensHere && coordinates.WordOrdinal == childStartOrdinal
+                        && b.DerivedStyle.ActualDisplay == Keywords.Inline && !HoldsAtomicInlineContent(b))
+                    {
+                        PlaceEmptyInline(b);
+
+                        if (coordinates.Break is not null) return;
                     }
                 }
 

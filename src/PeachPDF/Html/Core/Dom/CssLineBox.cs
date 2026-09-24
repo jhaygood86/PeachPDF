@@ -116,6 +116,14 @@ namespace PeachPDF.Html.Core.Dom
         internal LineBoxExtent? BaselineAlignedExtent { get; set; }
 
         /// <summary>
+        /// The empty inlines <c>CssLayoutEngine.FlowBox</c> gave to this line as it went, with no word to
+        /// carry them: an inline that places no word still counts toward the line's height (CSS 2.1 §9.4.2,
+        /// §10.8.1). Kept so a pass resuming after this line knows which empty inlines at its resume point
+        /// this line already holds.
+        /// </summary>
+        internal List<CssBox>? EmptyInlines { get; set; }
+
+        /// <summary>
         /// The tallest replaced margin box aligned to the line box's top edge.
         /// </summary>
         internal double TopAlignedAtomicHeight { get; set; }

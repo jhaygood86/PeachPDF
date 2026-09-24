@@ -462,6 +462,31 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Whether the line this word sits on, from the line's top at <paramref name="lineTop"/> down to this
+        /// word's bottom, is too deep for any fragmentainer: the <see cref="WouldStraddleFragmentainer"/>
+        /// exemption asked of the line rather than of the word alone, against the same insets.
+        /// </summary>
+        /// <remarks>
+        /// A word straddling only because the line above it is that deep would straddle again at the top of
+        /// the next fragmentainer, and breaking there takes a fresh one on every pass: the resume slot
+        /// advances, so the no-progress backstop never fires, and the run truncates at the pass cap. So the
+        /// line overflows instead (css-break-3 §2). Measured from the line's top, which is where the resumed
+        /// pass would put it. Reached by a line an empty inline has made deep.
+        /// </remarks>
+        /// <param name="lineTop">the top of the line this word sits on</param>
+        /// <returns>true when breaking before the line could never make it fit</returns>
+        internal bool LineFitsNoFragmentainer(double lineTop)
+        {
+            var container = OwnerBox.HtmlContainer!;
+            var (clonedTop, reservedEnd) = ClonedInsets(container);
+            var depth = Bottom - lineTop;
+
+            return container.CurrentFragmentainer is { HasOwnBand: true } columnBand
+                ? !MonolithicContent.FitsInBand(depth, clonedTop, reservedEnd, columnBand.BandHeight)
+                : MonolithicContent.FitsNoFragmentainer(depth, clonedTop, reservedEnd, container);
+        }
+
+        /// <summary>
         /// The two insets <see cref="WouldStraddleFragmentainer"/> and <see cref="OverflowsEveryFragmentainer"/>
         /// both measure against: how much of this word's own top is already claimed by a
         /// <c>box-decoration-break: clone</c> ancestor's opening edge, and how much of its bottom a

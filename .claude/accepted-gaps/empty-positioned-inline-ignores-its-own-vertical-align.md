@@ -16,4 +16,6 @@ or tooltip wrapper with no `vertical-align`, is correct without it, and computin
 resolving the inline's `vertical-align` against the line outside the vertical-align pass, or teaching
 that pass about a box with no words. #1307 is the same missing piece for an empty atomic `inline-block`,
 which paints in the wrong place. A fix there that gives the empty box a rectangle the pass can move is
-likely the shape to reuse here.
+likely the shape to reuse here. Since #1310 the empty inline's extent does size its line
+(`FlowBox`'s `PlaceEmptyInline`), but always as a baseline-aligned box, so a fix here has to change what
+that contributes as well as where the containing block sits.
