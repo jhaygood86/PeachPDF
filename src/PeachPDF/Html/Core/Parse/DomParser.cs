@@ -1435,8 +1435,10 @@ namespace PeachPDF.Html.Core.Parse
             // same way IsFloated is, so the item-collection filter excludes it and nothing else lays it
             // out). Covers every IsFloated/IsPageFloated value (left/right/inside/outside/top/bottom/
             // top-bottom/snap) for that reason, not just left/right.
-            // Floating.Footnote is deliberately not touched: css-gcpm-3 pulls a footnote body out of the
-            // flow entirely, so it is not an item at all, which is what IsExcludedFromFlow already says.
+            // Floating.Footnote is deliberately not touched: DetachFootnoteBodies replaces a footnote source
+            // with its inline call, which is then the container's item, and the body moves to the note area
+            // (a footnote is not a plain float, so css-flexbox-1 section 3's "float has no effect" is not
+            // what governs it).
             if (box.IsFloated || box.IsPageFloated)
             {
                 box.Float = CssProperty<Floating>.FromValue(Keywords.None, Floating.None);
@@ -1580,13 +1582,13 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>Only an inline-level source qualifies</b> (<see cref="CssBox.IsInline"/>, matching
-        /// <see cref="DerivedStyle.ActualDisplay"/>'s own float:footnote blockification exclusion) - the
-        /// dominant real case is a <c>&lt;sup&gt;</c>/<c>&lt;span&gt;</c> reference inside running text.
-        /// A block-level <c>float: footnote</c> source is left entirely alone here (an accepted gap,
-        /// behaving as <c>float: none</c>) rather than being detached, since supporting it would need the
-        /// same anonymous-block-wrapper reasoning <see cref="CorrectInlineBoxesParent"/> already owns,
-        /// re-run selectively - out of scope.
+        /// <b>Any source that is a box at all qualifies</b> (<see cref="IsFootnoteSource"/>): the dominant
+        /// real case is a <c>&lt;sup&gt;</c>/<c>&lt;span&gt;</c> reference inside running text, but a
+        /// block-level element works too. css-gcpm-3 §2.2 replaces the element with a
+        /// <c>::footnote-call</c> whatever its own <c>display</c> was, and the call is inline by default, so
+        /// a block-level source among block siblings leaves the inline call needing an anonymous block box
+        /// around it (<see href="https://www.w3.org/TR/CSS21/visuren.html#anonymous-block-level">CSS 2.1
+        /// §9.2.1.1</see>) - <see cref="LocateCall"/> gives it one, or joins the run beside it.
         /// </para>
         /// <para>
         /// <b>A qualifying box's own descendants are never recursed into</b> once it is detached (the
@@ -1602,7 +1604,7 @@ namespace PeachPDF.Html.Core.Parse
         {
             foreach (var child in box.Boxes.ToArray())
             {
-                if (child.Float.Value == Floating.Footnote && child.IsInline)
+                if (IsFootnoteSource(child))
                 {
                     DetachOneFootnoteBody(box, child, htmlContainer, valueParser, cssData, media, containerSizes);
                     continue;
@@ -1633,16 +1635,111 @@ namespace PeachPDF.Html.Core.Parse
             }
         }
 
+        /// <summary>
+        /// Whether <paramref name="box"/> is a footnote source: <c>float: footnote</c> on a box that is
+        /// rendered at all and is not held out of the flow or inside a table's repeated header/footer.
+        /// </summary>
+        /// <remarks>
+        /// <c>display: none</c> generates no box, and an absolutely positioned or <c>position: running()</c>
+        /// box computes <c>float</c> to <c>none</c> (CSS 2.1 §9.7), so none of them is a footnote. A
+        /// table-internal display (a row, a cell...) cannot hold the inline call that would replace it. A
+        /// repeated <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> is laid out once and translated onto each page,
+        /// so a call inside one has no single page of its own to resolve a note against (see the
+        /// <c>footnote-inside-table-cell-flex-grid-item</c> accepted gap); it is left as ordinary content.
+        /// </remarks>
+        private static bool IsFootnoteSource(CssBox box)
+        {
+            if (box.Float.Value != Floating.Footnote) return false;
+            if (box.DerivedStyle.ActualDisplay == Keywords.None) return false;
+            if (box.IsAbsolutelyPositioned || box.IsRunningPositioned) return false;
+
+            if (box.DerivedStyle.ActualDisplay is Keywords.TableRow or Keywords.TableCell or Keywords.TableRowGroup
+                or Keywords.TableHeaderGroup or Keywords.TableFooterGroup or Keywords.TableColumn
+                or Keywords.TableColumnGroup or Keywords.TableCaption)
+            {
+                return false;
+            }
+
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor.DerivedStyle.ActualDisplay is Keywords.TableHeaderGroup or Keywords.TableFooterGroup)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Where the <see cref="CssBoxFootnoteCall"/> replacing <paramref name="sourceBox"/> goes: at its own
+        /// index for an inline source, and for a block-level one, inside an anonymous block box when the
+        /// container holds other block-level content.
+        /// </summary>
+        /// <remarks>
+        /// A container holds either block-level boxes or inline ones, never both
+        /// (<see href="https://www.w3.org/TR/CSS21/visuren.html#anonymous-block-level">CSS 2.1 §9.2.1.1</see>),
+        /// and the call is inline. So beside other block-level siblings it joins the anonymous block that
+        /// <see cref="CorrectInlineBoxesParent"/> already made for the inline run next to it (merging the two
+        /// runs the source was standing between into one), or gets one of its own. A container with no other
+        /// block-level child simply holds the call, and a flex or grid container gives it an item of its own
+        /// like any other child (an anonymous block there would be the item instead).
+        /// </remarks>
+        private static (CssBox Parent, int Index) LocateCall(CssBox container, CssBox sourceBox, int index)
+        {
+            if (sourceBox.IsInline || container.IsInline) return (container, index);
+
+            if (container.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex or Keywords.Grid
+                or Keywords.InlineGrid)
+            {
+                return (container, index);
+            }
+
+            static bool IsBlockLevelInFlow(CssBox b) => !b.IsInline && !b.IsFloated && !b.IsAbsolutelyPositioned
+                                                        && !b.IsRunningPositioned;
+
+            if (!container.Boxes.Any(b => !ReferenceEquals(b, sourceBox) && IsBlockLevelInFlow(b)))
+            {
+                return (container, index);
+            }
+
+            var previous = index > 0 ? container.Boxes[index - 1] : null;
+            var next = index + 1 < container.Boxes.Count ? container.Boxes[index + 1] : null;
+
+            if (previous is { IsInlineRunWrapper: true })
+            {
+                // The run after the source reads on from the call as one line flow.
+                if (next is { IsInlineRunWrapper: true })
+                {
+                    foreach (var moved in next.Boxes.ToArray())
+                    {
+                        moved.ParentBox = previous;
+                    }
+
+                    container.Boxes.Remove(next);
+                }
+
+                return (previous, previous.Boxes.Count);
+            }
+
+            if (next is { IsInlineRunWrapper: true }) return (next, 0);
+
+            var wrapper = CssBox.CreateBlock(container, null, sourceBox);
+            wrapper.IsInlineRunWrapper = true;
+            return (wrapper, 0);
+        }
+
         private static void DetachOneFootnoteBody(CssBox container, CssBox sourceBox, HtmlContainerInt htmlContainer, CssValueParser valueParser, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes)
         {
-            var index = container.Boxes.IndexOf(sourceBox);
+            var (callParent, callIndex) = LocateCall(container, sourceBox, container.Boxes.IndexOf(sourceBox));
 
             // CssBox's constructor auto-appends a non-null parent's Boxes list - remove-then-reinsert at
-            // the source's own index, the same pattern CssData's ::before/::after/::marker synthesis and
-            // EnsureListItemMarkers above both already use.
-            var callBox = new CssBoxFootnoteCall(container, sourceBox);
-            container.Boxes.Remove(callBox);
-            container.Boxes.Insert(index, callBox);
+            // the chosen index, the same pattern CssData's ::before/::after/::marker synthesis and
+            // EnsureListItemMarkers above both already use. The source itself is detached below, once the
+            // call has taken its place.
+            var callBox = new CssBoxFootnoteCall(callParent, sourceBox);
+            callParent.Boxes.Remove(callBox);
+            callParent.Boxes.Insert(callIndex, callBox);
 
             // Fully detach the body - it is never reachable via ordinary CssBox.Boxes walks again, the
             // same carve-out FragmentEmitter already documents for a repeating table <thead>/<tfoot>'s

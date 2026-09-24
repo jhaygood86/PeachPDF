@@ -2178,6 +2178,14 @@ var footnotesHtml = """
     </div>
 
     <div style="break-before: page;">
+    <h1>A block-level source</h1>
+    <p>The element carrying float: footnote can be block-level too. It is replaced by the numbered call, which
+    is inline, so among block siblings the call gets a line of its own.</p>
+    <div style="float:footnote">This note came from a &lt;div&gt; with float: footnote, so its call stands on its own line between the paragraphs.</div>
+    <p>The paragraph after the source carries on below that call, and the note sits at the foot of the page like any other.</p>
+    </div>
+
+    <div style="break-before: page;">
     <h1>Column-scoped notes</h1>
     <p>float-reference: column (CSS Page Floats) routes a note to the bottom of the column its own
     reference landed in, rather than the bottom of the page. Each column gets its own divider, its own
