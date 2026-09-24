@@ -1868,8 +1868,8 @@ namespace PeachPDF.Html.Core.Dom
             // supports the requested feature, in which case the word is left untouched here and real
             // substitution happens transparently at measure/paint time. The other 4 caps keywords
             // never synthesize at all (real substitution or a silent no-op, never an approximation).
-            var isSmallCapsFamily = FontVariantCaps is Keywords.SmallCaps or Keywords.AllSmallCaps;
-            var isAllSmallCaps = FontVariantCaps == Keywords.AllSmallCaps;
+            var isSmallCapsFamily = FontVariantCaps.Value is FontVariantCapsMode.SmallCaps or FontVariantCapsMode.AllSmallCaps;
+            var isAllSmallCaps = FontVariantCaps.Value == FontVariantCapsMode.AllSmallCaps;
             var needsSynthesis = isSmallCapsFamily && ActualFontVariantCaps == FontVariantCapsFeature.None;
             var synthesisApplies = needsSynthesis && (ContainsLowerLetter(text) || (isAllSmallCaps && ContainsUpperLetter(text)));
 
@@ -3598,7 +3598,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>inside</c> marker is an ordinary flowed inline and answers false.
         /// </remarks>
         internal static bool IsOutsideMarker(CssBox box) =>
-            box is { IsMarkerPseudoElement: true, ListStylePosition: not Keywords.Inside };
+            box is { IsMarkerPseudoElement: true, ListStylePosition.Value: not ListStylePositionMode.Inside };
 
         /// <summary>
         /// Whether <paramref name="box"/>'s own captured <see cref="Location"/>/<see cref="ActualBottom"/>

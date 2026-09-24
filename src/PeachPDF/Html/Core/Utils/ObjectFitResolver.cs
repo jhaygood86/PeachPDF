@@ -25,13 +25,13 @@ namespace PeachPDF.Html.Core.Utils
         public static (RRect Destination, bool NeedsClip) Compute(
             RRect contentBox,
             double naturalWidth, double naturalHeight,
-            string objectFit, string objectPosition,
+            ObjectFitMode objectFit, string objectPosition,
             CssBox box)
         {
             // fill (the initial value) and the no-known-intrinsic-size case both stretch to the content
             // box - identical to the pre-object-fit behavior, so the common path is unchanged.
             if (naturalWidth <= 0 || naturalHeight <= 0
-                || string.Equals(objectFit, Keywords.Fill, StringComparison.OrdinalIgnoreCase))
+                || objectFit == ObjectFitMode.Fill)
             {
                 return (contentBox, false);
             }
@@ -40,17 +40,17 @@ namespace PeachPDF.Html.Core.Utils
             var containerHeight = contentBox.Height;
             var ratio = naturalWidth / naturalHeight;
 
-            var (objectWidth, objectHeight) = objectFit.ToLowerInvariant() switch
+            var (objectWidth, objectHeight) = objectFit switch
             {
-                Keywords.Contain =>
+                ObjectFitMode.Contain =>
                     BackgroundLayerResolver.ResolveSize(Keywords.Contain, containerWidth, containerHeight, naturalWidth, naturalHeight, ratio, box),
-                Keywords.Cover =>
+                ObjectFitMode.Cover =>
                     BackgroundLayerResolver.ResolveSize(Keywords.Cover, containerWidth, containerHeight, naturalWidth, naturalHeight, ratio, box),
-                Keywords.None =>
+                ObjectFitMode.None =>
                     (naturalWidth, naturalHeight),
-                Keywords.ScaleDown =>
+                ObjectFitMode.ScaleDown =>
                     ScaleDown(containerWidth, containerHeight, naturalWidth, naturalHeight, ratio, box),
-                _ => // any unrecognized value falls back to fill
+                _ => // fill
                     (containerWidth, containerHeight)
             };
 

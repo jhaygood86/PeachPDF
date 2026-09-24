@@ -836,13 +836,17 @@
       "comment": "visible | hidden (CSS Transforms 2 section 14): whether the box is painted while its back faces the viewer. FragmentPainter decides facing from the sign of the transformed normal.",
       "inherited": false,
       "initialValue": "visible",
-      "cssDataType": "keyword",
-      "supportedValues": ["visible", "hidden"],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BackfaceVisibilityMode",
+        "keywordMap": "Map.BackfaceVisibilityModes",
+        "fallback": "BackfaceVisibilityMode.Visible"
+      },
       "html": {
         "propertyPath": "BackfaceVisibility",
-        "csharpDataType": "string",
-        "area": "VisualEffectsArea"
+        "csharpDataType": "CssProperty<BackfaceVisibilityMode>",
+        "area": "VisualEffectsArea",
+        "getterExpression": "{box}.BackfaceVisibility.ToString()"
       }
     },
     {
@@ -850,13 +854,17 @@
       "comment": "flat | preserve-3d (CSS Transforms 2 section 6.1): whether a box's children share its 3D rendering context. Not inherited. The used value also depends on grouping properties (overflow, opacity, filter, ...), which force flat: see DomUtils.EstablishesPreserve3d. Read at paint time by FragmentPainter.Preserve3D and by DomUtils.IsStackingContextBox.",
       "inherited": false,
       "initialValue": "flat",
-      "cssDataType": "keyword",
-      "supportedValues": ["flat", "preserve-3d"],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TransformStyleMode",
+        "keywordMap": "Map.TransformStyleModes",
+        "fallback": "TransformStyleMode.Flat"
+      },
       "html": {
         "propertyPath": "TransformStyle",
-        "csharpDataType": "string",
-        "area": "VisualEffectsArea"
+        "csharpDataType": "CssProperty<TransformStyleMode>",
+        "area": "VisualEffectsArea",
+        "getterExpression": "{box}.TransformStyle.ToString()"
       }
     },
     {
@@ -1734,19 +1742,17 @@
       "name": "object-fit",
       "inherited": false,
       "initialValue": "fill",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "fill",
-        "contain",
-        "cover",
-        "none",
-        "scale-down"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "ObjectFitMode",
+        "keywordMap": "Map.ObjectFitModes",
+        "fallback": "ObjectFitMode.Fill"
+      },
       "html": {
         "propertyPath": "ObjectFit",
-        "csharpDataType": "string",
-        "area": "BackgroundArea"
+        "csharpDataType": "CssProperty<ObjectFitMode>",
+        "area": "BackgroundArea",
+        "getterExpression": "{box}.ObjectFit.ToString()"
       }
     },
     {
@@ -1983,16 +1989,17 @@
       "name": "border-collapse",
       "inherited": true,
       "initialValue": "separate",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "collapse",
-        "separate"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BorderCollapseMode",
+        "keywordMap": "Map.BorderCollapseModes",
+        "fallback": "BorderCollapseMode.Separate"
+      },
       "html": {
         "propertyPath": "BorderCollapse",
-        "csharpDataType": "string",
-        "area": "TableArea"
+        "csharpDataType": "CssProperty<BorderCollapseMode>",
+        "area": "TableArea",
+        "getterExpression": "{box}.BorderCollapse.ToString()"
       }
     },
     {
@@ -2011,32 +2018,34 @@
       "name": "empty-cells",
       "inherited": true,
       "initialValue": "show",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "show",
-        "hide"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "EmptyCellsMode",
+        "keywordMap": "Map.EmptyCellsModes",
+        "fallback": "EmptyCellsMode.Show"
+      },
       "html": {
         "propertyPath": "EmptyCells",
-        "csharpDataType": "string",
-        "area": "TableArea"
+        "csharpDataType": "CssProperty<EmptyCellsMode>",
+        "area": "TableArea",
+        "getterExpression": "{box}.EmptyCells.ToString()"
       }
     },
     {
       "name": "caption-side",
       "inherited": true,
       "initialValue": "top",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "top",
-        "bottom"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "CaptionSideMode",
+        "keywordMap": "Map.CaptionSideModes",
+        "fallback": "CaptionSideMode.Top"
+      },
       "html": {
         "propertyPath": "CaptionSide",
-        "csharpDataType": "string",
-        "area": "TableArea"
+        "csharpDataType": "CssProperty<CaptionSideMode>",
+        "area": "TableArea",
+        "getterExpression": "{box}.CaptionSide.ToString()"
       }
     },
     {
@@ -2044,16 +2053,17 @@
       "comment": "CSS 2.1 §17.5.2's algorithm selector. Plain-string like its TableArea siblings (border-collapse/empty-cells/caption-side) rather than enum-keyword: CssLayoutEngineTable consumes every table keyword by comparing against a Keywords constant (tableBox.BorderCollapse == Keywords.Collapse), and Keywords.Auto/Keywords.Fixed already exist. Not inherited (unlike the other TableArea entries) - CSS 2.1 §17.5.2 defines it as non-inherited.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "auto",
-        "fixed"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TableLayoutMode",
+        "keywordMap": "Map.TableLayoutModes",
+        "fallback": "TableLayoutMode.Auto"
+      },
       "html": {
         "propertyPath": "TableLayout",
-        "csharpDataType": "string",
-        "area": "TableArea"
+        "csharpDataType": "CssProperty<TableLayoutMode>",
+        "area": "TableArea",
+        "getterExpression": "{box}.TableLayout.ToString()"
       }
     },
     {
@@ -2635,13 +2645,17 @@
       "comment": "CSS Text Decoration 3 §3.2, single keyword. 'double'/'wavy' validate-and-accept here exactly as they did under cssom, but paint currently renders every style as solid - a separate, already-accepted, non-perf-related gap; this change doesn't touch that.",
       "inherited": false,
       "initialValue": "solid",
-      "cssDataType": "keyword",
-      "supportedValues": ["solid", "double", "dotted", "dashed", "wavy"],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TextDecorationStyleMode",
+        "keywordMap": "Map.TextDecorationStyleModes",
+        "fallback": "TextDecorationStyleMode.Solid"
+      },
       "html": {
         "propertyPath": "TextDecorationStyle",
-        "csharpDataType": "string",
-        "area": "TextDecorationArea"
+        "csharpDataType": "CssProperty<TextDecorationStyleMode>",
+        "area": "TextDecorationArea",
+        "getterExpression": "{box}.TextDecorationStyle.ToString()"
       }
     },
     {
@@ -2778,13 +2792,17 @@
       "comment": "CSS Fonts 3 §6.2, single mutually-exclusive keyword (not a space-separated combination, despite superficially reading like one of the other font-variant-* longhands).",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "keyword",
-      "supportedValues": ["normal", "small-caps", "all-small-caps", "petite-caps", "all-petite-caps", "unicase", "titling-caps"],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontVariantCapsMode",
+        "keywordMap": "Map.FontVariantCapsModes",
+        "fallback": "FontVariantCapsMode.Normal"
+      },
       "html": {
         "propertyPath": "FontVariantCaps",
-        "csharpDataType": "string",
-        "area": "FontArea"
+        "csharpDataType": "CssProperty<FontVariantCapsMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontVariantCaps.ToString()"
       }
     },
     {
@@ -2792,13 +2810,17 @@
       "comment": "CSS Fonts 4 §6.4, single mutually-exclusive keyword like font-variant-caps (not a space-separated combination). sub/super map to the OpenType 'subs'/'sups' GSUB features, with a synthesized fallback when the resolved font lacks them.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "keyword",
-      "supportedValues": ["normal", "sub", "super"],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontVariantPositionMode",
+        "keywordMap": "Map.FontVariantPositionModes",
+        "fallback": "FontVariantPositionMode.Normal"
+      },
       "html": {
         "propertyPath": "FontVariantPosition",
-        "csharpDataType": "string",
-        "area": "FontArea"
+        "csharpDataType": "CssProperty<FontVariantPositionMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontVariantPosition.ToString()"
       }
     },
     {
@@ -2830,13 +2852,17 @@
       "comment": "CSS Fonts 3 §7.3, single keyword.",
       "inherited": true,
       "initialValue": "auto",
-      "cssDataType": "keyword",
-      "supportedValues": ["auto", "normal", "none"],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontKerningMode",
+        "keywordMap": "Map.FontKerningModes",
+        "fallback": "FontKerningMode.Auto"
+      },
       "html": {
         "propertyPath": "FontKerning",
-        "csharpDataType": "string",
-        "area": "FontArea"
+        "csharpDataType": "CssProperty<FontKerningMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontKerning.ToString()"
       }
     },
     {
@@ -2931,16 +2957,17 @@
       "name": "list-style-position",
       "inherited": true,
       "initialValue": "outside",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "inside",
-        "outside"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "ListStylePositionMode",
+        "keywordMap": "Map.ListStylePositionModes",
+        "fallback": "ListStylePositionMode.Outside"
+      },
       "html": {
         "propertyPath": "ListStylePosition",
-        "csharpDataType": "string",
-        "area": "ListArea"
+        "csharpDataType": "CssProperty<ListStylePositionMode>",
+        "area": "ListArea",
+        "getterExpression": "{box}.ListStylePosition.ToString()"
       }
     },
     {

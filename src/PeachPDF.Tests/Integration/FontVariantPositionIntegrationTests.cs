@@ -42,7 +42,7 @@ namespace PeachPDF.Tests.Integration
             // before it ever reaches CssBox.
             var box = await FindWordsBox(SupsFontBase64, "<b id=\"w\" style=\"font-variant-position:super\">42</b>");
 
-            Assert.Equal("super", box.FontVariantPosition);
+            Assert.Equal("super", box.FontVariantPosition.ToString());
             Assert.Equal(FontVariantPositionFeature.Super, box.RequestedFontVariantPosition);
         }
 
@@ -53,7 +53,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await FindWordsBox(SupsFontBase64, "<b id=\"w\" style=\"" + declaration + "\">42</b>");
 
-            Assert.Equal(expected, box.FontVariantPosition);
+            Assert.Equal(expected, box.FontVariantPosition.ToString());
         }
 
         [Fact]
@@ -64,7 +64,7 @@ namespace PeachPDF.Tests.Integration
             var box = await FindWordsBox(SupsFontBase64,
                 "<div style=\"font-variant-position:super\"><b id=\"w\" style=\"font:12pt SupsFont\">42</b></div>");
 
-            Assert.Equal("normal", box.FontVariantPosition);
+            Assert.Equal("normal", box.FontVariantPosition.ToString());
         }
 
         [Fact]

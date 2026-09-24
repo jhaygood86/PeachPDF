@@ -385,7 +385,7 @@ namespace PeachPDF.Html.Core.Dom
             var writingMode = tableBox.WritingMode.Value;
             _isVertical = writingMode is WritingMode.VerticalRl or WritingMode.VerticalLr;
             _rowAxisStartIsAtMax = LogicalPropertyResolver.BlockStart(writingMode) is PhysicalSide.Right or PhysicalSide.Bottom;
-            _isFixedLayout = tableBox.TableLayout == Keywords.Fixed
+            _isFixedLayout = tableBox.TableLayout.Value == TableLayoutMode.Fixed
                 && CssValueParser.IsValidLength(_isVertical ? tableBox.Height : tableBox.Width);
 
             _blockStartBorder = ToBorder(LogicalPropertyResolver.BlockStart(writingMode));
@@ -462,7 +462,7 @@ namespace PeachPDF.Html.Core.Dom
             // estimator with no CssLayoutEngineTable instance to build one), so there is nothing to
             // resolve against - 0 is a strictly better estimate than a flat per-boundary guess would be,
             // and every real caller re-derives the true spacing once the engine actually runs.
-            if (tableBox.BorderCollapse == Keywords.Collapse) return 0;
+            if (tableBox.BorderCollapse.Value == BorderCollapseMode.Collapse) return 0;
 
             // +1 columns because padding is between the cell and table borders
             return (columns + 1) * tableBox.ActualBorderSpacingHorizontal;
@@ -665,7 +665,7 @@ namespace PeachPDF.Html.Core.Dom
             // output (HorizontalLineWidth/VerticalLineWidth) then feeds that math instead of the old
             // flat border-spacing constant. Table-topology-only cost for a `separate` table: none, since
             // neither field is ever set.
-            if (_tableBox.BorderCollapse == Keywords.Collapse)
+            if (_tableBox.BorderCollapse.Value == BorderCollapseMode.Collapse)
             {
                 _grid = BuildTableGrid();
                 _collapsedBorders = CollapsedBorderModel.Resolve(
@@ -917,7 +917,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private void SuppressParticipantBorderPaint()
         {
-            var edges = _tableBox.BorderCollapse == Keywords.Collapse ? BorderEdges.All : BorderEdges.None;
+            var edges = _tableBox.BorderCollapse.Value == BorderCollapseMode.Collapse ? BorderEdges.All : BorderEdges.None;
 
             _tableBox.SuppressedBorderEdges = edges;
 
@@ -1831,7 +1831,7 @@ namespace PeachPDF.Html.Core.Dom
             // computed value, not the table's or the first caption's.
             foreach (var caption in _captionBoxes)
             {
-                (caption.CaptionSide == Keywords.Bottom ? _bottomCaptions : _topCaptions).Add(caption);
+                (caption.CaptionSide.Value == CaptionSideMode.Bottom ? _bottomCaptions : _topCaptions).Add(caption);
             }
         }
 
@@ -7218,11 +7218,11 @@ namespace PeachPDF.Html.Core.Dom
         /// first cell inside of.
         /// </remarks>
         private double StartXSpacing() =>
-            _tableBox.BorderCollapse == Keywords.Collapse ? -TableInlineBorderStart / 2 : ColumnAxisBorderSpacing;
+            _tableBox.BorderCollapse.Value == BorderCollapseMode.Collapse ? -TableInlineBorderStart / 2 : ColumnAxisBorderSpacing;
 
         /// <summary>The row-axis twin of <see cref="StartXSpacing"/> - see its own remarks.</summary>
         private double StartYSpacing() =>
-            _tableBox.BorderCollapse == Keywords.Collapse ? -TableRowAxisBorderStart / 2 : RowAxisBorderSpacing;
+            _tableBox.BorderCollapse.Value == BorderCollapseMode.Collapse ? -TableRowAxisBorderStart / 2 : RowAxisBorderSpacing;
 
         /// <summary>
         /// CSS <c>border-spacing</c>'s two values are physical (horizontal = X gaps, vertical = Y gaps),
@@ -7257,7 +7257,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private double HorizontalSpacingAt(int line)
         {
-            if (_tableBox.BorderCollapse != Keywords.Collapse) return ColumnAxisBorderSpacing;
+            if (_tableBox.BorderCollapse.Value != BorderCollapseMode.Collapse) return ColumnAxisBorderSpacing;
             if (_collapsedBorders is not { } model || model.VerticalLineWidth.Length == 0) return 0;
 
             if (line <= 0 || line >= _columnCount)
@@ -7272,7 +7272,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>The gap a row cursor advances by when it crosses horizontal grid line <paramref name="line"/> (0..RowCount) - see <see cref="HorizontalSpacingAt"/>'s own remarks, which apply identically on this axis.</summary>
         private double VerticalSpacingAt(int line)
         {
-            if (_tableBox.BorderCollapse != Keywords.Collapse) return RowAxisBorderSpacing;
+            if (_tableBox.BorderCollapse.Value != BorderCollapseMode.Collapse) return RowAxisBorderSpacing;
             if (_collapsedBorders is not { } model || model.HorizontalLineWidth.Length == 0) return 0;
 
             var rowCount = _grid?.RowCount ?? 0;

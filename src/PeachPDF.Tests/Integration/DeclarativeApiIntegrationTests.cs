@@ -411,7 +411,7 @@ namespace PeachPDF.Tests.Integration
                 });
             });
 
-            Assert.Equal("inside", item1!.ListStylePosition);
+            Assert.Equal("inside", item1!.ListStylePosition.ToString());
         }
 
         [Fact]

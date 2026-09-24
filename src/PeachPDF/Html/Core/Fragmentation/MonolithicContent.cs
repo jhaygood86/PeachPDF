@@ -248,7 +248,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         internal static bool HasColumnPaginationExcludedFeature(CssBox box)
         {
-            if (box.BorderCollapse == Keywords.Collapse) return true;
+            if (box.BorderCollapse.Value == BorderCollapseMode.Collapse) return true;
 
             if (box.ParentBox is { } parent &&
                 parent.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex

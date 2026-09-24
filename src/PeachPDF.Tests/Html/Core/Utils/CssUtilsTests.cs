@@ -1082,7 +1082,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var box = await FindDivBox("font-variant: small-caps;");
 
-            Assert.Equal("small-caps", box.FontVariantCaps);
+            Assert.Equal("small-caps", box.FontVariantCaps.ToString());
         }
 
         [Fact]
@@ -1090,7 +1090,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var box = await FindDivBox("font-variant: small-caps common-ligatures oldstyle-nums tabular-nums;");
 
-            Assert.Equal("small-caps", box.FontVariantCaps);
+            Assert.Equal("small-caps", box.FontVariantCaps.ToString());
             Assert.Equal("common-ligatures", box.FontVariantLigatures);
             Assert.Equal("oldstyle-nums tabular-nums", box.FontVariantNumeric);
         }
@@ -1101,7 +1101,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var box = await FindDivBox("font-variant: none;");
 
             Assert.Equal("none", box.FontVariantLigatures);
-            Assert.Equal("normal", box.FontVariantCaps);
+            Assert.Equal("normal", box.FontVariantCaps.ToString());
             Assert.Equal("normal", box.FontVariantNumeric);
             Assert.Equal("normal", box.FontVariantEastAsian);
         }
@@ -1113,7 +1113,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
                 "font-variant-caps: petite-caps; font-variant-ligatures: no-common-ligatures; " +
                 "font-variant-numeric: oldstyle-nums; font-variant-east-asian: ruby; font: 16pt sans-serif;");
 
-            Assert.Equal("normal", box.FontVariantCaps);
+            Assert.Equal("normal", box.FontVariantCaps.ToString());
             Assert.Equal("normal", box.FontVariantLigatures);
             Assert.Equal("normal", box.FontVariantNumeric);
             Assert.Equal("normal", box.FontVariantEastAsian);
@@ -1124,7 +1124,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var box = await FindDivBox("font-variant: prince-opentype(smcp, c2sc);");
 
-            Assert.Equal("all-small-caps", box.FontVariantCaps);
+            Assert.Equal("all-small-caps", box.FontVariantCaps.ToString());
             Assert.Equal("normal", box.FontVariantLigatures);
             Assert.Equal("normal", box.FontFeatureSettings);
         }
@@ -1135,7 +1135,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var box = await FindDivBox("font-variant: prince-opentype(liga);");
 
             Assert.Equal("common-ligatures", box.FontVariantLigatures);
-            Assert.Equal("normal", box.FontVariantCaps);
+            Assert.Equal("normal", box.FontVariantCaps.ToString());
         }
 
         [Fact]
@@ -1155,7 +1155,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var box = await FindDivBox("font-variant: prince-opentype(smcp, ss01 2);");
 
-            Assert.Equal("small-caps", box.FontVariantCaps);
+            Assert.Equal("small-caps", box.FontVariantCaps.ToString());
             Assert.Equal("\"ss01\" 2", box.FontFeatureSettings);
         }
 
@@ -1167,7 +1167,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             // passed through to font-feature-settings either (it's a recognized-but-unmappable tag).
             var box = await FindDivBox("font-variant: prince-opentype(c2sc);");
 
-            Assert.Equal("normal", box.FontVariantCaps);
+            Assert.Equal("normal", box.FontVariantCaps.ToString());
             Assert.Equal("normal", box.FontFeatureSettings);
         }
 

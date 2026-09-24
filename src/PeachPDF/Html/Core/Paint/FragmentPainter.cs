@@ -611,7 +611,7 @@ namespace PeachPDF.Html.Core.Paint
             var box = fragment.Box;
 
             if (box.DerivedStyle.ActualDisplay == Keywords.None ||
-                (box.DerivedStyle.ActualDisplay == Keywords.TableCell && box.EmptyCells == Keywords.Hide && box.IsSpaceOrEmpty)) return;
+                (box.DerivedStyle.ActualDisplay == Keywords.TableCell && box.EmptyCells.Value == EmptyCellsMode.Hide && box.IsSpaceOrEmpty)) return;
 
             var clipsPushed = RenderUtils.ClipGraphicsByOverflow(g, fragment.OverflowClip, fragment.OverflowClipCurve);
             var overflowClipRecorded = PushOverflowClip(fragment);

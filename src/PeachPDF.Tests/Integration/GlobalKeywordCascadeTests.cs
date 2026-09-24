@@ -500,7 +500,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("fill", child!.ObjectFit);
+            Assert.Equal("fill", child!.ObjectFit.ToString());
         }
 
         // ── regression: box-sizing is spec-correctly not inherited ───────────────────
