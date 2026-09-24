@@ -142,6 +142,53 @@ namespace PeachPDF.Tests.Integration
             Assert.True(trIndex < posIndex, "the transformed box must paint before the positive-z-index sibling");
         }
 
+        [Theory]
+        [InlineData("transform:rotate(0deg)")]
+        [InlineData("transform:rotate(0)")]
+        [InlineData("transform:scale(1)")]
+        [InlineData("transform:translateZ(0)")]
+        [InlineData("perspective:500px")]
+        public async Task IdentityTransformOrPerspectiveBox_IsAStackingContext_SoANegativeZIndexChildPaintsAboveItsBackground(string style)
+        {
+            // CSS Transforms 1 §2 / Transforms 2: any transform other than none, and any perspective other
+            // than none, establishes a stacking context - whatever the matrix resolves to. The z-index:-1
+            // child is therefore trapped inside the box and paints above the box's own background.
+            var (root, container) = await BuildAndLayout(Wrap(
+                $"<div id='ctx' style='{style};width:100px;height:100px;background:rgb(0,0,221);'>" +
+                "<div id='kid' style='position:relative;z-index:-1;width:50px;height:50px;background:rgb(221,0,0);'></div></div>"));
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, root, g);
+
+            var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
+            var ctxIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 0, 221));
+            var kidIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(221, 0, 0));
+
+            Assert.True(ctxIndex >= 0 && kidIndex >= 0, "one of the two boxes never painted");
+            Assert.True(ctxIndex < kidIndex, "the z-index:-1 child must paint above the stacking context's own background");
+            Assert.DoesNotContain(g.Log, op => op is TestRecordingGraphics.PushTransformCall);
+        }
+
+        [Fact]
+        public async Task NoTransform_IsNotAStackingContext_SoANegativeZIndexChildPaintsBelowItsParentBackground()
+        {
+            // The control for the theory above: without a transform the child escapes to the root's
+            // negative layer and paints first.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='ctx' style='transform:none;width:100px;height:100px;background:rgb(0,0,221);'>" +
+                "<div id='kid' style='position:relative;z-index:-1;width:50px;height:50px;background:rgb(221,0,0);'></div></div>"));
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, root, g);
+
+            var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
+            var ctxIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 0, 221));
+            var kidIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(221, 0, 0));
+
+            Assert.True(ctxIndex >= 0 && kidIndex >= 0, "one of the two boxes never painted");
+            Assert.True(kidIndex < ctxIndex, "without a stacking context the z-index:-1 child paints first");
+        }
+
         [Fact]
         public async Task PositionedAutoSiblings_PaintInTreeOrderAcrossPositionSchemes()
         {

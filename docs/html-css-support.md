@@ -812,7 +812,8 @@ Paint order follows the CSS [stacking context](https://developer.mozilla.org/en-
 - `position: fixed` or `sticky` (unconditionally, regardless of `z-index`)
 - a flex item (a direct child of a `display: flex`/`inline-flex` container) with a `z-index` other than `auto`
 - `opacity` less than 1
-- a `transform` other than `none`
+- a `transform` other than `none` — including one whose matrix is the identity, such as `rotate(0deg)`, `scale(1)` or `translateZ(0)`
+- a `perspective` other than `none`
 - `mix-blend-mode` other than `normal`
 - `filter` other than `none`
 

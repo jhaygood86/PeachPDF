@@ -316,6 +316,29 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.True(DomUtils.IsStackingContextBox(span));
         }
 
+        [Theory]
+        [InlineData("transform: rotate(0deg)")]
+        [InlineData("transform: rotate(0)")]
+        [InlineData("transform: scale(1)")]
+        [InlineData("transform: translateZ(0)")]
+        [InlineData("perspective: 500px")]
+        public async Task IsStackingContextBox_IdentityTransformOrPerspective_ReturnsTrue(string style)
+        {
+            var root = await Render($"<div><span id='inner' style='{style};'>Text</span></div>");
+            var span = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.True(DomUtils.IsStackingContextBox(span));
+        }
+
+        [Fact]
+        public async Task IsStackingContextBox_PerspectiveNone_ReturnsFalse()
+        {
+            var root = await Render("<div><span id='inner' style='perspective: none;'>Text</span></div>");
+            var span = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.False(DomUtils.IsStackingContextBox(span));
+        }
+
         [Fact]
         public async Task IsStackingContextBox_TransformNone_ReturnsFalse()
         {

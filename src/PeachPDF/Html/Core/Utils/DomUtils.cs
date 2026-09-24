@@ -1599,16 +1599,26 @@ namespace PeachPDF.Html.Core.Utils
                 return true;
             }
 
-            // Opacity less than 1 and any non-identity transform each establish a stacking context per
-            // spec, regardless of `position` - both are already rendered as isolated, self-contained
-            // units (an offscreen composited group for opacity; a pushed/popped matrix for transform), so
+            // Opacity less than 1 and any transform other than `none` each establish a stacking context per
+            // spec, regardless of `position` - both paint as isolated, self-contained units (an offscreen
+            // composited group for opacity; a pushed/popped matrix for a non-identity transform), so
             // painting their descendants as one atomic block here matches what already happens visually.
             if (!box.IsOpaque)
             {
                 return true;
             }
 
-            if (box.IsTransformed)
+            // CSS Transforms 1 §2 keys on the computed value, not the matrix: `rotate(0deg)`, `scale(1)`
+            // and `translateZ(0)` resolve to the identity yet still establish a stacking context, so this
+            // reads HasTransform. Paint keeps IsTransformed, where an identity matrix really is a no-op.
+            if (box.HasTransform)
+            {
+                return true;
+            }
+
+            // A perspective other than `none` does too (CSS Transforms 2 §Perspective), whatever the
+            // transform of the box itself.
+            if (box.ActualPerspective > 0)
             {
                 return true;
             }
