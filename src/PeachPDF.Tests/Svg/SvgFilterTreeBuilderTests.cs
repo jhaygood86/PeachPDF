@@ -73,14 +73,8 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Theory]
-        [InlineData("""<filter id="f"><feImage href="#x"/></filter>""")]
         [InlineData("""<filter id="f"><feComposite operator="bogus"/></filter>""")]
-        [InlineData("""<filter id="f"><feFlood in="BackgroundImage"/></filter>""")]
-        [InlineData("""<filter id="f"><feOffset in="StrokePaint" dx="1" dy="1"/></filter>""")]
-        [InlineData("""<filter id="f"><feMerge><feMergeNode in="BackgroundAlpha"/></feMerge></filter>""")]
-        [InlineData("""<filter id="f"><feTile in="FillPaint"/></filter>""")]
-        [InlineData("""<filter id="f"><feBlend in2="BackgroundImage" mode="multiply"/></filter>""")]
-        [InlineData("""<filter id="f"><feComposite in2="FillPaint"/></filter>""")]
+        [InlineData("""<filter id="f"><feUnknown/></filter>""")]
         public void UnsupportedGraph_IsNeverRegistered(string filterMarkup)
         {
             var document = BuildFrom(filterMarkup);
@@ -92,6 +86,22 @@ namespace PeachPDF.Tests.Svg
             // is never a partially-applied graph.
             var target = Assert.IsType<SvgRectElement>(Assert.Single(document.Children));
             Assert.Equal("f", target.FilterRef);
+        }
+
+        [Theory]
+        [InlineData("""<filter id="f"><feImage href="#x"/></filter>""")]
+        [InlineData("""<filter id="f"><feFlood in="BackgroundImage"/></filter>""")]
+        [InlineData("""<filter id="f"><feOffset in="StrokePaint" dx="1" dy="1"/></filter>""")]
+        [InlineData("""<filter id="f"><feMerge><feMergeNode in="BackgroundAlpha"/></feMerge></filter>""")]
+        [InlineData("""<filter id="f"><feTile in="FillPaint"/></filter>""")]
+        [InlineData("""<filter id="f"><feBlend in2="BackgroundImage" mode="multiply"/></filter>""")]
+        [InlineData("""<filter id="f"><feComposite in2="FillPaint"/></filter>""")]
+        public void ReservedInputsAndFeImage_AreRegisteredAndNeedPixels(string filterMarkup)
+        {
+            var document = BuildFrom(filterMarkup);
+
+            var filter = Assert.Contains("f", document.Filters);
+            Assert.True(filter.RequiresRaster);
         }
 
         [Theory]

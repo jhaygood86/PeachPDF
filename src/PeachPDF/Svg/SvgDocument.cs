@@ -53,5 +53,11 @@ namespace PeachPDF.Svg
         /// <see cref="SvgFilter"/>'s remarks.
         /// </summary>
         public Dictionary<string, SvgFilter> Filters { get; init; } = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// True when a filter reads <c>BackgroundImage</c>/<c>BackgroundAlpha</c>. What such a filter shows depends on what was painted
+        /// behind the element, so the document's artwork cannot be painted once and shared as a cached form.
+        /// </summary>
+        public bool ReadsBackdrop { get; set; }
     }
 }

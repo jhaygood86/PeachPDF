@@ -1963,7 +1963,7 @@ namespace PeachPDF.Svg
         /// is required for the mask to land in the same place as the content it's masking.
         /// </summary>
         /// <summary>
-        /// Delegates to <see cref="SvgFilterEvaluator.Render(RGraphics, SvgFilter, SvgElement, RRect?, Action{RGraphics})"/>, supplying its <c>SourceGraphic</c> input
+        /// Delegates to <see cref="SvgFilterEvaluator.Render(RGraphics, SvgFilter, SvgElement, RRect?, Action{RGraphics}, SvgFilterInputs?)"/>, supplying its <c>SourceGraphic</c> input
         /// as a callback that paints <paramref name="element"/>'s own ordinary content - the same
         /// <see cref="RenderElementSwitch"/> call <see cref="RenderMaskedElementContent"/> makes for its
         /// mask tile, at the same (already inheritedOpacity*element.Opacity-multiplied)
@@ -1972,7 +1972,86 @@ namespace PeachPDF.Svg
         /// established) convention rather than introducing a second, different opacity-timing rule.
         /// </summary>
         private static void RenderFilteredElementContent(RGraphics g, SvgDocument document, SvgElement element, SvgFilter filter, double opacity, (double Width, double Height) viewport) =>
-            SvgFilterEvaluator.Render(g, filter, element, new RRect(0, 0, viewport.Width, viewport.Height), tg => RenderElementSwitch(tg, document, element, opacity, viewport));
+            SvgFilterEvaluator.Render(g, filter, element, new RRect(0, 0, viewport.Width, viewport.Height), tg => RenderElementSwitch(tg, document, element, opacity, viewport),
+                filter.RequiresRaster ? new RendererFilterInputs(document, element, viewport) : null);
+
+        /// <summary>How deep filter inputs that render other content (an <c>feImage</c> naming an element) may nest, which stops one that names an element filtered by itself.</summary>
+        private const int MaxFilterInputDepth = 4;
+
+        [ThreadStatic]
+        private static int s_filterInputDepth;
+
+        /// <summary>The painted inputs of one raster filter evaluation, drawn with this renderer's own paint code.</summary>
+        private sealed class RendererFilterInputs(SvgDocument document, SvgElement element, (double Width, double Height) viewport) : SvgFilterInputs
+        {
+            public override SvgPaint PaintOf(bool stroke) => stroke ? element.Stroke : element.Fill;
+
+            public override void PaintPaint(RGraphics g, bool stroke, RRect region)
+            {
+                var paint = PaintOf(stroke);
+
+                // The paint is the element's own, so an objectBoundingBox gradient or pattern is measured against the element, not the region.
+                var bounds = SvgFilterEvaluator.ElementBounds(element, new RRect(0, 0, viewport.Width, viewport.Height));
+                var rect = new SvgRectElement { X = region.X, Y = region.Y, Width = region.Width, Height = region.Height, Fill = paint, Stroke = SvgPaint.None };
+                using var path = BuildRectPath(g, rect);
+
+                if (paint.Kind == SvgPaintKind.PatternRef)
+                {
+                    PaintPatternFill(g, document, rect, path, 1.0, bounds);
+                }
+                else if (ResolvePaintBrush(g, document, rect, paint, 1.0, bounds) is { } brush)
+                {
+                    g.DrawPath(brush, path);
+                }
+            }
+
+            public override void PaintImage(RGraphics g, FeImage image, RRect subregion, double offsetX, double offsetY)
+            {
+                if (s_filterInputDepth >= MaxFilterInputDepth)
+                    return;
+
+                s_filterInputDepth++;
+                try
+                {
+                    g.PushClip(subregion);
+
+                    if (image.Image is { } stand)
+                    {
+                        // A stand-alone image fills the primitive subregion by its own preserveAspectRatio, like an <image> of that size.
+                        RenderImage(g, new SvgImageElement
+                        {
+                            X = subregion.X,
+                            Y = subregion.Y,
+                            Width = subregion.Width,
+                            Height = subregion.Height,
+                            PreserveAspectRatio = stand.PreserveAspectRatio,
+                            Image = stand.Image,
+                            NestedDocument = stand.NestedDocument,
+                        }, 1.0);
+                    }
+                    else if (image.Target is { } target)
+                    {
+                        // A referenced element keeps the filtered element's user space; a subregion x/y moves its origin.
+                        var moved = offsetX != 0 || offsetY != 0;
+                        if (moved)
+                            g.PushTransform(new RMatrix(1, 0, 0, 1, offsetX, offsetY));
+
+                        RenderElement(g, document, target, 1.0, viewport);
+
+                        if (moved)
+                            g.PopTransform();
+                    }
+
+                    g.PopClip();
+                }
+                finally
+                {
+                    s_filterInputDepth--;
+                }
+            }
+
+            public override bool PaintBackdrop(RGraphics g, RRect region) => false;
+        }
 
         private static void RenderMaskedElementContent(RGraphics g, SvgDocument document, SvgElement element, SvgMask mask, double opacity, (double Width, double Height) viewport)
         {
