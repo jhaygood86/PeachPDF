@@ -339,6 +339,8 @@ namespace PeachPDF.Tests.Integration
         [InlineData("<div style=\"width: 50px; height: 50px; background: #ff0000;\"></div><div style=\"width: 50px; height: 50px; margin-top: -25px; background: #00ff00; mix-blend-mode: multiply;\"></div>", "mix-blend-mode")]
         [InlineData("<div style=\"width: 50px; height: 50px; background: #ff0000; filter: brightness(1.5);\"></div>", "filter: brightness() (color matrix)")]
         [InlineData("<div style=\"width: 50px; height: 50px; background: #ff0000; filter: opacity(0.5);\"></div>", "filter: opacity()")]
+        [InlineData("<div style=\"width: 50px; height: 50px; background: #ff0000; filter: blur(2px);\"></div>", "filter: blur() (rendered as a bitmap)")]
+        [InlineData("<div style=\"width: 50px; height: 50px; background: #ff0000; filter: grayscale(50%);\"></div>", "filter: grayscale() (rendered as a bitmap)")]
         [InlineData("""<svg viewBox="0 0 100 100" width="100" height="100"><defs><filter id="f"><feColorMatrix type="matrix" values="1.5 0 0 0 0  0 1.5 0 0 0  0 0 1.5 0 0  0 0 0 1 0"/></filter></defs><rect width="50" height="50" fill="red" filter="url(#f)"/></svg>""", "svg filter: feColorMatrix (color matrix, same /TR mechanism as CSS filter)")]
         public async Task PdfA1B_TransparencyRequiringContent_Throws(string bodyHtml, string _)
         {

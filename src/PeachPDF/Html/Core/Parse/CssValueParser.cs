@@ -964,15 +964,24 @@ namespace PeachPDF.Html.Core.Parse
         /// <c>perspective()</c> is not supported (see docs/html-css-support.md) and is ignored like any other
         /// unrecognized function name, contributing identity.
         /// </remarks>
-        public static RMatrix ParseTransform(string transformValue, string transformOriginValue, CssBox box)
+        public static RMatrix ParseTransform(string transformValue, string transformOriginValue, CssBox box) =>
+            ParseTransformFull(transformValue, transformOriginValue, box).Affine;
+
+        /// <summary>
+        /// <see cref="ParseTransform"/>, plus the full 4x4 (origin baked in, box-local like the affine matrix) the affine matrix was
+        /// projected from - null when there is no transform. A chain containing <c>perspective()</c>, or one a <c>perspective</c> on the
+        /// parent will act on, is not affine once projected onto the box's plane, and the 4x4 is what the raster backend warps with; the
+        /// affine matrix is then only the linearisation around the transform origin.
+        /// </summary>
+        public static (RMatrix Affine, Matrix4x4? Final4) ParseTransformFull(string transformValue, string transformOriginValue, CssBox box)
         {
             var built = BuildFinal4(transformValue, transformOriginValue, box);
             if (built is not { } b)
-                return RMatrix.Identity;
+                return (RMatrix.Identity, null);
 
             var epsilonX = Math.Max(box.ActualWidth / 2, 1);
             var epsilonY = Math.Max(box.ActualHeight / 2, 1);
-            return ProjectTo2D(b.Final4, b.Ox, b.Oy, epsilonX, epsilonY);
+            return (ProjectTo2D(b.Final4, b.Ox, b.Oy, epsilonX, epsilonY), b.Final4);
         }
 
         private readonly record struct Final4Result(Matrix4x4 Final4, double Ox, double Oy);
@@ -1172,7 +1181,23 @@ namespace PeachPDF.Html.Core.Parse
                     v[12], v[13], v[14], v[15]);
             }
 
-            // Unrecognized / unsupported (e.g. perspective(), future functions) -> identity, contributes nothing.
+            // perspective(<length> | none): the CSS Transforms 2 matrix that divides by 1 - z/d. A non-positive length is invalid there and
+            // contributes nothing, like none.
+            if (Named(name, FunctionNames.Perspective))
+            {
+                if (args.Count < 1 || Named(SingleTokenText(args[0]).AsSpan(), Keywords.None))
+                    return null;
+
+                var distance = LengthArg(0, 0);
+                if (!(distance > 0))
+                    return null;
+
+                var perspective = Matrix4x4.Identity;
+                perspective.M34 = (float)(-1.0 / distance);
+                return perspective;
+            }
+
+            // Unrecognized / unsupported (future functions) -> identity, contributes nothing.
             return null;
         }
 
@@ -1187,7 +1212,7 @@ namespace PeachPDF.Html.Core.Parse
             Named(name, FunctionNames.Rotate) || Named(name, FunctionNames.RotateX) || Named(name, FunctionNames.RotateY) ||
             Named(name, FunctionNames.RotateZ) || Named(name, FunctionNames.Rotate3d) ||
             Named(name, FunctionNames.SkewX) || Named(name, FunctionNames.SkewY) || Named(name, FunctionNames.Skew) ||
-            Named(name, FunctionNames.Matrix) || Named(name, FunctionNames.Matrix3d);
+            Named(name, FunctionNames.Matrix) || Named(name, FunctionNames.Matrix3d) || Named(name, FunctionNames.Perspective);
 
         /// <summary>
         /// Whether every function in a <c>transform</c> value is one <see cref="BuildFunctionMatrix"/>
@@ -1330,6 +1355,8 @@ namespace PeachPDF.Html.Core.Parse
         /// Parses transform-origin: 1-3 values (X, Y, optional Z). X/Y accept length/percentage/keywords
         /// (resolved against the box's own border-box size), Z is a plain length (no percentage), default 0.
         /// </summary>
+        internal static (double X, double Y, double Z) ParseTransformOriginPublic(string value, CssBox box) => ParseTransformOrigin(value, box);
+
         private static (double X, double Y, double Z) ParseTransformOrigin(string value, CssBox box)
         {
             if (string.IsNullOrWhiteSpace(value))

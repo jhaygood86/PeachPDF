@@ -160,6 +160,9 @@ namespace PeachPDF.Fonts.OpenType
         internal GlyphPositioningTable gpos = null!; // optional - absent on many fonts
         internal ColrTable colr = null!;
         internal CpalTable cpal = null!;
+
+        /// <summary>The bitmap colour glyphs (CBDT/CBLC or sbix), or null when the font has none.</summary>
+        internal BitmapGlyphSource? bitmap;
         internal GlyphMathTable math = null!; // optional - only dedicated math fonts carry one
         internal VerticalHeaderTable vhea = null!; // optional - absent on purely-horizontal fonts
         internal VerticalMetricsTable vmtx = null!; // optional - absent on purely-horizontal fonts
@@ -334,6 +337,9 @@ namespace PeachPDF.Fonts.OpenType
                 if (TableDictionary.ContainsKey(TableTagNames.Colr))
                     colr = new ColrTable(this);
 
+                // Optional bitmap colour glyphs (CBDT/CBLC, sbix): one picture per glyph and size.
+                bitmap = BitmapGlyphSource.TryCreate(this, maxp?.numGlyphs ?? 0);
+
                 // Optional glyph-definition/positioning tables (GDEF/GPOS). Absent on many fonts -
                 // no kerning/mark-attachment/mark-filtering data at all in that case.
                 if (TableDictionary.ContainsKey(TableTagNames.GDEF))
@@ -406,11 +412,12 @@ namespace PeachPDF.Fonts.OpenType
             // a valid contour. Embedding the real layer closure would not help: no Tj references those
             // layer CIDs, and their outlines are already emitted directly as PDF vector paths.
             HashSet<int>? syntheticSelectionGlyphs = null;
-            if (colr != null)
+            if (colr != null || bitmap != null)
             {
                 foreach (int glyphId in glyphs.Keys)
                 {
-                    if (colr.HasColorGlyph(glyphId) && glyf.HasNoContours(glyphId))
+                    // A bitmap colour glyph (CBDT/sbix) has no outline at all: same treatment as an empty COLR base.
+                    if (((colr?.HasColorGlyph(glyphId) ?? false) || (bitmap?.HasGlyph(glyphId) ?? false)) && glyf.HasNoContours(glyphId))
                         (syntheticSelectionGlyphs ??= []).Add(glyphId);
                 }
             }

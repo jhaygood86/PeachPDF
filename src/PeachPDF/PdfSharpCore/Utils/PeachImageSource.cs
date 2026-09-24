@@ -4,6 +4,7 @@ using PeachImage.Formats.Bmp;
 using PeachImage.Formats.Gif;
 using PeachImage.Formats.Jpeg;
 using PeachImage.Formats.Png;
+using PeachPDF.Raster;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -184,6 +185,10 @@ namespace PeachPDF.PdfSharpCore.Utils
         /// (always <see langword="false"/> for a non-JPEG source - <see cref="ImageInfo"/>'s own remarks),
         /// so the decoded bytes are already in the standard, ready-to-embed CMYK convention.
         /// </summary>
+        /// <summary>A CMYK image source over raw interleaved C, M, Y, K samples (255 = full ink), with no embedded profile.</summary>
+        internal static IImageSource CreateCmykRaster(string name, int width, int height, byte[] cmyk) =>
+            new PeachCmykImageSourceImpl(name, width, height, new CmykRasterData { Data = cmyk });
+
         private static PeachCmykImageSourceImpl DecodeCmykRaster(string name, byte[] bytes, ImageInfo info)
         {
             var cmykOptions = new DecoderOptions { TargetPixelFormat = PixelFormat.Cmyk32 };
@@ -597,7 +602,7 @@ namespace PeachPDF.PdfSharpCore.Utils
         /// both: PeachImage has no CMYK JPEG encoder, and a raw CMYK raster embed has no resize step
         /// either, so a CMYK source is never resized regardless of which shape it took.
         /// </summary>
-        private sealed class PeachCmykImageSourceImpl : IImageSource
+        private sealed class PeachCmykImageSourceImpl : IImageSource, IRgbaPixelProvider
         {
             private readonly JpegPassthroughData? _passthrough;
             private readonly CmykRasterData? _raster;
@@ -636,6 +641,40 @@ namespace PeachPDF.PdfSharpCore.Utils
 
             public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
                 throw new InvalidOperationException("A CMYK image is always embedded via JpegPassthrough or CmykRaster; SaveAsPdfBitmap is never called for it.");
+
+            // The PDF embed keeps CMYK exactly as authored, but a bitmap rendition of it has no colour management to keep: the
+            // usual naive conversion (r = (1 - c)(1 - k) ...) is what any raster fallback for CMYK does.
+            public bool TryGetRgba(out int width, out int height, out byte[] rgba)
+            {
+                width = Width;
+                height = Height;
+
+                if (_raster is { } raster)
+                {
+                    rgba = new byte[width * height * 4];
+                    for (int i = 0, j = 0; i < rgba.Length && j + 3 < raster.Data.Length; i += 4, j += 4)
+                    {
+                        int k = 255 - raster.Data[j + 3];
+                        rgba[i] = (byte)((255 - raster.Data[j]) * k / 255);
+                        rgba[i + 1] = (byte)((255 - raster.Data[j + 1]) * k / 255);
+                        rgba[i + 2] = (byte)((255 - raster.Data[j + 2]) * k / 255);
+                        rgba[i + 3] = 255;
+                    }
+
+                    return true;
+                }
+
+                if (_passthrough is { } jpeg)
+                {
+                    // A CMYK JPEG: let the codec convert it to RGBA, as it does for every other source.
+                    using var decoded = Image.Load(new MemoryStream(jpeg.Data), Rgba32DecoderOptions);
+                    rgba = decoded.GetPixelSpan().Slice(0, width * height * 4).ToArray();
+                    return true;
+                }
+
+                rgba = [];
+                return false;
+            }
         }
 
         /// <summary>
@@ -650,7 +689,7 @@ namespace PeachPDF.PdfSharpCore.Utils
         /// under the default <see cref="PeachPDF.ImageCompression.Auto"/>/<see cref="PeachPDF.ImageCompression.Lossless"/>
         /// modes, neither ever is, so this is genuinely cheaper than today for the common case.
         /// </summary>
-        private sealed class PeachPngPassthroughImageSourceImpl : IImageSource
+        private sealed class PeachPngPassthroughImageSourceImpl : IImageSource, IRgbaPixelProvider
         {
             private readonly byte[] _bytes;
             private readonly int _quality;
@@ -700,6 +739,9 @@ namespace PeachPDF.PdfSharpCore.Utils
 
             public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
                 DecodedFallback().SaveAsPdfBitmap(ms, targetWidth, targetHeight);
+
+            public bool TryGetRgba(out int width, out int height, out byte[] rgba) =>
+                DecodedFallback().TryGetRgba(out width, out height, out rgba);
         }
 
         /// <summary>
@@ -708,7 +750,7 @@ namespace PeachPDF.PdfSharpCore.Utils
         /// <see cref="PeachPngPassthroughImageSourceImpl"/>, including its <see cref="ImageCompression.Lossy"/>
         /// decoded-fallback reasoning.
         /// </summary>
-        private sealed class PeachGifPassthroughImageSourceImpl : IImageSource
+        private sealed class PeachGifPassthroughImageSourceImpl : IImageSource, IRgbaPixelProvider
         {
             private readonly byte[] _bytes;
             private readonly int _quality;
@@ -746,6 +788,9 @@ namespace PeachPDF.PdfSharpCore.Utils
 
             public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
                 DecodedFallback().SaveAsPdfBitmap(ms, targetWidth, targetHeight);
+
+            public bool TryGetRgba(out int width, out int height, out byte[] rgba) =>
+                DecodedFallback().TryGetRgba(out width, out height, out rgba);
         }
 
         // Whether to embed losslessly (preserving alpha, via SaveAsPdfBitmap) or as lossy JPEG is
@@ -758,7 +803,7 @@ namespace PeachPDF.PdfSharpCore.Utils
         // from the pixels", not an oversight. See .claude/migration-notes for the behavior change this
         // replaced: a per-pixel Vector<uint> scan of the decoded Rgba32 buffer that decided the embed
         // path from real transparency rather than declared format capability.
-        private sealed class PeachImageSourceImpl : IImageSource
+        private sealed class PeachImageSourceImpl : IImageSource, IRgbaPixelProvider
         {
             private readonly Image _rgba;
             private readonly int _quality;
@@ -841,6 +886,45 @@ namespace PeachPDF.PdfSharpCore.Utils
                 public void Dispose()
                 {
                     if (_owned) Source.Dispose();
+                }
+            }
+
+            public bool TryGetRgba(out int width, out int height, out byte[] rgba)
+            {
+                width = _rgba.Width;
+                height = _rgba.Height;
+                var pixels = _rgba.GetPixelSpan();
+                rgba = new byte[width * height * 4];
+
+                switch (_rgba.PixelFormat)
+                {
+                    case PixelFormat.Rgba32:
+                        pixels.Slice(0, rgba.Length).CopyTo(rgba);
+                        return true;
+
+                    case PixelFormat.Rgb24:
+                        for (int i = 0, j = 0; i < rgba.Length; i += 4, j += 3)
+                        {
+                            rgba[i] = pixels[j];
+                            rgba[i + 1] = pixels[j + 1];
+                            rgba[i + 2] = pixels[j + 2];
+                            rgba[i + 3] = 255;
+                        }
+
+                        return true;
+
+                    case PixelFormat.Gray8:
+                        for (int i = 0, j = 0; i < rgba.Length; i += 4, j++)
+                        {
+                            rgba[i] = rgba[i + 1] = rgba[i + 2] = pixels[j];
+                            rgba[i + 3] = 255;
+                        }
+
+                        return true;
+
+                    default:
+                        rgba = [];
+                        return false;
                 }
             }
 

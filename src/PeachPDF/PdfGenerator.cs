@@ -196,6 +196,28 @@ namespace PeachPDF
         }
 
         /// <summary>
+        /// Validates the raster backend's settings and hands them to the adapter every <see cref="RGraphics"/> reads
+        /// them from. Called wherever <see cref="PdfGenerateConfig.PixelsPerInch"/> is applied, so the two always agree.
+        /// </summary>
+        private void ApplyRasterizationSettings(PdfGenerateConfig config)
+        {
+            if (!(config.RasterizationDpi >= 72 && config.RasterizationDpi <= 1200))
+            {
+                throw new ArgumentOutOfRangeException(nameof(config), config.RasterizationDpi,
+                    "PdfGenerateConfig.RasterizationDpi must be between 72 and 1200 pixels per inch.");
+            }
+
+            if (config.MaxRasterPixels < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(config), config.MaxRasterPixels,
+                    "PdfGenerateConfig.MaxRasterPixels must be at least 1.");
+            }
+
+            _pdfSharpAdapter.RasterizationDpi = config.RasterizationDpi;
+            _pdfSharpAdapter.MaxRasterPixels = config.MaxRasterPixels;
+        }
+
+        /// <summary>
         /// Create PDF pages from given HTML and appends them to the provided PDF document.<br/>
         /// </summary>
         /// <param name="document">PDF document to append pages to</param>
@@ -221,6 +243,7 @@ namespace PeachPDF
             _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
             _pdfSharpAdapter.AllowLocalFileAccess = config.AllowLocalFileAccess;
             _pdfSharpAdapter.PixelsPerPoint = config.PixelsPerInch / 72d;
+            ApplyRasterizationSettings(config);
 
             html ??= await _pdfSharpAdapter.NetworkLoader.GetPrimaryContents();
 
@@ -327,6 +350,7 @@ namespace PeachPDF
             // document this is byte-identical to Rgb mode (every color's ColorSpace is already Rgb).
             document.PdfDocument.Options.ColorMode = PdfColorMode.Undefined;
             document.PdfDocument.Options.DownscaleImages = config.DownscaleImages;
+            document.PdfDocument.Options.FlattenTransparency = config.TransparencyPolicy == TransparencyPolicy.Flatten;
             document.PdfDocument.Options.DownscaleQuality = config.DownscaleQuality;
             document.PdfDocument.Options.MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier;
             document.PdfDocument.Options.ImageCompression = config.ImageCompression;
@@ -561,6 +585,7 @@ namespace PeachPDF
             _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
             _pdfSharpAdapter.AllowLocalFileAccess = config.AllowLocalFileAccess;
             _pdfSharpAdapter.PixelsPerPoint = config.PixelsPerInch / 72d;
+            ApplyRasterizationSettings(config);
 
             using var container = new HtmlContainer(_pdfSharpAdapter);
 

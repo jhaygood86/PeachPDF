@@ -1456,6 +1456,13 @@ namespace PeachPDF.Html.Core.Utils
                 return true;
             }
 
+            // backdrop-filter does too (Filter Effects Level 2 §3.1: "a value other than none results in the creation of both a
+            // stacking context and a Containing Block for absolute and fixed position descendants").
+            if (box.ActualBackdropFilterFunctions.Count > 0)
+            {
+                return true;
+            }
+
             return false;
         }
 

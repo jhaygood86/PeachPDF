@@ -360,6 +360,18 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>True when this box has a non-identity CSS transform to apply at paint time.</summary>
         public bool IsTransformed => DerivedStyle.IsTransformed;
 
+        /// <summary>The box-local 4x4 the transform was projected from, or null without a <c>transform</c>.</summary>
+        public System.Numerics.Matrix4x4? ActualTransform4 => DerivedStyle.ActualTransform4;
+
+        /// <summary>The <c>perspective</c> distance this box gives its children (layout units); 0 for <c>none</c>.</summary>
+        public double ActualPerspective => DerivedStyle.ActualPerspective;
+
+        /// <summary>The <c>perspective-origin</c> relative to this box's border box (layout units).</summary>
+        public (double X, double Y) ActualPerspectiveOrigin => DerivedStyle.ActualPerspectiveOrigin;
+
+        /// <summary>True for <c>backface-visibility: hidden</c>.</summary>
+        public bool IsBackfaceHidden => DerivedStyle.IsBackfaceHidden;
+
         /// <summary>Lazily computes the used value of the <c>opacity</c> property, clamped to [0, 1].</summary>
         public double ActualOpacity => DerivedStyle.ActualOpacity;
 
@@ -368,6 +380,9 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>Lazily parses the used value of the <c>filter</c> property into its ordered function list.</summary>
         public IReadOnlyList<FilterGrammar.FilterFunction> ActualFilterFunctions => DerivedStyle.ActualFilterFunctions;
+
+        /// <summary>Lazily parses the used value of the <c>backdrop-filter</c> property into its ordered function list.</summary>
+        public IReadOnlyList<FilterGrammar.FilterFunction> ActualBackdropFilterFunctions => DerivedStyle.ActualBackdropFilterFunctions;
 
         /// <summary>The used value of <c>mix-blend-mode</c>.</summary>
         public BlendMode ActualMixBlendMode => DerivedStyle.ActualMixBlendMode;

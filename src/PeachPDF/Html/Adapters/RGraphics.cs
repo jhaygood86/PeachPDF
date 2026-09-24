@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Raster;
 using PeachPDF.Text;
 using System;
 using System.Collections.Generic;
@@ -250,6 +251,61 @@ namespace PeachPDF.Html.Adapters
         /// measure-only pass with no real PDF page to own the new object).
         /// </summary>
         public abstract (RGraphics Graphics, RImage Image)? CreateTile(double width, double height);
+
+        /// <summary>
+        /// Asks this graphics for a pixel surface to paint an effect PDF cannot express as vector content
+        /// (a blur, a cross-channel colour filter, ...) into. The returned scope's
+        /// <see cref="RasterSurfaceScope.Graphics"/> has this graphics' own coordinate system, so the same paint
+        /// code that would have drawn to this graphics draws to it unchanged; when finished, hand
+        /// <see cref="RasterSurfaceScope.Surface"/> back through <see cref="DrawRaster"/>.
+        /// </summary>
+        /// <param name="layoutBounds">the region to cover, in this graphics' layout units</param>
+        /// <param name="dpiOverride">pixels per inch of paper for this surface; null uses the document's rasterization DPI</param>
+        /// <returns>
+        /// null when this graphics cannot rasterize (a measure-only pass, a test double), the region is empty, or it
+        /// cannot be allocated - callers fall back to whatever they did before the raster backend existed.
+        /// </returns>
+        internal virtual RasterSurfaceScope? BeginRasterSurface(RRect layoutBounds, double? dpiOverride = null) => null;
+
+        /// <summary>
+        /// While true, text this graphics draws is laid out and embedded as usual but paints nothing (PDF text render mode 3), so
+        /// it stays selectable and searchable over content drawn some other way - a bitmap of the same text, say. Backends with no
+        /// notion of text extraction (a raster graphics) draw no text at all while it is set. Everything other than text is
+        /// unaffected; callers set it around the text-only pass and clear it afterwards.
+        /// </summary>
+        internal bool InvisibleText { get; set; }
+
+        /// <summary>
+        /// Whether group effects (opacity, blend modes, colour functions) are best done by rendering the element into a tight
+        /// bitmap and compositing that, rather than through <see cref="CreateTile"/>. True for a raster graphics, whose tile
+        /// would otherwise span from the page origin; false for a PDF graphics, where a tile is a cheap vector Form XObject.
+        /// </summary>
+        internal virtual bool PrefersRasterGroups => false;
+
+        /// <summary>
+        /// Whether the document being written forbids transparency (PDF/A-1, PDF/X-1a/X-3) and was asked to flatten it instead of
+        /// rejecting it (<see cref="PdfGenerateConfig.TransparencyPolicy"/>). The painter then renders what needs transparency as an
+        /// opaque bitmap.
+        /// </summary>
+        internal virtual bool FlattensTransparency => false;
+
+        /// <summary>A probe that answers whether painting something would need transparency, or null when this graphics cannot tell.</summary>
+        internal virtual PeachPDF.Adapters.TransparencyProbe? CreateTransparencyProbe() => null;
+
+        /// <summary>
+        /// How much the transforms pushed so far magnify a unit along each axis: the lengths of the images of the unit x and y
+        /// vectors under the accumulated linear part. A raster region renders at the physical resolution the document asked for
+        /// <em>after</em> those transforms are applied, so it needs this to pick its pixel pitch; a graphics that does not
+        /// track transforms reports no magnification.
+        /// </summary>
+        internal virtual (double X, double Y) TransformScale => (1.0, 1.0);
+
+        /// <summary>
+        /// Draws a surface obtained from <see cref="BeginRasterSurface"/> into this graphics at the rectangle the
+        /// surface itself records (<see cref="RasterSurface.LayoutRect"/>), so its physical size is exact. Honours
+        /// this graphics' current transform, clip and blend mode.
+        /// </summary>
+        internal virtual void DrawRaster(RasterSurface surface) { }
 
         /// <summary>
         /// Whether this instance paints into an offscreen tile (e.g. one returned by

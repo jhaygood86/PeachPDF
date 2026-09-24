@@ -221,7 +221,7 @@ namespace PeachPDF.CSS
             _ => 0f,
         };
 
-        private static List<List<Token>> SplitByComma(IReadOnlyList<Token> tokens)
+        internal static List<List<Token>> SplitByComma(IReadOnlyList<Token> tokens)
         {
             var groups = new List<List<Token>>();
             var current = new List<Token>();

@@ -103,6 +103,16 @@ internal static class CliRunner
             AllowLocalFileAccess = !options.NoLocalFiles,
         };
 
+        if (options.RasterDpi is { } rasterDpi)
+        {
+            config.RasterizationDpi = rasterDpi;
+        }
+
+        if (options.FlattenTransparency)
+        {
+            config.TransparencyPolicy = TransparencyPolicy.Flatten;
+        }
+
         if (options.PageSize is { } pageSize)
         {
             config.PageSize = pageSize;

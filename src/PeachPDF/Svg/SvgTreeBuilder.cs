@@ -1779,12 +1779,12 @@ namespace PeachPDF.Svg
         /// </summary>
         private SvgFilter? BuildFilter(ISvgSourceNode node)
         {
-            var primitives = BuildFilterPrimitives(node);
-            if (primitives is null)
-                return null;
-
             var isObjectBoundingBox = !string.Equals(node.GetAttribute("filterUnits"), "userSpaceOnUse", StringComparison.OrdinalIgnoreCase);
             var primitiveUnitsUserSpaceOnUse = !string.Equals(node.GetAttribute("primitiveUnits"), "objectBoundingBox", StringComparison.OrdinalIgnoreCase);
+
+            var primitives = BuildFilterPrimitives(node, primitiveUnitsUserSpaceOnUse);
+            if (primitives is null)
+                return null;
 
             var defaultFilter = new SvgFilter();
             return new SvgFilter
@@ -1801,30 +1801,49 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Walks a <c>&lt;filter&gt;</c>'s direct children into a primitive list, or null on the first unsupported one (see <see cref="BuildFilter"/>'s remarks). A non-<c>fe*</c> child (<c>&lt;title&gt;</c>/<c>&lt;desc&gt;</c>/etc.) is skipped, not a rejection.</summary>
-        private List<FilterPrimitive>? BuildFilterPrimitives(ISvgSourceNode node)
+        private List<FilterPrimitive>? BuildFilterPrimitives(ISvgSourceNode node, bool primitiveUnitsUserSpaceOnUse)
         {
             var primitives = new List<FilterPrimitive>();
+            var filterLinear = ParseColorInterpolationFilters(node.GetAttribute("color-interpolation-filters"), true);
 
             foreach (var child in node.Children)
             {
                 if (!child.Name.StartsWith("fe", StringComparison.Ordinal))
                     continue;
 
-                if (HasSubregion(child))
-                    return null;
-
                 if (BuildFilterPrimitive(child) is not { } primitive)
                     return null;
 
+                primitive.LinearRgb = ParseColorInterpolationFilters(child.GetAttribute("color-interpolation-filters"), filterLinear);
+                primitive.Subregion = ParseSubregion(child, primitiveUnitsUserSpaceOnUse);
                 primitives.Add(primitive);
             }
 
             return primitives;
         }
 
-        private static bool HasSubregion(ISvgSourceNode node) =>
-            node.GetAttribute("x") is not null || node.GetAttribute("y") is not null ||
-            node.GetAttribute("width") is not null || node.GetAttribute("height") is not null;
+        private static bool ParseColorInterpolationFilters(string? value, bool inherited) => value?.Trim() switch
+        {
+            "linearRGB" => true,
+            "sRGB" or "auto" => false,
+            _ => inherited,
+        };
+
+        private FilterSubregion? ParseSubregion(ISvgSourceNode node, bool primitiveUnitsUserSpaceOnUse)
+        {
+            if (node.GetAttribute("x") is null && node.GetAttribute("y") is null &&
+                node.GetAttribute("width") is null && node.GetAttribute("height") is null)
+            {
+                return null;
+            }
+
+            var objectBoundingBox = !primitiveUnitsUserSpaceOnUse;
+            return new FilterSubregion(
+                SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("x"), objectBoundingBox, _viewportWidth),
+                SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("y"), objectBoundingBox, _viewportHeight),
+                SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("width"), objectBoundingBox, _viewportWidth),
+                SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("height"), objectBoundingBox, _viewportHeight));
+        }
 
         private static bool IsReservedInput(string? value) =>
             value is "BackgroundImage" or "BackgroundAlpha" or "FillPaint" or "StrokePaint";
@@ -1839,7 +1858,15 @@ namespace PeachPDF.Svg
             "feBlend" => BuildFeBlend(node),
             "feColorMatrix" => BuildFeColorMatrix(node),
             "feComponentTransfer" => BuildFeComponentTransfer(node),
-            _ => null, // any other fe* element (feGaussianBlur, feImage, lighting, ...) - unsupported
+            "feGaussianBlur" => BuildFeGaussianBlur(node),
+            "feDropShadow" => BuildFeDropShadow(node),
+            "feMorphology" => BuildFeMorphology(node),
+            "feConvolveMatrix" => BuildFeConvolveMatrix(node),
+            "feTurbulence" => BuildFeTurbulence(node),
+            "feDisplacementMap" => BuildFeDisplacementMap(node),
+            "feDiffuseLighting" => BuildFeLighting(node, specular: false),
+            "feSpecularLighting" => BuildFeLighting(node, specular: true),
+            _ => null, // feImage (and anything unknown) - unsupported
         };
 
         private FilterPrimitive? BuildFeFlood(ISvgSourceNode node)
@@ -1914,15 +1941,25 @@ namespace PeachPDF.Svg
             if (IsReservedInput(inAttr) || IsReservedInput(in2Attr))
                 return null;
 
-            // "arithmetic" needs true per-pixel computation (k1*i1*i2 + k2*i1 + k3*i2 + k4) - not
-            // representable, and any other/unrecognized operator value is rejected too rather than
-            // silently falling back to "over" (unlike feBlend's mode, which does default leniently -
-            // there is no safe default here since the author's INTENDED operator is unknown).
+            // "arithmetic" (k1*i1*i2 + k2*i1 + k3*i2 + k4) needs per-pixel computation, so it makes the whole filter a raster
+            // one. Any other/unrecognized operator value is rejected rather than silently falling back to "over" (unlike
+            // feBlend's mode, which does default leniently - there is no safe default here since the author's INTENDED
+            // operator is unknown).
             var op = (node.GetAttribute("operator") ?? "over").Trim().ToLowerInvariant();
-            if (op is not ("over" or "in" or "out" or "atop" or "xor"))
+            if (op is not ("over" or "in" or "out" or "atop" or "xor" or "arithmetic"))
                 return null;
 
-            return new FeComposite { In = inAttr, In2 = in2Attr, Result = node.GetAttribute("result"), Operator = op };
+            return new FeComposite
+            {
+                In = inAttr,
+                In2 = in2Attr,
+                Result = node.GetAttribute("result"),
+                Operator = op,
+                K1 = ParseFilterNumber(node.GetAttribute("k1")),
+                K2 = ParseFilterNumber(node.GetAttribute("k2")),
+                K3 = ParseFilterNumber(node.GetAttribute("k3")),
+                K4 = ParseFilterNumber(node.GetAttribute("k4")),
+            };
         }
 
         private FilterPrimitive? BuildFeBlend(ISvgSourceNode node)
@@ -1981,23 +2018,36 @@ namespace PeachPDF.Svg
             if (type == "luminancetoalpha")
                 return new FeColorMatrix { In = inAttr, Result = result, Matrix = ColorMatrix.Identity, IsLuminanceToAlpha = true };
 
-            // saturate/hueRotate mix all three color channels into each output channel by construction -
-            // no amount/angle value could ever bring either back into PDF /TR's per-channel-only model
-            // (ISO 32000-1 §8.6.5.3), so both are rejected unconditionally rather than inspected further.
-            if (type is "saturate" or "huerotate")
-                return null;
+            // saturate/hueRotate and any matrix with an off-diagonal term mix channels, which PDF's per-channel /TR cannot
+            // express; such a matrix is built as normal and FeColorMatrix.RequiresRaster routes the filter to pixels.
+            ColorMatrix matrix;
+            switch (type)
+            {
+                case "saturate":
+                    matrix = PeachPDF.Html.Core.Paint.FilterEffectResolver.SaturateMatrix(
+                        SvgValueParsers.ParseNumberList(node.GetAttribute("values")) is { Length: > 0 } sat ? sat[0] : 1.0);
+                    break;
 
-            if (type != "matrix")
-                return null;
+                case "huerotate":
+                    matrix = PeachPDF.Html.Core.Paint.FilterEffectResolver.HueRotateMatrix(
+                        (SvgValueParsers.ParseNumberList(node.GetAttribute("values")) is { Length: > 0 } hue ? hue[0] : 0.0) * Math.PI / 180.0);
+                    break;
 
-            var values = SvgValueParsers.ParseNumberList(node.GetAttribute("values")) ?? SvgColorMatrixTable.Identity;
-            if (values.Length != 20)
-                return null;
+                case "matrix":
+                {
+                    var values = SvgValueParsers.ParseNumberList(node.GetAttribute("values")) ?? SvgColorMatrixTable.Identity;
+                    if (values.Length != 20)
+                        return null;
 
-            var matrix = SvgColorMatrixTable.Build(values);
-            return matrix.IsChannelIndependent
-                ? new FeColorMatrix { In = inAttr, Result = result, Matrix = matrix, IsLuminanceToAlpha = false }
-                : null; // a real off-diagonal term - cross-channel, same corrected finding as saturate/hueRotate above
+                    matrix = SvgColorMatrixTable.Build(values);
+                    break;
+                }
+
+                default:
+                    return null;
+            }
+
+            return new FeColorMatrix { In = inAttr, Result = result, Matrix = matrix, IsLuminanceToAlpha = false };
         }
 
         private FilterPrimitive? BuildFeComponentTransfer(ISvgSourceNode node)
@@ -2006,79 +2056,276 @@ namespace PeachPDF.Svg
             if (IsReservedInput(inAttr))
                 return null;
 
-            if (!TryReadTransferFunction(node, "feFuncR", out var slopeR, out var interceptR)) return null;
-            if (!TryReadTransferFunction(node, "feFuncG", out var slopeG, out var interceptG)) return null;
-            if (!TryReadTransferFunction(node, "feFuncB", out var slopeB, out var interceptB)) return null;
-            if (!IsFeFuncAIdentityOrAbsent(node)) return null;
+            var functions = new[]
+            {
+                ReadTransferFunction(node, "feFuncR"),
+                ReadTransferFunction(node, "feFuncG"),
+                ReadTransferFunction(node, "feFuncB"),
+                ReadTransferFunction(node, "feFuncA"),
+            };
+
+            // Identity or linear on R/G/B and no alpha function is a per-channel affine map, which a PDF /TR can carry; anything
+            // else needs the raster path and keeps the whole function list.
+            var vectorRepresentable = functions[3].Kind == TransferKind.Identity;
+            for (var i = 0; i < 3 && vectorRepresentable; i++)
+                vectorRepresentable = functions[i].Kind is TransferKind.Identity or TransferKind.Linear;
 
             var linear = new Matrix4x4(
-                (float)slopeR, 0, 0, 0,
-                0, (float)slopeG, 0, 0,
-                0, 0, (float)slopeB, 0,
+                (float)LinearSlope(functions[0]), 0, 0, 0,
+                0, (float)LinearSlope(functions[1]), 0, 0,
+                0, 0, (float)LinearSlope(functions[2]), 0,
                 0, 0, 0, 1);
-            var offset = new Vector4((float)interceptR, (float)interceptG, (float)interceptB, 0f);
+            var offset = new Vector4((float)LinearIntercept(functions[0]), (float)LinearIntercept(functions[1]), (float)LinearIntercept(functions[2]), 0f);
 
-            return new FeComponentTransfer { In = inAttr, Result = node.GetAttribute("result"), Matrix = new ColorMatrix(linear, offset) };
+            return new FeComponentTransfer
+            {
+                In = inAttr,
+                Result = node.GetAttribute("result"),
+                Matrix = new ColorMatrix(linear, offset),
+                Functions = vectorRepresentable ? null : functions,
+            };
         }
 
-        /// <summary>
-        /// Reads one <c>&lt;feFuncR&gt;</c>/<c>&lt;feFuncG&gt;</c>/<c>&lt;feFuncB&gt;</c> child's transfer
-        /// function: absent defaults to identity (slope 1, intercept 0) per spec; <c>type="identity"</c>
-        /// is the same; <c>type="linear"</c> reads <c>slope</c>/<c>intercept</c> (each defaulting per
-        /// spec when omitted). <c>false</c> for <c>type="gamma"</c>/<c>"table"</c>/<c>"discrete"</c> -
-        /// none of those are affine (see <see cref="FeComponentTransfer"/>'s remarks), so the whole
-        /// filter is rejected rather than approximated.
-        /// </summary>
-        private static bool TryReadTransferFunction(ISvgSourceNode node, string childName, out double slope, out double intercept)
-        {
-            slope = 1;
-            intercept = 0;
+        private static double LinearSlope(TransferFunction f) => f.Kind == TransferKind.Linear ? f.Slope : 1.0;
 
+        private static double LinearIntercept(TransferFunction f) => f.Kind == TransferKind.Linear ? f.Intercept : 0.0;
+
+        /// <summary>Reads one <c>feFuncR</c>/<c>feFuncG</c>/<c>feFuncB</c>/<c>feFuncA</c> child; absent or unrecognised is the identity, as the spec says.</summary>
+        private static TransferFunction ReadTransferFunction(ISvgSourceNode node, string childName)
+        {
             ISvgSourceNode? func = null;
             foreach (var child in node.Children)
             {
                 if (child.Name == childName)
-                {
                     func = child;
-                    break;
-                }
             }
 
             if (func is null)
-                return true;
+                return TransferFunction.Identity;
 
-            var type = (func.GetAttribute("type") ?? "identity").Trim().ToLowerInvariant();
-            switch (type)
+            var table = SvgValueParsers.ParseNumberList(func.GetAttribute("tableValues")) ?? [];
+            return (func.GetAttribute("type") ?? "identity").Trim().ToLowerInvariant() switch
             {
-                case "identity":
-                    return true;
-                case "linear":
-                    slope = ParseFilterNumber(func.GetAttribute("slope"), 1);
-                    intercept = ParseFilterNumber(func.GetAttribute("intercept"), 0);
-                    return true;
-                default:
-                    return false;
-            }
+                "table" when table.Length > 0 => new TransferFunction(TransferKind.Table, table, 1, 0, 1, 1, 0),
+                "discrete" when table.Length > 0 => new TransferFunction(TransferKind.Discrete, table, 1, 0, 1, 1, 0),
+                "linear" => new TransferFunction(TransferKind.Linear, [], ParseFilterNumber(func.GetAttribute("slope"), 1), ParseFilterNumber(func.GetAttribute("intercept"), 0), 1, 1, 0),
+                "gamma" => new TransferFunction(TransferKind.Gamma, [], 1, 0,
+                    ParseFilterNumber(func.GetAttribute("amplitude"), 1), ParseFilterNumber(func.GetAttribute("exponent"), 1), ParseFilterNumber(func.GetAttribute("offset"), 0)),
+                _ => TransferFunction.Identity,
+            };
         }
 
-        /// <summary>
-        /// <c>&lt;feComponentTransfer&gt;</c> only ever composes R/G/B here (see
-        /// <see cref="FeComponentTransfer"/>'s remarks) - an author-specified <c>&lt;feFuncA&gt;</c> that
-        /// would actually change alpha (any type other than absent/identity) is rejected outright rather
-        /// than silently dropped, since silently ignoring a real, spec-legal request would under-render
-        /// without any signal that anything was left out.
-        /// </summary>
-        private static bool IsFeFuncAIdentityOrAbsent(ISvgSourceNode node)
+        /// <summary>The one or two numbers of a <c>number-optional-number</c> attribute; null when the text is not one or two numbers.</summary>
+        private static (double First, double Second)? ParseNumberOptionalNumber(string? value, double defaultFirst, double defaultSecond)
         {
-            foreach (var child in node.Children)
-            {
-                if (child.Name != "feFuncA")
-                    continue;
+            if (string.IsNullOrWhiteSpace(value))
+                return (defaultFirst, defaultSecond);
 
-                return (child.GetAttribute("type") ?? "identity").Trim().Equals("identity", StringComparison.OrdinalIgnoreCase);
+            var numbers = SvgValueParsers.ParseNumberList(value);
+            return numbers is { Length: 1 } ? (numbers[0], numbers[0])
+                : numbers is { Length: 2 } ? (numbers[0], numbers[1])
+                : null;
+        }
+
+        private FilterPrimitive? BuildFeGaussianBlur(ISvgSourceNode node)
+        {
+            var inAttr = node.GetAttribute("in");
+            if (IsReservedInput(inAttr) || ParseNumberOptionalNumber(node.GetAttribute("stdDeviation"), 0, 0) is not { } deviation)
+                return null;
+
+            return new FeGaussianBlur { In = inAttr, Result = node.GetAttribute("result"), StdDeviationX = deviation.First, StdDeviationY = deviation.Second };
+        }
+
+        private FilterPrimitive? BuildFeDropShadow(ISvgSourceNode node)
+        {
+            var inAttr = node.GetAttribute("in");
+            if (IsReservedInput(inAttr) || ParseNumberOptionalNumber(node.GetAttribute("stdDeviation"), 2, 2) is not { } deviation)
+                return null;
+
+            var colorAttr = node.GetAttribute("flood-color");
+            var color = string.IsNullOrWhiteSpace(colorAttr)
+                ? RColor.Black
+                : colorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
+                    ? _contextColor
+                    : new CssValueParser(_adapter).GetActualColor(colorAttr);
+
+            return new FeDropShadow
+            {
+                In = inAttr,
+                Result = node.GetAttribute("result"),
+                Dx = ParseFilterNumber(node.GetAttribute("dx"), 2),
+                Dy = ParseFilterNumber(node.GetAttribute("dy"), 2),
+                StdDeviationX = deviation.First,
+                StdDeviationY = deviation.Second,
+                Color = color,
+                Opacity = SvgValueParsers.ParseOpacity(node.GetAttribute("flood-opacity")),
+            };
+        }
+
+        private FilterPrimitive? BuildFeMorphology(ISvgSourceNode node)
+        {
+            var inAttr = node.GetAttribute("in");
+            if (IsReservedInput(inAttr) || ParseNumberOptionalNumber(node.GetAttribute("radius"), 0, 0) is not { } radius)
+                return null;
+
+            return new FeMorphology
+            {
+                In = inAttr,
+                Result = node.GetAttribute("result"),
+                Dilate = string.Equals(node.GetAttribute("operator")?.Trim(), "dilate", StringComparison.OrdinalIgnoreCase),
+                RadiusX = radius.First,
+                RadiusY = radius.Second,
+            };
+        }
+
+        private FilterPrimitive? BuildFeConvolveMatrix(ISvgSourceNode node)
+        {
+            var inAttr = node.GetAttribute("in");
+            if (IsReservedInput(inAttr) || ParseNumberOptionalNumber(node.GetAttribute("order"), 3, 3) is not { } order)
+                return null;
+
+            var orderX = (int)order.First;
+            var orderY = (int)order.Second;
+            if (orderX < 1 || orderY < 1 || orderX != order.First || orderY != order.Second || (long)orderX * orderY > 10_000)
+                return null;
+
+            var kernel = SvgValueParsers.ParseNumberList(node.GetAttribute("kernelMatrix"));
+            if (kernel is null || kernel.Length != orderX * orderY)
+                return null;
+
+            var divisor = ParseFilterNumber(node.GetAttribute("divisor"), 0);
+            if (divisor == 0)
+            {
+                foreach (var k in kernel)
+                    divisor += k;
+
+                if (divisor == 0)
+                    divisor = 1;
             }
 
-            return true;
+            var targetX = node.GetAttribute("targetX") is { } tx ? (int)ParseFilterNumber(tx, orderX / 2) : orderX / 2;
+            var targetY = node.GetAttribute("targetY") is { } ty ? (int)ParseFilterNumber(ty, orderY / 2) : orderY / 2;
+            if (targetX < 0 || targetX >= orderX || targetY < 0 || targetY >= orderY)
+                return null;
+
+            return new FeConvolveMatrix
+            {
+                In = inAttr,
+                Result = node.GetAttribute("result"),
+                OrderX = orderX,
+                OrderY = orderY,
+                Kernel = kernel,
+                Divisor = divisor,
+                Bias = ParseFilterNumber(node.GetAttribute("bias"), 0),
+                TargetX = targetX,
+                TargetY = targetY,
+                EdgeMode = (node.GetAttribute("edgeMode") ?? "duplicate").Trim().ToLowerInvariant() switch
+                {
+                    "wrap" => FilterEdgeMode.Wrap,
+                    "none" => FilterEdgeMode.None,
+                    _ => FilterEdgeMode.Duplicate,
+                },
+                PreserveAlpha = string.Equals(node.GetAttribute("preserveAlpha")?.Trim(), "true", StringComparison.OrdinalIgnoreCase),
+            };
+        }
+
+        private FilterPrimitive? BuildFeTurbulence(ISvgSourceNode node)
+        {
+            if (ParseNumberOptionalNumber(node.GetAttribute("baseFrequency"), 0, 0) is not { } frequency ||
+                frequency.First < 0 || frequency.Second < 0)
+            {
+                return null;
+            }
+
+            var octaves = (int)ParseFilterNumber(node.GetAttribute("numOctaves"), 1);
+            return new FeTurbulence
+            {
+                Result = node.GetAttribute("result"),
+                BaseFrequencyX = frequency.First,
+                BaseFrequencyY = frequency.Second,
+                NumOctaves = Math.Clamp(octaves, 0, 16),
+                Seed = ParseFilterNumber(node.GetAttribute("seed"), 0),
+                Stitch = string.Equals(node.GetAttribute("stitchTiles")?.Trim(), "stitch", StringComparison.OrdinalIgnoreCase),
+                FractalNoise = string.Equals(node.GetAttribute("type")?.Trim(), "fractalNoise", StringComparison.OrdinalIgnoreCase),
+            };
+        }
+
+        private static int ParseChannelSelector(string? value) => value?.Trim() switch
+        {
+            "R" => 0,
+            "G" => 1,
+            "B" => 2,
+            _ => 3,
+        };
+
+        private FilterPrimitive? BuildFeDisplacementMap(ISvgSourceNode node)
+        {
+            var inAttr = node.GetAttribute("in");
+            var in2Attr = node.GetAttribute("in2");
+            if (IsReservedInput(inAttr) || IsReservedInput(in2Attr))
+                return null;
+
+            return new FeDisplacementMap
+            {
+                In = inAttr,
+                In2 = in2Attr,
+                Result = node.GetAttribute("result"),
+                Scale = ParseFilterNumber(node.GetAttribute("scale"), 0),
+                XChannel = ParseChannelSelector(node.GetAttribute("xChannelSelector")),
+                YChannel = ParseChannelSelector(node.GetAttribute("yChannelSelector")),
+            };
+        }
+
+        private FilterPrimitive? BuildFeLighting(ISvgSourceNode node, bool specular)
+        {
+            var inAttr = node.GetAttribute("in");
+            if (IsReservedInput(inAttr))
+                return null;
+
+            LightSource? light = null;
+            foreach (var child in node.Children)
+            {
+                light = child.Name switch
+                {
+                    "feDistantLight" => new LightSource(LightKind.Distant,
+                        ParseFilterNumber(child.GetAttribute("azimuth")), ParseFilterNumber(child.GetAttribute("elevation")),
+                        0, 0, 0, 0, 0, 0, 1, null),
+                    "fePointLight" => new LightSource(LightKind.Point, 0, 0,
+                        ParseFilterNumber(child.GetAttribute("x")), ParseFilterNumber(child.GetAttribute("y")), ParseFilterNumber(child.GetAttribute("z")),
+                        0, 0, 0, 1, null),
+                    "feSpotLight" => new LightSource(LightKind.Spot, 0, 0,
+                        ParseFilterNumber(child.GetAttribute("x")), ParseFilterNumber(child.GetAttribute("y")), ParseFilterNumber(child.GetAttribute("z")),
+                        ParseFilterNumber(child.GetAttribute("pointsAtX")), ParseFilterNumber(child.GetAttribute("pointsAtY")), ParseFilterNumber(child.GetAttribute("pointsAtZ")),
+                        ParseFilterNumber(child.GetAttribute("specularExponent"), 1),
+                        child.GetAttribute("limitingConeAngle") is { } cone ? ParseFilterNumber(cone, 0) : null),
+                    _ => null,
+                };
+
+                if (light is not null)
+                    break;
+            }
+
+            if (light is null)
+                return null;
+
+            var colorAttr = node.GetAttribute("lighting-color");
+            var color = string.IsNullOrWhiteSpace(colorAttr)
+                ? RColor.White
+                : colorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
+                    ? _contextColor
+                    : new CssValueParser(_adapter).GetActualColor(colorAttr);
+
+            return new FeLighting
+            {
+                In = inAttr,
+                Result = node.GetAttribute("result"),
+                Specular = specular,
+                SurfaceScale = ParseFilterNumber(node.GetAttribute("surfaceScale"), 1),
+                Constant = ParseFilterNumber(node.GetAttribute(specular ? "specularConstant" : "diffuseConstant"), 1),
+                SpecularExponent = specular ? Math.Clamp(ParseFilterNumber(node.GetAttribute("specularExponent"), 1), 1, 128) : 1,
+                LightingColor = color,
+                Light = light,
+            };
         }
 
         private static double ParseFilterNumber(string? value, double fallback = 0)

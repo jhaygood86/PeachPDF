@@ -73,25 +73,14 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Theory]
-        [InlineData("""<filter id="f"><feGaussianBlur stdDeviation="2"/></filter>""")] // unsupported primitive kind
         [InlineData("""<filter id="f"><feImage href="#x"/></filter>""")]
-        [InlineData("""<filter id="f"><feComposite operator="arithmetic" k1="1" k2="0" k3="0" k4="0"/></filter>""")]
         [InlineData("""<filter id="f"><feComposite operator="bogus"/></filter>""")]
-        [InlineData("""<filter id="f"><feColorMatrix type="saturate" values="0.5"/></filter>""")]
-        [InlineData("""<filter id="f"><feColorMatrix type="hueRotate" values="90"/></filter>""")]
-        // Off-diagonal type="matrix": R' picks up some G (a cross-channel coupling), so IsChannelIndependent is false.
-        [InlineData("""<filter id="f"><feColorMatrix type="matrix" values="1 0.2 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"/></filter>""")]
-        [InlineData("""<filter id="f"><feComponentTransfer><feFuncR type="gamma" amplitude="1" exponent="2" offset="0"/></feComponentTransfer></filter>""")]
-        [InlineData("""<filter id="f"><feComponentTransfer><feFuncR type="table" tableValues="0 1"/></feComponentTransfer></filter>""")]
-        [InlineData("""<filter id="f"><feComponentTransfer><feFuncR type="discrete" tableValues="0 1"/></feComponentTransfer></filter>""")]
-        [InlineData("""<filter id="f"><feComponentTransfer><feFuncA type="linear" slope="0.5"/></feComponentTransfer></filter>""")]
         [InlineData("""<filter id="f"><feFlood in="BackgroundImage"/></filter>""")]
         [InlineData("""<filter id="f"><feOffset in="StrokePaint" dx="1" dy="1"/></filter>""")]
         [InlineData("""<filter id="f"><feMerge><feMergeNode in="BackgroundAlpha"/></feMerge></filter>""")]
         [InlineData("""<filter id="f"><feTile in="FillPaint"/></filter>""")]
         [InlineData("""<filter id="f"><feBlend in2="BackgroundImage" mode="multiply"/></filter>""")]
         [InlineData("""<filter id="f"><feComposite in2="FillPaint"/></filter>""")]
-        [InlineData("""<filter id="f"><feFlood x="0" y="0" width="10" height="10"/></filter>""")] // per-primitive subregion
         public void UnsupportedGraph_IsNeverRegistered(string filterMarkup)
         {
             var document = BuildFrom(filterMarkup);
@@ -103,6 +92,65 @@ namespace PeachPDF.Tests.Svg
             // is never a partially-applied graph.
             var target = Assert.IsType<SvgRectElement>(Assert.Single(document.Children));
             Assert.Equal("f", target.FilterRef);
+        }
+
+        [Theory]
+        [InlineData("""<filter id="f"><feGaussianBlur stdDeviation="2"/></filter>""")]
+        [InlineData("""<filter id="f"><feComposite operator="arithmetic" k1="1" k2="0" k3="0" k4="0"/></filter>""")]
+        [InlineData("""<filter id="f"><feColorMatrix type="saturate" values="0.5"/></filter>""")]
+        [InlineData("""<filter id="f"><feColorMatrix type="hueRotate" values="90"/></filter>""")]
+        // Off-diagonal type="matrix": R' picks up some G (a cross-channel coupling), so IsChannelIndependent is false.
+        [InlineData("""<filter id="f"><feColorMatrix type="matrix" values="1 0.2 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"/></filter>""")]
+        [InlineData("""<filter id="f"><feComponentTransfer><feFuncR type="gamma" amplitude="1" exponent="2" offset="0"/></feComponentTransfer></filter>""")]
+        [InlineData("""<filter id="f"><feComponentTransfer><feFuncR type="table" tableValues="0 1"/></feComponentTransfer></filter>""")]
+        [InlineData("""<filter id="f"><feComponentTransfer><feFuncR type="discrete" tableValues="0 1"/></feComponentTransfer></filter>""")]
+        [InlineData("""<filter id="f"><feComponentTransfer><feFuncA type="linear" slope="0.5"/></feComponentTransfer></filter>""")]
+        [InlineData("""<filter id="f"><feFlood x="0" y="0" width="10" height="10"/></filter>""")] // per-primitive subregion
+        [InlineData("""<filter id="f"><feMorphology operator="dilate" radius="2"/></filter>""")]
+        [InlineData("""<filter id="f"><feConvolveMatrix order="3" kernelMatrix="0 0 0 0 1 0 0 0 0"/></filter>""")]
+        [InlineData("""<filter id="f"><feTurbulence baseFrequency="0.05" numOctaves="2"/></filter>""")]
+        [InlineData("""<filter id="f"><feDisplacementMap scale="5" xChannelSelector="R" yChannelSelector="G"/></filter>""")]
+        [InlineData("""<filter id="f"><feDiffuseLighting><feDistantLight azimuth="45" elevation="45"/></feDiffuseLighting></filter>""")]
+        [InlineData("""<filter id="f"><feSpecularLighting specularExponent="8"><fePointLight x="10" y="10" z="20"/></feSpecularLighting></filter>""")]
+        [InlineData("""<filter id="f"><feDropShadow dx="2" dy="2" stdDeviation="1"/></filter>""")]
+        public void PixelPrimitives_AreRegistered_AndMarkTheFilterAsNeedingRaster(string filterMarkup)
+        {
+            var document = BuildFrom(filterMarkup);
+
+            Assert.True(document.Filters.ContainsKey("f"));
+            Assert.True(document.Filters["f"].RequiresRaster);
+        }
+
+        [Fact]
+        public void VectorOnlyPrimitives_DoNotRequireRaster()
+        {
+            var document = BuildFrom("""<filter id="f"><feFlood flood-color="red"/><feOffset dx="1" dy="2"/><feComponentTransfer><feFuncR type="linear" slope="2"/></feComponentTransfer></filter>""");
+
+            Assert.False(document.Filters["f"].RequiresRaster);
+        }
+
+        [Theory]
+        [InlineData("""<filter id="f"><feConvolveMatrix order="3" kernelMatrix="1 2"/></filter>""")] // wrong kernel length
+        [InlineData("""<filter id="f"><feConvolveMatrix order="0" kernelMatrix=""/></filter>""")]
+        [InlineData("""<filter id="f"><feConvolveMatrix order="3" targetX="5" kernelMatrix="0 0 0 0 1 0 0 0 0"/></filter>""")]
+        [InlineData("""<filter id="f"><feTurbulence baseFrequency="-1"/></filter>""")]
+        [InlineData("""<filter id="f"><feDiffuseLighting/></filter>""")] // no light source
+        [InlineData("""<filter id="f"><feGaussianBlur stdDeviation="1 2 3"/></filter>""")]
+        [InlineData("""<filter id="f"><feColorMatrix type="matrix" values="1 2 3"/></filter>""")]
+        public void MalformedPixelPrimitives_RejectTheFilter(string filterMarkup)
+        {
+            Assert.False(BuildFrom(filterMarkup).Filters.ContainsKey("f"));
+        }
+
+        [Fact]
+        public void ColorInterpolationFilters_DefaultsToLinearRgb_AndInheritsFromTheFilter()
+        {
+            var document = BuildFrom("""<filter id="f" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="1"/><feOffset color-interpolation-filters="linearRGB"/></filter>""");
+
+            var primitives = document.Filters["f"].Primitives;
+            Assert.False(primitives[0].LinearRgb);
+            Assert.True(primitives[1].LinearRgb);
+            Assert.True(BuildFrom("""<filter id="f"><feGaussianBlur stdDeviation="1"/></filter>""").Filters["f"].Primitives[0].LinearRgb);
         }
 
         [Fact]

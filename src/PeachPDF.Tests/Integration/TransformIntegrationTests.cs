@@ -237,23 +237,29 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(40, m.OffsetY, 2);
         }
 
-        // --- perspective() is unsupported ---
+        // --- perspective() ---
 
         [Fact]
-        public async Task Perspective_IsUnsupported_TreatedAsIdentity()
+        public async Task Perspective_ContributesADivisorToTheBoxsTransform()
         {
-            // perspective() is not supported (see docs/html-css-support.md) - it's ignored like any
-            // other unrecognized function name, contributing identity to the composed transform.
             var withPerspective = await FindDivBox("transform: perspective(300px) rotateY(45deg); transform-origin: 0 0;");
             var plain = await FindDivBox("transform: rotateY(45deg); transform-origin: 0 0;");
 
-            var m = withPerspective.ActualTransformMatrix;
-            var p = plain.ActualTransformMatrix;
+            var m4 = withPerspective.ActualTransform4;
+            Assert.NotNull(m4);
 
-            Assert.Equal(p.M11, m.M11, 6);
-            Assert.Equal(p.M22, m.M22, 6);
-            Assert.Equal(p.OffsetX, m.OffsetX, 6);
-            Assert.Equal(p.OffsetY, m.OffsetY, 6);
+            // rotateY(45deg) on its own keeps the plane affine (no divisor); perspective() is what makes it projective.
+            Assert.Equal(0, plain.ActualTransform4!.Value.M14, 6);
+            Assert.NotEqual(0, m4!.Value.M14, 6);
+        }
+
+        [Fact]
+        public async Task PerspectiveOfZero_ContributesNothing()
+        {
+            var zero = await FindDivBox("transform: perspective(0px) rotateY(45deg);");
+            var plain = await FindDivBox("transform: rotateY(45deg);");
+
+            Assert.Equal(plain.ActualTransform4!.Value.M14, zero.ActualTransform4!.Value.M14, 6);
         }
 
         // --- Non-inheritance ---

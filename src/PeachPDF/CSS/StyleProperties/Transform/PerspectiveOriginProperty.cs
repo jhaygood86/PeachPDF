@@ -30,15 +30,17 @@
                 .Or(Keywords.Bottom, Length.Full)
                 .Or(Keywords.Center, Length.Half);
 
-        private static readonly IValueConverter PerspectiveConverter = LengthOrPercentConverter.Or(
+        // Exposed for css-properties.json's "cssom-grammar" validator, which calls this same real grammar directly.
+        internal static readonly IValueConverter ValueGrammar = LengthOrPercentConverter.Or(
             Keywords.Left, new Point(Length.Zero, Length.Half)).Or(
             Keywords.Center, new Point(Length.Half, Length.Half)).Or(
             Keywords.Right, new Point(Length.Full, Length.Half)).Or(
             Keywords.Top, new Point(Length.Half, Length.Zero)).Or(
             Keywords.Bottom, new Point(Length.Half, Length.Full)).Or(
             WithOrder(Horizontal.Option(Length.Half), Vertical.Option(Length.Half))).Or(
-            WithAnyOrderIndependent(HorizontalKeyword.Option(Length.Half), VerticalKeyword.Option(Length.Half)))
-            .OrDefault(Point.Center);
+            WithAnyOrderIndependent(HorizontalKeyword.Option(Length.Half), VerticalKeyword.Option(Length.Half)));
+
+        private static readonly IValueConverter PerspectiveConverter = ValueGrammar.OrDefault(Point.Center);
 
 
         internal PerspectiveOriginProperty()
