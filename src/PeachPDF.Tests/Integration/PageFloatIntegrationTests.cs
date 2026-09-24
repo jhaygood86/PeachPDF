@@ -425,13 +425,13 @@ namespace PeachPDF.Tests.Integration
             // a box off the reserved strip: they continue at the next page's own content edge unless the
             // resumed flow honours the reservation itself (issue #1273). The float is anchored inside the
             // paragraph on page 1, so page 1 reserves its top strip.
-            // One word per line (a 60pt measure), 20pt lines, 160pt pages: eight lines a page. The float sits
+            // One word per line (a 20pt measure, narrower than any word), 20pt lines, 160pt pages: eight lines a page. The float sits
             // after the eleventh word, on page 1, so the paragraph's lines nine to eleven are the ones that
             // continue from page 0 into the reserved page.
             var before = string.Join(" ", Enumerable.Range(0, 11).Select(i => $"word{i}"));
             var after = string.Join(" ", Enumerable.Range(11, 20).Select(i => $"word{i}"));
             var html = Wrap($@"
-                <p id='p' style='margin:0; font:10pt monospace; line-height:20pt; width:60pt'>{before}<span id='f' style='float:top; width:20pt; height:50pt'></span> {after}</p>");
+                <p id='p' style='margin:0; font:10pt monospace; line-height:20pt; width:20pt'>{before}<span id='f' style='float:top; width:20pt; height:50pt'></span> {after}</p>");
 
             var (root, container) = await LayoutAsync(html, pageWidth: 200, pageHeight: 200, margin: 20);
             var p = FindById(root, "p")!;
@@ -455,7 +455,7 @@ namespace PeachPDF.Tests.Integration
             // lines flush with the page's content edge, so the assertion above is about the reservation.
             var words = string.Join(" ", Enumerable.Range(0, 60).Select(i => $"word{i}"));
             var html = Wrap($@"
-                <p id='p' style='margin:0; font:10pt monospace; line-height:20pt; width:60pt'>{words} tail words after</p>");
+                <p id='p' style='margin:0; font:10pt monospace; line-height:20pt; width:20pt'>{words} tail words after</p>");
 
             var (root, container) = await LayoutAsync(html, pageWidth: 200, pageHeight: 200, margin: 20);
             var p = FindById(root, "p")!;
