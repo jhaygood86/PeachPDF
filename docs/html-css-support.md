@@ -1708,7 +1708,7 @@ The `<h1>` no longer appears at its original position in the document; instead, 
 </sup> without any manual positioning.</p>
 ```
 
-- **Source element** — the element carrying `float: footnote` must be inline-level (`inline`, `inline-block`, `inline-table`, `inline-flex`, or `inline-grid`) — the common case is a `<sup>` or `<span>` reference inside running text. A block-level source is left alone (behaves as `float: none`).
+- **Source element** — the element carrying `float: footnote`, of any `display` that generates a box: the common case is a `<sup>` or `<span>` reference inside running text, but a block-level element works too. It is replaced by the numbered call, which is inline, so among block-level siblings the call gets an anonymous block box of its own (or joins the run of inline content beside it). A source that is absolutely positioned, `position: running()`, `display: none` or a table-internal display (a row, a cell...) is not a footnote and renders as ordinary content.
 - **Numbering** — footnotes are numbered automatically, in document order, through a real `footnote`
   counter you can control from `@page` and `@footnote`. By default each page restarts at 1, because the
   user-agent stylesheet declares `@page { counter-reset: footnote }` and
@@ -1785,7 +1785,7 @@ The `<h1>` no longer appears at its original position in the document; instead, 
 - A column-scoped note area taller than the column it belongs to is declined rather than reserved, and
   overflows the column instead — reserving the whole column would leave no room for the content the
   note is attached to.
-- `float: footnote` inside a table cell, flex item, or grid item is untested and not a supported combination in this version.
+- `float: footnote` inside a repeated table `<thead>`/`<tfoot>` is left as ordinary content: those groups are laid out once and translated onto every page, so a call inside one has no single page of its own. A footnote inside a table cell, or inside a flex or grid item, works like one anywhere else. A footnote that is itself a direct child of a flex or grid container is replaced by its call, which is then the item.
 - A footnote authored inside another footnote's body is inert — it renders as ordinary text rather than becoming a second footnote.
 - A footnote body taller than a whole page's content band overflows the note area rather than splitting across pages.
 - Links and bookmark-candidate headings inside a footnote body are not collected into the PDF's outline or link annotations.
