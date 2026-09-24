@@ -1,4 +1,5 @@
 using PeachPDF.Html.Core.Dom;
+using System;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -144,6 +145,82 @@ namespace PeachPDF.Tests.Integration
 
             var onFirstPage = Enumerable.Range(1, 20).Select(i => FindById(root, $"b{i}")!).Where(p => p.Location.Y < PageBottom).ToList();
             Assert.All(onFirstPage, p => Assert.True(p.ActualBottom <= PageBottom - FloatHeight + 0.5, $"{p.Location} overlaps the float"));
+        }
+
+        /// <summary>
+        /// Balanced columns of wrapping text with a bottom float first and a top float where the flow crosses
+        /// into the second column - the shape a real document has, where the float holds text of its own.
+        /// </summary>
+        private const string TextDocument =
+            "<style>body { margin: 0; font-family: sans-serif } h1 { margin: 0; height: 40pt } " +
+            "#mc { column-count: 2; column-gap: 20pt } #mc p { margin: 0 0 6pt; font-size: 9pt; line-height: 12pt } " +
+            ".fl { border: 1pt solid blue; padding: 6pt; font-size: 9pt; line-height: 12pt }</style>" +
+            "<h1>Heading</h1><div id='mc'>" +
+            "<div id='fb' class='fl' style='float: bottom; float-reference: column'>Bottom callout with text of its own that wraps.</div>" +
+            "<p id='p1'>One. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.</p>" +
+            "<p id='p2'>Two. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.</p>" +
+            "<p id='p3'>Three. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.</p>" +
+            "<p id='p4'>Four. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.</p>" +
+            "<div id='ft' class='fl' style='float: top; float-reference: column'>Top figure with text of its own that wraps.</div>" +
+            "<p id='p5'>Five. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.</p>" +
+            "<p id='p6'>Six. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.</p>" +
+            "<p id='p7'>Seven. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.</p>" +
+            "<p id='p8'>Eight. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.</p></div>";
+
+        [Fact]
+        public async Task AFloatHoldingText_DoesNotPushTheFlowIntoTheNextColumn()
+        {
+            // The float's own words sit inside the strip it reserves. Measured against the column's band they
+            // would all straddle it and break into the next column, taking the whole flow with them, and the
+            // first column would be left empty.
+            var (root, _) = await Lay(TextDocument);
+            var fb = FindById(root, "fb")!;
+
+            Assert.Equal(0, FindById(root, "p1")!.Location.X, 1);
+            Assert.Equal(0, fb.Location.X, 1);
+            Assert.True(fb.ActualBottom > fb.Location.Y + 20, "the callout keeps its text");
+        }
+
+        [Fact]
+        public async Task ATopFloat_HasEveryBoxOfItsColumnStartBelowIt_IncludingAParagraphContinuingIntoTheColumn()
+        {
+            var (root, container) = await Lay(TextDocument);
+            var ft = FindById(root, "ft")!;
+
+            var inItsColumn = Enumerable.Range(1, 8).Select(i => FindById(root, $"p{i}")!)
+                .Where(p => Math.Abs(p.Location.X - ft.Location.X) < 1 && p.Location.Y < PageBottom).ToList();
+
+            Assert.NotEmpty(inItsColumn);
+            Assert.All(inItsColumn, p => Assert.True(p.Location.Y >= ft.ActualBottom - 0.5,
+                $"{p.Location} begins inside the strip that ends at {ft.ActualBottom}"));
+
+            // The strip that moves the paragraph before its float between columns settles rather than
+            // running the convergence loop to its cap.
+            Assert.True(container.FootnoteLoopSettled);
+        }
+
+        [Fact]
+        public async Task ABlockContinuingIntoAColumnWithATopFloat_BeginsBelowTheFloat()
+        {
+            // One paragraph of twenty-four 10pt lines: sixteen fill column one, the rest continue into column
+            // two - where the float that follows it in the source is pinned to the top. The continuation is a
+            // box that resumes there rather than one laid out afresh, and has to start below the strip too.
+            var (root, _) = await Lay(
+                "<style>body { margin: 0 } h1 { margin: 0; height: 40pt } #mc { column-count: 2; column-gap: 20pt; column-fill: auto } " +
+                "#mc p { margin: 0; font-size: 8pt; line-height: 10pt } .fl { float: top; float-reference: column; width: 50pt; height: 30pt }</style>" +
+                "<h1>Heading</h1><div id='mc'><p id='long'>" +
+                string.Concat(Enumerable.Range(1, 24).Select(i => $"Line {i}<br>")) +
+                "</p><div id='f' class='fl'></div><p id='after'>After</p></div>");
+
+            var f = FindById(root, "f")!;
+            Assert.Equal(SecondColumnLeft, f.Location.X, 1);
+            Assert.Equal(ColumnBandTop, f.Location.Y, 1);
+
+            var words = FindById(root, "long")!.Words.Concat(FindById(root, "long")!.Boxes.SelectMany(b => b.Words)).ToList();
+            var inSecondColumn = words.Where(w => w.Left > 100).ToList();
+            Assert.NotEmpty(inSecondColumn);
+            Assert.All(inSecondColumn, w => Assert.True(w.Top >= ColumnBandTop + FloatHeight - 0.5,
+                $"'{w.Text}' at Y {w.Top} is inside the strip"));
         }
 
         [Fact]

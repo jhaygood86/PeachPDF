@@ -234,14 +234,15 @@ namespace PeachPDF.Html.Core.Dom
                 // What is left of this container's own page. A column, or a spanning box standing in for
                 // one, can never be taller than that, so it is the ceiling on every target below.
                 //
-                // The page's footnote-area reservation comes off that ceiling. This is deliberately NOT
+                // The page's whole block-end reservation - its footnote area and any page float pinned to its
+                // foot - comes off that ceiling. This is deliberately NOT
                 // done by calling ReserveBandEnd on each column's own FragmentainerContext: a nested
                 // context's band bottom is the COLUMN's (boxTop + target), not the page's, so a band-end
                 // inset there would stop content that far above a balanced column bottom which already
                 // sits well above the note area - a fresh bug rather than a fix. Shrinking the ceiling is
                 // the right lever, and since pageBudget is only ever used as one (Math.Min, the
                 // target >= pageBudget stop, and EstimateBalancedColumnHeight's own cap), it changes
-                // nothing at all for a document with no footnotes.
+                // nothing at all for a document with neither.
                 //
                 // ReserveBandEnd on a column context is reserved for a COLUMN-scoped note area, whose
                 // band bottom genuinely is where that area sits. The two must never both be applied for

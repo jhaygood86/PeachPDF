@@ -3290,6 +3290,12 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
+            if (child.IsPageFloated && child.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: true } } columnContainer)
+            {
+                await LayoutPageFloatInColumn(g, child, columnContainer, framePlacesChild);
+                return;
+            }
+
             try
             {
                 await child.PerformLayoutImp(g, this, framePlacesChild);
@@ -3298,6 +3304,35 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (child.HtmlContainer is { } container)
                     throw container.RenderError(HtmlRenderErrorType.Layout, "Exception in box layout", ex);
+            }
+        }
+
+        /// <summary>
+        /// Lays a page float inside a column out unbroken. It sits in the strip its own reservation holds back
+        /// from the column's flow, so measured against the column's band its words would all straddle it and
+        /// break into the next column, taking the flow with them. Which column it is in is recorded first: a
+        /// detached fragmentainer no longer says.
+        /// </summary>
+        private async ValueTask LayoutPageFloatInColumn(RGraphics g, CssBox child, HtmlContainerInt container, bool framePlacesChild)
+        {
+            container.NotePageFloatColumn(child);
+
+            var detached = container.DetachFragmentainer();
+            var previousSuppress = container.SuppressWordPageBreaks;
+            container.SuppressWordPageBreaks = true;
+
+            try
+            {
+                await child.PerformLayoutImp(g, this, framePlacesChild);
+            }
+            catch (Exception ex)
+            {
+                throw container.RenderError(HtmlRenderErrorType.Layout, "Exception in box layout", ex);
+            }
+            finally
+            {
+                container.RestoreFragmentainer(detached);
+                container.SuppressWordPageBreaks = previousSuppress;
             }
         }
 
@@ -4403,8 +4438,9 @@ namespace PeachPDF.Html.Core.Dom
         /// in (<see href="https://www.w3.org/TR/css-multicol-1/#mci">css-multicol-1 §2</see>), so it was resolved
         /// against exactly the extent this pass would take away. Laying it out again at the container's own
         /// width put a <c>float: right</c> at the container's right edge, in the last column, whichever
-        /// column it was in. A page float (<c>float: top</c>/<c>bottom</c>) is not column-scoped yet, so it is
-        /// still resolved against the container's own width.
+        /// column it was in. A page float (<c>float: top</c>/<c>bottom</c>) is resolved against the container's
+        /// own width - unless it is <c>float-reference: column</c>, which was laid out in its column and is
+        /// left there.
         /// </remarks>
         internal async ValueTask LayoutOutOfFlowChildrenAgain(RGraphics g)
         {

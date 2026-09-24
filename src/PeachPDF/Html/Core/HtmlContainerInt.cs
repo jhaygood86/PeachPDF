@@ -215,7 +215,7 @@ namespace PeachPDF.Html.Core
         /// edge, and a container that spans pages lays the float out in a slot other than the one an earlier
         /// pass left it in.
         /// </summary>
-        private Dictionary<CssBox, Fragmentation.ColumnAreaKey> PageFloatColumns { get; } = [];
+        private readonly Dictionary<CssBox, Fragmentation.ColumnAreaKey> PageFloatColumns = [];
 
         /// <summary>
         /// Records which column <paramref name="box"/> is being laid out in, from the fragmentainer being
@@ -231,7 +231,7 @@ namespace PeachPDF.Html.Core
             {
                 PageFloatColumns[box] = key;
             }
-            else if (!filling.HasOwnBand)
+            else
             {
                 PageFloatColumns.Remove(box);
             }
@@ -3995,8 +3995,8 @@ namespace PeachPDF.Html.Core
             }
 
             // Detects a state the loop has been in before and, from then on, only lets a reservation grow
-            // (issue #1270) - see GuardFootnoteConvergence.
-            GuardFootnoteConvergence(current, currentByColumn);
+            // (issue #1270) - see ColumnReservationGuard.
+            _footnoteGuard.Apply(current, currentByColumn);
 
             // areasBySlot is simply empty when there is no real page grid, so this one assignment covers
             // both arms.
@@ -4036,23 +4036,23 @@ namespace PeachPDF.Html.Core
             return false;
         }
 
-        private readonly List<(string Signature, Dictionary<int, double> BySlot, Dictionary<Fragmentation.ColumnAreaKey, double> ByColumn)> _footnoteStates = [];
-        private bool _footnoteColumnFloorsLatched;
-        private readonly Dictionary<Fragmentation.ColumnAreaKey, double> _footnoteColumnFloors = [];
+        private readonly ColumnReservationGuard _footnoteGuard = new();
+        private readonly ColumnReservationGuard _topFloatGuard = new();
+        private readonly ColumnReservationGuard _bottomFloatGuard = new();
 
         /// <summary>
-        /// Starts a fresh footnote convergence run: forgets the states an earlier run visited and any floor it
-        /// latched. Called once before <see cref="PerformLayout"/>'s footnote loop.
+        /// Starts a fresh convergence run: forgets the states an earlier run visited and any floor it
+        /// latched. Called once before <see cref="PerformLayout"/>'s footnote and page-float loop.
         /// </summary>
         private void BeginFootnoteConvergence()
         {
-            _footnoteStates.Clear();
-            _footnoteColumnFloorsLatched = false;
-            _footnoteColumnFloors.Clear();
+            _footnoteGuard.Begin();
+            _topFloatGuard.Begin();
+            _bottomFloatGuard.Begin();
         }
 
         /// <summary>
-        /// Makes the footnote loop terminate by construction when reserving room and re-flowing feed each other
+        /// Makes a loop terminate by construction when reserving room and re-flowing feed each other
         /// (issue #1270): the first time a state repeats that is not the previous one - a real cycle, not a
         /// settled loop - each column's reservation is held at the largest it was anywhere in the cycle, and can
         /// only grow after.
@@ -4063,76 +4063,94 @@ namespace PeachPDF.Html.Core
         /// paragraph carrying the call into the next column; the reservation then moves there and the first
         /// column is long again, and the paragraph is pulled back. The loop's own six-pass cap ended that, but
         /// left the note area describing whichever state it happened to stop in, and a dense document of
-        /// column notes hit the cap every time.
+        /// column notes hit the cap every time. A column-scoped page float's strip does the same to the
+        /// paragraph before its anchor, so it gets one guard per edge.
         /// </para>
         /// <para>
         /// Holding a column's reservation once the paragraph has left it keeps the paragraph where it went, so
         /// the seeds are monotone and termination follows without reasoning about the column balancer: the
-        /// floors only grow, and take values from a finite set (sums of the notes' heights). The cost is a blank
-        /// strip at the foot of a column that lost its call. Only column reservations are held. A page-level
-        /// reservation does not take part in the feedback edge, and holding one would keep a state whose shape is
-        /// gone: a column note is resolved against the page before the columns exist to route it, and that
-        /// page-level area must not outlive the state it belonged to. Nothing changes before the first repeated
-        /// state, so a document that settles on its own is laid out exactly as before; the six-pass cap remains
-        /// as a backstop.
+        /// floors only grow, and take values from a finite set (sums of the notes' or floats' heights). The
+        /// cost is a blank strip in a column that lost its call or its float. Only column reservations are
+        /// held. A page-level reservation does not take part in the feedback edge, and holding one would keep
+        /// a state whose shape is gone: a column note is resolved against the page before the columns exist to
+        /// route it, and that page-level area must not outlive the state it belonged to. Nothing changes
+        /// before the first repeated state, so a document that settles on its own is laid out exactly as
+        /// before; the six-pass cap remains as a backstop.
         /// </para>
         /// </remarks>
-        private void GuardFootnoteConvergence(
-            Dictionary<int, double> bySlot, Dictionary<Fragmentation.ColumnAreaKey, double> byColumn)
+        private sealed class ColumnReservationGuard
         {
-            if (!_footnoteColumnFloorsLatched)
-            {
-                var signature = FootnoteStateSignature(bySlot, byColumn);
-                var firstVisit = _footnoteStates.FindIndex(state => state.Signature == signature);
+            private readonly List<(string Signature, Dictionary<Fragmentation.ColumnAreaKey, double> ByColumn)> _states = [];
+            private bool _latched;
+            private readonly Dictionary<Fragmentation.ColumnAreaKey, double> _floors = [];
 
-                // The same state as the previous pass is a loop that has settled, not a cycle.
-                if (firstVisit < 0 || firstVisit == _footnoteStates.Count - 1)
+            internal void Begin()
+            {
+                _states.Clear();
+                _latched = false;
+                _floors.Clear();
+            }
+
+            /// <summary>
+            /// Records this pass's state and, once a cycle has been seen, raises <paramref name="byColumn"/> to the
+            /// held floors. <paramref name="bySlot"/> only distinguishes states; it is never changed.
+            /// </summary>
+            internal void Apply(Dictionary<int, double> bySlot, Dictionary<Fragmentation.ColumnAreaKey, double> byColumn)
+            {
+                if (!_latched)
                 {
-                    _footnoteStates.Add((signature, new Dictionary<int, double>(bySlot), new Dictionary<Fragmentation.ColumnAreaKey, double>(byColumn)));
-                    return;
+                    var signature = Signature(bySlot, byColumn);
+                    var firstVisit = _states.FindIndex(state => state.Signature == signature);
+
+                    // The same state as the previous pass is a loop that has settled, not a cycle.
+                    if (firstVisit < 0 || firstVisit == _states.Count - 1)
+                    {
+                        _states.Add((signature, new Dictionary<Fragmentation.ColumnAreaKey, double>(byColumn)));
+                        return;
+                    }
+
+                    // The states from the first visit to now are the cycle; only its column reservations are held.
+                    _latched = true;
+
+                    for (var i = firstVisit; i < _states.Count; i++)
+                    {
+                        Raise(_states[i].ByColumn);
+                    }
                 }
 
-                // The states from the first visit to now are the cycle; only its column reservations are held.
-                _footnoteColumnFloorsLatched = true;
+                Raise(byColumn);
 
-                for (var i = firstVisit; i < _footnoteStates.Count; i++)
+                foreach (var (key, floor) in _floors)
                 {
-                    RaiseFootnoteColumnFloors(_footnoteStates[i].ByColumn);
+                    byColumn[key] = Math.Max(byColumn.GetValueOrDefault(key), floor);
                 }
             }
 
-            RaiseFootnoteColumnFloors(byColumn);
-
-            foreach (var (key, floor) in _footnoteColumnFloors)
+            private void Raise(Dictionary<Fragmentation.ColumnAreaKey, double> byColumn)
             {
-                byColumn[key] = Math.Max(byColumn.GetValueOrDefault(key), floor);
-            }
-        }
-
-        private void RaiseFootnoteColumnFloors(Dictionary<Fragmentation.ColumnAreaKey, double> byColumn)
-        {
-            foreach (var (key, height) in byColumn)
-            {
-                _footnoteColumnFloors[key] = Math.Max(_footnoteColumnFloors.GetValueOrDefault(key), height);
-            }
-        }
-
-        private static string FootnoteStateSignature(
-            Dictionary<int, double> bySlot, Dictionary<Fragmentation.ColumnAreaKey, double> byColumn)
-        {
-            var signature = new StringBuilder();
-
-            foreach (var (slot, height) in bySlot.OrderBy(kv => kv.Key))
-            {
-                signature.Append('s').Append(slot).Append('=').Append(Math.Round(height, 1).ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(';');
+                foreach (var (key, height) in byColumn)
+                {
+                    _floors[key] = Math.Max(_floors.GetValueOrDefault(key), height);
+                }
             }
 
-            foreach (var (key, height) in byColumn.OrderBy(kv => kv.Key.ToString(), StringComparer.Ordinal))
+            private static string Signature(
+                Dictionary<int, double> bySlot, Dictionary<Fragmentation.ColumnAreaKey, double> byColumn)
             {
-                signature.Append('c').Append(key).Append('=').Append(Math.Round(height, 1).ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(';');
-            }
+                var signature = new StringBuilder();
 
-            return signature.ToString();
+                foreach (var (slot, height) in bySlot.OrderBy(kv => kv.Key))
+                {
+                    signature.Append('s').Append(slot).Append('=').Append(Math.Round(height, 1).ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(';');
+                }
+
+                foreach (var (key, height) in byColumn.OrderBy(kv => kv.Key.ToString(), StringComparer.Ordinal))
+                {
+                    signature.Append('c').Append(key).Append('=').Append(Math.Round(height, 1).ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(';');
+                }
+
+                return signature.ToString();
+            }
         }
 
         /// <summary>
@@ -4326,6 +4344,11 @@ namespace PeachPDF.Html.Core
                 }
             }
 
+            // A strip that moves the paragraph before its float into the next column moves with it: the same
+            // feedback a column note area has, held in check the same way (see ColumnReservationGuard).
+            _topFloatGuard.Apply(currentTop, currentTopByColumn);
+            _bottomFloatGuard.Apply(currentBottom, currentBottomByColumn);
+
             TopFloatAreaHeightsBySlot = currentTop;
             BottomFloatAreaHeightsBySlot = currentBottom;
             TopFloatAreaHeightsByColumn = currentTopByColumn;
@@ -4346,8 +4369,13 @@ namespace PeachPDF.Html.Core
         /// <see cref="FootnoteHeight"/> is what a footnote area has already spent at the block-end edge of
         /// that same reference.
         /// </summary>
-        private sealed record PageFloatArea(int Slot, Fragmentation.ColumnAreaKey? Column, double Top, double Bottom, double FootnoteHeight)
+        private sealed class PageFloatArea(int slot, Fragmentation.ColumnAreaKey? column, double top, double bottom, double footnoteHeight)
         {
+            internal int Slot { get; } = slot;
+            internal Fragmentation.ColumnAreaKey? Column { get; } = column;
+            internal double Top { get; } = top;
+            internal double Bottom { get; } = bottom;
+            internal double FootnoteHeight { get; } = footnoteHeight;
             internal List<CssBox> Boxes { get; } = [];
         }
 
