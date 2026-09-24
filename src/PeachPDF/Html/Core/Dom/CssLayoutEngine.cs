@@ -539,7 +539,8 @@ namespace PeachPDF.Html.Core.Dom
         /// </para>
         /// <para>
         /// Its inline position is where the walk passed the box, carried through alignment and bidi
-        /// reordering by an adjacent word (<see cref="PlaceOnFinalLine"/>). Its block extent is the content
+        /// reordering by an adjacent word (<see cref="PlaceOnFinalLine"/>, which is right within a bidi run
+        /// but not at a run boundary). Its block extent is the content
         /// area a word in the inline's own font has on the line (baseline less ascent, one font height),
         /// plus the inline's padding; on a line with no word, it starts at the line's top. The inline's own
         /// <c>vertical-align</c> is not applied, so a raised empty inline sits on the line's baseline. Held
@@ -554,7 +555,8 @@ namespace PeachPDF.Html.Core.Dom
             var ancestor = DomUtils.GetNearestPositionedAncestor(setAside.Box);
             var line = setAside.Line;
 
-            if (!ancestor.IsInline || DomUtils.IsAtomicInline(ancestor) || ancestor.Rectangles.Count > 0) return null;
+            // An atomic inline is let through: DomUtils.InlineContainingBlockOf never reads this off one.
+            if (!ancestor.IsInline || ancestor.Rectangles.Count > 0) return null;
 
             // Only an inline in this flow is known to be empty. One outside it - the box sits in a float or
             // inline-block inside that inline - merely has not got its fragments yet, since its own line is
@@ -615,6 +617,11 @@ namespace PeachPDF.Html.Core.Dom
         /// reverses such a run within its span). So a place just after a word in an <c>rtl</c> run lands on
         /// that word's left edge, where the next word in reading order begins.
         /// </summary>
+        /// <remarks>
+        /// Right within a run only. The place has no bidi level of its own, so at the boundary between two
+        /// runs of opposite direction it goes with its anchor's run, and lands at that run's far end rather
+        /// than between the runs (#1309).
+        /// </remarks>
         /// <param name="setAside">the set-aside box</param>
         /// <returns>the place's inline position on the final line</returns>
         private static double PlaceOnFinalLine(SetAsideBox setAside)
@@ -649,9 +656,14 @@ namespace PeachPDF.Html.Core.Dom
             var declared = ResolveLogicalAlignment(line.OwnerBox.ActualTextAlignAll, towardStart, towardEnd);
             var (alignment, _) = ResolveUsedAlignment(line, endsAParagraph: true, declared, towardStart, towardEnd);
 
+            // The walk put an ltr line's text-indent into the cursor, but reserves an rtl one on the right
+            // edge instead (see ApplyJustifyAlignment), so it is added back there.
             var lead = setAside.X - line.ContentLeft;
+            var rtlIndent = isRtl
+                ? GetLineTextIndent(line.OwnerBox, line.Equals(line.OwnerBox.LineBoxes[0]), line.FollowsForcedBreak)
+                : 0d;
             var flushLeft = isRtl ? line.ContentLeft : setAside.X;
-            var flushRight = isRtl ? line.ContentRight - lead : line.ContentRight;
+            var flushRight = isRtl ? line.ContentRight - lead - rtlIndent : line.ContentRight;
 
             return alignment switch
             {
@@ -1603,15 +1615,72 @@ namespace PeachPDF.Html.Core.Dom
                 _ => 0d
             };
 
+            OffsetCellContent(cell, dist, isVertical);
+
+            return dist;
+        }
+
+        /// <summary>
+        /// Moves <paramref name="cell"/>'s content along its alignment axis by <paramref name="dist"/>, the
+        /// way <see cref="ApplyCellVerticalAlignment"/> aligns it: every child, and the absolutely positioned
+        /// boxes that belong at a static position in that content, but not a box its containing block places
+        /// on that axis. Also what undoes an alignment (<c>TableRowCursor.Retract</c>, with the distance
+        /// negated), which has to move exactly the same boxes.
+        /// </summary>
+        /// <param name="cell">the table cell whose content moves</param>
+        /// <param name="dist">the distance, positive towards the cell's far edge</param>
+        /// <param name="isVertical">whether the cell's table is vertical, which makes X the alignment axis</param>
+        internal static void OffsetCellContent(CssBox cell, double dist, bool isVertical)
+        {
+            if (dist == 0d) return;
+
             foreach (var b in cell.Boxes)
             {
                 if (IsPlacedByItsContainingBlockAlong(b, isVertical)) continue;
 
-                if (isVertical) b.OffsetLeft(dist);
-                else b.OffsetTop(dist);
+                OffsetAlongCellAxis(b, dist, isVertical);
+                MoveStaticallyPlacedDescendants(b, b, dist, isVertical);
             }
+        }
 
-            return dist;
+        private static void OffsetAlongCellAxis(CssBox box, double dist, bool isVertical)
+        {
+            if (isVertical) box.OffsetLeft(dist);
+            else box.OffsetTop(dist);
+        }
+
+        /// <summary>
+        /// Moves the absolutely positioned descendants of <paramref name="box"/> that the translation rooted at
+        /// <paramref name="translationRoot"/> skipped, because their containing block lies outside it, but
+        /// whose offsets on the alignment axis are both `auto`.
+        /// </summary>
+        /// <remarks>
+        /// Such a box belongs at its static position (CSS 2.1 §10.6.4), which is in the content being moved,
+        /// just as for a direct child of the cell (<see cref="IsPlacedByItsContainingBlockAlong"/>). Without
+        /// this, one nested in an inline - <c>&lt;td&gt;text &lt;span&gt;x&lt;span style="position:
+        /// absolute"&gt;</c> - stayed at its containing block's corner while a middle-aligned cell moved the
+        /// text down around it.
+        /// </remarks>
+        /// <param name="box">the box whose descendants are walked</param>
+        /// <param name="translationRoot">the box the translation that reached <paramref name="box"/> was rooted at</param>
+        /// <param name="dist">the distance the cell's content was moved by</param>
+        /// <param name="isVertical">whether the cell's table is vertical, which makes X the alignment axis</param>
+        private static void MoveStaticallyPlacedDescendants(CssBox box, CssBox translationRoot, double dist, bool isVertical)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (!child.EscapesTranslationOf(translationRoot))
+                {
+                    MoveStaticallyPlacedDescendants(child, translationRoot, dist, isVertical);
+                    continue;
+                }
+
+                // One placed by its containing block stays, and so does everything placed against it.
+                if (IsPlacedByItsContainingBlockAlong(child, isVertical)) continue;
+
+                OffsetAlongCellAxis(child, dist, isVertical);
+                MoveStaticallyPlacedDescendants(child, child, dist, isVertical);
+            }
         }
 
         /// <summary>
@@ -1626,7 +1695,7 @@ namespace PeachPDF.Html.Core.Dom
         /// position itself is not computed (#1303), so the box starts at its containing block's corner, and
         /// moving it with the content keeps it nearer where it belongs.
         /// </remarks>
-        /// <param name="box">a child of the cell being aligned</param>
+        /// <param name="box">a child of the cell being aligned, or an absolutely positioned box nested in one</param>
         /// <param name="isVertical">whether the cell's table is vertical, which makes X the alignment axis</param>
         /// <returns>true to leave the box where it is</returns>
         private static bool IsPlacedByItsContainingBlockAlong(CssBox box, bool isVertical) =>
@@ -7891,9 +7960,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             foreach (var childBox in box.Boxes)
             {
-                // An absolutely positioned descendant contributes nothing to its ancestors' intrinsic sizes
-                // (CSS Sizing 3 §5.1). Measured here, a nowrap badge inside a shrink-to-fit float widened
-                // the float to the badge's own width.
+                // An absolutely positioned descendant is out of flow (CSS 2.1 §9.6), so it contributes nothing
+                // to its ancestors' intrinsic sizes. Measured here, a nowrap badge inside a shrink-to-fit float
+                // widened the float to the badge's own width.
                 if (childBox.IsAbsolutelyPositioned) continue;
 
                 var childBoxWidth = await GetBoxWidth(g, childBox);

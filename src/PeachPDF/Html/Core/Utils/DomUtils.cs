@@ -753,10 +753,11 @@ namespace PeachPDF.Html.Core.Utils
         /// (4.1) defines this only for an inline on one line: the bounding box of the padding boxes of its
         /// first and last inline boxes. It leaves a multi-line inline undefined. The rule used for that is
         /// <see href="https://www.w3.org/TR/css-position-3/#def-cb">CSS Positioned Layout 3 §2.1</see>'s:
-        /// the start-most padding edges of the first fragment and the end-most padding edges of the last,
-        /// in the inline's own writing mode. So in <c>ltr</c> the top and left come from the first fragment
-        /// and the bottom and right from the last, and in <c>rtl</c> the left and right swap. Chromium uses
-        /// the padding edges the same way. A resulting negative width or height, which a wrapped inline can
+        /// the start-most edges of the first fragment and the end-most edges of the last, in the inline's
+        /// own writing mode. So in <c>ltr</c> the top and left come from the first fragment
+        /// and the bottom and right from the last, and in <c>rtl</c> the left and right swap. That section
+        /// names the fragments' content edges; padding edges are used instead, as CSS 2.1's one-line rule
+        /// and Chromium both use them. A resulting negative width or height, which a wrapped inline can
         /// produce, is clamped to zero.
         /// </para>
         /// <para>

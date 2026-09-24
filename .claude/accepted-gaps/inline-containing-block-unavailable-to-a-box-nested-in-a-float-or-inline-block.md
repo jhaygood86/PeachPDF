@@ -12,8 +12,12 @@ inline's rectangles, so `InlineContainingBlockOf` returns null. The callers then
 inline's line-local `Location` (0, 0), and the box lands at the sheet origin.
 
 Probed: `<span style="position:relative">aa<span style="float:left">f<b style="position:absolute;
-top:0;left:0">` puts the `<b>` at (0, 0) while the span's fragment starts at X≈155. The inline-block
-variant is the same.
+top:0;left:0">` puts the `<b>` at (0, 0) while the span's fragment starts at X≈155. An inline-block
+holding block content (`<span style="display:inline-block"><div>f<b …>`) is the same. An inline-block
+holding inline content is not at the origin, but it is still wrong: the `<b>` lands at the
+inline-block's own left edge rather than the span's start, which is where Chrome puts it. Measured in
+review: (125.7, 39.6) against Chrome's (112.5, 39.8); one probe here put it at X=145.9 with the span
+starting at 134.7. The difference is the width of the span's text before the inline-block.
 
 Unchanged from `main` before #1299: probed there with the same markup, both shapes also put the `<b>`
 at (0, 0), because the parser never split the inline around a float and the inline's `Location` was

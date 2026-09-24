@@ -24,7 +24,8 @@ the child inside an inline flow:
 - `DomUtils.InlineContainingBlockOf` builds the containing block from an inline's first and last
   `Rectangles` (border boxes, so borders come off; `rtl` swaps left/right). CSS 2.1 §10.1 (4.1) only
   defines the one-line case and leaves a wrapped inline undefined; the first/last-fragment corner rule
-  and the `rtl` swap are CSS Positioned Layout 3 §2.1's, which Chromium follows with padding edges too.
+  and the `rtl` swap are CSS Positioned Layout 3 §2.1's. That section names content edges; padding edges
+  are used, as in CSS 2.1's one-line rule and in Chromium.
 - An inline holding only absolutely positioned boxes has no `Rectangles` at all. `FlowBox` records each
   set-aside box's place on the line (`SetAsideBox`: line, cursor X/Y, the word count then and the
   preceding word as anchor), `AnchorSetAsideBoxes` gives one with no preceding word the *following*
@@ -49,6 +50,21 @@ the child inside an inline flow:
   (`IsPlacedByItsContainingBlockAlong`): that box belongs at its static position, inside the aligned
   content. Static position is not computed (#1303), so moving it keeps the old, closer approximation;
   the first cut stopped moving every such child, which a code review caught as a regression from `main`.
+  A second review caught the same regression one level down: a box nested in an inline in the cell,
+  with no positioned ancestor inside the cell, escapes the child's `OffsetTop` (`EscapesTranslationOf`),
+  so it stayed at the page corner, 37-74pt from the text, where `main` (which hoisted it to a direct
+  child) had moved it. `MoveStaticallyPlacedDescendants` now walks the moved subtree the way `OffsetTop`
+  does and moves each escaped box with both offsets on the axis `auto`, then its own escaped
+  descendants in turn.
+- **Undo the alignment through the same mover.** `TableRowCursor.Retract` undoes a rowspan cell's
+  alignment when a row is retracted at a page break, and it used to offset every direct child by the
+  negated distance itself. Once the alignment skipped pinned children and moved nested ones, that no
+  longer undid what it did: a pinned child moved back by a distance it never moved, and a nested box kept
+  the shift, then took a second one when the row was placed again. Both now call
+  `CssLayoutEngine.OffsetCellContent`. Found by the post-change review agent, not by a test.
+- `PlaceOnWordlessLine` adds an `rtl` line's `text-indent` back on the right: the walk puts an `ltr`
+  indent into the cursor, but reserves an `rtl` one on the wrap boundary instead (`ApplyJustifyAlignment`
+  explains it). Found by the mutation test for the indent term; before, the badge sat on the right edge.
 - `PlaceOnFinalLine` reads the level `ApplyBidiReordering` actually used (`ReorderedLevelOf`): UAX #9 L1
   resets the line's trailing space words to the paragraph level only in the reorder's local array, so a
   preserved space between two rtl words that ends a line still stores an odd `BidiLevel`.
@@ -110,19 +126,38 @@ the child inside an inline flow:
 - **An empty positioned inline's own `vertical-align` (#1308)** (`super`, `top`, a length) does not move its
   zero-width containing block, which always sits on the line's baseline. Rare, and the vertical-align
   pass only moves words and `Rectangles`, which such an inline has none of.
+- **An empty positioned inline at a bidi run boundary (#1309)** goes to the far end of its anchor word's
+  run. `PlaceOnFinalLine` is right within a run only.
+- **An empty inline's own larger `font-size` (#1310)** does not grow the line. It predates this change.
 
-All three are recorded in `.claude/accepted-gaps/`.
+All five are recorded in `.claude/accepted-gaps/`.
 
 **Evidence:** new `AbsolutelyPositionedInInlineContentTests` (line not broken, span not split,
 left/top, right/bottom/percentage, left+right fill, auto block margins, wrapped inline first/last
-fragments, `rtl`, tall child content kept, child on a discarded line laid out once, child's own content
-normalized, both #1299 repros draw the ring, split pieces keep the outline). Review follow-ups added
-the repeated-header text on every page (both review repros, asserted from the fragment tree), the empty
-inline (between words under `left`/`center`, at the start of a `center`/`right` line, at line start,
-on a wordless line, in an rtl run), percentage `left`/`top` and
-`right`/`bottom` against an inline, a child on a completed line before a page break, the
-`JoinsTheInlineRun` arm, the float width and both cell-alignment shapes. Each was mutation-checked:
-reverting the site it covers fails it. Full net8.0 suite green.
+fragments, `rtl`, tall child content kept, child's own content normalized, both #1299 repros draw the
+ring, split pieces keep the outline). Review follow-ups added the repeated-header text on every page
+(both review repros, asserted from the fragment tree), the empty inline (between words under
+`left`/`center`, at the start of a `center`/`right` line, at line start, on a wordless line, in an rtl
+run), percentage `left`/`top` and `right`/`bottom` against an inline, a child on a completed line
+before a page break, the `JoinsTheInlineRun` arm, the float width and both cell-alignment shapes.
+
+The first round's "each was mutation-checked" was not true of every guard: the second review found six
+survivors. Each now has a test that fails when it is reverted, rerun one mutation at a time: the
+vertical-table arms of `GetMaximumRight`'s skip and of `IsPlacedByItsContainingBlockAlong`, `bottom` in
+that rule, the `IsSelfOrDescendantOf` guard (#1304's float shape stays at the origin), the
+`InlineContainingBlockOf` atomic guard (a positioned inline-block), and both `text-indent` terms of
+`PlaceOnWordlessLine` (which found the `rtl` bug above). The nested cell-alignment move is covered the
+same way (middle, bottom, a box nested in a moved one, and an explicit `top` staying put).
+
+Two survivors had nothing to observe. The atomic guard in `EmptyInlineContainingBlockFor` was
+redundant (`InlineContainingBlockOf` rejects an atomic inline before reading the value), so it was
+removed. The `Ordinal >= beforeOrdinal` filter is real but unobservable: on a pass that discards a
+line after the flow has passed a box on it (a later word on the line straddles the page end, which
+takes the break at the line's start), laying the box out anyway is overwritten whole by the resumed
+pass, including its fragments and its `string-set` registration. It only saves work.
+`…_OnALineDiscardedAtAPageBreak_IsPlacedOnTheNextPage` covers that path, and a probe confirmed the
+filter fires there. The old "laid out once" test never reached it: `widows: 2` moved the break, and the
+flow stopped at the line's first word before reaching the box. Full net8.0 suite green.
 All 155 showcases rendered before and after and raster-diffed with PDFium: only `writing_mode.pdf`
 page 8 changed. That is §10d's "position: absolute nested inside vertical line flow", where
 "Before"/"after" now share one vertical line as its label describes. PDFium and MuPDF agree. New

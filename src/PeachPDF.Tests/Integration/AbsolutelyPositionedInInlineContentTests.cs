@@ -3,6 +3,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Tests.TestSupport;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
@@ -198,22 +199,62 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task AbsolutelyPositionedChild_OnALineThatMovesToTheNextPage_IsLaidOutOnce()
+        public async Task AbsolutelyPositionedChild_OnALineDiscardedAtAPageBreak_IsPlacedOnTheNextPage()
         {
-            // Five 20pt lines fit in the 100pt page area. The sixth, holding the positioned child after its
-            // first word, is discarded at the break and rebuilt on the next page, where the child is laid
-            // out rather than on the page the line left.
-            var lines = string.Join("", Enumerable.Range(0, 5).Select(i => $"Line{i}<br>"));
-            var (root, _) = await LayoutAsync(
-                $"<div style='line-height: 20pt'>{lines}six<span id='a' style='position: absolute; width: 8pt; height: 8pt'>" +
-                "</span> seven</div>",
+            // Four 20pt lines fit in the 100pt page area. The fifth starts inside it, and the flow passes the
+            // positioned child on it before meeting a large word that runs past the page's end, so the whole
+            // line is discarded and rebuilt on the next page. The child is placed from the rebuilt line: its
+            // containing block is the inline on it. (The pass that discards the line skips the child, which
+            // only saves work: the resumed pass lays it out again and replaces every result.)
+            var lines = string.Join("", Enumerable.Range(0, 4).Select(i => $"Line{i}<br>"));
+            var (root, container) = await LayoutAsync(
+                $"<div style='line-height: 20pt; orphans: 1; widows: 1'>{lines}<span id='s' style='position: relative'>six" +
+                "<span id='a' style='position: absolute; left: 0; top: 0; width: 30pt; height: 8pt; string-set: tag \"B\"'>badge</span>" +
+                $"</span> <b style='font-size: 40pt'>BIG</b><br>{lines}</div>",
                 pageHeight: 140);
 
             var abs = Find(root, "a");
+            var fragment = Assert.Single(Find(root, "s").Rectangles.Values);
 
-            Assert.Null(abs.PendingBreakToken);
-            Assert.Equal(8, abs.ActualRight - abs.Location.X, 3);
+            Assert.Equal(fragment.Top, abs.Location.Y, 3);
             Assert.Equal(8, abs.ActualBottom - abs.Location.Y, 3);
+            Assert.Single(container.NamedStrings, s => s.Name == "tag");
+            var page = Assert.Single(container.FragmentTree!.Fragmentainers,
+                f => Flatten(f.Root).Any(b => ReferenceEquals(b.Box, abs)));
+            Assert.Equal(1, page.SlotIndex);
+            Assert.Contains(Flatten(page.Root).SelectMany(f => f.Words), w => w.Word.Text == "BIG");
+        }
+
+        [Fact]
+        public async Task PositionedInlineBlock_IsTheContainingBlock_FromItsOwnPaddingBox()
+        {
+            // An inline-block is atomic: its own padding box, not a line fragment, forms the containing block.
+            var (root, _) = await LayoutAsync(
+                "<div style='margin-left: 100pt'>before <span id='s' style='display: inline-block; position: relative; " +
+                "border: 2pt solid; padding: 5pt'>text<span id='a' style='position: absolute; left: 0; top: 0; " +
+                "width: 4pt; height: 4pt'></span></span></div>");
+
+            var ib = Find(root, "s");
+            var abs = Find(root, "a");
+
+            Assert.Equal(ib.Location.X + 2, abs.Location.X, 3);
+            Assert.Equal(ib.Location.Y + 2, abs.Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task AbsolutelyPositionedChild_OfAFloatInsideAPositionedInline_IsNotAnchoredInsideTheFloat()
+        {
+            // The inline's fragments do not exist yet while the float's content is laid out, so it is not
+            // taken for an empty inline and given a place on the float's own line. That leaves the box at the
+            // fallback origin, the known gap for this shape.
+            var (root, _) = await LayoutAsync(
+                "<div style='margin-left: 100pt'>before <span style='position: relative'>aa<span style='float: left'>" +
+                "ff<b id='a' style='position: absolute; top: 0; left: 0; width: 4pt; height: 4pt'></b></span></span></div>");
+
+            var abs = Find(root, "a");
+
+            Assert.Equal(0, abs.Location.X, 3);
+            Assert.Equal(0, abs.Location.Y, 3);
         }
 
         [Fact]
@@ -322,6 +363,141 @@ namespace PeachPDF.Tests.Integration
 
             Assert.True(shift > 10, $"the content moved only {shift}pt");
             Assert.Equal(Find(top, "a").Location.Y + shift, Find(middle, "a").Location.Y, 3);
+        }
+
+        [Theory]
+        [InlineData("middle")]
+        [InlineData("bottom")]
+        public async Task AbsolutelyPositionedChild_NestedInAnInline_WithAutoOffsets_MovesWithTheAlignedContent(string align)
+        {
+            // No positioned ancestor, so the translation of the cell's content skips the box (its containing
+            // block is outside the cell); its static position is still in that content.
+            static string Table(string align) =>
+                $"<table><tr><td style='vertical-align: {align}; height: 90pt'><b id='w'>CELL</b> <span>x" +
+                "<span id='a' style='position: absolute; width: 30pt; height: 10pt'><i id='in'>ABS</i></span></span></td></tr></table>";
+
+            var (top, _) = await LayoutAsync(Table("top"));
+            var (aligned, _) = await LayoutAsync(Table(align));
+
+            var shift = Assert.Single(Find(aligned, "w").Rectangles.Values).Top - Assert.Single(Find(top, "w").Rectangles.Values).Top;
+
+            Assert.True(shift > 10, $"the content moved only {shift}pt");
+            Assert.Equal(Find(top, "a").Location.Y + shift, Find(aligned, "a").Location.Y, 3);
+            // Its own content goes with it.
+            Assert.Equal(
+                Assert.Single(Find(top, "in").Rectangles.Values).Top + shift,
+                Assert.Single(Find(aligned, "in").Rectangles.Values).Top, 3);
+        }
+
+        [Fact]
+        public async Task AbsolutelyPositionedChild_NestedInAnInline_WithATopOffset_StaysWithItsContainingBlock()
+        {
+            // So does the fixed box nested in it: its static position is inside a box that did not move.
+            static string Table(string align) =>
+                $"<table><tr><td style='vertical-align: {align}; height: 90pt'><b>CELL</b> <span>x" +
+                "<span id='a' style='position: absolute; top: 0; width: 30pt; height: 10pt'>" +
+                "<span id='b' style='position: fixed; width: 5pt; height: 5pt'></span></span></span></td></tr></table>";
+
+            var (top, _) = await LayoutAsync(Table("top"));
+            var (middle, _) = await LayoutAsync(Table("middle"));
+
+            Assert.Equal(Find(top, "a").Location.Y, Find(middle, "a").Location.Y, 3);
+            Assert.Equal(Find(top, "b").Location.Y, Find(middle, "b").Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task AbsolutelyPositionedDirectChild_WithABottomOffset_StaysWithItsContainingBlock()
+        {
+            static string Table(string align) =>
+                $"<table><tr><td style='vertical-align: {align}; position: relative; height: 90pt'><b>Name</b>" +
+                "<div id='a' style='position: absolute; left: 0; bottom: 0; width: 10pt; height: 5pt'></div></td></tr></table>";
+
+            var (top, _) = await LayoutAsync(Table("top"));
+            var (middle, _) = await LayoutAsync(Table("middle"));
+
+            Assert.Equal(Find(top, "a").Location.Y, Find(middle, "a").Location.Y, 3);
+        }
+
+        [Theory]
+        [InlineData("left: 0")]
+        [InlineData("right: 0")]
+        public async Task VerticalTable_AbsolutelyPositionedChild_WithAnInlineOffset_StaysWithItsContainingBlock(string offset)
+        {
+            // In a vertical table the cell aligns its content along X, so `left`/`right` pin the box instead.
+            static string Table(string align, string offset) =>
+                $"<table style='writing-mode: vertical-rl; border-spacing: 0'><tr><td style='width: 100pt; height: 20pt'>Wide</td>" +
+                $"<td id='c' style='width: 10pt; height: 20pt; vertical-align: {align}; position: relative'>Short" +
+                $"<div id='a' style='position: absolute; {offset}; width: 4pt; height: 4pt'></div></td></tr></table>";
+
+            var (top, _) = await LayoutAsync(Table("top", offset));
+            var (bottom, _) = await LayoutAsync(Table("bottom", offset));
+
+            Assert.Equal(Find(top, "a").Location.X, Find(bottom, "a").Location.X, 3);
+        }
+
+        [Fact]
+        public async Task VerticalTable_AbsolutelyPositionedBoxNestedInTheCellText_WithAutoOffsets_MovesWithTheContent()
+        {
+            static string Table(string align) =>
+                "<table style='writing-mode: vertical-rl; border-spacing: 0'><tr><td style='width: 100pt; height: 20pt'>Wide</td>" +
+                $"<td style='width: 10pt; height: 20pt; vertical-align: {align}'><b id='w'>Short</b><span>x" +
+                "<span id='a' style='position: absolute; width: 4pt; height: 4pt'></span></span></td></tr></table>";
+
+            var (top, _) = await LayoutAsync(Table("top"));
+            var (bottom, _) = await LayoutAsync(Table("bottom"));
+
+            var shift = Assert.Single(Find(bottom, "w").Rectangles.Values).Left - Assert.Single(Find(top, "w").Rectangles.Values).Left;
+
+            Assert.True(Math.Abs(shift) > 10, $"the content moved only {shift}pt");
+            Assert.Equal(Find(top, "a").Location.X + shift, Find(bottom, "a").Location.X, 3);
+        }
+
+        [Fact]
+        public async Task VerticalTable_AbsolutelyPositionedBoxNestedInTheCellText_IsNotMeasured()
+        {
+            // Placed far past the cell's content along X, which counted would shrink the room to align into.
+            static string Table(string badge) =>
+                "<table style='writing-mode: vertical-rl; border-spacing: 0'><tr><td style='width: 100pt; height: 20pt'>Wide</td>" +
+                $"<td style='width: 10pt; height: 20pt; vertical-align: bottom'><b id='w'>Short</b><span>x{badge}</span></td></tr></table>";
+
+            var (plain, _) = await LayoutAsync(Table(""));
+            var (badged, _) = await LayoutAsync(Table(
+                "<span style='position: absolute; left: 400pt; top: 0; width: 50pt; height: 4pt'></span>"));
+
+            Assert.Equal(
+                Assert.Single(Find(plain, "w").Rectangles.Values).Left,
+                Assert.Single(Find(badged, "w").Rectangles.Values).Left, 3);
+        }
+
+        [Theory]
+        [InlineData("", 20)]
+        [InlineData("dir='rtl'", -20)]
+        public async Task EmptyPositionedInline_OnALineWithNoWords_KeepsTheTextIndent(string attributes, double indent)
+        {
+            var (root, _) = await LayoutAsync(
+                $"<div id='d' {attributes} style='text-indent: 20pt'><span style='position: relative'><span id='a' style='position: absolute; " +
+                "left: 0; top: 0; width: 4pt; height: 4pt'></span></span></div>");
+
+            var d = Find(root, "d");
+
+            Assert.Equal((indent > 0 ? d.ClientLeft : d.ClientRight) + indent, Find(root, "a").Location.X, 3);
+        }
+
+        [Fact]
+        public async Task AbsolutelyPositionedChild_NestedInAMovedAbsolutelyPositionedBox_MovesWithIt()
+        {
+            static string Table(string align) =>
+                $"<table><tr><td style='vertical-align: {align}; height: 90pt'><b>CELL</b> <span>x" +
+                "<span id='a' style='position: absolute; width: 30pt; height: 10pt'>" +
+                "<span id='b' style='position: fixed; width: 5pt; height: 5pt'></span></span></span></td></tr></table>";
+
+            var (top, _) = await LayoutAsync(Table("top"));
+            var (middle, _) = await LayoutAsync(Table("middle"));
+
+            var shift = Find(middle, "a").Location.Y - Find(top, "a").Location.Y;
+
+            Assert.True(shift > 10, $"the box moved only {shift}pt");
+            Assert.Equal(Find(top, "b").Location.Y + shift, Find(middle, "b").Location.Y, 3);
         }
 
         [Fact]
