@@ -1,4 +1,4 @@
-// "Therefore those skilled at the unorthodox
+﻿// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -118,6 +118,15 @@ namespace PeachPDF.Html.Core
         /// <see cref="FootnoteCalls"/> is already maintained.
         /// </summary>
         internal bool HasFootnotes => FootnoteCalls.Count > 0;
+
+        /// <summary>
+        /// How many resolve passes the footnote convergence loop in <see cref="PerformLayout"/> used on its
+        /// last run - the cap means it stopped without settling.
+        /// </summary>
+        internal int FootnoteResolvePasses { get; private set; }
+
+        /// <summary>Whether the last pass of that loop found nothing left to change.</summary>
+        internal bool FootnoteLoopSettled { get; private set; }
 
         /// <summary>
         /// This layout attempt's discovered footnote-area reservation, in points of layout space, per
@@ -1647,8 +1656,11 @@ namespace PeachPDF.Html.Core
                 var footnoteRootWidth = IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width));
                 const int maxFootnotePasses = 6;
 
+                BeginFootnoteConvergence();
+
                 for (var pass = 0; pass < maxFootnotePasses; pass++)
                 {
+                    FootnoteResolvePasses = pass + 1;
                     // Gated independently, not just by the outer HasFootnotes || HasPageFloats: a document
                     // using only one of the two features must not pay the other resolver's own dictionary
                     // allocations and bookkeeping on every one of up to 6 passes.
@@ -1662,6 +1674,8 @@ namespace PeachPDF.Html.Core
                     // or they describe a Root tree an earlier LayoutDocument call already left behind:
                     // reaching the cap with changed still true and relaying out one further time,
                     // unresolved, is exactly what would do that.
+                    FootnoteLoopSettled = !changed;
+
                     if (!changed || pass == maxFootnotePasses - 1) break;
 
                     Root.Size = new RSize(footnoteRootWidth, 0);
@@ -3910,6 +3924,10 @@ namespace PeachPDF.Html.Core
                 }
             }
 
+            // Detects a state the loop has been in before and, from then on, only lets a reservation grow
+            // (issue #1270) - see GuardFootnoteConvergence.
+            GuardFootnoteConvergence(current, currentByColumn);
+
             // areasBySlot is simply empty when there is no real page grid, so this one assignment covers
             // both arms.
             _footnoteAreasBySlot = areasBySlot;
@@ -3946,6 +3964,105 @@ namespace PeachPDF.Html.Core
                     return true;
             }
             return false;
+        }
+
+        private readonly List<(string Signature, Dictionary<int, double> BySlot, Dictionary<Fragmentation.ColumnAreaKey, double> ByColumn)> _footnoteStates = [];
+        private bool _footnoteColumnFloorsLatched;
+        private readonly Dictionary<Fragmentation.ColumnAreaKey, double> _footnoteColumnFloors = [];
+
+        /// <summary>
+        /// Starts a fresh footnote convergence run: forgets the states an earlier run visited and any floor it
+        /// latched. Called once before <see cref="PerformLayout"/>'s footnote loop.
+        /// </summary>
+        private void BeginFootnoteConvergence()
+        {
+            _footnoteStates.Clear();
+            _footnoteColumnFloorsLatched = false;
+            _footnoteColumnFloors.Clear();
+        }
+
+        /// <summary>
+        /// Makes the footnote loop terminate by construction when reserving room and re-flowing feed each other
+        /// (issue #1270): the first time a state repeats that is not the previous one - a real cycle, not a
+        /// settled loop - each column's reservation is held at the largest it was anywhere in the cycle, and can
+        /// only grow after.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A column-scoped note area (<c>float-reference: column</c>) shortens its column, which can push the
+        /// paragraph carrying the call into the next column; the reservation then moves there and the first
+        /// column is long again, and the paragraph is pulled back. The loop's own six-pass cap ended that, but
+        /// left the note area describing whichever state it happened to stop in, and a dense document of
+        /// column notes hit the cap every time.
+        /// </para>
+        /// <para>
+        /// Holding a column's reservation once the paragraph has left it keeps the paragraph where it went, so
+        /// the seeds are monotone and termination follows without reasoning about the column balancer: the
+        /// floors only grow, and take values from a finite set (sums of the notes' heights). The cost is a blank
+        /// strip at the foot of a column that lost its call. Only column reservations are held. A page-level
+        /// reservation does not take part in the feedback edge, and holding one would keep a state whose shape is
+        /// gone: a column note is resolved against the page before the columns exist to route it, and that
+        /// page-level area must not outlive the state it belonged to. Nothing changes before the first repeated
+        /// state, so a document that settles on its own is laid out exactly as before; the six-pass cap remains
+        /// as a backstop.
+        /// </para>
+        /// </remarks>
+        private void GuardFootnoteConvergence(
+            Dictionary<int, double> bySlot, Dictionary<Fragmentation.ColumnAreaKey, double> byColumn)
+        {
+            if (!_footnoteColumnFloorsLatched)
+            {
+                var signature = FootnoteStateSignature(bySlot, byColumn);
+                var firstVisit = _footnoteStates.FindIndex(state => state.Signature == signature);
+
+                // The same state as the previous pass is a loop that has settled, not a cycle.
+                if (firstVisit < 0 || firstVisit == _footnoteStates.Count - 1)
+                {
+                    _footnoteStates.Add((signature, new Dictionary<int, double>(bySlot), new Dictionary<Fragmentation.ColumnAreaKey, double>(byColumn)));
+                    return;
+                }
+
+                // The states from the first visit to now are the cycle; only its column reservations are held.
+                _footnoteColumnFloorsLatched = true;
+
+                for (var i = firstVisit; i < _footnoteStates.Count; i++)
+                {
+                    RaiseFootnoteColumnFloors(_footnoteStates[i].ByColumn);
+                }
+            }
+
+            RaiseFootnoteColumnFloors(byColumn);
+
+            foreach (var (key, floor) in _footnoteColumnFloors)
+            {
+                byColumn[key] = Math.Max(byColumn.GetValueOrDefault(key), floor);
+            }
+        }
+
+        private void RaiseFootnoteColumnFloors(Dictionary<Fragmentation.ColumnAreaKey, double> byColumn)
+        {
+            foreach (var (key, height) in byColumn)
+            {
+                _footnoteColumnFloors[key] = Math.Max(_footnoteColumnFloors.GetValueOrDefault(key), height);
+            }
+        }
+
+        private static string FootnoteStateSignature(
+            Dictionary<int, double> bySlot, Dictionary<Fragmentation.ColumnAreaKey, double> byColumn)
+        {
+            var signature = new StringBuilder();
+
+            foreach (var (slot, height) in bySlot.OrderBy(kv => kv.Key))
+            {
+                signature.Append('s').Append(slot).Append('=').Append(Math.Round(height, 1).ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(';');
+            }
+
+            foreach (var (key, height) in byColumn.OrderBy(kv => kv.Key.ToString(), StringComparer.Ordinal))
+            {
+                signature.Append('c').Append(key).Append('=').Append(Math.Round(height, 1).ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(';');
+            }
+
+            return signature.ToString();
         }
 
         /// <summary>
