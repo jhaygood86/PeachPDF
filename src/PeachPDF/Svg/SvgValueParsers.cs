@@ -490,12 +490,12 @@ namespace PeachPDF.Svg
         /// percentage or bare number is a fraction of the referencing shape's bounding box - resolved
         /// later at paint time (see <see cref="SvgRenderer"/>), so no reference length applies here,
         /// just percentage-to-fraction conversion. In <c>userSpaceOnUse</c> mode, this is an ordinary
-        /// length (see <see cref="ParseLength"/>).
+        /// length (see <see cref="ParseLength"/>), so <paramref name="basis"/> resolves its font-relative units.
         /// </summary>
-        public static double? ParseGradientCoordinate(string? value, bool isObjectBoundingBox, double? userSpaceReferenceLength)
+        public static double? ParseGradientCoordinate(string? value, bool isObjectBoundingBox, double? userSpaceReferenceLength, ISvgLengthBasis? basis = null)
         {
             if (!isObjectBoundingBox)
-                return ParseLength(value, userSpaceReferenceLength);
+                return ParseLength(value, userSpaceReferenceLength, basis);
 
             if (string.IsNullOrWhiteSpace(value))
                 return null;

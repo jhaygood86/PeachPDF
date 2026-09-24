@@ -817,7 +817,9 @@ namespace PeachPDF.CSS
                 {Keywords.TopBottom, Floating.TopBottom},
                 {Keywords.Snap, Floating.Snap},
                 {Keywords.Inside, Floating.Inside},
-                {Keywords.Outside, Floating.Outside}
+                {Keywords.Outside, Floating.Outside},
+                {Keywords.InlineStart, Floating.InlineStart},
+                {Keywords.InlineEnd, Floating.InlineEnd}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         // Named *References (plural), not FloatReference, to avoid colliding with the FloatReference
         // enum type itself - same convention as FloatingModes above.
@@ -873,7 +875,9 @@ namespace PeachPDF.CSS
                 {Keywords.None, ClearMode.None},
                 {Keywords.Left, ClearMode.Left},
                 {Keywords.Right, ClearMode.Right},
-                {Keywords.Both, ClearMode.Both}
+                {Keywords.Both, ClearMode.Both},
+                {Keywords.InlineStart, ClearMode.InlineStart},
+                {Keywords.InlineEnd, ClearMode.InlineEnd}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, BackgroundRepeat> BackgroundRepeats =
             new Dictionary<string, BackgroundRepeat>(StringComparer.OrdinalIgnoreCase)

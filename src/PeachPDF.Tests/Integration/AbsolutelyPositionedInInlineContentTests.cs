@@ -2,6 +2,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Linq;
@@ -242,19 +243,85 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task AbsolutelyPositionedChild_OfAFloatInsideAPositionedInline_IsNotAnchoredInsideTheFloat()
+        public async Task AbsolutelyPositionedChild_OfAFloatInsideAPositionedInline_IsPlacedAgainstTheInlinesFragment()
         {
-            // The inline's fragments do not exist yet while the float's content is laid out, so it is not
-            // taken for an empty inline and given a place on the float's own line. That leaves the box at the
-            // fallback origin, the known gap for this shape.
+            // The inline's containing block is formed from its own fragments, wherever inside it the box
+            // sits (CSS 2.1 §10.1 (4.1)). The float's content is laid out while the inline's flow is still
+            // walking, so the box is left for that flow to lay out once the fragments exist (issue #1304).
             var (root, _) = await LayoutAsync(
-                "<div style='margin-left: 100pt'>before <span style='position: relative'>aa<span style='float: left'>" +
+                "<div style='margin-left: 100pt'>before <span id='s' style='position: relative; border: 2pt solid'>aa<span style='float: left'>" +
+                "ff<b id='a' style='position: absolute; top: 3pt; left: 5pt; width: 4pt; height: 4pt'></b></span></span></div>");
+
+            var fragment = Assert.Single(Find(root, "s").Rectangles.Values);
+            var abs = Find(root, "a");
+
+            Assert.Equal(fragment.Left + 2 + 5, abs.Location.X, 3);
+            Assert.Equal(fragment.Top + 2 + 3, abs.Location.Y, 3);
+            Assert.Equal(4, abs.ActualRight - abs.Location.X, 3);
+        }
+
+        [Fact]
+        public async Task AbsolutelyPositionedChild_OfAFloatInsideAPositionedInline_ResolvesRightAndPercentagesAgainstTheFragment()
+        {
+            var (root, _) = await LayoutAsync(
+                "<div style='margin-left: 100pt'>before <span id='s' style='position: relative; border: 2pt solid'>an inline box<span style='float: left'>" +
+                "ff<b id='a' style='position: absolute; right: 0; bottom: 0; width: 50%; height: 5pt'></b></span></span></div>");
+
+            var fragment = Assert.Single(Find(root, "s").Rectangles.Values);
+            var abs = Find(root, "a");
+
+            Assert.Equal((fragment.Width - 4) / 2, abs.ActualRight - abs.Location.X, 3);
+            Assert.Equal(fragment.Right - 2, abs.ActualRight, 3);
+            Assert.Equal(fragment.Bottom - 2, abs.ActualBottom, 3);
+        }
+
+        [Fact]
+        public async Task AbsolutelyPositionedChild_OfABlockContentInlineBlockInsideAPositionedInline_IsPlacedAgainstTheInlinesFragment()
+        {
+            var (root, _) = await LayoutAsync(
+                "<div style='margin-left: 100pt'>before <span id='s' style='position: relative; border: 2pt solid'>aa" +
+                "<span style='display: inline-block'><div>block</div>" +
+                "<b id='a' style='position: absolute; top: 0; left: 0; width: 4pt; height: 4pt'></b></span></span></div>");
+
+            var fragment = Assert.Single(Find(root, "s").Rectangles.Values);
+            var abs = Find(root, "a");
+
+            Assert.Equal(fragment.Left + 2, abs.Location.X, 3);
+            Assert.Equal(fragment.Top + 2, abs.Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task AbsolutelyPositionedChild_OfAnInlineContentInlineBlockInsideAPositionedInline_IsPlacedAgainstTheInlinesFragment()
+        {
+            // The box's containing block is the positioned inline, not the inline-block it sits in: it is
+            // placed from the start of the inline's fragment, after the text that precedes the inline-block.
+            var (root, _) = await LayoutAsync(
+                "<div style='margin-left: 100pt'>before <span id='s' style='position: relative; border: 2pt solid'>an inline " +
+                "<span style='display: inline-block'>ff" +
+                "<b id='a' style='position: absolute; top: 0; left: 0; width: 4pt; height: 4pt'></b></span></span></div>");
+
+            // The inline may wrap; its containing block is formed from its first and last fragments.
+            var containingBlock = DomUtils.InlineContainingBlockOf(Find(root, "s"));
+            var abs = Find(root, "a");
+
+            Assert.NotNull(containingBlock);
+            Assert.Equal(containingBlock.Value.Left, abs.Location.X, 3);
+            Assert.Equal(containingBlock.Value.Top, abs.Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task AbsolutelyPositionedChild_OfAFloatInsideAnEmptyPositionedInline_IsNotLeftAtTheOrigin()
+        {
+            // No word is placed in the inline itself, so it has no fragment: the box is anchored at the
+            // place the walk passed the float, not at the sheet's origin.
+            var (root, _) = await LayoutAsync(
+                "<div style='margin-left: 100pt'>before <span style='position: relative'><span style='float: left'>" +
                 "ff<b id='a' style='position: absolute; top: 0; left: 0; width: 4pt; height: 4pt'></b></span></span></div>");
 
             var abs = Find(root, "a");
 
-            Assert.Equal(0, abs.Location.X, 3);
-            Assert.Equal(0, abs.Location.Y, 3);
+            Assert.True(abs.Location.X >= 100, $"the box belongs beside the paragraph's text, was at X {abs.Location.X}");
+            Assert.True(abs.Location.Y >= Origin - 0.5, $"the box belongs on the paragraph's line, was at Y {abs.Location.Y}");
         }
 
         [Fact]

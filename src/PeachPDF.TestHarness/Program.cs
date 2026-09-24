@@ -4643,7 +4643,10 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
             "stripe tile rotated 45° via patternTransform"),
         SvgSwatch("pattern filling a star shape",
             $"""<svg viewBox="0 0 100 100" width="80" height="80"><defs><pattern id="grid" patternUnits="userSpaceOnUse" width="10" height="10"><rect width="10" height="10" fill="#fdebd0"/><rect width="10" height="2" fill="#e67e22"/><rect width="2" height="10" fill="#e67e22"/></pattern></defs><polygon points="{StarPoints}" fill="url(#grid)"/></svg>""",
-            "pattern respects the star's own fill geometry")
+            "pattern respects the star's own fill geometry"),
+        SvgSwatch("pattern content inherits from &lt;svg&gt;",
+            """<svg viewBox="0 0 100 100" width="80" height="80" fill="#e67e22" stroke="#2c3e50" stroke-width="2"><defs><pattern id="inheritDots" patternUnits="userSpaceOnUse" width="20" height="20"><circle cx="10" cy="10" r="6"/></pattern></defs><rect x="10" y="10" width="80" height="80" fill="url(#inheritDots)"/></svg>""",
+            "the unstyled circle inherits fill and stroke from the root &lt;svg&gt;, not from the rect that references the pattern")
     ) +
 
     "<h2>17 — Mask</h2>" +
@@ -4659,7 +4662,10 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
             "a shape, not just a gradient, as the mask's luminance"),
         SvgSwatch("&lt;text&gt; as mask content",
             """<svg viewBox="0 0 100 100" width="80" height="80"><defs><linearGradient id="textGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9966"/><stop offset="1" stop-color="#ff5e62"/></linearGradient><mask id="textMask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100"><text x="6" y="65" font-size="46" font-weight="bold" fill="#ffffff">PDF</text></mask></defs><rect x="0" y="0" width="100" height="100" fill="url(#textGrad)" mask="url(#textMask)"/></svg>""",
-            "gradient shows only through the letter shapes")
+            "gradient shows only through the letter shapes"),
+        SvgSwatch("mask content inherits fill",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><g fill="#ffffff"><mask id="inheritMask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100"><circle cx="50" cy="50" r="40"/></mask></g></defs><rect x="0" y="0" width="100" height="100" fill="#8e44ad" mask="url(#inheritMask)"/></svg>""",
+            "the mask's unstyled circle inherits fill=white from the &lt;g&gt; it is defined in, so the rect shows through")
     ) +
 
     "<h2>18 — &lt;image&gt; Element</h2>" +
@@ -6662,7 +6668,11 @@ await SaveShowcaseAsync("block_inline_placement", "Layout", "Block Placement in 
 // An absolutely positioned box sitting among inline text stays out of the line: the text around it reads on
 // as one line, and a positioned inline around it is its containing block, formed from that inline's first and
 // last line fragments.
-var positionedInlineHtml = """
+var positionedCartSvg = Convert.ToBase64String(Encoding.UTF8.GetBytes(
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>" +
+    "<path d='M3 5h4l3 16h15l3-11H8M11 27h1m11 0h1' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/>" +
+    "</svg>"));
+var positionedInlineHtml = $$"""
     <!DOCTYPE html><html><head><style>
     @page { size: a4; margin: 15mm }
     body { font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.6; margin: 0; color: #222 }
@@ -6678,8 +6688,17 @@ var positionedInlineHtml = """
     .pin { position: absolute; width: 6pt; height: 6pt; background: #d94a4a }
     .ring { outline: 2pt solid #d94a4a; outline-offset: 2pt }
     .aside { position: absolute; top: 0; right: 0; width: 70pt; font-size: 8pt; line-height: 1.2; color: #777 }
+    .cart-row { position: relative; width: 500px; height: 42px; overflow: hidden; background: #193b49 }
+    .cart-nav { float: left; width: 440px; height: 42px; box-sizing: border-box;
+                padding: 9px 0 0 16px; color: white; font-size: 11px }
+    .cart { position: absolute; top: 5px; right: 14px }
+    .cart a { display: inline-block; width: 32px; height: 32px;
+              background: #227f71 url('data:image/svg+xml;base64,{{positionedCartSvg}}') center/26px no-repeat }
+    .cart-badge { position: absolute; top: -4px; right: -6px; min-width: 14px; height: 14px;
+                  border-radius: 7px; background: #e65a3d; color: white; font: bold 10px Arial;
+                  text-align: center; line-height: 14px }
     </style></head><body>
-    <h1>Absolutely positioned boxes inside inline text</h1>
+    <h1>Positioned boxes and inline content</h1>
     <p class="note">An absolutely positioned box among inline content is taken out of the line, so the text around it
     carries on as if it were not there. When its nearest positioned ancestor is an inline, that inline is its
     containing block.</p>
@@ -6713,11 +6732,15 @@ var positionedInlineHtml = """
     <div style="position: relative; width: 300pt; padding-right: 80pt">The words after a positioned note
     <span class="aside">A note placed at the top right of the paragraph.</span>continue on the same line,
     and an outlined span holding one <span class="ring">keeps its outline<span class="aside" style="top: 44pt">A second note.</span></span>.</div>
+
+    <h2>An independent positioned box after a float</h2>
+    <p class="note">The navigation float must not shift the cart icon or badge outside the dark bar.</p>
+    <div class="cart-row"><div class="cart-nav">Shop &nbsp; Products &nbsp; About</div><div class="cart"><a><span class="cart-badge">6</span></a></div></div>
     </body></html>
     """;
 
-await SaveShowcaseAsync("positioned_inline", "Layout", "Positioned Boxes in Inline Text",
-    "Absolutely positioned boxes anchored to a word or a wrapped inline, with the text around them left on one line.",
+await SaveShowcaseAsync("positioned_inline", "Layout", "Positioned Boxes and Inline Content",
+    "Absolutely positioned boxes among inline text, anchored to wrapped inlines, and isolated from a preceding float.",
     positionedInlineHtml, pdfConfig);
 
 // --- horizontal rule attributes showcase ---

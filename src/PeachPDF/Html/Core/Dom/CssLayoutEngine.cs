@@ -405,7 +405,17 @@ namespace PeachPDF.Html.Core.Dom
             };
 
             //Flow words and boxes
-            await FlowBox(g, blockBox, blockBox, 0, startX, coordinates);
+            var activeFlows = blockBox.HtmlContainer?.ActiveInlineFlows;
+            activeFlows?.Add(coordinates);
+
+            try
+            {
+                await FlowBox(g, blockBox, blockBox, 0, startX, coordinates);
+            }
+            finally
+            {
+                activeFlows?.RemoveAt(activeFlows.Count - 1);
+            }
 
             // Empty inlines still held for a word that never came sit on the flow's last line. A break
             // discards the line being built and a line-clamp stop hides what follows, so then they are on no
@@ -534,6 +544,74 @@ namespace PeachPDF.Html.Core.Dom
                     if (emptyInline is not null) emptyInline.EmptyInlineContainingBlock = null;
                 }
             }
+        }
+
+        /// <summary>
+        /// Records <paramref name="box"/> as passed at the flow's cursor, to be laid out once the lines are
+        /// final. Held once: a box a float's or inline-block's layout reaches on several passes (a
+        /// measurement, then the real one) replaces its earlier entry rather than being laid out twice.
+        /// </summary>
+        private static void SetAsideAtTheCursor(CssLineBoxCoordinates coordinates, CssBox box, int ordinal)
+        {
+            var words = coordinates.Line.Words;
+            var preceding = words.Count > 0 ? words[^1] : null;
+            var setAside = new SetAsideBox(
+                box, ordinal, coordinates.Line, coordinates.CurrentX, coordinates.CurrentY,
+                words.Count, preceding, preceding?.Left ?? 0);
+
+            var boxes = coordinates.AbsolutelyPositioned ??= [];
+            var existing = boxes.FindIndex(s => ReferenceEquals(s.Box, box));
+
+            if (existing >= 0) boxes[existing] = setAside;
+            else boxes.Add(setAside);
+        }
+
+        /// <summary>
+        /// Hands an absolutely positioned <paramref name="box"/> to the inline flow that owns its containing
+        /// block when that block is a positioned <i>inline</i> whose lines the flow is still building, and
+        /// says so; false when the box can be laid out now.
+        /// </summary>
+        /// <remarks>
+        /// A box inside a float, or inside an inline-block holding block-level content, is laid out as part
+        /// of that box's own content, mid-walk of the flow around it. Its nearest positioned ancestor can be
+        /// an inline outside that content, and an inline's containing block is formed from its first and last
+        /// line fragments (<see href="https://www.w3.org/TR/css-position-3/#def-cb">CSS Positioned Layout 3
+        /// §2.1</see>, <see href="https://www.w3.org/TR/CSS21/visudet.html#containing-block-details">CSS 2.1
+        /// §10.1</see>) - which do not exist until the flow has finished and aligned every line. Read
+        /// early, they gave nothing and the box was placed at the sheet's origin (issue #1304). Where the box
+        /// sits inside the inline does not change its containing block, so the flow holding the inline is
+        /// the one to lay it out, as it does a box directly among its content. The flows are found by
+        /// box-tree ancestry, never by nesting depth: the one owned by the block the inline's run sits in.
+        /// </remarks>
+        internal static bool TryDeferToEnclosingInlineFlow(CssBox box)
+        {
+            // A fixed box's containing block is the page (or a transformed ancestor), never a positioned inline.
+            if (box.Position.Value != PositionMode.Absolute) return false;
+            if (box.HtmlContainer?.ActiveInlineFlows is not { Count: > 0 } flows) return false;
+
+            var ancestor = DomUtils.GetNearestPositionedAncestor(box);
+            if (!ancestor.IsInline || DomUtils.IsAtomicInline(ancestor)) return false;
+
+            // The flow that lays the inline's own lines out is the one owned by the block its inline run sits
+            // in. Any flow further out merely contains that block (a float inside an outer flow holds a whole
+            // inline flow of its own), and handing the box to it would lay the box out before the inline's
+            // fragments exist there too.
+            var linesOwner = ancestor.ParentBox;
+            while (linesOwner is { IsInline: true } && !DomUtils.IsAtomicInline(linesOwner))
+            {
+                linesOwner = linesOwner.ParentBox;
+            }
+
+            for (var i = flows.Count - 1; i >= 0; i--)
+            {
+                var flow = flows[i];
+                if (!ReferenceEquals(flow.Line.OwnerBox, linesOwner)) continue;
+
+                SetAsideAtTheCursor(flow, box, flow.WordOrdinal);
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -1734,8 +1812,9 @@ namespace PeachPDF.Html.Core.Dom
 
             switch (box.Float.Value)
             {
-                case Floating.Left or Floating.Right or Floating.Inside or Floating.Outside:
-                    // CSS Page Floats' inside/outside resolve to an effective left/right based on which
+                case Floating.Left or Floating.Right or Floating.Inside or Floating.Outside
+                    or Floating.InlineStart or Floating.InlineEnd:
+                    // CSS Page Floats' inside/outside (and css-logical-1's inline-start/inline-end) resolve to an effective left/right based on which
                     // physical side of a two-page spread the float's landing page is (CssBox.EffectiveFloatSide);
                     // left/right pass through unchanged. Once resolved, every left/right code path
                     // (collision scanning, line wrapping, shrink-to-fit, "floats share the line") reads
@@ -2978,14 +3057,16 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var siblingBox = containingBox.Boxes[i];
 
-                clearance = Math.Max(clearance, GetClearance(siblingBox, box.Clear.Value));
+                var clears = box.EffectiveClear;
+
+                clearance = Math.Max(clearance, GetClearance(siblingBox, clears));
 
                 if (!siblingBox.IsFloated) continue;
 
                 switch (siblingBox.EffectiveFloatSide)
                 {
-                    case Floating.Left when box.Clear.Value is ClearMode.Right:
-                    case Floating.Right when box.Clear.Value is ClearMode.Left:
+                    case Floating.Left when clears is ClearMode.Right:
+                    case Floating.Right when clears is ClearMode.Left:
                         continue;
                 }
 
@@ -4016,7 +4097,9 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var floatBox in floats)
             {
-                if (floatBox.Float.Value != side) continue;
+                // The resolved physical side, not the specified keyword: an `inside`/`outside` float
+                // placed among inline content is a left or a right one depending on its page.
+                if (floatBox.EffectiveFloatSide != side) continue;
 
                 var top = floatBox.Location.Y;
                 var bottom = floatBox.ActualBottom + floatBox.ActualMarginBottom;
@@ -4067,7 +4150,9 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private static CssBox? LeftFloatAt(CssLineBoxCoordinates coordinates, CssBox reference)
         {
-            var ancestorFloat = DomUtils.GetLastLeftIntersectingFloatBox(reference, coordinates);
+            var ancestorFloat = LineOwnerIsIsolatedFromOuterFloats(coordinates, reference)
+                ? null
+                : DomUtils.GetLastLeftIntersectingFloatBox(reference, coordinates);
             var inlineFloat = GetIntersectingInlineFloat(coordinates, Floating.Left);
 
             if (ancestorFloat is null) return inlineFloat;
@@ -4077,6 +4162,38 @@ namespace PeachPDF.Html.Core.Dom
                    > ancestorFloat.ActualRight + ancestorFloat.ActualMarginRight
                 ? inlineFloat
                 : ancestorFloat;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="reference"/> is the block whose lines are being laid out AND that block
+        /// is an out-of-flow box, a table cell, or a grid or flex item - a formatting-context root that is
+        /// not itself placed beside outside floats - so no float outside it can shorten those lines.
+        /// </summary>
+        /// <remarks>
+        /// <see href="https://www.w3.org/TR/CSS21/visuren.html#block-formatting">CSS 2.1 §9.4.1</see>: a line
+        /// box is shortened only by floats in its own block formatting context, and a box that establishes a
+        /// new one contains its floats and is unaffected by any outside it (issue #1335 - a preceding
+        /// <c>float: left</c> pushed an absolutely positioned box's inline content 523pt to the right, off
+        /// the page). The ancestor walk in <see cref="DomUtils.GetLastLeftIntersectingFloatBox"/> cannot
+        /// apply this itself at its starting level: the box it starts from is also the box being
+        /// <i>placed</i> by <c>FloatBoxLeft</c>, and a float must still see its own preceding siblings (see
+        /// the note in <c>FindIntersectingFloatBox</c>). Line flow knows its own owner, so it asks here
+        /// instead. Only the owner itself is tested: when <paramref name="reference"/> is a descendant, the
+        /// walk climbs to the owner and its non-starting-level check already stops there.
+        /// </remarks>
+        private static bool LineOwnerIsIsolatedFromOuterFloats(CssLineBoxCoordinates coordinates, CssBox reference)
+        {
+            if (!ReferenceEquals(reference, coordinates.Line.OwnerBox)) return false;
+
+            // Only the roots that are not themselves placed beside a float: an in-flow root
+            // (`overflow: hidden`, a table caption) has to avoid the floats next to it (CSS 2.1 §9.5), and
+            // this engine does that by narrowing its lines, so those keep the outer float lookup.
+            return reference.IsFloated
+                   || reference.IsPageFloated
+                   || reference.IsAbsolutelyPositioned
+                   || reference.DerivedStyle.ActualDisplay == Keywords.TableCell
+                   || reference.ParentBox?.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
+                       or Keywords.Grid or Keywords.InlineGrid;
         }
 
         /// <summary>
@@ -4688,11 +4805,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (childOpensHere && b.DerivedStyle.ActualDisplay != Keywords.None)
                     {
-                        var words = coordinates.Line.Words;
-                        var preceding = words.Count > 0 ? words[^1] : null;
-                        (coordinates.AbsolutelyPositioned ??= []).Add(new SetAsideBox(
-                            b, childStartOrdinal, coordinates.Line, coordinates.CurrentX, coordinates.CurrentY,
-                            words.Count, preceding, preceding?.Left ?? 0));
+                        SetAsideAtTheCursor(coordinates, b, childStartOrdinal);
                     }
 
                     continue;

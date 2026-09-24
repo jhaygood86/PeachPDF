@@ -1,5 +1,6 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
+using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
 using System.Text;
@@ -131,6 +132,41 @@ namespace PeachPDF.Tests.Integration
             Assert.True(tile.Success, "expected a 24x24pt SVG background tile");
             Assert.Matches(new Regex(@"(^|\s)1 1 1 rg\s"), tile.Groups[1].Value);
             Assert.DoesNotMatch(new Regex(@"(^|\s)0 0 0 rg\s"), tile.Groups[1].Value);
+        }
+
+        [Fact]
+        public async Task SvgBackground_OnAbsoluteCartAfterFloat_WithPositionedBadge_IsPainted()
+        {
+            // The float precedes an absolutely positioned cart. Its badge is out of flow, so the
+            // cart's own inline-block still needs a visible border box and background image.
+            var html = "<!doctype html><html><head><style>" +
+                "body{margin:0}" +
+                ".header{position:fixed;left:0;width:100%;height:52px}" +
+                ".row{position:relative;width:100%;height:52px;overflow:hidden}" +
+                ".preceding{float:left;width:500pt;height:39pt}" +
+                ".cart{position:absolute;right:15px;top:0}" +
+                ".cart a{display:inline-block;width:52px;height:52px;padding:9px 9px 0;" +
+                $"background:url('{SvgDataUri(SvgMarkup)}') center/32px no-repeat}}" +
+                ".cart span{position:absolute;top:2px;right:-5px}" +
+                "</style></head><body><div class='header'><div class='row'>" +
+                "<div class='preceding'></div><div id='cart' class='cart'>" +
+                "<a id='cartLink'><span>6</span></a></div>" +
+                "</div></div></body></html>";
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html, pageWidth: 612, pageHeight: 792, margin: 10);
+            var cart = LayoutHarness.FindById(root, "cart")!;
+            var link = LayoutHarness.FindById(root, "cartLink")!;
+            var linkRect = Assert.Single(link.Rectangles.Values);
+
+            // The preceding float may overlap the cart's horizontal band, but it must not advance
+            // the cart link's own line cursor outside its independently positioned parent.
+            Assert.InRange(linkRect.Left - cart.Location.X, -1, 1);
+            Assert.InRange(linkRect.Right, 0, 612);
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/BBox [0 0 24 24]", pdfText);
+            Assert.Matches(new Regex(@"/Fm\d+ Do"), pdfText);
         }
 
         [Fact]

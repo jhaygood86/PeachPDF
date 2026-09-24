@@ -911,6 +911,104 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task InlineSvg_MaskContentWithoutItsOwnFill_InheritsWhiteFromTheDefinitionsAncestor()
+        {
+            // The mask's rect declares no fill; it must inherit the white from the <g> the mask is defined in, not
+            // start from black (a black mask hides everything it masks). White in a Luminosity mask form is the
+            // "1 1 1 rg" fill; the masked rect itself is red, so nothing else in this document paints white.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <g fill="#ffffff">
+                    <defs>
+                      <mask id="fade" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+                        <rect x="0" y="0" width="100" height="100"/>
+                      </mask>
+                    </defs>
+                  </g>
+                  <rect x="10" y="10" width="80" height="80" fill="#ff0000" mask="url(#fade)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/SMask", pdfText);
+            Assert.Contains("1 1 1 rg", pdfText);
+            Assert.Matches(new Regex(@"cm /GS\d+ gs /Fm\d+ Do"), pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_PatternContentWithoutItsOwnFill_InheritsFromTheRootSvg()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" fill="#ffffff">
+                  <defs><pattern id="p" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="5" height="5"/></pattern></defs>
+                  <rect width="100" height="100" fill="url(#p)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/Subtype /Form", pdfText);
+            Assert.Contains("1 1 1 rg", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_PatternInheritingItselfAsItsFill_TerminatesWithoutPaintingItself()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" fill="url(#p)">
+                  <pattern id="p" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="5" height="5"/></pattern>
+                  <rect width="100" height="100"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.StartsWith("%PDF", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_PatternsPaintingEachOther_TerminateAtTheNestingCap()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+                  <pattern id="a" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill="url(#b)"/></pattern>
+                  <pattern id="b" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill="url(#a)"/></pattern>
+                  <rect width="100" height="100" fill="url(#a)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.StartsWith("%PDF", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_MarkerContentNamingItsOwnMarker_Terminates()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+                  <marker id="m" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse"><path d="M0,0 L5,5" marker-end="url(#m)" stroke="black"/></marker>
+                  <path d="M10,50 L90,50" stroke="black" marker-end="url(#m)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.StartsWith("%PDF", pdfText);
+        }
+
+        [Fact]
         public async Task InlineSvg_MaskWithGradientContent_RendersShadingInsideMaskForm()
         {
             // A mask's own content can itself use fill/gradients (a full paint, not just geometry,
