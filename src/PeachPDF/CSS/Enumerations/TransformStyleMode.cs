@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    internal enum TransformStyleMode
+    internal enum TransformStyleMode : byte
     {
         Flat,
         Preserve3d

@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    internal enum CaptionSideMode
+    internal enum CaptionSideMode : byte
     {
         Top,
         Bottom

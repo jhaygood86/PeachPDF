@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    internal enum BackfaceVisibilityMode
+    internal enum BackfaceVisibilityMode : byte
     {
         Visible,
         Hidden

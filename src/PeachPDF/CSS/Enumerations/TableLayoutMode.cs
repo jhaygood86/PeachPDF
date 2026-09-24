@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    internal enum TableLayoutMode
+    internal enum TableLayoutMode : byte
     {
         Auto,
         Fixed

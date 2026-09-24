@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    internal enum EmptyCellsMode
+    internal enum EmptyCellsMode : byte
     {
         Show,
         Hide

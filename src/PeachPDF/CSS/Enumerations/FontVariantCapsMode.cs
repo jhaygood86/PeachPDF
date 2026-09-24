@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    internal enum FontVariantCapsMode
+    internal enum FontVariantCapsMode : byte
     {
         Normal,
         SmallCaps,

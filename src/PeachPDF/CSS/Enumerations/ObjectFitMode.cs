@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    internal enum ObjectFitMode
+    internal enum ObjectFitMode : byte
     {
         Fill,
         Contain,

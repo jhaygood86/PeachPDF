@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task UnknownValue_FallsBackToFill()
         {
-            var (dest, clip) = ObjectFitResolver.Compute(Box, IntrinsicWidth, IntrinsicHeight, (ObjectFitMode)999, "50% 50%", await AnyBox());
+            var (dest, clip) = ObjectFitResolver.Compute(Box, IntrinsicWidth, IntrinsicHeight, (ObjectFitMode)200, "50% 50%", await AnyBox());
             Assert.Equal(100, dest.Width); Assert.Equal(100, dest.Height);
             Assert.False(clip);
         }

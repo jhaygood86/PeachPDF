@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    internal enum ListStylePositionMode
+    internal enum ListStylePositionMode : byte
     {
         Outside,
         Inside
