@@ -181,7 +181,7 @@ namespace PeachPDF.Html.Core.Dom
 
             await MeasureWordsSize(g);
 
-            if (ListStylePosition != Keywords.Outside) return;
+            if (ListStylePosition.Value != ListStylePositionMode.Outside) return;
             if (ParentBox is not CssBox owner) return;
 
             var word = Words.Count > 0 ? Words[0] : null;

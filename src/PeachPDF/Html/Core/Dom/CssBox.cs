@@ -1868,8 +1868,8 @@ namespace PeachPDF.Html.Core.Dom
             // supports the requested feature, in which case the word is left untouched here and real
             // substitution happens transparently at measure/paint time. The other 4 caps keywords
             // never synthesize at all (real substitution or a silent no-op, never an approximation).
-            var isSmallCapsFamily = FontVariantCaps is Keywords.SmallCaps or Keywords.AllSmallCaps;
-            var isAllSmallCaps = FontVariantCaps == Keywords.AllSmallCaps;
+            var isSmallCapsFamily = FontVariantCaps.Value is FontVariantCapsMode.SmallCaps or FontVariantCapsMode.AllSmallCaps;
+            var isAllSmallCaps = FontVariantCaps.Value == FontVariantCapsMode.AllSmallCaps;
             var needsSynthesis = isSmallCapsFamily && ActualFontVariantCaps == FontVariantCapsFeature.None;
             var synthesisApplies = needsSynthesis && (ContainsLowerLetter(text) || (isAllSmallCaps && ContainsUpperLetter(text)));
 
@@ -3598,7 +3598,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>inside</c> marker is an ordinary flowed inline and answers false.
         /// </remarks>
         internal static bool IsOutsideMarker(CssBox box) =>
-            box is { IsMarkerPseudoElement: true, ListStylePosition: not Keywords.Inside };
+            box is { IsMarkerPseudoElement: true, ListStylePosition.Value: not ListStylePositionMode.Inside };
 
         /// <summary>
         /// Whether <paramref name="box"/>'s own captured <see cref="Location"/>/<see cref="ActualBottom"/>
@@ -5254,7 +5254,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private static bool AvoidsBreakingAcrossThisColumn(CssBox childBox) =>
             childBox.PendingBreakToken is not null
-            && BreakValues.AvoidsBreak(childBox.BreakInside, FragmentationContext.Column);
+            && BreakValues.AvoidsBreak(childBox.BreakInside.Value, FragmentationContext.Column);
 
         /// <summary>
         /// The link of the chain to record when <paramref name="childBox"/> raised — or is passing on — a
@@ -6554,7 +6554,7 @@ namespace PeachPDF.Html.Core.Dom
             // mover, because "may not be broken" and "asks not to be broken" want the same relocation. So
             // does a table that did not break between any two of its own rows: it did not fragment, which
             // is what the other two say about themselves in advance rather than after the fact.
-            var avoidsBreak = BreakValues.AvoidsBreak(BreakInside, FragmentationContext.Page);
+            var avoidsBreak = BreakValues.AvoidsBreak(BreakInside.Value, FragmentationContext.Page);
             var monolithic = IsMonolithicBoxThisMoverMayMove() || PaginatedItsOwnContentWithoutBreaking();
 
             // One correction per box per pass (_earlyBreakTaken). Where the box was laid out again

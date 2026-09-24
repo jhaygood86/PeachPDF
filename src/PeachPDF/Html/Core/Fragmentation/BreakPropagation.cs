@@ -85,15 +85,15 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// its own <c>break-before</c> combined with every value propagating outward to it from the chain
         /// of boxes it begins. Null when none of them is forced.
         /// </summary>
-        internal static string? ForcedBreakBeforeAt(CssBox box, FragmentationContext context)
+        internal static BreakMode? ForcedBreakBeforeAt(CssBox box, FragmentationContext context)
         {
-            var value = Forced(box.BreakBefore, context);
+            var value = Forced(box.BreakBefore.Value, context);
 
             for (var child = FirstInFlowChild(box);
                  child is not null && PropagatesBreakBeforeOutward(child);
                  child = FirstInFlowChild(child))
             {
-                value = Combine(value, Forced(child.BreakBefore, context));
+                value = Combine(value, Forced(child.BreakBefore.Value, context));
             }
 
             return value;
@@ -103,15 +103,15 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// The break-after counterpart of <see cref="ForcedBreakBeforeAt"/>, read through the chain of boxes
         /// <paramref name="box"/> ends.
         /// </summary>
-        internal static string? ForcedBreakAfterAt(CssBox box, FragmentationContext context)
+        internal static BreakMode? ForcedBreakAfterAt(CssBox box, FragmentationContext context)
         {
-            var value = Forced(box.BreakAfter, context);
+            var value = Forced(box.BreakAfter.Value, context);
 
             for (var child = LastInFlowChild(box);
                  child is not null && PropagatesBreakAfterOutward(child);
                  child = LastInFlowChild(child))
             {
-                value = Combine(value, Forced(child.BreakAfter, context));
+                value = Combine(value, Forced(child.BreakAfter.Value, context));
             }
 
             return value;
@@ -131,7 +131,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         /// <param name="outer">the value already resolved for the enclosing box</param>
         /// <param name="inner">the value propagating outward from the box it begins, later in flow</param>
-        private static string? Combine(string? outer, string? inner)
+        private static BreakMode? Combine(BreakMode? outer, BreakMode? inner)
         {
             if (BreakValues.SideOf(inner) is not PageSide.Any) return inner;
             if (BreakValues.SideOf(outer) is not PageSide.Any) return outer;
@@ -142,7 +142,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             return outer ?? inner;
         }
 
-        private static string? Forced(string? value, FragmentationContext context) =>
+        private static BreakMode? Forced(BreakMode value, FragmentationContext context) =>
             BreakValues.IsForcedBreak(value, context) ? value : null;
 
         /// <summary>

@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using System;
 using System.Collections.Generic;
@@ -120,8 +121,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         private static PageSide? ForcedBreakBetween(
             IReadOnlyList<CssBox>? earlier, IReadOnlyList<CssBox>? later)
         {
-            var laterValue = later is null ? null : MostDemandingForcedValue(later.Select(box => box.BreakBefore));
-            var earlierValue = earlier is null ? null : MostDemandingForcedValue(earlier.Select(box => box.BreakAfter));
+            BreakMode? laterValue = later is null ? null : MostDemandingForcedValue(later.Select(box => box.BreakBefore.Value));
+            BreakMode? earlierValue = earlier is null ? null : MostDemandingForcedValue(earlier.Select(box => box.BreakAfter.Value));
 
             return laterValue is null && earlierValue is null
                 ? null
@@ -139,10 +140,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// the first directional value it meets. <see cref="BreakValues.RequiredSide"/> applies the same
         /// rule across the two sides.
         /// </remarks>
-        private static string? MostDemandingForcedValue(IEnumerable<string?> values)
+        private static BreakMode? MostDemandingForcedValue(IEnumerable<BreakMode> values)
         {
-            string? forced = null;
-            string? directional = null;
+            BreakMode? forced = null;
+            BreakMode? directional = null;
 
             foreach (var value in values)
             {
@@ -162,9 +163,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         private static bool AvoidsBreakAbove(LineGroup group) =>
             (group.Later is not null
-             && group.Later.Any(box => BreakValues.AvoidsBreak(box.BreakBefore, FragmentationContext.Page)))
+             && group.Later.Any(box => BreakValues.AvoidsBreak(box.BreakBefore.Value, FragmentationContext.Page)))
             || (group.Earlier is not null
-                && group.Earlier.Any(box => BreakValues.AvoidsBreak(box.BreakAfter, FragmentationContext.Page)));
+                && group.Earlier.Any(box => BreakValues.AvoidsBreak(box.BreakAfter.Value, FragmentationContext.Page)));
 
         /// <summary>
         /// Whether anything in a line may not be cut by a fragmentainer boundary: an item asking not to be
@@ -178,7 +179,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// which is a larger behaviour change than the break values themselves ask for.
         /// </remarks>
         private static bool MayNotBeCut(IReadOnlyList<CssBox> boxes) =>
-            boxes.Any(box => BreakValues.AvoidsBreak(box.BreakInside, FragmentationContext.Page)
+            boxes.Any(box => BreakValues.AvoidsBreak(box.BreakInside.Value, FragmentationContext.Page)
                              || MonolithicContent.IsMonolithicForFragmentation(box));
 
         /// <summary>

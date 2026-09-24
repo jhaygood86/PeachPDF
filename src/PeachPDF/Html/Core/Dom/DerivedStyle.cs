@@ -732,7 +732,11 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>True when <c>backface-visibility: hidden</c>: the box is not painted while it faces away from the viewer.</summary>
         public bool IsBackfaceHidden =>
-            string.Equals(Style.VisualEffects.BackfaceVisibility?.Trim(), Keywords.Hidden, StringComparison.OrdinalIgnoreCase);
+            Style.VisualEffects.BackfaceVisibility.Value == BackfaceVisibilityMode.Hidden;
+
+        /// <summary>True when the computed <c>transform-style</c> is <c>preserve-3d</c>. The <em>used</em> value also depends on the grouping properties that force <c>flat</c>: see <c>DomUtils.EstablishesPreserve3d</c>.</summary>
+        public bool IsPreserve3dRequested =>
+            Style.VisualEffects.TransformStyle.Value == TransformStyleMode.Preserve3d;
 
         internal void InvalidateTransform() => _actualTransformComputed = false;
 
@@ -1130,7 +1134,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (_actualFontVariantCaps is { } cached) return cached;
 
-                var requested = TextShapingFeatureResolver.ResolveCapsRequested(Style.Font.FontVariantCaps);
+                var requested = TextShapingFeatureResolver.ResolveCapsRequested(Style.Font.FontVariantCaps.Value);
 
                 var resolved = requested != FontVariantCapsFeature.None && ActualFont.SupportsFontVariantCaps(requested)
                     ? requested
@@ -1151,7 +1155,7 @@ namespace PeachPDF.Html.Core.Dom
         /// has real <c>subs</c>/<c>sups</c> glyphs or the effect has to be synthesized.
         /// </summary>
         public FontVariantPositionFeature RequestedFontVariantPosition =>
-            _requestedFontVariantPosition ??= TextShapingFeatureResolver.ResolvePositionRequested(Style.Font.FontVariantPosition);
+            _requestedFontVariantPosition ??= TextShapingFeatureResolver.ResolvePositionRequested(Style.Font.FontVariantPosition.Value);
 
         /// <summary>
         /// The position feature that should actually be requested from the shaping layer:
@@ -1229,7 +1233,7 @@ namespace PeachPDF.Html.Core.Dom
         /// stylistic opt-out the way kerning is.
         /// </summary>
         public bool ActualFontKerning =>
-            _actualFontKerning ??= TextShapingFeatureResolver.ResolveKerning(Style.Font.FontKerning);
+            _actualFontKerning ??= TextShapingFeatureResolver.ResolveKerning(Style.Font.FontKerning.Value);
 
         private TextShapingFeatures? _actualTextShapingFeatures;
 

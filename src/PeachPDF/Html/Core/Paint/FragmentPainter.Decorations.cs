@@ -947,16 +947,11 @@ namespace PeachPDF.Html.Core.Paint
             // carry several space-separated line keywords (e.g. "underline overline"); each is drawn.
             var styleSource = firstLineStyle ?? box;
             var textDecorationLine = styleSource.TextDecorationLine;
-            var textDecorationStyle = styleSource.TextDecorationStyle;
+            var textDecorationStyle = styleSource.TextDecorationStyle.Value;
             var textDecorationColor = styleSource.TextDecorationColor;
 
             if (string.IsNullOrEmpty(textDecorationLine) || textDecorationLine == Keywords.None)
                 return;
-
-            if (string.IsNullOrEmpty(textDecorationStyle))
-            {
-                textDecorationStyle = Keywords.Solid;
-            }
 
             if (!string.IsNullOrEmpty(textDecorationColor) && !box.HtmlContainer!.CssParser.IsColorValid(textDecorationColor))
             {
@@ -1237,7 +1232,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <remarks>
         /// <para>
         /// <c>solid</c>/<c>dotted</c>/<c>dashed</c> are one stroke each, differing only in the pen's dash
-        /// pattern, which <see cref="TextDecorationStyleMapper.ToDashStyle"/> has already set. <c>double</c>
+        /// pattern, which <see cref="TextDecorationStyleMapper.ToDashStyle(TextDecorationStyleMode)"/> has already set. <c>double</c>
         /// and <c>wavy</c> are not a single pen stroke at all: the former is two strokes, the latter a
         /// stroked <see cref="Html.Adapters.RGraphicsPath"/> built by
         /// <see cref="WavyDecorationRenderer.StrokeWavyLine"/> - see that class's remarks for the wave's
@@ -1291,7 +1286,7 @@ namespace PeachPDF.Html.Core.Paint
         /// pin an underline there instead, or move an overline off it to avoid colliding with a pinned
         /// underline (<c>PaintDecoration</c>'s own <c>overlineSwitchesSides</c>) - see its remarks.
         /// </param>
-        private static void StrokeDecorationSegment(RGraphics g, RPen pen, double thickness, RColor color, string? style, string line,
+        private static void StrokeDecorationSegment(RGraphics g, RPen pen, double thickness, RColor color, TextDecorationStyleMode style, string line,
             double x1, double x2, double cross, bool isVertical, int underSign, bool atBlockStart)
         {
             void Draw(double at)
@@ -1302,7 +1297,7 @@ namespace PeachPDF.Html.Core.Paint
 
             switch (style)
             {
-                case Keywords.Double:
+                case TextDecorationStyleMode.Double:
                 {
                     var strokeWidth = DoubleStrokeWidth(thickness, g.PixelsPerPoint);
                     var separation = 2 * strokeWidth;
@@ -1332,7 +1327,7 @@ namespace PeachPDF.Html.Core.Paint
                     return;
                 }
 
-                case Keywords.Wavy when !isVertical:
+                case TextDecorationStyleMode.Wavy when !isVertical:
                     WavyDecorationRenderer.StrokeWavyLine(g, color, line, x1, x2, cross, thickness);
                     return;
 
@@ -1367,7 +1362,7 @@ namespace PeachPDF.Html.Core.Paint
         /// </summary>
         internal static double DoubleOverlineExtraReachAbove(CssBox box, double pixelsPerPoint)
         {
-            if (box.TextDecorationStyle != Keywords.Double) return 0;
+            if (box.TextDecorationStyle.Value != TextDecorationStyleMode.Double) return 0;
 
             var line = box.TextDecorationLine;
             if (string.IsNullOrEmpty(line) || line == Keywords.None) return 0;

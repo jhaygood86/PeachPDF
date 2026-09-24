@@ -116,7 +116,7 @@ namespace PeachPDF.Html.Core.Paint
             if (g.IsOffscreenTile)
                 return;
 
-            var overlay = new FragmentPainter(container) { _textOnly = true };
+            var overlay = new FragmentPainter(container) { _textOnly = true, _contextMembers = _contextMembers };
             g.InvisibleText = true;
             try
             {
@@ -128,37 +128,64 @@ namespace PeachPDF.Html.Core.Paint
             }
         }
 
-        /// <summary>The union of everything <paramref name="fragment"/> and its descendants paint, or null when nothing has an extent.</summary>
-        private static RRect? SubtreeExtent(BoxFragment fragment)
+        /// <summary>
+        /// The union of everything <paramref name="fragment"/> and its descendants paint, or null when nothing has an extent. Fragments in
+        /// <paramref name="excluded"/> (the other planes of a 3D rendering context) and their subtrees are left out.
+        /// </summary>
+        private static RRect? SubtreeExtent(BoxFragment fragment, HashSet<BoxFragment>? excluded = null)
         {
-            RRect? union = null;
+            var union = new ExtentUnion();
+            union.Add(fragment.WholeBoxRect);
+            AccumulateExtent(fragment, ref union, excluded);
+            return union.ToRect();
+        }
 
-            void Add(RRect rect)
+        private static void AccumulateExtent(BoxFragment node, ref ExtentUnion union, HashSet<BoxFragment>? excluded)
+        {
+            union.Add(node.Rect);
+
+            var lines = node.Lines;
+            for (var i = 0; i < lines.Count; i++)
+                union.Add(lines[i].Rect);
+
+            var words = node.Words;
+            for (var i = 0; i < words.Count; i++)
+                union.Add(words[i].Rect);
+
+            var children = node.Children;
+            for (var i = 0; i < children.Count; i++)
+            {
+                if (excluded is null || !excluded.Contains(children[i]))
+                    AccumulateExtent(children[i], ref union, excluded);
+            }
+        }
+
+        /// <summary>A running union of rectangles, on the stack. A rectangle without positive width and height is ignored (see the invariant on degenerate rectangles).</summary>
+        private struct ExtentUnion
+        {
+            private double _left, _top, _right, _bottom;
+            private bool _any;
+
+            public void Add(RRect rect)
             {
                 // A box that draws nothing of its own (an anonymous text box: its words carry the rectangles) reports a degenerate rectangle
                 // at the origin, which would drag the union there.
                 if (!(rect.Width > 0) || !(rect.Height > 0) || double.IsNaN(rect.X + rect.Y + rect.Width + rect.Height))
                     return;
 
-                union = union is { } current ? Union(current, rect) : rect;
+                if (!_any)
+                {
+                    (_left, _top, _right, _bottom, _any) = (rect.Left, rect.Top, rect.Right, rect.Bottom, true);
+                    return;
+                }
+
+                _left = Math.Min(_left, rect.Left);
+                _top = Math.Min(_top, rect.Top);
+                _right = Math.Max(_right, rect.Right);
+                _bottom = Math.Max(_bottom, rect.Bottom);
             }
 
-            void Walk(BoxFragment node)
-            {
-                Add(node.Rect);
-                foreach (var line in node.Lines)
-                    Add(line.Rect);
-
-                foreach (var word in node.Words)
-                    Add(word.Rect);
-
-                foreach (var child in node.Children)
-                    Walk(child);
-            }
-
-            Add(fragment.WholeBoxRect);
-            Walk(fragment);
-            return union;
+            public readonly RRect? ToRect() => _any ? new RRect(_left, _top, _right - _left, _bottom - _top) : null;
         }
 
         /// <summary>
@@ -209,28 +236,35 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>
         /// The most any box in <paramref name="fragment"/>'s subtree (the box itself included) paints beyond its own rectangle:
         /// <c>box-shadow</c>, <c>drop-shadow()</c>, <c>outline</c> and <c>text-shadow</c>. A descendant's shadow spills past the
-        /// filtered element's own extent just as its own does, and would otherwise be cut off at the bitmap's edge.
+        /// filtered element's own extent just as its own does, and would otherwise be cut off at the bitmap's edge. Fragments in
+        /// <paramref name="excluded"/> and their subtrees are not counted.
         /// </summary>
-        private static double SubtreeBleed(BoxFragment fragment)
+        private static double SubtreeBleed(BoxFragment fragment, HashSet<BoxFragment>? excluded = null)
         {
             var bleed = ShadowBleed(fragment.Box);
-
-            void Walk(BoxFragment node)
+            var children = fragment.Children;
+            for (var i = 0; i < children.Count; i++)
             {
-                var box = node.Box;
-                bleed = Math.Max(bleed, ShadowBleed(box));
-                bleed = Math.Max(bleed, OutlineBleed(box));
-                bleed = Math.Max(bleed, TextShadowBleed(box));
-
-                foreach (var child in node.Children)
-                    Walk(child);
+                if (excluded is null || !excluded.Contains(children[i]))
+                    AccumulateBleed(children[i], ref bleed, excluded);
             }
 
-            foreach (var child in fragment.Children)
-                Walk(child);
+            return Math.Max(bleed, Math.Max(OutlineBleed(fragment.Box), TextShadowBleed(fragment.Box)));
+        }
 
-            bleed = Math.Max(bleed, Math.Max(OutlineBleed(fragment.Box), TextShadowBleed(fragment.Box)));
-            return bleed;
+        private static void AccumulateBleed(BoxFragment node, ref double bleed, HashSet<BoxFragment>? excluded)
+        {
+            var box = node.Box;
+            bleed = Math.Max(bleed, ShadowBleed(box));
+            bleed = Math.Max(bleed, OutlineBleed(box));
+            bleed = Math.Max(bleed, TextShadowBleed(box));
+
+            var children = node.Children;
+            for (var i = 0; i < children.Count; i++)
+            {
+                if (excluded is null || !excluded.Contains(children[i]))
+                    AccumulateBleed(children[i], ref bleed, excluded);
+            }
         }
 
         private static double OutlineBleed(CssBox box) =>

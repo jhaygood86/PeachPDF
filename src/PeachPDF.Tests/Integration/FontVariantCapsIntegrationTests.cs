@@ -61,7 +61,7 @@ namespace PeachPDF.Tests.Integration
             var container = await LayoutHtml($"<b id=\"w\" style=\"font-variant-caps:{keyword}\">Hello</b>", BundledFonts.Ttf, "truetype", "SS3Caps");
             var box = FindWordsBox(container.Root!, "w");
 
-            Assert.Equal(keyword, box.FontVariantCaps);
+            Assert.Equal(keyword, box.FontVariantCaps.ToString());
             Assert.Equal(FontVariantCapsFeature.None, box.ActualFontVariantCaps);
             Assert.Single(box.Words);
             Assert.Equal("Hello", box.Words[0].Text);
@@ -76,7 +76,7 @@ namespace PeachPDF.Tests.Integration
                 BundledFonts.Ttf, "truetype", "SS3Caps");
             var box = FindWordsBox(container.Root!, "w");
 
-            Assert.Equal("normal", box.FontVariantCaps);
+            Assert.Equal("normal", box.FontVariantCaps.ToString());
             Assert.Contains(("smcp", 1), box.ActualFontFeatureSettings);
             // font-feature-settings has no synthesis fallback at all - it's a real-GSUB-or-nothing
             // channel, so this composes with the (font-variant-caps-driven) small-caps synthesis gate

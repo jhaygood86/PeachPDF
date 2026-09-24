@@ -119,7 +119,7 @@ namespace PeachPDF.Tests.Integration
 
             var second = FindBoxByClass(rootBox, "second");
             Assert.NotNull(second);
-            Assert.Equal("auto", second.BreakBefore);
+            Assert.Equal("auto", second.BreakBefore.ToString());
             Assert.True(second.Location.Y < container.PageSize.Height,
                 $"break-before: always is not a valid break value and must not paginate, but the box starts at y={second.Location.Y}");
         }
