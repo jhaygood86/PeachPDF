@@ -249,6 +249,7 @@ namespace PeachPDF.Html.Core.Paint
             else
             {
                 var wordPoint = new RPoint(rect.X, rect.Y + baselineAdjust);
+                PaintTextShadows(g, styleSource, font, text, wordPoint, textSize, wordFeatures, logicalText);
                 g.DrawString(text, font, styleSource.ActualColor, wordPoint, textSize, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
             }
         }

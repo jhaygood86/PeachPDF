@@ -110,6 +110,8 @@
         public static readonly string FillOpacity = "fill-opacity";
         public static readonly string FillRule = "fill-rule";
         public static readonly string Filter = "filter";
+        public static readonly string BackdropFilter = "backdrop-filter";
+        public static readonly string WebkitBackdropFilter = "-webkit-backdrop-filter";
         public static readonly string Flex = "flex";
         public static readonly string FlexBasis = "flex-basis";
         public static readonly string FlexDirection = "flex-direction";

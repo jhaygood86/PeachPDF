@@ -14,6 +14,8 @@ using PeachPDF.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.Raster;
 using PeachPDF.Text;
 using PeachPDF.Utilities;
 using System;
@@ -116,8 +118,30 @@ namespace PeachPDF.Adapters
         public override void PushClipExclude(RRect rect)
         { }
 
+        // The accumulated linear part of the pushed transforms (a, b, c, d of x' = a x + c y, y' = b x + d y), so a raster
+        // region can pick a pixel pitch that is right after the transforms are applied.
+        private readonly Stack<(double A, double B, double C, double D)> _linearStack = [];
+        private (double A, double B, double C, double D) _linear = (1, 0, 0, 1);
+
+        internal override (double X, double Y) TransformScale
+        {
+            get
+            {
+                var x = Math.Sqrt(_linear.A * _linear.A + _linear.B * _linear.B);
+                var y = Math.Sqrt(_linear.C * _linear.C + _linear.D * _linear.D);
+                return (x > 1e-6 ? x : 1.0, y > 1e-6 ? y : 1.0);
+            }
+        }
+
         public override void PushTransform(RMatrix matrix)
         {
+            _linearStack.Push(_linear);
+            _linear = (
+                matrix.M11 * _linear.A + matrix.M12 * _linear.C,
+                matrix.M11 * _linear.B + matrix.M12 * _linear.D,
+                matrix.M21 * _linear.A + matrix.M22 * _linear.C,
+                matrix.M21 * _linear.B + matrix.M22 * _linear.D);
+
             _g.Save();
             _g.MultiplyTransform(new XMatrix(
                 matrix.M11, matrix.M12, matrix.M21, matrix.M22,
@@ -126,6 +150,9 @@ namespace PeachPDF.Adapters
 
         public override void PopTransform()
         {
+            if (_linearStack.Count > 0)
+                _linear = _linearStack.Pop();
+
             _g.Restore();
         }
 
@@ -183,7 +210,10 @@ namespace PeachPDF.Adapters
         /// the one real PDF-writing path that acts on it.</summary>
         public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, TextShapingFeatures? features, string? logicalText)
         {
-            var xBrush = ((BrushAdapter)_adapter.GetSolidBrush(color)).Brush;
+            // Invisible text paints nothing, so its colour is irrelevant - and an opaque one keeps it clear of the alpha and
+            // colour-space guards a real colour would pass through.
+            var xBrush = ((BrushAdapter)_adapter.GetSolidBrush(InvisibleText ? RColor.Black : color)).Brush;
+            _g.InvisibleText = InvisibleText;
             var xPoint = Utils.Convert(point, PixelsPerPoint);
 
             // Realized via the PDF `Tc` character-spacing operator (XGraphicsPdfRenderer/
@@ -192,11 +222,21 @@ namespace PeachPDF.Adapters
             // extra draw calls and the string stays a single, contiguous, copy/paste- and
             // tagged-PDF-friendly text run regardless of its value.
             var xLetterSpacing = letterSpacing / PixelsPerPoint;
-            _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, ToGlyphPalette(fontPalette), features ?? TextShapingFeatures.Default, logicalText);
+            try
+            {
+                _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, ToGlyphPalette(fontPalette), features ?? TextShapingFeatures.Default, logicalText);
+            }
+            finally
+            {
+                _g.InvisibleText = false;
+            }
         }
 
         public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color)
         {
+            if (InvisibleText)
+                return;
+
             var xBrush = ((BrushAdapter)_adapter.GetSolidBrush(color)).Brush;
             var positioned = new (int GlyphIndex, double X, double Y)[glyphs.Count];
             for (var i = 0; i < glyphs.Count; i++)
@@ -225,80 +265,9 @@ namespace PeachPDF.Adapters
             return new XGlyphPalette(palette.BasePaletteIndex, overrides);
         }
 
-        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null)
-        {
-            var resolvedFeatures = features ?? TextShapingFeatures.Default;
-            var realFont = ((FontAdapter)font).Font;
-            var descriptor = realFont.Descriptor;
-            if (descriptor is null || descriptor.UnitsPerEm == 0)
-                return null;
-
-            // Design units -> SVG user space. font.Size is in points (XFont.Size = css/svg size / PixelsPerPoint),
-            // while these path coordinates reach the backend un-scaled by PixelsPerPoint (see GraphicsPathAdapter.
-            // Transform), the same space shape paths are built in - so multiply back by PixelsPerPoint. The em-square
-            // is y-up; user space is y-down, so glyph Y is subtracted from the baseline.
-            double scale = realFont.Size * PixelsPerPoint / descriptor.UnitsPerEm;
-
-            var path = GetGraphicsPath();
-            path.FillMode = RFillMode.Nonzero;
-
-            double penX = baselineOrigin.X;
-            double baseY = baselineOrigin.Y;
-            bool anyGeometry = false;
-
-            foreach (ShapedGlyph glyph in descriptor.Shape(str, resolvedFeatures))
-            {
-                int glyphId = glyph.GlyphIndex;
-
-                // TryGetGlyphOutline returns false for an empty glyph (e.g. space) or a font with no
-                // usable outline source at all (a CID-keyed CFF or bitmap font) - either way there's
-                // nothing to add for this glyph.
-                if (descriptor.TryGetGlyphOutline(glyphId, out GlyphOutline outline))
-                {
-                    // GPOS positioning (kerning's XOffset, mark attachment's XOffset/YOffset) shifts
-                    // where this glyph paints without changing its own outline shape - see
-                    // GposPositioner. Y is subtracted (em-square is y-up, user space is y-down), same
-                    // as the outline's own Y coordinates just below.
-                    double glyphX = penX + glyph.XOffset * scale;
-                    double glyphY = baseY - glyph.YOffset * scale;
-
-                    foreach (GlyphContour contour in outline.Contours)
-                    {
-                        path.AddMove(glyphX + contour.Start.X * scale, glyphY - contour.Start.Y * scale);
-
-                        foreach (GlyphSegment segment in contour.Segments)
-                        {
-                            if (segment.IsCubic)
-                            {
-                                path.AddBezierTo(
-                                    glyphX + segment.Control1.X * scale, glyphY - segment.Control1.Y * scale,
-                                    glyphX + segment.Control2.X * scale, glyphY - segment.Control2.Y * scale,
-                                    glyphX + segment.End.X * scale, glyphY - segment.End.Y * scale);
-                            }
-                            else
-                            {
-                                path.LineTo(glyphX + segment.End.X * scale, glyphY - segment.End.Y * scale);
-                            }
-                        }
-
-                        path.CloseFigure();
-                        anyGeometry = true;
-                    }
-                }
-
-                penX += (descriptor.GlyphIndexToWidth(glyphId) + glyph.XAdvanceDelta) * scale + letterSpacing;
-            }
-
-            // No geometry at all means the font produced no outlines (a CID-keyed CFF or bitmap font) -
-            // signal the caller to fall back to DrawString.
-            if (!anyGeometry)
-            {
-                path.Dispose();
-                return null;
-            }
-
-            return path;
-        }
+        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null) =>
+            TextOutlineBuilder.Build(GetGraphicsPath(), ((FontAdapter)font).Font, PixelsPerPoint, str, baselineOrigin, letterSpacing,
+                features ?? TextShapingFeatures.Default);
 
         public override IReadOnlyList<RInkSpan>? GetInkCrossings(
             string str, RFont font, RPoint origin, double bandTop, double bandBottom,
@@ -492,6 +461,41 @@ namespace PeachPDF.Adapters
             return (tileGraphics, new ImageAdapter(form));
         }
 
+        internal override RasterSurfaceScope? BeginRasterSurface(RRect layoutBounds, double? dpiOverride = null) =>
+            RasterSurfaceFactory.Create(_adapter, PixelsPerPoint, layoutBounds, dpiOverride ?? _adapter.RasterizationDpi, _adapter.MaxRasterPixels, TransformScale);
+
+        internal override bool FlattensTransparency =>
+            _g.Owner is { } owner && owner.Options.FlattenTransparency &&
+            (owner.Options.PdfAConformance is PdfAConformance.PdfA1B or PdfAConformance.PdfA1A ||
+             owner.Options.PdfXConformance is PdfXConformance.X1a or PdfXConformance.X3);
+
+        private TransparencyProbe? _probe;
+
+        internal override TransparencyProbe? CreateTransparencyProbe() => _probe ??= new TransparencyProbe(_adapter, PixelsPerPoint);
+
+        internal override void DrawRaster(RasterSurface surface)
+        {
+            // A bitmap with soft edges needs an image soft mask (/SMask), a transparency construct PDF/A-1 and
+            // PDF/X-1a/X-3 forbid. Rejected up front, with a message naming the CSS feature rather than the
+            // image, like every other transparency-requiring paint path.
+            // A surface with no soft edge at all (a flattened region, or a backdrop over opaque paper) embeds without an alpha plane
+            // and needs none of that.
+            var opaque = RasterEmbedder.IsOpaque(surface);
+            if (!opaque && _g.Owner is { } document)
+            {
+                PdfATransparencyGuard.RequireAllowed(document,
+                    "An effect PeachPDF renders as a bitmap (a CSS filter such as blur() or grayscale(), a shadow with a blur radius, or an SVG filter with a blur, lighting or other pixel primitive)");
+            }
+
+            // PDF/X-1a allows only CMYK content, so an opaque bitmap goes in as DeviceCMYK there.
+            var asCmyk = opaque && _g.Owner?.Options.PdfXConformance == PdfXConformance.X1a;
+
+            // The image is placed at the surface's own snapped layout rectangle, converted to points once here
+            // (the same division every other draw call makes), so its physical size is exact.
+            var richBlack = _g.Owner?.Options.ColorOptions?.BlackGeneration == ColorBlackGeneration.UseRichBlack;
+            _g.DrawImage(RasterEmbedder.ToXImage(surface, asCmyk, richBlack), Utils.Convert(surface.LayoutRect, PixelsPerPoint));
+        }
+
         public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect)
         {
             if (((ImageAdapter)image).Image is XForm imageForm && ((ImageAdapter)maskImage).Image is XForm maskForm)
@@ -549,6 +553,9 @@ namespace PeachPDF.Adapters
 
         public override void Dispose()
         {
+            _probe?.Dispose();
+            _probe = null;
+
             if (_releaseGraphics)
                 _g.Dispose();
         }

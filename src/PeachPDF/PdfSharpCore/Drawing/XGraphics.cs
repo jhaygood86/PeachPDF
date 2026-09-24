@@ -1175,6 +1175,14 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
+        /// <summary>
+        /// When true, <see cref="DrawString(string, XFont, XBrush, XRect, XStringFormat, double, XGlyphPalette?, TextShapingFeatures?, string?)"/>
+        /// shows text in PDF text rendering mode 3 (neither filled nor stroked): the glyphs are laid out, embedded and
+        /// extractable exactly as visible text is, but paint nothing. Used to keep text selectable and searchable over content
+        /// that was drawn as a bitmap. Text decorations and colour-glyph artwork are not painted either.
+        /// </summary>
+        public bool InvisibleText { get; set; }
+
         public void DrawString(string s, XFont font, XBrush brush, XPoint point)
         {
             DrawString(s, font, brush, new XRect(point.X, point.Y, 0, 0), XStringFormats.Default);

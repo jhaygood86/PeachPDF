@@ -635,6 +635,18 @@
       }
     },
     {
+      "name": "text-shadow",
+      "comment": "cssDataType 'cssom-grammar' calls TextShadowGrammar.TryParse directly - the same grammar FragmentPainter's text-shadow paint calls at render time (none-aware, like box-shadow's). Inherited, per CSS Text Decoration 3 section 4.1.",
+      "inherited": true,
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.TextShadowGrammar.TryParse" },
+      "html": {
+        "propertyPath": "TextShadow",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
       "name": "outline-color",
       "inherited": false,
       "initialValue": "currentcolor",
@@ -783,13 +795,79 @@
     },
     {
       "name": "filter",
-      "comment": "cssDataType 'cssom-grammar' calls FilterGrammar.TryParse directly - the same grammar PeachPDF.Html.Core.Paint.FilterEffectResolver (via CssBox.ActualFilterFunctions) calls at paint time. No acceptsNoneLiteral needed: TryParse is already none-aware (returns an empty list, not null, for the literal 'none'), matching box-shadow's own convention. Only opacity()/brightness()/contrast()/invert() (and drop-shadow(), approximated) have any native PDF rendering path - blur()/grayscale()/hue-rotate()/saturate()/sepia() parse successfully but are documented no-ops (ColorMatrix's remarks explain why: PDF's /TR transfer function is strictly per-channel independent, so a cross-channel color mix has no native PDF mechanism at all).",
+      "comment": "cssDataType 'cssom-grammar' calls FilterGrammar.TryParse directly - the same grammar PeachPDF.Html.Core.Paint.FilterEffectResolver (via CssBox.ActualFilterFunctions) calls at paint time. No acceptsNoneLiteral needed: TryParse is already none-aware (returns an empty list, not null, for the literal 'none'), matching box-shadow's own convention. opacity()/brightness()/contrast()/invert() have a native PDF path; blur()/grayscale()/sepia()/saturate()/hue-rotate()/drop-shadow() are rendered into a bitmap by the raster backend (FilterEffectResolver.Resolved.RequiresRaster).",
       "inherited": false,
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FilterGrammar.TryParse" },
       "html": {
         "propertyPath": "Filter",
         "invalidates": "InvalidateFilter",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
+      "name": "perspective",
+      "comment": "none | <length>: how far the viewer is from the z=0 plane, for this box's children (CSS Transforms 2 section 13). cssDataType 'cssom-grammar' calls PerspectiveProperty.ValueGrammar directly. Read at paint time by FragmentPainter's projective path (a child with a transform that moves out of the plane); no cascade-time work.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.PerspectiveProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "Perspective",
+        "invalidates": "InvalidatePerspective",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
+      "name": "perspective-origin",
+      "comment": "<position>: the vanishing point of perspective, relative to this box (CSS Transforms 2 section 13). cssDataType 'cssom-grammar' calls PerspectiveOriginProperty.ValueGrammar directly.",
+      "inherited": false,
+      "initialValue": "50% 50%",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.PerspectiveOriginProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "PerspectiveOrigin",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
+      "name": "backface-visibility",
+      "comment": "visible | hidden (CSS Transforms 2 section 14): whether the box is painted while its back faces the viewer. FragmentPainter decides facing from the sign of the transformed normal.",
+      "inherited": false,
+      "initialValue": "visible",
+      "cssDataType": "keyword",
+      "supportedValues": ["visible", "hidden"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "BackfaceVisibility",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
+      "name": "backdrop-filter",
+      "comment": "The same function grammar as filter (Filter Effects 2 section 3.1), applied to what was painted behind the element rather than to the element. Always rendered by the raster backend: FragmentPainter.PaintBackdropFilter re-paints the earlier content of the backdrop root into a bitmap, filters it, and draws it under the element's own background.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FilterGrammar.TryParse" },
+      "html": {
+        "propertyPath": "BackdropFilter",
+        "invalidates": "InvalidateBackdropFilter",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
+      "name": "-webkit-backdrop-filter",
+      "comment": "Prefixed alias of backdrop-filter, sharing its storage; still what older Safari-targeted stylesheets write.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FilterGrammar.TryParse" },
+      "aliasOf": "backdrop-filter",
+      "html": {
+        "propertyPath": "BackdropFilter",
+        "invalidates": "InvalidateBackdropFilter",
         "csharpDataType": "string",
         "area": "VisualEffectsArea"
       }

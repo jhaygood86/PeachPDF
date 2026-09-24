@@ -122,6 +122,8 @@ namespace PeachPDF.Html.Core.Paint
         /// <param name="draw">false to only restore the enclosing scope - after a paint that failed</param>
         private void CloseOutlineScope(RGraphics g, OutlineScopeState? outer, StructureTagBuilder? builder, bool draw = true)
         {
+            draw &= !_stopped;
+
             if (outer is not { } state) return;
 
             var outlines = _deferredOutlines!;
@@ -144,6 +146,9 @@ namespace PeachPDF.Html.Core.Paint
         /// </summary>
         private void DrawScopeOutlinesSoFar(RGraphics g, StructureTagBuilder? builder)
         {
+            if (_stopped)
+                return;
+
             if (_deferredOutlines is not { Count: > 0 } outlines) return;
 
             _deferredOutlines = [];

@@ -82,8 +82,11 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 // this glyph paints without changing its own outline shape - see GposPositioner.
                 // The artwork itself is identical wherever the glyph lands, so it is drawn once into a
                 // Form XObject and referenced here; only when that cannot apply is it inlined.
-                if (!TryPaintGlyphFromForm(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale))
+                if (!PaintBitmapGlyph(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale) &&
+                    !TryPaintGlyphFromForm(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale))
+                {
                     PaintGlyph(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale);
+                }
 
                 penX += (_descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta) * _scale + _letterSpacing;
             }
@@ -269,20 +272,47 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             return result;
         }
 
+        /// <summary>
+        /// Draws a bitmap colour glyph (CBDT/sbix): the strike's picture, scaled by <c>fontSize / strikePpem</c> and placed from the
+        /// glyph origin by the picture's own bearings. False when the glyph has no picture (an ordinary outline glyph).
+        /// </summary>
+        private bool PaintBitmapGlyph(int glyphId, double originX, double originYOffset)
+        {
+            if (!_descriptor.HasBitmapGlyphs || !_descriptor.TryGetBitmapGlyph(glyphId, _font.Size, out BitmapGlyph bitmap))
+                return false;
+
+            double scale = _font.Size / bitmap.Ppem;
+            double baselineY = _pageDownwards ? _baselineY - originYOffset : _baselineY + originYOffset;
+            double width = bitmap.Width * scale;
+            double height = bitmap.Height * scale;
+            double left = originX + bitmap.BearingX * scale;
+            double top = _pageDownwards ? baselineY - bitmap.BearingTop * scale : baselineY + bitmap.BearingTop * scale - height;
+
+            if (_measuring)
+            {
+                IncludeInMeasuredBounds(new XRect(left, top, width, height));
+                return true;
+            }
+
+            _gfx.DrawImage(PeachPDF.Adapters.BitmapGlyphImages.Get(_descriptor, glyphId, bitmap), new XRect(left, top, width, height));
+            return true;
+        }
+
         private void PaintGlyph(int glyphId, double originX, double originYOffset = 0)
         {
             ColrAffine placement = Placement(originX, originYOffset);
-            ColrTable colr = _descriptor.ColorTable;
+            // A bitmap-only colour font (CBDT/sbix) has no COLR table: its glyphs with no picture are plain outlines.
+            ColrTable? colr = _descriptor.ColorTable;
 
             // Per the COLR processing model a v1-aware renderer resolves the v1 BaseGlyphList first,
             // falling back to the v0 layer records only when the glyph has no v1 paint.
-            if (colr.Version >= 1 && colr.GetV1BaseGlyphPaint(glyphId) is { } paint)
+            if (colr is not null && colr.Version >= 1 && colr.GetV1BaseGlyphPaint(glyphId) is { } paint)
             {
                 PaintV1(paint, placement, hasClip: false, clip: default, depth: 0);
                 return;
             }
 
-            if (colr.TryGetV0Layers(glyphId, out var layers))
+            if (colr is not null && colr.TryGetV0Layers(glyphId, out var layers))
             {
                 foreach ((int layerGlyphId, int paletteIndex) in layers)
                     FillGlyphOutline(layerGlyphId, placement, ResolveColor(paletteIndex));

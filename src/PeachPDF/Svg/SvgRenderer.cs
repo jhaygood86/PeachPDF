@@ -1963,7 +1963,7 @@ namespace PeachPDF.Svg
         /// is required for the mask to land in the same place as the content it's masking.
         /// </summary>
         /// <summary>
-        /// Delegates to <see cref="SvgFilterEvaluator.Render"/>, supplying its <c>SourceGraphic</c> input
+        /// Delegates to <see cref="SvgFilterEvaluator.Render(RGraphics, SvgFilter, SvgElement, RRect?, Action{RGraphics})"/>, supplying its <c>SourceGraphic</c> input
         /// as a callback that paints <paramref name="element"/>'s own ordinary content - the same
         /// <see cref="RenderElementSwitch"/> call <see cref="RenderMaskedElementContent"/> makes for its
         /// mask tile, at the same (already inheritedOpacity*element.Opacity-multiplied)
@@ -1972,7 +1972,7 @@ namespace PeachPDF.Svg
         /// established) convention rather than introducing a second, different opacity-timing rule.
         /// </summary>
         private static void RenderFilteredElementContent(RGraphics g, SvgDocument document, SvgElement element, SvgFilter filter, double opacity, (double Width, double Height) viewport) =>
-            SvgFilterEvaluator.Render(g, filter, element, tg => RenderElementSwitch(tg, document, element, opacity, viewport));
+            SvgFilterEvaluator.Render(g, filter, element, new RRect(0, 0, viewport.Width, viewport.Height), tg => RenderElementSwitch(tg, document, element, opacity, viewport));
 
         private static void RenderMaskedElementContent(RGraphics g, SvgDocument document, SvgElement element, SvgMask mask, double opacity, (double Width, double Height) viewport)
         {

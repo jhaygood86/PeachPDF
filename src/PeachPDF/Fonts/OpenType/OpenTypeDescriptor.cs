@@ -578,7 +578,23 @@ namespace PeachPDF.Fonts.OpenType
         /// True when this font carries COLR + CPAL color-glyph data over glyf outlines, so its color
         /// glyphs can be drawn as vector fills. CFF-flavored color fonts report false (no glyf).
         /// </summary>
-        public bool IsColorFont => FontFace.colr != null && FontFace.cpal != null && FontFace.glyf != null;
+        public bool IsColorFont => (FontFace.colr != null && FontFace.cpal != null && FontFace.glyf != null) || FontFace.bitmap != null;
+
+        /// <summary>True when this font carries bitmap colour glyphs (CBDT/CBLC or sbix): a picture per glyph and size, not outlines.</summary>
+        public bool HasBitmapGlyphs => FontFace.bitmap != null;
+
+        /// <summary>Whether the font has a bitmap picture for <paramref name="glyphId"/>.</summary>
+        public bool HasBitmapGlyph(int glyphId) => FontFace.bitmap?.HasGlyph(glyphId) ?? false;
+
+        /// <summary>
+        /// The bitmap picture of a glyph from the strike best suited to a font size of <paramref name="ppem"/> pixels per em, or false when
+        /// the glyph has none (an outline glyph, or a font without bitmap colour tables).
+        /// </summary>
+        public bool TryGetBitmapGlyph(int glyphId, double ppem, out BitmapGlyph glyph)
+        {
+            glyph = default;
+            return FontFace.bitmap?.TryGet(glyphId, ppem, out glyph) ?? false;
+        }
 
         /// <summary>The font's COLR table, or null if it has none.</summary>
         public ColrTable ColorTable => FontFace.colr;

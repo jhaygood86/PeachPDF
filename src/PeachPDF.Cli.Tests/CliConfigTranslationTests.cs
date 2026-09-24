@@ -61,6 +61,34 @@ public class CliConfigTranslationTests
     }
 
     [Fact]
+    public void RasterDpi_DefaultsToTheLibraryDefault_AndMapsWhenGiven()
+    {
+        Assert.Equal(new PdfGenerateConfig().RasterizationDpi, CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).RasterizationDpi);
+
+        Assert.Equal(600, CliRunner.BuildConfig(ArgumentParser.Parse(["--raster-dpi=600", "doc.html"])).RasterizationDpi);
+        Assert.Equal(288, CliRunner.BuildConfig(ArgumentParser.Parse(["--raster-dpi", "288", "doc.html"])).RasterizationDpi);
+    }
+
+    [Fact]
+    public void FlattenTransparency_DefaultsToReject_AndMapsWhenGiven()
+    {
+        Assert.Equal(TransparencyPolicy.Reject, CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).TransparencyPolicy);
+        Assert.Equal(TransparencyPolicy.Flatten, CliRunner.BuildConfig(ArgumentParser.Parse(["--flatten-transparency", "doc.html"])).TransparencyPolicy);
+    }
+
+    [Theory]
+    [InlineData("50")]
+    [InlineData("1201")]
+    [InlineData("abc")]
+    [InlineData("")]
+    public void RasterDpi_OutOfRangeOrMalformed_IsAnArgumentError(string value)
+    {
+        var options = ArgumentParser.Parse([$"--raster-dpi={value}", "doc.html"]);
+
+        Assert.NotEmpty(options.Errors);
+    }
+
+    [Fact]
     public void Metadata_OverridesArePopulated()
     {
         var config = CliRunner.BuildConfig(ArgumentParser.Parse([

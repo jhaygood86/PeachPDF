@@ -194,12 +194,13 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
-        public void SupportsTransformPerspectiveRule_NotGenuinelyRendered()
+        public void SupportsTransformPerspectiveRule_IsGenuinelyRendered()
         {
+            // perspective() is drawn in real perspective (see docs/html-css-support.md), so the oracle reports it supported.
             var source = @"@supports (transform: perspective(300px)) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.False(supports.Condition.Check());
+            Assert.True(supports.Condition.Check());
         }
 
         // break-before's cssDataType includes region/avoid-region (real dispatch stores any css-break-4

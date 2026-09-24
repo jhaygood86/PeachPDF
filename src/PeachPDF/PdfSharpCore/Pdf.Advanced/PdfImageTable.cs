@@ -140,6 +140,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             // ICC-preserving pass-through for that specific embed (PdfImage.InitializeJpeg).
             if (image.IsCmyk) return (null, null);
 
+            // Raster-backend output is rendered at a deliberately chosen physical resolution; resampling it
+            // to the display size would throw that resolution away (see XImage.IsRasterOutput).
+            if (image.IsRasterOutput) return (null, null);
+
             if (IsPngPinnedToNaturalSize(image)) return (null, null);
             if (IsGifPinnedToNaturalSize(image)) return (null, null);
 

@@ -122,6 +122,15 @@ namespace PeachPDF.Html.Adapters
         internal virtual double LayoutUnitsPerPoint => 1.0;
 
         /// <summary>
+        /// The resolution, in pixels per inch of paper, the raster backend renders effects at
+        /// (see <c>PdfGenerateConfig.RasterizationDpi</c>). Set per render by the owner of the adapter.
+        /// </summary>
+        internal double RasterizationDpi { get; set; } = 300;
+
+        /// <summary>The most pixels one raster surface may have before its resolution is lowered to fit.</summary>
+        internal long MaxRasterPixels { get; set; } = 64_000_000;
+
+        /// <summary>
         /// Resolve color value from given color name.
         /// </summary>
         /// <param name="colorName">the color name</param>

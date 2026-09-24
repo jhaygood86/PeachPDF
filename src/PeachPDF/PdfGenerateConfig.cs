@@ -331,6 +331,38 @@ namespace PeachPDF
         public ImageCompression ImageCompression { get; set; } = ImageCompression.Auto;
 
         /// <summary>
+        /// The resolution, in pixels per inch of <em>paper</em>, at which PeachPDF renders the effects a PDF cannot
+        /// express as vector content (for example <c>filter: blur()</c>) into bitmaps before embedding them.
+        /// Defaults to <c>300</c>, the print-quality convention: it stays sharp when a viewer is zoomed to several
+        /// hundred percent or the file is printed. Valid values are 72 to 1200; anything else throws an
+        /// <see cref="System.ArgumentOutOfRangeException"/> when generation starts.
+        /// </summary>
+        /// <remarks>
+        /// The value is a physical resolution and is independent of <see cref="PixelsPerInch"/>: a bitmap is always
+        /// placed at exactly the size of the content it replaces, so an inch of the page stays an inch, and only the
+        /// number of pixels backing it changes. For example with <see cref="PixelsPerInch"/> of 96 and a value of
+        /// 288, each CSS pixel is backed by 3 x 3 = 9 bitmap pixels. Higher values give sharper output and larger
+        /// files; content that would exceed <see cref="MaxRasterPixels"/> is rendered at a lower resolution instead
+        /// (its placed size never changes). Bitmaps are exempt from <see cref="DownscaleImages"/>.
+        /// </remarks>
+        public double RasterizationDpi { get; set; } = 300;
+
+        /// <summary>
+        /// The largest number of pixels a single rasterized region may have (see <see cref="RasterizationDpi"/>).
+        /// A region that would exceed it is rendered at a lower resolution just large enough to fit. Defaults to
+        /// 64 million pixels (about 256 MB of working memory for one region).
+        /// </summary>
+        public long MaxRasterPixels { get; set; } = 64_000_000;
+
+        /// <summary>
+        /// What happens when a document that targets PDF/A-1 or PDF/X-1a/X-3 (all of which forbid transparency) uses something that needs it.
+        /// <see cref="TransparencyPolicy.Reject"/> (the default) fails generation with an error naming the construct;
+        /// <see cref="TransparencyPolicy.Flatten"/> renders the affected region into an opaque bitmap at <see cref="RasterizationDpi"/> instead
+        /// (embedded as DeviceCMYK under PDF/X-1a). Has no effect at any other conformance level, which permit transparency.
+        /// </summary>
+        public TransparencyPolicy TransparencyPolicy { get; set; } = TransparencyPolicy.Reject;
+
+        /// <summary>
         /// The PDF/X (ISO 15930) print-production conformance level to target. Defaults to
         /// <see cref="PeachPDF.PdfXConformance.None"/> - no PDF/X-specific work is done. See
         /// <see cref="PeachPDF.PdfXConformance"/> for what each level requires, including the mandatory

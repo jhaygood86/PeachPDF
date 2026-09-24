@@ -7,6 +7,7 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.Text;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -664,6 +665,7 @@ namespace PeachPDF.Html.Core.Dom
 
         private bool _actualTransformComputed;
         private RMatrix _actualTransformMatrix;
+        private Matrix4x4? _actualTransform4;
 
         /// <summary>
         /// Lazily computes the combined 2D transform matrix for the <c>transform</c>/<c>transform-origin</c>
@@ -676,17 +678,65 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!_actualTransformComputed)
                 {
-                    _actualTransformMatrix = CssValueParser.ParseTransform(Style.VisualEffects.Transform, Style.VisualEffects.TransformOrigin, Owner);
+                    (_actualTransformMatrix, _actualTransform4) = CssValueParser.ParseTransformFull(Style.VisualEffects.Transform, Style.VisualEffects.TransformOrigin, Owner);
                     _actualTransformComputed = true;
                 }
                 return _actualTransformMatrix;
             }
         }
 
+        /// <summary>
+        /// The 4x4 the 2D matrix above was projected from (transform origin baked in, box-local), or null when the box has no
+        /// <c>transform</c>. Its z=0 restriction is a homography when it involves <c>perspective()</c> or a perspective the parent applies.
+        /// </summary>
+        public Matrix4x4? ActualTransform4
+        {
+            get
+            {
+                _ = ActualTransformMatrix;
+                return _actualTransform4;
+            }
+        }
+
         /// <summary>True when this box has a non-identity CSS transform to apply at paint time.</summary>
         public bool IsTransformed => !ActualTransformMatrix.IsIdentity;
 
+        private double _actualPerspective = double.NaN;
+
+        /// <summary>The <c>perspective</c> distance this box gives its children, in layout units; 0 for <c>none</c>.</summary>
+        public double ActualPerspective
+        {
+            get
+            {
+                if (double.IsNaN(_actualPerspective))
+                {
+                    var value = Style.VisualEffects.Perspective;
+                    _actualPerspective = string.IsNullOrWhiteSpace(value) || value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase)
+                        ? 0
+                        : Math.Max(0, CssValueParser.ParseLength(value, 0, Owner));
+                }
+
+                return _actualPerspective;
+            }
+        }
+
+        /// <summary>The <c>perspective-origin</c> (the vanishing point), relative to this box's border box, in layout units.</summary>
+        public (double X, double Y) ActualPerspectiveOrigin
+        {
+            get
+            {
+                var (x, y, _) = CssValueParser.ParseTransformOriginPublic(Style.VisualEffects.PerspectiveOrigin, Owner);
+                return (x, y);
+            }
+        }
+
+        /// <summary>True when <c>backface-visibility: hidden</c>: the box is not painted while it faces away from the viewer.</summary>
+        public bool IsBackfaceHidden =>
+            string.Equals(Style.VisualEffects.BackfaceVisibility?.Trim(), Keywords.Hidden, StringComparison.OrdinalIgnoreCase);
+
         internal void InvalidateTransform() => _actualTransformComputed = false;
+
+        internal void InvalidatePerspective() => _actualPerspective = double.NaN;
 
         private bool _actualOpacityComputed;
         private double _actualOpacity;
@@ -745,6 +795,34 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         internal void InvalidateFilter() => _filterFunctionsComputed = false;
+
+        private bool _backdropFilterFunctionsComputed;
+        private List<FilterGrammar.FilterFunction> _backdropFilterFunctions = [];
+
+        /// <summary>
+        /// Lazily parses the used value of <c>backdrop-filter</c> (Filter Effects Level 2 §3.1) into its ordered function list -
+        /// empty for <c>none</c> or an unparsable value. The grammar is <c>filter</c>'s own.
+        /// </summary>
+        public IReadOnlyList<FilterGrammar.FilterFunction> ActualBackdropFilterFunctions
+        {
+            get
+            {
+                if (!_backdropFilterFunctionsComputed)
+                {
+                    using (var pooledTokens = CssValueParser.GetCssTokensPooled(Style.VisualEffects.BackdropFilter))
+                    {
+                        List<Token> tokens = pooledTokens;
+                        _backdropFilterFunctions = FilterGrammar.TryParse(tokens) ?? [];
+                    }
+
+                    _backdropFilterFunctionsComputed = true;
+                }
+
+                return _backdropFilterFunctions;
+            }
+        }
+
+        internal void InvalidateBackdropFilter() => _backdropFilterFunctionsComputed = false;
 
         private bool _actualMixBlendModeComputed;
         private BlendMode _actualMixBlendMode;

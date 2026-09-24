@@ -95,6 +95,8 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.BoxShadow, () => new BoxShadowProperty(), true);
             AddLonghand(PropertyNames.MixBlendMode, () => new MixBlendModeProperty());
             AddLonghand(PropertyNames.Filter, () => new FilterProperty(), true);
+            AddLonghand(PropertyNames.BackdropFilter, () => new BackdropFilterProperty(PropertyNames.BackdropFilter), true);
+            AddLonghand(PropertyNames.WebkitBackdropFilter, () => new BackdropFilterProperty(PropertyNames.WebkitBackdropFilter), true);
             AddLonghand(PropertyNames.BoxDecorationBreak, () => new BoxDecorationBreak());
             AddLonghand(PropertyNames.BreakAfter, () => new BreakAfterProperty());
             AddLonghand(PropertyNames.BreakBefore, () => new BreakBeforeProperty());

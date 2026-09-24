@@ -54,7 +54,30 @@ namespace PeachPDF.Svg
         public bool PrimitiveUnitsUserSpaceOnUse { get; init; } = true;
 
         public List<FilterPrimitive> Primitives { get; init; } = [];
+
+        /// <summary>
+        /// True when at least one primitive needs pixels: a blur, a lighting or morphology pass, a cross-channel colour matrix,
+        /// arithmetic compositing, a non-linear transfer function, or a primitive subregion. Such a filter is evaluated in a
+        /// bitmap by the raster backend (<see cref="SvgRasterFilterEvaluator"/>); a filter of only the vector primitives keeps
+        /// running over PDF tiles and stays vector.
+        /// </summary>
+        public bool RequiresRaster
+        {
+            get
+            {
+                foreach (var primitive in Primitives)
+                {
+                    if (primitive.RequiresRaster)
+                        return true;
+                }
+
+                return false;
+            }
+        }
     }
+
+    /// <summary>A primitive subregion (<c>x</c>/<c>y</c>/<c>width</c>/<c>height</c> on a filter primitive); each side is null when omitted (and then follows the default subregion rule).</summary>
+    internal readonly record struct FilterSubregion(double? X, double? Y, double? Width, double? Height);
 
     /// <summary>
     /// One node of a <see cref="SvgFilter"/>'s primitive graph. <see cref="In"/> is this primitive's
@@ -70,6 +93,15 @@ namespace PeachPDF.Svg
 
         /// <summary>This primitive's own named result, referenceable by a LATER primitive's <see cref="In"/>/<c>In2</c>/<c>Inputs</c> - null means this result is only reachable via the implicit "previous result" rule.</summary>
         public string? Result { get; init; }
+
+        /// <summary>The primitive's own <c>x</c>/<c>y</c>/<c>width</c>/<c>height</c>, or null for the default subregion (the whole filter region).</summary>
+        public FilterSubregion? Subregion { get; set; }
+
+        /// <summary><c>color-interpolation-filters</c>: true (the initial value) computes in linear light, false in sRGB. Only the raster evaluation honours it.</summary>
+        public bool LinearRgb { get; set; } = true;
+
+        /// <summary>Whether this primitive can only be evaluated over pixels.</summary>
+        public virtual bool RequiresRaster => Subregion is not null;
     }
 
     /// <summary><c>feFlood</c> - fills the whole filter region with a flat color, ignoring <see cref="FilterPrimitive.In"/> (it has no real input; the SVG spec allows one to be specified but it's never consulted).</summary>
@@ -102,6 +134,14 @@ namespace PeachPDF.Svg
     {
         public string? In2 { get; init; }
         public required string Operator { get; init; }
+
+        /// <summary><c>k1</c>-<c>k4</c> of <c>operator="arithmetic"</c>: <c>k1*i1*i2 + k2*i1 + k3*i2 + k4</c> per premultiplied channel.</summary>
+        public double K1 { get; init; }
+        public double K2 { get; init; }
+        public double K3 { get; init; }
+        public double K4 { get; init; }
+
+        public override bool RequiresRaster => Operator == "arithmetic" || base.RequiresRaster;
     }
 
     /// <summary><c>feBlend</c> - blends <see cref="FilterPrimitive.In"/> over <see cref="In2"/> with a PDF blend mode.</summary>
@@ -124,6 +164,8 @@ namespace PeachPDF.Svg
     {
         public required ColorMatrix Matrix { get; init; }
         public required bool IsLuminanceToAlpha { get; init; }
+
+        public override bool RequiresRaster => (!IsLuminanceToAlpha && !Matrix.IsChannelIndependent) || base.RequiresRaster;
     }
 
     /// <summary>
@@ -142,6 +184,119 @@ namespace PeachPDF.Svg
     internal sealed class FeComponentTransfer : FilterPrimitive
     {
         public required ColorMatrix Matrix { get; init; }
+
+        /// <summary>The R, G, B and A transfer functions, in that order, when any of them needs pixels (gamma, table, discrete, or a non-identity alpha function); null when <see cref="Matrix"/> says it all.</summary>
+        public TransferFunction[]? Functions { get; init; }
+
+        public override bool RequiresRaster => Functions is not null || base.RequiresRaster;
+    }
+
+    internal enum TransferKind { Identity, Table, Discrete, Linear, Gamma }
+
+    /// <summary>One <c>feFuncR</c>/<c>feFuncG</c>/<c>feFuncB</c>/<c>feFuncA</c> child of <c>feComponentTransfer</c>.</summary>
+    internal sealed record TransferFunction(TransferKind Kind, double[] Table, double Slope, double Intercept, double Amplitude, double Exponent, double Offset)
+    {
+        public static TransferFunction Identity { get; } = new(TransferKind.Identity, [], 1, 0, 1, 1, 0);
+    }
+
+    /// <summary><c>feGaussianBlur</c>: blurs by <see cref="StdDeviationX"/>/<see cref="StdDeviationY"/> user units.</summary>
+    internal sealed class FeGaussianBlur : FilterPrimitive
+    {
+        public required double StdDeviationX { get; init; }
+        public required double StdDeviationY { get; init; }
+
+        public override bool RequiresRaster => true;
+    }
+
+    /// <summary><c>feDropShadow</c>: the input blurred, offset, flooded with <see cref="Color"/> and merged under the input.</summary>
+    internal sealed class FeDropShadow : FilterPrimitive
+    {
+        public required double Dx { get; init; }
+        public required double Dy { get; init; }
+        public required double StdDeviationX { get; init; }
+        public required double StdDeviationY { get; init; }
+        public required RColor Color { get; init; }
+        public required double Opacity { get; init; }
+
+        public override bool RequiresRaster => true;
+    }
+
+    /// <summary><c>feMorphology</c>: erodes or dilates the input by a rectangular window of <see cref="RadiusX"/> x <see cref="RadiusY"/> user units.</summary>
+    internal sealed class FeMorphology : FilterPrimitive
+    {
+        public required bool Dilate { get; init; }
+        public required double RadiusX { get; init; }
+        public required double RadiusY { get; init; }
+
+        public override bool RequiresRaster => true;
+    }
+
+    internal enum FilterEdgeMode { Duplicate, Wrap, None }
+
+    /// <summary><c>feConvolveMatrix</c>.</summary>
+    internal sealed class FeConvolveMatrix : FilterPrimitive
+    {
+        public required int OrderX { get; init; }
+        public required int OrderY { get; init; }
+        public required double[] Kernel { get; init; }
+        public required double Divisor { get; init; }
+        public required double Bias { get; init; }
+        public required int TargetX { get; init; }
+        public required int TargetY { get; init; }
+        public required FilterEdgeMode EdgeMode { get; init; }
+        public required bool PreserveAlpha { get; init; }
+
+        public override bool RequiresRaster => true;
+    }
+
+    /// <summary><c>feTurbulence</c>: Perlin noise from the SVG reference algorithm.</summary>
+    internal sealed class FeTurbulence : FilterPrimitive
+    {
+        public required double BaseFrequencyX { get; init; }
+        public required double BaseFrequencyY { get; init; }
+        public required int NumOctaves { get; init; }
+        public required double Seed { get; init; }
+        public required bool Stitch { get; init; }
+        public required bool FractalNoise { get; init; }
+
+        public override bool RequiresRaster => true;
+    }
+
+    /// <summary><c>feDisplacementMap</c>: moves <see cref="FilterPrimitive.In"/>'s pixels by the channels of <see cref="In2"/>.</summary>
+    internal sealed class FeDisplacementMap : FilterPrimitive
+    {
+        public string? In2 { get; init; }
+        public required double Scale { get; init; }
+
+        /// <summary>The channels (0 = R, 1 = G, 2 = B, 3 = A) that drive the x and y displacement.</summary>
+        public required int XChannel { get; init; }
+        public required int YChannel { get; init; }
+
+        public override bool RequiresRaster => true;
+    }
+
+    internal enum LightKind { Distant, Point, Spot }
+
+    /// <summary>The <c>feDistantLight</c>/<c>fePointLight</c>/<c>feSpotLight</c> child of a lighting primitive.</summary>
+    internal sealed record LightSource(
+        LightKind Kind, double Azimuth, double Elevation,
+        double X, double Y, double Z,
+        double PointsAtX, double PointsAtY, double PointsAtZ,
+        double SpecularExponent, double? LimitingConeAngle);
+
+    /// <summary><c>feDiffuseLighting</c> and <c>feSpecularLighting</c>.</summary>
+    internal sealed class FeLighting : FilterPrimitive
+    {
+        public required bool Specular { get; init; }
+        public required double SurfaceScale { get; init; }
+
+        /// <summary><c>diffuseConstant</c> or <c>specularConstant</c>.</summary>
+        public required double Constant { get; init; }
+        public required double SpecularExponent { get; init; }
+        public required RColor LightingColor { get; init; }
+        public required LightSource Light { get; init; }
+
+        public override bool RequiresRaster => true;
     }
 
     /// <summary>

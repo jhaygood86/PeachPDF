@@ -85,6 +85,12 @@ internal sealed class CliOptions
 
     // --- PDF output ---
     public bool NoCompress { get; set; }
+
+    /// <summary>Pixels per inch of paper for effects rendered as bitmaps (<c>--raster-dpi</c>); null keeps the library default.</summary>
+    public double? RasterDpi { get; set; }
+
+    /// <summary>Render what needs transparency as opaque bitmaps instead of rejecting it under PDF/A-1 and PDF/X-1a/X-3 (<c>--flatten-transparency</c>).</summary>
+    public bool FlattenTransparency { get; set; }
     public bool TaggedPdf { get; set; }
     public bool InteractivePdfForms { get; set; }
     public string? PdfTitle { get; set; }

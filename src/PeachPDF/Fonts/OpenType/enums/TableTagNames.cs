@@ -134,6 +134,15 @@ namespace PeachPDF.Fonts.OpenType
         /// </summary>
         public const string EBSC = "EBSC";
 
+        /// <summary>Colour bitmap glyph data (Google's bitmap colour emoji format).</summary>
+        public const string CBDT = "CBDT";
+
+        /// <summary>Colour bitmap glyph location data.</summary>
+        public const string CBLC = "CBLC";
+
+        /// <summary>Standard bitmap graphics (Apple's bitmap colour emoji format).</summary>
+        public const string Sbix = "sbix";
+
         // --- Color Tables ---
 
         /// <summary>
