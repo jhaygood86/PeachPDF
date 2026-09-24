@@ -105,7 +105,7 @@ before it was built on.
 at the block's left edge, on top of that content. Tracked as #1038 (since fixed - a float now shares
 one inline formatting context with surrounding content regardless of source order; the residual,
 narrower gap is recorded in
-[.claude/accepted-gaps/a-floats-own-content-taller-than-one-page-overflows.md](../accepted-gaps/a-floats-own-content-taller-than-one-page-overflows.md)) —
+[.claude/recent-fixes/2026-09-24-a-float-taller-than-a-page-shows-all-of-its-lines.md](2026-09-24-a-float-taller-than-a-page-shows-all-of-its-lines.md)) —
 it was a box-tree change (not generating the wrapper at all, which `DomUtils.ContainsInlinesOnly`,
 `CssBox.LayoutContents`' inline-vs-block dispatch and `CssLayoutEngine.FlowBox` all had to absorb),
 not a placement tweak. Two floats with nothing between them are already placed side by side, so the
