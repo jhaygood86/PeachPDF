@@ -552,7 +552,8 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public bool IsBlock => DerivedStyle.ActualDisplay == Keywords.Block;
 
-        public bool IsFloated => Float.Value is Floating.Left or Floating.Right or Floating.Inside or Floating.Outside;
+        public bool IsFloated => Float.Value is Floating.Left or Floating.Right or Floating.Inside or Floating.Outside
+            or Floating.InlineStart or Floating.InlineEnd;
 
         /// <summary>
         /// CSS Page Floats: <c>float: top/bottom/top-bottom/snap</c> - floats to the block-start/block-end
@@ -592,8 +593,46 @@ namespace PeachPDF.Html.Core.Dom
                 Floating.Left => Floating.Left,
                 Floating.Right => Floating.Right,
                 Floating.Inside or Floating.Outside => ResolveInsideOutsideSide(),
+                Floating.InlineStart => ResolveInlineSide(inlineStart: true),
+                Floating.InlineEnd => ResolveInlineSide(inlineStart: false),
                 _ => Floating.None
             };
+
+        /// <summary>
+        /// This box's <see cref="Clear"/> value resolved to the physical <see cref="ClearMode.Left"/>/
+        /// <see cref="ClearMode.Right"/> the clearance algorithms compare against
+        /// <see cref="EffectiveFloatSide"/>: <c>inline-start</c>/<c>inline-end</c> resolve as
+        /// <see cref="Floating.InlineStart"/>/<see cref="Floating.InlineEnd"/> do, and every other value
+        /// passes through unchanged.
+        /// </summary>
+        internal ClearMode EffectiveClear =>
+            Clear.Value switch
+            {
+                ClearMode.InlineStart => ResolveInlineSide(inlineStart: true) == Floating.Left ? ClearMode.Left : ClearMode.Right,
+                ClearMode.InlineEnd => ResolveInlineSide(inlineStart: false) == Floating.Left ? ClearMode.Left : ClearMode.Right,
+                var physical => physical
+            };
+
+        /// <summary>
+        /// The physical side an <c>inline-start</c>/<c>inline-end</c> <c>float</c> or <c>clear</c> names.
+        /// </summary>
+        /// <remarks>
+        /// <see href="https://www.w3.org/TR/css-logical-1/#float-clear">CSS Logical Properties §2.2</see>:
+        /// the mapping "uses the writing mode of the element's containing block", and inline-start is the
+        /// line-left side when that block's <c>direction</c> is <c>ltr</c> and the line-right side when it is
+        /// <c>rtl</c> (<see href="https://www.w3.org/TR/css-writing-modes-4/#logical-to-physical">Writing Modes 4
+        /// §6.4</see>). <c>left</c>/<c>right</c> are line-relative too, so the answer is the same in every
+        /// writing mode: the returned <see cref="Floating.Left"/>/<see cref="Floating.Right"/> is the
+        /// line-left/line-right side, which is what every float algorithm here already reads.
+        /// Resolved when asked rather than cached, like <see cref="ResolveInsideOutsideSide"/>: the
+        /// containing block's direction is a cascaded value that layout reads, and the computed value of the
+        /// property stays the keyword.
+        /// </remarks>
+        private Floating ResolveInlineSide(bool inlineStart)
+        {
+            var rtl = ContainingBlock.Direction.Value == DirectionMode.Rtl;
+            return inlineStart != rtl ? Floating.Left : Floating.Right;
+        }
 
         private Floating ResolveInsideOutsideSide()
         {

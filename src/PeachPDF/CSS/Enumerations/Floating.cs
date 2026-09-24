@@ -52,6 +52,18 @@ namespace PeachPDF.CSS
         /// CSS Page Floats: floats to the inline edge farthest from the binding - the mirror of
         /// <see cref="Inside"/>.
         /// </summary>
-        Outside
+        Outside,
+
+        /// <summary>
+        /// CSS Logical Properties §2.2: floats to the inline-start side of the containing block -
+        /// line-left when its used <c>direction</c> is <c>ltr</c>, line-right when <c>rtl</c>. The keyword
+        /// stays the computed value; <c>CssBox.EffectiveFloatSide</c> resolves it to <see cref="Left"/>/
+        /// <see cref="Right"/> when layout asks, since the containing block's direction is not final
+        /// when the cascade runs.
+        /// </summary>
+        InlineStart,
+
+        /// <summary>The mirror of <see cref="InlineStart"/>: the inline-end side of the containing block.</summary>
+        InlineEnd
     }
 }

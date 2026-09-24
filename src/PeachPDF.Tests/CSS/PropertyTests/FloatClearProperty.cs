@@ -9,6 +9,8 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         [InlineData("left")]
         [InlineData("right")]
         [InlineData("none")]
+        [InlineData("inline-start")]
+        [InlineData("inline-end")]
         public void FloatKeywordLegal(string keyword)
         {
             var snippet = $"float: {keyword}";
@@ -40,6 +42,8 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         [InlineData("right")]
         [InlineData("both")]
         [InlineData("none")]
+        [InlineData("inline-start")]
+        [InlineData("inline-end")]
         public void ClearKeywordLegal(string keyword)
         {
             var snippet = $"clear: {keyword}";
