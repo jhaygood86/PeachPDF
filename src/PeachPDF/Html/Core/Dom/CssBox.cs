@@ -2902,11 +2902,44 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Set on a float that a vertical writing-mode block placed (<see cref="LayoutVerticalBlockChildren"/>):
-        /// whether it is pinned to the physical bottom (line-right) rather than the top (line-left), and the
-        /// inline-axis extent it takes measured from that edge - the range from <c>From</c> to <c>To</c>, the
-        /// floats ahead of it on the same side included.
+        /// how far along the inline axis it reaches, and from which edge of the box that placed it.
         /// </summary>
-        internal (bool AtBottom, double From, double To)? VerticalFloatOccupancy { get; private set; }
+        internal VerticalFloatReach? VerticalFloatOccupancy { get; private set; }
+
+        /// <summary>
+        /// What a vertical-mode float takes of the inline axis, in terms of the box that placed it: whether it is
+        /// pinned to the physical bottom (line-right) rather than the top (line-left), the range it covers measured
+        /// from that edge (<c>From</c> to <c>To</c>, the floats ahead of it on the same side included), and where
+        /// the placing box's own top and - when its height is definite - bottom edges were.
+        /// </summary>
+        /// <remarks>
+        /// The placer's edges travel with it because a box that reads this is not always the placer: a paragraph
+        /// beside a float has its own, different edges, and an offset measured from the wrapper's bottom edge is
+        /// not one from the paragraph's. The placer's bottom edge is unknown while its height is auto - it is
+        /// only final once <see cref="CssLayoutEngine.ApplyHeight"/> has run - and a reader then takes the two
+        /// edges to coincide.
+        /// </remarks>
+        internal readonly record struct VerticalFloatReach(
+            bool AtBottom, double From, double To, double ContainerTop, double? ContainerBottom)
+        {
+            /// <summary>
+            /// Folds this float's reach into the room a box whose inline extent runs from <paramref name="readerTop"/>
+            /// to <paramref name="readerBottom"/> has to give up at each end.
+            /// </summary>
+            internal void GrowInsets(double readerTop, double readerBottom, ref double top, ref double bottom)
+            {
+                if (AtBottom)
+                {
+                    bottom = Math.Max(bottom, ContainerBottom is { } containerBottom
+                        ? readerBottom - (containerBottom - To)
+                        : To);
+                }
+                else
+                {
+                    top = Math.Max(top, ContainerTop + To - readerTop);
+                }
+            }
+        }
 
         /// <summary>
         /// Set by <see cref="CssLayoutEngine.CreateVerticalLineBoxes"/> when this box is a <c>direction: rtl</c>
@@ -4885,7 +4918,7 @@ namespace PeachPDF.Html.Core.Dom
                     // line-left (top) or line-right (bottom) side - see PlaceVerticalFloat.
                     await PlaceVerticalFloat(g, childBox, frame, clientTop,
                         logicalBlockOffset + (hasPrecedingSibling ? pendingGroup.CollapsedValue : 0),
-                        placedFloats ??= [], bottomFloats ??= [], heightIsAuto ? null : frame.LogicalContentWidth);
+                        placedFloats ??= [], bottomFloats ??= [], heightIsAuto ? null : CssLayoutEngine.DefiniteContentHeight(this));
                     continue;
                 }
 
@@ -5058,57 +5091,57 @@ namespace PeachPDF.Html.Core.Dom
         private static async ValueTask<double> ResolveVerticalChildBlockSize(RGraphics g, CssBox child, WritingModeFrame frame,
             double logicalBlockOffset, double clientTop)
         {
-        // A placeholder position so ResolveOwnInlineSize has something to fix Size.Width against;
-        // the true position is written below, once that width is known - moving Location afterward
-        // leaves Size.Width untouched, the same mechanic CssLayoutEngine.ShrinkAutoWidthTo already
-        // relies on for this box's own auto-width shrink further down.
-        child.Location = new RPoint(frame.ToPhysical(0, logicalBlockOffset).X, clientTop);
-        await child.ResolveOwnInlineSize(g, clientTop);
-        var childWidth = child.ActualRight - child.Location.X;
+            // A placeholder position so ResolveOwnInlineSize has something to fix Size.Width against;
+            // the true position is written below, once that width is known - moving Location afterward
+            // leaves Size.Width untouched, the same mechanic CssLayoutEngine.ShrinkAutoWidthTo already
+            // relies on for this box's own auto-width shrink further down.
+            child.Location = new RPoint(frame.ToPhysical(0, logicalBlockOffset).X, clientTop);
+            await child.ResolveOwnInlineSize(g, clientTop);
+            var childWidth = child.ActualRight - child.Location.X;
 
-        // CSS Writing Modes 4 §4.3: an auto-sized orthogonal flow root (this child's own resolved
-        // writing-mode is horizontal while this always-vertical box is its containing block) is
-        // sized via shrink-to-fit against a constraint derived from the parent's own definite
-        // dimension, not via the ordinary stretch-to-containing-block auto-width ResolveOwnInlineSize
-        // just gave it above. childWidth (that stretch value) IS exactly that constraint - reused
-        // directly rather than re-derived, since GetFitContentWidth already clamps its result to
-        // it, leaving a child whose content fills or overflows the constraint unaffected either way.
-        // Scoped to a plain auto-width block box: excludes a replaced element (Words.Count > 0,
-        // whose intrinsic width was never stretched in the first place) and table/flex/grid
-        // (the same exclusion ResolveOwnInlineSize itself uses - those resolve their own inline
-        // size internally regardless of writing-mode).
-        if (child.Words.Count == 0
-            && !CssValueParser.IsValidLength(child.Width)
-            && child.WritingMode.Value is not (CSS.WritingMode.VerticalRl or CSS.WritingMode.VerticalLr)
-            && child.DerivedStyle.ActualDisplay is not (Keywords.Table or Keywords.TableCell
-                or Keywords.Flex or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid))
-        {
-            var fitContentWidth = await CssLayoutEngine.GetFitContentWidth(g, child, childWidth);
-
-            // GetFitContentWidth alone only ever narrows toward the constraint - it has no floor
-            // of its own, so a constraint narrower than the child's own min-content (its longest
-            // unbreakable run) would otherwise squeeze it below that per §4.3's own formula
-            // (min(max-content, max(min-content, constraint))). GetMinContentWidth is the same
-            // measurement GetFitContentWidth's own max-content pass already primed via MeasureWords,
-            // so this is a second read of already-computed state, not a second layout pass.
-            fitContentWidth = Math.Max(fitContentWidth, await CssLayoutEngine.GetMinContentWidth(g, child));
-
-            // Separately, GetFitContentWidth has no notion of this child's own CSS min-width either -
-            // float the result back up against it too, mirroring
-            // CssLayoutEngineFlex.ShrinkColumnItemToContentWidth's own clamp after the same call
-            // (max-width needs no re-check here: childWidth was already max-width-clamped by
-            // ResolveOwnInlineSize above, and GetFitContentWidth's result can only be <= the
-            // constraint it was passed).
-            if (child.MinWidth != "0" && CssValueParser.IsValidLength(child.MinWidth))
+            // CSS Writing Modes 4 §4.3: an auto-sized orthogonal flow root (this child's own resolved
+            // writing-mode is horizontal while this always-vertical box is its containing block) is
+            // sized via shrink-to-fit against a constraint derived from the parent's own definite
+            // dimension, not via the ordinary stretch-to-containing-block auto-width ResolveOwnInlineSize
+            // just gave it above. childWidth (that stretch value) IS exactly that constraint - reused
+            // directly rather than re-derived, since GetFitContentWidth already clamps its result to
+            // it, leaving a child whose content fills or overflows the constraint unaffected either way.
+            // Scoped to a plain auto-width block box: excludes a replaced element (Words.Count > 0,
+            // whose intrinsic width was never stretched in the first place) and table/flex/grid
+            // (the same exclusion ResolveOwnInlineSize itself uses - those resolve their own inline
+            // size internally regardless of writing-mode).
+            if (child.Words.Count == 0
+                && !CssValueParser.IsValidLength(child.Width)
+                && child.WritingMode.Value is not (CSS.WritingMode.VerticalRl or CSS.WritingMode.VerticalLr)
+                && child.DerivedStyle.ActualDisplay is not (Keywords.Table or Keywords.TableCell
+                    or Keywords.Flex or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid))
             {
-                var minWidth = CssValueParser.ParseLength(child.MinWidth, child.ContainingBlock.Size.Width, child)
-                    + child.ActualBoxSizeIncludedWidth;
-                fitContentWidth = Math.Max(fitContentWidth, minWidth);
-            }
+                var fitContentWidth = await CssLayoutEngine.GetFitContentWidth(g, child, childWidth);
 
-            childWidth = fitContentWidth;
-            child.ActualRight = child.Location.X + childWidth;
-        }
+                // GetFitContentWidth alone only ever narrows toward the constraint - it has no floor
+                // of its own, so a constraint narrower than the child's own min-content (its longest
+                // unbreakable run) would otherwise squeeze it below that per §4.3's own formula
+                // (min(max-content, max(min-content, constraint))). GetMinContentWidth is the same
+                // measurement GetFitContentWidth's own max-content pass already primed via MeasureWords,
+                // so this is a second read of already-computed state, not a second layout pass.
+                fitContentWidth = Math.Max(fitContentWidth, await CssLayoutEngine.GetMinContentWidth(g, child));
+
+                // Separately, GetFitContentWidth has no notion of this child's own CSS min-width either -
+                // float the result back up against it too, mirroring
+                // CssLayoutEngineFlex.ShrinkColumnItemToContentWidth's own clamp after the same call
+                // (max-width needs no re-check here: childWidth was already max-width-clamped by
+                // ResolveOwnInlineSize above, and GetFitContentWidth's result can only be <= the
+                // constraint it was passed).
+                if (child.MinWidth != "0" && CssValueParser.IsValidLength(child.MinWidth))
+                {
+                    var minWidth = CssValueParser.ParseLength(child.MinWidth, child.ContainingBlock.Size.Width, child)
+                        + child.ActualBoxSizeIncludedWidth;
+                    fitContentWidth = Math.Max(fitContentWidth, minWidth);
+                }
+
+                childWidth = fitContentWidth;
+                child.ActualRight = child.Location.X + childWidth;
+            }
 
             return childWidth;
         }
@@ -5180,6 +5213,13 @@ namespace PeachPDF.Html.Core.Dom
                 marginBoxBlockStart = Math.Max(marginBoxBlockStart, clearance);
             }
 
+            // CSS 2.1 section 9.5.1 rule 5 with the axes swapped: a float's outer block-start edge may not be
+            // before that of any float placed earlier.
+            foreach (var earlier in placed)
+            {
+                marginBoxBlockStart = Math.Max(marginBoxBlockStart, earlier.BlockStart);
+            }
+
             var childWidth = await ResolveVerticalChildBlockSize(g, floated, frame, marginBoxBlockStart, clientTop);
             var origin = frame.ToPhysical(0, marginBoxBlockStart);
             floated.Location = new RPoint(
@@ -5192,26 +5232,31 @@ namespace PeachPDF.Html.Core.Dom
             var outerBlock = childWidth + blockStartMargin + blockEndMargin;
             var outerInline = floated.ActualBottom - floated.Location.Y + floated.ActualMarginTop + floated.ActualMarginBottom;
 
-            // CSS 2.1 section 9.5.1 rules 2, 5 and 6 with the axes swapped: beside the floats already on this
-            // side that share this block-axis range while the inline axis has room, otherwise dropped to the
-            // block-end edge of the first of them to end.
+            // CSS 2.1 section 9.5.1 rules 2, 3 and 6 with the axes swapped: beside the floats already on this
+            // side that share this block-axis range while the inline axis has room - the room the floats on the
+            // opposite side take included, since a left and a right float may not overlap - otherwise dropped to
+            // the block-end edge of the first of them to end.
+            const int maxDrops = 1000;
             double inlineFrom;
 
-            for (var guard = 0; ; guard++)
+            for (var drops = 0; ; drops++)
             {
                 inlineFrom = 0;
+                double oppositeReach = 0;
                 double? dropTo = null;
 
                 foreach (var other in placed)
                 {
-                    if (other.AtBottom != atBottom) continue;
                     if (other.BlockEnd <= marginBoxBlockStart + epsilon || other.BlockStart >= marginBoxBlockStart + outerBlock - epsilon) continue;
 
-                    inlineFrom = Math.Max(inlineFrom, other.InlineTo);
+                    if (other.AtBottom == atBottom) inlineFrom = Math.Max(inlineFrom, other.InlineTo);
+                    else oppositeReach = Math.Max(oppositeReach, other.InlineTo);
+
                     dropTo = dropTo is null ? other.BlockEnd : Math.Min(dropTo.Value, other.BlockEnd);
                 }
 
-                if (guard < 1000 && inlineExtent is { } extent && dropTo is { } drop && inlineFrom + outerInline > extent + epsilon)
+                if (drops < maxDrops && inlineExtent is { } extent && dropTo is { } drop
+                    && inlineFrom + outerInline + oppositeReach > extent + epsilon)
                 {
                     marginBoxBlockStart = drop;
                     continue;
@@ -5234,7 +5279,8 @@ namespace PeachPDF.Html.Core.Dom
                 if (targetY != floated.Location.Y) floated.OffsetTop(targetY - floated.Location.Y);
             }
 
-            floated.VerticalFloatOccupancy = (atBottom, inlineFrom, inlineFrom + outerInline);
+            floated.VerticalFloatOccupancy = new VerticalFloatReach(
+                atBottom, inlineFrom, inlineFrom + outerInline, clientTop, inlineExtent is { } known ? clientTop + known : null);
             placed.Add(new VerticalFloatPlacement(floated, atBottom, marginBoxBlockStart, marginBoxBlockStart + outerBlock,
                 inlineFrom, inlineFrom + outerInline));
         }
@@ -6782,6 +6828,10 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     var height = floated.ActualBottom - floated.Location.Y;
                     var target = ClientBottom - inlineFromBottom - floated.ActualMarginBottom - height;
+
+                    // A float taller than what the box holds would hang above it, where a line-left one hangs
+                    // below: keep it at the box's own start edge, so it overflows the end instead.
+                    target = Math.Max(target, ClientTop + floated.ActualMarginTop);
                     if (target != floated.Location.Y) floated.OffsetTop(target - floated.Location.Y);
                 }
             }

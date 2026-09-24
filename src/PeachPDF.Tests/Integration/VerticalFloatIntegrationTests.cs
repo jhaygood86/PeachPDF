@@ -304,5 +304,139 @@ namespace PeachPDF.Tests.Integration
                 Assert.Equal(c[i].Left, a[i].Left, 1);
             }
         }
+
+        [Fact]
+        public async Task ABlockThatEndsBeforeABottomFloatBegins_KeepsItsFullInlineExtent()
+        {
+            // The float is pinned 140-200pt down the 200pt container; the paragraph is only 100pt tall. A float's
+            // reach is measured from the container's bottom edge, which is not the paragraph's - reading it as the
+            // paragraph's own would narrow the paragraph to 40pt.
+            var withFloat = await LayoutAsync(
+                $"<div id='wrapper' style='writing-mode:vertical-rl; {Wrapper}'><div style='float:right; width:30pt; height:60pt'></div>" +
+                $"<p id='p' style='width:100pt; height:100pt; margin:0'>{Alpha}</p></div>", "p");
+            var without = await LayoutAsync(
+                $"<div id='wrapper' style='writing-mode:vertical-rl; {Wrapper}'><p id='p' style='width:100pt; height:100pt; margin:0'>{Alpha}</p></div>", "p");
+
+            var a = WordsOf(withFloat.Boxes["p"]);
+            var c = WordsOf(without.Boxes["p"]);
+
+            Assert.Equal(c.Count, a.Count);
+            for (var i = 0; i < a.Count; i++)
+            {
+                Assert.Equal(c[i].Top, a[i].Top, 1);
+                Assert.Equal(c[i].Left, a[i].Left, 1);
+            }
+        }
+
+        [Fact]
+        public async Task ABlockWithPaddingBesideATopFloat_MeasuresTheFloatsReachFromItsOwnContentEdge()
+        {
+            // A 60pt float from the container's top edge reaches only 40pt into a paragraph whose content starts
+            // 20pt down (its padding), so the words there must clear 40pt, not 60pt.
+            var (wrapper, b) = await LayoutAsync(
+                $"<div id='wrapper' style='writing-mode:vertical-rl; {Wrapper}'><div id='f' style='float:left; width:30pt; height:60pt'></div>" +
+                $"<p id='p' style='width:100pt; margin:0; padding-top:20pt'>{Alpha}</p></div>", "f", "p");
+            var f = b["f"];
+
+            var beside = WordsOf(b["p"]).Where(w => w.Left < f.ActualRight + f.ActualMarginRight && w.Right > f.Location.X - f.ActualMarginLeft).ToList();
+            Assert.NotEmpty(beside);
+            Assert.All(beside, w => Assert.True(w.Top >= f.ActualBottom - 0.5, $"'{w.Text}' at Y {w.Top} overlaps the float"));
+
+            // ...and no further: the first of them starts where the float ends, not 20pt below that.
+            Assert.Contains(beside, w => System.Math.Abs(w.Top - f.ActualBottom) < 0.5);
+        }
+
+        [Fact]
+        public async Task FloatsOnOppositeSides_DoNotOverlap_SoASecondThatDoesNotFitBesideTheFirstDropsBelowIt()
+        {
+            // CSS 2.1 section 9.5.1 rule 3 with the axes swapped: 70pt and 70pt do not fit a 100pt-tall container
+            // side by side, so the bottom float goes to the block-end edge of the top one.
+            var (_, b) = await LayoutAsync(
+                "<div id='wrapper' style='writing-mode:vertical-rl; width:300pt; height:100pt'><div id='top' style='float:left; width:30pt; height:70pt'></div>" +
+                "<div id='bottom' style='float:right; width:30pt; height:70pt'></div></div>", "top", "bottom");
+
+            Assert.True(b["bottom"].ActualRight <= b["top"].Location.X + 0.01,
+                $"the bottom float ends at {b["bottom"].ActualRight} but the top one starts at {b["top"].Location.X}");
+        }
+
+        [Fact]
+        public async Task ALaterFloat_IsNotBeforeAnEarlierOnesBlockStart()
+        {
+            // CSS 2.1 section 9.5.1 rule 5 with the axes swapped: the third 90pt float does not fit beside the
+            // first two and drops toward block-end; the right-side float that follows it may not go back to the
+            // block-start edge above it.
+            var (_, b) = await LayoutAsync(
+                $"<div id='wrapper' style='writing-mode:vertical-rl; {Wrapper}'>" +
+                "<div id='a' style='float:left; width:30pt; height:90pt'></div>" +
+                "<div id='b' style='float:left; width:30pt; height:90pt'></div>" +
+                "<div id='c' style='float:left; width:30pt; height:90pt'></div>" +
+                "<div id='d' style='float:right; width:30pt; height:30pt'></div></div>", "a", "b", "c", "d");
+
+            Assert.True(b["c"].ActualRight < b["a"].ActualRight - 0.01, "the third float dropped toward block-end");
+            Assert.True(b["d"].ActualRight <= b["c"].ActualRight + 0.01,
+                $"d starts at {b["d"].ActualRight}, before c's {b["c"].ActualRight}");
+        }
+
+        [Fact]
+        public async Task ABottomFloatTallerThanItsAutoHeightContainer_DoesNotHangAboveIt()
+        {
+            var (wrapper, b) = await LayoutAsync(
+                "<div id='wrapper' style='writing-mode:vertical-rl; width:300pt'><div id='f' style='float:right; width:30pt; height:60pt'></div></div>", "f");
+
+            Assert.True(b["f"].Location.Y >= wrapper.ClientTop - 0.01,
+                $"the float starts at {b["f"].Location.Y}, above the container's {wrapper.ClientTop}");
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task AColumnStartingWhereAFloatEnds_IsBeyondIt_ButOneStartingWhereItBeginsIsBesideIt(bool blockStartIsRight)
+        {
+            var mode = blockStartIsRight ? "vertical-rl" : "vertical-lr";
+            var (_, b) = await LayoutAsync(
+                $"<div id='wrapper' style='writing-mode:{mode}; {Wrapper}'><div id='f' style='float:left; width:30pt; height:60pt'></div></div>", "f");
+            var f = b["f"];
+
+            var blockStartEdge = blockStartIsRight ? f.ActualRight : f.Location.X;
+            var blockEndEdge = blockStartIsRight ? f.Location.X : f.ActualRight;
+
+            Assert.True(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, blockStartEdge, blockStartIsRight));
+            Assert.False(PeachPDF.Html.Core.Utils.DomUtils.VerticalFloatCoversBlockPoint(f, blockEndEdge, blockStartIsRight));
+        }
+
+        [Fact]
+        public async Task AFloatFollowingAWordThatWrapsInTwo_StaysAfterBothHalves()
+        {
+            // 'overflow-wrap: anywhere' splits the long word across columns, which puts one more word in the stream
+            // ahead of the float that follows it in the source. The float must go beside the columns after the whole
+            // word, not beside its last piece.
+            var (_, b) = await LayoutAsync(
+                $"<div id='wrapper' style='writing-mode:vertical-rl; {Wrapper}'><p id='p' style='width:200pt; height:60pt; margin:0; overflow-wrap:anywhere'>" +
+                "Supercalifragilisticexpialidocious<span id='f' style='float:left; width:20pt; height:20pt'></span> after</p></div>", "p", "f");
+            var f = b["f"];
+
+            var pieces = WordsOf(b["p"]).Where(w => w.Text is not null && "Supercalifragilisticexpialidocious".Contains(w.Text.Trim('-'))).ToList();
+            Assert.True(pieces.Count > 1, "the long word wrapped");
+            Assert.All(pieces, w => Assert.True(f.ActualRight <= w.Left + 0.5,
+                $"the float ends at X {f.ActualRight}, beside the piece at X {w.Left}"));
+        }
+
+        [Fact]
+        public async Task ATallerWordArrivingAfterAFloatInTheSameColumn_DoesNotReachIntoIt()
+        {
+            // The float is reached with a small word already in the column, and a much larger one follows it in the
+            // same column, making the column thicker. The float goes beside the column that follows the whole thing.
+            var (_, b) = await LayoutAsync(
+                $"<div id='wrapper' style='writing-mode:vertical-rl; {Wrapper}'><p id='p' style='width:250pt; height:150pt; margin:0'>" +
+                "a<span id='f' style='float:left; width:20pt; height:20pt'></span><span style='font-size:40pt'>B</span> c d e f g</p></div>", "p", "f");
+            var f = b["f"];
+
+            var firstColumn = WordsOf(b["p"]).Where(w => w.Text is "a" or "B").ToList();
+            Assert.Equal(2, firstColumn.Count);
+            // A glyph's own rectangle can sit a little inside its line box, so allow for that; a float placed
+            // against only the small word's thickness would overlap by about twenty points.
+            Assert.All(firstColumn, w => Assert.True(f.ActualRight <= w.Left + 2,
+                $"the float ends at X {f.ActualRight}, beside '{w.Text}' at X {w.Left}"));
+        }
     }
 }

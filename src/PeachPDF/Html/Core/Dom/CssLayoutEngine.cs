@@ -893,6 +893,17 @@ namespace PeachPDF.Html.Core.Dom
                 return placedAny;
             }
 
+            // A word split in two (hyphenation, overflow-wrap) puts one more word in the stream, so the floats that
+            // follow it in the source now follow one word further on.
+            void ShiftFloatsAfter(int splitIndex)
+            {
+                for (var f = nextFloat; f < floatsInOrder.Count; f++)
+                {
+                    if (floatsInOrder[f].WordIndex > splitIndex)
+                        floatsInOrder[f] = (floatsInOrder[f].Box, floatsInOrder[f].WordIndex + 1);
+                }
+            }
+
             if (words.Count == 0)
             {
                 await PlaceFloatsUpTo(int.MaxValue, 0);
@@ -932,7 +943,9 @@ namespace PeachPDF.Html.Core.Dom
             var blockBoxPermitsWrap = blockBox.WhiteSpace.Value != Whitespace.NoWrap
                                        && blockBox.WhiteSpace.Value != Whitespace.Pre;
 
-            void StartNewLine()
+            var currentWordIndex = 0;
+
+            async ValueTask StartNewLine()
             {
                 // The column about to close is being abandoned for a new one - fold whether it ended in a
                 // hyphen into the running consecutive-hyphenated-columns count before that state resets.
@@ -944,6 +957,12 @@ namespace PeachPDF.Html.Core.Dom
                 lineThickness = 0;
                 trailingRegionalIndicatorCount = 0;
                 trailingGraphemeContext = string.Empty;
+
+                // A float the word stream reached while the closing column held words goes beside the next one,
+                // placed now that this column's thickness is final: a taller word arriving mid-column could
+                // otherwise have reached into a float placed against the thickness so far.
+                await PlaceFloatsUpTo(currentWordIndex, blockOffset);
+
                 line = new CssLineBox(blockBox);
                 (columnStartInset, effectiveWrapLimit, columnTopInset, columnBottomInset) =
                     ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, blockOffset, placedFloats);
@@ -956,12 +975,15 @@ namespace PeachPDF.Html.Core.Dom
 
             for (var i = 0; i < words.Count; i++)
             {
+                currentWordIndex = i;
+
                 // A float the word stream has just reached is no higher than the column being built (CSS 2.1
-                // section 9.5.1 rule 6, axes swapped): at its block-axis position while the column is still empty,
-                // and beside the next one once words are on it, so it never overlaps words already placed.
+                // section 9.5.1 rule 6, axes swapped): at its block-axis position while the column is still empty.
+                // Once words are on the column it waits for the next one (StartNewLine), so it never overlaps words
+                // already placed or yet to come.
                 if (nextFloat < floatsInOrder.Count && floatsInOrder[nextFloat].WordIndex <= i
-                    && await PlaceFloatsUpTo(i, line.Words.Count == 0 ? blockOffset : blockOffset + lineThickness)
-                    && line.Words.Count == 0)
+                    && line.Words.Count == 0
+                    && await PlaceFloatsUpTo(i, blockOffset))
                 {
                     (columnStartInset, effectiveWrapLimit, columnTopInset, columnBottomInset) =
                         ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, blockOffset, placedFloats);
@@ -977,7 +999,7 @@ namespace PeachPDF.Html.Core.Dom
                     // See CssLineBox.PrecedesForcedBreak: the column this break closes is the last one of
                     // its paragraph, so text-align-last governs it (css-text-3 §6.1/§6.3).
                     line.PrecedesForcedBreak = true;
-                    StartNewLine();
+                    await StartNewLine();
                     continue;
                 }
 
@@ -1040,6 +1062,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     words[i] = prefixWord!;
                     words.Insert(i + 1, suffixWord!);
+                    ShiftFloatsAfter(i);
 
                     // TryHyphenateWord never sets this - without it, ApplyVerticalBidiReordering would
                     // treat a hyphenated fragment as base-level LTR regardless of its true embedding level.
@@ -1061,6 +1084,7 @@ namespace PeachPDF.Html.Core.Dom
                         out var overflowSuffix))
                 {
                     ReplaceCollectedWordWithOverflowWrapSplit(words, i, word, overflowPrefix!, overflowSuffix!);
+                    ShiftFloatsAfter(i);
                     word = overflowPrefix!;
                     (naturalWidth, naturalHeight) = NaturalWordSize(g, word);
                     wordRectInline = naturalWidth;
@@ -1108,13 +1132,14 @@ namespace PeachPDF.Html.Core.Dom
                             && isGraphemeBoundary && AllowsOverflowWrapAtBoundary(previousWord, word))
                         || (!word.SuppressWrapBefore && wrapsWholeNoWrapRun));
                 if (startedNewLine)
-                    StartNewLine();
+                    await StartNewLine();
 
                 if (startedNewLine && naturalWidth > effectiveWrapLimit - columnStartInset &&
                     TryOverflowWrapWord(g, word, effectiveWrapLimit - columnStartInset, out overflowPrefix,
                         out overflowSuffix))
                 {
                     ReplaceCollectedWordWithOverflowWrapSplit(words, i, word, overflowPrefix!, overflowSuffix!);
+                    ShiftFloatsAfter(i);
                     word = overflowPrefix!;
                     (naturalWidth, naturalHeight) = NaturalWordSize(g, word);
                     wordRectInline = naturalWidth;
@@ -1152,6 +1177,12 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
+
+            // Floats after the last word, and the ones pinned to the bottom edge, which
+            // CssBox.PerformLayoutEpilogue moves there once that edge is final. Placed before the auto width
+            // settles, as the ones in the loop above were, so shrinking moves them all together.
+            await PlaceFloatsUpTo(int.MaxValue, blockOffset + lineThickness);
+            blockBox.SetPendingBottomFloats(bottomFloats);
 
             // Auto height/width must settle before text-align/bidi below - both read the box's own final
             // ClientTop/ClientBottom, which ApplyHeight would otherwise not have resolved yet. This also
@@ -1207,11 +1238,6 @@ namespace PeachPDF.Html.Core.Dom
             {
                 FinalizeVerticalLineBoxes(blockBox, finalFrame, clientTop, finalClientBottom);
             }
-
-            // Floats after the last word, and the ones pinned to the bottom edge, which
-            // CssBox.PerformLayoutEpilogue moves there once that edge is final.
-            await PlaceFloatsUpTo(int.MaxValue, blockOffset + lineThickness);
-            blockBox.SetPendingBottomFloats(bottomFloats);
 
             await LayoutOutOfFlowDescendants(g, blockBox, outOfFlowDescendants);
         }
@@ -1283,7 +1309,8 @@ namespace PeachPDF.Html.Core.Dom
 
             // The same provisional bottom edge frame itself was built from (clientTop + wrapLimit), not
             // blockBox.ClientBottom - which, for an auto-height box, is not yet resolved at this point.
-            var (topInset, bottomInset) = DomUtils.GetVerticalFloatInsets(blockBox, columnBlockAxisPoint);
+            var (topInset, bottomInset) = DomUtils.GetVerticalFloatInsets(
+                blockBox, columnBlockAxisPoint, frame.BlockStartIsRight, clientTop, clientTop + wrapLimit);
 
             // Floats this box's own inline flow placed are its children, which the scan of preceding siblings
             // does not reach.
@@ -1291,13 +1318,11 @@ namespace PeachPDF.Html.Core.Dom
             {
                 foreach (var own in ownFloats)
                 {
-                    if (own.Box.VerticalFloatOccupancy is not { } occupancy) continue;
+                    if (own.Box.VerticalFloatOccupancy is not { } reach) continue;
 
-                    if (own.Box.Location.X - own.Box.ActualMarginLeft <= columnBlockAxisPoint
-                        && columnBlockAxisPoint <= own.Box.ActualRight + own.Box.ActualMarginRight)
+                    if (DomUtils.VerticalFloatCoversBlockPoint(own.Box, columnBlockAxisPoint, frame.BlockStartIsRight))
                     {
-                        if (occupancy.AtBottom) bottomInset = Math.Max(bottomInset, occupancy.To);
-                        else topInset = Math.Max(topInset, occupancy.To);
+                        reach.GrowInsets(clientTop, clientTop + wrapLimit, ref topInset, ref bottomInset);
                     }
                 }
             }
@@ -1521,7 +1546,7 @@ namespace PeachPDF.Html.Core.Dom
         /// formula, then converted from that branch's border-box result down to the content height
         /// <see cref="CreateVerticalLineBoxes"/>'s wrap limit actually needs.
         /// </summary>
-        private static double DefiniteContentHeight(CssBox box)
+        internal static double DefiniteContentHeight(CssBox box)
         {
             var borderBoxHeight = CssValueParser.ParseLength(box.Height, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
 

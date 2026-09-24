@@ -23,18 +23,32 @@ corrected.
   lands depends on that width. Same-side floats sharing a block-axis range stack along the inline axis while it has
   room (a definite height; an auto-height container never drops) and drop to the block-end edge of the first of
   them to end otherwise.
-- **`CssBox.VerticalFloatOccupancy`** records, per float, which physical edge it is pinned to and the inline range
-  from that edge it covers, floats ahead of it on the side included. A bottom float cannot know its Y until the
-  container's height is final, so it is left at the top and moved in `PerformLayoutEpilogue`
-  (`_pendingBottomFloats`); later text only needs the occupancy, not the position.
+- **`CssBox.VerticalFloatOccupancy`** (a `VerticalFloatReach`) records, per float, which physical edge it is pinned
+  to, the inline range from that edge it covers (floats ahead of it on the side included) **and the placing
+  container's own top and bottom edges**. A bottom float cannot know its Y until the container's height is final, so
+  it is left at the top and moved in `PerformLayoutEpilogue` (`_pendingBottomFloats`, clamped so a float taller than
+  its box overflows the end rather than hanging above it); later text only needs the reach, not the position. See
+  the invariant [vertical-a-floats-reach-is-relative-to-the-box-that-placed-it](../invariants/vertical-a-floats-reach-is-relative-to-the-box-that-placed-it.md).
+- **CSS 2.1 §9.5.1 with the axes swapped, all of it.** Rule 2 (stack beside the floats on the same side), rule 3
+  (a left and a right float may not overlap: the opposite side's reach counts against the fit, so a 70pt and a 70pt
+  float do not share a 100pt container), rule 5 (a float's block-start is not before an earlier float's) and rule 6
+  (a float reached mid-text is no higher than the column being built). The first version enforced only rule 2.
+- **A float reached mid-column waits for the column to close** (`StartNewLine` places it), because a taller word can
+  still arrive and make the column thicker; placed against the thickness so far, it would be reached into. A float
+  reached while the column is empty is placed at once, since the next word's span must see it. A word split in two
+  (hyphenation, overflow-wrap) shifts the index of every float after it (`ShiftFloatsAfter`), or a float following a
+  split word is placed beside its last piece.
 - **`clear`** on a stacked child: `ClearanceEdge` takes the block-end outer edge of the floats it names (`left` = the
   top ones, `right` = the bottom ones, resolved through `EffectiveClear` so `inline-start`/`inline-end` work), moves
   the child's block-start margin edge there, and spends the open margin group (clearance inhibits collapsing,
   CSS 2.1 §9.5.2).
 - **Wrap.** `DomUtils.GetVerticalFloatInsets` replaced `GetVerticalFloatConstraint`, which returned only an extent
   cap and so could only express a float at the far end. It returns how far top and bottom floats reach into the
-  column, and `ComputeColumnInlineSpan` maps them to a start inset (words begin after it) and an end inset (the wrap
-  limit), swapped for `direction: rtl`. The floats the box's own inline flow placed are its children and so are not
+  column, **translated into the reading box's own edges** (a paragraph beside a float is not the float's container),
+  and `ComputeColumnInlineSpan` maps them to a start inset (words begin after it) and an end inset (the wrap
+  limit), swapped for `direction: rtl`. A column is beside a float when its leading edge is in the float's block
+  range, half-open at the block-end edge (`VerticalFloatCoversBlockPoint`): a column starting exactly where the
+  float ends is beyond it. The floats the box's own inline flow placed are its children and so are not
   reached by the preceding-sibling scan; they are passed in.
 - **Alignment.** `CssLineBox.VerticalTopInset`/`VerticalBottomInset` carry each column's insets, and
   `FinalizeVerticalLineBoxes` aligns and bidi-reorders within that span. Without this, `text-align: start` flushed
@@ -55,9 +69,17 @@ column's span is computed or that column ignores it. See the invariant
 
 The #768 tests passed for the wrong reason: `AssertFloatAvoidance` skipped each column's first word, which is exactly
 where a column that leaves no room puts its one forced word, and none asserted where the float itself was. They are
-replaced by `VerticalFloatIntegrationTests` (27 cases: placement for every mode/direction/side, block-axis
+replaced by `VerticalFloatIntegrationTests` (placement for every mode/direction/side, block-axis
 position, opposite sides, stacking and dropping, `clear` left/right/both, `inline-start`/`inline-end`, auto height,
 text starting below a top float and stopping above a bottom one).
+
+## A definite height is not `ClientBottom` while the box is still laying out
+
+The first version took a container's inline extent from `WritingModeFrame.LogicalContentWidth`, which reads
+`ClientBottom`. For a box with a definite `height` that is not settled until `ApplyHeight` runs in the epilogue, and
+read as 0 mid-layout - so every float's container looked 0pt tall and a paragraph beside a bottom float was narrowed by
+the float's whole length. It passed every test where the paragraph and the container shared their bottom edge.
+`CssLayoutEngine.DefiniteContentHeight` is the number to use, as the inline path always did.
 
 ## Not done (recorded in the accepted-gap file)
 
@@ -66,6 +88,6 @@ sized by the two-phase rule (#1354); a bottom float in an auto-height box wraps 
 and an auto-height *nested* vertical block wraps against the page, so a bottom float only cuts its columns when that
 block has an explicit height (a pre-existing property of the engine, not of this change).
 
-Evidence: 27 new tests; full net8.0 suite green; the `vertical_floats` showcase rasterized through PDFium and MuPDF
+Evidence: 34 new test methods (40 cases); full net8.0 suite green; the `vertical_floats` showcase rasterized through PDFium and MuPDF
 (identical: top float with text starting below it, bottom float with text stopping above it, both sides at once in
 `vertical-lr`/`rtl`, and `clear` leaving a visible gap).

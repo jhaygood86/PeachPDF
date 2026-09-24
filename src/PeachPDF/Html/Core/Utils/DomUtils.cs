@@ -1258,7 +1258,8 @@ namespace PeachPDF.Html.Core.Utils
         /// which is what <c>CssBox.VerticalFloatOccupancy</c> records for the scan below.
         /// </para>
         /// </remarks>
-        public static (double Top, double Bottom) GetVerticalFloatInsets(CssBox reference, double columnBlockAxisPoint)
+        public static (double Top, double Bottom) GetVerticalFloatInsets(
+            CssBox reference, double columnBlockAxisPoint, bool blockStartIsRight, double readerTop, double readerBottom)
         {
             var container = reference.HtmlContainer;
             container?.RecordFloatScanCall();
@@ -1278,8 +1279,8 @@ namespace PeachPDF.Html.Core.Utils
 
                 for (var i = 0; i < currentBoxIdx; i++)
                 {
-                    ScanForVerticalFloatInsets(reference.ParentBox.Boxes[i], columnBlockAxisPoint, ref top, ref bottom,
-                        ref boxesVisited);
+                    ScanForVerticalFloatInsets(reference.ParentBox.Boxes[i], columnBlockAxisPoint, blockStartIsRight,
+                        readerTop, readerBottom, ref top, ref bottom, ref boxesVisited);
                 }
 
                 reference = reference.ParentBox;
@@ -1289,34 +1290,41 @@ namespace PeachPDF.Html.Core.Utils
             return (top, bottom);
         }
 
-        private static void ScanForVerticalFloatInsets(CssBox box, double columnBlockAxisPoint, ref double top,
-            ref double bottom, ref int boxesVisited)
+        private static void ScanForVerticalFloatInsets(CssBox box, double columnBlockAxisPoint, bool blockStartIsRight,
+            double readerTop, double readerBottom, ref double top, ref double bottom, ref int boxesVisited)
         {
             boxesVisited++;
 
             // Only a float the vertical block flow itself placed (CssBox.VerticalFloatOccupancy): it says how far
-            // along the inline axis, from the physical top or bottom edge it is pinned to, the float reaches.
-            if (box.IsFloated && box.VerticalFloatOccupancy is { } occupancy)
+            // along the inline axis, from the physical top or bottom edge of the box that placed it, the float
+            // reaches, which the reach translates into the reader's own edges.
+            if (box.IsFloated && box.VerticalFloatOccupancy is { } reach
+                && VerticalFloatCoversBlockPoint(box, columnBlockAxisPoint, blockStartIsRight))
             {
-                var targetLeft = box.Location.X - box.ActualMarginLeft;
-                var targetRight = box.ActualRight + box.ActualMarginRight;
-
-                // Closed on both ends, unlike the horizontal engine's half-open point test: a column's own
-                // block-axis point here names its leading (not-yet-consumed) edge, which is very commonly
-                // exactly flush against a float's own edge, and a strict `<`/`>` test would miss that touching
-                // case even though the column's real footprint, once it has any thickness at all, provably
-                // overlaps the float from that shared edge inward.
-                if (targetLeft <= columnBlockAxisPoint && columnBlockAxisPoint <= targetRight)
-                {
-                    if (occupancy.AtBottom) bottom = Math.Max(bottom, occupancy.To);
-                    else top = Math.Max(top, occupancy.To);
-                }
+                reach.GrowInsets(readerTop, readerBottom, ref top, ref bottom);
             }
 
             foreach (var childBox in box.Boxes)
             {
-                ScanForVerticalFloatInsets(childBox, columnBlockAxisPoint, ref top, ref bottom, ref boxesVisited);
+                ScanForVerticalFloatInsets(childBox, columnBlockAxisPoint, blockStartIsRight, readerTop, readerBottom,
+                    ref top, ref bottom, ref boxesVisited);
             }
+        }
+
+        /// <summary>
+        /// Whether a column whose leading (not-yet-consumed) edge is at <paramref name="columnBlockAxisPoint"/> lies
+        /// within <paramref name="floated"/>'s block-axis range. The range is half-open at its block-end edge: a
+        /// column starting exactly where the float ends is beyond it, while one starting at the float's block-start
+        /// edge is beside it, however thin the column.
+        /// </summary>
+        internal static bool VerticalFloatCoversBlockPoint(CssBox floated, double columnBlockAxisPoint, bool blockStartIsRight)
+        {
+            var left = floated.Location.X - floated.ActualMarginLeft;
+            var right = floated.ActualRight + floated.ActualMarginRight;
+
+            return blockStartIsRight
+                ? left < columnBlockAxisPoint && columnBlockAxisPoint <= right
+                : left <= columnBlockAxisPoint && columnBlockAxisPoint < right;
         }
 
         public static CssBox? GetNearestParentElementBox(CssBox box)
