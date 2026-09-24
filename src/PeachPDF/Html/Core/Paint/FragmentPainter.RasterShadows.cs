@@ -75,11 +75,11 @@ namespace PeachPDF.Html.Core.Paint
         /// </summary>
         /// <remarks>
         /// The bitmap is grown past the padding box by three deviations because the blurred value at its edge depends on
-        /// shadow-coloured pixels outside it. The lit hole keeps the box's rounded corners (reduced by the spread), which the
-        /// four-rectangle vector approximation cannot.
+        /// shadow-coloured pixels outside it. The lit hole keeps the padding edge's rounded corners
+        /// (<paramref name="paddingRadii"/>, reduced by the spread), which the four-rectangle vector approximation cannot.
         /// </remarks>
         /// <returns>false, having painted nothing, when <paramref name="g"/> cannot rasterize.</returns>
-        private static bool TryPaintBlurredInsetShadow(RGraphics g, CssBox box, RRect borderBox, RRect paddingBox,
+        private static bool TryPaintBlurredInsetShadow(RGraphics g, RRect paddingBox, BorderRadii paddingRadii,
             RRect inner, double blur, double spread, RColor color)
         {
             var margin = 1.5 * blur;
@@ -105,9 +105,10 @@ namespace PeachPDF.Html.Core.Paint
 
             if (inner.Width > 0 && inner.Height > 0)
             {
-                if (box.IsRounded)
+                var holeRadii = AdjustRadii(paddingRadii, -spread);
+                if (holeRadii.IsRounded)
                 {
-                    using var hole = BuildLayerRoundRect(rg, inner, ShadowCornerRadii(box, borderBox, -spread), 0);
+                    using var hole = BuildLayerRoundRect(rg, inner, holeRadii, 0);
                     ring.AddPath(hole);
                 }
                 else

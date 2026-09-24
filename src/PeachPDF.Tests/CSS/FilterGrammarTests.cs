@@ -151,9 +151,24 @@ namespace PeachPDF.Tests.CSS
         [InlineData("drop-shadow(2px 3px -5px)")]        // negative blur radius
         [InlineData("drop-shadow(2px 3px red blue)")]    // two colors
         [InlineData("drop-shadow()")]                    // no lengths at all
+        [InlineData("drop-shadow(2foo 3px)")]            // unknown dimension unit
         public void DropShadow_Invalid_ReturnsNull(string value)
         {
             Assert.Null(Parse(value));
+        }
+
+        [Fact]
+        public void DropShadow_AcceptsCalcInALengthSlot()
+        {
+            var function = Assert.Single(Parse("drop-shadow(calc(1px + 2px) 3px 5px)"));
+            Assert.Equal("calc(1px + 2px)", function.Arguments[0]);
+        }
+
+        [Fact]
+        public void Blur_UnknownUnitIsRejected_CalcIsAccepted()
+        {
+            Assert.Null(Parse("blur(5foo)"));
+            Assert.Single(Parse("blur(calc(2px + 3px))"));
         }
     }
 }

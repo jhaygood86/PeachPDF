@@ -263,6 +263,33 @@ namespace PeachPDF.Tests.Raster
         }
 
         [Fact]
+        public async Task BlurredInsetShadow_FollowsThePaddingEdgeCorner_NotTheBorderEdgeCorner()
+        {
+            // 30pt border-radius over a 10pt border leaves a 20pt padding-edge radius, whose corner arc passes
+            // ~5.9pt in along the diagonal from the padding box's corner; the 30pt border-edge radius would only
+            // reach ~8.8pt in. A full-cover shadow makes that difference the whole picture.
+            var page = await PaintAsync(
+                "<div style=\"margin:20pt;width:100pt;height:60pt;border:10pt solid #ffffff;border-radius:30pt;" +
+                "background:#ffffff;box-shadow:inset 0 0 1pt 30pt #000000\"></div>");
+
+            Assert.True(page.Surface.Row(37)[37 * 4] < 60, "inside the padding-edge arc, so shadowed");
+            Assert.True(page.Surface.Row(32)[32 * 4] > 200, "outside the padding-edge arc, so left alone");
+        }
+
+        [Fact]
+        public async Task BlurredInsetShadow_LitHoleFollowsThePaddingEdgeRadius()
+        {
+            // Same box, but a spread-0 shadow so the lit hole (the padding edge) exists. The hole's own corner is the
+            // 20pt padding-edge arc, which reaches the diagonal at ~5.9pt; a hole built from the 30pt border radius
+            // would only reach it at ~8.8pt and so leave (37,37), 7pt in, shadowed instead of lit.
+            var page = await PaintAsync(
+                "<div style=\"margin:20pt;width:100pt;height:60pt;border:10pt solid #ffffff;border-radius:30pt;" +
+                "background:#ffffff;box-shadow:inset 0 0 1pt #000000\"></div>");
+
+            Assert.True(page.Surface.Row(37)[37 * 4] > 200, "inside the lit hole, so not shadowed");
+        }
+
+        [Fact]
         public async Task DropShadow_FollowsTheGlyphShape_NotTheBoundingBox()
         {
             var page = await PaintAsync(
