@@ -60,8 +60,7 @@ a box the floor already pushed past it.
   below the strip. The common case this feature targets - a float placed at a block-level position
   between paragraphs - already works, since the float and its siblings are ordinary block boxes; the
   narrower gap is filed rather than chased down `CreateLineBoxes`'s own line-breaking state in the same
-  change. See `.claude/accepted-gaps/float-top-reservation-not-honored-by-continuing-inline-content.md`
-  (issue #1273).
+  change (closed since: `2026-09-24-a-resumed-paragraph-starts-below-a-top-page-float.md`, issue #1273).
 - **`float-reference: column` is ignored for page floats** - every page float resolves against the
   page regardless of its own `float-reference`, and a page float placed directly inside a multicol
   container is dropped by `CssLayoutEngineColumns.Layout`'s existing out-of-flow filter (the same

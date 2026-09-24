@@ -1631,7 +1631,9 @@ namespace PeachPDF.Html.Core
             // in (see LayoutDocument's own ReserveBandEnd seed), and repeat until a round's per-page totals
             // stop changing. Runs before the target-counter(_, page)/ReapplyPseudoElementContent work below
             // so those resolve against footnotes' own, already-settled page breaks rather than the other
-            // way around. Only entered for documents that actually use float: footnote or a page float -
+            // way around - and the target-counter loop resolves footnotes again after each of its own
+            // reflows, since a resolved page number can move a footnote call across a page break
+            // (issue #757). Only entered for documents that actually use float: footnote or a page float -
             // HasFootnotes/HasPageFloats are plain list-count checks, not tree walks, so this costs
             // nothing for the common case.
             //
@@ -1693,7 +1695,14 @@ namespace PeachPDF.Html.Core
                 // nothing to seed correctly rather than from null.
                 var previousSignature = TargetPageContentSignature(Root);
 
-                for (var pass = 0; pass < 3; pass++)
+                // Footnote and page-float state has to describe the layout that is finally emitted
+                // (issue #757), so it is resolved again after every reflow below, and the loop is not done
+                // while that resolution still moves. The cap is the footnote loop's own when either feature is
+                // in use: a resolve that changes what the next pass seeds needs the room to settle.
+                var footnotesOrPageFloatsInUse = HasFootnotes || HasPageFloats;
+                var maxTargetPagePasses = footnotesOrPageFloatsInUse ? 6 : 3;
+
+                for (var pass = 0; pass < maxTargetPagePasses; pass++)
                 {
                     // Speculative: LayoutDocument (below) replaces _emitter with a fresh one on its next
                     // call, so finishing this one early to read its tree and discarding the result costs
@@ -1718,7 +1727,21 @@ namespace PeachPDF.Html.Core
                     await LayoutDocument(g);
                     ReapplyPseudoElementContent(Root);
 
-                    if (currentSignature == previousSignature) break;
+                    // The reflow may have moved a footnote call or a page float across a page break (the
+                    // resolved page number can change line-breaking), so the reservations and note areas
+                    // the footnote loop above settled describe a layout that no longer exists. Resolving is
+                    // the last thing each pass does, so what AttachFootnoteAreas reads is always the state of
+                    // the layout just produced, including on the pass that ends the loop by the cap.
+                    var footnoteStateChanged = false;
+
+                    if (footnotesOrPageFloatsInUse)
+                    {
+                        var footnotesChanged = HasFootnotes && await ResolveFootnotesForThisAttempt(g);
+                        var pageFloatsChanged = HasPageFloats && ResolvePageFloatsForThisAttempt();
+                        footnoteStateChanged = footnotesChanged || pageFloatsChanged;
+                    }
+
+                    if (currentSignature == previousSignature && !footnoteStateChanged) break;
                     previousSignature = currentSignature;
                 }
             }

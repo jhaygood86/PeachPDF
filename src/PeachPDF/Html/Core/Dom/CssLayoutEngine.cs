@@ -351,10 +351,18 @@ namespace PeachPDF.Html.Core.Dom
             // Resumed content starts at the new fragmentainer's own content edge, below any border and padding
             // a `box-decoration-break: clone` box re-opens with there (css-break-3 §6.2). `text-indent`
             // applies to the first formatted line only (CSS Text §5), so it is not re-applied here.
+            //
+            // Below the room a page float pinned to this fragmentainer's head (css-page-floats `float: top`)
+            // has claimed, too. A block-level box is kept off that strip by ResolveBlockChildOffset's floor,
+            // but a paragraph that started on an earlier page is not placed by it: its lines continue from
+            // the content edge, which is inside the strip (issue #1273). The same floor, taken the same way,
+            // so a document with no page float reads zero here.
             var startY = resume is not null && context is not null
-                ? context.ResumeContentTop + (blockBox.HtmlContainer is { HasCloneDecorations: true }
-                    ? DomUtils.ClonedBlockStart(blockBox, stopAt: null)
-                    : 0)
+                ? Math.Max(
+                    context.ResumeContentTop + (blockBox.HtmlContainer is { HasCloneDecorations: true }
+                        ? DomUtils.ClonedBlockStart(blockBox, stopAt: null)
+                        : 0),
+                    context.BandTop + context.BandStartInsetOf(context.SlotIndex))
                 : blockBox.ClientTop;
 
             // The last line an earlier fragmentainer kept, read before the seed line joins the list.
@@ -1812,8 +1820,9 @@ namespace PeachPDF.Html.Core.Dom
 
             switch (box.Float.Value)
             {
-                case Floating.Left or Floating.Right or Floating.Inside or Floating.Outside:
-                    // CSS Page Floats' inside/outside resolve to an effective left/right based on which
+                case Floating.Left or Floating.Right or Floating.Inside or Floating.Outside
+                    or Floating.InlineStart or Floating.InlineEnd:
+                    // CSS Page Floats' inside/outside (and css-logical-1's inline-start/inline-end) resolve to an effective left/right based on which
                     // physical side of a two-page spread the float's landing page is (CssBox.EffectiveFloatSide);
                     // left/right pass through unchanged. Once resolved, every left/right code path
                     // (collision scanning, line wrapping, shrink-to-fit, "floats share the line") reads
@@ -3046,14 +3055,16 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var siblingBox = containingBox.Boxes[i];
 
-                clearance = Math.Max(clearance, GetClearance(siblingBox, box.Clear.Value));
+                var clears = box.EffectiveClear;
+
+                clearance = Math.Max(clearance, GetClearance(siblingBox, clears));
 
                 if (!siblingBox.IsFloated) continue;
 
                 switch (siblingBox.EffectiveFloatSide)
                 {
-                    case Floating.Left when box.Clear.Value is ClearMode.Right:
-                    case Floating.Right when box.Clear.Value is ClearMode.Left:
+                    case Floating.Left when clears is ClearMode.Right:
+                    case Floating.Right when clears is ClearMode.Left:
                         continue;
                 }
 

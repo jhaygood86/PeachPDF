@@ -477,6 +477,32 @@ table + .landing-lede,
   margin-top: 1.25rem;
 }
 
+.testimonial {
+  max-width: 42rem;
+  margin: 1.5rem auto 0;
+}
+
+.testimonial blockquote {
+  margin: 0;
+  padding: 1rem 1.5rem;
+  font-size: 1.05rem;
+  font-style: italic;
+  color: var(--text);
+}
+
+.testimonial figcaption {
+  margin-top: 0.75rem;
+  text-align: right;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.testimonial .testimonial-video {
+  margin: 0.5rem 0 0;
+  text-align: right;
+  font-size: 0.9rem;
+}
+
 p {
   margin: 0 0 1rem;
 }

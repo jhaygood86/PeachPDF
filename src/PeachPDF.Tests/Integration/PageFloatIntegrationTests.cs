@@ -1,4 +1,6 @@
 using PeachPDF.Html.Core.Dom;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 using static PeachPDF.Tests.TestSupport.LayoutHarness;
@@ -409,6 +411,58 @@ namespace PeachPDF.Tests.Integration
             Assert.True(bottomHeight >= 809.9, $"expected both floats' heights (750+60) reserved at the bottom, was {bottomHeight}");
             Assert.False(container.TopFloatAreaHeightsBySlot.ContainsKey(0),
                 "the top-bottom float must have fallen back to the bottom edge, not claimed the top");
+        }
+
+        // ─── The top reservation and content that flows across a page boundary ───
+
+        private static IEnumerable<CssLineBox> LinesUnder(CssBox box) =>
+            box.LineBoxes.Concat(box.Boxes.SelectMany(LinesUnder));
+
+        [Fact]
+        public async Task FloatTop_OnALaterPage_KeepsAParagraphContinuingFromAnEarlierPageBelowTheStrip()
+        {
+            // The paragraph starts on page 0, so its lines are not placed by the block-level clamp that keeps
+            // a box off the reserved strip: they continue at the next page's own content edge unless the
+            // resumed flow honours the reservation itself (issue #1273). The float is anchored inside the
+            // paragraph on page 1, so page 1 reserves its top strip.
+            // One word per line (a 20pt measure, narrower than any word), 20pt lines, 160pt pages: eight lines a page. The float sits
+            // after the eleventh word, on page 1, so the paragraph's lines nine to eleven are the ones that
+            // continue from page 0 into the reserved page.
+            var before = string.Join(" ", Enumerable.Range(0, 11).Select(i => $"word{i}"));
+            var after = string.Join(" ", Enumerable.Range(11, 20).Select(i => $"word{i}"));
+            var html = Wrap($@"
+                <p id='p' style='margin:0; font:10pt monospace; line-height:20pt; width:20pt'>{before}<span id='f' style='float:top; width:20pt; height:50pt'></span> {after}</p>");
+
+            var (root, container) = await LayoutAsync(html, pageWidth: 200, pageHeight: 200, margin: 20);
+            var p = FindById(root, "p")!;
+
+            var reserved = container.TopFloatAreaHeightsBySlot.GetValueOrDefault(1);
+            Assert.True(reserved >= 49.9, $"page 1 should reserve the float's ~50pt, was {reserved}; reservations: " +
+                string.Join(",", container.TopFloatAreaHeightsBySlot.Select(kv => $"{kv.Key}={kv.Value}")));
+
+            var pageOneTop = container.PageTopOf(1);
+            var onPageOne = LinesUnder(p).Where(l => container.PageIndexOf(l.LineTop) == 1).ToList();
+
+            Assert.NotEmpty(onPageOne);
+            Assert.All(onPageOne, l => Assert.True(l.LineTop >= pageOneTop + reserved - 0.01,
+                $"line at {l.LineTop} sits inside the reserved strip ending at {pageOneTop + reserved}"));
+        }
+
+        [Fact]
+        public async Task FloatTop_OnALaterPage_ControlWithoutAReservation_StartsContinuedLinesAtThePageTop()
+        {
+            // The control for the test above: the same paragraph with nothing reserved starts its continued
+            // lines flush with the page's content edge, so the assertion above is about the reservation.
+            var words = string.Join(" ", Enumerable.Range(0, 60).Select(i => $"word{i}"));
+            var html = Wrap($@"
+                <p id='p' style='margin:0; font:10pt monospace; line-height:20pt; width:20pt'>{words} tail words after</p>");
+
+            var (root, container) = await LayoutAsync(html, pageWidth: 200, pageHeight: 200, margin: 20);
+            var p = FindById(root, "p")!;
+
+            var firstOnPageOne = p.LineBoxes.First(l => container.PageIndexOf(l.LineTop) == 1);
+
+            Assert.Equal(container.PageTopOf(1), firstOnPageOne.LineTop, 0.5);
         }
 
         // ─── Flex/grid items: float has no effect (css-flexbox-1 §4 / css-grid-2 §6) ───
