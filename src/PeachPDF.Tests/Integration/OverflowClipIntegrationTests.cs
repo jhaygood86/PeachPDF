@@ -1,11 +1,13 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -221,6 +223,49 @@ body { margin: 0; }
             Assert.True(curveIndex >= 0,
                 "expected the hoisted stacking-context child to re-apply its rounded ancestor's curve clip");
             Assert.Equal(recording.PushCount, recording.PopCount);
+        }
+
+        // CSS Overflow 3 §3 through the real painter: a hoisted absolutely positioned box is clipped by a
+        // non-positioned overflow:hidden wrapper only when the wrapper forms its containing block - here
+        // by being positioned, or by any transform other than none, identity ones included.
+        [Theory]
+        [InlineData("", false)]
+        [InlineData("position:relative;", true)]
+        [InlineData("transform:translateZ(0);", true)]
+        [InlineData("transform:scale(1);", true)]
+        public async Task PaintingHoistedAbsposChild_IsClippedByOverflowWrapper_OnlyWhenItFormsTheContainingBlock(string wrapperStyle, bool clipped)
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div style='position:relative;width:200pt;height:100pt'>" +
+                $"<div style='overflow:hidden;{wrapperStyle}width:60pt;height:5pt'>" +
+                "<div style='position:absolute;z-index:1;top:0;left:0;width:80pt;height:40pt;background:red'></div></div></div>"));
+
+            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintPage(container, recording);
+
+            var activeClips = new List<RRect>();
+            List<RRect>? clipsAtFill = null;
+            foreach (var op in recording.Log)
+            {
+                switch (op.Kind)
+                {
+                    case PaintOpKind.PushClip:
+                        activeClips.Add(op.Bounds);
+                        break;
+                    case PaintOpKind.PushClipPath:
+                        activeClips.Add(default);
+                        break;
+                    case PaintOpKind.PopClip:
+                        activeClips.RemoveAt(activeClips.Count - 1);
+                        break;
+                    case PaintOpKind.FillRect when Math.Abs(op.Bounds.Height - 40) < 0.5:
+                        clipsAtFill ??= [.. activeClips];
+                        break;
+                }
+            }
+
+            Assert.NotNull(clipsAtFill);
+            Assert.Equal(clipped, clipsAtFill!.Exists(c => Math.Abs(c.Height - 5) < 0.5));
         }
 
         [Fact]

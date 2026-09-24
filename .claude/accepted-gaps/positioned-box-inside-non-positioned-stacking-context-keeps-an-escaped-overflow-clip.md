@@ -3,7 +3,7 @@
 **Gap:** CSS Overflow 3 §3 clips only descendants whose containing block chain passes through the
 clipping box. `relative > overflow:hidden > opacity:.5 > absolute` should leave the absolute box unclipped,
 because `opacity` forms a stacking context but not a containing block. PeachPDF still clips it to the
-`overflow: hidden` box. The same applies to `mix-blend-mode` and to a flex item with `z-index` in the
+`overflow: hidden` box. The same applies to `mix-blend-mode`, a flex or grid item with `z-index` in the
 middle position, and to `position: fixed` in the same place.
 
 **Why:** the positioned box is a stacking participant of the `opacity` box, so it is painted inside that

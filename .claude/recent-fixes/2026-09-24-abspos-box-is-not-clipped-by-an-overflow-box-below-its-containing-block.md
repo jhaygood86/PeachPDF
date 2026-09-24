@@ -60,6 +60,20 @@ participant's chain.
   and column groups, and all three clip checks use it
   (`AbsposFragment_IsNotClipped_ByAContainingBlockOverflowDoesNotApplyTo`).
 
+- **"Has a transform" is the computed value, not the matrix.** CSS Transforms 1 §2 forms the containing
+  block for any `transform` other than `none`. `CssBox.IsTransformed` is `!ActualTransformMatrix.IsIdentity`,
+  so `translateZ(0)`, `translate3d(0,0,0)`, `scale(1)` and `rotate(0deg)` (the "force a layer" hacks, usually
+  on non-positioned `overflow: hidden` wrappers) read as untransformed. Keying the chain on it made those
+  wrappers stop clipping their abspos/fixed children, which the merge-base and Chrome both clip (found in
+  review, 2,800 vs 24,000 red pixels at 96 dpi). The chain reads `CssBox.HasTransform` (computed value
+  not `none`) instead; `IsTransformed` stays for paint, where an identity matrix really is a no-op.
+- **Not fixed here:** a fixed box inside an `overflow: hidden` wrapper on a page with margins now spills
+  into the page margin (Chrome clips it to the page area); the old wrapper clip only hid that by accident.
+  `rotate(0)` (unitless zero angle) is still rejected by the transform grammar (#1327), so it does not form a
+  containing block either. A non-positioned `clip-path: inset(-500px)` box between the `overflow: hidden`
+  wrapper and the escaped box was reported in review to leak where the merge-base matched Chrome; not
+  investigated here.
+
 ## Evidence
 
 - New tests in `PushAncestorOverflowClipsTests`:
@@ -68,6 +82,13 @@ participant's chain.
   - The clip still applies when the wrapper is positioned, or has a `transform`/`filter`/`perspective`
     (for both absolute and fixed).
   - A fixed box gets no clip at all.
+  - Identity transforms (`translateZ(0)`, `translate3d(0,0,0)`, `scale(1)`, `rotate(0deg)`), `filter: blur(0)`
+    and `backdrop-filter` wrappers still clip, for both absolute and fixed; the identity rows fail with the
+    `IsTransformed` check.
+  - A `position: relative; overflow: hidden` `<tbody>` does not clip its abspos descendant.
+- `OverflowClipIntegrationTests.PaintingHoistedAbsposChild_IsClippedByOverflowWrapper_OnlyWhenItFormsTheContainingBlock`
+  paints a page through `FragmentPainter` and checks the clips active at the abspos box's fill, so the
+  painter's `PushAncestorOverflowClips` wiring has an end-to-end test.
 - Two `StackingContextOrderingTests` fixtures were relying on the old behaviour (non-positioned
   `overflow:hidden` wrappers clipping an abspos child). They now make those wrappers `position:relative`,
   which is what makes them clip in a browser.

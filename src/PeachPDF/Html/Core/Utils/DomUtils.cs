@@ -1,4 +1,4 @@
-// "Therefore those skilled at the unorthodox
+﻿// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -791,10 +791,13 @@ namespace PeachPDF.Html.Core.Utils
 
         /// <summary>
         /// Whether <paramref name="box"/> forms the containing block of its <c>position: fixed</c> (and
-        /// so also its absolutely positioned) descendants without being positioned itself.
+        /// so also its absolutely positioned) descendants without being positioned itself. Any
+        /// <c>transform</c> other than <c>none</c> counts, including an identity one such as
+        /// <c>translateZ(0)</c> or <c>scale(1)</c>, so this reads <see cref="CssBox.HasTransform"/> rather
+        /// than <see cref="CssBox.IsTransformed"/>.
         /// </summary>
         private static bool FormsContainingBlockForFixed(CssBox box) =>
-            box.IsTransformed
+            box.HasTransform
             || box.ActualPerspective > 0
             || box.ActualFilterFunctions.Count > 0
             || box.ActualBackdropFilterFunctions.Count > 0;

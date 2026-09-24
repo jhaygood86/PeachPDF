@@ -701,6 +701,20 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>True when this box has a non-identity CSS transform to apply at paint time.</summary>
         public bool IsTransformed => !ActualTransformMatrix.IsIdentity;
 
+        /// <summary>
+        /// True when the computed <c>transform</c> is anything other than <c>none</c>, identity matrices
+        /// (<c>translateZ(0)</c>, <c>scale(1)</c>) included. This, not <see cref="IsTransformed"/>, is what
+        /// CSS Transforms 1 §2 keys the containing block for positioned descendants on.
+        /// </summary>
+        public bool HasTransform
+        {
+            get
+            {
+                var value = Style.VisualEffects.Transform;
+                return !string.IsNullOrWhiteSpace(value) && !value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
         private double _actualPerspective = double.NaN;
 
         /// <summary>The <c>perspective</c> distance this box gives its children, in layout units; 0 for <c>none</c>.</summary>

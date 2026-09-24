@@ -154,7 +154,15 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
         [Theory]
         [InlineData("transform:translate(1pt,0)")]
+        // CSS Transforms 1 §2: any transform other than none forms the containing block, identity ones
+        // (the usual "force a layer" hacks) included.
+        [InlineData("transform:translateZ(0)")]
+        [InlineData("transform:translate3d(0,0,0)")]
+        [InlineData("transform:scale(1)")]
+        [InlineData("transform:rotate(0deg)")]
         [InlineData("filter:opacity(0.9)")]
+        [InlineData("filter:blur(0)")]
+        [InlineData("backdrop-filter:blur(2pt)")]
         [InlineData("perspective:100pt")]
         public async Task OutOfFlowFragment_IsClipped_ByANonPositionedClippingAncestorThatFormsItsContainingBlock(string effect)
         {
@@ -260,6 +268,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
                     "<span id='abs' style='position:absolute;display:block;top:0;left:0;width:80pt;height:40pt'></span></span></p>")]
         [InlineData("<table><tr id='cb' style='position:relative;overflow:hidden'><td>" +
                     "<div id='abs' style='position:absolute;top:0;left:0;width:80pt;height:40pt'></div></td></tr></table>")]
+        [InlineData("<table><tbody id='cb' style='position:relative;overflow:hidden'><tr><td>" +
+                    "<div id='abs' style='position:absolute;top:0;left:0;width:80pt;height:40pt'></div></td></tr></tbody></table>")]
         public async Task AbsposFragment_IsNotClipped_ByAContainingBlockOverflowDoesNotApplyTo(string html)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
