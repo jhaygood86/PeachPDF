@@ -710,10 +710,17 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
+                // Cached: the stacking-context predicate asks this of every box from several places.
+                if (_hasTransform is { } cached) return cached;
+
                 var value = Style.VisualEffects.Transform;
-                return !string.IsNullOrWhiteSpace(value) && !value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase);
+                var has = !string.IsNullOrWhiteSpace(value) && !value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase);
+                _hasTransform = has;
+                return has;
             }
         }
+
+        private bool? _hasTransform;
 
         private double _actualPerspective = double.NaN;
 
@@ -752,7 +759,11 @@ namespace PeachPDF.Html.Core.Dom
         public bool IsPreserve3dRequested =>
             Style.VisualEffects.TransformStyle.Value == TransformStyleMode.Preserve3d;
 
-        internal void InvalidateTransform() => _actualTransformComputed = false;
+        internal void InvalidateTransform()
+        {
+            _actualTransformComputed = false;
+            _hasTransform = null;
+        }
 
         internal void InvalidatePerspective() => _actualPerspective = double.NaN;
 

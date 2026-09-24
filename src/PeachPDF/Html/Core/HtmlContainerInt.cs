@@ -1545,12 +1545,12 @@ namespace PeachPDF.Html.Core
             // loop below, and until that loop has run, a box's page is provisional.
             _pageWidthsSettled = false;
 
-            // includeStackingHoistCandidates: false here - IsStackingContextBox reads IsTransformed,
-            // which lazily computes and permanently caches ActualTransformMatrix against this box's own
-            // border-box size on first access. Before layout, every box's size is still unset/default,
-            // so triggering that computation this early would cache a wrong transform matrix forever
-            // (this box never gets asked for its transform again once the cache is populated) - see the
-            // "actualTransformComputed" cache in DerivedStyle.ActualTransformMatrix.
+            // includeStackingHoistCandidates: false here - the stacking-context predicate is only settled
+            // once layout has run. It used to read IsTransformed, which lazily computes and permanently
+            // caches ActualTransformMatrix against the box's own border-box size on first access (before
+            // layout every box's size is still unset, so that would cache a wrong matrix forever - see the
+            // "actualTransformComputed" cache in DerivedStyle.ActualTransformMatrix). It reads the computed
+            // value (HasTransform) now, but the flag is only consumed after layout, so it stays deferred.
             (HasFloatedBoxes, HasOutOfFlowBoxes, _) = ComputeFlowFlags(Root, includeStackingHoistCandidates: false);
 
             // Depends on cascaded style only, and layout itself consults it, so it has to be settled before
