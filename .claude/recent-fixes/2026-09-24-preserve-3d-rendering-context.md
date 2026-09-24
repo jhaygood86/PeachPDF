@@ -24,7 +24,16 @@ because *everything* is painted through `PaintFragment`, hoisted positioned desc
 **A context is entered more than once.** A stacking context is discovered by more than one ordering scope (the page root's hoist search and
 the positioned stage above it), and `_painted` only guards `PaintTagged`. The first version therefore drew the context's bitmap twice (two
 identical `Do` operators in the PDF; the second painted an empty plane because `PaintTagged` had already recorded it). `TryPaintContext3D`
-returns early for a root already in `_painted`. Found by a PDF-level placement-count test, not by any pixel test.
+returns early for a root already in `_composedContexts` (its own set: keying on `_painted` misses a root that is backface-hidden or whose
+bitmap could not be made, and would break `PaintTagged` inside the context). Found by a PDF-level placement-count test, not by any pixel test.
+
+**Sort a child no earlier than its parent, and do not make plain children planes.** Two ordering defects came out of the review pass, neither
+visible in an untilted test. (1) Planes sort back to front by the depth of their *centre*; on a tilted root a coplanar child at the far end has a
+lower centre depth than the root, sorted first, and the root's own background then overpainted it (depth equal within epsilon, so the
+z-test let it). Each plane's sort key is now `max(own centre depth, parent's key)`. (2) A child with no transform, no `preserve-3d` and no
+`backface-visibility` is coplanar with its parent by construction, so it is painted in the parent's plane in ordinary CSS 2.1 paint order
+instead of as a separate coplanar plane in tree order (which let a later in-flow block cover an earlier positioned one, and cost a bitmap per
+anonymous box).
 
 **Fast path, so nothing regresses.** A context whose planes are all parallel to the view plane at one depth with no divisor
 (`M13, M23, M14, M24, M43 ≈ 0`, `M44 ≈ 1`, none hidden) has nothing for a depth test to change, and is painted by the old per-element vector
