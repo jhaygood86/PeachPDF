@@ -90,6 +90,38 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, m.M22, 3);
         }
 
+        [Theory]
+        [InlineData("rotate(0)")]
+        [InlineData("rotateX(0)")]
+        [InlineData("rotateY(0)")]
+        [InlineData("rotateZ(0)")]
+        [InlineData("rotate3d(1, 0, 0, 0)")]
+        [InlineData("skew(0)")]
+        [InlineData("skew(0, 0)")]
+        [InlineData("skewX(0)")]
+        [InlineData("skewY(0)")]
+        public async Task UnitlessZeroAngle_IsIdentity(string function)
+        {
+            var divBox = await FindDivBox($"transform: {function}; transform-origin: 0 0;");
+
+            Assert.False(divBox.IsTransformed);
+        }
+
+        [Fact]
+        public async Task UnitlessZeroAngle_DoesNotDiscardTheRestOfTheList()
+        {
+            var divBox = await FindDivBox("transform: rotate(0) translate(50pt, 20pt) skewX(0);");
+            var m = divBox.ActualTransformMatrix;
+
+            Assert.True(divBox.IsTransformed);
+            Assert.Equal(1, m.M11, 3);
+            Assert.Equal(0, m.M12, 3);
+            Assert.Equal(0, m.M21, 3);
+            Assert.Equal(1, m.M22, 3);
+            Assert.Equal(50, m.OffsetX, 3);
+            Assert.Equal(20, m.OffsetY, 3);
+        }
+
         [Fact]
         public async Task MatrixPassthrough_MapsDirectly()
         {

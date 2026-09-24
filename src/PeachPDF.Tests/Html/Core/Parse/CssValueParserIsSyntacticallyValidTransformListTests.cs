@@ -69,6 +69,10 @@ namespace PeachPDF.Tests.Html.Core.Parse
         [InlineData("translate(10px)\tscale(2)")] // tab as separator
         [InlineData("matrix(1, 0, 0, 1, 0, 0) translate(10px)")]
         [InlineData("perspective(300px) banana(1)")] // one recognized, one not
+        [InlineData("rotate(0)")] // <zero> is a legal transform-function angle
+        [InlineData("skew(0)")]
+        [InlineData("skew(0, 0)")]
+        [InlineData("rotate3d(1, 0, 0, 0) skewX(0)")]
         public void AgreesWithRealCssOmRoundTrip(string value)
         {
             var fast = CssValueParser.IsSyntacticallyValidTransformList(value);

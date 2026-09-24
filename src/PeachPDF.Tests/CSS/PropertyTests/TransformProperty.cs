@@ -564,6 +564,50 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.Equal("rotate(0.5turn)", concrete.Value);
         }
 
+        [Theory]
+        [InlineData("rotate(0)", "rotate(0deg)")]
+        [InlineData("rotateX(0)", "rotateX(0deg)")]
+        [InlineData("rotateY(0)", "rotateY(0deg)")]
+        [InlineData("rotateZ(0)", "rotateZ(0deg)")]
+        [InlineData("rotate3d(1, 0, 0, 0)", "rotate3d(1, 0, 0, 0deg)")]
+        [InlineData("skew(0)", "skew(0deg)")]
+        [InlineData("skew(0, 10deg)", "skew(0deg, 10deg)")]
+        [InlineData("skew(10deg, 0)", "skew(10deg, 0deg)")]
+        [InlineData("skewX(0)", "skewX(0deg)")]
+        [InlineData("skewY(0)", "skewY(0deg)")]
+        [InlineData("translate(1px, 2px) rotate(0) scale(2)", "translate(1px, 2px) rotate(0deg) scale(2)")]
+        public void CssTransformUnitlessZeroAngleLegal(string snippetValue, string expected)
+        {
+            // CSS Transforms 1/2: the angle arguments are [ <angle> | <zero> ].
+            var property = ParseDeclaration("transform: " + snippetValue);
+            var concrete = Assert.IsType<TransformProperty>(property);
+            Assert.True(concrete.HasValue);
+            Assert.Equal(expected, concrete.Value);
+        }
+
+        [Theory]
+        [InlineData("rotate(1)")]
+        [InlineData("rotate(0px)")]
+        [InlineData("rotateX(5)")]
+        [InlineData("rotate3d(1, 0, 0, 5)")]
+        [InlineData("skewX(5)")]
+        [InlineData("skew(0, 5)")]
+        public void CssTransformNonZeroUnitlessAngleIllegal(string snippetValue)
+        {
+            var property = ParseDeclaration("transform: " + snippetValue);
+            var concrete = Assert.IsType<TransformProperty>(property);
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
+        public void GeneralAngleStaysStrictAboutUnitlessZero()
+        {
+            // The <zero> alternative is specific to the legacy transform functions; a plain <angle>
+            // (here font-style's `oblique <angle>`) is not allowed to be a unitless zero (CSS Values 4 §6.1).
+            var property = ParseDeclaration("font-style: oblique 0");
+            Assert.False(property.HasValue);
+        }
+
         [Fact]
         public void CssTransformSkewXLegal()
         {
