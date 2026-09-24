@@ -4039,16 +4039,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            // Deliberately NOT wrapped in DetachFragmentainer/SuppressWordPageBreaks: FragmentEmitter's own
-            // recording (FragmentEmitter.cs, guarded by `CurrentFragmentainer is not { IsFragmenting: true }
-            // -> return`) skips emitting anything at all while the fragmentainer is detached, since that
-            // guard exists for genuine measurement/monolithic passes whose content is never meant to reach
-            // the page. This box's content is real, on-page content - it needs the ambient fragmentainer
-            // live the same way FlowInlineFlexChild's direct CssLayoutEngineFlex.PerformLayout(g, b) call
-            // already relies on it being, or nothing paints (confirmed: an earlier version of this method
-            // that did detach produced a fully-laid-out box tree - correct Location/Words on every
-            // descendant - whose PDF content stream carried zero text objects).
-            await b.LayoutContentAtItsAssignedPosition(g);
+            await LayoutContentUnbroken(g, b);
 
             // A box whose own content is inlines-only just laid out line boxes of its own, and came back
             // out of that machinery carrying one rectangle per line - the shape an INLINE box needs, so
@@ -4141,19 +4132,12 @@ namespace PeachPDF.Html.Core.Dom
         /// as it already would not for an ordinary block-level float in that position today.
         /// </para>
         /// <para>
-        /// <b>Pagination</b>: if <paramref name="b"/>'s own content is taller than fits in the remaining
-        /// fragmentainer, <see cref="CssBox.LayoutContentAtItsAssignedPosition"/> leaves a
-        /// <c>PendingBreakToken</c> on <paramref name="b"/> exactly as it would for an inline-block with
-        /// block content reached through <see cref="FlowAtomicBlockContentChild"/> - which today, like this
-        /// call, does not thread that token any further. Both are monolithic-in-practice for this flow's own
-        /// pagination the same way an <c>inline-table</c>/<c>inline-grid</c>/<c>inline-flex</c> child already
-        /// is (see this function's own <c>!childOpensHere</c> handling for those): <paramref name="b"/>'s
-        /// excess content overflows the page it starts on rather than continuing onto a later one. This is
-        /// not a regression against the "float before inline content" shape that already worked before
-        /// #1038 - it shares the identical limitation an inline-block with tall block content already had -
-        /// and it is safe rather than corrupting: <paramref name="b"/> is positioned once, its own content
-        /// layout is the ordinary (already fragmentainer-aware) block-content dispatch, and nothing here
-        /// re-enters or re-places it. See the #1038 migration note for the precise scope this leaves open.
+        /// <b>Pagination</b>: the content is laid out as one unbroken run (<see cref="LayoutContentUnbroken"/>),
+        /// because nothing up this inline flow resumes a record that a box it places itself leaves behind. One
+        /// taller than the page it starts on therefore runs on past the page's foot and each page shows the
+        /// slice that falls in it, rather than the lines after a break being dropped (issue #1201). It is not
+        /// fragmented at its own break points, so it does not continue <i>beside</i> the text flowing around it
+        /// onto the next page; that is float fragmentation proper (issue #317).
         /// </para>
         /// </remarks>
         private static async ValueTask FlowFloatChild(RGraphics g, CssBox blockBox, CssBox b, CssLineBoxCoordinates coordinates)
@@ -4177,7 +4161,41 @@ namespace PeachPDF.Html.Core.Dom
 
             (coordinates.InlineFloats ??= []).Add(b);
 
-            await b.LayoutContentAtItsAssignedPosition(g);
+            await LayoutContentUnbroken(g, b);
+        }
+
+        /// <summary>
+        /// Lays out <paramref name="b"/>'s own content at the position it was given, as one unbroken run:
+        /// with the fragmentainer detached and per-word page breaks suppressed, the way an unbreakable box's
+        /// content is laid out (<c>CssBox.LayoutContents</c>'s monolithic path).
+        /// </summary>
+        /// <remarks>
+        /// For a box the inline flow places itself - a float among inline content, an inline-block holding
+        /// block-level content. Nothing up that flow resumes a record such a box leaves behind, so a break
+        /// taken inside it would drop everything after the break: a float of twenty lines on pages that hold
+        /// eight showed eight (issues #1201, #1332). Laid out whole, its geometry runs on past the page's
+        /// foot and each page's fragment shows the slice that falls in it, as an unbreakable box's does
+        /// (css-break-3 §2: content that cannot be broken may be sliced to avoid losing it, §4.4).
+        /// </remarks>
+        private static async ValueTask LayoutContentUnbroken(RGraphics g, CssBox b)
+        {
+            var container = b.HtmlContainer;
+            var previousFragmentainer = container?.DetachFragmentainer();
+            var previousSuppress = container?.SuppressWordPageBreaks ?? false;
+            if (container is not null) container.SuppressWordPageBreaks = true;
+
+            try
+            {
+                await b.LayoutContentAtItsAssignedPosition(g);
+            }
+            finally
+            {
+                if (container is not null)
+                {
+                    container.RestoreFragmentainer(previousFragmentainer);
+                    container.SuppressWordPageBreaks = previousSuppress;
+                }
+            }
         }
 
         /// <summary>
