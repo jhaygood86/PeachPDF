@@ -66,10 +66,13 @@ namespace PeachPDF.Html.Core.Utils
         /// (<c>CssLayoutEngine.CreateLineBoxes</c>/<c>FlowBox</c>, which has its own dispatch branch for a
         /// floated child) rather than the block-children path - see <c>DomParser.JoinsTheInlineRun</c>'s
         /// own remarks and <see href="https://github.com/jhaygood86/PeachPDF/issues/1038">#1038</see>.
+        /// An absolutely positioned child is inline-compatible for the same reason: it is out of flow, so
+        /// it is not the block-level content CSS 2.1 §9.2.1.1 separates inline content from, and
+        /// <c>FlowBox</c> has a dispatch branch for it too.
         /// </remarks>
         public static bool ContainsInlinesOnly(CssBox box)
         {
-            return box.Boxes.All(b => b.IsInline || b.IsFloated);
+            return box.Boxes.All(b => b.IsInline || b.IsFloated || b.IsAbsolutelyPositioned);
         }
 
         /// <summary>
@@ -736,6 +739,58 @@ namespace PeachPDF.Html.Core.Utils
             } while (currentBox is { IsPositioned: false, EffectiveParentBox: not null });
 
             return currentBox!;
+        }
+
+        /// <summary>
+        /// The containing block a positioned <b>inline</b> ancestor forms for an absolutely positioned
+        /// descendant, or null when <paramref name="ancestor"/> is not a non-atomic inline with laid-out
+        /// fragments (or, for an empty one, a <see cref="CssBox.EmptyInlineContainingBlock"/>). Every other
+        /// ancestor forms it from its own padding box, which its callers already read off the box itself.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see href="https://www.w3.org/TR/CSS21/visudet.html#containing-block-details">CSS 2.1 §10.1</see>
+        /// (4.1) defines this only for an inline on one line: the bounding box of the padding boxes of its
+        /// first and last inline boxes. It leaves a multi-line inline undefined. The rule used for that is
+        /// <see href="https://www.w3.org/TR/css-position-3/#def-cb">CSS Positioned Layout 3 §2.1</see>'s:
+        /// the start-most edges of the first fragment and the end-most edges of the last, in the inline's
+        /// own writing mode. So in <c>ltr</c> the top and left come from the first fragment
+        /// and the bottom and right from the last, and in <c>rtl</c> the left and right swap. That section
+        /// names the fragments' content edges; padding edges are used instead, as CSS 2.1's one-line rule
+        /// and Chromium both use them. A resulting negative width or height, which a wrapped inline can
+        /// produce, is clamped to zero.
+        /// </para>
+        /// <para>
+        /// An inline's own <see cref="CssBox.Location"/> is a line-local value layout never updates, so
+        /// reading it the way a block's is read put such a descendant at the page origin. The per-line
+        /// rectangles are border boxes (<see cref="CssLineBox.UpdateRectangle"/>), so the borders come off.
+        /// </para>
+        /// </remarks>
+        /// <param name="ancestor">the nearest positioned ancestor of the absolutely positioned box</param>
+        /// <returns>the containing block's padding rectangle, or null</returns>
+        internal static RRect? InlineContainingBlockOf(CssBox ancestor)
+        {
+            if (!ancestor.IsInline || IsAtomicInline(ancestor)) return null;
+
+            // An inline with no fragment - one holding only absolutely positioned boxes - is given a
+            // zero-width one at their place on the line while they are laid out.
+            if (ancestor.Rectangles.Count == 0) return ancestor.EmptyInlineContainingBlock;
+
+            var rectangles = ancestor.Rectangles;
+            var first = ancestor.FirstHostingLineBox is { } firstLine && rectangles.TryGetValue(firstLine, out var f)
+                ? f
+                : rectangles.Values.MinBy(r => r.Top);
+            var last = ancestor.LastHostingLineBox is { } lastLine && rectangles.TryGetValue(lastLine, out var l)
+                ? l
+                : rectangles.Values.MaxBy(r => r.Bottom);
+
+            var rtl = ancestor.Direction.Value == DirectionMode.Rtl;
+            var left = (rtl ? last : first).Left + ancestor.ActualBorderLeftWidth;
+            var right = (rtl ? first : last).Right - ancestor.ActualBorderRightWidth;
+            var top = first.Top + ancestor.ActualBorderTopWidth;
+            var bottom = last.Bottom - ancestor.ActualBorderBottomWidth;
+
+            return new RRect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
         }
 
         /// <summary>

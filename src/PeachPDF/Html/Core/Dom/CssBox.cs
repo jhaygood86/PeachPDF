@@ -603,7 +603,13 @@ namespace PeachPDF.Html.Core.Dom
             return isRight ? Floating.Right : Floating.Left;
         }
 
-        public bool IsOutOfFlow => IsFloated || IsPageFloated || Position.Value is PositionMode.Absolute or PositionMode.Fixed;
+        public bool IsOutOfFlow => IsFloated || IsPageFloated || IsAbsolutelyPositioned;
+
+        /// <summary>
+        /// An absolutely positioned box: <c>position: absolute</c> or <c>fixed</c>
+        /// (<see href="https://www.w3.org/TR/CSS21/visuren.html#absolute-positioning">CSS 2.1 §9.6</see>).
+        /// </summary>
+        internal bool IsAbsolutelyPositioned => Position.Value is PositionMode.Absolute or PositionMode.Fixed;
 
         /// <summary>
         /// <see cref="IsOutOfFlow"/> plus <see cref="IsRunningPositioned"/> - every reason a box
@@ -1394,6 +1400,14 @@ namespace PeachPDF.Html.Core.Dom
         /// Gets the first word of the box
         /// </summary>
         internal CssRect FirstWord => Words[0];
+
+        /// <summary>
+        /// The padding rectangle this inline forms as a containing block when it has no line fragment of its
+        /// own, set only while an absolutely positioned descendant is laid out
+        /// (<c>CssLayoutEngine.EmptyInlineContainingBlockFor</c>, read by
+        /// <see cref="DomUtils.InlineContainingBlockOf"/>).
+        /// </summary>
+        internal RRect? EmptyInlineContainingBlock { get; set; }
 
         /// <summary>
         /// Gets or sets the first linebox where content of this box appear
@@ -6381,14 +6395,17 @@ namespace PeachPDF.Html.Core.Dom
                     //
                     // and the same child at `bottom: 0; right: 0` agreed with Chrome before and
                     // after, as does every offset once the ancestor's padding is zero.
-                    var containingBlockLeft = nearestPositionedAncestor.Location.X + nearestPositionedAncestor.ActualBorderLeftWidth;
-                    var containingBlockTop = nearestPositionedAncestor.Location.Y + nearestPositionedAncestor.ActualBorderTopWidth;
+                    var inlineContainingBlock = DomUtils.InlineContainingBlockOf(nearestPositionedAncestor);
+                    var containingBlockLeft = inlineContainingBlock?.Left
+                                              ?? nearestPositionedAncestor.Location.X + nearestPositionedAncestor.ActualBorderLeftWidth;
+                    var containingBlockTop = inlineContainingBlock?.Top
+                                             ?? nearestPositionedAncestor.Location.Y + nearestPositionedAncestor.ActualBorderTopWidth;
 
                     var left = containingBlockLeft + child.ActualMarginLeft +
-                               ResolveOffsetOrZero(child.Left, nearestPositionedAncestor.ActualWidth, child);
+                               ResolveOffsetOrZero(child.Left, inlineContainingBlock?.Width ?? nearestPositionedAncestor.ActualWidth, child);
 
                     var top = containingBlockTop + child.ActualMarginTop +
-                              ResolveOffsetOrZero(child.Top, nearestPositionedAncestor.ActualHeight, child);
+                              ResolveOffsetOrZero(child.Top, inlineContainingBlock?.Height ?? nearestPositionedAncestor.ActualHeight, child);
 
                     child.Location = new RPoint(left, top);
                 }
@@ -6644,9 +6661,11 @@ namespace PeachPDF.Html.Core.Dom
                 if (Left.Value.IsKeyword && Right.Value.IsValue)
                 {
                     var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
+                    var inlineContainingBlock = DomUtils.InlineContainingBlockOf(nearestPositionedAncestor);
 
-                    var right = CssValueParser.ParseLength(Right.Value.Value!.Value, nearestPositionedAncestor.ActualWidth, this);
-                    var actualRight = nearestPositionedAncestor.ClientRight + nearestPositionedAncestor.ActualPaddingRight - right;
+                    var right = CssValueParser.ParseLength(Right.Value.Value!.Value, inlineContainingBlock?.Width ?? nearestPositionedAncestor.ActualWidth, this);
+                    var actualRight = (inlineContainingBlock?.Right
+                                       ?? nearestPositionedAncestor.ClientRight + nearestPositionedAncestor.ActualPaddingRight) - right;
 
                     var delta = actualRight - ActualRight;
 
@@ -6661,8 +6680,9 @@ namespace PeachPDF.Html.Core.Dom
                 if (Top.Value.IsKeyword && Bottom.Value.IsValue)
                 {
                     var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
+                    var inlineContainingBlock = DomUtils.InlineContainingBlockOf(nearestPositionedAncestor);
 
-                    var bottom = CssValueParser.ParseLength(Bottom.Value.Value!.Value, nearestPositionedAncestor.ActualHeight, this);
+                    var bottom = CssValueParser.ParseLength(Bottom.Value.Value!.Value, inlineContainingBlock?.Height ?? nearestPositionedAncestor.ActualHeight, this);
 
                     // Unlike ActualRight/ActualWidth (resolved for every box, including this ancestor,
                     // before its children are laid out - see the GetBoxWidth call earlier in this
@@ -6673,10 +6693,11 @@ namespace PeachPDF.Html.Core.Dom
                     // height directly from its own declared CSS Height (independent of child layout
                     // order) when it has one; only fall back to its (possibly still-provisional)
                     // ActualBottom for an auto-height ancestor, where there is no better source yet.
-                    var ancestorBorderBoxHeight = CssLayoutEngine.GetBoxHeight(nearestPositionedAncestor)
-                        ?? nearestPositionedAncestor.ActualBottom - nearestPositionedAncestor.Location.Y;
-                    var ancestorPaddingBoxBottom = nearestPositionedAncestor.Location.Y + ancestorBorderBoxHeight
-                        - nearestPositionedAncestor.ActualBorderBottomWidth;
+                    var ancestorPaddingBoxBottom = inlineContainingBlock?.Bottom
+                        ?? nearestPositionedAncestor.Location.Y
+                           + (CssLayoutEngine.GetBoxHeight(nearestPositionedAncestor)
+                              ?? nearestPositionedAncestor.ActualBottom - nearestPositionedAncestor.Location.Y)
+                           - nearestPositionedAncestor.ActualBorderBottomWidth;
 
                     var actualBottom = ancestorPaddingBoxBottom - bottom;
 
@@ -6818,13 +6839,21 @@ namespace PeachPDF.Html.Core.Dom
             else
             {
                 var ancestor = DomUtils.GetNearestPositionedAncestor(this);
-                var ancestorBorderBoxHeight = finalizedAncestorBorderBoxHeight
-                    ?? CssLayoutEngine.GetBoxHeight(ancestor)
-                    ?? ancestor.ActualHeight;
 
-                // An absolute containing block formed by a block box is its padding box (§10.1).
-                containingBlockHeight = Math.Max(0, ancestorBorderBoxHeight
-                    - ancestor.ActualBorderTopWidth - ancestor.ActualBorderBottomWidth);
+                if (DomUtils.InlineContainingBlockOf(ancestor) is { } inlineContainingBlock)
+                {
+                    containingBlockHeight = inlineContainingBlock.Height;
+                }
+                else
+                {
+                    var ancestorBorderBoxHeight = finalizedAncestorBorderBoxHeight
+                        ?? CssLayoutEngine.GetBoxHeight(ancestor)
+                        ?? ancestor.ActualHeight;
+
+                    // An absolute containing block formed by a block box is its padding box (§10.1).
+                    containingBlockHeight = Math.Max(0, ancestorBorderBoxHeight
+                        - ancestor.ActualBorderTopWidth - ancestor.ActualBorderBottomWidth);
+                }
             }
 
             var top = CssValueParser.ParseLength(Top.Value.Value!.Value, containingBlockHeight, this);
@@ -7358,7 +7387,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 foreach (CssBox childBox in box.Boxes)
                 {
-                    if (childBox.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                    // Out of flow, like GetMinMaxSumWords' own skip: not part of this box's content width.
+                    if (childBox.DerivedStyle.ActualDisplay == Keywords.None || childBox.IsAbsolutelyPositioned) continue;
                     GetMinimumWidth_LongestWord(childBox, ref maxWidth, ref maxWidthWord);
                 }
             }
@@ -7399,6 +7429,12 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var b in startBox.Boxes)
             {
+                // Out of flow (CSS 2.1 §10.6.3): not part of the content a cell's height and vertical
+                // alignment are measured from. One nested in an inline hangs off the line (#1299), and a
+                // `top: 100%` badge counted here pushed a middle-aligned header's text above its cell,
+                // off every repeated header's page.
+                if (b.IsAbsolutelyPositioned) continue;
+
                 currentMaxBottom = Math.Max(currentMaxBottom, GetMaximumBottom(b, currentMaxBottom));
             }
 
@@ -7428,6 +7464,9 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var b in startBox.Boxes)
             {
+                // Out of flow, as in GetMaximumBottom.
+                if (b.IsAbsolutelyPositioned) continue;
+
                 currentMaxRight = Math.Max(currentMaxRight, GetMaximumRight(b, currentMaxRight));
             }
 
@@ -7921,6 +7960,13 @@ namespace PeachPDF.Html.Core.Dom
                 foreach (var childBox in box.Boxes)
                 {
                     if (childBox.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
+                    // An absolutely positioned box contributes nothing to its containing block's intrinsic
+                    // size (CSS 2.1 §10.3.7 sizes it against that block, not the other way round). Walked
+                    // into, it ended the line it sits on and measured its own content as a line of the
+                    // container's, which has been reachable among inline content since it stopped
+                    // splitting the inline around it (#1299).
+                    if (childBox.IsAbsolutelyPositioned) continue;
 
                     // A float is out of flow but is still placed BESIDE the inline content of the block
                     // it is in (CSS 2.1 §9.5), so its width adds to that content's line. The flat walk

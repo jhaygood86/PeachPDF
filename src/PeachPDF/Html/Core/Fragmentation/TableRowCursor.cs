@@ -579,14 +579,10 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 var (cell, previousBottom, appliedOffset) = _foreignWrites[i];
 
-                if (appliedOffset != 0d)
-                {
-                    foreach (var child in cell.Boxes)
-                    {
-                        if (IsVertical) child.OffsetLeft(-appliedOffset);
-                        else child.OffsetTop(-appliedOffset);
-                    }
-                }
+                // Through the alignment's own mover, so exactly the boxes it moved move back: it leaves an
+                // absolutely positioned box placed by its containing block where it is, and moves one nested
+                // in the content that the children's own translation skips.
+                CssLayoutEngine.OffsetCellContent(cell, -appliedOffset, IsVertical);
 
                 // previousBottom was captured off whichever physical field is this table's own row axis
                 // (CloseSpanningCell: ActualRight for a vertical table, ActualBottom otherwise) - writing

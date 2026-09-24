@@ -1240,6 +1240,42 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// The retraction moves back exactly what the alignment moved. A box nested in an inline whose
+        /// containing block is outside the cell escapes the children's own translation, and the alignment
+        /// moves it separately; a box with `top` set is placed by its containing block, and the alignment
+        /// leaves it alone.
+        /// </summary>
+        [Fact]
+        public async Task RetractingARowsPlacement_PutsBackTheAbsolutelyPositionedBoxesTheAlignmentMoved()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<table><tr><td id='a'>text <span>x<span id='nested' style='position: absolute; " +
+                                   "width: 4pt; height: 4pt'></span></span><div id='pinned' style='position: absolute; top: 0; " +
+                                   "width: 4pt; height: 4pt'></div></td></tr></table>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            var cell = LayoutHarness.FindById(root, "a")!;
+            var nested = LayoutHarness.FindById(root, "nested")!;
+            var pinned = LayoutHarness.FindById(root, "pinned")!;
+            var nestedTopBefore = nested.Location.Y;
+            var pinnedTopBefore = pinned.Location.Y;
+
+            var cursor = new TableRowCursor(top: 10, maxRight: 5, slotIndex: 0) { MaxBottom = 20 };
+            var placement = cursor.BeginRow();
+
+            CssLayoutEngine.OffsetCellContent(cell, 37, isVertical: false);
+            cursor.RecordForeignWrite(cell, cell.ActualBottom, 37);
+
+            Assert.Equal(nestedTopBefore + 37, nested.Location.Y, 0.001);
+            Assert.Equal(pinnedTopBefore, pinned.Location.Y, 0.001);
+
+            cursor.Retract(placement);
+
+            Assert.Equal(nestedTopBefore, nested.Location.Y, 0.001);
+            Assert.Equal(pinnedTopBefore, pinned.Location.Y, 0.001);
+        }
+
+        /// <summary>
         /// A <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> measurement cursor carries none of it: its rows are
         /// not body rows, and by the time a pass resumed the body that group is not in the tree.
         /// </summary>

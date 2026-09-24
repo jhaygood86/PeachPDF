@@ -1007,7 +1007,14 @@ namespace PeachPDF.Html.Core.Dom
                 .SetPropertyValue(border.BorderTopLeftRadius, parentStyle.Border.BorderTopLeftRadius, static (a, v) => a with { BorderTopLeftRadius = v })
                 .SetPropertyValue(border.BorderTopRightRadius, parentStyle.Border.BorderTopRightRadius, static (a, v) => a with { BorderTopRightRadius = v })
                 .SetPropertyValue(border.BorderBottomRightRadius, parentStyle.Border.BorderBottomRightRadius, static (a, v) => a with { BorderBottomRightRadius = v })
-                .SetPropertyValue(border.BorderBottomLeftRadius, parentStyle.Border.BorderBottomLeftRadius, static (a, v) => a with { BorderBottomLeftRadius = v });
+                .SetPropertyValue(border.BorderBottomLeftRadius, parentStyle.Border.BorderBottomLeftRadius, static (a, v) => a with { BorderBottomLeftRadius = v })
+                // The outline is the element's too (CSS UI 4 §3 draws it around every fragment of the
+                // element), so a split piece or a repeated header clone has to carry it. Without these a
+                // <span> split around a block child drew no outline on either half.
+                .SetPropertyValue(border.OutlineColor, parentStyle.Border.OutlineColor, static (a, v) => a with { OutlineColor = v })
+                .SetPropertyValue(border.OutlineStyle, parentStyle.Border.OutlineStyle, static (a, v) => a with { OutlineStyle = v })
+                .SetPropertyValue(border.OutlineWidth, parentStyle.Border.OutlineWidth, static (a, v) => a with { OutlineWidth = v })
+                .SetPropertyValue(border.OutlineOffset, parentStyle.Border.OutlineOffset, static (a, v) => a with { OutlineOffset = v });
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Border, border, static (s, a) => s with { Border = a });
 
             var visualEffects = _computedStyle.VisualEffects;

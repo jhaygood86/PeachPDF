@@ -2865,8 +2865,9 @@ namespace PeachPDF.Html.Core.Parse
                 {
                     CorrectBlockInsideInlineBlockFormattingContexts(child);
                 }
-                else if (child.IsFloated)
+                else if (child.IsFloated || child.IsAbsolutelyPositioned)
                 {
+                    // An absolutely positioned child is here for the float's reason (#1299).
                     // A float joins ContainsInlinesOnly's own shallow test (issue #1038: DomUtils.
                     // ContainsInlinesOnly, which is what routes this box here at all), so the ordinary
                     // per-child recursion in CorrectBlockInsideInline's ELSE branch - the one every other
@@ -2936,7 +2937,11 @@ namespace PeachPDF.Html.Core.Parse
         private static void CorrectBlockSplitBadBox(CssBox parentBox, CssBox badBox, CssBox leftBlock)
         {
             CssBox? leftbox = null;
-            while (badBox.Boxes[0].IsInline && ContainsInlinesOnlyDeep(badBox.Boxes[0]))
+            // An absolutely positioned child goes to the left piece with the inline content around it
+            // rather than being taken as the block the inline is split at, so it stays inside the inline
+            // (and that inline stays its containing block).
+            while (badBox.Boxes[0].IsInline && ContainsInlinesOnlyDeep(badBox.Boxes[0])
+                   || badBox.Boxes[0].IsAbsolutelyPositioned)
             {
                 if (leftbox == null)
                 {
@@ -3075,8 +3080,9 @@ namespace PeachPDF.Html.Core.Parse
                 {
                     CorrectInlineParentsInsideInlineBlockFormattingContexts(child);
                 }
-                else if (child.IsFloated)
+                else if (child.IsFloated || child.IsAbsolutelyPositioned)
                 {
+                    // An absolutely positioned child is here for the float's reason (#1299).
                     // Same reasoning as CorrectBlockInsideInlineBlockFormattingContexts' own float arm: a
                     // float joins DomUtils.ContainsInlinesOnly's shallow test (issue #1038), so the box
                     // holding it is routed to THIS specialized walk instead of CorrectInlineBoxesParent's
@@ -3158,9 +3164,24 @@ namespace PeachPDF.Html.Core.Parse
         /// block-level sibling between them instead of beside the text on one shared line
         /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1038">#1038</see>).
         /// </para>
+        /// <para>
+        /// An absolutely positioned box joins the run for the same reason: it is out of flow, so it is not the
+        /// block-level half of the run's mixed content either. Left out, <c>aaa&lt;span style="position:
+        /// absolute"&gt;x&lt;/span&gt;bbb</c> became two anonymous blocks, and <c>bbb</c> started a new line
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1299">#1299</see>).
+        /// </para>
         /// </remarks>
         private static bool JoinsTheInlineRun(CssBox box) =>
-            (box.IsInline || box.IsFloated) && !CssBox.IsOutsideMarker(box);
+            (box.IsInline || box.IsFloated || JoinsAsOutOfFlow(box)) && !CssBox.IsOutsideMarker(box);
+
+        /// <summary>
+        /// Whether an absolutely positioned <paramref name="box"/> stays among the inline content around it
+        /// (#1299) rather than standing as a block-level sibling. Everywhere but in a multi-column container:
+        /// the columns engine takes its children as block-level column content, so inline content beside an
+        /// absolutely positioned child there still needs the anonymous block it has always been given.
+        /// </summary>
+        private static bool JoinsAsOutOfFlow(CssBox box) =>
+            box.IsAbsolutelyPositioned && box.ParentBox is not { EstablishesMultiColumnContext: true };
 
         /// <summary>
         /// Collapses a collapsible white space run that continues across an inline element boundary with
@@ -3618,6 +3639,13 @@ namespace PeachPDF.Html.Core.Parse
                 // so a genuine block-inside-inline problem nested inside a float is still corrected.
                 if (childBox.IsFloated) continue;
 
+                // An absolutely positioned child is skipped for the same reason: it is out of flow, and
+                // CSS 2.1 §9.2.1.1 splits an inline only around an in-flow block-level box. Counting it
+                // split its inline ancestor in two and hoisted it out, which moved the content after it
+                // onto a new line, took it out of a positioned inline's containing block, and dropped
+                // the inline's outline (#1299).
+                if (childBox.IsAbsolutelyPositioned) continue;
+
                 if (!childBox.IsInline || !ContainsInlinesOnlyDeep(childBox))
                 {
                     return false;
@@ -3692,11 +3720,12 @@ namespace PeachPDF.Html.Core.Parse
                 // same predicate as "is this genuinely block-level": it is also true of an outside marker,
                 // which would otherwise make hasBlock true for an <li> whose only other content is
                 // ordinary inline text - a mix ContainsInlinesOnly already reports as inlines-only and
-                // CorrectInlineBoxesParent must not wrap.
+                // CorrectInlineBoxesParent must not wrap. An absolutely positioned box is neither half for
+                // a float's reason: it is out of flow (#1299).
                 var child = box.Boxes[i];
-                var isFloatOrOutsideMarker = child.IsFloated || CssBox.IsOutsideMarker(child);
-                var isRealBlock = !child.IsInline && !isFloatOrOutsideMarker;
-                var isRealInline = child.IsInline && !isFloatOrOutsideMarker;
+                var isOutOfFlowOrOutsideMarker = child.IsFloated || JoinsAsOutOfFlow(child) || CssBox.IsOutsideMarker(child);
+                var isRealBlock = !child.IsInline && !isOutOfFlowOrOutsideMarker;
+                var isRealInline = child.IsInline && !isOutOfFlowOrOutsideMarker;
                 hasBlock = hasBlock || isRealBlock;
                 hasInline = hasInline || isRealInline;
             }
