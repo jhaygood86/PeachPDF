@@ -36,15 +36,6 @@ reading of css-gcpm-3 would ask for:
   the footnote call is untested and not traced through - worth a targeted test (or a fix, if it
   turns out wrong) before relying on it for that shape of document.
 
-- **`ResolveFootnoteAreaBoxModel`'s two call sites (`ResolveFootnotesForThisAttempt` and
-  `AttachFootnoteAreas`) can in principle resolve a different `@footnote` rule for the same slot**
-  if a named-page transition's active name changes between them - which can happen because the
-  `target-counter(_, page)`/`leader()` convergence loop (`PerformLayout`, not gated on
-  `HasFootnotes`) runs a further `LayoutDocument` pass, rebuilding `_namedPageElements`, in between
-  the footnote convergence loop finishing and `AttachFootnoteAreas` running. This needs a document
-  combining named pages, footnotes, *and* `target-counter`/`leader()` content whose resolved text
-  width is itself pagination-sensitive - narrow enough that no reproduction has been attempted yet.
-
 None of these are believed to be common in practice; each is left here rather than fixed because a
 real fix for any of them touches either the row-packing loop's own accounting, the widows epilogue
 (shared, invariant-documented fragmentation code), or the ordering between two independently-owned
