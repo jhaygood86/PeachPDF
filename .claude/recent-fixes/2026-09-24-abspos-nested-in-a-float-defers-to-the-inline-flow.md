@@ -22,6 +22,10 @@ now it stays inside the page. `RightFloatAt` needed nothing, since `FindNarrowes
 tests the reference at its starting level. The same change fixed `GetIntersectingInlineFloat` comparing the
 specified `Float.Value` instead of `EffectiveFloatSide`, which never matched an `inside`/`outside` float.
 
+The #1335 diagnosis was reached independently in #1337 (ChrisVanDijk), whose SVG-background regression test
+and `positioned_inline` showcase panel for the cart-after-float case are carried over here. Its predicate
+(any reference that establishes a formatting context) was the broader one this note rejects.
+
 ## #1304: deferral by box-tree ownership, not nesting depth
 
 A box in a float (or block-content inline-block) is laid out during the outer flow's walk, before that flow's
