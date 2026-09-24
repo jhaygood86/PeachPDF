@@ -196,9 +196,10 @@ namespace PeachPDF.Html.Core.Paint
             if (ReferenceEquals(from.Box, box))
                 return from;
 
-            foreach (var child in from.Children)
+            var children = from.Children;
+            for (var i = 0; i < children.Count; i++)
             {
-                if (FindFragment(child, box) is { } found)
+                if (FindFragment(children[i], box) is { } found)
                     return found;
             }
 

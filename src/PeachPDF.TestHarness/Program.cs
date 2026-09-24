@@ -11983,6 +11983,77 @@ await SaveShowcaseAsync("perspective_3d_transforms", "Graphics & Effects", "Pers
     "CSS perspective on a parent and perspective() in a transform: rotateX/rotateY cards foreshortened in real perspective, translateZ scaling, backface-visibility, and a perspective card with opacity - warped from a bitmap of the element at the raster resolution.",
     perspectiveHtml, pdfConfig);
 
+// --- transform-style: preserve-3d showcase ---
+
+const string preserve3dHtml = """
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 0; font-family: sans-serif; background: #eef; }
+.row { display: flex; gap: 24px; padding: 18px; }
+.scene { width: 230px; height: 230px; perspective: 700px; background: #dde; position: relative; }
+.cap { font-size: 11px; text-align: center; margin-top: 4px; width: 230px; }
+h2 { font-size: 13px; margin: 8px 18px 0; }
+
+/* A cube: six faces in one 3D space, near faces over far ones. */
+.cube { position: absolute; left: 65px; top: 65px; width: 100px; height: 100px; transform-style: preserve-3d; transform: rotateX(-25deg) rotateY(-35deg); }
+.face { position: absolute; left: 0; top: 0; width: 96px; height: 96px; border: 2px solid #222; font-size: 15px; font-weight: bold; text-align: center; line-height: 96px; color: #111; }
+.front  { background: #f66; transform: translateZ(50px); }
+.back   { background: #6cf; transform: rotateY(180deg) translateZ(50px); }
+.right  { background: #6d6; transform: rotateY(90deg) translateZ(50px); }
+.left   { background: #fd5; transform: rotateY(-90deg) translateZ(50px); }
+.top    { background: #c9f; transform: rotateX(90deg) translateZ(50px); }
+.bottom { background: #ccc; transform: rotateX(-90deg) translateZ(50px); }
+
+/* A carousel: six panels around a vertical axis, the far ones hidden behind the near ones. */
+.carousel { position: absolute; left: 63px; top: 70px; width: 108px; height: 90px; transform-style: preserve-3d; transform: translateZ(-110px) rotateX(-10deg) rotateY(25deg); }
+.panel { position: absolute; left: 0; top: 0; width: 104px; height: 86px; border: 2px solid #222; font-size: 22px; font-weight: bold; text-align: center; line-height: 86px; color: #111; backface-visibility: hidden; }
+.p1 { background: #f66; transform: rotateY(0deg)   translateZ(110px); }
+.p2 { background: #fa5; transform: rotateY(60deg)  translateZ(110px); }
+.p3 { background: #fe5; transform: rotateY(120deg) translateZ(110px); }
+.p4 { background: #6d6; transform: rotateY(180deg) translateZ(110px); }
+.p5 { background: #6cf; transform: rotateY(240deg) translateZ(110px); }
+.p6 { background: #c9f; transform: rotateY(300deg) translateZ(110px); }
+
+/* A flip card: two faces with backface-visibility: hidden inside a rotating parent. */
+.flip { position: absolute; left: 45px; top: 55px; width: 140px; height: 110px; transform-style: preserve-3d; }
+.flip .side { position: absolute; left: 0; top: 0; width: 136px; height: 106px; border: 2px solid #222; backface-visibility: hidden; font-size: 18px; font-weight: bold; text-align: center; line-height: 106px; color: #111; }
+.flip .front { background: #f66; transform: none; }
+.flip .back  { background: #6cf; transform: rotateY(180deg); }
+.turn0   { transform: rotateY(0deg); }
+.turn70  { transform: rotateY(70deg); }
+.turn180 { transform: rotateY(180deg); }
+
+/* Planes that cross: each is nearer on one side of the line where they meet. */
+.cross { position: absolute; left: 40px; top: 40px; width: 150px; height: 150px; transform-style: preserve-3d; transform: rotateX(-15deg); }
+.plane { position: absolute; left: 0; top: 0; width: 146px; height: 146px; border: 2px solid #222; opacity: .92; }
+.pa { background: #f66; transform: rotateY(50deg); }
+.pb { background: #6cf; transform: rotateY(-50deg); }
+.pc { background: #6d6; transform: rotateX(80deg); }
+
+/* The same planes flattened: document order only. */
+.flat { transform-style: flat; }
+</style></head><body>
+<h2>transform-style: preserve-3d</h2>
+<div class="row">
+  <div><div class="scene"><div class="cube"><div class="face front">front</div><div class="face back">back</div><div class="face right">right</div><div class="face left">left</div><div class="face top">top</div><div class="face bottom">bottom</div></div></div><div class="cap">a cube: six faces, depth-tested</div></div>
+  <div><div class="scene"><div class="carousel"><div class="panel p1">1</div><div class="panel p2">2</div><div class="panel p3">3</div><div class="panel p4">4</div><div class="panel p5">5</div><div class="panel p6">6</div></div></div><div class="cap">a carousel: six panels around an axis, backs hidden</div></div>
+</div>
+<div class="row">
+  <div><div class="scene"><div class="flip turn0"><div class="side front">front</div><div class="side back">back</div></div></div><div class="cap">flip card, rotateY(0deg)</div></div>
+  <div><div class="scene"><div class="flip turn70"><div class="side front">front</div><div class="side back">back</div></div></div><div class="cap">rotateY(70deg): turning</div></div>
+  <div><div class="scene"><div class="flip turn180"><div class="side front">front</div><div class="side back">back</div></div></div><div class="cap">rotateY(180deg): the back, not the front</div></div>
+</div>
+<div class="row">
+  <div><div class="scene"><div class="cross"><div class="plane pa"></div><div class="plane pb"></div><div class="plane pc"></div></div></div><div class="cap">three planes that intersect, preserve-3d</div></div>
+  <div><div class="scene"><div class="cross flat"><div class="plane pa"></div><div class="plane pb"></div><div class="plane pc"></div></div></div><div class="cap">the same planes, transform-style: flat</div></div>
+</div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("preserve_3d_rendering_context", "Graphics & Effects", "3D Rendering Contexts (preserve-3d)",
+    "transform-style: preserve-3d: a cube, a carousel, flip cards with hidden back faces and intersecting planes, each depth-tested per pixel in one shared 3D space, with the parent's perspective reaching every nested plane - against the same planes flattened.",
+    preserve3dHtml, pdfConfig);
+
 // --- CSS mix-blend-mode showcase ---
 
 static string BlendSwatch(string desc, string blendMode) =>

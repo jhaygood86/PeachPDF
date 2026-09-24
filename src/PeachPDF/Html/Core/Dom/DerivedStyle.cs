@@ -734,6 +734,10 @@ namespace PeachPDF.Html.Core.Dom
         public bool IsBackfaceHidden =>
             string.Equals(Style.VisualEffects.BackfaceVisibility?.Trim(), Keywords.Hidden, StringComparison.OrdinalIgnoreCase);
 
+        /// <summary>True when the computed <c>transform-style</c> is <c>preserve-3d</c>. The <em>used</em> value also depends on the grouping properties that force <c>flat</c>: see <c>DomUtils.EstablishesPreserve3d</c>.</summary>
+        public bool IsPreserve3dRequested =>
+            string.Equals(Style.VisualEffects.TransformStyle?.Trim(), Keywords.Preserve3d, StringComparison.OrdinalIgnoreCase);
+
         internal void InvalidateTransform() => _actualTransformComputed = false;
 
         internal void InvalidatePerspective() => _actualPerspective = double.NaN;

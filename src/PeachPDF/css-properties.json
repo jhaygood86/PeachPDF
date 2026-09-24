@@ -846,6 +846,20 @@
       }
     },
     {
+      "name": "transform-style",
+      "comment": "flat | preserve-3d (CSS Transforms 2 section 6.1): whether a box's children share its 3D rendering context. Not inherited. The used value also depends on grouping properties (overflow, opacity, filter, ...), which force flat: see DomUtils.EstablishesPreserve3d. Read at paint time by FragmentPainter.Preserve3D and by DomUtils.IsStackingContextBox.",
+      "inherited": false,
+      "initialValue": "flat",
+      "cssDataType": "keyword",
+      "supportedValues": ["flat", "preserve-3d"],
+      "keywordComparison": "ordinal-ignore-case",
+      "html": {
+        "propertyPath": "TransformStyle",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
       "name": "backdrop-filter",
       "comment": "The same function grammar as filter (Filter Effects 2 section 3.1), applied to what was painted behind the element rather than to the element. Always rendered by the raster backend: FragmentPainter.PaintBackdropFilter re-paints the earlier content of the backdrop root into a bitmap, filters it, and draws it under the element's own background.",
       "inherited": false,

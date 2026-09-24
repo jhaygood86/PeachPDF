@@ -23,7 +23,7 @@ twin images): no forwarding class, nothing to keep in lock-step with the RGraphi
   than fixing it, so the two agree. Not investigated further.
 - An `<hr>`-like zero-area rectangle and an anonymous text box's `WholeBoxRect` both dragged bitmap extents to the origin: see the invariant.
 
-**Deliberately not done.** `transform-style: preserve-3d` ([accepted gap](../accepted-gaps/transform-style-preserve-3d-not-modelled.md)),
+**Deliberately not done.** `transform-style: preserve-3d` (done afterwards: [3D rendering contexts](2026-09-24-preserve-3d-rendering-context.md)),
 flattening under a transformed ancestor, `feImage`, SIMD paths wider than `Vector128` (see the benchmark note below), and per-pixel
 `kernelUnitLength` for `feConvolveMatrix`.
 

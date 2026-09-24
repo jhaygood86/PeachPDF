@@ -120,4 +120,55 @@ internal readonly struct Homography(double m11, double m12, double m13, double m
 
         return result;
     }
+
+    /// <summary>
+    /// The bounding box of <see cref="ProjectRectangle"/>'s polygon, without building it: the same clip at W &lt;= <paramref name="epsilon"/>,
+    /// on the stack. False when the projection is degenerate (fewer than three points, or wholly behind the viewer).
+    /// </summary>
+    public bool TryProjectRectangleBounds(double left, double top, double right, double bottom,
+        out double minX, out double minY, out double maxX, out double maxY, double epsilon = 1e-4)
+    {
+        Span<Vertex> corners =
+        [
+            new(ApplyHomogeneous(left, top)), new(ApplyHomogeneous(right, top)), new(ApplyHomogeneous(right, bottom)), new(ApplyHomogeneous(left, bottom)),
+        ];
+
+        minX = minY = double.MaxValue;
+        maxX = maxY = double.MinValue;
+        var points = 0;
+
+        for (var i = 0; i < corners.Length; i++)
+        {
+            var a = corners[i];
+            var b = corners[(i + 1) % corners.Length];
+            var aInside = a.W > epsilon;
+            var bInside = b.W > epsilon;
+            if (aInside)
+                Include(a.X / a.W, a.Y / a.W, ref points, ref minX, ref minY, ref maxX, ref maxY);
+
+            if (aInside != bInside)
+            {
+                var t = (epsilon - a.W) / (b.W - a.W);
+                Include((a.X + t * (b.X - a.X)) / epsilon, (a.Y + t * (b.Y - a.Y)) / epsilon, ref points, ref minX, ref minY, ref maxX, ref maxY);
+            }
+        }
+
+        return points >= 3;
+    }
+
+    private static void Include(double x, double y, ref int points, ref double minX, ref double minY, ref double maxX, ref double maxY)
+    {
+        points++;
+        minX = Math.Min(minX, x);
+        minY = Math.Min(minY, y);
+        maxX = Math.Max(maxX, x);
+        maxY = Math.Max(maxY, y);
+    }
+
+    private readonly struct Vertex((double X, double Y, double W) homogeneous)
+    {
+        public double X { get; } = homogeneous.X;
+        public double Y { get; } = homogeneous.Y;
+        public double W { get; } = homogeneous.W;
+    }
 }
