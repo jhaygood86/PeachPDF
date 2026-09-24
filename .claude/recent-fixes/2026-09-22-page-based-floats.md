@@ -66,7 +66,7 @@ a box the floor already pushed past it.
   container is dropped by `CssLayoutEngineColumns.Layout`'s existing out-of-flow filter (the same
   pre-existing gap `float: left/right` and absolute/fixed children already have, #1203). Column-scoped
   footnote areas were themselves a dedicated follow-up after page-level footnotes shipped; page floats
-  take the same path. See `.claude/accepted-gaps/page-floats-are-not-column-scoped.md` (issue #1272).
+  take the same path. Closed since by the column-scoped page floats entry (issue #1272).
 - **`top-bottom`/`snap`'s disambiguation rule is this implementation's own interpretation.** The exact
   keyword set the issue asks for (matching Prince XML, named in the issue) predates the current
   [CSS Page Floats](https://www.w3.org/TR/css-page-floats-3/) draft, which renamed/restructured the

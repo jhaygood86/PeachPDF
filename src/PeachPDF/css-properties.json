@@ -1852,7 +1852,7 @@
     },
     {
       "name": "float-reference",
-      "comment": "CSS Page Floats - which fragmentation context a float is positioned relative to. Consumed today only by a float: footnote source, where `column` routes the note into its own column's area; `inline` (the initial value) and `region` behave as `page` there. Inert on any other element, since PeachPDF implements no page floats.",
+      "comment": "CSS Page Floats - which fragmentation context a float is positioned relative to. Consumed by a float: footnote source and by a float: top/bottom/top-bottom/snap page float, where `column` routes it to the note area / block edge of the column its anchor sits in (falling back to the page outside a multi-column container); `inline` (the initial value), `region` and `page` resolve against the page. Inert on any other element.",
       "inherited": false,
       "initialValue": "inline",
       "cssDataType": {

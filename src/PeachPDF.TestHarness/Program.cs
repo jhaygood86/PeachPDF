@@ -2358,12 +2358,30 @@ var pageFloatsHtml = """
     verso page.</div>
     </div>
 
+    <div style="break-before: page;">
+    <h1>float-reference: column</h1>
+    <p>Inside a two-column container a page float can name the column instead of the page. Only the
+    column holding the float gives up room: the left column below keeps its full height and starts at
+    the top of the band, while the right column starts under its own float-reference: column figure.</p>
+    <div style="column-count: 2; column-gap: 24pt;">
+      <div class="figure" style="float-reference: column; float: bottom; margin: 12pt 0 0;">float: bottom, float-reference: column - flush with the foot of the left column, which stops above it.</div>
+      <p>Column one. This paragraph is anchored in the left column, so the callout belongs to that column and to no other: its strip is reserved at the left column's foot and the right column is unaffected by it.</p>
+      <p>The left column keeps flowing down to the callout. Every line up to the callout is in the left column's own band.</p>
+      <p>More left-column text, so that the flow reaches the right column: the container balances its columns, and the room each float takes is part of the balance.</p>
+      <p>Still the left column, until the balance moves the flow across.</p>
+      <div class="figure" style="float-reference: column; margin: 0 0 12pt;">float: top, float-reference: column - pinned to the top of the right column, whose text starts below it.</div>
+      <p>Right column. This paragraph follows the second float in the source, so it is anchored in the right column and the figure sits at that column's top edge, not the page's.</p>
+      <p>Right column. The left column beside it began at the top of the band and is untouched by this float.</p>
+      <p>Right column. A little more text so that the two columns are of a similar length.</p>
+    </div>
+    </div>
+
     </body>
     </html>
     """;
 
 await SaveShowcaseAsync("paged_media_page_floats", "Paged Media", "Page floats",
-    "css-page-floats' float: top/bottom/top-bottom/snap/inside/outside: a float: top figure landing flush at the true top of its landing page with flow content starting below the reserved strip, a float: bottom callout landing flush at the true bottom with flow content stopping above it, float: top-bottom falling back to the bottom edge once the top edge has no room left, and inside/outside resolving to opposite physical sides depending on whether the landing page is a right-hand (recto) or left-hand (verso) page.",
+    "css-page-floats' float: top/bottom/top-bottom/snap/inside/outside: a float: top figure landing flush at the true top of its landing page with flow content starting below the reserved strip, a float: bottom callout landing flush at the true bottom with flow content stopping above it, float: top-bottom falling back to the bottom edge once the top edge has no room left, inside/outside resolving to opposite physical sides depending on whether the landing page is a right-hand (recto) or left-hand (verso) page, and float-reference: column pinning a float to the edge of the column its anchor sits in so only that column gives up room.",
     pageFloatsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──

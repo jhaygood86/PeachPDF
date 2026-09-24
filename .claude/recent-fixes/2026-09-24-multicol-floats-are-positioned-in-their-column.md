@@ -46,7 +46,7 @@ container is not divided into columns at all, with or without a float
 
 A float that does not fit at the foot of its column stays there
 ([gap](../accepted-gaps/a-float-that-does-not-fit-in-its-column-overflows-it.md)); `float-reference: column`
-for page floats is still page-scoped ([gap](../accepted-gaps/page-floats-are-not-column-scoped.md)).
+for page floats was still page-scoped here; it is column-scoped since ([entry](2026-09-24-column-scoped-page-floats.md)).
 
 Evidence: 10 geometry/paint tests in `MulticolFloatIntegrationTests` (the four defect shapes above, painted
 position of a float in a column, page float as the only child, abspos child still against the container);
