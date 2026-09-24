@@ -25,8 +25,9 @@ namespace PeachPDF.Html.Core.Paint
     /// parent's box sits relative to the element's.
     /// </para>
     /// <para>
-    /// <b>Not modelled:</b> <c>transform-style: preserve-3d</c> (every element is flat: nested planes are not depth-sorted or intersected)
-    /// and a perspective reaching past the direct children.
+    /// <b>Planes that share a 3D space</b> (<c>transform-style: preserve-3d</c>) are not painted here: <see cref="TryPaintContext3D"/> composes the
+    /// whole context, with each plane's transform accumulated down from the context's root, and leaves a context that has no depth to
+    /// resolve to the per-element paint.
     /// </para>
     /// </remarks>
     internal sealed partial class FragmentPainter
@@ -125,18 +126,8 @@ namespace PeachPDF.Html.Core.Paint
                 return true;
 
             var source = Inflate(extent, SubtreeBleed(fragment));
-            var polygon = warp.Map.ProjectRectangle(source.Left, source.Top, source.Right, source.Bottom);
-            if (polygon.Count < 3)
+            if (!warp.Map.TryProjectRectangleBounds(source.Left, source.Top, source.Right, source.Bottom, out var minX, out var minY, out var maxX, out var maxY))
                 return true; // wholly behind the viewer
-
-            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
-            foreach (var (x, y) in polygon)
-            {
-                minX = Math.Min(minX, x);
-                minY = Math.Min(minY, y);
-                maxX = Math.Max(maxX, x);
-                maxY = Math.Max(maxY, y);
-            }
 
             var destination = Intersect(new RRect(minX, minY, maxX - minX, maxY - minY), g.GetClip());
             if (destination.Width <= 0 || destination.Height <= 0)

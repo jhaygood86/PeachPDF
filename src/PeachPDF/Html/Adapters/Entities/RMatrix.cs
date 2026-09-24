@@ -10,6 +10,8 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using System;
+
 namespace PeachPDF.Html.Adapters.Entities
 {
     /// <summary>
@@ -43,6 +45,33 @@ namespace PeachPDF.Html.Adapters.Entities
 
         public bool IsIdentity =>
             M11 == 1 && M12 == 0 && M21 == 0 && M22 == 1 && OffsetX == 0 && OffsetY == 0;
+
+        /// <summary>The transform that applies this one first and <paramref name="next"/> after it.</summary>
+        public RMatrix Then(RMatrix next) => new(
+            M11 * next.M11 + M12 * next.M21,
+            M11 * next.M12 + M12 * next.M22,
+            M21 * next.M11 + M22 * next.M21,
+            M21 * next.M12 + M22 * next.M22,
+            OffsetX * next.M11 + OffsetY * next.M21 + next.OffsetX,
+            OffsetX * next.M12 + OffsetY * next.M22 + next.OffsetY);
+
+        /// <summary>The transform that undoes this one; false when it collapses the plane (or is not finite) and has none.</summary>
+        public bool TryInvert(out RMatrix inverse)
+        {
+            var determinant = M11 * M22 - M12 * M21;
+            if (!double.IsFinite(determinant) || Math.Abs(determinant) < 1e-12)
+            {
+                inverse = Identity;
+                return false;
+            }
+
+            var a = M22 / determinant;
+            var b = -M12 / determinant;
+            var c = -M21 / determinant;
+            var d = M11 / determinant;
+            inverse = new RMatrix(a, b, c, d, -(OffsetX * a + OffsetY * c), -(OffsetX * b + OffsetY * d));
+            return true;
+        }
 
         /// <summary>
         /// Reinterprets this matrix - built treating the box's own top-left corner as local (0, 0) -

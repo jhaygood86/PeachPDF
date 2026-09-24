@@ -40,6 +40,8 @@ internal sealed partial class RasterGraphics : RGraphics
     private readonly Stack<RBlendMode> _blendModes = [];
     private readonly Stack<ClipState> _clips = [];
     private Affine _ctm = Affine.Identity;
+    private readonly Stack<RMatrix> _layoutTransforms = [];
+    private RMatrix _layoutCtm = RMatrix.Identity;
     private RBlendMode _blend = RBlendMode.Normal;
     private byte[] _coverageScratch;
     private byte[] _pixelScratch;
@@ -60,6 +62,11 @@ internal sealed partial class RasterGraphics : RGraphics
     }
 
     public RasterSurface Surface => _surface;
+
+    internal override RMatrix CurrentTransform => _layoutCtm;
+
+    /// <summary>Starts this graphics' transform at <paramref name="requester"/>'s: a raster region paints in its requester's current user space.</summary>
+    internal void SeedTransform(RMatrix requester) => _layoutCtm = requester;
 
     public override double PixelsPerPoint => _pixelsPerPoint;
 
@@ -125,6 +132,8 @@ internal sealed partial class RasterGraphics : RGraphics
     public override void PushTransform(RMatrix matrix)
     {
         _transforms.Push(_ctm);
+        _layoutTransforms.Push(_layoutCtm);
+        _layoutCtm = matrix.Then(_layoutCtm);
 
         // Only the translation is divided by PixelsPerPoint, exactly as GraphicsAdapter does: the linear
         // part is already scale-neutral (see RGraphics.PixelsPerPoint).
@@ -137,6 +146,9 @@ internal sealed partial class RasterGraphics : RGraphics
     {
         if (_transforms.Count > 0)
             _ctm = _transforms.Pop();
+
+        if (_layoutTransforms.Count > 0)
+            _layoutCtm = _layoutTransforms.Pop();
     }
 
     public override void PushBlendMode(RBlendMode mode)
@@ -219,7 +231,9 @@ internal sealed partial class RasterGraphics : RGraphics
             return null;
 
         var nested = new RasterSurface((int)(right - left), (int)(bottom - top), (int)left, (int)top, ppuX, ppuY);
-        return new RasterSurfaceScope(new RasterGraphics(_adapter, nested, _pixelsPerPoint), nested);
+        var graphics = new RasterGraphics(_adapter, nested, _pixelsPerPoint);
+        graphics.SeedTransform(_layoutCtm);
+        return new RasterSurfaceScope(graphics, nested);
     }
 
     internal override void DrawRaster(RasterSurface surface)

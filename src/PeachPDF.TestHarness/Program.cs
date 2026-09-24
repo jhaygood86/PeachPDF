@@ -6703,6 +6703,12 @@ var positionedInlineHtml = """
     <p style="margin-top: 20pt">Status: shipped<span style="position: relative"><span class="tag">new</span></span>
     and reviewed<span style="position: relative"><span class="tag">2 comments</span></span> this week.</p>
 
+    <h2>An empty inline with a larger font</h2>
+    <p class="note">The wrapper holds no text, but it is still an inline box on the line, so its 28pt font makes the
+    line taller and the text sits lower on the shared baseline. The pins mark the top-left and bottom-left of the
+    wrapper's content area, which now lies inside the grey line.</p>
+    <p style="background: #e8e8e8; line-height: 1.2">Before the badge<span style="position: relative; font-size: 28pt"><span class="pin" style="left: 0; top: 0"></span><span class="pin" style="left: 0; bottom: 0"></span></span> and after it.</p>
+
     <h2>The line is not broken</h2>
     <div style="position: relative; width: 300pt; padding-right: 80pt">The words after a positioned note
     <span class="aside">A note placed at the top right of the paragraph.</span>continue on the same line,
@@ -11877,6 +11883,41 @@ await SaveShowcaseAsync("svg_filters_raster", "Graphics & Effects", "SVG Filters
     "SVG filter primitives PDF has no operator for - blur, drop shadow, morphology, convolution, turbulence, displacement and lighting, cross-channel colour matrices, table/gamma transfer functions, arithmetic compositing - evaluated over pixels in linear light and embedded at the document's raster resolution.",
     svgRasterFiltersHtml, pdfConfig);
 
+// --- SVG filter inputs showcase: feImage, FillPaint/StrokePaint, BackgroundImage/BackgroundAlpha ---
+
+const string svgFilterInputImage = "<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#f0a'/><stop offset='1' stop-color='#0af'/></linearGradient></defs><rect width='40' height='40' fill='url(#g)'/><circle cx='20' cy='20' r='9' fill='#fff' fill-opacity='.7'/></svg>";
+var svgFilterInputImageUri = "data:image/svg+xml;base64," + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(svgFilterInputImage));
+
+// A stand-alone SVG (used through <img>): its filter's BackgroundAlpha sees only the circles painted before the filtered rectangle.
+const string svgFilterSilhouette = "<svg xmlns='http://www.w3.org/2000/svg' width='160' height='120' viewBox='0 0 160 120'><defs><filter id='sil' x='0' y='0' width='1' height='1' color-interpolation-filters='sRGB'><feOffset in='BackgroundAlpha' dx='7' dy='7' result='off'/><feFlood flood-color='#036' flood-opacity='.7'/><feComposite in2='off' operator='in'/></filter></defs><circle cx='55' cy='55' r='32' fill='#fc3'/><circle cx='100' cy='62' r='26' fill='#e33'/><rect x='10' y='10' width='140' height='100' fill='none' filter='url(#sil)'/></svg>";
+var svgFilterSilhouetteUri = "data:image/svg+xml;base64," + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(svgFilterSilhouette));
+
+var svgFilterInputsHtml = $$"""
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 10px; font-family: sans-serif; background: #fff; }
+.grid { display: flex; flex-wrap: wrap; gap: 8px; }
+figure { margin: 0; width: 170px; font-size: 9px; text-align: center; }
+svg { width: 160px; height: 120px; border: 1px solid #ddd; }
+.stripes { width: 160px; height: 120px; background: repeating-linear-gradient(45deg, #e33 0 10px, #fc3 10px 20px); }
+.stripes svg { border: 0; display: block; }
+</style></head><body>
+<div class="grid">
+<figure><svg viewBox="0 0 160 120"><defs><filter id="img" x="0" y="0" width="1" height="1"><feImage href="{{svgFilterInputImageUri}}" preserveAspectRatio="xMidYMid slice" result="pic"/><feComposite in="pic" in2="SourceAlpha" operator="in"/></filter></defs><text x="80" y="78" text-anchor="middle" font-size="64" font-weight="bold" filter="url(#img)">Aa</text></svg>feImage (image) masked to text</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="sub" x="0" y="0" width="1" height="1"><feImage href="{{svgFilterInputImageUri}}" x="20" y="20" width="50" height="80" preserveAspectRatio="xMidYMid meet" result="a"/><feImage href="{{svgFilterInputImageUri}}" x="90" y="20" width="50" height="80" preserveAspectRatio="none" result="b"/><feMerge><feMergeNode in="a"/><feMergeNode in="b"/></feMerge></filter></defs><rect width="160" height="120" fill="#eee" filter="url(#sub)"/></svg>feImage subregions: meet / none</figure>
+<figure><svg viewBox="0 0 160 120"><defs><path id="star" d="M30 -10 L36 8 L56 8 L40 20 L46 40 L30 28 L14 40 L20 20 L4 8 L24 8 Z" fill="#fc0" stroke="#a60" stroke-width="2"/><filter id="ref" x="0" y="0" width="1" height="1"><feImage href="#star" x="50" y="40" result="s"/><feGaussianBlur in="s" stdDeviation="1.5" result="soft"/><feMerge><feMergeNode in="soft"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect x="10" y="10" width="140" height="100" fill="none" stroke="#69c" stroke-width="3" filter="url(#ref)"/></svg>feImage (element) + blur</figure>
+<figure><svg viewBox="0 0 160 120"><defs><linearGradient id="fp" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e33"/><stop offset=".5" stop-color="#fc3"/><stop offset="1" stop-color="#36f"/></linearGradient><filter id="fill" color-interpolation-filters="sRGB"><feOffset in="SourceAlpha" dx="6" dy="6" result="o"/><feGaussianBlur in="o" stdDeviation="2" result="shadow"/><feComposite in="FillPaint" in2="SourceAlpha" operator="in" result="paint"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="paint"/></feMerge></filter></defs><text x="80" y="76" text-anchor="middle" font-size="46" font-weight="bold" fill="url(#fp)" filter="url(#fill)">Paint</text></svg>FillPaint (gradient) clipped to glyphs</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="ring" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB"><feMorphology in="SourceAlpha" operator="dilate" radius="5" result="fat"/><feComposite in="StrokePaint" in2="fat" operator="in" result="halo"/><feMerge><feMergeNode in="halo"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><text x="80" y="76" text-anchor="middle" font-size="46" font-weight="bold" fill="#fff" stroke="#d0208a" filter="url(#ring)">Ring</text><rect width="160" height="120" fill="none"/></svg>StrokePaint halo (dilate)</figure>
+<figure><div class="stripes"><svg viewBox="0 0 160 120"><defs><filter id="glass" x="0" y="0" width="1" height="1"><feGaussianBlur in="BackgroundImage" stdDeviation="4" result="blur"/><feComposite in="blur" in2="SourceAlpha" operator="in" result="pane"/><feMerge><feMergeNode in="pane"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><text x="8" y="46" font-size="24" font-weight="bold" fill="#111">Behind glass</text><rect x="18" y="30" width="124" height="70" rx="12" fill="#fff" fill-opacity=".28" stroke="#fff" stroke-opacity=".7" filter="url(#glass)"/></svg></div>BackgroundImage: frosted pane over HTML and SVG content</figure>
+<figure><img src="{{svgFilterSilhouetteUri}}" width="160" height="120" style="border:1px solid #ddd;background:#eef">BackgroundAlpha silhouette (SVG as &lt;img&gt;)</figure>
+</div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("svg_filter_inputs", "Graphics & Effects", "SVG Filter Inputs (feImage, FillPaint, BackgroundImage)",
+    "feImage with a stand-alone image (fitted by preserveAspectRatio into its subregion) and with a reference to an element, plus the FillPaint / StrokePaint / BackgroundImage / BackgroundAlpha inputs: a filter can paint the element's own gradient, stroke a halo in its stroke colour, or blur the page and the SVG content painted behind it.",
+    svgFilterInputsHtml, pdfConfig);
+
 // --- backdrop-filter showcase ---
 
 const string backdropFilterHtml = """
@@ -11982,6 +12023,77 @@ body { margin: 0; font-family: sans-serif; background: #eef; }
 await SaveShowcaseAsync("perspective_3d_transforms", "Graphics & Effects", "Perspective and 3D Transforms",
     "CSS perspective on a parent and perspective() in a transform: rotateX/rotateY cards foreshortened in real perspective, translateZ scaling, backface-visibility, and a perspective card with opacity - warped from a bitmap of the element at the raster resolution.",
     perspectiveHtml, pdfConfig);
+
+// --- transform-style: preserve-3d showcase ---
+
+const string preserve3dHtml = """
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 0; font-family: sans-serif; background: #eef; }
+.row { display: flex; gap: 24px; padding: 18px; }
+.scene { width: 230px; height: 230px; perspective: 700px; background: #dde; position: relative; }
+.cap { font-size: 11px; text-align: center; margin-top: 4px; width: 230px; }
+h2 { font-size: 13px; margin: 8px 18px 0; }
+
+/* A cube: six faces in one 3D space, near faces over far ones. */
+.cube { position: absolute; left: 65px; top: 65px; width: 100px; height: 100px; transform-style: preserve-3d; transform: rotateX(-25deg) rotateY(-35deg); }
+.face { position: absolute; left: 0; top: 0; width: 96px; height: 96px; border: 2px solid #222; font-size: 15px; font-weight: bold; text-align: center; line-height: 96px; color: #111; }
+.front  { background: #f66; transform: translateZ(50px); }
+.back   { background: #6cf; transform: rotateY(180deg) translateZ(50px); }
+.right  { background: #6d6; transform: rotateY(90deg) translateZ(50px); }
+.left   { background: #fd5; transform: rotateY(-90deg) translateZ(50px); }
+.top    { background: #c9f; transform: rotateX(90deg) translateZ(50px); }
+.bottom { background: #ccc; transform: rotateX(-90deg) translateZ(50px); }
+
+/* A carousel: six panels around a vertical axis, the far ones hidden behind the near ones. */
+.carousel { position: absolute; left: 63px; top: 70px; width: 108px; height: 90px; transform-style: preserve-3d; transform: translateZ(-110px) rotateX(-10deg) rotateY(25deg); }
+.panel { position: absolute; left: 0; top: 0; width: 104px; height: 86px; border: 2px solid #222; font-size: 22px; font-weight: bold; text-align: center; line-height: 86px; color: #111; backface-visibility: hidden; }
+.p1 { background: #f66; transform: rotateY(0deg)   translateZ(110px); }
+.p2 { background: #fa5; transform: rotateY(60deg)  translateZ(110px); }
+.p3 { background: #fe5; transform: rotateY(120deg) translateZ(110px); }
+.p4 { background: #6d6; transform: rotateY(180deg) translateZ(110px); }
+.p5 { background: #6cf; transform: rotateY(240deg) translateZ(110px); }
+.p6 { background: #c9f; transform: rotateY(300deg) translateZ(110px); }
+
+/* A flip card: two faces with backface-visibility: hidden inside a rotating parent. */
+.flip { position: absolute; left: 45px; top: 55px; width: 140px; height: 110px; transform-style: preserve-3d; }
+.flip .side { position: absolute; left: 0; top: 0; width: 136px; height: 106px; border: 2px solid #222; backface-visibility: hidden; font-size: 18px; font-weight: bold; text-align: center; line-height: 106px; color: #111; }
+.flip .front { background: #f66; transform: none; }
+.flip .back  { background: #6cf; transform: rotateY(180deg); }
+.turn0   { transform: rotateY(0deg); }
+.turn70  { transform: rotateY(70deg); }
+.turn180 { transform: rotateY(180deg); }
+
+/* Planes that cross: each is nearer on one side of the line where they meet. */
+.cross { position: absolute; left: 40px; top: 40px; width: 150px; height: 150px; transform-style: preserve-3d; transform: rotateX(-15deg); }
+.plane { position: absolute; left: 0; top: 0; width: 146px; height: 146px; border: 2px solid #222; opacity: .92; }
+.pa { background: #f66; transform: rotateY(50deg); }
+.pb { background: #6cf; transform: rotateY(-50deg); }
+.pc { background: #6d6; transform: rotateX(80deg); }
+
+/* The same planes flattened: document order only. */
+.flat { transform-style: flat; }
+</style></head><body>
+<h2>transform-style: preserve-3d</h2>
+<div class="row">
+  <div><div class="scene"><div class="cube"><div class="face front">front</div><div class="face back">back</div><div class="face right">right</div><div class="face left">left</div><div class="face top">top</div><div class="face bottom">bottom</div></div></div><div class="cap">a cube: six faces, depth-tested</div></div>
+  <div><div class="scene"><div class="carousel"><div class="panel p1">1</div><div class="panel p2">2</div><div class="panel p3">3</div><div class="panel p4">4</div><div class="panel p5">5</div><div class="panel p6">6</div></div></div><div class="cap">a carousel: six panels around an axis, backs hidden</div></div>
+</div>
+<div class="row">
+  <div><div class="scene"><div class="flip turn0"><div class="side front">front</div><div class="side back">back</div></div></div><div class="cap">flip card, rotateY(0deg)</div></div>
+  <div><div class="scene"><div class="flip turn70"><div class="side front">front</div><div class="side back">back</div></div></div><div class="cap">rotateY(70deg): turning</div></div>
+  <div><div class="scene"><div class="flip turn180"><div class="side front">front</div><div class="side back">back</div></div></div><div class="cap">rotateY(180deg): the back, not the front</div></div>
+</div>
+<div class="row">
+  <div><div class="scene"><div class="cross"><div class="plane pa"></div><div class="plane pb"></div><div class="plane pc"></div></div></div><div class="cap">three planes that intersect, preserve-3d</div></div>
+  <div><div class="scene"><div class="cross flat"><div class="plane pa"></div><div class="plane pb"></div><div class="plane pc"></div></div></div><div class="cap">the same planes, transform-style: flat</div></div>
+</div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("preserve_3d_rendering_context", "Graphics & Effects", "3D Rendering Contexts (preserve-3d)",
+    "transform-style: preserve-3d: a cube, a carousel, flip cards with hidden back faces and intersecting planes, each depth-tested per pixel in one shared 3D space, with the parent's perspective reaching every nested plane - against the same planes flattened.",
+    preserve3dHtml, pdfConfig);
 
 // --- CSS mix-blend-mode showcase ---
 

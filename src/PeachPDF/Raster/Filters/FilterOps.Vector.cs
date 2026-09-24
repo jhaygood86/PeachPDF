@@ -105,4 +105,38 @@ internal static partial class FilterOps
             output[i] = best;
         }
     }
+    /// <summary>
+    /// Clears the colour of every pixel and keeps its alpha - a premultiplied pixel of alpha <c>a</c> and no colour is opaque black at
+    /// that coverage, which is what <c>SourceAlpha</c> and <c>BackgroundAlpha</c> are.
+    /// </summary>
+    public static void ZeroColor(RasterSurface surface)
+    {
+        var pixels = MemoryMarshal.Cast<byte, uint>(surface.Pixels);
+        var done = 0;
+
+        if (Vector128.IsHardwareAccelerated)
+            done = ZeroColorVector128(pixels);
+
+        ZeroColorScalar(pixels, done);
+    }
+
+    /// <summary>The per-pixel reference for <see cref="ZeroColor"/>, starting at pixel <paramref name="start"/>.</summary>
+    internal static void ZeroColorScalar(Span<uint> pixels, int start = 0)
+    {
+        for (var i = start; i < pixels.Length; i++)
+            pixels[i] &= 0xFF000000u;
+    }
+
+    /// <summary>Four pixels at a time; returns how many pixels it handled (the caller finishes the tail).</summary>
+    internal static int ZeroColorVector128(Span<uint> pixels)
+    {
+        var count = pixels.Length / 4 * 4;
+        ref var first = ref MemoryMarshal.GetReference(pixels);
+        var alphaOnly = Vector128.Create(0xFF000000u);
+
+        for (var i = 0; i < count; i += 4)
+            (Vector128.LoadUnsafe(ref first, (nuint)i) & alphaOnly).StoreUnsafe(ref first, (nuint)i);
+
+        return count;
+    }
 }

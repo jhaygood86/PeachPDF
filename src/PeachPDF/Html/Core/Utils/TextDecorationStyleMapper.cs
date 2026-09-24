@@ -22,11 +22,15 @@ namespace PeachPDF.Html.Core.Utils
     /// </summary>
     internal static class TextDecorationStyleMapper
     {
-        internal static RDashStyle ToDashStyle(string? style) => style switch
+        internal static RDashStyle ToDashStyle(TextDecorationStyleMode style) => style switch
         {
-            Keywords.Dotted => RDashStyle.Dot,
-            Keywords.Dashed => RDashStyle.Dash,
+            TextDecorationStyleMode.Dotted => RDashStyle.Dot,
+            TextDecorationStyleMode.Dashed => RDashStyle.Dash,
             _ => RDashStyle.Solid, // solid, and the pen for each stroke of a double; wavy bypasses this pen entirely
         };
+
+        /// <summary>The same, for the keyword text of an SVG <c>text-decoration-style</c> attribute; an unrecognized keyword is <c>solid</c>.</summary>
+        internal static RDashStyle ToDashStyle(string? style) =>
+            style is not null && Map.TextDecorationStyleModes.TryGetValue(style, out var mode) ? ToDashStyle(mode) : RDashStyle.Solid;
     }
 }

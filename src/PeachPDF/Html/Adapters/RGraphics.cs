@@ -301,6 +301,19 @@ namespace PeachPDF.Html.Adapters
         internal virtual (double X, double Y) TransformScale => (1.0, 1.0);
 
         /// <summary>
+        /// The accumulated transform of every <see cref="PushTransform"/> in effect, mapping this graphics' current user space to
+        /// the layout space it started in (the space page content is laid out in). Identity for a graphics that does not track transforms.
+        /// A raster region starts in its requester's current user space, so it begins from the requester's value.
+        /// </summary>
+        internal virtual RMatrix CurrentTransform => RMatrix.Identity;
+
+        /// <summary>
+        /// What an SVG whose filters read <c>BackgroundImage</c> needs while it is being painted here: how to repaint what lies behind
+        /// an element. Null except while such an SVG (or a repaint of the part of it painted before an element) is being drawn.
+        /// </summary>
+        internal PeachPDF.Svg.SvgBackdropContext? SvgBackdrop { get; set; }
+
+        /// <summary>
         /// Draws a surface obtained from <see cref="BeginRasterSurface"/> into this graphics at the rectangle the
         /// surface itself records (<see cref="RasterSurface.LayoutRect"/>), so its physical size is exact. Honours
         /// this graphics' current transform, clip and blend mode.

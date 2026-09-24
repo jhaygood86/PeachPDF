@@ -42,7 +42,7 @@ namespace PeachPDF.Html.Core.Dom
             naturalHeight *= CSS.Length.PointsPerPx;
 
             var (destination, needsClip) = ObjectFitResolver.Compute(
-                contentBox, naturalWidth, naturalHeight, box.ObjectFit, box.ObjectPosition, box);
+                contentBox, naturalWidth, naturalHeight, box.ObjectFit.Value, box.ObjectPosition, box);
 
             if (needsClip)
                 g.PushClip(contentBox);

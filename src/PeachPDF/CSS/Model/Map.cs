@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 
@@ -455,6 +455,84 @@ namespace PeachPDF.CSS
             {
                 {Keywords.None, ColumnSpanMode.None},
                 {Keywords.All, ColumnSpanMode.All}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, TransformStyleMode> TransformStyleModes =
+            new Dictionary<string, TransformStyleMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Flat, TransformStyleMode.Flat},
+                {Keywords.Preserve3d, TransformStyleMode.Preserve3d}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, BackfaceVisibilityMode> BackfaceVisibilityModes =
+            new Dictionary<string, BackfaceVisibilityMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Visible, BackfaceVisibilityMode.Visible},
+                {Keywords.Hidden, BackfaceVisibilityMode.Hidden}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, BorderCollapseMode> BorderCollapseModes =
+            new Dictionary<string, BorderCollapseMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Separate, BorderCollapseMode.Separate},
+                {Keywords.Collapse, BorderCollapseMode.Collapse}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, EmptyCellsMode> EmptyCellsModes =
+            new Dictionary<string, EmptyCellsMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Show, EmptyCellsMode.Show},
+                {Keywords.Hide, EmptyCellsMode.Hide}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, CaptionSideMode> CaptionSideModes =
+            new Dictionary<string, CaptionSideMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Top, CaptionSideMode.Top},
+                {Keywords.Bottom, CaptionSideMode.Bottom}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, TableLayoutMode> TableLayoutModes =
+            new Dictionary<string, TableLayoutMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, TableLayoutMode.Auto},
+                {Keywords.Fixed, TableLayoutMode.Fixed}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, ListStylePositionMode> ListStylePositionModes =
+            new Dictionary<string, ListStylePositionMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Outside, ListStylePositionMode.Outside},
+                {Keywords.Inside, ListStylePositionMode.Inside}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, TextDecorationStyleMode> TextDecorationStyleModes =
+            new Dictionary<string, TextDecorationStyleMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Solid, TextDecorationStyleMode.Solid},
+                {Keywords.Double, TextDecorationStyleMode.Double},
+                {Keywords.Dotted, TextDecorationStyleMode.Dotted},
+                {Keywords.Dashed, TextDecorationStyleMode.Dashed},
+                {Keywords.Wavy, TextDecorationStyleMode.Wavy}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, FontVariantPositionMode> FontVariantPositionModes =
+            new Dictionary<string, FontVariantPositionMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Normal, FontVariantPositionMode.Normal},
+                {Keywords.Sub, FontVariantPositionMode.Sub},
+                {Keywords.Super, FontVariantPositionMode.Super}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, FontVariantCapsMode> FontVariantCapsModes =
+            new Dictionary<string, FontVariantCapsMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Normal, FontVariantCapsMode.Normal},
+                {Keywords.SmallCaps, FontVariantCapsMode.SmallCaps},
+                {Keywords.AllSmallCaps, FontVariantCapsMode.AllSmallCaps},
+                {Keywords.PetiteCaps, FontVariantCapsMode.PetiteCaps},
+                {Keywords.AllPetiteCaps, FontVariantCapsMode.AllPetiteCaps},
+                {Keywords.Unicase, FontVariantCapsMode.Unicase},
+                {Keywords.TitlingCaps, FontVariantCapsMode.TitlingCaps}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, ObjectFitMode> ObjectFitModes =
+            new Dictionary<string, ObjectFitMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Fill, ObjectFitMode.Fill},
+                {Keywords.Contain, ObjectFitMode.Contain},
+                {Keywords.Cover, ObjectFitMode.Cover},
+                {Keywords.None, ObjectFitMode.None},
+                {Keywords.ScaleDown, ObjectFitMode.ScaleDown}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, WritingMode> WritingModes =
             new Dictionary<string, WritingMode>(StringComparer.OrdinalIgnoreCase)

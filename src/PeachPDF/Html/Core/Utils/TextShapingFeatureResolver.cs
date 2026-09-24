@@ -40,27 +40,35 @@ namespace PeachPDF.Html.Core.Utils
         /// check its own resolved font's <c>SupportsFontVariantCaps</c> capability before actually
         /// requesting this from the shaping layer (see this type's own doc comment, and
         /// <c>DerivedStyle.ActualFontVariantCaps</c> for the HTML-side gating).</summary>
-        internal static FontVariantCapsFeature ResolveCapsRequested(string value) => value switch
+        internal static FontVariantCapsFeature ResolveCapsRequested(FontVariantCapsMode value) => value switch
         {
-            Keywords.SmallCaps => FontVariantCapsFeature.SmallCaps,
-            Keywords.AllSmallCaps => FontVariantCapsFeature.AllSmallCaps,
-            Keywords.PetiteCaps => FontVariantCapsFeature.PetiteCaps,
-            Keywords.AllPetiteCaps => FontVariantCapsFeature.AllPetiteCaps,
-            Keywords.Unicase => FontVariantCapsFeature.Unicase,
-            Keywords.TitlingCaps => FontVariantCapsFeature.TitlingCaps,
+            FontVariantCapsMode.SmallCaps => FontVariantCapsFeature.SmallCaps,
+            FontVariantCapsMode.AllSmallCaps => FontVariantCapsFeature.AllSmallCaps,
+            FontVariantCapsMode.PetiteCaps => FontVariantCapsFeature.PetiteCaps,
+            FontVariantCapsMode.AllPetiteCaps => FontVariantCapsFeature.AllPetiteCaps,
+            FontVariantCapsMode.Unicase => FontVariantCapsFeature.Unicase,
+            FontVariantCapsMode.TitlingCaps => FontVariantCapsFeature.TitlingCaps,
             _ => FontVariantCapsFeature.None,
         };
+
+        /// <summary>The same, for the keyword text of an SVG presentation attribute; an unrecognized keyword requests nothing.</summary>
+        internal static FontVariantCapsFeature ResolveCapsRequested(string value) =>
+            Map.FontVariantCapsModes.TryGetValue(value, out var mode) ? ResolveCapsRequested(mode) : FontVariantCapsFeature.None;
 
         /// <summary>The position feature <paramref name="value"/> requests, ungated - the caller must
         /// still check its own resolved font's <c>SupportsFontVariantPosition</c> capability to decide
         /// between real substitution and a synthesized sub/superscript (see
         /// <c>DerivedStyle.ActualFontVariantPosition</c> for the HTML-side gating).</summary>
-        internal static FontVariantPositionFeature ResolvePositionRequested(string value) => value switch
+        internal static FontVariantPositionFeature ResolvePositionRequested(FontVariantPositionMode value) => value switch
         {
-            Keywords.Sub => FontVariantPositionFeature.Sub,
-            Keywords.Super => FontVariantPositionFeature.Super,
+            FontVariantPositionMode.Sub => FontVariantPositionFeature.Sub,
+            FontVariantPositionMode.Super => FontVariantPositionFeature.Super,
             _ => FontVariantPositionFeature.None,
         };
+
+        /// <summary>The same, for the keyword text of an SVG presentation attribute; an unrecognized keyword requests nothing.</summary>
+        internal static FontVariantPositionFeature ResolvePositionRequested(string value) =>
+            Map.FontVariantPositionModes.TryGetValue(value, out var mode) ? ResolvePositionRequested(mode) : FontVariantPositionFeature.None;
 
         internal static NumericFeatures ResolveNumeric(string value)
         {
@@ -135,6 +143,9 @@ namespace PeachPDF.Html.Core.Utils
 
         /// <summary><c>false</c> only for <c>none</c> - both <c>auto</c> (the initial value) and
         /// <c>normal</c> mean "apply GPOS kerning when the font and script support it."</summary>
+        internal static bool ResolveKerning(FontKerningMode value) => value != FontKerningMode.None;
+
+        /// <summary>The same, for the keyword text of an SVG presentation attribute: only a literal <c>none</c> turns kerning off.</summary>
         internal static bool ResolveKerning(string value) => value != Keywords.None;
 
         private static bool Contains(string[] tokens, string token)

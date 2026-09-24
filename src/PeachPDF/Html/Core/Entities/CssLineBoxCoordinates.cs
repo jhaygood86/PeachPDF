@@ -149,6 +149,33 @@ namespace PeachPDF.Html.Core.Entities
         /// block's fragments all exist (<see cref="CssLayoutEngine.CreateLineBoxes"/>).
         /// </summary>
         public List<SetAsideBox>? AbsolutelyPositioned { get; set; }
+
+        /// <summary>
+        /// The union of the extents of the empty inline boxes - an empty <c>&lt;span&gt;</c>, or one holding
+        /// only out-of-flow content - the walk has passed after a wrap opportunity or at a line's start,
+        /// which still take part in a line's height (CSS 2.1 §9.4.2, §10.8.1). Held for the next word, and
+        /// folded into whichever line that word lands on, since an empty inline after a wrap opportunity
+        /// goes to the next line with it. <see cref="CssLayoutEngine.CreateLineBoxes"/> folds what is left at
+        /// the end of the flow into the last line, unless that line holds no content, which §9.4.2 keeps at
+        /// zero height.
+        /// </summary>
+        public LineBoxExtent? PendingEmptyInlineExtent { get; set; }
+
+        /// <summary>
+        /// The empty inlines whose extent <see cref="PendingEmptyInlineExtent"/> holds, recorded on the line
+        /// that takes them (<see cref="CssLineBox.EmptyInlines"/>) so a pass resuming after that line does not
+        /// place them again.
+        /// </summary>
+        public List<CssBox>? PendingEmptyInlines { get; set; }
+
+        /// <summary>
+        /// The empty inlines the line before this flow's resume point already holds
+        /// (<see cref="CssLineBox.EmptyInlines"/>), or null on a flow that is not resuming. An empty inline
+        /// places no word, so one placed with the word before a break sits at the ordinal the flow resumes
+        /// at, and the flow reaches it again; these must not be placed a second time. The others it reaches
+        /// there belonged to the line the break discarded, and are placed as usual.
+        /// </summary>
+        public IReadOnlyList<CssBox>? EmptyInlinesBeforeResume { get; init; }
     }
 
     /// <summary>

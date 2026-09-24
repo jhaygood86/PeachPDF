@@ -100,8 +100,11 @@ namespace PeachPDF.Svg
         /// <summary><c>color-interpolation-filters</c>: true (the initial value) computes in linear light, false in sRGB. Only the raster evaluation honours it.</summary>
         public bool LinearRgb { get; set; } = true;
 
+        /// <summary>True when an <c>in</c>/<c>in2</c> (or an <c>feMergeNode</c>'s <c>in</c>) names <c>FillPaint</c>, <c>StrokePaint</c>, <c>BackgroundImage</c> or <c>BackgroundAlpha</c>, which only exist as pixels.</summary>
+        public bool ReadsReservedInput { get; set; }
+
         /// <summary>Whether this primitive can only be evaluated over pixels.</summary>
-        public virtual bool RequiresRaster => Subregion is not null;
+        public virtual bool RequiresRaster => Subregion is not null || ReadsReservedInput;
     }
 
     /// <summary><c>feFlood</c> - fills the whole filter region with a flat color, ignoring <see cref="FilterPrimitive.In"/> (it has no real input; the SVG spec allows one to be specified but it's never consulted).</summary>
@@ -271,6 +274,24 @@ namespace PeachPDF.Svg
         /// <summary>The channels (0 = R, 1 = G, 2 = B, 3 = A) that drive the x and y displacement.</summary>
         public required int XChannel { get; init; }
         public required int YChannel { get; init; }
+
+        public override bool RequiresRaster => true;
+    }
+
+    /// <summary>
+    /// <c>feImage</c>: a stand-alone image (<see cref="Image"/>, fitted into the primitive subregion by its own <c>preserveAspectRatio</c>) or a
+    /// reference to an element of the document (<see cref="Target"/>, rendered in the filtered element's user space like <c>&lt;use&gt;</c>).
+    /// A reference that resolves to nothing leaves the result transparent. Evaluated only over pixels.
+    /// </summary>
+    internal sealed class FeImage : FilterPrimitive
+    {
+        /// <summary>The id a <c>href="#id"</c> names; resolved to <see cref="Target"/> once every node of the document is known.</summary>
+        public string? ReferenceId { get; init; }
+
+        public SvgElement? Target { get; set; }
+
+        /// <summary>The image resolved from a <c>data:</c>/prefetched href, laid out per the primitive subregion at paint time; null for an element reference.</summary>
+        public SvgImageElement? Image { get; init; }
 
         public override bool RequiresRaster => true;
     }

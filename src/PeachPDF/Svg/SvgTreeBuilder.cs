@@ -48,6 +48,7 @@ namespace PeachPDF.Svg
         private readonly RColor _contextColor;
         private readonly IReadOnlyDictionary<string, SvgImageResource>? _prefetchedImages;
         private readonly Dictionary<string, ISvgSourceNode> _nodesById = new(StringComparer.Ordinal);
+        private readonly List<FeImage> _feImageReferences = [];
         private readonly SvgDocument _document = new();
         private int _useDepth;
 
@@ -333,7 +334,8 @@ namespace PeachPDF.Svg
             // CollectImageHrefs matches on) - the ":image" substring covers the latter without a parse.
             var text = Encoding.UTF8.GetString(bytes);
             if (text.IndexOf("<image", StringComparison.OrdinalIgnoreCase) < 0
-                && text.IndexOf(":image", StringComparison.OrdinalIgnoreCase) < 0)
+                && text.IndexOf(":image", StringComparison.OrdinalIgnoreCase) < 0
+                && text.IndexOf("feImage", StringComparison.OrdinalIgnoreCase) < 0)
                 return null;
 
             if (!TryParseSvgRoot(text, out var nestedRoot))
@@ -365,10 +367,12 @@ namespace PeachPDF.Svg
         {
             foreach (var child in node.Children)
             {
-                if (child.Name == "image")
+                if (child.Name is "image" or "feImage")
                 {
                     var href = child.GetAttribute("href") ?? child.GetAttribute("xlink:href");
-                    if (!string.IsNullOrEmpty(href))
+
+                    // An feImage's "#id" names an element of this document, not something to fetch.
+                    if (!string.IsNullOrEmpty(href) && !(child.Name == "feImage" && href[0] == '#'))
                         hrefs.Add(href);
                 }
 
@@ -435,6 +439,8 @@ namespace PeachPDF.Svg
             _lengthBasis = _rootBasis;
             var rootPaint = ApplyCommon(new SvgGroupElement(), root, InheritedPaint.Initial);
             _lengthBasis = null;
+
+            ResolveFeImageReferences(rootPaint, rootFont);
 
             foreach (var child in root.Children)
             {
@@ -810,8 +816,16 @@ namespace PeachPDF.Svg
             };
             ApplyCommon(image, node, inherited);
 
-            var href = node.GetAttribute("href") ?? node.GetAttribute("xlink:href");
+            ResolveImageHref(image, node.GetAttribute("href") ?? node.GetAttribute("xlink:href"));
+            return image;
+        }
 
+        /// <summary>
+        /// Resolves an <c>href</c> into <paramref name="image"/>'s raster or nested-document payload: a <c>data:</c> URI is decoded
+        /// here, anything else is looked up in the images fetched ahead of the build. Shared by <c>&lt;image&gt;</c> and <c>feImage</c>.
+        /// </summary>
+        private void ResolveImageHref(SvgImageElement image, string? href)
+        {
             if (DataUriUtils.TryDecodeDataUri(href, out var mimeType, out var bytes))
             {
                 if (mimeType.Equals("image/svg+xml", StringComparison.OrdinalIgnoreCase))
@@ -828,8 +842,6 @@ namespace PeachPDF.Svg
                 else
                     image.Image = DecodeRasterImage(resource.Bytes);
             }
-
-            return image;
         }
 
         /// <summary>
@@ -1762,20 +1774,13 @@ namespace PeachPDF.Svg
 
         /// <summary>
         /// Builds a <c>&lt;filter&gt;</c> definition, or null when ANY of its primitives (or the values/
-        /// operators/types they use) falls outside the natively-representable set this evaluator
-        /// supports - a whole-filter rejection, not a partial graph, per <see cref="SvgFilter"/>'s
-        /// remarks: an element referencing a rejected (or absent) filter id simply paints unfiltered.
-        /// Rejected: any primitive kind besides feFlood/feOffset/feMerge/feTile/feComposite/feBlend/
-        /// feColorMatrix/feComponentTransfer; feComposite type="arithmetic"; feColorMatrix
-        /// type="saturate"/"hueRotate" or a type="matrix" with any nonzero off-diagonal term (confirmed
-        /// against ISO 32000-1 §8.6.5.3: PDF's /TR transfer function is strictly per-channel independent,
-        /// so a cross-channel matrix has no native mechanism at all); feComponentTransfer
-        /// type="gamma"/"table"/"discrete" (gamma is non-affine - output = amplitude*pow(input,exponent)
-        /// + offset, not slope*input + intercept - so it doesn't fit ColorMatrix's affine shape even in
-        /// principle, not just "not yet built"; table/discrete would need a PDF FunctionType 0 sampled
-        /// function, not built here) or a non-identity feFuncA; an in/in2 of BackgroundImage/
-        /// BackgroundAlpha/FillPaint/StrokePaint; and a per-primitive x/y/width/height subregion (every
-        /// primitive here always operates over the whole resolved filter region).
+        /// operators/types they use) falls outside the supported set - a whole-filter rejection, not a
+        /// partial graph, per <see cref="SvgFilter"/>'s remarks: an element referencing a rejected (or
+        /// absent) filter id simply paints unfiltered. Rejected: an unknown primitive element; an
+        /// feComposite operator, feColorMatrix type, feComponentTransfer type or numeric attribute that
+        /// does not parse. Every input keyword (SourceGraphic/SourceAlpha/FillPaint/StrokePaint/
+        /// BackgroundImage/BackgroundAlpha), <c>feImage</c> and a primitive subregion are supported, but the
+        /// ones PDF has no operator for make <see cref="SvgFilter.RequiresRaster"/> true.
         /// </summary>
         private SvgFilter? BuildFilter(ISvgSourceNode node)
         {
@@ -1815,6 +1820,10 @@ namespace PeachPDF.Svg
                     return null;
 
                 primitive.LinearRgb = ParseColorInterpolationFilters(child.GetAttribute("color-interpolation-filters"), filterLinear);
+                primitive.ReadsReservedInput = ReadsReservedInput(child, out var readsBackdrop);
+                if (readsBackdrop)
+                    _document.ReadsBackdrop = true;
+
                 primitive.Subregion = ParseSubregion(child, primitiveUnitsUserSpaceOnUse);
                 primitives.Add(primitive);
             }
@@ -1848,6 +1857,36 @@ namespace PeachPDF.Svg
         private static bool IsReservedInput(string? value) =>
             value is "BackgroundImage" or "BackgroundAlpha" or "FillPaint" or "StrokePaint";
 
+        private static bool IsBackdropInput(string? value) => value is "BackgroundImage" or "BackgroundAlpha";
+
+        /// <summary>Whether a primitive names <c>FillPaint</c>/<c>StrokePaint</c>/<c>BackgroundImage</c>/<c>BackgroundAlpha</c> as an input, and whether one of them is a backdrop.</summary>
+        private static bool ReadsReservedInput(ISvgSourceNode primitive, out bool readsBackdrop)
+        {
+            var reads = false;
+            var backdrop = false;
+
+            void Note(string? value)
+            {
+                reads |= IsReservedInput(value);
+                backdrop |= IsBackdropInput(value);
+            }
+
+            Note(primitive.GetAttribute("in"));
+            Note(primitive.GetAttribute("in2"));
+
+            if (primitive.Name == "feMerge")
+            {
+                foreach (var child in primitive.Children)
+                {
+                    if (child.Name == "feMergeNode")
+                        Note(child.GetAttribute("in"));
+                }
+            }
+
+            readsBackdrop = backdrop;
+            return reads;
+        }
+
         private FilterPrimitive? BuildFilterPrimitive(ISvgSourceNode node) => node.Name switch
         {
             "feFlood" => BuildFeFlood(node),
@@ -1866,15 +1905,56 @@ namespace PeachPDF.Svg
             "feDisplacementMap" => BuildFeDisplacementMap(node),
             "feDiffuseLighting" => BuildFeLighting(node, specular: false),
             "feSpecularLighting" => BuildFeLighting(node, specular: true),
-            _ => null, // feImage (and anything unknown) - unsupported
+            "feImage" => BuildFeImage(node),
+            _ => null, // anything unknown - unsupported
         };
+
+        /// <summary>
+        /// Builds an <c>feImage</c>. A <c>#id</c> href is only recorded here: filters are built while the id registry is still being
+        /// collected, so the referenced element is built afterwards by <see cref="ResolveFeImageReferences"/>. Any other href is an image
+        /// resolved like an <c>&lt;image&gt;</c>'s (an unresolvable one renders nothing, which leaves the primitive transparent).
+        /// </summary>
+        private FilterPrimitive BuildFeImage(ISvgSourceNode node)
+        {
+            var href = node.GetAttribute("href") ?? node.GetAttribute("xlink:href");
+            var result = node.GetAttribute("result");
+
+            if (href is { Length: > 1 } && href[0] == '#')
+            {
+                var feImage = new FeImage { Result = result, ReferenceId = href[1..] };
+                _feImageReferences.Add(feImage);
+                return feImage;
+            }
+
+            var image = new SvgImageElement { PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(node.GetAttribute("preserveAspectRatio")) };
+            ResolveImageHref(image, href);
+            return new FeImage { Result = result, Image = image };
+        }
+
+        /// <summary>Builds the element each <c>feImage href="#id"</c> names, now that every node of the document is registered.</summary>
+        private void ResolveFeImageReferences(InheritedPaint inherited, FontContext fontContext)
+        {
+            if (_feImageReferences.Count == 0)
+                return;
+
+            foreach (var feImage in _feImageReferences)
+            {
+                if (feImage.ReferenceId is not { } id || !_nodesById.TryGetValue(id, out var target) || _useDepth >= MaxUseDepth)
+                    continue;
+
+                _useDepth++;
+                feImage.Target = target.Name == "symbol"
+                    ? BuildSymbol(target, inherited, fontContext)
+                    : BuildElement(target, inherited, fontContext);
+                _useDepth--;
+            }
+
+            _feImageReferences.Clear();
+        }
 
         private FilterPrimitive? BuildFeFlood(ISvgSourceNode node)
         {
             var inAttr = node.GetAttribute("in");
-            if (IsReservedInput(inAttr))
-                return null;
-
             var floodColorAttr = node.GetAttribute("flood-color");
             var color = string.IsNullOrWhiteSpace(floodColorAttr)
                 ? RColor.Black
@@ -1894,9 +1974,6 @@ namespace PeachPDF.Svg
         private FilterPrimitive? BuildFeOffset(ISvgSourceNode node)
         {
             var inAttr = node.GetAttribute("in");
-            if (IsReservedInput(inAttr))
-                return null;
-
             return new FeOffset
             {
                 In = inAttr,
@@ -1916,9 +1993,6 @@ namespace PeachPDF.Svg
                     continue;
 
                 var inAttr = child.GetAttribute("in");
-                if (IsReservedInput(inAttr))
-                    return null;
-
                 inputs.Add(inAttr);
             }
 
@@ -1928,9 +2002,6 @@ namespace PeachPDF.Svg
         private FilterPrimitive? BuildFeTile(ISvgSourceNode node)
         {
             var inAttr = node.GetAttribute("in");
-            if (IsReservedInput(inAttr))
-                return null;
-
             return new FeTile { In = inAttr, Result = node.GetAttribute("result") };
         }
 
@@ -1938,9 +2009,6 @@ namespace PeachPDF.Svg
         {
             var inAttr = node.GetAttribute("in");
             var in2Attr = node.GetAttribute("in2");
-            if (IsReservedInput(inAttr) || IsReservedInput(in2Attr))
-                return null;
-
             // "arithmetic" (k1*i1*i2 + k2*i1 + k3*i2 + k4) needs per-pixel computation, so it makes the whole filter a raster
             // one. Any other/unrecognized operator value is rejected rather than silently falling back to "over" (unlike
             // feBlend's mode, which does default leniently - there is no safe default here since the author's INTENDED
@@ -1966,9 +2034,6 @@ namespace PeachPDF.Svg
         {
             var inAttr = node.GetAttribute("in");
             var in2Attr = node.GetAttribute("in2");
-            if (IsReservedInput(inAttr) || IsReservedInput(in2Attr))
-                return null;
-
             return new FeBlend
             {
                 In = inAttr,
@@ -2009,9 +2074,6 @@ namespace PeachPDF.Svg
         private FilterPrimitive? BuildFeColorMatrix(ISvgSourceNode node)
         {
             var inAttr = node.GetAttribute("in");
-            if (IsReservedInput(inAttr))
-                return null;
-
             var result = node.GetAttribute("result");
             var type = (node.GetAttribute("type") ?? "matrix").Trim().ToLowerInvariant();
 
@@ -2053,9 +2115,6 @@ namespace PeachPDF.Svg
         private FilterPrimitive? BuildFeComponentTransfer(ISvgSourceNode node)
         {
             var inAttr = node.GetAttribute("in");
-            if (IsReservedInput(inAttr))
-                return null;
-
             var functions = new[]
             {
                 ReadTransferFunction(node, "feFuncR"),
@@ -2130,7 +2189,7 @@ namespace PeachPDF.Svg
         private FilterPrimitive? BuildFeGaussianBlur(ISvgSourceNode node)
         {
             var inAttr = node.GetAttribute("in");
-            if (IsReservedInput(inAttr) || ParseNumberOptionalNumber(node.GetAttribute("stdDeviation"), 0, 0) is not { } deviation)
+            if (ParseNumberOptionalNumber(node.GetAttribute("stdDeviation"), 0, 0) is not { } deviation)
                 return null;
 
             return new FeGaussianBlur { In = inAttr, Result = node.GetAttribute("result"), StdDeviationX = deviation.First, StdDeviationY = deviation.Second };
@@ -2139,7 +2198,7 @@ namespace PeachPDF.Svg
         private FilterPrimitive? BuildFeDropShadow(ISvgSourceNode node)
         {
             var inAttr = node.GetAttribute("in");
-            if (IsReservedInput(inAttr) || ParseNumberOptionalNumber(node.GetAttribute("stdDeviation"), 2, 2) is not { } deviation)
+            if (ParseNumberOptionalNumber(node.GetAttribute("stdDeviation"), 2, 2) is not { } deviation)
                 return null;
 
             var colorAttr = node.GetAttribute("flood-color");
@@ -2165,7 +2224,7 @@ namespace PeachPDF.Svg
         private FilterPrimitive? BuildFeMorphology(ISvgSourceNode node)
         {
             var inAttr = node.GetAttribute("in");
-            if (IsReservedInput(inAttr) || ParseNumberOptionalNumber(node.GetAttribute("radius"), 0, 0) is not { } radius)
+            if (ParseNumberOptionalNumber(node.GetAttribute("radius"), 0, 0) is not { } radius)
                 return null;
 
             return new FeMorphology
@@ -2181,7 +2240,7 @@ namespace PeachPDF.Svg
         private FilterPrimitive? BuildFeConvolveMatrix(ISvgSourceNode node)
         {
             var inAttr = node.GetAttribute("in");
-            if (IsReservedInput(inAttr) || ParseNumberOptionalNumber(node.GetAttribute("order"), 3, 3) is not { } order)
+            if (ParseNumberOptionalNumber(node.GetAttribute("order"), 3, 3) is not { } order)
                 return null;
 
             var orderX = (int)order.First;
@@ -2262,9 +2321,6 @@ namespace PeachPDF.Svg
         {
             var inAttr = node.GetAttribute("in");
             var in2Attr = node.GetAttribute("in2");
-            if (IsReservedInput(inAttr) || IsReservedInput(in2Attr))
-                return null;
-
             return new FeDisplacementMap
             {
                 In = inAttr,
@@ -2279,9 +2335,6 @@ namespace PeachPDF.Svg
         private FilterPrimitive? BuildFeLighting(ISvgSourceNode node, bool specular)
         {
             var inAttr = node.GetAttribute("in");
-            if (IsReservedInput(inAttr))
-                return null;
-
             LightSource? light = null;
             foreach (var child in node.Children)
             {

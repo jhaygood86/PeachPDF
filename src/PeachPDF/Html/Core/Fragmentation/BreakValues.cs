@@ -64,9 +64,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// paginate. <c>always</c> never reaches here: it is a legacy <c>page-break-*</c> value only, and
         /// <see cref="CssUtils"/> rewrites it to <c>page</c> on the way in.
         /// </remarks>
-        internal static bool IsForcedPageBreak(string? value) =>
-            value is Keywords.Page or Keywords.Left or Keywords.Right
-                  or Keywords.Recto or Keywords.Verso;
+        internal static bool IsForcedPageBreak(BreakMode? value) =>
+            value is BreakMode.Page or BreakMode.Left or BreakMode.Right
+                  or BreakMode.Recto or BreakMode.Verso;
 
         /// <summary>
         /// Whether <paramref name="value"/> forces a break in <paramref name="context"/> (§3.1).
@@ -83,9 +83,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// being special-cased away.
         /// </para>
         /// </remarks>
-        internal static bool IsForcedBreak(string? value, FragmentationContext context) =>
+        internal static bool IsForcedBreak(BreakMode? value, FragmentationContext context) =>
             IsForcedPageBreak(value)
-            || (context is FragmentationContext.Column && value is Keywords.Column);
+            || (context is FragmentationContext.Column && value is BreakMode.Column);
 
         /// <summary>
         /// The side <paramref name="value"/> demands on its own, or <see cref="PageSide.Any"/>.
@@ -94,10 +94,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// PeachPDF's page progression is left-to-right, so <c>recto</c> is the right-hand page and
         /// <c>verso</c> the left-hand one.
         /// </remarks>
-        internal static PageSide SideOf(string? value) => value switch
+        internal static PageSide SideOf(BreakMode? value) => value switch
         {
-            Keywords.Left or Keywords.Verso => PageSide.Left,
-            Keywords.Right or Keywords.Recto => PageSide.Right,
+            BreakMode.Left or BreakMode.Verso => PageSide.Left,
+            BreakMode.Right or BreakMode.Recto => PageSide.Right,
             _ => PageSide.Any
         };
 
@@ -113,7 +113,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <c>break-before</c> rather than the preceding sibling's <c>break-after</c>.
         /// </remarks>
         /// <seealso cref="BreakPropagation.ForcedBreakBeforeAt"/>
-        internal static PageSide RequiredSide(string? breakBefore, string? previousBreakAfter) =>
+        internal static PageSide RequiredSide(BreakMode? breakBefore, BreakMode? previousBreakAfter) =>
             SideOf(breakBefore) is var own && own is not PageSide.Any ? own : SideOf(previousBreakAfter);
 
         /// <summary>
@@ -128,10 +128,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// the page. <c>avoid-region</c> names a context PeachPDF does not establish, so it forbids
         /// nothing here.
         /// </remarks>
-        internal static bool AvoidsBreak(string? value, FragmentationContext context) => context switch
+        internal static bool AvoidsBreak(BreakMode? value, FragmentationContext context) => context switch
         {
-            FragmentationContext.Column => value is Keywords.Avoid or Keywords.AvoidColumn,
-            _ => value is Keywords.Avoid or Keywords.AvoidPage
+            FragmentationContext.Column => value is BreakMode.Avoid or BreakMode.AvoidColumn,
+            _ => value is BreakMode.Avoid or BreakMode.AvoidPage
         };
 
         /// <summary>

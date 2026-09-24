@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
 
@@ -10,6 +11,10 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
     /// </summary>
     public class BreakValuesTests
     {
+        // The tests speak in css-break keyword text; the classifier speaks in the typed value.
+        private static BreakMode? Mode(string? keyword) =>
+            keyword is null ? null : Map.BreakModes.TryGetValue(keyword, out var mode) ? mode : Map.PageBreakModes[keyword];
+
         // §3.1's complete break-before/break-after value set. `page` forces a page break outright and
         // the four directional values force one or two of them; `column`/`region` force a break in a
         // fragmentation context a page break is not a substitute for, and the avoid family forces none.
@@ -28,13 +33,13 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         [InlineData("region", false)]
         [InlineData(null, false)]
         public void IsForcedPageBreak_MatchesTheSpecValueSet(string? value, bool expected) =>
-            Assert.Equal(expected, BreakValues.IsForcedPageBreak(value));
+            Assert.Equal(expected, BreakValues.IsForcedPageBreak(Mode(value)));
 
         // "always" only ever reaches a box through the legacy page-break-* alias, which CssUtils
         // rewrites to "page" - so the classifier must not accept it in its own right.
         [Fact]
         public void IsForcedPageBreak_RejectsTheLegacyAlwaysSpelling() =>
-            Assert.False(BreakValues.IsForcedPageBreak("always"));
+            Assert.False(BreakValues.IsForcedPageBreak(Mode("always")));
 
         // PageSide is internal, so the theory rows name it and this maps them back.
         private static PageSide Side(string name) => name switch
@@ -56,7 +61,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         [InlineData("auto", "avoid", "any")]
         [InlineData(null, null, "any")]
         public void RequiredSide_ReadsEitherSideOfTheBreakPoint(string? before, string? after, string expected) =>
-            Assert.Equal(Side(expected), BreakValues.RequiredSide(before, after));
+            Assert.Equal(Side(expected), BreakValues.RequiredSide(Mode(before), Mode(after)));
 
         // A directional value beats a plain `page` on the other side of the pair: honoring the
         // directional one satisfies both requirements, honoring `page` alone would not.
@@ -64,12 +69,12 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         [InlineData("page", "right", "right")]
         [InlineData("verso", "page", "left")]
         public void RequiredSide_DirectionalBeatsAPlainPageOnTheOtherSide(string? before, string? after, string expected) =>
-            Assert.Equal(Side(expected), BreakValues.RequiredSide(before, after));
+            Assert.Equal(Side(expected), BreakValues.RequiredSide(Mode(before), Mode(after)));
 
         // Conflicting directional values are unsatisfiable; the later box's own break-before wins.
         [Fact]
         public void RequiredSide_ConflictingDirectionalValues_TakeTheBreakBefore() =>
-            Assert.Equal(PageSide.Right, BreakValues.RequiredSide("right", "left"));
+            Assert.Equal(PageSide.Right, BreakValues.RequiredSide(BreakMode.Right, BreakMode.Left));
 
         [Theory]
         [InlineData("avoid", true)]
@@ -82,7 +87,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         [InlineData("region", false)]
         [InlineData(null, false)]
         public void AvoidsBreak_InThePageContext_CoversOnlyThePageValues(string? value, bool expected) =>
-            Assert.Equal(expected, BreakValues.AvoidsBreak(value, FragmentationContext.Page));
+            Assert.Equal(expected, BreakValues.AvoidsBreak(Mode(value), FragmentationContext.Page));
 
         // The mirror image, which is the whole of what makes `avoid-column` mean anything: it forbids a
         // column break and nothing else, and `avoid-page` forbids nothing here.
@@ -95,7 +100,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         [InlineData("column", false)]
         [InlineData(null, false)]
         public void AvoidsBreak_InTheColumnContext_CoversOnlyTheColumnValues(string? value, bool expected) =>
-            Assert.Equal(expected, BreakValues.AvoidsBreak(value, FragmentationContext.Column));
+            Assert.Equal(expected, BreakValues.AvoidsBreak(Mode(value), FragmentationContext.Column));
 
         // A page break is also a column break - a column cannot span pages - so every value that forces a
         // page break forces one in either context. The reverse does not hold: `column` names a boundary
@@ -111,8 +116,8 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         [InlineData(null, false, false)]
         public void IsForcedBreak_IsAskedOfTheContextBeingFilled(string? value, bool inPage, bool inColumn)
         {
-            Assert.Equal(inPage, BreakValues.IsForcedBreak(value, FragmentationContext.Page));
-            Assert.Equal(inColumn, BreakValues.IsForcedBreak(value, FragmentationContext.Column));
+            Assert.Equal(inPage, BreakValues.IsForcedBreak(Mode(value), FragmentationContext.Page));
+            Assert.Equal(inColumn, BreakValues.IsForcedBreak(Mode(value), FragmentationContext.Column));
         }
 
         // Slot k is page k+1, and the first page is a right page.

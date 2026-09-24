@@ -142,6 +142,10 @@ namespace PeachPDF.Html.Core.Paint
                 return;
             }
 
+            // Another plane of the 3D rendering context being painted: the context composes it, this plane's own painting must not.
+            if (_contextMembers is not null && _contextMembers.Contains(fragment))
+                return;
+
             try
             {
                 if (box.DerivedStyle.ActualDisplay == Keywords.None || box.Visibility.Value != Visibility.Visible) return;
@@ -160,7 +164,10 @@ namespace PeachPDF.Html.Core.Paint
                 // fragment's own rectangle and is only reached through this call.
                 var visible = fragment.Lines.Count == 0 || IsAnyRectVisible(fragment, g.GetClip());
 
-                if (visible)
+                // A 3D rendering context (transform-style: preserve-3d) is composed as a whole, planes depth-tested against each other.
+                var paintedAsContext = visible && !_textOnly && TryPaintContext3D(g, fragment);
+
+                if (visible && !paintedAsContext)
                 {
                     // A transform that is not affine once projected onto the element's plane (perspective, or a 3D transform under a
                     // parent's perspective) cannot be a PDF `cm`: the element is painted untransformed into a bitmap and warped.
@@ -604,7 +611,7 @@ namespace PeachPDF.Html.Core.Paint
             var box = fragment.Box;
 
             if (box.DerivedStyle.ActualDisplay == Keywords.None ||
-                (box.DerivedStyle.ActualDisplay == Keywords.TableCell && box.EmptyCells == Keywords.Hide && box.IsSpaceOrEmpty)) return;
+                (box.DerivedStyle.ActualDisplay == Keywords.TableCell && box.EmptyCells.Value == EmptyCellsMode.Hide && box.IsSpaceOrEmpty)) return;
 
             var clipsPushed = RenderUtils.ClipGraphicsByOverflow(g, fragment.OverflowClip, fragment.OverflowClipCurve);
             var overflowClipRecorded = PushOverflowClip(fragment);

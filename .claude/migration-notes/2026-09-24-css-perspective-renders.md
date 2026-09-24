@@ -12,8 +12,8 @@ parallel to the view plane (`translateZ()` under perspective) is just scaled and
 
 What a document author can notice: pages already written for browsers with a perspective stage now look like they do there instead of
 flat; such elements are bitmaps (sharp to the raster resolution, larger in the file) with their text still selectable; a document
-targeting PDF/A-1 or PDF/X-1a/X-3 that uses them is rejected unless it asks for transparency flattening. `transform-style: preserve-3d`
-is still not modelled.
+targeting PDF/A-1 or PDF/X-1a/X-3 that uses them is rejected unless it asks for transparency flattening. (`transform-style: preserve-3d`
+renders too: see [its own note](2026-09-24-preserve-3d-renders.md).)
 
 Verified at the previous release tag (v0.9.19): `docs/html-css-support.md` listed `perspective()`, `perspective`, `perspective-origin`
 and `backface-visibility` under unsupported CSS features.

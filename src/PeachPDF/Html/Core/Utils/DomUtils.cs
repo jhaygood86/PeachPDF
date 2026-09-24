@@ -229,8 +229,8 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 }
 
-                if (!BreakValues.AvoidsBreak(prev.BreakAfter, context)
-                    && !BreakValues.AvoidsBreak(current.BreakBefore, context))
+                if (!BreakValues.AvoidsBreak(prev.BreakAfter.Value, context)
+                    && !BreakValues.AvoidsBreak(current.BreakBefore.Value, context))
                 {
                     break;
                 }
@@ -1554,6 +1554,21 @@ namespace PeachPDF.Html.Core.Utils
             return total;
         }
 
+        /// <summary>
+        /// Whether <paramref name="box"/>'s <em>used</em> <c>transform-style</c> is <c>preserve-3d</c> (CSS Transforms 2 §6.1): the computed value,
+        /// unless a grouping property forces <c>flat</c> - <c>overflow</c> other than <c>visible</c>, <c>opacity</c> below 1, a <c>filter</c>,
+        /// <c>backdrop-filter</c>, <c>clip-path</c>, <c>clip</c> or a <c>mix-blend-mode</c> other than <c>normal</c>. Such a box's children are flattened into it.
+        /// </summary>
+        public static bool EstablishesPreserve3d(CssBox box) =>
+            box.IsPreserve3dRequested
+            && box.Overflow.Value == PeachPDF.CSS.Overflow.Visible
+            && box.IsOpaque
+            && box.ActualMixBlendMode == BlendMode.Normal
+            && box.ActualFilterFunctions.Count == 0
+            && box.ActualBackdropFilterFunctions.Count == 0
+            && (string.IsNullOrEmpty(box.ClipPath) || box.ClipPath == Keywords.None)
+            && (string.IsNullOrEmpty(box.Clip) || box.Clip == Keywords.Auto);
+
         public static bool IsStackingContextBox(CssBox box)
         {
             if (box.IsRoot)
@@ -1594,6 +1609,13 @@ namespace PeachPDF.Html.Core.Utils
             }
 
             if (box.IsTransformed)
+            {
+                return true;
+            }
+
+            // transform-style: preserve-3d (its used value, see EstablishesPreserve3d) establishes a stacking context too (CSS Transforms 2 §6.1),
+            // so a positioned descendant of one of its planes stays with that plane instead of escaping to the 3D rendering context's root.
+            if (EstablishesPreserve3d(box))
             {
                 return true;
             }

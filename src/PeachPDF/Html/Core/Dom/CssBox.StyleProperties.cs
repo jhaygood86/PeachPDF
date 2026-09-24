@@ -375,6 +375,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>True for <c>backface-visibility: hidden</c>.</summary>
         public bool IsBackfaceHidden => DerivedStyle.IsBackfaceHidden;
 
+        /// <summary>True when the computed <c>transform-style</c> is <c>preserve-3d</c> (see <c>DomUtils.EstablishesPreserve3d</c> for the used value).</summary>
+        public bool IsPreserve3dRequested => DerivedStyle.IsPreserve3dRequested;
+
         /// <summary>Lazily computes the used value of the <c>opacity</c> property, clamped to [0, 1].</summary>
         public double ActualOpacity => DerivedStyle.ActualOpacity;
 
