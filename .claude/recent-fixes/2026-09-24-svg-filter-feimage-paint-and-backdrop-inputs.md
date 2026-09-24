@@ -24,6 +24,16 @@ Builds on [the raster backend](2026-09-24-raster-backend-svg-filters-backdrop-fl
 - **A document that reads the backdrop cannot use the shared form.** `RenderCachedInto` falls through to a direct `RenderInto` for
   `SvgDocument.ReadsBackdrop`.
 
+**Found by the post-change review (both fixed, each with a test).** The SVG-layer repaint first skipped the viewport clip that `RenderInto`
+applies, so content overflowing the viewport leaked into `BackgroundImage` (`SvgBackdropContext` now keeps the frame, the viewport rectangle
+and the viewBox matrix separately and re-pushes them in that order). And the thread-static page binding was global, so an unrelated SVG
+painted during the page repaint (an `<img>` SVG, a nested `<image>`) picked up another document's page; it is now bound to one document
+(`SvgRenderer.BindPageBackdrop`).
+
+**Cost to know about.** Each filtered element that reads the backdrop repaints everything before it, and an earlier one that also reads it
+does the same in turn (capped at three levels, and the page repaint is repeated at each), so k such elements in one SVG cost on the order of
+k^3 region-size evaluations in the worst case. Fine for the handful this is used for; memoising a backdrop per region would be the next step.
+
 **Trap.** `BackgroundImage` covers only the filter region, so `feOffset` past the region reads transparency. Two of my first tests asserted
 otherwise and "failed" until the geometry was corrected; the code was right.
 
