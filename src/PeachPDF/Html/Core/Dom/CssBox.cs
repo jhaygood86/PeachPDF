@@ -4058,18 +4058,20 @@ namespace PeachPDF.Html.Core.Dom
                     // both display types are always positioned by that engine (PositionAssignedByEngine)
                     // rather than by this generic dispatch's own frame.
                     //
-                    // The `|| Boxes.Any(IsFloated)` disjunct exists because DomUtils.ContainsInlinesOnly
-                    // now also reports true for a box holding floats (issue #1038: a float joins the same
-                    // inline formatting context as surrounding inline content) - including a multi-column
-                    // box whose direct children are floats with no other content, or floats mixed with
-                    // genuinely inline content. Without it, such a box would newly take the
-                    // ContainsInlinesOnly/CreateLineBoxes branch below instead of the columns engine,
-                    // silently dropping real column layout for that combination - a column is still a real
-                    // fragmentainer for a float-containing box exactly as it already is for one holding
-                    // genuine block-level content, so this box's own dispatch must not change just because
-                    // ContainsInlinesOnly's set of "inline-compatible" children grew.
+                    // The float disjunct exists because DomUtils.ContainsInlinesOnly now also reports true
+                    // for a box holding floats (issue #1038: a float joins the same inline formatting context
+                    // as surrounding inline content) - including a multi-column box whose direct children are
+                    // floats with no other content. Without it, such a box would newly take the
+                    // ContainsInlinesOnly/CreateLineBoxes branch below instead of the columns engine, which
+                    // is what lays those floats out (issue #1203). Only when nothing else is in flow: the
+                    // columns engine takes its children as block-level column content, so text sitting
+                    // directly beside a float (which has no anonymous block around it in a multi-column
+                    // parent) is left to the inline flow it always took, instead of being dropped.
                     var dispatchesToColumnsEngine = EstablishesMultiColumnContext && Boxes.Count > 0
-                        && (!DomUtils.ContainsInlinesOnly(this) || Boxes.Any(b => b.IsFloated));
+                        && (!DomUtils.ContainsInlinesOnly(this)
+                            || (Boxes.Any(b => b.IsFloated)
+                                && Boxes.All(b => b.IsExcludedFromFlow || b.DerivedStyle.ActualDisplay == Keywords.None
+                                                  || b is { HtmlTag: null, IsSpaceOrEmpty: true })));
                     var suppressMonolithicBreaking = MonolithicContent.IsMonolithic(this)
                         && !dispatchesToColumnsEngine
                         && DerivedStyle.ActualDisplay is not (Keywords.TableCell or Keywords.TableCaption);
@@ -4392,10 +4394,28 @@ namespace PeachPDF.Html.Core.Dom
         private bool OrphansAndWidowsMayMoveABreak => HtmlContainer is { PageWidthsSettled: true };
 
         /// <summary>
-        /// Lays this box's out-of-flow children out again, for an engine that narrowed its own inline
-        /// extent while filling fragmentainers and so resolved them against the wrong containing block.
+        /// Lays this box's absolutely positioned and page-floated children out again, for an engine that narrowed
+        /// its own inline extent while filling fragmentainers and so resolved them against the wrong
+        /// containing block.
         /// </summary>
-        internal ValueTask LayoutOutOfFlowChildrenAgain(RGraphics g) => LayoutOutOfFlowChildren(g);
+        /// <remarks>
+        /// Left/right floats are left where the fill placed them: a float belongs to the column box it appears
+        /// in (<see href="https://www.w3.org/TR/css-multicol-1/#mci">css-multicol-1 §2</see>), so it was resolved
+        /// against exactly the extent this pass would take away. Laying it out again at the container's own
+        /// width put a <c>float: right</c> at the container's right edge, in the last column, whichever
+        /// column it was in. A page float (<c>float: top</c>/<c>bottom</c>) is not column-scoped yet, so it is
+        /// still resolved against the container's own width.
+        /// </remarks>
+        internal async ValueTask LayoutOutOfFlowChildrenAgain(RGraphics g)
+        {
+            foreach (var childBox in Boxes)
+            {
+                if ((childBox.IsAbsolutelyPositioned || childBox.IsPageFloated) && childBox.DerivedStyle.ActualDisplay != Keywords.None)
+                {
+                    await LayoutBlockChild(g, childBox);
+                }
+            }
+        }
 
         /// <summary>
         /// Runs the block-children loop for a layout engine that drives fragmentainers of its own, so it

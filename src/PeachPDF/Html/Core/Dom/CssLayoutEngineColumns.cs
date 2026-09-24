@@ -97,12 +97,6 @@ namespace PeachPDF.Html.Core.Dom
                             && (b.HtmlTag != null || !b.IsSpaceOrEmpty))
                 .ToList();
 
-            if (children.Count == 0)
-            {
-                columnsBox.ActualBottom = columnsBox.Location.Y + columnsBox.ActualBoxSizeIncludedHeight;
-                return;
-            }
-
             // column-gap is shared with flex/grid (same CSS property, see CssBox.FlexColumnGap); its
             // initial value "normal" (CSS Box Alignment Module Level 3 §8.3) behaves differently per
             // layout mode — flex/grid resolve it to 0, multicol resolves it to exactly 1em (the value
@@ -131,6 +125,13 @@ namespace PeachPDF.Html.Core.Dom
             var (columnCount, columnWidth) = isVertical
                 ? (1, containerWidth)
                 : ResolveColumns(columnsBox, containerWidth, gap);
+
+            if (children.Count == 0)
+            {
+                columnsBox.ActualBottom = columnsBox.Location.Y + columnsBox.ActualBoxSizeIncludedHeight;
+                await LayoutOutOfFlowChildrenOnly(g, columnsBox, columnsBox.ClientLeft, columnWidth, containerWidth);
+                return;
+            }
 
             if (columnCount <= 1)
             {
@@ -338,6 +339,44 @@ namespace PeachPDF.Html.Core.Dom
             {
                 columnsBox.SetPendingBreakToken(RetargetToTheNextPage(carry, htmlContainer, startSlot));
             }
+        }
+
+        /// <summary>
+        /// Lays out a container that holds only out-of-flow children - floats, page floats, absolutely
+        /// positioned boxes - which the column-distribution list never contains, so nothing else would reach
+        /// them and they kept the geometry they were created with.
+        /// </summary>
+        /// <remarks>
+        /// With no in-flow content there is nothing to arrange into columns, so a float lands in the first
+        /// column, which is the column box it appears in (<see href="https://www.w3.org/TR/css-multicol-1/#mci">
+        /// css-multicol-1 §2</see>). The container's own height is then extended over its floats as any
+        /// formatting context root's is, by <see cref="CssLayoutEngine.ApplyHeight"/> once this returns.
+        /// Absolutely positioned boxes resolve against the container itself, as they do beside in-flow content.
+        /// </remarks>
+        private static async ValueTask LayoutOutOfFlowChildrenOnly(
+            RGraphics g, CssBox columnsBox, double columnLeft, double columnWidth, double containerWidth)
+        {
+            static bool IsLaidOutHere(CssBox box) =>
+                (box.IsFloated || box.IsPageFloated) && box.DerivedStyle.ActualDisplay != Keywords.None;
+
+            if (columnsBox.Boxes.Any(IsLaidOutHere))
+            {
+                PlaceColumn(columnsBox, columnLeft, columnWidth);
+
+                try
+                {
+                    foreach (var childBox in columnsBox.Boxes.Where(IsLaidOutHere))
+                    {
+                        await columnsBox.LayoutBlockChild(g, childBox);
+                    }
+                }
+                finally
+                {
+                    PlaceColumn(columnsBox, columnLeft, containerWidth);
+                }
+            }
+
+            await columnsBox.LayoutOutOfFlowChildrenAgain(g);
         }
 
         private const int MaxFillAttempts = 4;

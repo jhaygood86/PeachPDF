@@ -8,13 +8,9 @@ lands in — the way `float: footnote` already does for `float-reference: column
 (`HtmlContainerInt.ColumnAreaFor`/`ColumnFragmentainerRecord`/`FootnoteAreaHeightsByColumn`) — but
 today it is always treated as page-scoped instead.
 
-A page float placed directly as a child of a multi-column container fares worse: `CssLayoutEngineColumns.Layout`'s
-own children filter (`!b.IsExcludedFromFlow`) excludes it the same way it already excludes
-`float: left/right` and absolutely/fixed-positioned children, so it is dropped entirely (all-zero
-geometry) rather than laid out at all — the pre-existing gap tracked by
-[#1203](https://github.com/jhaygood86/PeachPDF/issues/1203)
-(see [a-multicol-containers-floated-children-are-never-laid-out.md](a-multicol-containers-floated-children-are-never-laid-out.md)),
-now also covering these six new `Floating` values.
+A page float placed directly as a child of a multi-column container is laid out (it used to be dropped
+with all-zero geometry, [#1203](https://github.com/jhaygood86/PeachPDF/issues/1203)), but against the page,
+not the column - the same gap this file is about.
 
 This mirrors `float: footnote`'s own history: column-scoped note areas were a dedicated follow-up
 after page-level footnotes shipped, not part of the original feature. Page floats take the same path

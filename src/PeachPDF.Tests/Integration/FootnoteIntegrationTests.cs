@@ -193,20 +193,137 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task Footnote_OnBlockLevelSource_IsANoOp()
+        public async Task Footnote_OnBlockLevelSource_BetweenBlocks_LeavesAnInlineCallInAnAnonymousBlock()
         {
+            // css-gcpm-3 §2.2 replaces the element with an inline ::footnote-call whatever the source's own
+            // display was; among block siblings that call sits in an anonymous block (CSS 2.1 §9.2.1.1), on
+            // its own line between the paragraphs (issue #753).
             var html = Wrap(@"
-                <div id='block' style='float:footnote;'>Block footnote body</div>");
+                <p id='before' style='margin:0'>Before</p>
+                <div id='block' style='float:footnote;'>Block footnote body</div>
+                <p id='after' style='margin:0'>After</p>");
+
+            var (root, container) = await LayoutAsync(html);
+
+            var call = Assert.Single(container.FootnoteCalls);
+            Assert.Equal("block", call.Body.HtmlTag?.TryGetAttribute("id"));
+            Assert.Null(call.Body.ParentBox);
+
+            var wrapper = call.ParentBox!;
+            Assert.True(wrapper.IsInlineRunWrapper);
+            Assert.Null(wrapper.HtmlTag);
+
+            var before = FindById(root, "before")!;
+            var after = FindById(root, "after")!;
+            Assert.Same(before.ParentBox, wrapper.ParentBox);
+            Assert.True(wrapper.Location.Y >= before.ActualBottom - 0.01, "the call's line follows the first paragraph");
+            Assert.True(after.Location.Y >= wrapper.ActualBottom - 0.01, "and the second paragraph follows the call's line");
+
+            Assert.True(container.FootnoteAreaHeightsBySlot.GetValueOrDefault(0) > 0, "the body reserves a note area");
+        }
+
+        [Fact]
+        public async Task Footnote_OnBlockLevelSource_AsTheOnlyChild_LeavesTheCallAsTheContainersContent()
+        {
+            var html = Wrap(@"<section id='c'><div style='float:footnote;'>Block footnote body</div></section>");
+
+            var (root, container) = await LayoutAsync(html);
+
+            var call = Assert.Single(container.FootnoteCalls);
+            Assert.Same(FindById(root, "c"), call.ParentBox);
+            Assert.DoesNotContain(call.ParentBox!.Boxes, b => b.IsInlineRunWrapper);
+        }
+
+        [Fact]
+        public async Task Footnote_OnBlockLevelSource_BesideAnInlineRun_JoinsThatRunsLine()
+        {
+            // The text either side of the source was wrapped in anonymous blocks because the source counted as
+            // block-level; the call replaces it inside one merged run, so the words read on around it.
+            var html = Wrap(@"<div id='c' style='width:400pt'>Text before <div style='float:footnote;'>Body</div> and after<p id='p' style='margin:0'>Para</p></div>");
+
+            var (root, container) = await LayoutAsync(html);
+
+            var call = Assert.Single(container.FootnoteCalls);
+            var wrapper = call.ParentBox!;
+            Assert.True(wrapper.IsInlineRunWrapper);
+            Assert.Single(wrapper.LineBoxes);
+
+            // Exactly one anonymous run in the container: the two halves were merged around the call.
+            var outer = FindById(root, "c")!;
+            Assert.Single(outer.Boxes, b => b.IsInlineRunWrapper);
+        }
+
+        [Theory]
+        [InlineData("position:absolute;")]
+        [InlineData("display:none;")]
+        [InlineData("display:table-cell;")]
+        public async Task Footnote_OnASourceThatCannotBeOne_StaysOrdinaryContent(string style)
+        {
+            var html = Wrap($"<div id='c'><p>Text</p><div id='block' style='float:footnote; {style}'>Body</div></div>");
 
             var (root, container) = await LayoutAsync(html);
 
             Assert.Empty(container.FootnoteCalls);
+            Assert.NotNull(FindById(root, "block")!.ParentBox);
+        }
 
-            // Still an ordinary, in-flow tree member - never detached, since a block-level float:footnote
-            // source is left alone (an accepted gap, behaving as float: none) rather than pulled out.
-            var block = FindById(root, "block");
-            Assert.NotNull(block);
-            Assert.NotNull(block!.ParentBox);
+        [Fact]
+        public async Task Footnote_OnBlockLevelSourceWithBlockChildren_MovesWholeIntoTheNoteArea()
+        {
+            var html = Wrap(@"
+                <p>Before</p>
+                <div id='block' style='float:footnote;'><p>Paragraph one</p><p>Paragraph two</p></div>
+                <p>After</p>");
+
+            var (_, container) = await LayoutAsync(html);
+
+            var call = Assert.Single(container.FootnoteCalls);
+            Assert.Equal(2, call.Body.Boxes.Count(b => b.HtmlTag?.Name == "p"));
+        }
+
+        // ─── Table cells, flex and grid items, repeated header groups (issue #750) ───
+
+        [Theory]
+        [InlineData("<table><tr><td id='host'>Cell<sup style='float:footnote'>Cell note</sup> text</td></tr></table>")]
+        [InlineData("<div style='display:flex'><div id='host'>Item<sup style='float:footnote'>Item note</sup> text</div></div>")]
+        [InlineData("<div style='display:grid'><div id='host'>Item<sup style='float:footnote'>Item note</sup> text</div></div>")]
+        public async Task Footnote_InsideATableCellOrFlexOrGridItem_ReservesANoteAreaOnItsPage(string html)
+        {
+            var (root, container) = await LayoutAsync(Wrap(html));
+
+            var call = Assert.Single(container.FootnoteCalls);
+            Assert.Same(FindById(root, "host"), Ancestors(call).First(b => b.HtmlTag?.TryGetAttribute("id") == "host"));
+            Assert.True(container.FootnoteAreaHeightsBySlot.GetValueOrDefault(0) > 0, "the body reserves a note area");
+
+            var area = SoleFootnoteArea(container.FragmentTree!.Fragmentainers[0]);
+            Assert.Single(area.Bodies);
+        }
+
+        [Fact]
+        public async Task Footnote_AsADirectFlexChild_BecomesTheCallInItsPlace()
+        {
+            // A direct child of a flex container is an item, and float has no effect on an item
+            // (css-flexbox-1 section 3) - but a footnote is not a plain float: the source is replaced by its
+            // call, which is then the item, and the note still reaches the page's note area.
+            var (root, container) = await LayoutAsync(Wrap(
+                "<div id='flex' style='display:flex'><sup style='float:footnote'>Direct note</sup><span>Sibling</span></div>"));
+
+            var call = Assert.Single(container.FootnoteCalls);
+            Assert.Same(FindById(root, "flex"), call.ParentBox);
+            Assert.True(container.FootnoteAreaHeightsBySlot.GetValueOrDefault(0) > 0);
+        }
+
+        [Fact]
+        public async Task Footnote_InsideARepeatedTableHeader_StaysOrdinaryContent()
+        {
+            // A repeated <thead> is laid out once and translated onto every page, so a call inside it has no
+            // page of its own to resolve a note against; it is left as the ordinary content it would be
+            // without float: footnote rather than attached to whichever page laid out last.
+            var (root, container) = await LayoutAsync(Wrap(
+                "<table><thead><tr><th id='h'>Head<sup id='s' style='float:footnote'>Header note</sup></th></tr></thead>" +
+                "<tbody><tr><td>Body</td></tr></tbody></table>"));
+
+            Assert.Empty(container.FootnoteCalls);
         }
 
         [Fact]
@@ -584,6 +701,11 @@ namespace PeachPDF.Tests.Integration
         /// <c>float-reference: column</c> call gives its column an area of its own - every test here is
         /// about the page-level area, so asserting there is exactly one is part of the assertion.
         /// </summary>
+        private static System.Collections.Generic.IEnumerable<CssBox> Ancestors(CssBox box)
+        {
+            for (var current = box.ParentBox; current is not null; current = current.ParentBox) yield return current;
+        }
+
         private static FootnoteAreaFragment SoleFootnoteArea(FragmentainerFragment page)
         {
             Assert.NotNull(page.FootnoteAreas);
