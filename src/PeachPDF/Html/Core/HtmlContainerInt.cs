@@ -160,8 +160,8 @@ namespace PeachPDF.Html.Core
         /// edge (<c>float: top</c>, or <c>top-bottom</c>/<c>snap</c> resolving to <c>top</c>), per slot -
         /// the band-start analogue of <see cref="FootnoteAreaHeightsBySlot"/>. Seeded into that slot's
         /// <see cref="Fragmentation.FragmentainerContext"/> via <c>ReserveBandStart</c> in
-        /// <see cref="LayoutDocument"/>. Only page-level (<c>float-reference: column</c> page floats are
-        /// not reserved per column - see <c>.claude/accepted-gaps/page-floats-are-not-column-scoped.md</c>).
+        /// <see cref="LayoutDocument"/>. Only page-level: a <c>float-reference: column</c> page float is
+        /// reserved in its column instead, see <see cref="TopFloatAreaHeightsByColumn"/>.
         /// </summary>
         internal Dictionary<int, double> TopFloatAreaHeightsBySlot { get; private set; } = [];
 
@@ -185,6 +185,65 @@ namespace PeachPDF.Html.Core
         /// it lands on.
         /// </summary>
         internal Dictionary<CssBox, double> PageFloatPlacements { get; private set; } = [];
+
+        /// <summary>
+        /// The room a <c>float-reference: column</c> page float pinned to a column's block-start edge
+        /// needs in that column, as resolved on the previous attempt - the column-scoped counterpart of
+        /// <see cref="TopFloatAreaHeightsBySlot"/>, seeded into that column's own
+        /// <c>ReserveBandStart</c> by the multi-column engine. Absent when no page float landed there.
+        /// </summary>
+        internal Dictionary<Fragmentation.ColumnAreaKey, double> TopFloatAreaHeightsByColumn { get; private set; } = [];
+
+        /// <summary>
+        /// The block-end counterpart of <see cref="TopFloatAreaHeightsByColumn"/>. Composed with the
+        /// column's footnote area (<see cref="ColumnFootnoteInsetFor"/>) into one <c>ReserveBandEnd</c>.
+        /// </summary>
+        internal Dictionary<Fragmentation.ColumnAreaKey, double> BottomFloatAreaHeightsByColumn { get; private set; } = [];
+
+        /// <summary>How much of a column's block-start edge a page float has claimed, as resolved on the previous attempt.</summary>
+        internal double ColumnPageFloatTopInsetFor(Fragmentation.ColumnAreaKey key) =>
+            TopFloatAreaHeightsByColumn.GetValueOrDefault(key, 0);
+
+        /// <summary>How much of a column's block-end edge a page float has claimed, as resolved on the previous attempt.</summary>
+        internal double ColumnPageFloatBottomInsetFor(Fragmentation.ColumnAreaKey key) =>
+            BottomFloatAreaHeightsByColumn.GetValueOrDefault(key, 0);
+
+        /// <summary>
+        /// The column each <c>float-reference: column</c> page float was last laid out in, as the column's
+        /// own fragmentainer said so at the moment (<see cref="NotePageFloatColumn"/>). A float's
+        /// <see cref="CssBox.Location"/> cannot answer this after the fact: layout moves it to its resolved
+        /// edge, and a container that spans pages lays the float out in a slot other than the one an earlier
+        /// pass left it in.
+        /// </summary>
+        private Dictionary<CssBox, Fragmentation.ColumnAreaKey> PageFloatColumns { get; } = [];
+
+        /// <summary>
+        /// Records which column <paramref name="box"/> is being laid out in, from the fragmentainer being
+        /// filled. Outside any column - page-level flow - it forgets an earlier answer, since the float has
+        /// moved to a place where the page is its reference. A measurement pass has no fragmentainer and
+        /// leaves the record alone, so the last real placement stands.
+        /// </summary>
+        internal void NotePageFloatColumn(CssBox box)
+        {
+            if (box.FloatReference.Value != FloatReference.Column || CurrentFragmentainer is not { } filling) return;
+
+            if (filling.ColumnKey is { } key)
+            {
+                PageFloatColumns[box] = key;
+            }
+            else if (!filling.HasOwnBand)
+            {
+                PageFloatColumns.Remove(box);
+            }
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is a page float that resolves against the column it sits in
+        /// (<c>float-reference: column</c>, laid out inside one of <paramref name="columnsBox"/>'s columns)
+        /// rather than against the page.
+        /// </summary>
+        internal bool IsColumnScopedPageFloat(CssBox box, CssBox columnsBox) =>
+            HasRealPageGrid && ColumnRecordForPageFloat(box) is { } record && ReferenceEquals(record.ColumnsBox, columnsBox);
 
         /// <summary>
         /// The total band-end reservation <paramref name="slot"/> needs seeded into its
@@ -1184,6 +1243,9 @@ namespace PeachPDF.Html.Core
             PageFloats.Clear();
             TopFloatAreaHeightsBySlot = [];
             BottomFloatAreaHeightsBySlot = [];
+            TopFloatAreaHeightsByColumn = [];
+            BottomFloatAreaHeightsByColumn = [];
+            PageFloatColumns.Clear();
             // Keyed by CssBox, same reference-leak reason as the footnote dictionaries above.
             PageFloatPlacements = [];
             // Keyed by CssBox/CssBoxFootnoteCall, same reason ClearBlankSlotReservations() below is -
@@ -3691,11 +3753,19 @@ namespace PeachPDF.Html.Core
             IReadOnlyDictionary<CssBoxFootnoteCall, (double Top, double Left)> callAnchors)
         {
             if (call.Body.FloatReference.Value != FloatReference.Column) return null;
-            if (ColumnFragmentainers.Count == 0) return null;
             if (!callAnchors.TryGetValue(call, out var anchor)) return null;
 
-            var (top, left) = anchor;
+            return ColumnRecordAt(slot, anchor.Top, anchor.Left);
+        }
 
+        /// <summary>
+        /// The column of pagination slot <paramref name="slot"/> whose inline span holds
+        /// <paramref name="left"/> and whose block band holds <paramref name="top"/>, or null when the point
+        /// is in no column.
+        /// </summary>
+        private Fragmentation.ColumnFragmentainerRecord? ColumnRecordAt(int slot, double top, double left)
+        {
+            if (ColumnFragmentainers.Count == 0) return null;
             if (double.IsNaN(left)) return null;
 
             foreach (var record in ColumnFragmentainers)
@@ -4090,24 +4160,33 @@ namespace PeachPDF.Html.Core
         /// containing block or detached re-layout is needed the way a footnote body's is.
         /// </para>
         /// <para>
-        /// <c>float-reference</c> is not consulted: every page float resolves against the page, regardless
-        /// of its own <c>float-reference</c> value, including <c>column</c> - see
-        /// <c>.claude/accepted-gaps/page-floats-are-not-column-scoped.md</c>.
+        /// A <c>float-reference: column</c> float resolves against the column its anchor sits in
+        /// (<see cref="ColumnRecordForPageFloat"/>) and everything else against the page, including the
+        /// initial <c>inline</c> - see
+        /// <c>.claude/accepted-gaps/page-float-keywords-ignore-an-inline-float-reference.md</c>.
         /// </para>
         /// </remarks>
         private bool ResolvePageFloatsForThisAttempt()
         {
             var previousTop = TopFloatAreaHeightsBySlot;
             var previousBottom = BottomFloatAreaHeightsBySlot;
+            var previousTopByColumn = TopFloatAreaHeightsByColumn;
+            var previousBottomByColumn = BottomFloatAreaHeightsByColumn;
             var previousPlacements = PageFloatPlacements;
 
             var currentTop = new Dictionary<int, double>();
             var currentBottom = new Dictionary<int, double>();
+            var currentTopByColumn = new Dictionary<Fragmentation.ColumnAreaKey, double>();
+            var currentBottomByColumn = new Dictionary<Fragmentation.ColumnAreaKey, double>();
             var currentPlacements = new Dictionary<CssBox, double>();
 
             if (HasRealPageGrid)
             {
-                var bySlot = new Dictionary<int, List<CssBox>>();
+                // One area per page slot that holds a page-referenced float, and one per column that holds a
+                // column-referenced one (css-page-floats-3 section 3.1: a float goes to the edge of the
+                // reference it names, here the column its anchor sits in).
+                var pageAreas = new Dictionary<int, PageFloatArea>();
+                var columnAreas = new Dictionary<Fragmentation.ColumnAreaKey, PageFloatArea>();
 
                 foreach (var box in PageFloats)
                 {
@@ -4117,31 +4196,48 @@ namespace PeachPDF.Html.Core
                     // clamp, which reads the resulting slot the same way) - PageIndexOf applies no boundary
                     // convention and a top edge exactly on a boundary belongs to the slot it opens.
                     var slot = SlotStartingAt(box.Location.Y);
-                    if (!bySlot.TryGetValue(slot, out var list))
-                        bySlot[slot] = list = [];
-                    list.Add(box);
+
+                    if (ColumnRecordForPageFloat(box) is { } column)
+                    {
+                        if (!columnAreas.TryGetValue(column.Key, out var columnArea))
+                        {
+                            columnAreas[column.Key] = columnArea = new PageFloatArea(
+                                slot, column.Key, column.BandTop, column.BandBottom, ColumnFootnoteInsetFor(column.Key));
+                        }
+
+                        columnArea.Boxes.Add(box);
+                        continue;
+                    }
+
+                    if (!pageAreas.TryGetValue(slot, out var pageArea))
+                    {
+                        // A footnote area on this same slot (if any) already claims room at the true bottom
+                        // edge, resolved earlier this same attempt (ResolveFootnotesForThisAttempt runs first
+                        // in PerformLayout's convergence loop) - page floats stack outside it (see the class
+                        // remarks and TotalBandEndReservationFor), so both the top-bottom fit check and the
+                        // bottom-edge anchor below have to know how much of the bottom it has already spent.
+                        pageAreas[slot] = pageArea = new PageFloatArea(
+                            slot, null, PageTopOf(slot), PageBottomOf(slot), FootnoteAreaHeightsBySlot.GetValueOrDefault(slot));
+                    }
+
+                    pageArea.Boxes.Add(box);
                 }
 
-                foreach (var (slot, boxes) in bySlot)
+                foreach (var area in pageAreas.Values.Concat(columnAreas.Values))
                 {
-                    var pageTop = PageTopOf(slot);
-                    var pageBottom = PageBottomOf(slot);
+                    var boxes = area.Boxes;
+                    var pageTop = area.Top;
+                    var pageBottom = area.Bottom;
                     var bandHeight = pageBottom - pageTop;
-
-                    // A footnote area on this same slot (if any) already claims room at the true bottom
-                    // edge, resolved earlier this same attempt (ResolveFootnotesForThisAttempt runs first
-                    // in PerformLayout's convergence loop) - page floats stack outside it (see the class
-                    // remarks and TotalBandEndReservationFor), so both the top-bottom fit check and the
-                    // bottom-edge anchor below have to know how much of the bottom it has already spent.
-                    var footnoteHeight = FootnoteAreaHeightsBySlot.GetValueOrDefault(slot);
+                    var footnoteHeight = area.FootnoteHeight;
                     var bottomEdge = pageBottom - footnoteHeight;
 
                     // First pass, in document order: decide which edge each float belongs to and total up
                     // both edges. top-bottom's "does it fit at top" and snap's "which edge is nearer" both
                     // need this walked in document order, since top-bottom's decision for one float depends
-                    // on every earlier float on the same slot (either edge) already having claimed its
+                    // on every earlier float in the same area (either edge) already having claimed its
                     // share - the check below is against the room actually left over both edges, not
-                    // against the whole band as if nothing else on this slot existed.
+                    // against the whole band as if nothing else in this area existed.
                     var atBottom = new Dictionary<CssBox, bool>();
                     double topTotal = 0, bottomTotal = 0;
 
@@ -4159,7 +4255,7 @@ namespace PeachPDF.Html.Core
                             // docs/html-css-support.md's float row): try top; fall back to bottom once the
                             // top edge has no room left for it - "room left" meaning what remains of the
                             // whole band once every other top float, bottom float, and the footnote area
-                            // already on this slot have claimed theirs.
+                            // already in this area have claimed theirs.
                             Floating.TopBottom => topTotal + height + bottomTotal + footnoteHeight > bandHeight,
                             // Whichever edge the float's own natural (static) position is nearer to.
                             Floating.Snap => (box.Location.Y - pageTop) > (pageBottom - box.Location.Y),
@@ -4171,11 +4267,11 @@ namespace PeachPDF.Html.Core
                     }
 
                     // Second pass: place each float within its edge's own strip, in document order - the
-                    // first float on an edge sits closest to the flow content (the page's own top edge for
-                    // a top float, the boundary with whatever else already reserves this slot's bottom -
+                    // first float on an edge sits closest to the flow content (the area's own top edge for
+                    // a top float, the boundary with whatever else already reserves this area's bottom -
                     // a footnote area, see TotalBandEndReservationFor - for a bottom float), later floats
                     // on the same edge stack further from flow content, and the last one is flush with the
-                    // page's own physical edge (or, for a bottom float, the footnote area's own top edge,
+                    // area's own physical edge (or, for a bottom float, the footnote area's own top edge,
                     // via bottomEdge above).
                     double topRunning = 0, bottomRunning = 0;
 
@@ -4196,20 +4292,60 @@ namespace PeachPDF.Html.Core
                         }
                     }
 
-                    if (topTotal > 0) currentTop[slot] = topTotal;
-                    if (bottomTotal > 0) currentBottom[slot] = bottomTotal;
+                    if (area.Column is { } key)
+                    {
+                        if (topTotal > 0) currentTopByColumn[key] = topTotal;
+                        if (bottomTotal > 0) currentBottomByColumn[key] = bottomTotal;
+                    }
+                    else
+                    {
+                        if (topTotal > 0) currentTop[area.Slot] = topTotal;
+                        if (bottomTotal > 0) currentBottom[area.Slot] = bottomTotal;
+                    }
                 }
             }
 
             TopFloatAreaHeightsBySlot = currentTop;
             BottomFloatAreaHeightsBySlot = currentBottom;
+            TopFloatAreaHeightsByColumn = currentTopByColumn;
+            BottomFloatAreaHeightsByColumn = currentBottomByColumn;
             PageFloatPlacements = currentPlacements;
 
             var changed = DictionaryValuesChanged(previousTop, currentTop)
                           || DictionaryValuesChanged(previousBottom, currentBottom)
+                          || DictionaryValuesChanged(previousTopByColumn, currentTopByColumn)
+                          || DictionaryValuesChanged(previousBottomByColumn, currentBottomByColumn)
                           || DictionaryValuesChanged(previousPlacements, currentPlacements);
 
             return changed;
+        }
+
+        /// <summary>
+        /// The page floats sharing one reference: a page slot's content area, or a column's band.
+        /// <see cref="FootnoteHeight"/> is what a footnote area has already spent at the block-end edge of
+        /// that same reference.
+        /// </summary>
+        private sealed record PageFloatArea(int Slot, Fragmentation.ColumnAreaKey? Column, double Top, double Bottom, double FootnoteHeight)
+        {
+            internal List<CssBox> Boxes { get; } = [];
+        }
+
+        /// <summary>
+        /// The column <paramref name="box"/> resolves against, or null when it resolves against the page -
+        /// <c>float-reference</c>'s other values, and a <c>column</c> float that turns out not to be inside a
+        /// multi-column container at all (css-page-floats-3 section 3.1: the reference then falls back to
+        /// the one the float would otherwise have, which for a page float is the page).
+        /// </summary>
+        private Fragmentation.ColumnFragmentainerRecord? ColumnRecordForPageFloat(CssBox box)
+        {
+            if (!PageFloatColumns.TryGetValue(box, out var key)) return null;
+
+            foreach (var record in ColumnFragmentainers)
+            {
+                if (record.Key == key) return record;
+            }
+
+            return null;
         }
 
         /// <summary>

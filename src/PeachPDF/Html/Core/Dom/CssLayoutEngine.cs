@@ -1882,6 +1882,9 @@ namespace PeachPDF.Html.Core.Dom
         private static void FloatBoxPageArea(CssBox box)
         {
             if (box.HtmlContainer is not { HasRealPageGrid: true } container) return;
+
+            container.NotePageFloatColumn(box);
+
             if (!container.PageFloatPlacements.TryGetValue(box, out var top)) return;
 
             box.Location = new RPoint(box.Location.X, top);

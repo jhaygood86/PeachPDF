@@ -24,5 +24,5 @@ CSS, and there is no CSS here to implement. `footnote-style-position` is out for
 The other half of the original note - column-scoped footnote areas - **is** closed: css-gcpm-3 leaves
 it as an open issue pointing at page floats, and PeachPDF now implements it through the
 standards-track [css-page-floats](https://drafts.csswg.org/css-page-floats/) `float-reference: column`
-(see [float-reference-is-inert-outside-a-footnote.md](float-reference-is-inert-outside-a-footnote.md)
+(see [page-float-keywords-ignore-an-inline-float-reference.md](page-float-keywords-ignore-an-inline-float-reference.md)
 for what that property does *not* do).

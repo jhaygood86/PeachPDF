@@ -4412,6 +4412,11 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if ((childBox.IsAbsolutelyPositioned || childBox.IsPageFloated) && childBox.DerivedStyle.ActualDisplay != Keywords.None)
                 {
+                    // A page float resolved against the column it sits in was already laid out there, at
+                    // that column's width and inline position; laying it out again at this container's own
+                    // would move it out of its column.
+                    if (childBox.IsPageFloated && HtmlContainer!.IsColumnScopedPageFloat(childBox, this)) continue;
+
                     await LayoutBlockChild(g, childBox);
                 }
             }
@@ -6265,6 +6270,17 @@ namespace PeachPDF.Html.Core.Dom
                         {
                             top = Math.Max(top, topFloatContainer.PageTopOf(landingSlot) + topInset);
                         }
+                    }
+
+                    // The same floor for a page float that resolved against a column (float-reference:
+                    // column): its room is reserved at the head of that column's own band, which the column's
+                    // fragmentainer carries (CssLayoutEngineColumns.FillColumns seeds it), not at the head
+                    // of the page.
+                    if (child.HtmlContainer is { HasRealPageGrid: true, CurrentFragmentainer: { HasOwnBand: true } columnContext } columnContainer
+                        && columnContext.SlotIndex == columnContainer.SlotStartingAt(top)
+                        && columnContext.BandStartInsetOf(columnContext.SlotIndex) is > 0 and var columnTopInset)
+                    {
+                        top = Math.Max(top, columnContext.BandTop + columnTopInset);
                     }
 
                     return new BlockChildOffset(left, top, PositionedInBlockFlow: true);

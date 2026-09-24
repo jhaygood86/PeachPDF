@@ -248,7 +248,7 @@ namespace PeachPDF.Html.Core.Dom
                 // the same amount - they compose, and would double-count it.
                 var pageBudget = htmlContainer.HasRealPageGrid
                     ? htmlContainer.PageBottomOf(startSlot)
-                      - htmlContainer.FootnoteAreaHeightsBySlot.GetValueOrDefault(startSlot, 0)
+                      - htmlContainer.TotalBandEndReservationFor(startSlot)
                       - boxTop
                     : double.MaxValue / 4;
 
@@ -645,11 +645,31 @@ namespace PeachPDF.Html.Core.Dom
                 // advances, and the container defers page after page until HasAlreadyBeenEntered trips
                 // the monolithic last resort. Declining lets the area overflow the column instead, which
                 // is the same answer the page path already gives for an over-tall note area.
-                var columnFootnoteInset = htmlContainer.ColumnFootnoteInsetFor(columnKey);
-                if (columnFootnoteInset > 0 && columnFootnoteInset < target)
+                //
+                // A column-scoped page float (float-reference: column) claims room at the column's own edges
+                // the same way: its block-end strip composes with the note area into that one reservation,
+                // and its block-start strip is the mirror at the head. Both are declined together if the
+                // pair would leave no room, for the reason above.
+                var columnTopInset = htmlContainer.ColumnPageFloatTopInsetFor(columnKey);
+                var columnBottomInset = htmlContainer.ColumnFootnoteInsetFor(columnKey)
+                                        + htmlContainer.ColumnPageFloatBottomInsetFor(columnKey);
+
+                if (columnTopInset + columnBottomInset >= target)
                 {
-                    column.ReserveBandEnd(startSlot, columnFootnoteInset);
+                    columnTopInset = columnBottomInset = 0;
                 }
+
+                if (columnBottomInset > 0)
+                {
+                    column.ReserveBandEnd(startSlot, columnBottomInset);
+                }
+
+                if (columnTopInset > 0)
+                {
+                    column.ReserveBandStart(startSlot, columnTopInset);
+                }
+
+                column.ColumnKey = columnKey;
 
                 var previousContext = htmlContainer.EnterNestedFragmentainer(column);
 
