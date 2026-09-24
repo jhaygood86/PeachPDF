@@ -1829,9 +1829,6 @@ page edge without manual, page-aware absolute positioning.
 - `float-reference: column` is not honored for a page float — it always resolves against the page, even
   inside a multi-column container, and a page float placed directly as a multi-column container's own
   child is not laid out at all.
-- The top-edge reservation is honored by ordinary block-level placement, but not by inline content that
-  is still flowing (mid-paragraph) when it crosses onto a page that reserves top space — such content
-  may render into the reserved strip instead of below it.
 - Prince's own extensions on top of this keyword set (`-prince-float-reference`, `-prince-float-policy`,
   `top-corner`/`bottom-corner`, `sidenote`/`wide` reference targets, `align-top`/`align-bottom`,
   `inline-footnote`) are not implemented.

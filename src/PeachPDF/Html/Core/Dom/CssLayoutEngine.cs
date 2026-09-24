@@ -351,10 +351,18 @@ namespace PeachPDF.Html.Core.Dom
             // Resumed content starts at the new fragmentainer's own content edge, below any border and padding
             // a `box-decoration-break: clone` box re-opens with there (css-break-3 §6.2). `text-indent`
             // applies to the first formatted line only (CSS Text §5), so it is not re-applied here.
+            //
+            // Below the room a page float pinned to this fragmentainer's head (css-page-floats `float: top`)
+            // has claimed, too. A block-level box is kept off that strip by ResolveBlockChildOffset's floor,
+            // but a paragraph that started on an earlier page is not placed by it: its lines continue from
+            // the content edge, which is inside the strip (issue #1273). The same floor, taken the same way,
+            // so a document with no page float reads zero here.
             var startY = resume is not null && context is not null
-                ? context.ResumeContentTop + (blockBox.HtmlContainer is { HasCloneDecorations: true }
-                    ? DomUtils.ClonedBlockStart(blockBox, stopAt: null)
-                    : 0)
+                ? Math.Max(
+                    context.ResumeContentTop + (blockBox.HtmlContainer is { HasCloneDecorations: true }
+                        ? DomUtils.ClonedBlockStart(blockBox, stopAt: null)
+                        : 0),
+                    context.BandTop + context.BandStartInsetOf(context.SlotIndex))
                 : blockBox.ClientTop;
 
             // The last line an earlier fragmentainer kept, read before the seed line joins the list.
