@@ -19,8 +19,6 @@ Consequences a document author can notice:
   it used to collapse to a sliver at the origin and hide the element. This applies to vector filters too.
 - A document targeting PDF/A-1 or PDF/X-1a/X-3 that uses one of these filters is now rejected (a bitmap with soft edges needs a
   soft mask, which those levels forbid) instead of silently rendering unfiltered.
-- `feImage` and the `BackgroundImage`/`BackgroundAlpha`/`FillPaint`/`StrokePaint` inputs are still unsupported; a filter using one
-  still paints unfiltered.
 
 Verified at the previous release tag: `docs/supported-svg-features.md` listed all of the above primitives under "Unsupported SVG
 Features".

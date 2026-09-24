@@ -118,29 +118,27 @@ namespace PeachPDF.Adapters
         public override void PushClipExclude(RRect rect)
         { }
 
-        // The accumulated linear part of the pushed transforms (a, b, c, d of x' = a x + c y, y' = b x + d y), so a raster
-        // region can pick a pixel pitch that is right after the transforms are applied.
-        private readonly Stack<(double A, double B, double C, double D)> _linearStack = [];
-        private (double A, double B, double C, double D) _linear = (1, 0, 0, 1);
+        // The accumulated pushed transforms, so a raster region can pick a pixel pitch that is right after the transforms are
+        // applied (from the linear part) and an SVG backdrop repaint can map between coordinate spaces (the whole matrix).
+        private readonly Stack<RMatrix> _transformStack = [];
+        private RMatrix _accumulated = RMatrix.Identity;
+
+        internal override RMatrix CurrentTransform => _accumulated;
 
         internal override (double X, double Y) TransformScale
         {
             get
             {
-                var x = Math.Sqrt(_linear.A * _linear.A + _linear.B * _linear.B);
-                var y = Math.Sqrt(_linear.C * _linear.C + _linear.D * _linear.D);
+                var x = Math.Sqrt(_accumulated.M11 * _accumulated.M11 + _accumulated.M12 * _accumulated.M12);
+                var y = Math.Sqrt(_accumulated.M21 * _accumulated.M21 + _accumulated.M22 * _accumulated.M22);
                 return (x > 1e-6 ? x : 1.0, y > 1e-6 ? y : 1.0);
             }
         }
 
         public override void PushTransform(RMatrix matrix)
         {
-            _linearStack.Push(_linear);
-            _linear = (
-                matrix.M11 * _linear.A + matrix.M12 * _linear.C,
-                matrix.M11 * _linear.B + matrix.M12 * _linear.D,
-                matrix.M21 * _linear.A + matrix.M22 * _linear.C,
-                matrix.M21 * _linear.B + matrix.M22 * _linear.D);
+            _transformStack.Push(_accumulated);
+            _accumulated = matrix.Then(_accumulated);
 
             _g.Save();
             _g.MultiplyTransform(new XMatrix(
@@ -150,8 +148,8 @@ namespace PeachPDF.Adapters
 
         public override void PopTransform()
         {
-            if (_linearStack.Count > 0)
-                _linear = _linearStack.Pop();
+            if (_transformStack.Count > 0)
+                _accumulated = _transformStack.Pop();
 
             _g.Restore();
         }
@@ -461,8 +459,12 @@ namespace PeachPDF.Adapters
             return (tileGraphics, new ImageAdapter(form));
         }
 
-        internal override RasterSurfaceScope? BeginRasterSurface(RRect layoutBounds, double? dpiOverride = null) =>
-            RasterSurfaceFactory.Create(_adapter, PixelsPerPoint, layoutBounds, dpiOverride ?? _adapter.RasterizationDpi, _adapter.MaxRasterPixels, TransformScale);
+        internal override RasterSurfaceScope? BeginRasterSurface(RRect layoutBounds, double? dpiOverride = null)
+        {
+            var scope = RasterSurfaceFactory.Create(_adapter, PixelsPerPoint, layoutBounds, dpiOverride ?? _adapter.RasterizationDpi, _adapter.MaxRasterPixels, TransformScale);
+            scope?.Graphics.SeedTransform(_accumulated);
+            return scope;
+        }
 
         internal override bool FlattensTransparency =>
             _g.Owner is { } owner && owner.Options.FlattenTransparency &&

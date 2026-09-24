@@ -1,5 +1,6 @@
 using PeachPDF.Html.Adapters.Entities;
 using System;
+using System.Runtime.InteropServices;
 
 namespace PeachPDF.Raster.Filters;
 
@@ -142,7 +143,18 @@ internal static partial class FilterOps
         }
     }
 
+    /// <summary>Sets every pixel to <paramref name="color"/> at <paramref name="opacity"/> (premultiplied on the way in).</summary>
     public static void Fill(RasterSurface surface, RColor color, double opacity)
+    {
+        var a = Math.Clamp((int)Math.Round(color.A * opacity), 0, 255);
+        var packed = PixelKernels.Pack((byte)((color.R * a + 127) / 255), (byte)((color.G * a + 127) / 255), (byte)((color.B * a + 127) / 255), (byte)a);
+
+        // One 32-bit store per pixel, which the runtime vectorizes; the byte order is the surface's R, G, B, A.
+        MemoryMarshal.Cast<byte, uint>(surface.Pixels).Fill(packed);
+    }
+
+    /// <summary>The per-byte reference for <see cref="Fill"/>; the packed form must produce the same bytes.</summary>
+    internal static void FillScalar(RasterSurface surface, RColor color, double opacity)
     {
         var a = Math.Clamp((int)Math.Round(color.A * opacity), 0, 255);
         var r = (byte)((color.R * a + 127) / 255);

@@ -8,4 +8,5 @@ SMIL animation, scripting, `<cursor>`/`<view>`, legacy SVG glyph-outline fonts, 
 (`feGaussianBlur`, `feDropShadow`, `feMorphology`, `feConvolveMatrix`, `feTurbulence`, `feDisplacementMap`, the lighting
 primitives, `feComposite type="arithmetic"`, cross-channel `feColorMatrix`, non-linear `feComponentTransfer`, or a primitive
 subregion) is evaluated over pixels by the raster backend — see [Filters](../../docs/supported-svg-features.md#filters).
-Still out of scope: `feImage`, and an `in`/`in2` of `BackgroundImage`/`BackgroundAlpha`/`FillPaint`/`StrokePaint`.
+`feImage` and the `FillPaint`/`StrokePaint`/`BackgroundImage`/`BackgroundAlpha` inputs are supported too (the last two with the deviations in
+[svg-filter-backdrop-isolation-groups](svg-filter-backdrop-isolation-groups.md)).

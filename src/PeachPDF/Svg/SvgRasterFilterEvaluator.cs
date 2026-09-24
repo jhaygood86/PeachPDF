@@ -23,14 +23,20 @@ namespace PeachPDF.Svg
     internal static class SvgRasterFilterEvaluator
     {
         /// <summary>A primitive's result: its pixels, the colour space they are in and the subregion the primitive produced.</summary>
-        private sealed class Image(RasterSurface surface, bool linear, IntRect subregion)
+        private sealed class Image(RasterSurface surface, bool linear, IntRect subregion, bool standardInput = false)
         {
             public RasterSurface Surface { get; } = surface;
             public bool Linear { get; } = linear;
             public IntRect Subregion { get; } = subregion;
+
+            /// <summary>True for an input that always spans the whole filter region (<c>SourceGraphic</c>, <c>SourceAlpha</c>, <c>FillPaint</c>, ...).</summary>
+            public bool StandardInput { get; } = standardInput;
         }
 
-        public static void Render(RGraphics g, SvgFilter filter, SvgElement element, RRect? viewportBounds, Action<RGraphics> paintSourceGraphic)
+        /// <summary>The inputs that are painted through a nested raster scope rather than computed.</summary>
+        private enum PaintedInput { Paint, Image, Backdrop }
+
+        public static void Render(RGraphics g, SvgFilter filter, SvgElement element, RRect? viewportBounds, Action<RGraphics> paintSourceGraphic, SvgFilterInputs? inputs = null)
         {
             var bbox = SvgFilterEvaluator.ElementBounds(element, viewportBounds);
             var (x, y, width, height) = SvgFilterEvaluator.ResolveFilterRect(filter, bbox);
@@ -44,7 +50,7 @@ namespace PeachPDF.Svg
 
             paintSourceGraphic(scope.Graphics);
 
-            var result = Evaluate(filter, bbox, scope.Surface);
+            var result = Evaluate(g, filter, bbox, scope.Surface, new RRect(x, y, width, height), inputs);
             if (result is null)
                 return;
 
@@ -54,7 +60,7 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Runs the primitive graph and returns the final result in sRGB, or null when the graph produced nothing. The caller owns the returned surface.</summary>
-        private static RasterSurface? Evaluate(SvgFilter filter, RRect? bbox, RasterSurface sourcePixels)
+        private static RasterSurface? Evaluate(RGraphics g, SvgFilter filter, RRect? bbox, RasterSurface sourcePixels, RRect region, SvgFilterInputs? inputs)
         {
             var owned = new List<RasterSurface>();
 
@@ -68,8 +74,9 @@ namespace PeachPDF.Svg
             var sx = sourcePixels.PixelsPerUnitX;
             var sy = sourcePixels.PixelsPerUnitY;
 
-            var source = new Image(Track(FilterOps.Clone(sourcePixels)), false, full);
+            var source = new Image(Track(FilterOps.Clone(sourcePixels)), false, full, standardInput: true);
             Image? sourceAlpha = null;
+            Image? fillPaint = null, strokePaint = null, backdrop = null, backdropAlpha = null;
             var named = new Dictionary<string, Image>(StringComparer.Ordinal) { ["SourceGraphic"] = source };
             var last = source;
 
@@ -78,22 +85,85 @@ namespace PeachPDF.Svg
                 if (name is null)
                     return last;
 
-                if (name == "SourceAlpha")
+                switch (name)
                 {
-                    if (sourceAlpha is null)
-                    {
-                        var alpha = Track(FilterOps.Clone(source.Surface));
-                        var p = alpha.Pixels;
-                        for (var i = 0; i + 3 < p.Length; i += 4)
-                            p[i] = p[i + 1] = p[i + 2] = 0;
-
-                        sourceAlpha = new Image(alpha, false, full);
-                    }
-
-                    return sourceAlpha;
+                    case "SourceAlpha":
+                        return sourceAlpha ??= AlphaOf(source);
+                    case "FillPaint":
+                        return fillPaint ??= PaintInput(stroke: false);
+                    case "StrokePaint":
+                        return strokePaint ??= PaintInput(stroke: true);
+                    case "BackgroundImage":
+                        return backdrop ??= BackdropInput();
+                    case "BackgroundAlpha":
+                        return backdropAlpha ??= AlphaOf(backdrop ??= BackdropInput());
                 }
 
                 return named.TryGetValue(name, out var image) ? image : last;
+            }
+
+            // The alpha channel of an image: its colour cleared, opacity kept.
+            Image AlphaOf(Image image)
+            {
+                var alpha = Track(FilterOps.Clone(image.Surface));
+                FilterOps.ZeroColor(alpha);
+                return new Image(alpha, false, full, standardInput: true);
+            }
+
+            // A same-sized sRGB surface painted through a nested raster scope over the filter region, or null when none could be made.
+            RasterSurface? PaintedSurface(RRect area, PaintedInput kind, bool stroke, FeImage? feImage, double offsetX, double offsetY)
+            {
+                var scope = g.BeginRasterSurface(region);
+                if (scope is null)
+                    return null;
+
+                // The scope's own surface becomes the result; only its (stateless) graphics is released here.
+                var surface = Track(scope.Surface);
+                if (surface.Width != sourcePixels.Width || surface.Height != sourcePixels.Height || surface.GridX != sourcePixels.GridX || surface.GridY != sourcePixels.GridY)
+                    return null;
+
+                var painted = true;
+                switch (kind)
+                {
+                    case PaintedInput.Paint:
+                        inputs!.PaintPaint(scope.Graphics, stroke, area);
+                        break;
+                    case PaintedInput.Image:
+                        inputs!.PaintImage(scope.Graphics, feImage!, area, offsetX, offsetY);
+                        break;
+                    default:
+                        painted = inputs!.PaintBackdrop(scope.Graphics, area);
+                        break;
+                }
+
+                scope.Graphics.Dispose();
+                return painted ? surface : null;
+            }
+
+            // FillPaint/StrokePaint: the whole filter region filled with the element's paint. A solid colour needs no scope at all.
+            Image PaintInput(bool stroke)
+            {
+                var paint = inputs?.PaintOf(stroke) ?? SvgPaint.None;
+                if (paint.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef &&
+                    PaintedSurface(region, PaintedInput.Paint, stroke, null, 0, 0) is { } painted)
+                {
+                    return new Image(painted, false, full, standardInput: true);
+                }
+
+                var blank = Track(FilterOps.Blank(sourcePixels));
+                if (paint.Kind == SvgPaintKind.Solid)
+                    FilterOps.Fill(blank, paint.Color, 1.0);
+
+                return new Image(blank, false, full, standardInput: true);
+            }
+
+            // BackgroundImage: what was painted behind the element, or transparent when the renderer has none to offer.
+            Image BackdropInput()
+            {
+                if (inputs is not null && PaintedSurface(region, PaintedInput.Backdrop, false, null, 0, 0) is { } painted)
+                    return new Image(painted, false, full, standardInput: true);
+
+                return new Image(Track(FilterOps.Blank(sourcePixels)), false, full, standardInput: true);
             }
 
             // A primitive computes in its own colour space: an input in the other one is converted first.
@@ -140,7 +210,7 @@ namespace PeachPDF.Svg
                 foreach (var name in InputsOf(primitive))
                 {
                     var input = Resolve(name);
-                    if (ReferenceEquals(input, source) || ReferenceEquals(input, sourceAlpha))
+                    if (input.StandardInput)
                         return full;
 
                     if (input.Subregion.IsEmpty)
@@ -155,17 +225,17 @@ namespace PeachPDF.Svg
                 return union ?? full;
             }
 
+            double Point(double value, double bboxOrigin, double bboxSize) =>
+                filter.PrimitiveUnitsUserSpaceOnUse || bbox is null ? value : bboxOrigin + value * bboxSize;
+
+            double Size(double value, double bboxSize) =>
+                filter.PrimitiveUnitsUserSpaceOnUse || bbox is null ? value : value * bboxSize;
+
             IntRect SubregionOf(FilterPrimitive primitive)
             {
                 var fallback = DefaultSubregion(primitive);
                 if (primitive.Subregion is not { } sub)
                     return fallback;
-
-                double Point(double value, double bboxOrigin, double bboxSize) =>
-                    filter.PrimitiveUnitsUserSpaceOnUse || bbox is null ? value : bboxOrigin + value * bboxSize;
-
-                double Size(double value, double bboxSize) =>
-                    filter.PrimitiveUnitsUserSpaceOnUse || bbox is null ? value : value * bboxSize;
 
                 // An attribute that is not given takes the default subregion's edge.
                 var left = fallback.Left;
@@ -221,6 +291,26 @@ namespace PeachPDF.Svg
                         var dx = filter.PrimitiveUnitsUserSpaceOnUse || bbox is not { } b1 ? offset.Dx : offset.Dx * b1.Width;
                         var dy = filter.PrimitiveUnitsUserSpaceOnUse || bbox is not { } b2 ? offset.Dy : offset.Dy * b2.Height;
                         FilterOps.Offset(input.Surface, output, (int)Math.Round(dx * sx), (int)Math.Round(dy * sy));
+                        break;
+                    }
+
+                    case FeImage feImage:
+                    {
+                        // The subregion in user space, which the image is fitted into; a referenced element is translated by the subregion's x/y.
+                        var area = new RRect((subregion.Left + sourcePixels.GridX) / sx, (subregion.Top + sourcePixels.GridY) / sy, subregion.Width / sx, subregion.Height / sy);
+                        var offsetX = feImage.Subregion?.X is { } fx ? Point(fx, bbox?.X ?? 0, bbox?.Width ?? 0) : 0;
+                        var offsetY = feImage.Subregion?.Y is { } fy ? Point(fy, bbox?.Y ?? 0, bbox?.Height ?? 0) : 0;
+
+                        if (inputs is not null && (feImage.Image is not null || feImage.Target is not null) && !subregion.IsEmpty &&
+                            PaintedSurface(area, PaintedInput.Image, false, feImage, offsetX, offsetY) is { } painted)
+                        {
+                            // Painted in sRGB; the primitive computes in its own space.
+                            if (linear)
+                                FilterOps.ConvertColorSpace(painted, true);
+
+                            output = painted;
+                        }
+
                         break;
                     }
 

@@ -27,7 +27,7 @@ namespace PeachPDF.Svg
     /// </summary>
     internal static class SvgFilterEvaluator
     {
-        /// <inheritdoc cref="Render(RGraphics, SvgFilter, SvgElement, RRect?, Action{RGraphics})"/>
+        /// <inheritdoc cref="Render(RGraphics, SvgFilter, SvgElement, RRect?, Action{RGraphics}, SvgFilterInputs?)"/>
         public static void Render(RGraphics g, SvgFilter filter, SvgElement element, Action<RGraphics> paintSourceGraphic) =>
             Render(g, filter, element, null, paintSourceGraphic);
 
@@ -47,11 +47,12 @@ namespace PeachPDF.Svg
         /// <param name="element">The element being filtered.</param>
         /// <param name="viewportBounds">Stands in for the element's bounding box when that cannot be measured (see <see cref="ElementBounds"/>); null keeps the region as authored.</param>
         /// <param name="paintSourceGraphic">Paints the element's ordinary content (the <c>SourceGraphic</c>).</param>
-        public static void Render(RGraphics g, SvgFilter filter, SvgElement element, RRect? viewportBounds, Action<RGraphics> paintSourceGraphic)
+        /// <param name="inputs">What a raster evaluation needs beyond the source graphic (<c>FillPaint</c>, <c>feImage</c>, the backdrop); null when the caller has none, which leaves those inputs transparent.</param>
+        public static void Render(RGraphics g, SvgFilter filter, SvgElement element, RRect? viewportBounds, Action<RGraphics> paintSourceGraphic, SvgFilterInputs? inputs = null)
         {
             if (filter.RequiresRaster)
             {
-                SvgRasterFilterEvaluator.Render(g, filter, element, viewportBounds, paintSourceGraphic);
+                SvgRasterFilterEvaluator.Render(g, filter, element, viewportBounds, paintSourceGraphic, inputs);
                 return;
             }
 

@@ -6,6 +6,7 @@ using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Raster;
 using PeachPDF.Raster.Filters;
+using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
 
@@ -77,24 +78,7 @@ namespace PeachPDF.Html.Core.Paint
             if (scope is null)
                 return;
 
-            // The page is paper: opaque white behind everything the document paints. A nested backdrop root starts transparent instead.
-            if (rootBox is null)
-            {
-                FilterOps.Fill(scope.Surface, RColor.FromArgb(255, 255, 255, 255), 1.0);
-                if (container.CanvasBackgroundBox is { } canvas)
-                    PaintCanvasBackground(scope.Graphics, canvas, container.PageBoxRect);
-            }
-
-            var mirror = new FragmentPainter(container)
-            {
-                _stopAt = fragment,
-                _taggingSuppressed = true,
-                _backdropDepth = _backdropDepth + 1,
-                _pageRoot = _pageRoot,
-            };
-
-            mirror.PaintTagged(scope.Graphics, rootFragment);
-            if (!mirror._stopped)
+            if (!RepaintBackdrop(scope.Graphics, scope.Surface, fragment, rootBox, rootFragment, stopBeforeContent: false))
             {
                 // The element was never reached (it is not in this root's paint order); nothing sensible to filter.
                 return;
@@ -127,6 +111,83 @@ namespace PeachPDF.Html.Core.Paint
                 g.PopClip();
                 shape?.Dispose();
             }
+        }
+
+        /// <summary>
+        /// Repaints into <paramref name="graphics"/> (whose bitmap is <paramref name="surface"/>) what was painted before
+        /// <paramref name="fragment"/> inside <paramref name="rootBox"/>'s isolation group - the page over white paper when there is none.
+        /// The repaint stops where the fragment begins, or, for <paramref name="stopBeforeContent"/>, after its own background and borders
+        /// but before its content (a replaced element's content is what asked for its backdrop). False when the fragment was never reached.
+        /// </summary>
+        private bool RepaintBackdrop(RGraphics graphics, RasterSurface surface, BoxFragment fragment, CssBox? rootBox, BoxFragment rootFragment, bool stopBeforeContent)
+        {
+            // The page is paper: opaque white behind everything the document paints. A nested backdrop root starts transparent instead.
+            if (rootBox is null)
+            {
+                FilterOps.Fill(surface, RColor.FromArgb(255, 255, 255, 255), 1.0);
+                if (container.CanvasBackgroundBox is { } canvas)
+                    PaintCanvasBackground(graphics, canvas, container.PageBoxRect);
+            }
+
+            var mirror = new FragmentPainter(container)
+            {
+                _stopAt = stopBeforeContent ? null : fragment,
+                _stopBeforeContent = stopBeforeContent ? fragment : null,
+                _taggingSuppressed = true,
+                _backdropDepth = _backdropDepth + 1,
+                _pageRoot = _pageRoot,
+            };
+
+            mirror.PaintTagged(graphics, rootFragment);
+            return mirror._stopped;
+        }
+
+        /// <summary>Set on a repaint painter: the replaced fragment whose content is where painting stops (its background and borders are still backdrop).</summary>
+        private BoxFragment? _stopBeforeContent;
+
+        /// <summary>Whether a backdrop repaint ends at <paramref name="fragment"/>'s content, so the content painter must not draw it.</summary>
+        internal bool StopsBeforeContent(BoxFragment fragment)
+        {
+            if (!ReferenceEquals(fragment, _stopBeforeContent))
+                return false;
+
+            _stopped = true;
+            return true;
+        }
+
+        /// <summary>
+        /// The page behind an inline SVG, for its filters' <c>BackgroundImage</c>; null when the SVG's own group effect isolates it from
+        /// the page or the page cannot be repainted here.
+        /// </summary>
+        internal ISvgPageBackdrop? CreateSvgBackdrop(BoxFragment svgFragment) =>
+            _textOnly || _pageRoot is null || _backdropDepth >= MaxBackdropDepth || IsBackdropRoot(svgFragment.Box)
+                ? null
+                : new SvgPageBackdrop(this, svgFragment);
+
+        private sealed class SvgPageBackdrop(FragmentPainter painter, BoxFragment fragment) : ISvgPageBackdrop
+        {
+            public bool Paint(RGraphics g) => painter.PaintSvgPageBackdrop(g, fragment);
+        }
+
+        private bool PaintSvgPageBackdrop(RGraphics g, BoxFragment svgFragment)
+        {
+            if (g is not RasterGraphics raster || _pageRoot is null || _backdropDepth >= MaxBackdropDepth)
+                return false;
+
+            // A transformed ancestor does not matter here: the page is repainted in its own (device) frame and the bitmap covers the SVG's
+            // user-space region, so the caller has already mapped one onto the other.
+            CssBox? rootBox = null;
+            for (var ancestor = svgFragment.Box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (IsBackdropRoot(ancestor))
+                {
+                    rootBox = ancestor;
+                    break;
+                }
+            }
+
+            var rootFragment = rootBox is null ? _pageRoot : FindFragment(_pageRoot, rootBox);
+            return rootFragment is not null && RepaintBackdrop(g, raster.Surface, svgFragment, rootBox, rootFragment, stopBeforeContent: true);
         }
 
         /// <summary>
