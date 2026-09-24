@@ -177,6 +177,8 @@
         public const string Thick = "thick";
         public const string Inside = "inside";
         public const string Outside = "outside";
+        public const string InlineStart = "inline-start";
+        public const string InlineEnd = "inline-end";
         public const string BorderBox = "border-box";
         public const string PaddingBox = "padding-box";
         public const string ContentBox = "content-box";
