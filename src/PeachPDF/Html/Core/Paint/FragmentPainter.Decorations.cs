@@ -667,10 +667,14 @@ namespace PeachPDF.Html.Core.Paint
                 Math.Max(0, paddingBox.Width - 2 * spread),
                 Math.Max(0, paddingBox.Height - 2 * spread));
 
+            // The shadow is confined to the padding edge, whose corners are the border-radius minus the border
+            // width (CSS Backgrounds 3 §5.5) - not the border edge's own radii.
+            var paddingRadii = PaddingEdgeRadii(box, borderBox, paddingBox);
+
             RGraphicsPath? clipPath = null;
-            if (box.IsRounded)
+            if (paddingRadii.IsRounded)
             {
-                clipPath = BuildLayerRoundRect(g, paddingBox, ShadowCornerRadii(box, borderBox, spread: 0), 0);
+                clipPath = BuildLayerRoundRect(g, paddingBox, paddingRadii, 0);
                 g.PushClip(clipPath);
             }
             else
@@ -683,7 +687,7 @@ namespace PeachPDF.Html.Core.Paint
                 // Solid ring = padding box minus the inner hole.
                 FillRingRects(g, paddingBox, inner, color);
             }
-            else if (color.A > 0 && TryPaintBlurredInsetShadow(g, box, borderBox, paddingBox, inner, blur, spread, color))
+            else if (color.A > 0 && TryPaintBlurredInsetShadow(g, paddingBox, paddingRadii, inner, blur, spread, color))
             {
                 // Painted as a real Gaussian blur in a bitmap (see TryPaintBlurredInsetShadow).
             }
@@ -716,9 +720,20 @@ namespace PeachPDF.Html.Core.Paint
 
         /// <summary>The shadow shape's per-corner radii: the box's <c>border-radius</c> grown by
         /// <paramref name="spread"/> where non-zero, with sharp corners staying sharp.</summary>
-        private static BorderRadii ShadowCornerRadii(CssBox box, RRect borderBox, double spread)
+        private static BorderRadii ShadowCornerRadii(CssBox box, RRect borderBox, double spread) =>
+            AdjustRadii(box.ComputeRadii(borderBox), spread);
+
+        /// <summary>The box's padding-edge radii: its <c>border-radius</c> reduced by the border width on each
+        /// adjacent side, floored at zero (CSS Backgrounds 3 §5.5) - the shape an inset shadow lives inside.</summary>
+        private static BorderRadii PaddingEdgeRadii(CssBox box, RRect borderBox, RRect paddingBox) =>
+            box.ComputeInnerRadii(borderBox, paddingBox,
+                box.ActualBorderLeftWidth, box.ActualBorderTopWidth,
+                box.ActualBorderRightWidth, box.ActualBorderBottomWidth);
+
+        /// <summary>Grows (or, when negative, shrinks) each already-rounded corner of <paramref name="r"/> by
+        /// <paramref name="spread"/>; a sharp corner stays sharp.</summary>
+        private static BorderRadii AdjustRadii(BorderRadii r, double spread)
         {
-            var r = box.ComputeRadii(borderBox);
             double Adj(double v) => v > 0 ? Math.Max(0, v + spread) : 0;
             return new BorderRadii(Adj(r.TLX), Adj(r.TLY), Adj(r.TRX), Adj(r.TRY),
                                    Adj(r.BRX), Adj(r.BRY), Adj(r.BLX), Adj(r.BLY));

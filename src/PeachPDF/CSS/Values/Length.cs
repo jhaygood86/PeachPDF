@@ -300,7 +300,23 @@ namespace PeachPDF.CSS
             return false;
         }
 
+        /// <summary>Maps a unit name to its <see cref="Unit"/>, case-insensitively (CSS unit names are
+        /// ASCII case-insensitive); <see cref="Unit.None"/> when it is not a known unit. The lower-casing
+        /// only runs on the miss path, and only when the name has an upper-case letter.</summary>
         public static Unit GetUnit(string s)
+        {
+            var unit = GetLowercaseUnit(s);
+            if (unit != Unit.None || s is null) return unit;
+
+            foreach (var c in s)
+            {
+                if (char.IsUpper(c)) return GetLowercaseUnit(s.ToLowerInvariant());
+            }
+
+            return Unit.None;
+        }
+
+        private static Unit GetLowercaseUnit(string s)
         {
             return s switch
             {

@@ -205,12 +205,19 @@ namespace PeachPDF.CSS
             token.Type == TokenType.Ident && token.Data.Isi(Keywords.Inset);
 
         /// <summary>A box-shadow offset/blur/spread is a <c>&lt;length&gt;</c> (not a length-percentage):
-        /// a dimension, or the unitless zero. Percentages are not valid here. Also used by
-        /// <c>FilterGrammar</c>'s <c>blur()</c>/<c>drop-shadow()</c> argument classification, which is the
-        /// same production.</summary>
+        /// a dimension with a recognised length unit, a <c>calc()</c>-family function, or the unitless zero.
+        /// Percentages and unknown units (<c>2foo</c>) are not valid here. A <c>calc()</c> result's sign
+        /// can't be checked statically, so a negative one is left to the paint-time resolver. Also used by
+        /// <c>FilterGrammar</c>'s <c>blur()</c>/<c>drop-shadow()</c> and <c>TextShadowGrammar</c>'s argument
+        /// classification, which are the same production.</summary>
         internal static bool IsLength(Token token)
         {
-            if (token.Type == TokenType.Dimension) return true;
+            if (token.Type == TokenType.Dimension)
+                return Length.GetUnit(token.Unit) is not (Length.Unit.None or Length.Unit.Percent);
+
+            if (token is { Type: TokenType.Function } function)
+                return CalcParser.IsCalcFamily(function.Data);
+
             return token is { Type: TokenType.Number, Value: 0f };
         }
 

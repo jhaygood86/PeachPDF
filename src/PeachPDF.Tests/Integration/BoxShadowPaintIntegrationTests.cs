@@ -148,6 +148,89 @@ namespace PeachPDF.Tests.Integration
             Assert.True(rings >= 6, $"expected inset ring layers, got {rings}");
         }
 
+        // CSS Backgrounds 3 §5.5: an inset shadow lives inside the padding edge, whose corner radius is the
+        // border-radius minus the border width - not the border edge's own radius.
+        [Fact]
+        public async Task RoundedInsetShadow_ClipRadiusIsBorderRadiusMinusBorderWidth()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='el' style='box-shadow: inset 2pt 2pt black; border: 4pt solid #888; border-radius: 10pt; width: 40pt; height: 30pt'>x</div>"));
+            var el = FindById(root, "el")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            // Padding box starts 4pt in from the border box; its top edge's straight run starts one radius
+            // (10 - 4 = 6pt) further in - not the full 10pt border-radius the old clip used.
+            var clip = g.ClipPaths.Single(p => Math.Abs(TopEdge(p).MinY - (el.Bounds.Y + 4)) < 0.01);
+            Assert.Equal(el.Bounds.X + 4 + 6, TopEdge(clip).MinXOnTop, 1);
+        }
+
+        [Fact]
+        public async Task RoundedInsetShadow_BorderWiderThanRadius_ClipsToAPlainPaddingBox()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='el' style='box-shadow: inset 2pt 2pt black; border: 8pt solid #888; border-radius: 6pt; width: 40pt; height: 30pt'>x</div>"));
+            var el = FindById(root, "el")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            // The padding edge is square (6pt radius - 8pt border floors at 0), so its clip is a plain
+            // rectangle: no pushed clip path sits on the padding box's own top edge.
+            var paddingTop = el.Bounds.Y + 8;
+            Assert.DoesNotContain(g.ClipPaths, p => Math.Abs(TopEdge(p).MinY - paddingTop) < 0.01);
+        }
+
+        [Fact]
+        public async Task UpperCaseUnit_ResolvesAtPaintTime_MovesTheShadow()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='el' style='box-shadow: 8PT 0 black; background: white; width: 40pt; height: 30pt'>x</div>"));
+            var el = FindById(root, "el")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            var shadow = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => IsOpaqueBlack(r.Color));
+            Assert.Equal(el.Bounds.X + 8, shadow.X, 1);
+        }
+
+        [Fact]
+        public async Task CalcOffsetWithFontRelativeUnit_ResolvesAgainstTheBox()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='el' style='font-size: 10pt; box-shadow: calc(1em + 2pt) 0 black; background: white; width: 40pt; height: 30pt'>x</div>"));
+            var el = FindById(root, "el")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            var shadow = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => IsOpaqueBlack(r.Color));
+            Assert.Equal(el.Bounds.X + 12, shadow.X, 1);
+        }
+
+        [Fact]
+        public async Task CalcOffset_ResolvesAtPaintTime_MovesTheShadow()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='el' style='box-shadow: calc(2pt + 3pt) 0 black; background: white; width: 40pt; height: 30pt'>x</div>"));
+            var el = FindById(root, "el")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            var shadow = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => IsOpaqueBlack(r.Color));
+            Assert.Equal(el.Bounds.X + 5, shadow.X, 1);
+            Assert.Equal(el.Bounds.Y, shadow.Y, 1);
+        }
+
+        private static (double MinY, double MinXOnTop) TopEdge(TestGraphicsPath path)
+        {
+            var minY = path.Points.Min(p => p.Y);
+            return (minY, path.Points.Where(p => Math.Abs(p.Y - minY) < 0.01).Min(p => p.X));
+        }
+
         [Fact]
         public async Task RoundedOutsetShadow_FillsAPathNotAPlainRect()
         {

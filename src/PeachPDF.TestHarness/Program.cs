@@ -818,10 +818,18 @@ var shadowHtml = "<!DOCTYPE html><html><head>" + ShadowCss + "</head><body>" +
         ShadowSwatch("neumorphic", "6px 6px 12px #b9c2cf, -6px -6px 12px #ffffff", "background: #eef1f5; border-radius: 12px")
     ) +
 
+    "<h2>6 — Inset Inside a Border &amp; calc() Lengths</h2>" +
+    "<p class=\"intro\">An inset shadow is confined to the padding edge, whose corner radius is the border-radius minus the border width (a border at least as wide as the radius leaves it square). Offsets, blur and spread accept calc().</p>" +
+    ShadowRow(
+        ShadowSwatch("inset, radius 20 − border 6", "inset 0 0 8px 2px rgba(0,0,0,.6)", "background: #fd0; border: 6px solid #4a90d9; border-radius: 20px"),
+        ShadowSwatch("inset, border &gt; radius", "inset 0 0 8px 2px rgba(0,0,0,.6)", "background: #fd0; border: 8px solid #4a90d9; border-radius: 4px"),
+        ShadowSwatch("calc() lengths", "calc(2px + 4px) calc(2px + 4px) calc(3px * 2) rgba(0,0,0,.5)")
+    ) +
+
     "</body></html>";
 
 await SaveShowcaseAsync("box_shadow", "Backgrounds & Borders", "Box Shadow",
-    "box-shadow: drop shadows, blur, spread, inset, colored and multiple layered shadows, with border-radius — blur approximated as vector geometry.",
+    "box-shadow: drop shadows, Gaussian blur, spread, inset (following the padding edge's rounded corners), colored and multiple layered shadows, with border-radius and calc() lengths.",
     shadowHtml, pdfConfig);
 
 // --- border-image showcase ---

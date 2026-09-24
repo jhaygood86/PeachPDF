@@ -103,6 +103,32 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal("-1px", layer.Spread);
         }
 
+        [Theory]
+        [InlineData("2rem 2rem 2rem", "2rem")]
+        [InlineData("2lh 2px", "2lh")]
+        [InlineData("2vw 2px", "2vw")]
+        [InlineData("2cqw 2px", "2cqw")]
+        [InlineData("2PX 2px", "2PX")]      // units are case-insensitive
+        public void RealLengthUnits_AreAcceptedVerbatim(string value, string expectedOffsetX)
+        {
+            var layer = Assert.Single(Parse(value));
+            Assert.Equal(expectedOffsetX, layer.OffsetX);
+        }
+
+        [Theory]
+        [InlineData("calc(1px + 2px) 2px red", "calc(1px + 2px)", "2px", "0", "0")]
+        [InlineData("2px 2px calc(1em * 2) 1px red", "2px", "2px", "calc(1em * 2)", "1px")]
+        [InlineData("min(2px, 4px) 2px", "min(2px, 4px)", "2px", "0", "0")]
+        [InlineData("inset 0 0 0 calc(1px + 1px) blue", "0", "0", "0", "calc(1px + 1px)")]
+        public void CalcInALengthSlot_IsKeptAsAuthoredText(string value, string x, string y, string blur, string spread)
+        {
+            var layer = Assert.Single(Parse(value));
+            Assert.Equal(x, layer.OffsetX);
+            Assert.Equal(y, layer.OffsetY);
+            Assert.Equal(blur, layer.Blur);
+            Assert.Equal(spread, layer.Spread);
+        }
+
         [Fact]
         public void MultipleLayers_ParseInOrder()
         {
@@ -128,6 +154,9 @@ namespace PeachPDF.Tests.CSS
         [InlineData("2px 50%")]             // percentage is not a valid length
         [InlineData("2px 2px 50%")]         // percentage where a color/length is expected
         [InlineData("2px 2px red blue")]    // two colors
+        [InlineData("2foo 2px red")]        // unknown dimension unit
+        [InlineData("2px 2px 3foo")]        // unknown unit in the blur slot
+        [InlineData("foo(1px) 2px")]        // a non-calc function is not a length
         public void Invalid_ReturnsNull(string value)
         {
             Assert.Null(Parse(value));
@@ -140,6 +169,8 @@ namespace PeachPDF.Tests.CSS
         [InlineData("box-shadow: 1px 1px 2px 3px rgba(0,0,0,.5), 0 0 0 1px blue", true)]
         [InlineData("box-shadow: banana", false)]
         [InlineData("box-shadow: 2px 50%", false)]
+        [InlineData("box-shadow: 2foo 2px red", false)]
+        [InlineData("box-shadow: calc(1px + 1px) 2px red", true)]
         public void LayerA_AcceptsValid_RejectsInvalid(string declaration, bool shouldApply)
         {
             var sheet = ParseStyleSheet($"div {{ {declaration}; }}");
