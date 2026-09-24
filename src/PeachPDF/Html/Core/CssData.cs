@@ -735,7 +735,12 @@ namespace PeachPDF.Html.Core
                 // standards-mode-only engine like this one, since real browsers have no element above
                 // <html> for "*" to match) incorrectly match. Acid2's own "* html .parser" rule
                 // exercises exactly this.
-                AllSelector => node is { IsRoot: false },
+                //
+                // It must also never match a bare text box or other anonymous box (Selectors 4 §5.2: "*"
+                // is any *element*; Cascade 4 §1.1: text nodes "cannot be targeted by selectors", their
+                // values come from inheritance). Matching them made a "* { font-family }" rule land on the
+                // text directly, so no more specific rule for the parent element could reach it.
+                AllSelector => node is { IsRoot: false } && CanBeMatched(node),
                 ListSelector listSelector => DoesSelectorMatch(listSelector, node),
                 TypeSelector typeSelector => DoesSelectorMatch(typeSelector, node),
                 ComplexSelector complexSelector => DoesSelectorMatch(complexSelector, node),
@@ -761,6 +766,16 @@ namespace PeachPDF.Html.Core
                 _ => false
             };
         }
+
+        /// <summary>
+        /// Whether <paramref name="node"/> is something a selector that is not tied to an element name,
+        /// class, id or attribute (<c>*</c>, <c>:not()</c>, <c>:lang()</c>) may match: an element, or one of
+        /// PeachPDF's own generated pseudo-element boxes (which the pseudo-element path matches on purpose).
+        /// A bare text or anonymous box (no <see cref="ICssDomNode.TagName"/>) is not an element and only
+        /// ever inherits (Cascade 4 §1.1/§7.2).
+        /// </summary>
+        private static bool CanBeMatched(ICssDomNode node) =>
+            node.TagName is not null || node is CssBox { IsPseudoElement: true };
 
         /// <summary>The nearest ancestor that is an element node (has a <see cref="ICssDomNode.TagName"/>), skipping anonymous/text nodes - the node-agnostic analogue of <c>DomUtils.GetNearestParentElementBox</c>.</summary>
         private static ICssDomNode? GetNearestParentElement(ICssDomNode node)
@@ -995,10 +1010,11 @@ namespace PeachPDF.Html.Core
                 // language"; every one of them is defined as a child of its originating element). A box
                 // with no HtmlTag at this point in the pipeline is an anonymous text box - the box a raw
                 // text node became - which is not an element and cannot originate one. The universal
-                // selector reaches those boxes here (DoesSelectorMatch(AllSelector) is deliberately
-                // structural rather than element-only), so a blanket "* ::before" - Charts.css's own
-                // ".charts-css *::before { box-sizing: border-box }" is the case that found this - would
-                // otherwise hang an empty ::before/::after box off every text box in the document.
+                // selector (and :not()/:lang()) no longer match such a box, so a blanket "*::before" -
+                // Charts.css's own ".charts-css *::before { box-sizing: border-box }" is the case that
+                // found this - normally never gets this far; the guard stays as the last line of defence
+                // for any other compound member that accepts a box with no element behind it, since a
+                // blanket rule would otherwise hang an empty ::before/::after box off every text box.
                 //
                 // That is not cosmetic: it leaves a box holding BOTH its own words and child boxes, and
                 // CssLayoutEngine.FlowBox flows a box's own words only when it has no child boxes
@@ -1383,7 +1399,7 @@ namespace PeachPDF.Html.Core
 
         private static bool DoesSelectorMatch(NotSelector notSelector, ICssDomNode? node)
         {
-            return node is not null && !DoesSelectorMatch(notSelector.Inner, node);
+            return node is not null && CanBeMatched(node) && !DoesSelectorMatch(notSelector.Inner, node);
         }
 
         private static bool DoesSelectorMatch(MatchesSelector matchesSelector, ICssDomNode? node)
@@ -1406,7 +1422,7 @@ namespace PeachPDF.Html.Core
         /// </summary>
         private static bool DoesSelectorMatch(LangSelector langSelector, ICssDomNode? node)
         {
-            if (node is null) return false;
+            if (node is null || !CanBeMatched(node)) return false;
             var language = GetElementLanguage(node);
             if (language is null) return false;
 
