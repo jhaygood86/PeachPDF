@@ -53,6 +53,33 @@ namespace PeachPDF.Svg
         private int _useDepth;
 
         /// <summary>
+        /// A gradient/marker/pattern/mask/clipPath found by <see cref="CollectDefinitions"/>, with the chain of
+        /// elements between the root and it (root excluded). Its content inherits from that chain, not from
+        /// whatever references it, but the chain's computed values can't be known until the root font, the
+        /// viewport and the id registry exist - so the build is deferred to <see cref="BuildDeferredDefinitions"/>
+        /// and the chain is replayed then (see <see cref="ResolveAncestorContext"/>).
+        /// </summary>
+        private readonly record struct DeferredDefinition(ISvgSourceNode Node, string Id, ISvgSourceNode[] Ancestors);
+
+        private readonly List<DeferredDefinition> _deferredDefinitions = [];
+        private readonly Dictionary<string, ISvgSourceNode[]> _clipPathAncestors = new(StringComparer.Ordinal);
+        private readonly List<ISvgSourceNode> _ancestorStack = [];
+        private readonly HashSet<string> _resolvingClipPaths = new(StringComparer.Ordinal);
+
+        /// <summary>The root's own resolved inherited paint, the seed every definition's ancestor chain folds from.</summary>
+        private InheritedPaint _rootPaint = InheritedPaint.Initial;
+        private double? _rootViewportWidth;
+        private double? _rootViewportHeight;
+
+        /// <summary>
+        /// True while <see cref="ApplyCommon"/> is run only to obtain the inherited values it returns (the root,
+        /// a definition's ancestors, the definition element itself), discarding the throwaway element. It stops
+        /// <c>clip-path</c> resolution there: that would build a clipPath - which itself replays an ancestor chain
+        /// through here - before the context it needs exists, and could recurse.
+        /// </summary>
+        private bool _contextOnly;
+
+        /// <summary>
         /// The root element's used <c>font-size</c> (the value <c>rem</c> font-sizes resolve against),
         /// captured once in <see cref="BuildDocument"/>. Defaults to the UA initial font size until then.
         /// </summary>
@@ -410,35 +437,28 @@ namespace PeachPDF.Svg
                 _document.Height = SvgValueParsers.ParseLength(rootHeight, null, _rootBasis);
             _viewportWidth = _document.ViewBox?.Width ?? _document.Width;
             _viewportHeight = _document.ViewBox?.Height ?? _document.Height;
-
-            // Unlike gradients/markers/patterns/masks (built eagerly above, inside CollectDefinitions
-            // itself, since each is "self-contained" enough not to need the full id registry first), a
-            // <clipPath> was historically only ever resolved lazily - ResolveClipPath is memoized and
-            // "safe to call any time during pass 2" (its own doc comment), triggered whenever something
-            // inside *this* subtree referenced it via clip-path:url(#id) (ApplyCommon). That left a
-            // <clipPath> with no such in-subtree reference (e.g. a document-wide `<svg style="display:
-            // none">` used purely as a defs resource for an unrelated HTML element's own clip-path:
-            // url(#id), see SvgClipPathRegistry) never resolved into SvgDocument.ClipPaths at all. Every
-            // clipPath id is now resolved here unconditionally, right after the id registry is complete -
-            // ResolveClipPath's own memoization makes this a no-op for one already resolved during pass 2.
-            // Must run after _rootFontSize is set above (not just after CollectDefinitions): ResolveClipPath
-            // builds its children via BuildElement, and a rem-unit length inside a clipPath shape (e.g. a
-            // nested <text font-size="2rem">) resolves against the _rootFontSize field directly - resolving
-            // it too early would permanently bake in the wrong (UA-default) root size, since ResolveClipPath's
-            // own memoization would then make the later, correctly-timed lazy call from ApplyCommon a no-op.
-            foreach (var (id, node) in _nodesById)
-            {
-                if (node.Name == "clipPath")
-                    ResolveClipPath(id);
-            }
+            _rootViewportWidth = _viewportWidth;
+            _rootViewportHeight = _viewportHeight;
 
             // The root <svg>'s own inherited presentation properties (e.g. <svg fill="#fff">, a common
             // icon idiom) seed inheritance for the whole tree, like its font-* above. The root has no
             // SvgElement of its own, so they are resolved onto a throwaway group purely for the returned
             // inherited values; its non-inherited properties (opacity/transform/clip-path/...) are unused.
+            // Resolved before the definitions below: they inherit from the root through their ancestors.
             _lengthBasis = _rootBasis;
-            var rootPaint = ApplyCommon(new SvgGroupElement(), root, InheritedPaint.Initial);
+            _contextOnly = true;
+            var rootPaint = _rootPaint = ApplyCommon(new SvgGroupElement(), root, InheritedPaint.Initial);
+            _contextOnly = false;
             _lengthBasis = null;
+
+            // Gradients/markers/patterns/masks/clipPaths are built only now, not while CollectDefinitions walks
+            // the tree: their content inherits from the definition's own ancestors, which needs the root font
+            // (rem), the root viewport and the complete id registry (a clip-path: url(#id) or fill: url(#id)
+            // inside the content) - none of which exist during that walk. Every clipPath id is resolved here
+            // unconditionally (not only when something in this subtree references it), so a document-wide
+            // `<svg style="display: none">` used purely as a defs resource for an unrelated HTML element's own
+            // clip-path: url(#id) (see SvgClipPathRegistry) still lands in SvgDocument.ClipPaths.
+            BuildDeferredDefinitions();
 
             ResolveFeImageReferences(rootPaint, rootFont);
 
@@ -463,25 +483,19 @@ namespace PeachPDF.Svg
 
                 switch (child.Name)
                 {
-                    case "linearGradient" when !string.IsNullOrEmpty(id):
-                        _document.Gradients[id] = BuildLinearGradient(child);
-                        break;
-                    case "radialGradient" when !string.IsNullOrEmpty(id):
-                        _document.Gradients[id] = BuildRadialGradient(child);
-                        break;
-                    case "marker" when !string.IsNullOrEmpty(id):
-                        _document.Markers[id] = BuildMarker(child);
-                        break;
-                    case "pattern" when !string.IsNullOrEmpty(id):
-                        _document.Patterns[id] = BuildPattern(child);
-                        break;
-                    case "mask" when !string.IsNullOrEmpty(id):
-                        _document.Masks[id] = BuildMask(child);
+                    // Recorded with their ancestor chain and built later (BuildDeferredDefinitions): their
+                    // content inherits from that chain, whose values aren't computable during this walk.
+                    case "linearGradient" or "radialGradient" or "marker" or "pattern" or "mask" or "clipPath"
+                        when !string.IsNullOrEmpty(id):
+                        var ancestors = _ancestorStack.ToArray();
+                        _deferredDefinitions.Add(new DeferredDefinition(child, id, ancestors));
+                        if (child.Name == "clipPath")
+                            _clipPathAncestors[id] = ancestors;
                         break;
                     // Filters are self-contained (a primitive's `in`/`in2`/child `in` only reference
-                    // earlier results within the SAME filter, never forward or cross-filter) just like
-                    // gradients/markers/patterns/masks above, so eager building fits here too - no lazy
-                    // resolution needed. A filter whose graph isn't fully natively representable is
+                    // earlier results within the SAME filter, never forward or cross-filter), and
+                    // nothing in one inherits from its ancestors, so eager building fits here - no
+                    // deferral needed. A filter whose graph isn't fully natively representable is
                     // simply never added (BuildFilter returns null - see SvgFilter's remarks), so a
                     // referencing element's FilterRef resolves to nothing and it paints unfiltered.
                     case "filter" when !string.IsNullOrEmpty(id):
@@ -494,7 +508,149 @@ namespace PeachPDF.Svg
                     // and document-level <style>), or the SVG's own for standalone (built by the loader).
                 }
 
+                _ancestorStack.Add(child);
                 CollectDefinitions(child);
+                _ancestorStack.RemoveAt(_ancestorStack.Count - 1);
+            }
+        }
+
+        /// <summary>Builds every definition <see cref="CollectDefinitions"/> deferred, in document order, each against its own inherited context.</summary>
+        private void BuildDeferredDefinitions()
+        {
+            foreach (var (node, id, ancestors) in _deferredDefinitions)
+            {
+                switch (node.Name)
+                {
+                    case "linearGradient":
+                        _document.Gradients[id] = InDefinitionContext(node, ancestors, (_, _) => BuildLinearGradient(node));
+                        break;
+                    case "radialGradient":
+                        _document.Gradients[id] = InDefinitionContext(node, ancestors, (_, _) => BuildRadialGradient(node));
+                        break;
+                    case "marker":
+                        _document.Markers[id] = InDefinitionContext(node, ancestors, (paint, font) => BuildMarker(node, paint, font));
+                        break;
+                    case "pattern":
+                        _document.Patterns[id] = InDefinitionContext(node, ancestors, (paint, font) => BuildPattern(node, paint, font));
+                        break;
+                    case "mask":
+                        _document.Masks[id] = InDefinitionContext(node, ancestors, (paint, font) => BuildMask(node, paint, font));
+                        break;
+                    case "clipPath":
+                        ResolveClipPath(id);
+                        break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Runs <paramref name="build"/> with the builder positioned where <paramref name="node"/> sits in the
+        /// document: the viewport its ancestors establish, and the length basis of its own font. The callback
+        /// receives the paint/font it inherits from <paramref name="ancestors"/> (the element's own properties
+        /// are applied by <see cref="EnterDefinition"/>). The builder's ambient state is restored afterwards -
+        /// a clipPath can be resolved from inside another definition's build.
+        /// </summary>
+        private T InDefinitionContext<T>(ISvgSourceNode node, ISvgSourceNode[] ancestors, Func<InheritedPaint, FontContext, T> build)
+        {
+            var outerBasis = _lengthBasis;
+            var outerWidth = _viewportWidth;
+            var outerHeight = _viewportHeight;
+
+            try
+            {
+                var (paint, font) = ResolveAncestorContext(ancestors);
+                _lengthBasis = new LengthBasis(this, node, font);
+                return build(paint, font);
+            }
+            finally
+            {
+                _lengthBasis = outerBasis;
+                _viewportWidth = outerWidth;
+                _viewportHeight = outerHeight;
+            }
+        }
+
+        /// <summary>
+        /// Replays <paramref name="ancestors"/> (root excluded) the way pass 2 walks down to an element: each
+        /// one's presentation properties and font layer over its parent's, and a nested <c>&lt;svg&gt;</c>/
+        /// <c>&lt;symbol&gt;</c> replaces the viewport percentage lengths resolve against. Leaves
+        /// <see cref="_viewportWidth"/>/<see cref="_viewportHeight"/> set to the resulting viewport.
+        /// </summary>
+        private (InheritedPaint Paint, FontContext Font) ResolveAncestorContext(ISvgSourceNode[] ancestors)
+        {
+            // Sibling definitions share their ancestor nodes (the same instances, from CollectDefinitions' stack), and
+            // computing one ancestor's context costs a full presentation-property cascade - so resume from the deepest
+            // ancestor already computed rather than replaying from the root for every definition.
+            var context = new AncestorContext(_rootPaint, _rootFont ?? FontContext.Default, _rootViewportWidth, _rootViewportHeight);
+            var start = 0;
+
+            for (var i = ancestors.Length; i > 0; i--)
+            {
+                if (_ancestorContexts.TryGetValue(ancestors[i - 1], out var cached))
+                {
+                    context = cached;
+                    start = i;
+                    break;
+                }
+            }
+
+            var (paint, font) = (context.Paint, context.Font);
+            _viewportWidth = context.ViewportWidth;
+            _viewportHeight = context.ViewportHeight;
+
+            for (var i = start; i < ancestors.Length; i++)
+            {
+                var ancestor = ancestors[i];
+
+                // Same order BuildElement/BuildNestedSvg use: lengths resolve against the element's own font.
+                _lengthBasis = new LengthBasis(this, ancestor, font);
+                (paint, font) = EnterDefinition(ancestor, paint, font);
+                EnterViewport(ancestor);
+
+                _ancestorContexts[ancestor] = new AncestorContext(paint, font, _viewportWidth, _viewportHeight);
+            }
+
+            return (paint, font);
+        }
+
+        /// <summary>What an element's children inherit, and the viewport they sit in: one step of <see cref="ResolveAncestorContext"/>'s replay, kept so it isn't repeated.</summary>
+        private readonly record struct AncestorContext(InheritedPaint Paint, FontContext Font, double? ViewportWidth, double? ViewportHeight);
+
+        private readonly Dictionary<ISvgSourceNode, AncestorContext> _ancestorContexts = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>The paint and font <paramref name="node"/>'s children inherit: its own properties layered over its parent's.</summary>
+        private (InheritedPaint Paint, FontContext Font) EnterDefinition(ISvgSourceNode node, InheritedPaint parentPaint, FontContext parentFont)
+        {
+            var wasContextOnly = _contextOnly;
+            _contextOnly = true;
+
+            try
+            {
+                return (ApplyCommon(new SvgGroupElement(), node, parentPaint), ComputeFontContext(node, parentFont));
+            }
+            finally
+            {
+                _contextOnly = wasContextOnly;
+            }
+        }
+
+        /// <summary>Applies the viewport change a nested <c>&lt;svg&gt;</c> (see <see cref="BuildNestedSvg"/>) or <c>&lt;symbol&gt;</c> (see <see cref="BuildSymbol"/>) makes for its content.</summary>
+        private void EnterViewport(ISvgSourceNode node)
+        {
+            switch (node.Name)
+            {
+                case "svg":
+                    var viewBox = SvgValueParsers.ParseViewBox(node.GetAttribute("viewBox"));
+                    var width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth, _lengthBasis) ?? _viewportWidth ?? 0;
+                    var height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight, _lengthBasis) ?? _viewportHeight ?? 0;
+                    _viewportWidth = viewBox?.Width ?? width;
+                    _viewportHeight = viewBox?.Height ?? height;
+                    break;
+                case "symbol":
+                    var symbolViewBox = SvgValueParsers.ParseViewBox(node.GetAttribute("viewBox"));
+                    _viewportWidth = symbolViewBox?.Width ?? _viewportWidth;
+                    _viewportHeight = symbolViewBox?.Height ?? _viewportHeight;
+                    break;
             }
         }
 
@@ -898,8 +1054,10 @@ namespace PeachPDF.Svg
         /// <summary>
         /// Resolves (and memoizes into <see cref="SvgDocument.ClipPaths"/>) the &lt;clipPath&gt;
         /// referenced by <paramref name="id"/>. Safe to call once the full id registry from
-        /// <see cref="CollectDefinitions"/> is in place, i.e. any time during pass 2. Paint
-        /// inheritance doesn't matter here - only the shapes' geometry is ever used for clipping.
+        /// <see cref="CollectDefinitions"/> is in place and the root context is known, i.e. any time
+        /// during <see cref="BuildDeferredDefinitions"/> or pass 2. The shapes are built against the
+        /// clipPath's own inherited context (its ancestors' font, so <c>em</c>/<c>rem</c> geometry resolves
+        /// correctly); only their geometry is ever used for clipping.
         /// </summary>
         private void ResolveClipPath(string id)
         {
@@ -909,24 +1067,35 @@ namespace PeachPDF.Svg
             if (!_nodesById.TryGetValue(id, out var node) || node.Name != "clipPath")
                 return;
 
-            var clipPath = new SvgClipPath
-            {
-                Id = id,
-                ClipRule = SvgValueParsers.ParseFillRule(node.GetAttribute("clip-rule")),
-                // Default is userSpaceOnUse; objectBoundingBox maps 0..1 child geometry to the
-                // referencing element's bounding box (resolved at render time).
-                ClipPathUnitsUserSpaceOnUse =
-                    !string.Equals(node.GetAttribute("clipPathUnits"), "objectBoundingBox", StringComparison.OrdinalIgnoreCase),
-            };
+            // A shape inside the clipPath that itself references this clipPath would otherwise recurse.
+            if (!_resolvingClipPaths.Add(id))
+                return;
 
-            foreach (var child in node.Children)
+            try
             {
-                var shape = BuildElement(child, InheritedPaint.Initial, FontContext.Default);
-                if (shape is not null)
-                    clipPath.Shapes.Add(shape);
+                var ancestors = _clipPathAncestors.GetValueOrDefault(id) ?? [];
+
+                _document.ClipPaths[id] = InDefinitionContext(node, ancestors, (parentPaint, parentFont) =>
+                {
+                    var clipPath = new SvgClipPath
+                    {
+                        Id = id,
+                        ClipRule = SvgValueParsers.ParseFillRule(node.GetAttribute("clip-rule")),
+                        // Default is userSpaceOnUse; objectBoundingBox maps 0..1 child geometry to the
+                        // referencing element's bounding box (resolved at render time).
+                        ClipPathUnitsUserSpaceOnUse =
+                            !string.Equals(node.GetAttribute("clipPathUnits"), "objectBoundingBox", StringComparison.OrdinalIgnoreCase),
+                    };
+
+                    var (paint, font) = EnterDefinition(node, parentPaint, parentFont);
+                    clipPath.Shapes.AddRange(BuildDefinitionChildren(node, paint, font));
+                    return clipPath;
+                });
             }
-
-            _document.ClipPaths[id] = clipPath;
+            finally
+            {
+                _resolvingClipPaths.Remove(id);
+            }
         }
 
         /// <summary>
@@ -1039,7 +1208,9 @@ namespace PeachPDF.Svg
                 {
                     var clipId = clipPathAttr[(hashIndex + 1)..closeIndex].Trim();
                     element.ClipPathRef = clipId;
-                    ResolveClipPath(clipId);
+
+                    if (!_contextOnly)
+                        ResolveClipPath(clipId);
                 }
             }
 
@@ -1688,7 +1859,7 @@ namespace PeachPDF.Svg
             }
         }
 
-        private SvgMarkerElement BuildMarker(ISvgSourceNode node)
+        private SvgMarkerElement BuildMarker(ISvgSourceNode node, InheritedPaint parentPaint, FontContext parentFont)
         {
             var orient = node.GetAttribute("orient");
 
@@ -1706,12 +1877,19 @@ namespace PeachPDF.Svg
                 OrientAngle = SvgValueParsers.ParseLength(orient) ?? 0,
             };
 
-            foreach (var child in node.Children)
+            var (paint, font) = EnterDefinition(node, parentPaint, parentFont);
+
+            // A shape inside the marker that inherits `marker-end: url(#thisMarker)` from an ancestor would draw the
+            // marker inside itself, without end - so drop just the inherited references to this marker. A reference
+            // to another marker is ordinary inheritance; a cycle through two markers is cut by the renderer's nesting cap.
+            var markerId = node.GetAttribute("id");
+            paint = paint with
             {
-                var element = BuildElement(child, InheritedPaint.Initial, FontContext.Default);
-                if (element is not null)
-                    marker.Children.Add(element);
-            }
+                MarkerStartRef = paint.MarkerStartRef == markerId ? null : paint.MarkerStartRef,
+                MarkerMidRef = paint.MarkerMidRef == markerId ? null : paint.MarkerMidRef,
+                MarkerEndRef = paint.MarkerEndRef == markerId ? null : paint.MarkerEndRef,
+            };
+            marker.Children.AddRange(BuildDefinitionChildren(node, paint, font));
 
             return marker;
         }
@@ -1724,49 +1902,62 @@ namespace PeachPDF.Svg
         /// any element's own paint is resolved) is available.
         /// </summary>
         private SvgPaint ResolveUrlPaintKind(SvgPaint paint) =>
-            paint.Kind == SvgPaintKind.GradientRef && paint.ReferenceId is { } id && !_document.Gradients.ContainsKey(id) && _document.Patterns.ContainsKey(id)
+            paint.Kind == SvgPaintKind.GradientRef && paint.ReferenceId is { } id && _nodesById.TryGetValue(id, out var target) && target.Name == "pattern"
                 ? SvgPaint.PatternRef(id)
                 : paint;
 
-        private SvgMask BuildMask(ISvgSourceNode node)
+        private SvgMask BuildMask(ISvgSourceNode node, InheritedPaint parentPaint, FontContext parentFont)
         {
             var isObjectBoundingBox = !string.Equals(node.GetAttribute("maskUnits"), "userSpaceOnUse", StringComparison.OrdinalIgnoreCase);
             var contentUnitsUserSpaceOnUse = !string.Equals(node.GetAttribute("maskContentUnits"), "objectBoundingBox", StringComparison.OrdinalIgnoreCase);
+
+            var (paint, font) = EnterDefinition(node, parentPaint, parentFont);
 
             var defaultMask = new SvgMask();
             var mask = new SvgMask
             {
                 Id = node.GetAttribute("id"),
-                X = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("x"), isObjectBoundingBox, _viewportWidth) ?? defaultMask.X,
-                Y = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("y"), isObjectBoundingBox, _viewportHeight) ?? defaultMask.Y,
-                Width = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("width"), isObjectBoundingBox, _viewportWidth) ?? defaultMask.Width,
-                Height = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("height"), isObjectBoundingBox, _viewportHeight) ?? defaultMask.Height,
+                X = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("x"), isObjectBoundingBox, _viewportWidth, _lengthBasis) ?? defaultMask.X,
+                Y = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("y"), isObjectBoundingBox, _viewportHeight, _lengthBasis) ?? defaultMask.Y,
+                Width = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("width"), isObjectBoundingBox, _viewportWidth, _lengthBasis) ?? defaultMask.Width,
+                Height = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("height"), isObjectBoundingBox, _viewportHeight, _lengthBasis) ?? defaultMask.Height,
                 MaskUnitsUserSpaceOnUse = !isObjectBoundingBox,
                 MaskContentUnitsUserSpaceOnUse = contentUnitsUserSpaceOnUse,
-                Children = BuildDefinitionChildren(node),
+                Children = BuildDefinitionChildren(node, paint, font),
             };
 
             return mask;
         }
 
-        private SvgPattern BuildPattern(ISvgSourceNode node)
+        private SvgPattern BuildPattern(ISvgSourceNode node, InheritedPaint parentPaint, FontContext parentFont)
         {
             var isObjectBoundingBox = !string.Equals(node.GetAttribute("patternUnits"), "userSpaceOnUse", StringComparison.OrdinalIgnoreCase);
             var contentUnitsUserSpaceOnUse = !string.Equals(node.GetAttribute("patternContentUnits"), "objectBoundingBox", StringComparison.OrdinalIgnoreCase);
 
+            var (paint, font) = EnterDefinition(node, parentPaint, parentFont);
+
+            var id = node.GetAttribute("id");
+
+            // Inheriting `fill="url(#thisPattern)"` from an ancestor into the pattern's own content would make
+            // the pattern paint itself without end (browsers treat the cyclic reference as none).
+            if (paint.Fill.Kind == SvgPaintKind.PatternRef && paint.Fill.ReferenceId == id)
+                paint = paint with { Fill = SvgPaint.None };
+            if (paint.Stroke.Kind == SvgPaintKind.PatternRef && paint.Stroke.ReferenceId == id)
+                paint = paint with { Stroke = SvgPaint.None };
+
             var pattern = new SvgPattern
             {
-                Id = node.GetAttribute("id"),
-                X = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("x"), isObjectBoundingBox, _viewportWidth) ?? 0,
-                Y = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("y"), isObjectBoundingBox, _viewportHeight) ?? 0,
-                Width = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("width"), isObjectBoundingBox, _viewportWidth) ?? 0,
-                Height = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("height"), isObjectBoundingBox, _viewportHeight) ?? 0,
+                Id = id,
+                X = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("x"), isObjectBoundingBox, _viewportWidth, _lengthBasis) ?? 0,
+                Y = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("y"), isObjectBoundingBox, _viewportHeight, _lengthBasis) ?? 0,
+                Width = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("width"), isObjectBoundingBox, _viewportWidth, _lengthBasis) ?? 0,
+                Height = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("height"), isObjectBoundingBox, _viewportHeight, _lengthBasis) ?? 0,
                 PatternUnitsUserSpaceOnUse = !isObjectBoundingBox,
                 PatternContentUnitsUserSpaceOnUse = contentUnitsUserSpaceOnUse,
                 PatternTransform = SvgTransformParser.Parse(node.GetAttribute("patternTransform")),
                 ViewBox = SvgValueParsers.ParseViewBox(node.GetAttribute("viewBox")),
                 PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(node.GetAttribute("preserveAspectRatio")),
-                Children = BuildDefinitionChildren(node),
+                Children = BuildDefinitionChildren(node, paint, font),
             };
 
             return pattern;
@@ -2389,14 +2580,14 @@ namespace PeachPDF.Svg
             return double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : fallback;
         }
 
-        /// <summary>Builds the renderable children of a pure definition element (<c>&lt;pattern&gt;</c>/<c>&lt;marker&gt;</c>/<c>&lt;mask&gt;</c>) - same recursion <see cref="BuildGroup"/> uses for an ordinary container, just not itself wrapped in a paintable <see cref="SvgElement"/>.</summary>
-        private List<SvgElement> BuildDefinitionChildren(ISvgSourceNode node)
+        /// <summary>Builds the renderable children of a pure definition element (<c>&lt;pattern&gt;</c>/<c>&lt;marker&gt;</c>/<c>&lt;mask&gt;</c>/<c>&lt;clipPath&gt;</c>) - same recursion <see cref="BuildGroup"/> uses for an ordinary container, just not itself wrapped in a paintable <see cref="SvgElement"/>. <paramref name="paint"/>/<paramref name="font"/> are what the definition element's own children inherit (see <see cref="EnterDefinition"/>).</summary>
+        private List<SvgElement> BuildDefinitionChildren(ISvgSourceNode node, InheritedPaint paint, FontContext font)
         {
             var children = new List<SvgElement>();
 
             foreach (var child in node.Children)
             {
-                var element = BuildElement(child, InheritedPaint.Initial, FontContext.Default);
+                var element = BuildElement(child, paint, font);
                 if (element is not null)
                     children.Add(element);
             }
@@ -2417,10 +2608,10 @@ namespace PeachPDF.Svg
                 // Spec defaults: x1/y1/y2 = 0%, x2 = 100% - expressed directly as the objectBoundingBox
                 // fraction (0 or 1); the userSpaceOnUse-mode default (100% of the current viewport,
                 // rather than a flat 0) is not resolved here, a minor known gap for the less common mode.
-                X1 = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("x1"), isObjectBoundingBox, _viewportWidth) ?? 0,
-                Y1 = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("y1"), isObjectBoundingBox, _viewportHeight) ?? 0,
-                X2 = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("x2"), isObjectBoundingBox, _viewportWidth) ?? (isObjectBoundingBox ? 1.0 : 0.0),
-                Y2 = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("y2"), isObjectBoundingBox, _viewportHeight) ?? 0,
+                X1 = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("x1"), isObjectBoundingBox, _viewportWidth, _lengthBasis) ?? 0,
+                Y1 = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("y1"), isObjectBoundingBox, _viewportHeight, _lengthBasis) ?? 0,
+                X2 = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("x2"), isObjectBoundingBox, _viewportWidth, _lengthBasis) ?? (isObjectBoundingBox ? 1.0 : 0.0),
+                Y2 = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("y2"), isObjectBoundingBox, _viewportHeight, _lengthBasis) ?? 0,
                 Stops = BuildStops(node),
             };
         }
@@ -2437,11 +2628,11 @@ namespace PeachPDF.Svg
                 SpreadMethod = SvgValueParsers.ParseSpreadMethod(node.GetAttribute("spreadMethod")),
                 // Spec defaults: cx/cy/r = 50% - expressed directly as the objectBoundingBox fraction
                 // (0.5); see BuildLinearGradient's comment re: the userSpaceOnUse-mode default gap.
-                Cx = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("cx"), isObjectBoundingBox, _viewportWidth) ?? (isObjectBoundingBox ? 0.5 : 0.0),
-                Cy = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("cy"), isObjectBoundingBox, _viewportHeight) ?? (isObjectBoundingBox ? 0.5 : 0.0),
-                R = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("r"), isObjectBoundingBox, ViewportDiagonal) ?? (isObjectBoundingBox ? 0.5 : 0.0),
-                Fx = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("fx"), isObjectBoundingBox, _viewportWidth),
-                Fy = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("fy"), isObjectBoundingBox, _viewportHeight),
+                Cx = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("cx"), isObjectBoundingBox, _viewportWidth, _lengthBasis) ?? (isObjectBoundingBox ? 0.5 : 0.0),
+                Cy = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("cy"), isObjectBoundingBox, _viewportHeight, _lengthBasis) ?? (isObjectBoundingBox ? 0.5 : 0.0),
+                R = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("r"), isObjectBoundingBox, ViewportDiagonal, _lengthBasis) ?? (isObjectBoundingBox ? 0.5 : 0.0),
+                Fx = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("fx"), isObjectBoundingBox, _viewportWidth, _lengthBasis),
+                Fy = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("fy"), isObjectBoundingBox, _viewportHeight, _lengthBasis),
                 Stops = BuildStops(node),
             };
         }
