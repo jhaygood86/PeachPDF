@@ -1674,98 +1674,10 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(40, p1!.Location.X - p2!.Location.X, 1);
         }
 
-        // ── Issue #768: real float wrap-around for vertical column flow ─────────
-
-        [Fact]
-        public async Task VerticalRl_FloatRight_NarrowsEarlyColumnsAndNoWordOverlapsIt()
-        {
-            await AssertFloatAvoidance(
-                floated: """
-                    <div id="wrapper" style="writing-mode: vertical-rl; width: 300px">
-                      <div id="floatBox" style="float: right; width: 30pt; height: 60pt"></div>
-                      <p id="after" style="width: 200pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p>
-                    </div>
-                    """,
-                unfloated: """
-                    <div id="wrapper" style="writing-mode: vertical-rl; width: 300px">
-                      <p id="after" style="width: 200pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p>
-                    </div>
-                    """);
-        }
-
-        [Fact]
-        public async Task VerticalRl_FloatLeft_NarrowsLaterColumnsAndNoWordOverlapsIt()
-        {
-            // "after" has an explicit width (200pt) giving it a fixed, font-independent physical span of
-            // [wrapper.ClientRight-200, wrapper.ClientRight] - but its actual columns are only created as
-            // content needs them, so how far left they actually reach (and whether they overflow past that
-            // declared span) is column-pitch/word-height dependent, i.e. font-metric dependent. A narrow
-            // float sized to just barely reach into that overflow zone on one font's metrics can miss
-            // entirely on another's (this previously passed locally on Windows but failed in CI on
-            // Ubuntu/macOS, whose default fallback font produces different metrics). Two independent
-            // safety margins remove that dependency: the float is widened/heightened to overlap most of
-            // "after"'s own always-present, font-independent [120,320] span rather than relying on
-            // overflow past it, and the word count is 6x'd so even a compact font's fewer, wider columns
-            // still walk deep into that span.
-            const string words = """
-                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
-                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
-                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
-                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
-                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
-                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
-                """;
-            await AssertFloatAvoidance(
-                floated: $"""
-                    <div id="wrapper" style="writing-mode: vertical-rl; width: 400px">
-                      <div id="floatBox" style="float: left; width: 280pt; height: 60pt"></div>
-                      <p id="after" style="width: 200pt; height: 60pt">{words}</p>
-                    </div>
-                    """,
-                unfloated: $"""
-                    <div id="wrapper" style="writing-mode: vertical-rl; width: 400px">
-                      <p id="after" style="width: 200pt; height: 60pt">{words}</p>
-                    </div>
-                    """);
-        }
-
-        [Fact]
-        public async Task VerticalLr_FloatLeft_NarrowsEarlyColumnsAndNoWordOverlapsIt()
-        {
-            await AssertFloatAvoidance(
-                floated: """
-                    <div id="wrapper" style="writing-mode: vertical-lr; width: 300px">
-                      <div id="floatBox" style="float: left; width: 30pt; height: 60pt"></div>
-                      <p id="after" style="width: 200pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p>
-                    </div>
-                    """,
-                unfloated: """
-                    <div id="wrapper" style="writing-mode: vertical-lr; width: 300px">
-                      <p id="after" style="width: 200pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p>
-                    </div>
-                    """);
-        }
-
-        [Fact]
-        public async Task VerticalRl_Rtl_FloatRight_NarrowsEarlyColumnsAndNoWordOverlapsIt()
-        {
-            // Explicit height on "after" - an auto-height inline-only vertical box under direction:rtl has
-            // a separate, pre-existing bug (words anchor against the provisional page-height bottom edge,
-            // not the final settled one, landing outside the box - unrelated to #768, not fixed here);
-            // sidestepped here since it isn't what this test is about.
-            await AssertFloatAvoidance(
-                floated: """
-                    <div id="wrapper" style="writing-mode: vertical-rl; direction: rtl; width: 300px; height: 350pt">
-                      <div id="floatBox" style="float: right; width: 30pt; height: 60pt"></div>
-                      <p id="after" style="width: 200pt; height: 330pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p>
-                    </div>
-                    """,
-                unfloated: """
-                    <div id="wrapper" style="writing-mode: vertical-rl; direction: rtl; width: 300px; height: 350pt">
-                      <p id="after" style="width: 200pt; height: 330pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p>
-                    </div>
-                    """);
-        }
+        // ── Issue #768 / #796: float wrap-around for vertical column flow ──────
+        //
+        // The placement and wrap-around of a float itself (line-left is the physical top, line-right the
+        // physical bottom) is covered by VerticalFloatIntegrationTests; what stays here is the routing.
 
         [Fact]
         public async Task VerticalRl_Float_TextBeforeItInSourceOrderIsUnaffected()
@@ -1885,74 +1797,6 @@ namespace PeachPDF.Tests.Integration
             Assert.True(floatBox!.IsFloated);
             Assert.NotEqual(default, floatBox.Location);
         }
-
-        private static async Task AssertFloatAvoidance(string floated, string unfloated)
-        {
-            const string fixtureStyle = "<style>html { font-family: 'Vertical Float Fixture' }</style>";
-            var (floatedRoot, _) = await LayoutHarness.LayoutAsync(
-                fixtureStyle + floated,
-                configureAdapter: RegisterVerticalFloatFont);
-            var (unfloatedRoot, _) = await LayoutHarness.LayoutAsync(
-                fixtureStyle + unfloated,
-                configureAdapter: RegisterVerticalFloatFont);
-
-            var floatBox = LayoutHarness.FindById(floatedRoot, "floatBox");
-            var floatedAfter = LayoutHarness.FindById(floatedRoot, "after");
-            var unfloatedAfter = LayoutHarness.FindById(unfloatedRoot, "after");
-            Assert.NotNull(floatBox);
-            Assert.NotNull(floatedAfter);
-            Assert.NotNull(unfloatedAfter);
-
-            var floatedWords = floatedAfter!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
-            var unfloatedWords = unfloatedAfter!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
-            Assert.Equal(unfloatedWords.Count, floatedWords.Count);
-
-            // The float must have actually changed something - a no-op implementation would produce
-            // byte-identical output versus the no-float baseline.
-            var anyDifference = false;
-            for (var i = 0; i < floatedWords.Count; i++)
-            {
-                if (System.Math.Abs(floatedWords[i].Top - unfloatedWords[i].Top) > 0.5
-                    || System.Math.Abs(floatedWords[i].Left - unfloatedWords[i].Left) > 0.5)
-                {
-                    anyDifference = true;
-                    break;
-                }
-            }
-            Assert.True(anyDifference, "the float should have changed at least one word's position versus the no-float baseline");
-
-            // No line box overlaps the float in both axes. Glyph ink may overhang its line box when
-            // line-height introduces negative leading, so its physical rectangle is not the exclusion edge.
-            foreach (var lineBox in floatedAfter.LineBoxes)
-            {
-                var columnWords = lineBox.Words.Where(w => !w.IsLineBreak).ToList();
-                if (columnWords.Count == 0) continue;
-
-                var thickness = columnWords.Max(word => word.OwnerBox.ActualLineHeight);
-                var lineLeft = floatedAfter.WritingMode.Value == WritingMode.VerticalRl
-                    ? columnWords.Max(word => word.Right) - thickness
-                    : columnWords.Min(word => word.Left);
-                var lineRight = lineLeft + thickness;
-                var lineOverlapsFloat = lineLeft < floatBox!.ActualRight + floatBox.ActualMarginRight
-                                         && lineRight > floatBox.Location.X - floatBox.ActualMarginLeft;
-
-                if (!lineOverlapsFloat) continue;
-
-                // A column's first word is placed despite unavoidable inline-axis overflow so layout
-                // continues making progress when the float leaves no usable room.
-                foreach (var word in columnWords.Skip(1))
-                {
-                    var overlapsY = word.Top < floatBox.ActualBottom + floatBox.ActualMarginBottom
-                                     && word.Top + word.Height > floatBox.Location.Y - floatBox.ActualMarginTop;
-
-                    Assert.False(overlapsY,
-                        $"line containing '{word.Text}' overlaps the float in both axes");
-                }
-            }
-        }
-
-        private static Task RegisterVerticalFloatFont(PdfSharpAdapter adapter) =>
-            BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "Vertical Float Fixture");
 
         private static double LineBoxBlockExtent(CssBox box) =>
             box.LineBoxes.Sum(line =>

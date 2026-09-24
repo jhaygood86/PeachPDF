@@ -29,6 +29,16 @@ namespace PeachPDF.Html.Core.Dom
     internal sealed class CssLineBox
     {
         /// <summary>
+        /// For a column of a vertical writing-mode box (<c>CssLayoutEngine.CreateVerticalLineBoxes</c>): how far a
+        /// float pinned to the physical top edge reaches into the column, and how far one pinned to the bottom
+        /// edge does. Text alignment and bidi reordering work within the span these leave.
+        /// </summary>
+        internal double VerticalTopInset { get; set; }
+
+        /// <inheritdoc cref="VerticalTopInset"/>
+        internal double VerticalBottomInset { get; set; }
+
+        /// <summary>
         /// Creates a new LineBox
         /// </summary>
         public CssLineBox(CssBox ownerBox)

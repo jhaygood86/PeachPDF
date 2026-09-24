@@ -815,10 +815,10 @@ namespace PeachPDF.Html.Core.Dom
         /// (fill-available, unaware of writing-mode) is unchanged; only auto height becomes genuinely
         /// content-driven, mirroring <see cref="CreateLineBoxes"/>'s own auto-height growth. Still scoped
         /// down: no leading/trailing inline spacing from a nested inline box's own border/padding/margin, no
-        /// <c>box-decoration-break: clone</c> - see the no-vertical-writing-mode-layout accepted gap. A
-        /// float's own starting position inside a vertical box's <em>block-level</em> content (a sibling of
-        /// this method, not a descendant reached here) remains a separate, pre-existing, out-of-scope gap;
-        /// see that accepted-gap file's own remaining-gaps section.
+        /// <c>box-decoration-break: clone</c> - see the no-vertical-writing-mode-layout accepted gap. A float
+        /// among the box's own inline content is placed by <see cref="CssBox.PlaceVerticalFloat"/> at the
+        /// block-axis position of the column the word stream has reached (issue #796); one in its
+        /// <em>block-level</em> content is placed the same way by <c>CssBox.LayoutVerticalBlockChildren</c>.
         /// </remarks>
         internal static async ValueTask CreateVerticalLineBoxes(RGraphics g, CssBox blockBox)
         {
@@ -827,7 +827,7 @@ namespace PeachPDF.Html.Core.Dom
             blockBox.LineBoxes.Clear();
 
             var words = new List<CssRect>();
-            var outOfFlowDescendants = new List<CssBox>();
+            var outOfFlowDescendants = new List<(CssBox Box, int WordIndex)>();
             await MeasureAndCollectWordsInDocumentOrder(g, blockBox, words, outOfFlowDescendants);
 
             var clientTop = blockBox.ClientTop;
@@ -870,8 +870,45 @@ namespace PeachPDF.Html.Core.Dom
             // LogicalPropertyResolver.BlockStart a second time for the same box.
             var widthIsAuto = !CssValueParser.IsValidLength(blockBox.Width);
 
+            var placedFloats = new List<CssBox.VerticalFloatPlacement>();
+            var bottomFloats = new List<(CssBox Box, double InlineFromBottom)>();
+            var nextFloat = 0;
+            var floatsInOrder = outOfFlowDescendants.Where(o => o.Box.IsFloated
+                && o.Box.DerivedStyle.ActualDisplay != Keywords.None).ToList();
+
+            // Places every float the word stream has reached by <paramref name="wordIndex"/>, at the block-axis
+            // position of the column being built (or of the box's block-start, before any column exists).
+            async ValueTask<bool> PlaceFloatsUpTo(int wordIndex, double atBlockOffset)
+            {
+                var placedAny = false;
+
+                while (nextFloat < floatsInOrder.Count && floatsInOrder[nextFloat].WordIndex <= wordIndex)
+                {
+                    await CssBox.PlaceVerticalFloat(g, floatsInOrder[nextFloat].Box, frame, clientTop, atBlockOffset,
+                        placedFloats, bottomFloats, heightIsAuto ? null : wrapLimit);
+                    nextFloat++;
+                    placedAny = true;
+                }
+
+                return placedAny;
+            }
+
+            // A word split in two (hyphenation, overflow-wrap) puts one more word in the stream, so the floats that
+            // follow it in the source now follow one word further on.
+            void ShiftFloatsAfter(int splitIndex)
+            {
+                for (var f = nextFloat; f < floatsInOrder.Count; f++)
+                {
+                    if (floatsInOrder[f].WordIndex > splitIndex)
+                        floatsInOrder[f] = (floatsInOrder[f].Box, floatsInOrder[f].WordIndex + 1);
+                }
+            }
+
             if (words.Count == 0)
             {
+                await PlaceFloatsUpTo(int.MaxValue, 0);
+                blockBox.SetPendingBottomFloats(bottomFloats);
+
                 if (heightIsAuto) blockBox.ActualBottom = clientTop;
                 if (widthIsAuto) ShrinkAutoWidthTo(blockBox, frame, 0);
                 await LayoutOutOfFlowDescendants(g, blockBox, outOfFlowDescendants);
@@ -887,7 +924,16 @@ namespace PeachPDF.Html.Core.Dom
             var currentColumnHyphenated = false;
             var trailingRegionalIndicatorCount = 0;
             var trailingGraphemeContext = string.Empty;
-            var effectiveWrapLimit = ComputeEffectiveWrapLimit(blockBox, frame, clientTop, wrapLimit, 0);
+            // Where the current column's content starts along the inline axis and how far it may run: a float
+            // pinned to the line-left or line-right side (physical top or bottom) takes that end of the column
+            // (CSS Writing Modes 4 section 7.5), so words start after it and stop before the one on the other side.
+            await PlaceFloatsUpTo(0, 0);
+
+            var (columnStartInset, effectiveWrapLimit, columnTopInset, columnBottomInset) =
+                ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, 0, placedFloats);
+            inlineOffset = columnStartInset;
+            line.VerticalTopInset = columnTopInset;
+            line.VerticalBottomInset = columnBottomInset;
 
             // Whether blockBox's own white-space permits a column break anywhere in its content at all -
             // FlowBox's own `blockBoxPermitsWrap` counterpart (issue #841). Read once: if blockBox itself
@@ -897,7 +943,9 @@ namespace PeachPDF.Html.Core.Dom
             var blockBoxPermitsWrap = blockBox.WhiteSpace.Value != Whitespace.NoWrap
                                        && blockBox.WhiteSpace.Value != Whitespace.Pre;
 
-            void StartNewLine()
+            var currentWordIndex = 0;
+
+            async ValueTask StartNewLine()
             {
                 // The column about to close is being abandoned for a new one - fold whether it ended in a
                 // hyphen into the running consecutive-hyphenated-columns count before that state resets.
@@ -906,18 +954,44 @@ namespace PeachPDF.Html.Core.Dom
 
                 maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
                 blockOffset += lineThickness;
-                inlineOffset = 0;
                 lineThickness = 0;
                 trailingRegionalIndicatorCount = 0;
                 trailingGraphemeContext = string.Empty;
+
+                // A float the word stream reached while the closing column held words goes beside the next one,
+                // placed now that this column's thickness is final: a taller word arriving mid-column could
+                // otherwise have reached into a float placed against the thickness so far.
+                await PlaceFloatsUpTo(currentWordIndex, blockOffset);
+
                 line = new CssLineBox(blockBox);
-                effectiveWrapLimit = ComputeEffectiveWrapLimit(blockBox, frame, clientTop, wrapLimit, blockOffset);
+                (columnStartInset, effectiveWrapLimit, columnTopInset, columnBottomInset) =
+                    ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, blockOffset, placedFloats);
+                inlineOffset = columnStartInset;
+                line.VerticalTopInset = columnTopInset;
+                line.VerticalBottomInset = columnBottomInset;
             }
 
             var pendingWordSeparator = false;
 
             for (var i = 0; i < words.Count; i++)
             {
+                currentWordIndex = i;
+
+                // A float the word stream has just reached is no higher than the column being built (CSS 2.1
+                // section 9.5.1 rule 6, axes swapped): at its block-axis position while the column is still empty.
+                // Once words are on the column it waits for the next one (StartNewLine), so it never overlaps words
+                // already placed or yet to come.
+                if (nextFloat < floatsInOrder.Count && floatsInOrder[nextFloat].WordIndex <= i
+                    && line.Words.Count == 0
+                    && await PlaceFloatsUpTo(i, blockOffset))
+                {
+                    (columnStartInset, effectiveWrapLimit, columnTopInset, columnBottomInset) =
+                        ComputeColumnInlineSpan(blockBox, frame, clientTop, wrapLimit, blockOffset, placedFloats);
+                    inlineOffset = columnStartInset;
+                    line.VerticalTopInset = columnTopInset;
+                    line.VerticalBottomInset = columnBottomInset;
+                }
+
                 var word = words[i];
 
                 if (word.IsLineBreak)
@@ -925,7 +999,7 @@ namespace PeachPDF.Html.Core.Dom
                     // See CssLineBox.PrecedesForcedBreak: the column this break closes is the last one of
                     // its paragraph, so text-align-last governs it (css-text-3 §6.1/§6.3).
                     line.PrecedesForcedBreak = true;
-                    StartNewLine();
+                    await StartNewLine();
                     continue;
                 }
 
@@ -988,6 +1062,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     words[i] = prefixWord!;
                     words.Insert(i + 1, suffixWord!);
+                    ShiftFloatsAfter(i);
 
                     // TryHyphenateWord never sets this - without it, ApplyVerticalBidiReordering would
                     // treat a hyphenated fragment as base-level LTR regardless of its true embedding level.
@@ -1004,11 +1079,12 @@ namespace PeachPDF.Html.Core.Dom
                     currentColumnHyphenated = true;
                 }
 
-                if (wordDoesNotFit && (inlineOffset == 0 || !hasOrdinaryWrapBefore) &&
+                if (wordDoesNotFit && (inlineOffset <= columnStartInset || !hasOrdinaryWrapBefore) &&
                     TryOverflowWrapWord(g, word, effectiveWrapLimit - inlineOffset, out var overflowPrefix,
                         out var overflowSuffix))
                 {
                     ReplaceCollectedWordWithOverflowWrapSplit(words, i, word, overflowPrefix!, overflowSuffix!);
+                    ShiftFloatsAfter(i);
                     word = overflowPrefix!;
                     (naturalWidth, naturalHeight) = NaturalWordSize(g, word);
                     wordRectInline = naturalWidth;
@@ -1030,7 +1106,7 @@ namespace PeachPDF.Html.Core.Dom
                                           && (i == 0 || words[i - 1].OwnerBox != word.OwnerBox);
 
                 var wrapsWholeNoWrapRun = false;
-                if (entersNewNoWrapRun && inlineOffset > 0)
+                if (entersNewNoWrapRun && inlineOffset > columnStartInset)
                 {
                     // The run's own total *inline-axis* (along-the-column) extent - NaturalWordSize's
                     // Width, the same quantity wordAdvance above is built from, not Height (the cross-axis
@@ -1050,19 +1126,20 @@ namespace PeachPDF.Html.Core.Dom
                 // guard FlowBox's own wrap check already applies. inlineOffset > 0 (a real word already
                 // placed in this column) avoids wrapping a column that is still empty - the same
                 // unavoidable-overflow fallback FlowBox's own first-word-of-a-line case gets.
-                var startedNewLine = inlineOffset > 0
+                var startedNewLine = inlineOffset > columnStartInset
                     && ((hasOrdinaryWrapBefore && wordDoesNotFit)
                         || (!hasOrdinaryWrapBefore && wordDoesNotFit
                             && isGraphemeBoundary && AllowsOverflowWrapAtBoundary(previousWord, word))
                         || (!word.SuppressWrapBefore && wrapsWholeNoWrapRun));
                 if (startedNewLine)
-                    StartNewLine();
+                    await StartNewLine();
 
-                if (startedNewLine && naturalWidth > effectiveWrapLimit &&
-                    TryOverflowWrapWord(g, word, effectiveWrapLimit, out overflowPrefix,
+                if (startedNewLine && naturalWidth > effectiveWrapLimit - columnStartInset &&
+                    TryOverflowWrapWord(g, word, effectiveWrapLimit - columnStartInset, out overflowPrefix,
                         out overflowSuffix))
                 {
                     ReplaceCollectedWordWithOverflowWrapSplit(words, i, word, overflowPrefix!, overflowSuffix!);
+                    ShiftFloatsAfter(i);
                     word = overflowPrefix!;
                     (naturalWidth, naturalHeight) = NaturalWordSize(g, word);
                     wordRectInline = naturalWidth;
@@ -1100,6 +1177,12 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
+
+            // Floats after the last word, and the ones pinned to the bottom edge, which
+            // CssBox.PerformLayoutEpilogue moves there once that edge is final. Placed before the auto width
+            // settles, as the ones in the loop above were, so shrinking moves them all together.
+            await PlaceFloatsUpTo(int.MaxValue, blockOffset + lineThickness);
+            blockBox.SetPendingBottomFloats(bottomFloats);
 
             // Auto height/width must settle before text-align/bidi below - both read the box's own final
             // ClientTop/ClientBottom, which ApplyHeight would otherwise not have resolved yet. This also
@@ -1196,8 +1279,13 @@ namespace PeachPDF.Html.Core.Dom
                 // text-align before bidi, for the same reason FinalizeLineBoxes orders them this way for
                 // horizontal flow: alignment establishes the column's own outer span, and bidi only ever
                 // reflects positions within that span - it never moves the span's own edges.
-                ApplyVerticalTextAlignment(lineBox, finalFrame, isLastColumn, clientTop, clientBottom);
-                ApplyVerticalBidiReordering(lineBox, finalFrame, clientTop, clientBottom);
+                //
+                // The column's own span, not the box's: a float pinned to the physical top or bottom took that
+                // end of it (VerticalTopInset/VerticalBottomInset), and alignment is within what is left.
+                var spanTop = clientTop + lineBox.VerticalTopInset;
+                var spanBottom = clientBottom - lineBox.VerticalBottomInset;
+                ApplyVerticalTextAlignment(lineBox, finalFrame, isLastColumn, spanTop, spanBottom);
+                ApplyVerticalBidiReordering(lineBox, finalFrame, spanTop, spanBottom);
 
                 BubbleRectangles(blockBox, lineBox);
                 lineBox.AssignRectanglesToBoxes();
@@ -1205,25 +1293,46 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// The inline-axis extent a column starting at block-axis position <paramref name="blockOffset"/>
-        /// can actually use, narrowed from <paramref name="wrapLimit"/> by whichever floated sibling (found
-        /// via <see cref="DomUtils.GetVerticalFloatConstraint"/>) occupies this column's own block-axis
-        /// position and leaves the least room. Computed once per column (called from <c>StartNewLine</c>,
-        /// not per word) since a column's own block-axis position, unlike a horizontal line's right-float
-        /// wrap boundary, never changes mid-column.
+        /// The inline-axis span a column starting at block-axis position <paramref name="blockOffset"/> can
+        /// actually use: where its content starts (the room a float pinned to the physical top or bottom takes at
+        /// the column's inline-start end) and how far it may run (<paramref name="wrapLimit"/>, less what a float
+        /// takes at the other end). Both come from the floated siblings found via
+        /// <see cref="DomUtils.GetVerticalFloatInsets"/>. Computed once per column (called from <c>StartNewLine</c>,
+        /// not per word) since a column's own block-axis position, unlike a horizontal line's right-float wrap
+        /// boundary, never changes mid-column.
         /// </summary>
-        private static double ComputeEffectiveWrapLimit(CssBox blockBox, WritingModeFrame frame, double clientTop,
-            double wrapLimit, double blockOffset)
+        private static (double StartInset, double WrapLimit, double TopInset, double BottomInset) ComputeColumnInlineSpan(
+            CssBox blockBox, WritingModeFrame frame,
+            double clientTop, double wrapLimit, double blockOffset, List<CssBox.VerticalFloatPlacement>? ownFloats = null)
         {
             var columnBlockAxisPoint = frame.ToPhysical(0, blockOffset).X;
 
             // The same provisional bottom edge frame itself was built from (clientTop + wrapLimit), not
             // blockBox.ClientBottom - which, for an auto-height box, is not yet resolved at this point.
-            var columnInlineStart = frame.InlineStartIsBottom ? clientTop + wrapLimit : clientTop;
+            var (topInset, bottomInset) = DomUtils.GetVerticalFloatInsets(
+                blockBox, columnBlockAxisPoint, frame.BlockStartIsRight, clientTop, clientTop + wrapLimit);
 
-            var constraint = DomUtils.GetVerticalFloatConstraint(blockBox, columnBlockAxisPoint, columnInlineStart, frame.InlineStartIsBottom);
+            // Floats this box's own inline flow placed are its children, which the scan of preceding siblings
+            // does not reach.
+            if (ownFloats is not null)
+            {
+                foreach (var own in ownFloats)
+                {
+                    if (own.Box.VerticalFloatOccupancy is not { } reach) continue;
 
-            return constraint is { } extent ? Math.Min(wrapLimit, extent) : wrapLimit;
+                    if (DomUtils.VerticalFloatCoversBlockPoint(own.Box, columnBlockAxisPoint, frame.BlockStartIsRight))
+                    {
+                        reach.GrowInsets(clientTop, clientTop + wrapLimit, ref topInset, ref bottomInset);
+                    }
+                }
+            }
+
+            // The line-left float (physical top) is at the column's start when inline-start is the top and at
+            // its end when inline-start is the bottom, and the reverse for the line-right one.
+            var (startInset, endInset) = frame.InlineStartIsBottom ? (bottomInset, topInset) : (topInset, bottomInset);
+
+            // A float covering the whole column leaves no usable extent, but a column still holds one word.
+            return (startInset, Math.Max(startInset, wrapLimit - endInset), topInset, bottomInset);
         }
 
         /// <summary>
@@ -1437,7 +1546,7 @@ namespace PeachPDF.Html.Core.Dom
         /// formula, then converted from that branch's border-box result down to the content height
         /// <see cref="CreateVerticalLineBoxes"/>'s wrap limit actually needs.
         /// </summary>
-        private static double DefiniteContentHeight(CssBox box)
+        internal static double DefiniteContentHeight(CssBox box)
         {
             var borderBoxHeight = CssValueParser.ParseLength(box.Height, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
 
@@ -1454,7 +1563,7 @@ namespace PeachPDF.Html.Core.Dom
         /// direct words, not its descendants'.
         /// </summary>
         private static async ValueTask MeasureAndCollectWordsInDocumentOrder(RGraphics g, CssBox box,
-            List<CssRect> words, List<CssBox> outOfFlowDescendants)
+            List<CssRect> words, List<(CssBox Box, int WordIndex)> outOfFlowDescendants)
         {
             if (box.Words.Count > 0)
             {
@@ -1478,7 +1587,10 @@ namespace PeachPDF.Html.Core.Dom
                 // column flow would place its content inline.
                 if (child.IsOutOfFlow)
                 {
-                    outOfFlowDescendants.Add(child);
+                    // Where in the word stream it sits, for a float: it is placed at the block-axis position
+                    // the column flow has reached by then (CSS 2.1 section 9.5.1 rule 6, axes swapped).
+                    outOfFlowDescendants.Add((child, words.Count));
+                    child.ResetVerticalFloatOccupancy();
                     continue;
                 }
 
@@ -1497,11 +1609,16 @@ namespace PeachPDF.Html.Core.Dom
         /// <paramref name="blockBox"/>'s own auto width/height have settled, so a same-box positioned
         /// ancestor resolves against final geometry.
         /// </summary>
-        private static async ValueTask LayoutOutOfFlowDescendants(RGraphics g, CssBox blockBox, List<CssBox> outOfFlowDescendants)
+        private static async ValueTask LayoutOutOfFlowDescendants(RGraphics g, CssBox blockBox,
+            List<(CssBox Box, int WordIndex)> outOfFlowDescendants)
         {
-            foreach (var child in outOfFlowDescendants)
+            foreach (var (child, _) in outOfFlowDescendants)
             {
                 if (child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
+                // A float the column flow already placed (CreateVerticalLineBoxes) is done.
+                if (child.IsFloated && child.VerticalFloatOccupancy is not null) continue;
+
                 await blockBox.LayoutBlockChild(g, child);
             }
         }

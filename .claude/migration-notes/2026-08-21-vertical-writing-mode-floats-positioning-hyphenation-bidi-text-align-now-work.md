@@ -20,10 +20,9 @@ breaks, Unicode Bidi Algorithm reordering, and `text-align`. All five now work.
   and reserves no space in the surrounding column flow — previously it flowed as ordinary inline
   content, ignoring its own positioning entirely.
 - **`float: left`/`right`** on a sibling of vertical text now actually narrows the columns that share
-  its physical position — vertical columns wrap around a float the same way horizontal lines already
-  do. `float`'s own physical-left/right semantics are unchanged by writing-mode (confirmed against
-  current spec text and real browser behavior); only the *column-avoidance* side of float layout was
-  missing before.
+  its position — vertical columns wrap around a float the same way horizontal lines already do. (This
+  entry originally said `left`/`right` stay physical under a vertical writing mode; they are line-relative,
+  and were made so in [2026-09-24-vertical-floats-and-clear-are-line-relative.md](2026-09-24-vertical-floats-and-clear-are-line-relative.md).)
 
 **Not part of this change**, and still open as separate, narrower issues: a float's own starting
 position when interleaved between vertical text runs, and `clear` on an ordinary block-level child of
