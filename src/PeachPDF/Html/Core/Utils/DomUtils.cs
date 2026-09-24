@@ -1,4 +1,4 @@
-﻿// "Therefore those skilled at the unorthodox
+// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -739,6 +739,108 @@ namespace PeachPDF.Html.Core.Utils
             } while (currentBox is { IsPositioned: false, EffectiveParentBox: not null });
 
             return currentBox!;
+        }
+
+        /// <summary>
+        /// The next box up the chain whose <c>overflow</c> clip can apply to <paramref name="box"/>, or
+        /// null when no box in the document can clip it. An absolutely positioned box continues at the
+        /// nearest ancestor that forms its containing block, a fixed one at the nearest ancestor that forms
+        /// a fixed-position containing block (null when there is none, since the page is then its
+        /// containing block), and any other box at its ordinary <see cref="CssBox.ContainingBlock"/>. As
+        /// with <see cref="CssBox.ContainingBlock"/>, the root returns itself.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see href="https://www.w3.org/TR/css-overflow-3/#overflow-properties">CSS Overflow 3 §3</see>:
+        /// an overflow clip affects descendants whose containing block chain passes through the clipping
+        /// box, so an <c>overflow: hidden</c> box sitting between an out-of-flow positioned descendant and
+        /// that descendant's containing block does not clip it.
+        /// </para>
+        /// <para>
+        /// Besides a positioned ancestor (absolute only), <c>transform</c>, <c>perspective</c>, <c>filter</c>
+        /// and <c>backdrop-filter</c> each form the containing block of both kinds of positioned
+        /// descendant (CSS Transforms 1 §2, CSS Transforms 2 §13, Filter Effects 1 §3 and 2 §3.1). Layout
+        /// still places such a descendant against its nearest positioned ancestor or the page, but the
+        /// clip follows the specification so that a transformed <c>overflow: hidden</c> box keeps
+        /// clipping its positioned descendants, as it did before clipping honoured the containing-block
+        /// chain.
+        /// </para>
+        /// </remarks>
+        /// <param name="box">the box being clipped</param>
+        /// <returns>the next box on its clipping containing-block chain, or null</returns>
+        internal static CssBox? ClippingContainingBlockOf(CssBox box)
+        {
+            var position = box.Position.Value;
+            if (position is not (PositionMode.Absolute or PositionMode.Fixed) || box.EffectiveParentBox is null)
+                return box.ContainingBlock;
+
+            var current = box.EffectiveParentBox;
+
+            while (true)
+            {
+                if (FormsContainingBlockForFixed(current)
+                    || (position is PositionMode.Absolute && current.IsPositioned))
+                    return current;
+
+                if (current.EffectiveParentBox is not { } parent)
+                    return position is PositionMode.Absolute ? current : null;
+
+                current = parent;
+            }
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> forms the containing block of its <c>position: fixed</c> (and
+        /// so also its absolutely positioned) descendants without being positioned itself.
+        /// </summary>
+        private static bool FormsContainingBlockForFixed(CssBox box) =>
+            box.IsTransformed
+            || box.ActualPerspective > 0
+            || box.ActualFilterFunctions.Count > 0
+            || box.ActualBackdropFilterFunctions.Count > 0;
+
+        /// <summary>
+        /// Whether <paramref name="box"/>'s <c>overflow: hidden</c> clips its descendants. CSS Overflow 3
+        /// applies <c>overflow</c> to block containers, flex and grid containers, not to a non-atomic
+        /// inline box or to a table row, row group, column or column group, so those never clip.
+        /// </summary>
+        /// <param name="box">the candidate clipping box</param>
+        /// <returns>true when <paramref name="box"/> has <c>overflow: hidden</c> and <c>overflow</c> applies to it</returns>
+        internal static bool ClipsItsOverflow(CssBox box) =>
+            box.Overflow.Value == Overflow.Hidden
+            && !(box.IsInline && !IsAtomicInline(box))
+            && !box.IsTableRowGroupBox
+            && box.DerivedStyle.ActualDisplay is not (Keywords.TableRow or Keywords.TableColumn or Keywords.TableColumnGroup);
+
+        /// <summary>
+        /// Whether <paramref name="ancestor"/>'s <c>overflow</c> clip applies to <paramref name="box"/>:
+        /// whether the walk up from <paramref name="box"/> reaches it without an out-of-flow positioned
+        /// box on the way jumping past it to its own containing block (<see cref="ClippingContainingBlockOf"/>).
+        /// </summary>
+        /// <remarks>
+        /// Every other step goes to <see cref="CssBox.EffectiveParentBox"/>, not
+        /// <see cref="CssBox.ContainingBlock"/>. The ordinary containing-block walk skips ancestors whose
+        /// display it doesn't list (a <c>table-caption</c> with <c>overflow: hidden</c> among them) and stops
+        /// at a detached repeating <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>, and either would drop a clip
+        /// that in-flow content inside it has always had.
+        /// </remarks>
+        /// <param name="box">the box being clipped</param>
+        /// <param name="ancestor">a candidate clipping ancestor</param>
+        /// <returns>true when <paramref name="ancestor"/>'s overflow clip applies to <paramref name="box"/></returns>
+        internal static bool IsOnClippingChainOf(CssBox box, CssBox ancestor)
+        {
+            var current = box;
+
+            while (true)
+            {
+                var next = current.Position.Value is PositionMode.Absolute or PositionMode.Fixed
+                    ? ClippingContainingBlockOf(current)
+                    : current.EffectiveParentBox;
+
+                if (next is null || ReferenceEquals(next, current)) return false;
+                if (ReferenceEquals(next, ancestor)) return true;
+                current = next;
+            }
         }
 
         /// <summary>

@@ -1,4 +1,4 @@
-﻿using PeachPDF.Adapters;
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -2165,17 +2165,19 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             if (draft.DisplacementRoot is not { } root) return false;
 
-            var containingBlock = draft.Box.ContainingBlock;
+            var containingBlock = DomUtils.ClippingContainingBlockOf(draft.Box);
 
-            while (true)
+            while (containingBlock is not null)
             {
-                if (containingBlock.Overflow.Value == Overflow.Hidden)
+                if (DomUtils.ClipsItsOverflow(containingBlock))
                     return IsSelfOrAncestor(root, containingBlock);
 
-                var next = containingBlock.ContainingBlock;
+                var next = DomUtils.ClippingContainingBlockOf(containingBlock);
                 if (ReferenceEquals(next, containingBlock)) return false;
                 containingBlock = next;
             }
+
+            return false;
         }
 
         /// <summary>Whether <paramref name="box"/> is <paramref name="root"/> or sits beneath it.</summary>
@@ -2871,17 +2873,20 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <para>
         /// A box outside the snapshot is read live, which is correct: the only boxes whose live geometry
         /// is stale are the ones inside a proxied subtree, and those are exactly the ones the snapshot
-        /// holds. That is also all the walk can reach — <c>CssLayoutEngineTable.RemoveHeaderFooterFromTree</c>
-        /// detaches the source row-group, so the chain ends there and never leaves the subtree.
+        /// holds. For in-flow content that is also all the walk can reach —
+        /// <c>CssLayoutEngineTable.RemoveHeaderFooterFromTree</c> detaches the source row-group, so the
+        /// chain ends there. An out-of-flow positioned box inside it can leave the subtree
+        /// (<see cref="DomUtils.ClippingContainingBlockOf"/> climbs through the detachment), but only to
+        /// its own containing block outside the table, which is not proxied and so is read live correctly.
         /// </para>
         /// </remarks>
         private static (RRect Rect, BorderRadii? Radii)? OverflowClipOf(CssBox box, BoxGeometrySnapshot? snapshot, double originY)
         {
-            var containingBlock = box.ContainingBlock;
+            var containingBlock = DomUtils.ClippingContainingBlockOf(box);
 
-            while (true)
+            while (containingBlock is not null)
             {
-                if (containingBlock.Overflow.Value == Overflow.Hidden)
+                if (DomUtils.ClipsItsOverflow(containingBlock))
                 {
                     var borderBoxRect = ClipSourceBoundsOf(containingBlock, snapshot);
                     var paddingRect = RenderUtils.PaddingEdgeOf(containingBlock, borderBoxRect);
@@ -2893,10 +2898,12 @@ namespace PeachPDF.Html.Core.Fragmentation
                     return (Localize(paddingRect, originY), radii);
                 }
 
-                var next = containingBlock.ContainingBlock;
+                var next = DomUtils.ClippingContainingBlockOf(containingBlock);
                 if (ReferenceEquals(next, containingBlock)) return null;
                 containingBlock = next;
             }
+
+            return null;
         }
 
         /// <summary>

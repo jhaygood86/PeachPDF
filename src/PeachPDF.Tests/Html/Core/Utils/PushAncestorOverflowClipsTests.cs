@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var movedAncestor = FragmentPaintHarness.FragmentOf(container, hBox) with { Rect = movedRect };
 
             var recording = new TestRecordingGraphics();
-            RenderUtils.PushAncestorOverflowClips(recording, [movedAncestor]);
+            RenderUtils.PushAncestorOverflowClips(recording, DomUtils.GetBoxById(root, "hoisted")!, [movedAncestor]);
 
             var pushed = Assert.Single(recording.Log.OfType<PushClipCall>());
             var expected = RenderUtils.PaddingEdgeOf(hBox, movedRect);
@@ -64,10 +64,114 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var ancestor = FragmentPaintHarness.FragmentOf(container, plainBox);
 
             var recording = new TestRecordingGraphics();
-            var pushed = RenderUtils.PushAncestorOverflowClips(recording, [ancestor]);
+            var pushed = RenderUtils.PushAncestorOverflowClips(recording, DomUtils.GetBoxById(root, "hoisted")!, [ancestor]);
 
             Assert.Equal(0, pushed);
             Assert.Empty(recording.Log.OfType<PushClipCall>());
+        }
+
+        // CSS Overflow 3 §3: an overflow clip only reaches descendants whose containing block chain
+        // passes through the clipping box. An absolutely positioned box's containing block is its
+        // nearest positioned ancestor, so a non-positioned overflow:hidden box in between does not clip it.
+        private const string AbsposPastNonPositionedClip =
+            "<div id='cb' style='position:relative;width:200pt;height:100pt'>" +
+            "<div id='h' style='overflow:hidden;width:100pt;height:5pt'>" +
+            "<div id='abs' style='position:absolute;top:0;left:0;width:80pt;height:40pt'></div></div></div>";
+
+        [Fact]
+        public async Task PushesNoClip_WhenHoistedAbsposBoxsContainingBlockIsAboveTheClippingAncestor()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(AbsposPastNonPositionedClip));
+
+            var ancestor = FragmentPaintHarness.FragmentOf(container, DomUtils.GetBoxById(root, "h")!);
+
+            var recording = new TestRecordingGraphics();
+            var pushed = RenderUtils.PushAncestorOverflowClips(recording, DomUtils.GetBoxById(root, "abs")!, [ancestor]);
+
+            Assert.Equal(0, pushed);
+            Assert.Empty(recording.Log.OfType<PushClipCall>());
+        }
+
+        [Fact]
+        public async Task AbsposFragment_HasNoOverflowClip_FromANonPositionedClippingAncestorBelowItsContainingBlock()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(AbsposPastNonPositionedClip));
+
+            var absFragment = FragmentPaintHarness.FragmentOf(container, DomUtils.GetBoxById(root, "abs")!);
+
+            Assert.Null(absFragment.OverflowClip);
+        }
+
+        [Fact]
+        public async Task AbsposFragment_IsClipped_ByAPositionedClippingContainingBlock()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='h' style='position:relative;overflow:hidden;width:100pt;height:5pt'>" +
+                "<div><div id='abs' style='position:absolute;top:0;left:0;width:80pt;height:40pt'></div></div></div>"));
+
+            var hBox = DomUtils.GetBoxById(root, "h")!;
+            var absBox = DomUtils.GetBoxById(root, "abs")!;
+            var absFragment = FragmentPaintHarness.FragmentOf(container, absBox);
+
+            Assert.NotNull(absFragment.OverflowClip);
+            Assert.Equal(5, absFragment.OverflowClip!.Value.Height, 3);
+
+            var recording = new TestRecordingGraphics();
+            var pushed = RenderUtils.PushAncestorOverflowClips(recording, absBox, [FragmentPaintHarness.FragmentOf(container, hBox)]);
+
+            Assert.Equal(1, pushed);
+        }
+
+        [Fact]
+        public async Task StaticChildOfAbsposBox_IsNotClipped_ByTheNonPositionedAncestorItsParentEscapes()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div style='position:relative;width:200pt;height:100pt'>" +
+                "<div style='overflow:hidden;width:100pt;height:5pt'>" +
+                "<div style='position:absolute;top:0;left:0;width:80pt;height:40pt'>" +
+                "<div id='inner' style='height:30pt'></div></div></div></div>"));
+
+            var innerFragment = FragmentPaintHarness.FragmentOf(container, DomUtils.GetBoxById(root, "inner")!);
+
+            Assert.Null(innerFragment.OverflowClip);
+        }
+
+        // css-position-3 §2.1: a fixed box's containing block is the viewport (the page), unless an
+        // ancestor with transform/perspective/filter/backdrop-filter forms it instead.
+        [Fact]
+        public async Task FixedFragment_HasNoOverflowClip_WithoutATransformedAncestor()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='h' style='position:relative;overflow:hidden;width:100pt;height:5pt'>" +
+                "<div id='fixed' style='position:fixed;top:0;left:0;width:80pt;height:40pt'></div></div>"));
+
+            var fixedBox = DomUtils.GetBoxById(root, "fixed")!;
+            var fixedFragment = FragmentPaintHarness.FragmentOf(container, fixedBox);
+
+            Assert.Null(fixedFragment.OverflowClip);
+            Assert.False(DomUtils.IsOnClippingChainOf(fixedBox, DomUtils.GetBoxById(root, "h")!));
+        }
+
+        [Theory]
+        [InlineData("transform:translate(1pt,0)")]
+        [InlineData("filter:opacity(0.9)")]
+        [InlineData("perspective:100pt")]
+        public async Task OutOfFlowFragment_IsClipped_ByANonPositionedClippingAncestorThatFormsItsContainingBlock(string effect)
+        {
+            foreach (var position in new[] { "absolute", "fixed" })
+            {
+                var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                    "<div style='position:relative;width:200pt;height:100pt'>" +
+                    $"<div id='h' style='overflow:hidden;{effect};width:100pt;height:5pt'>" +
+                    $"<div id='oof' style='position:{position};top:0;left:0;width:80pt;height:40pt'></div></div></div>"));
+
+                var oofBox = DomUtils.GetBoxById(root, "oof")!;
+                var fragment = FragmentPaintHarness.FragmentOf(container, oofBox);
+
+                Assert.NotNull(fragment.OverflowClip);
+                Assert.Equal(5, fragment.OverflowClip!.Value.Height, 3);
+                Assert.True(DomUtils.IsOnClippingChainOf(oofBox, DomUtils.GetBoxById(root, "h")!));
+            }
         }
 
         [Fact]
@@ -97,6 +201,86 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             Assert.NotEqual(ancestorA.Rect.Top, ancestorB.Rect.Top);
             Assert.Equal(movedRect.Top, ancestorB.Rect.Top, 3);
+        }
+
+        [Fact]
+        public async Task HoistedBoxInARepeatingTableHeader_IsStillClipped_ByAnOverflowAncestorOfTheTable()
+        {
+            // A repeating thead is detached from its table (ParentBox null, DomParentBox the table), so
+            // the ordinary containing-block chain of anything inside it stops at the thead - the walk
+            // must continue at the table, whose overflow:hidden ancestor still clips the header.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='h' style='overflow:hidden;width:50pt;height:10pt'><table>" +
+                "<thead><tr><td><div id='hoisted' style='position:relative;z-index:0;height:40pt'>X</div></td></tr></thead>" +
+                "<tbody><tr><td>body</td></tr></tbody></table></div>"));
+
+            var hBox = DomUtils.GetBoxById(root, "h")!;
+
+            // GetBoxById walks CssBox.Boxes, which doesn't reach into the detached thead.
+            var participant = TryFind(FragmentPaintHarness.FragmentOf(container, root), "hoisted")
+                              ?? throw new Xunit.Sdk.XunitException("hoisted participant not found");
+            var hoistedBox = participant.Box;
+
+            Assert.True(DomUtils.IsOnClippingChainOf(hoistedBox, hBox));
+            Assert.Contains(participant.ClipAncestors, a => a.Box == hBox);
+
+            var recording = new TestRecordingGraphics();
+            var pushed = RenderUtils.PushAncestorOverflowClips(recording, hoistedBox, participant.ClipAncestors);
+
+            Assert.True(pushed >= 1);
+            Assert.Contains(recording.Log.OfType<PushClipCall>(), p => p.Rect.Height <= 10.5);
+        }
+
+        [Fact]
+        public async Task HoistedBoxInAnOverflowHiddenCaption_IsStillClippedByTheCaption()
+        {
+            // CssBox.ContainingBlock skips a table-caption, so an in-flow step must walk every ancestor,
+            // not the containing-block chain, or the caption's own clip is dropped.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<table><caption id='cap' style='overflow:hidden;height:5pt'>" +
+                "<div id='rel' style='position:relative;z-index:1;height:40pt'>X</div></caption>" +
+                "<tr><td>body</td></tr></table>"));
+
+            var capBox = DomUtils.GetBoxById(root, "cap")!;
+            var participant = TryFind(FragmentPaintHarness.FragmentOf(container, root), "rel")
+                              ?? throw new Xunit.Sdk.XunitException("hoisted participant not found");
+
+            Assert.True(DomUtils.IsOnClippingChainOf(participant.Box, capBox));
+
+            var recording = new TestRecordingGraphics();
+            var pushed = RenderUtils.PushAncestorOverflowClips(recording, participant.Box, participant.ClipAncestors);
+
+            Assert.True(pushed >= 1);
+        }
+
+        // overflow does not apply to a non-atomic inline or a table row, so a positioned one of those
+        // that is an abspos box's containing block must not clip it.
+        [Theory]
+        [InlineData("<p><span id='cb' style='position:relative;overflow:hidden'>text " +
+                    "<span id='abs' style='position:absolute;display:block;top:0;left:0;width:80pt;height:40pt'></span></span></p>")]
+        [InlineData("<table><tr id='cb' style='position:relative;overflow:hidden'><td>" +
+                    "<div id='abs' style='position:absolute;top:0;left:0;width:80pt;height:40pt'></div></td></tr></table>")]
+        public async Task AbsposFragment_IsNotClipped_ByAContainingBlockOverflowDoesNotApplyTo(string html)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
+
+            var absBox = DomUtils.GetBoxById(root, "abs")!;
+            var cbBox = DomUtils.GetBoxById(root, "cb")!;
+
+            Assert.Same(cbBox, DomUtils.ClippingContainingBlockOf(absBox));
+            Assert.Null(FragmentPaintHarness.FragmentOf(container, absBox).OverflowClip);
+            Assert.False(DomUtils.ClipsItsOverflow(cbBox));
+        }
+
+        private static StackingOrder.StackingParticipant? TryFind(BoxFragment fragment, string id)
+        {
+            foreach (var participant in StackingOrder.Flatten(fragment))
+                if (participant.Box.HtmlTag?.TryGetAttribute("id") == id) return participant;
+
+            foreach (var child in fragment.Children)
+                if (TryFind(child, id) is { } found) return found;
+
+            return null;
         }
 
         private static BoxFragment WithReplacedRect(BoxFragment fragment, CssBox target, RRect newRect) =>
