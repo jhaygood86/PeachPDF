@@ -233,6 +233,25 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(FirstContentStream(withoutText), FirstContentStream(withText));
         }
 
+        [Theory]
+        [InlineData("""<feImage href="#src"/>""")]
+        [InlineData("""<feMerge><feMergeNode in="FillPaint"/></feMerge>""")]
+        [InlineData("""<feMerge><feMergeNode in="BackgroundImage"/></feMerge>""")]
+        public async Task PaintedInputs_ReachThePdfAsABitmapOfTheFilteredRegion(string primitive)
+        {
+            var svg = $"""
+                <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <defs><filter id="f">{primitive}</filter></defs>
+                <rect id="src" x="10" y="10" width="50" height="50" fill="#ff0000" filter="url(#f)"/>
+                </svg>
+                """;
+
+            var pdfText = await GetPdfText(svg);
+
+            // Evaluated over pixels: the result is an embedded image, drawn where the element would have been.
+            Assert.Contains("/Subtype /Image", pdfText);
+        }
+
         private static string FirstContentStream(string pdfText)
         {
             var match = Regex.Match(pdfText, @"stream\r?\n(.*?)\r?\nendstream", RegexOptions.Singleline);

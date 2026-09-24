@@ -90,5 +90,20 @@ namespace PeachPDF.Tests.Html.Core.Paint
             var p = Pixel(page, 15, 20);
             Assert.True(p[1] > 240 && p[0] < 10 && p[2] < 10, $"pixel was {string.Join(",", p)}");
         }
+
+        [Fact]
+        public async Task AnSvgUsedAsAnImage_IsItsOwnDocumentWithNoPageBehindIt()
+        {
+            var svg = "<svg xmlns='http://www.w3.org/2000/svg' width='80' height='40' viewBox='0 0 80 40'><defs><filter id='f' color-interpolation-filters='sRGB'><feOffset in='BackgroundImage' dx='-40' dy='0'/></filter></defs><rect width='80' height='40' fill='red' filter='url(#f)'/></svg>";
+            var uri = "data:image/svg+xml;base64," + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(svg));
+            var html = $"""<div style="margin:0;width:40pt;height:60pt;background:rgb(0,0,255)"><img src="{uri}" width="80" height="40" style="display:block"></div>""";
+            var (_, container) = await LayoutHarness.LayoutAsync(html, margin: 0);
+            var page = NewPage(100, 80);
+
+            FragmentPaintHarness.PaintPage(container, page);
+
+            // Nothing was painted inside the image before the rectangle, and the page is not its backdrop: the blue div shows through.
+            Assert.Equal([0, 0, 255, 255], Pixel(page, 15, 20));
+        }
     }
 }

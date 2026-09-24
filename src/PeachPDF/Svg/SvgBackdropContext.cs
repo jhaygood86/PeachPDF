@@ -30,8 +30,14 @@ namespace PeachPDF.Svg
         /// <summary>The page layer, or null for an SVG that is not inline in an HTML page.</summary>
         public ISvgPageBackdrop? Page { get; } = page;
 
-        /// <summary>The transform in effect where the document's root elements are painted (the viewBox mapping included).</summary>
-        public RMatrix RootTransform { get; set; }
+        /// <summary>The transform in effect where the document is placed, before its viewBox mapping.</summary>
+        public RMatrix Frame { get; set; }
+
+        /// <summary>The rectangle, in <see cref="Frame"/>'s space, the document is clipped to.</summary>
+        public RRect ViewportRect { get; set; }
+
+        /// <summary>The viewBox-to-viewport mapping the document's root elements are painted under.</summary>
+        public RMatrix ViewBoxMatrix { get; set; }
 
         /// <summary>The user-space size root elements resolve percentages against.</summary>
         public (double Width, double Height) Viewport { get; set; }

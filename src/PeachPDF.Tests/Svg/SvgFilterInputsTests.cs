@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Raster;
 using PeachPDF.Svg;
@@ -203,6 +204,97 @@ namespace PeachPDF.Tests.Svg
             // The bar covers x 10..40 in device units; seen 20 device units (10 user units) to the right, at 30..60.
             Assert.Equal([0, 255, 0, 255], Pixel(host, 50, 45));
             Assert.Equal(0, Pixel(host, 62, 45)[3]);
+        }
+
+        [Fact]
+        public void BackgroundImage_ContainsAnEarlierFilteredElementsOutput_EvenThroughAViewBox()
+        {
+            // A is filtered to a red block by FillPaint; B reads the backdrop shifted right by 10, which holds the green bar and A's block.
+            var markup = """
+                <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 50 50">
+                  <defs>
+                    <filter id="fa" color-interpolation-filters="sRGB"><feMerge><feMergeNode in="FillPaint"/></feMerge></filter>
+                    <filter id="fb" color-interpolation-filters="sRGB"><feOffset in="BackgroundImage" dx="10" dy="0"/></filter>
+                  </defs>
+                  <rect x="5" y="22" width="10" height="6" fill="rgb(0,255,0)"/>
+                  <rect x="20" y="22" width="10" height="6" fill="rgb(255,0,0)" filter="url(#fa)"/>
+                  <rect x="5" y="20" width="30" height="10" filter="url(#fb)"/>
+                </svg>
+                """;
+            var root = XDocument.Parse(markup).Root!;
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter);
+            var host = new RasterGraphics(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+
+            SvgRenderer.RenderInto(host, document, new RRect(0, 0, 100, 100));
+
+            // User x 22 sees x 12 (the bar); user x 32 sees x 22 (A's block, which only exists as A's filtered output).
+            Assert.Equal([0, 255, 0, 255], Pixel(host, 44, 50));
+            Assert.Equal([255, 0, 0, 255], Pixel(host, 64, 50));
+        }
+
+        [Fact]
+        public void BackgroundImage_DoesNotIncludeWhatOverflowsTheViewport()
+        {
+            // The big rectangle is clipped to the viewport (0..50) when painted, so nothing of it lies behind x 52 either.
+            var markup = """
+                <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 50 50">
+                  <defs>
+                    <filter id="f" color-interpolation-filters="sRGB">
+                      <feOffset in="BackgroundImage" dx="-5" dy="0" result="o"/>
+                      <feFlood flood-color="rgb(255,0,0)" result="r"/>
+                      <feComposite in="r" in2="o" operator="out"/>
+                    </filter>
+                  </defs>
+                  <rect x="-30" y="0" width="160" height="50" fill="rgb(0,255,0)"/>
+                  <rect x="44" y="10" width="10" height="10" filter="url(#f)"/>
+                </svg>
+                """;
+            var root = XDocument.Parse(markup).Root!;
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter);
+            var host = new RasterGraphics(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+
+            SvgRenderer.RenderInto(host, document, new RRect(0, 0, 100, 100));
+
+            // User x 47 sees x 52, outside the viewport: empty, so the flood survives. User x 44 sees x 49: painted, so it is cut away.
+            Assert.Equal([255, 0, 0, 255], Pixel(host, 94, 30));
+            Assert.Equal([0, 255, 0, 255], Pixel(host, 88, 30));
+        }
+
+        private sealed class CountingPage : ISvgPageBackdrop
+        {
+            public int Calls { get; private set; }
+
+            public bool Paint(RGraphics g)
+            {
+                Calls++;
+                return true;
+            }
+        }
+
+        [Fact]
+        public void ThePageBackdrop_IsOnlyUsedByTheDocumentItWasBoundTo()
+        {
+            const string body = """<defs><filter id="f"><feOffset in="BackgroundImage" dx="1"/></filter></defs><rect x="20" y="20" width="40" height="40" filter="url(#f)"/>""";
+            var bound = Build(body);
+            var other = Build(body);
+            var page = new CountingPage();
+
+            var previous = SvgRenderer.BindPageBackdrop(bound, page);
+            try
+            {
+                foreach (var document in new[] { other, bound })
+                {
+                    var host = new RasterGraphics(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+                    SvgRenderer.RenderInto(host, document, new RRect(0, 0, 100, 100));
+                }
+            }
+            finally
+            {
+                SvgRenderer.BindPageBackdrop(previous.Document, previous.Page);
+            }
+
+            // Only the second render, of the document the page was bound to, asked for it.
+            Assert.Equal(1, page.Calls);
         }
 
         [Fact]

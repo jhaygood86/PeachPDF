@@ -117,6 +117,7 @@ namespace PeachPDF.Svg
 
             var matrix = ComputePaintViewportTransform(g, viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, document.PreserveAspectRatio);
 
+            var frame = g.CurrentTransform;
             g.PushClip(viewportRect);
             g.PushTransform(matrix);
 
@@ -124,12 +125,25 @@ namespace PeachPDF.Svg
 
             var previousBackdrop = g.SvgBackdrop;
             if (document.ReadsBackdrop)
-                g.SvgBackdrop = new SvgBackdropContext(document, PageBackdrop) { RootTransform = g.CurrentTransform, Viewport = viewport };
+            {
+                g.SvgBackdrop = new SvgBackdropContext(document, PageBackdropFor(document))
+                {
+                    Frame = frame,
+                    ViewportRect = viewportRect,
+                    ViewBoxMatrix = matrix,
+                    Viewport = viewport,
+                };
+            }
 
-            foreach (var element in document.Children)
-                RenderElement(g, document, element, 1.0, viewport);
-
-            g.SvgBackdrop = previousBackdrop;
+            try
+            {
+                foreach (var element in document.Children)
+                    RenderElement(g, document, element, 1.0, viewport);
+            }
+            finally
+            {
+                g.SvgBackdrop = previousBackdrop;
+            }
 
             g.PopTransform();
             g.PopClip();
@@ -1993,9 +2007,27 @@ namespace PeachPDF.Svg
             SvgFilterEvaluator.Render(g, filter, element, new RRect(0, 0, viewport.Width, viewport.Height), tg => RenderElementSwitch(tg, document, element, opacity, viewport),
                 filter.RequiresRaster ? new RendererFilterInputs(g, document, element, viewport) : null);
 
-        /// <summary>The page behind the SVG being painted, set by the HTML painter around an inline SVG whose filters read <c>BackgroundImage</c>; null otherwise.</summary>
         [ThreadStatic]
-        internal static ISvgPageBackdrop? PageBackdrop;
+        private static SvgDocument? s_backdropDocument;
+
+        [ThreadStatic]
+        private static ISvgPageBackdrop? s_pageBackdrop;
+
+        /// <summary>
+        /// Binds the page behind <paramref name="document"/> for the duration of its paint (the HTML painter does this around an inline
+        /// SVG whose filters read <c>BackgroundImage</c>), returning what was bound before so the caller can put it back. Bound to one
+        /// document, so an unrelated SVG painted meanwhile (through the backdrop repaint of the page) never picks it up.
+        /// </summary>
+        internal static (SvgDocument? Document, ISvgPageBackdrop? Page) BindPageBackdrop(SvgDocument? document, ISvgPageBackdrop? page)
+        {
+            var previous = (s_backdropDocument, s_pageBackdrop);
+            s_backdropDocument = document;
+            s_pageBackdrop = page;
+            return previous;
+        }
+
+        private static ISvgPageBackdrop? PageBackdropFor(SvgDocument document) =>
+            ReferenceEquals(s_backdropDocument, document) ? s_pageBackdrop : null;
 
         /// <summary>How many backdrop repaints may nest inside one another: each one repaints part of the document.</summary>
         private const int MaxBackdropDepth = 3;
@@ -2115,14 +2147,19 @@ namespace PeachPDF.Svg
                 // The SVG's own layer: everything before the element, painted from the root down and stopped at the element.
                 var repaint = new SvgBackdropContext(context.Document, context.Page)
                 {
-                    RootTransform = context.RootTransform,
+                    Frame = context.Frame,
+                    ViewportRect = context.ViewportRect,
+                    ViewBoxMatrix = context.ViewBoxMatrix,
                     Viewport = context.Viewport,
                     Depth = context.Depth + 1,
                     StopElement = element,
                 };
 
+                // The document is clipped to its viewport when painted, so what overflows it is not part of the backdrop either.
                 g.SvgBackdrop = repaint;
-                g.PushTransform(context.RootTransform.Then(toUserSpace));
+                g.PushTransform(context.Frame.Then(toUserSpace));
+                g.PushClip(context.ViewportRect);
+                g.PushTransform(context.ViewBoxMatrix);
 
                 foreach (var child in context.Document.Children)
                 {
@@ -2131,6 +2168,8 @@ namespace PeachPDF.Svg
                         break;
                 }
 
+                g.PopTransform();
+                g.PopClip();
                 g.PopTransform();
                 g.SvgBackdrop = null;
                 return true;

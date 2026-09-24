@@ -33,7 +33,8 @@ namespace PeachPDF.Svg
             public bool StandardInput { get; } = standardInput;
         }
 
-        private const int PaintKindPaint = 0, PaintKindImage = 1, PaintKindBackdrop = 2;
+        /// <summary>The inputs that are painted through a nested raster scope rather than computed.</summary>
+        private enum PaintedInput { Paint, Image, Backdrop }
 
         public static void Render(RGraphics g, SvgFilter filter, SvgElement element, RRect? viewportBounds, Action<RGraphics> paintSourceGraphic, SvgFilterInputs? inputs = null)
         {
@@ -110,7 +111,7 @@ namespace PeachPDF.Svg
             }
 
             // A same-sized sRGB surface painted through a nested raster scope over the filter region, or null when none could be made.
-            RasterSurface? PaintedSurface(RRect area, int kind, bool stroke, FeImage? feImage, double offsetX, double offsetY)
+            RasterSurface? PaintedSurface(RRect area, PaintedInput kind, bool stroke, FeImage? feImage, double offsetX, double offsetY)
             {
                 var scope = g.BeginRasterSurface(region);
                 if (scope is null)
@@ -124,10 +125,10 @@ namespace PeachPDF.Svg
                 var painted = true;
                 switch (kind)
                 {
-                    case PaintKindPaint:
+                    case PaintedInput.Paint:
                         inputs!.PaintPaint(scope.Graphics, stroke, area);
                         break;
-                    case PaintKindImage:
+                    case PaintedInput.Image:
                         inputs!.PaintImage(scope.Graphics, feImage!, area, offsetX, offsetY);
                         break;
                     default:
@@ -142,15 +143,16 @@ namespace PeachPDF.Svg
             // FillPaint/StrokePaint: the whole filter region filled with the element's paint. A solid colour needs no scope at all.
             Image PaintInput(bool stroke)
             {
-                var blank = Track(FilterOps.Blank(sourcePixels));
-                if (inputs is not null)
+                var paint = inputs?.PaintOf(stroke) ?? SvgPaint.None;
+                if (paint.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef &&
+                    PaintedSurface(region, PaintedInput.Paint, stroke, null, 0, 0) is { } painted)
                 {
-                    var paint = inputs.PaintOf(stroke);
-                    if (paint.Kind == SvgPaintKind.Solid)
-                        FilterOps.Fill(blank, paint.Color, 1.0);
-                    else if (paint.Kind != SvgPaintKind.None && PaintedSurface(region, PaintKindPaint, stroke, null, 0, 0) is { } painted)
-                        return new Image(painted, false, full, standardInput: true);
+                    return new Image(painted, false, full, standardInput: true);
                 }
+
+                var blank = Track(FilterOps.Blank(sourcePixels));
+                if (paint.Kind == SvgPaintKind.Solid)
+                    FilterOps.Fill(blank, paint.Color, 1.0);
 
                 return new Image(blank, false, full, standardInput: true);
             }
@@ -158,7 +160,7 @@ namespace PeachPDF.Svg
             // BackgroundImage: what was painted behind the element, or transparent when the renderer has none to offer.
             Image BackdropInput()
             {
-                if (inputs is not null && PaintedSurface(region, PaintKindBackdrop, false, null, 0, 0) is { } painted)
+                if (inputs is not null && PaintedSurface(region, PaintedInput.Backdrop, false, null, 0, 0) is { } painted)
                     return new Image(painted, false, full, standardInput: true);
 
                 return new Image(Track(FilterOps.Blank(sourcePixels)), false, full, standardInput: true);
@@ -300,7 +302,7 @@ namespace PeachPDF.Svg
                         var offsetY = feImage.Subregion?.Y is { } fy ? Point(fy, bbox?.Y ?? 0, bbox?.Height ?? 0) : 0;
 
                         if (inputs is not null && (feImage.Image is not null || feImage.Target is not null) && !subregion.IsEmpty &&
-                            PaintedSurface(area, PaintKindImage, false, feImage, offsetX, offsetY) is { } painted)
+                            PaintedSurface(area, PaintedInput.Image, false, feImage, offsetX, offsetY) is { } painted)
                         {
                             // Painted in sRGB; the primitive computes in its own space.
                             if (linear)

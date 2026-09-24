@@ -11877,6 +11877,41 @@ await SaveShowcaseAsync("svg_filters_raster", "Graphics & Effects", "SVG Filters
     "SVG filter primitives PDF has no operator for - blur, drop shadow, morphology, convolution, turbulence, displacement and lighting, cross-channel colour matrices, table/gamma transfer functions, arithmetic compositing - evaluated over pixels in linear light and embedded at the document's raster resolution.",
     svgRasterFiltersHtml, pdfConfig);
 
+// --- SVG filter inputs showcase: feImage, FillPaint/StrokePaint, BackgroundImage/BackgroundAlpha ---
+
+const string svgFilterInputImage = "<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#f0a'/><stop offset='1' stop-color='#0af'/></linearGradient></defs><rect width='40' height='40' fill='url(#g)'/><circle cx='20' cy='20' r='9' fill='#fff' fill-opacity='.7'/></svg>";
+var svgFilterInputImageUri = "data:image/svg+xml;base64," + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(svgFilterInputImage));
+
+// A stand-alone SVG (used through <img>): its filter's BackgroundAlpha sees only the circles painted before the filtered rectangle.
+const string svgFilterSilhouette = "<svg xmlns='http://www.w3.org/2000/svg' width='160' height='120' viewBox='0 0 160 120'><defs><filter id='sil' x='0' y='0' width='1' height='1' color-interpolation-filters='sRGB'><feOffset in='BackgroundAlpha' dx='7' dy='7' result='off'/><feFlood flood-color='#036' flood-opacity='.7'/><feComposite in2='off' operator='in'/></filter></defs><circle cx='55' cy='55' r='32' fill='#fc3'/><circle cx='100' cy='62' r='26' fill='#e33'/><rect x='10' y='10' width='140' height='100' fill='none' filter='url(#sil)'/></svg>";
+var svgFilterSilhouetteUri = "data:image/svg+xml;base64," + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(svgFilterSilhouette));
+
+var svgFilterInputsHtml = $$"""
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 10px; font-family: sans-serif; background: #fff; }
+.grid { display: flex; flex-wrap: wrap; gap: 8px; }
+figure { margin: 0; width: 170px; font-size: 9px; text-align: center; }
+svg { width: 160px; height: 120px; border: 1px solid #ddd; }
+.stripes { width: 160px; height: 120px; background: repeating-linear-gradient(45deg, #e33 0 10px, #fc3 10px 20px); }
+.stripes svg { border: 0; display: block; }
+</style></head><body>
+<div class="grid">
+<figure><svg viewBox="0 0 160 120"><defs><filter id="img" x="0" y="0" width="1" height="1"><feImage href="{{svgFilterInputImageUri}}" preserveAspectRatio="xMidYMid slice" result="pic"/><feComposite in="pic" in2="SourceAlpha" operator="in"/></filter></defs><text x="80" y="78" text-anchor="middle" font-size="64" font-weight="bold" filter="url(#img)">Aa</text></svg>feImage (image) masked to text</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="sub" x="0" y="0" width="1" height="1"><feImage href="{{svgFilterInputImageUri}}" x="20" y="20" width="50" height="80" preserveAspectRatio="xMidYMid meet" result="a"/><feImage href="{{svgFilterInputImageUri}}" x="90" y="20" width="50" height="80" preserveAspectRatio="none" result="b"/><feMerge><feMergeNode in="a"/><feMergeNode in="b"/></feMerge></filter></defs><rect width="160" height="120" fill="#eee" filter="url(#sub)"/></svg>feImage subregions: meet / none</figure>
+<figure><svg viewBox="0 0 160 120"><defs><path id="star" d="M30 -10 L36 8 L56 8 L40 20 L46 40 L30 28 L14 40 L20 20 L4 8 L24 8 Z" fill="#fc0" stroke="#a60" stroke-width="2"/><filter id="ref" x="0" y="0" width="1" height="1"><feImage href="#star" x="50" y="40" result="s"/><feGaussianBlur in="s" stdDeviation="1.5" result="soft"/><feMerge><feMergeNode in="soft"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect x="10" y="10" width="140" height="100" fill="none" stroke="#69c" stroke-width="3" filter="url(#ref)"/></svg>feImage (element) + blur</figure>
+<figure><svg viewBox="0 0 160 120"><defs><linearGradient id="fp" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e33"/><stop offset=".5" stop-color="#fc3"/><stop offset="1" stop-color="#36f"/></linearGradient><filter id="fill" color-interpolation-filters="sRGB"><feOffset in="SourceAlpha" dx="6" dy="6" result="o"/><feGaussianBlur in="o" stdDeviation="2" result="shadow"/><feComposite in="FillPaint" in2="SourceAlpha" operator="in" result="paint"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="paint"/></feMerge></filter></defs><text x="80" y="76" text-anchor="middle" font-size="46" font-weight="bold" fill="url(#fp)" filter="url(#fill)">Paint</text></svg>FillPaint (gradient) clipped to glyphs</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="ring" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB"><feMorphology in="SourceAlpha" operator="dilate" radius="5" result="fat"/><feComposite in="StrokePaint" in2="fat" operator="in" result="halo"/><feMerge><feMergeNode in="halo"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><text x="80" y="76" text-anchor="middle" font-size="46" font-weight="bold" fill="#fff" stroke="#d0208a" filter="url(#ring)">Ring</text><rect width="160" height="120" fill="none"/></svg>StrokePaint halo (dilate)</figure>
+<figure><div class="stripes"><svg viewBox="0 0 160 120"><defs><filter id="glass" x="0" y="0" width="1" height="1"><feGaussianBlur in="BackgroundImage" stdDeviation="4" result="blur"/><feComposite in="blur" in2="SourceAlpha" operator="in" result="pane"/><feMerge><feMergeNode in="pane"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><text x="8" y="46" font-size="24" font-weight="bold" fill="#111">Behind glass</text><rect x="18" y="30" width="124" height="70" rx="12" fill="#fff" fill-opacity=".28" stroke="#fff" stroke-opacity=".7" filter="url(#glass)"/></svg></div>BackgroundImage: frosted pane over HTML and SVG content</figure>
+<figure><img src="{{svgFilterSilhouetteUri}}" width="160" height="120" style="border:1px solid #ddd;background:#eef">BackgroundAlpha silhouette (SVG as &lt;img&gt;)</figure>
+</div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("svg_filter_inputs", "Graphics & Effects", "SVG Filter Inputs (feImage, FillPaint, BackgroundImage)",
+    "feImage with a stand-alone image (fitted by preserveAspectRatio into its subregion) and with a reference to an element, plus the FillPaint / StrokePaint / BackgroundImage / BackgroundAlpha inputs: a filter can paint the element's own gradient, stroke a halo in its stroke colour, or blur the page and the SVG content painted behind it.",
+    svgFilterInputsHtml, pdfConfig);
+
 // --- backdrop-filter showcase ---
 
 const string backdropFilterHtml = """
