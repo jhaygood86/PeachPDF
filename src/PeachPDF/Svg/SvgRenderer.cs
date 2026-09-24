@@ -48,6 +48,13 @@ namespace PeachPDF.Svg
             if (viewportRect.Width <= 0 || viewportRect.Height <= 0)
                 return;
 
+            // What a filter reading BackgroundImage shows depends on what was painted behind it, which differs at every placement.
+            if (document.ReadsBackdrop)
+            {
+                RenderInto(g, document, viewportRect);
+                return;
+            }
+
             // Recording/measurement graphics have no PDF document to own a form and should still
             // receive the individual drawing calls directly.
             if (g.FormCacheOwner is null)
@@ -114,8 +121,15 @@ namespace PeachPDF.Svg
             g.PushTransform(matrix);
 
             var viewport = (viewBoxWidth, viewBoxHeight);
+
+            var previousBackdrop = g.SvgBackdrop;
+            if (document.ReadsBackdrop)
+                g.SvgBackdrop = new SvgBackdropContext(document, PageBackdrop) { RootTransform = g.CurrentTransform, Viewport = viewport };
+
             foreach (var element in document.Children)
                 RenderElement(g, document, element, 1.0, viewport);
+
+            g.SvgBackdrop = previousBackdrop;
 
             g.PopTransform();
             g.PopClip();
@@ -1659,6 +1673,10 @@ namespace PeachPDF.Svg
 
         private static void RenderElement(RGraphics g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
         {
+            // A backdrop repaint ends where the element it is repainting for begins.
+            if (g.SvgBackdrop is { } backdrop && backdrop.ShouldSkip(element))
+                return;
+
             var opacity = inheritedOpacity * element.Opacity;
             var pushedTransform = false;
             var pushedClip = false;
@@ -1973,7 +1991,14 @@ namespace PeachPDF.Svg
         /// </summary>
         private static void RenderFilteredElementContent(RGraphics g, SvgDocument document, SvgElement element, SvgFilter filter, double opacity, (double Width, double Height) viewport) =>
             SvgFilterEvaluator.Render(g, filter, element, new RRect(0, 0, viewport.Width, viewport.Height), tg => RenderElementSwitch(tg, document, element, opacity, viewport),
-                filter.RequiresRaster ? new RendererFilterInputs(document, element, viewport) : null);
+                filter.RequiresRaster ? new RendererFilterInputs(g, document, element, viewport) : null);
+
+        /// <summary>The page behind the SVG being painted, set by the HTML painter around an inline SVG whose filters read <c>BackgroundImage</c>; null otherwise.</summary>
+        [ThreadStatic]
+        internal static ISvgPageBackdrop? PageBackdrop;
+
+        /// <summary>How many backdrop repaints may nest inside one another: each one repaints part of the document.</summary>
+        private const int MaxBackdropDepth = 3;
 
         /// <summary>How deep filter inputs that render other content (an <c>feImage</c> naming an element) may nest, which stops one that names an element filtered by itself.</summary>
         private const int MaxFilterInputDepth = 4;
@@ -1982,7 +2007,7 @@ namespace PeachPDF.Svg
         private static int s_filterInputDepth;
 
         /// <summary>The painted inputs of one raster filter evaluation, drawn with this renderer's own paint code.</summary>
-        private sealed class RendererFilterInputs(SvgDocument document, SvgElement element, (double Width, double Height) viewport) : SvgFilterInputs
+        private sealed class RendererFilterInputs(RGraphics owner, SvgDocument document, SvgElement element, (double Width, double Height) viewport) : SvgFilterInputs
         {
             public override SvgPaint PaintOf(bool stroke) => stroke ? element.Stroke : element.Fill;
 
@@ -2050,7 +2075,66 @@ namespace PeachPDF.Svg
                 }
             }
 
-            public override bool PaintBackdrop(RGraphics g, RRect region) => false;
+            /// <summary>The bounding rectangle, in layout space, of <paramref name="region"/> (user space) under <paramref name="toLayout"/>.</summary>
+            private static RRect LayoutBounds(RMatrix toLayout, RRect region)
+            {
+                double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+                for (var i = 0; i < 4; i++)
+                {
+                    var x = i % 2 == 0 ? region.Left : region.Right;
+                    var y = i < 2 ? region.Top : region.Bottom;
+                    var lx = x * toLayout.M11 + y * toLayout.M21 + toLayout.OffsetX;
+                    var ly = x * toLayout.M12 + y * toLayout.M22 + toLayout.OffsetY;
+                    minX = Math.Min(minX, lx);
+                    maxX = Math.Max(maxX, lx);
+                    minY = Math.Min(minY, ly);
+                    maxY = Math.Max(maxY, ly);
+                }
+
+                return new RRect(minX, minY, maxX - minX, maxY - minY);
+            }
+
+            public override bool PaintBackdrop(RGraphics g, RRect region)
+            {
+                // Only the graphics that paints the document's own content knows how to repaint what came before; a group's isolated
+                // tile has no backdrop, and neither does a document that is not being painted with one.
+                if (owner.SvgBackdrop is not { } context || context.Depth >= MaxBackdropDepth || !owner.CurrentTransform.TryInvert(out var toUserSpace))
+                    return false;
+
+                // The page layer: the page is drawn in layout space, so put layout space into this element's user space.
+                if (context.Page is { } page)
+                {
+                    // Layout code culls against the current clip, so hand it the region in the space it paints in.
+                    g.PushTransform(toUserSpace);
+                    g.PushClip(LayoutBounds(owner.CurrentTransform, region));
+                    page.Paint(g);
+                    g.PopClip();
+                    g.PopTransform();
+                }
+
+                // The SVG's own layer: everything before the element, painted from the root down and stopped at the element.
+                var repaint = new SvgBackdropContext(context.Document, context.Page)
+                {
+                    RootTransform = context.RootTransform,
+                    Viewport = context.Viewport,
+                    Depth = context.Depth + 1,
+                    StopElement = element,
+                };
+
+                g.SvgBackdrop = repaint;
+                g.PushTransform(context.RootTransform.Then(toUserSpace));
+
+                foreach (var child in context.Document.Children)
+                {
+                    RenderElement(g, context.Document, child, 1.0, context.Viewport);
+                    if (repaint.Stopped)
+                        break;
+                }
+
+                g.PopTransform();
+                g.SvgBackdrop = null;
+                return true;
+            }
         }
 
         private static void RenderMaskedElementContent(RGraphics g, SvgDocument document, SvgElement element, SvgMask mask, double opacity, (double Width, double Height) viewport)

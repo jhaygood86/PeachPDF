@@ -42,7 +42,9 @@ namespace PeachPDF.Html.Core.Paint.Content
             FragmentPainter.PaintBackground(g, box, BoxDecorationGeometry.Unbroken(rect));
             BordersDrawHandler.DrawBoxBorders(g, box, rect, hasLeftEdge: true, hasRightEdge: true);
 
-            DrawContent(g, box, ContentRect(box, fragment, rect));
+            // A backdrop repaint stops here: what is behind this element's content includes its background and borders, not the content.
+            if (!painter.StopsBeforeContent(fragment))
+                DrawContent(painter, g, fragment, box, ContentRect(box, fragment, rect));
 
             for (var i = 0; i < clipsPushed; i++)
                 g.PopClip();
@@ -79,5 +81,12 @@ namespace PeachPDF.Html.Core.Paint.Content
 
         /// <summary>Draws the replacement content into its resolved content box.</summary>
         protected abstract void DrawContent(RGraphics g, CssBox box, RRect rect);
+
+        /// <summary>
+        /// <see cref="DrawContent(RGraphics, CssBox, RRect)"/> with the painter and fragment it is drawn for, for content that needs the page
+        /// around it (an inline SVG's <c>BackgroundImage</c>); the default draws without it.
+        /// </summary>
+        protected virtual void DrawContent(FragmentPainter painter, RGraphics g, BoxFragment fragment, CssBox box, RRect rect) =>
+            DrawContent(g, box, rect);
     }
 }
