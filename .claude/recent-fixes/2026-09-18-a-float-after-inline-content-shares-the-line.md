@@ -3,7 +3,7 @@
 Issue #1038, and the gap file
 `.claude/accepted-gaps/a-float-after-inline-content-is-placed-on-the-next-line.md`, narrowed (not
 deleted - see below) to
-[a-floats-own-content-taller-than-one-page-overflows.md](../accepted-gaps/a-floats-own-content-taller-than-one-page-overflows.md).
+[the fix that closed it](2026-09-24-a-float-taller-than-a-page-shows-all-of-its-lines.md).
 
 A floated child now joins the same inline formatting context as the inline content around it,
 regardless of source order - `XY <span style="float:left">ZZZZ</span> more words` places `XY`, the
@@ -176,7 +176,7 @@ remaining page, the excess is simply never laid out - it does not continue on a 
 matches the *identical*, already-accepted limitation `FlowAtomicBlockContentChild` has for an
 inline-block with block-level content (neither call site threads a nested `PendingBreakToken` any
 further), so this is not a new class of limitation introduced by this fix - see
-[a-floats-own-content-taller-than-one-page-overflows.md](../accepted-gaps/a-floats-own-content-taller-than-one-page-overflows.md)
+[the fix that closed it](2026-09-24-a-float-taller-than-a-page-shows-all-of-its-lines.md)
 (filed as issue #1201). It is safe rather than corrupting: the float is positioned once, its content
 layout is the ordinary fragmentainer-aware dispatch, and nothing re-enters or duplicates it. The
 *surrounding* document's own pagination is unaffected either way, confirmed by a dedicated test
