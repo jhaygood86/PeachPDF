@@ -1812,8 +1812,9 @@ namespace PeachPDF.Html.Core.Dom
 
             switch (box.Float.Value)
             {
-                case Floating.Left or Floating.Right or Floating.Inside or Floating.Outside:
-                    // CSS Page Floats' inside/outside resolve to an effective left/right based on which
+                case Floating.Left or Floating.Right or Floating.Inside or Floating.Outside
+                    or Floating.InlineStart or Floating.InlineEnd:
+                    // CSS Page Floats' inside/outside (and css-logical-1's inline-start/inline-end) resolve to an effective left/right based on which
                     // physical side of a two-page spread the float's landing page is (CssBox.EffectiveFloatSide);
                     // left/right pass through unchanged. Once resolved, every left/right code path
                     // (collision scanning, line wrapping, shrink-to-fit, "floats share the line") reads
@@ -3046,14 +3047,16 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var siblingBox = containingBox.Boxes[i];
 
-                clearance = Math.Max(clearance, GetClearance(siblingBox, box.Clear.Value));
+                var clears = box.EffectiveClear;
+
+                clearance = Math.Max(clearance, GetClearance(siblingBox, clears));
 
                 if (!siblingBox.IsFloated) continue;
 
                 switch (siblingBox.EffectiveFloatSide)
                 {
-                    case Floating.Left when box.Clear.Value is ClearMode.Right:
-                    case Floating.Right when box.Clear.Value is ClearMode.Left:
+                    case Floating.Left when clears is ClearMode.Right:
+                    case Floating.Right when clears is ClearMode.Left:
                         continue;
                 }
 
