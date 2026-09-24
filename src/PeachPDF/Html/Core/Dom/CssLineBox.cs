@@ -73,9 +73,10 @@ namespace PeachPDF.Html.Core.Dom
         public bool PrecedesForcedBreak { get; internal set; }
 
         /// <summary>
-        /// The content-box right edge this line was wrapped against — css-break-3 §5.1's per-fragmentainer
-        /// measure, resolved at the moment this line started (<c>CssLayoutEngine.FlowBox</c>), not
-        /// <c>OwnerBox.ClientRight</c>, which names only the measure of the page the box <i>started</i> on.
+        /// The right edge this line was wrapped against — css-break-3 §5.1's per-fragmentainer
+        /// measure, resolved when this line started (<c>CssLayoutEngine.FlowBox</c>) and narrowed
+        /// when a right float intersects it. This is not necessarily <c>OwnerBox.ClientRight</c>,
+        /// which names only the measure of the page the box <i>started</i> on.
         /// <c>ApplyRightAlignment</c>/<c>ApplyCenterAlignment</c>/<c>ApplyJustifyAlignment</c> flush against
         /// this rather than the box's own edge, so a straddling box's continuation lines align correctly
         /// against whichever page they actually landed on. Equal to <c>OwnerBox.ClientRight</c> for a box
