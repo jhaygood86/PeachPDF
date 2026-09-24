@@ -4643,7 +4643,10 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
             "stripe tile rotated 45° via patternTransform"),
         SvgSwatch("pattern filling a star shape",
             $"""<svg viewBox="0 0 100 100" width="80" height="80"><defs><pattern id="grid" patternUnits="userSpaceOnUse" width="10" height="10"><rect width="10" height="10" fill="#fdebd0"/><rect width="10" height="2" fill="#e67e22"/><rect width="2" height="10" fill="#e67e22"/></pattern></defs><polygon points="{StarPoints}" fill="url(#grid)"/></svg>""",
-            "pattern respects the star's own fill geometry")
+            "pattern respects the star's own fill geometry"),
+        SvgSwatch("pattern content inherits from &lt;svg&gt;",
+            """<svg viewBox="0 0 100 100" width="80" height="80" fill="#e67e22" stroke="#2c3e50" stroke-width="2"><defs><pattern id="inheritDots" patternUnits="userSpaceOnUse" width="20" height="20"><circle cx="10" cy="10" r="6"/></pattern></defs><rect x="10" y="10" width="80" height="80" fill="url(#inheritDots)"/></svg>""",
+            "the unstyled circle inherits fill and stroke from the root &lt;svg&gt;, not from the rect that references the pattern")
     ) +
 
     "<h2>17 — Mask</h2>" +
@@ -4659,7 +4662,10 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
             "a shape, not just a gradient, as the mask's luminance"),
         SvgSwatch("&lt;text&gt; as mask content",
             """<svg viewBox="0 0 100 100" width="80" height="80"><defs><linearGradient id="textGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9966"/><stop offset="1" stop-color="#ff5e62"/></linearGradient><mask id="textMask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100"><text x="6" y="65" font-size="46" font-weight="bold" fill="#ffffff">PDF</text></mask></defs><rect x="0" y="0" width="100" height="100" fill="url(#textGrad)" mask="url(#textMask)"/></svg>""",
-            "gradient shows only through the letter shapes")
+            "gradient shows only through the letter shapes"),
+        SvgSwatch("mask content inherits fill",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><g fill="#ffffff"><mask id="inheritMask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100"><circle cx="50" cy="50" r="40"/></mask></g></defs><rect x="0" y="0" width="100" height="100" fill="#8e44ad" mask="url(#inheritMask)"/></svg>""",
+            "the mask's unstyled circle inherits fill=white from the &lt;g&gt; it is defined in, so the rect shows through")
     ) +
 
     "<h2>18 — &lt;image&gt; Element</h2>" +

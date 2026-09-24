@@ -2038,6 +2038,12 @@ namespace PeachPDF.Svg
         [ThreadStatic]
         private static int s_filterInputDepth;
 
+        /// <summary>How many pattern tiles / marker instances may be painted inside one another. Content inherits from the definition's own ancestors, so a pattern or marker can end up painting itself (or a cycle of them); real documents nest a level or two.</summary>
+        private const int MaxDefinitionNesting = 4;
+
+        [ThreadStatic]
+        private static int s_definitionNesting;
+
         /// <summary>The painted inputs of one raster filter evaluation, drawn with this renderer's own paint code.</summary>
         private sealed class RendererFilterInputs(RGraphics owner, SvgDocument document, SvgElement element, (double Width, double Height) viewport) : SvgFilterInputs
         {
@@ -2461,8 +2467,20 @@ namespace PeachPDF.Svg
             var toVertex = new RMatrix(1, 0, 0, 1, vertex.X, vertex.Y);
             var placement = MultiplyMatrix(MultiplyMatrix(preShift, rotateScale), toVertex);
 
+            if (s_definitionNesting >= MaxDefinitionNesting)
+                return;
+
             g.PushTransform(placement);
-            RenderViewport(g, document, 0, 0, marker.MarkerWidth, marker.MarkerHeight, marker.ViewBox, marker.PreserveAspectRatio, marker.Children, opacity);
+            s_definitionNesting++;
+            try
+            {
+                RenderViewport(g, document, 0, 0, marker.MarkerWidth, marker.MarkerHeight, marker.ViewBox, marker.PreserveAspectRatio, marker.Children, opacity);
+            }
+            finally
+            {
+                s_definitionNesting--;
+            }
+
             g.PopTransform();
         }
 
@@ -2503,11 +2521,23 @@ namespace PeachPDF.Svg
             if (width <= 0 || height <= 0)
                 return;
 
+            if (s_definitionNesting >= MaxDefinitionNesting)
+                return;
+
             var tile = g.CreateTile(width, height);
             if (tile is not { } t)
                 return;
 
-            RenderViewport(t.Graphics, document, 0, 0, width, height, pattern.ViewBox, pattern.PreserveAspectRatio, pattern.Children, opacity);
+            s_definitionNesting++;
+            try
+            {
+                RenderViewport(t.Graphics, document, 0, 0, width, height, pattern.ViewBox, pattern.PreserveAspectRatio, pattern.Children, opacity);
+            }
+            finally
+            {
+                s_definitionNesting--;
+            }
+
             t.Graphics.Dispose();
 
             var bounds = OwnerBounds(element, boundsOverride) ?? new RRect(x, y, width, height);
