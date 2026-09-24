@@ -5,7 +5,7 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 
 ## Features
 
-- Native vector SVG rendering (inline `<svg>`, standalone `<img src="x.svg">`/`data:image/svg+xml`, and as a `background-image`/`list-style-image` source) — never rasterized
+- Native vector SVG rendering (inline `<svg>`, standalone `<img src="x.svg">`/`data:image/svg+xml`, and as a `background-image`/`list-style-image` source) — vector, except an SVG `<filter>` that uses a blur, lighting or other pixel primitive, which is rendered as a high-resolution bitmap
 - Native vector MathML rendering (inline `<math>`, targeting the [MathML Core](https://w3c.github.io/mathml-core/) layout algorithm) — fraction bars, radicals, and stretchy operators built from the font's own OpenType `MATH` table, never rasterized
 - Optional PDF 2.0 (ISO 32000-2) output (see `PdfGenerateConfig.PdfVersion`), with `<math>` formulas tagged as accessible `Formula` structure elements carrying their original MathML source as a PDF 2.0 Associated File
 - CSS custom properties (`--foo`) and `var()`, including fallbacks and inheritance

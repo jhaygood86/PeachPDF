@@ -77,6 +77,24 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.Equal("calc(1em + 5px)", property.Value);
         }
 
+        [Theory]
+        [InlineData("calc(1cap + 5px)")]
+        [InlineData("calc(1ic + 5px)")]
+        [InlineData("calc(1lh + 5px)")]
+        [InlineData("calc(1ch + 5px)")]
+        [InlineData("calc(1rex + 5px)")]
+        [InlineData("calc(1rch + 5px)")]
+        [InlineData("calc(1rcap + 5px)")]
+        [InlineData("calc(1ric + 5px)")]
+        [InlineData("calc(1rlh + 5px)")]
+        public void Width_CalcMeasuredFontUnit_PreservesCalcExpression(string calc)
+        {
+            // Layer A has no font, so folding one of these to pixels would bake in a wrong number for good.
+            var property = ParseDeclaration("width: " + calc);
+            Assert.True(property.HasValue);
+            Assert.Equal(calc, property.Value);
+        }
+
         [Fact]
         public void Width_CalcPercentMinusPx_PreservesCalcExpression()
         {

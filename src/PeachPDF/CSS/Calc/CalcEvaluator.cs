@@ -15,7 +15,7 @@ namespace PeachPDF.CSS
             double? viewportWidthPt = null, double? viewportHeightPt = null,
             double? containerWidthPt = null, double? containerHeightPt = null,
             double? viewportInlineSizePt = null, double? viewportBlockSizePt = null,
-            double pixelsPerPoint = 1.0)
+            double pixelsPerPoint = 1.0, IFontMetricSource? fonts = null)
         {
             HundredPercent = hundredPercent;
             EmFactor = emFactor;
@@ -30,7 +30,13 @@ namespace PeachPDF.CSS
             ViewportInlineSizePt = viewportInlineSizePt;
             ViewportBlockSizePt = viewportBlockSizePt;
             PixelsPerPoint = pixelsPerPoint;
+            Fonts = fonts;
         }
+
+        /// <summary>See <see cref="Length.ToPixels"/>'s <c>fonts</c> parameter - where an <c>ex</c>/<c>ch</c>/
+        /// <c>cap</c>/<c>ic</c>/<c>lh</c> leaf inside calc() reads the used font's measurements. <c>null</c>
+        /// takes each unit's spec fallback.</summary>
+        public IFontMetricSource? Fonts { get; }
 
         public double HundredPercent { get; }
         public double EmFactor { get; }
@@ -80,7 +86,7 @@ namespace PeachPDF.CSS
 
     /// <summary>
     /// Evaluates a validated calc-family AST to a pixel-space number. This is the one place calc()
-    /// numbers actually get computed — called only from Layer B (<see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double)"/>),
+    /// numbers actually get computed — called only from Layer B (<see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double, IFontMetricSource?)"/>),
     /// since only layout has the <see cref="CalcContext"/> a percentage/em/rem leaf needs to resolve.
     /// Reuses <see cref="Length.ToPixels"/> for every leaf, so no unit-conversion arithmetic is duplicated
     /// here. A null result signals a divide-by-zero; per the type-checker's rules every legal divisor is
@@ -110,7 +116,7 @@ namespace PeachPDF.CSS
                         context.ContainerInlineSizePt, context.ContainerBlockSizePt,
                         context.ViewportWidthPt, context.ViewportHeightPt,
                         context.ContainerWidthPt, context.ContainerHeightPt,
-                        context.ViewportInlineSizePt, context.ViewportBlockSizePt);
+                        context.ViewportInlineSizePt, context.ViewportBlockSizePt, context.Fonts);
 
                     // Per-leaf mirror of Length.NeedsPixelsPerPointCatchUp's use in
                     // CssValueParser.ParseLength (issues #814/#826/#829): an absolute or em/rem/ex/ch leaf

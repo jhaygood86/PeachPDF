@@ -12,6 +12,7 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Parse;
 using System;
 using System.Collections.Generic;
@@ -28,17 +29,63 @@ namespace PeachPDF.Svg
     internal static class SvgValueParsers
     {
         /// <summary>
-        /// Absolute-unit and <c>em</c>/<c>rem</c> length suffixes, longest-suffix-first so
-        /// <c>"rem"</c> is checked before the shorter <c>"em"</c> it would otherwise also match.
-        /// Conversions use the standard 96 CSS px/inch. <c>em</c>/<c>rem</c> have no live CSS
-        /// font-size context available to arbitrary SVG geometry attributes (unlike text, which
-        /// gets real font resolution in a later phase), so they approximate CSS's own initial
-        /// <c>font-size</c> (16px) - a documented v1 simplification.
+        /// What 1em/1rem are, in user units, when the caller has no font in scope: CSS's own initial
+        /// <c>font-size</c> (16px). A caller that does have one passes an <see cref="ISvgLengthBasis"/>.
+        /// </summary>
+        public const double DefaultEmPx = 16.0;
+
+        /// <summary>
+        /// The font-relative unit suffixes measured from the used font (CSS Values and Units 4 §6.1.1), longest
+        /// first so <c>"rcap"</c>/<c>"rex"</c>/<c>"ric"</c> are matched before the shorter suffix each ends with.
+        /// </summary>
+        private static readonly (string Suffix, Length.Unit Unit)[] FontRelativeSuffixes =
+        [
+            ("rcap", Length.Unit.Rcap),
+            ("rlh", Length.Unit.Rlh),
+            ("rch", Length.Unit.Rch),
+            ("rex", Length.Unit.Rex),
+            ("ric", Length.Unit.Ric),
+            ("cap", Length.Unit.Cap),
+            ("ex", Length.Unit.Ex),
+            ("ch", Length.Unit.Ch),
+            ("ic", Length.Unit.Ic),
+            ("lh", Length.Unit.Lh),
+        ];
+
+        /// <summary>
+        /// Splits a trailing <c>ex</c>/<c>ch</c>/<c>cap</c>/<c>ic</c>/<c>lh</c>/<c>rex</c>/<c>rch</c>/<c>rcap</c>/
+        /// <c>ric</c>/<c>rlh</c> unit off <paramref name="value"/>. False when there is none, or the rest is not a number.
+        /// </summary>
+        internal static bool TryParseMeasuredUnit(string value, out double number, out Length.Unit unit)
+        {
+            foreach (var (suffix, suffixUnit) in FontRelativeSuffixes)
+            {
+                if (value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                    && double.TryParse(value[..^suffix.Length], NumberStyles.Float, CultureInfo.InvariantCulture, out number))
+                {
+                    unit = suffixUnit;
+                    return true;
+                }
+            }
+
+            number = 0;
+            unit = default;
+            return false;
+        }
+
+        /// <summary>
+        /// Resolves <paramref name="number"/> of a measured unit to user units: its em multiplied by the basis'
+        /// em, or the root's for the <c>r*</c> variants. Every unit's conversion lives in <see cref="Length.ToPixels"/>.
+        /// </summary>
+        internal static double ResolveMeasuredUnit(double number, Length.Unit unit, ISvgLengthBasis? basis) =>
+            number * new Length(1f, unit).ToPixels(basis?.EmPx ?? DefaultEmPx, basis?.RootEmPx ?? DefaultEmPx, 0, fonts: basis);
+
+        /// <summary>
+        /// Absolute-unit length suffixes, converted at the standard 96 CSS px/inch. <c>em</c>/<c>rem</c> and the
+        /// measured font-relative units are handled ahead of this table (see <see cref="ParseLength"/>).
         /// </summary>
         private static readonly (string Suffix, double PixelsPerUnit)[] UnitConversions =
         [
-            ("rem", 16.0),
-            ("em", 16.0),
             ("px", 1.0),
             ("pt", 96.0 / 72.0),
             ("pc", 16.0),
@@ -70,9 +117,12 @@ namespace PeachPDF.Svg
         /// <c>"2in"</c>). A percentage resolves against <paramref name="referenceLength"/> (the
         /// relevant viewport dimension - width, height, or diagonal per the SVG spec, depending on
         /// which attribute is being parsed); with no reference length available, a percentage
-        /// returns null, same as if the attribute were absent.
+        /// returns null, same as if the attribute were absent. Font-relative units (<c>em</c>/<c>ex</c>/<c>ch</c>/
+        /// <c>cap</c>/<c>ic</c>/<c>lh</c> and the root-element <c>rem</c>/<c>rex</c>/...) resolve against
+        /// <paramref name="basis"/>, the element's own font; with none they take
+        /// <see cref="DefaultEmPx"/> and each unit's spec fallback.
         /// </summary>
-        public static double? ParseLength(string? value, double? referenceLength = null)
+        public static double? ParseLength(string? value, double? referenceLength = null, ISvgLengthBasis? basis = null)
         {
             if (string.IsNullOrWhiteSpace(value))
                 return null;
@@ -83,19 +133,21 @@ namespace PeachPDF.Svg
             // whole calc grammar + evaluator) rather than duplicated here. That parser works in points
             // (1px = 0.75pt), while SVG lengths here are CSS px (1px = 1 user unit), so the percentage/
             // em/rem bases are converted into points on the way in and the result back to px on the way
-            // out. A percentage inside the calc resolves against the SVG reference length; em/rem use the
-            // same 16px approximation this parser uses for a plain em/rem length (see UnitConversions). Any
-            // var() has already been substituted by SvgTreeBuilder.ResolveStyledAttr before this point.
+            // out. A percentage inside the calc resolves against the SVG reference length; em/rem and the
+            // measured font-relative units resolve against the element's own font (basis), or the 16px initial
+            // size with no basis. Any var() has already been substituted by SvgTreeBuilder.ResolveStyledAttr
+            // before this point.
             if (IsCalcExpression(trimmed))
             {
                 const double pointsPerPx = 0.75; // Length.PointsPerPx: 1px = 1/96in = 0.75pt
                 var points = CssValueParser.ParseLength(
                     trimmed,
                     hundredPercent: (referenceLength ?? 0) * pointsPerPx,
-                    emFactor: 16 * pointsPerPx,
-                    remFactor: 16 * pointsPerPx,
+                    emFactor: (basis?.EmPx ?? DefaultEmPx) * pointsPerPx,
+                    remFactor: (basis?.RootEmPx ?? DefaultEmPx) * pointsPerPx,
                     defaultUnit: null,
-                    returnPoints: false);
+                    returnPoints: false,
+                    fonts: basis);
                 return points / pointsPerPx;
             }
 
@@ -108,6 +160,18 @@ namespace PeachPDF.Svg
                     ? refLen * pct / 100.0
                     : null;
             }
+
+            if (TryParseMeasuredUnit(trimmed, out var measured, out var measuredUnit))
+                return ResolveMeasuredUnit(measured, measuredUnit, basis);
+
+            // rem is checked before the shorter em it ends with.
+            if (trimmed.EndsWith("rem", StringComparison.OrdinalIgnoreCase)
+                && double.TryParse(trimmed[..^3], NumberStyles.Float, CultureInfo.InvariantCulture, out var rems))
+                return rems * (basis?.RootEmPx ?? DefaultEmPx);
+
+            if (trimmed.EndsWith("em", StringComparison.OrdinalIgnoreCase)
+                && double.TryParse(trimmed[..^2], NumberStyles.Float, CultureInfo.InvariantCulture, out var ems))
+                return ems * (basis?.EmPx ?? DefaultEmPx);
 
             var scale = 1.0;
 
@@ -130,7 +194,7 @@ namespace PeachPDF.Svg
         /// <see cref="ParseLength"/> (so unit suffixes and percentages are honored), a non-parseable
         /// token contributing 0. Returns null for a missing/empty value.
         /// </summary>
-        public static double[]? ParseLengthList(string? value, double? referenceLength = null)
+        public static double[]? ParseLengthList(string? value, double? referenceLength = null, ISvgLengthBasis? basis = null)
         {
             if (string.IsNullOrWhiteSpace(value))
                 return null;
@@ -141,7 +205,7 @@ namespace PeachPDF.Svg
 
             var values = new double[parts.Length];
             for (var i = 0; i < parts.Length; i++)
-                values[i] = ParseLength(parts[i], referenceLength) ?? 0;
+                values[i] = ParseLength(parts[i], referenceLength, basis) ?? 0;
 
             return values;
         }
@@ -248,7 +312,7 @@ namespace PeachPDF.Svg
         /// list of all zeros is treated the same as <c>none</c>. Returns null (caller should fall back
         /// to the inherited value) for a missing or malformed value.
         /// </summary>
-        public static double[]? ParseDashArray(string? value, double? referenceLength)
+        public static double[]? ParseDashArray(string? value, double? referenceLength, ISvgLengthBasis? basis = null)
         {
             if (string.IsNullOrWhiteSpace(value))
                 return null;
@@ -267,7 +331,7 @@ namespace PeachPDF.Svg
 
             for (var i = 0; i < parts.Length; i++)
             {
-                if (ParseLength(parts[i], referenceLength) is not { } v || v < 0)
+                if (ParseLength(parts[i], referenceLength, basis) is not { } v || v < 0)
                     return null;
 
                 values[i] = v;

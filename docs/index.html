@@ -50,7 +50,7 @@ layout: default
     </div>
     <div class="card">
       <h3>Effects that stay vector</h3>
-      <p><code>filter</code>, all sixteen <code>mix-blend-mode</code> values, SVG filters, <code>clip-path</code>, <code>border-image</code>, and <code>background-clip: text</code> are written as native PDF content, not baked into bitmaps.</p>
+      <p>All sixteen <code>mix-blend-mode</code> values, <code>clip-path</code>, <code>border-image</code>, <code>background-clip: text</code>, and most <code>filter</code> functions are written as native PDF content, not baked into bitmaps. The few effects a PDF cannot express — <code>filter: blur()</code> and the cross-channel colour filters, blurred shadows, <code>backdrop-filter</code>, <code>perspective</code>, and SVG filters with blur, lighting or noise — are rendered as a high-resolution bitmap (300&nbsp;dpi by default) placed at exactly their own size, with their text still selectable. A PDF/A-1 or PDF/X document can ask for transparency to be flattened the same way instead of being rejected.</p>
     </div>
     <div class="card">
       <h3>Fillable forms</h3>

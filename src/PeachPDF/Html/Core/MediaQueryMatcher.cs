@@ -180,8 +180,7 @@ namespace PeachPDF.Html.Core
             const double initialFontPt = 16d * PeachPDF.CSS.Length.PointsPerPx;
             var valuePt = length.ToPixels(initialFontPt, initialFontPt, actual);
 
-            var needsCatchUpMultiply = length.IsAbsolute
-                || length.Type is Length.Unit.Em or Length.Unit.Rem or Length.Unit.Ex or Length.Unit.Ch;
+            var needsCatchUpMultiply = length.NeedsPixelsPerPointCatchUp;
             if (needsCatchUpMultiply) valuePt *= pixelsPerPoint;
 
             return CompareNumeric(actual, valuePt, feature.Comparison);

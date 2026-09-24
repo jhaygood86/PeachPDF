@@ -1,4 +1,6 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
+using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -134,7 +136,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task Ch_ResolvesAsHalfEm()
+        public async Task Ch_ResolvesAsTheZeroGlyphAdvance()
         {
             var html = Html(
                 "#target { font-size: 20pt; width: 10ch; height: 10px; }",
@@ -143,8 +145,10 @@ namespace PeachPDF.Tests.Integration
             var root = await BuildRoot(html);
             var target = DomUtils.GetBoxById(root, "target");
             Assert.NotNull(target);
-            // 10 * 0.5 * 20pt = 100pt.
-            Assert.Equal(100d, target!.ActualBoxSizingWidth, 1);
+            // 10 "0" advances of the box's own 20pt font (whatever the default font is) - see
+            // FontRelativeUnitsIntegrationTests for literal expectations against a pinned monospace font.
+            var zeroAdvanceEm = FontMetricMeasurement.Ratio(target!.ActualFont, FontMetric.Ch);
+            Assert.Equal(10 * zeroAdvanceEm * 20d, target.ActualBoxSizingWidth, 1);
         }
 
         [Fact]
@@ -157,8 +161,9 @@ namespace PeachPDF.Tests.Integration
             var root = await BuildRoot(html);
             var target = DomUtils.GetBoxById(root, "target");
             Assert.NotNull(target);
-            // 10 * 0.5 * 20pt (100pt) + 5px (3.75pt) = 103.75pt.
-            Assert.Equal(103.75d, target!.ActualBoxSizingWidth, 1);
+            // 10 "0" advances of the 20pt font + 5px (3.75pt).
+            var zeroAdvanceEm = FontMetricMeasurement.Ratio(target!.ActualFont, FontMetric.Ch);
+            Assert.Equal(10 * zeroAdvanceEm * 20d + 3.75d, target.ActualBoxSizingWidth, 1);
         }
 
         // ─── Harness ──────────────────────────────────────────────────────────

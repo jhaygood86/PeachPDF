@@ -91,6 +91,8 @@ static PdfGenerateConfig ClonePdfAConfig(PdfGenerateConfig source, DateTimeOffse
     DownscaleImages = source.DownscaleImages,
     DownscaleQuality = source.DownscaleQuality,
     MaximumDownscaleMultiplier = source.MaximumDownscaleMultiplier,
+    RasterizationDpi = source.RasterizationDpi,
+    MaxRasterPixels = source.MaxRasterPixels,
     MarginTop = source.MarginTop,
     MarginBottom = source.MarginBottom,
     MarginLeft = source.MarginLeft,
@@ -11704,6 +11706,275 @@ await SaveShowcaseAsync("css_filter", "Graphics & Effects", "CSS Filter",
     "filter: opacity(), brightness(), contrast(), and invert() - genuinely native PDF color math via ExtGState /TR, composed into a single transfer function per element.",
     cssFilterHtml, pdfConfig);
 
+// --- CSS filter showcase (rendered through the raster backend: blur/grayscale/sepia/saturate/hue-rotate) ---
+
+var cssFilterRasterHtml = "<!DOCTYPE html><html><head>" + FilterCss + "</head><body>" +
+
+    "<h1>CSS filter: Rendered as a Bitmap</h1>" +
+    "<p class=\"intro\">blur(), grayscale(), sepia(), saturate(), and hue-rotate() have no PDF equivalent - a blur needs per-pixel convolution and the colour functions mix channels - so an element carrying one is rendered into a bitmap at 300 dpi, filtered in the order written, and embedded at exactly its own size. Zoom in: the edges of the blur stay smooth, and the unfiltered swatch next to them stays vector. (docs/html-css-support.md#rasterized-effects)</p>" +
+
+    "<h2>1 — Blur</h2>" +
+    Row(
+        FilterSwatch("baseline (no filter)", "none"),
+        FilterSwatch("blur 2px", "blur(2px)"),
+        FilterSwatch("blur 5px", "blur(5px)"),
+        FilterSwatch("blur 10px", "blur(10px)")
+    ) +
+
+    "<h2>2 — Cross-channel colour functions</h2>" +
+    Row(
+        FilterSwatch("grayscale", "grayscale(1)"),
+        FilterSwatch("sepia", "sepia(1)"),
+        FilterSwatch("saturate up", "saturate(2.5)"),
+        FilterSwatch("hue-rotate", "hue-rotate(120deg)")
+    ) +
+
+    "<h2>3 — Partial amounts and chains, applied in order</h2>" +
+    Row(
+        FilterSwatch("half grayscale", "grayscale(0.5)"),
+        FilterSwatch("desaturated", "saturate(0.3)"),
+        FilterSwatch("sepia then blur", "sepia(0.8) blur(3px)"),
+        FilterSwatch("everything together", "hue-rotate(200deg) saturate(1.6) brightness(1.1) blur(1.5px) opacity(0.9)")
+    ) +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("css_filter_raster", "Graphics & Effects", "CSS Filter (Rasterized)",
+    "filter: blur(), grayscale(), sepia(), saturate(), and hue-rotate() - rendered into a bitmap at the configured RasterizationDpi and embedded at exactly the element's own size, while the rest of the page stays vector.",
+    cssFilterRasterHtml, pdfConfig);
+
+// --- Raster shadows showcase (text-shadow, Gaussian box-shadow, silhouette drop-shadow) ---
+
+// A 64x64 PNG whose corners are fully transparent: a filled circle with a soft (partial-alpha) rim.
+string MakeRasterShadowPng()
+{
+    using var image = PeachImage.Image.Create(64, 64, PeachImage.PixelFormat.Rgba32);
+    var pixels = image.GetPixelSpan();
+    for (var y = 0; y < 64; y++)
+    {
+        for (var x = 0; x < 64; x++)
+        {
+            var d = Math.Sqrt((x - 31.5) * (x - 31.5) + (y - 31.5) * (y - 31.5));
+            var alpha = (byte)Math.Clamp((int)((30 - d) * 255 / 3), 0, 255);
+            var p = (y * 64 + x) * 4;
+            pixels[p] = (byte)(60 + x * 3);
+            pixels[p + 1] = (byte)(200 - y * 2);
+            pixels[p + 2] = 90;
+            pixels[p + 3] = alpha;
+        }
+    }
+
+    using var ms = new MemoryStream();
+    image.Save(ms, "png", new PeachImage.Formats.Png.PngEncoderOptions());
+    return "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());
+}
+
+var rasterShadowPng = MakeRasterShadowPng();
+
+const string RasterShadowCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0; background: #fafafa }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    .row { display: flex; gap: 26px; margin-bottom: 12px; align-items: flex-start }
+    .cap { font-size: 6.5pt; color: #666; margin-top: 4px }
+    .t { font: bold 26pt Arial, sans-serif; color: #2a5db0 }
+    .card { width: 110px; height: 70px; background: #fff; border-radius: 10px }
+    .sil { font: bold 20pt Arial, sans-serif; color: #c33 }
+    </style>
+    """;
+
+var rasterShadowsHtml = "<!DOCTYPE html><html><head>" + RasterShadowCss + "</head><body>" +
+    "<h1>Shadows</h1>" +
+    "<p class=\"intro\">Blurred shadows are true Gaussian blurs rendered into bitmaps at 300 dpi, drawn underneath content that stays vector and selectable. text-shadow, box-shadow (outer and inset) and drop-shadow() all follow the real shape: a drop-shadow of text or of a PNG with transparent corners is the glyph or image outline, not a rectangle. (docs/html-css-support.md#rasterized-effects)</p>" +
+
+    "<h2>1 — text-shadow</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"t\" style=\"text-shadow: 3px 3px 0 #9ab\">Hard</div><div class=\"cap\">3px 3px 0 #9ab</div></div>" +
+    "<div><div class=\"t\" style=\"text-shadow: 0 0 6px #4af\">Glow</div><div class=\"cap\">0 0 6px #4af</div></div>" +
+    "<div><div class=\"t\" style=\"text-shadow: 2px 3px 5px rgba(0,0,0,.6)\">Soft</div><div class=\"cap\">2px 3px 5px rgba(0,0,0,.6)</div></div>" +
+    "<div><div class=\"t\" style=\"text-shadow: 0 0 3px #fff, 0 0 10px #f80, 0 0 20px #f00; background:#222; padding:0 10px\">Fire</div><div class=\"cap\">three layers, first on top</div></div>" +
+    "</div>" +
+
+    "<h2>2 — box-shadow: a real Gaussian, knocked out under the box</h2>" +
+    "<div class=\"row\" style=\"padding: 14px\">" +
+    "<div><div class=\"card\" style=\"box-shadow: 0 4px 14px rgba(0,0,0,.45)\"></div><div class=\"cap\">0 4px 14px rgba(0,0,0,.45)</div></div>" +
+    "<div><div class=\"card\" style=\"background: transparent; box-shadow: 6px 6px 12px #36c\"></div><div class=\"cap\">transparent box: no shadow shows through</div></div>" +
+    "<div><div class=\"card\" style=\"box-shadow: inset 0 0 14px #36c, 0 0 0 2px #36c\"></div><div class=\"cap\">inset 0 0 14px, rounded hole</div></div>" +
+    "<div><div class=\"card\" style=\"box-shadow: 0 0 0 4px #fff, 0 10px 20px 2px rgba(200,0,60,.5)\"></div><div class=\"cap\">spread + two layers</div></div>" +
+    "</div>" +
+
+    "<h2>3 — filter: drop-shadow() follows the alpha shape</h2>" +
+    "<div class=\"row\" style=\"padding: 10px\">" +
+    "<div><div class=\"sil\" style=\"filter: drop-shadow(4px 4px 3px rgba(0,0,0,.6))\">Silhouette</div><div class=\"cap\">text: shadow is the glyph outline</div></div>" +
+    "<div><img src=\"" + rasterShadowPng + "\" width=\"64\" height=\"64\" style=\"filter: drop-shadow(5px 5px 4px #000)\"><div class=\"cap\">PNG with transparent corners</div></div>" +
+    "<div><svg width=\"90\" height=\"70\" viewBox=\"0 0 90 70\" style=\"filter: drop-shadow(4px 5px 3px rgba(0,0,80,.7))\"><path d=\"M10 60 L45 8 L80 60 Z\" fill=\"#e8a\"/><circle cx=\"45\" cy=\"42\" r=\"11\" fill=\"#fff\"/></svg><div class=\"cap\">inline SVG (not its bounding box)</div></div>" +
+    "<div><div class=\"card\" style=\"background:#9cf; filter: drop-shadow(0 6px 5px rgba(0,0,0,.5)) drop-shadow(6px 0 0 #f80)\"></div><div class=\"cap\">two drop-shadows chained</div></div>" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("shadows_raster", "Graphics & Effects", "Shadows (Gaussian blur)",
+    "text-shadow, blurred box-shadow (outer and inset), and filter: drop-shadow() - real Gaussian blurs rendered into bitmaps beneath vector content, following the actual glyph, image, and SVG shapes.",
+    rasterShadowsHtml, pdfConfig);
+
+// --- SVG filters over pixels showcase ---
+
+const string svgRasterFiltersHtml = """
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 10px; font-family: sans-serif; background: #fff; }
+.grid { display: flex; flex-wrap: wrap; gap: 8px; }
+figure { margin: 0; width: 170px; font-size: 9px; text-align: center; }
+svg { width: 160px; height: 120px; border: 1px solid #ddd; }
+</style></head><body>
+<div class="grid">
+<figure><svg viewBox="0 0 160 120"><defs><filter id="blur"><feGaussianBlur stdDeviation="4"/></filter></defs><g filter="url(#blur)"><rect x="30" y="20" width="100" height="70" fill="#c33"/><circle cx="80" cy="55" r="25" fill="#fc3"/></g></svg>blur 4</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="blurx"><feGaussianBlur stdDeviation="8 0"/></filter></defs><g filter="url(#blurx)"><rect x="30" y="20" width="100" height="70" fill="#c33"/></g></svg>blur x-only</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="sat"><feColorMatrix type="saturate" values="0.2"/></filter></defs><g filter="url(#sat)"><rect x="10" y="10" width="60" height="100" fill="#f00"/><rect x="80" y="10" width="60" height="100" fill="#0a0"/></g></svg>saturate .2</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="hue"><feColorMatrix type="hueRotate" values="120"/></filter></defs><g filter="url(#hue)"><rect x="10" y="10" width="60" height="100" fill="#f00"/><rect x="80" y="10" width="60" height="100" fill="#0a0"/></g></svg>hueRotate 120</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="shadow" x="-20%" y="-20%" width="150%" height="150%"><feDropShadow dx="5" dy="5" stdDeviation="3" flood-color="#000" flood-opacity="0.6"/></filter></defs><g filter="url(#shadow)"><rect x="30" y="20" width="80" height="60" fill="#39c" rx="10"/></g></svg>feDropShadow</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="morph"><feMorphology operator="dilate" radius="3"/></filter></defs><g filter="url(#morph)"><text x="15" y="70" font-size="40" font-family="sans-serif" fill="#000">Ab</text></g></svg>dilate 3</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="erode"><feMorphology operator="erode" radius="2"/></filter></defs><g filter="url(#erode)"><text x="15" y="70" font-size="50" font-family="sans-serif" font-weight="bold" fill="#000">Ab</text></g></svg>erode 2</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="turb" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" seed="3"/></filter></defs><rect width="160" height="120" fill="#fff" filter="url(#turb)"/></svg>fractalNoise</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="turb2" x="0" y="0" width="100%" height="100%"><feTurbulence type="turbulence" baseFrequency="0.05" numOctaves="2"/></filter></defs><rect width="160" height="120" fill="#fff" filter="url(#turb2)"/></svg>turbulence</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="disp" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="turbulence" baseFrequency="0.05" numOctaves="2" result="t"/>
+      <feDisplacementMap in="SourceGraphic" in2="t" scale="18" xChannelSelector="R" yChannelSelector="G"/>
+    </filter></defs><g filter="url(#disp)"><rect x="20" y="20" width="120" height="80" fill="#c33"/><circle cx="80" cy="60" r="25" fill="#fff"/></g></svg>displacement</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="light" x="0" y="0" width="100%" height="100%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b"/>
+      <feDiffuseLighting in="b" surfaceScale="6" diffuseConstant="1" lighting-color="#fff" result="d"><feDistantLight azimuth="225" elevation="45"/></feDiffuseLighting>
+      <feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1" k2="0.2" k3="0" k4="0"/>
+    </filter></defs><g filter="url(#light)"><rect x="20" y="20" width="120" height="80" rx="20" fill="#c63"/></g></svg>diffuse light</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="spec" x="0" y="0" width="100%" height="100%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b"/>
+      <feSpecularLighting in="b" surfaceScale="5" specularConstant="1" specularExponent="20" lighting-color="#fff" result="s"><fePointLight x="40" y="20" z="60"/></feSpecularLighting>
+      <feComposite in="s" in2="SourceAlpha" operator="in" result="s2"/>
+      <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="s2"/></feMerge>
+    </filter></defs><g filter="url(#spec)"><rect x="20" y="20" width="120" height="80" rx="20" fill="#369"/></g></svg>specular point</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="conv"><feConvolveMatrix order="3" kernelMatrix="0 -1 0 -1 5 -1 0 -1 0"/></filter></defs><g filter="url(#conv)"><rect x="20" y="20" width="120" height="80" fill="#888"/><circle cx="80" cy="60" r="25" fill="#eee"/></g></svg>sharpen</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="emboss"><feConvolveMatrix order="3" kernelMatrix="-2 -1 0 -1 1 1 0 1 2" preserveAlpha="true"/></filter></defs><g filter="url(#emboss)"><rect x="20" y="20" width="120" height="80" fill="#888"/><circle cx="80" cy="60" r="25" fill="#eee"/></g></svg>emboss</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="ct"><feComponentTransfer><feFuncR type="discrete" tableValues="0 0.5 1"/><feFuncG type="gamma" amplitude="1" exponent="0.5"/><feFuncB type="table" tableValues="1 0"/></feComponentTransfer></filter></defs><g filter="url(#ct)"><rect x="10" y="10" width="140" height="100" fill="url(#grad)"/></g><defs><linearGradient id="grad"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient></defs></svg>transfer fns</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="lin"><feGaussianBlur stdDeviation="6" color-interpolation-filters="linearRGB"/></filter></defs><g filter="url(#lin)"><rect x="20" y="20" width="60" height="80" fill="#f00"/><rect x="80" y="20" width="60" height="80" fill="#00f"/></g></svg>blur linearRGB</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="srgb" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="6"/></filter></defs><g filter="url(#srgb)"><rect x="20" y="20" width="60" height="80" fill="#f00"/><rect x="80" y="20" width="60" height="80" fill="#00f"/></g></svg>blur sRGB</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="sub" x="0" y="0" width="100%" height="100%"><feFlood flood-color="#39f" x="20" y="20" width="60" height="40"/></filter></defs><rect width="160" height="120" fill="#eee" filter="url(#sub)"/></svg>subregion flood</figure>
+<figure><svg viewBox="0 0 160 120"><defs><filter id="tile" x="0" y="0" width="100%" height="100%"><feFlood flood-color="#e63" x="0" y="0" width="20" height="20"/><feOffset dx="0" dy="0" x="0" y="0" width="20" height="20" result="o"/><feTile in="o"/></filter></defs><rect width="160" height="120" fill="#eee" filter="url(#tile)"/></svg>feTile</figure>
+</div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("svg_filters_raster", "Graphics & Effects", "SVG Filters (Rasterized)",
+    "SVG filter primitives PDF has no operator for - blur, drop shadow, morphology, convolution, turbulence, displacement and lighting, cross-channel colour matrices, table/gamma transfer functions, arithmetic compositing - evaluated over pixels in linear light and embedded at the document's raster resolution.",
+    svgRasterFiltersHtml, pdfConfig);
+
+// --- backdrop-filter showcase ---
+
+const string backdropFilterHtml = """
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 0; font-family: sans-serif; }
+.stage { position: relative; width: 520px; height: 300px; background: linear-gradient(90deg, #e33 0, #fc3 33%, #3c6 66%, #36f 100%); overflow: hidden; }
+.stage p { position: absolute; margin: 0; font-size: 24px; font-weight: bold; color: #111; white-space: nowrap; }
+.glass { position: absolute; border-radius: 18px; border: 1px solid rgba(255,255,255,.6); color: #000; font-size: 13px; padding: 8px 12px; box-sizing: border-box; }
+.g1 { left: 40px; top: 44px; width: 210px; height: 100px; background: rgba(255,255,255,.18); backdrop-filter: blur(6px); }
+.g2 { left: 280px; top: 44px; width: 210px; height: 100px; background: rgba(0,0,0,.05); backdrop-filter: grayscale(1) contrast(1.2); }
+.g3 { left: 40px; top: 170px; width: 210px; height: 100px; background: rgba(255,255,255,.1); -webkit-backdrop-filter: blur(3px) saturate(2); }
+.g4 { left: 280px; top: 170px; width: 210px; height: 100px; border-radius: 45px; background: rgba(255,255,255,.1); backdrop-filter: invert(1) hue-rotate(90deg); }
+.iso { position: absolute; left: 0; top: 0; width: 100%; height: 100%; opacity: .99; }
+</style></head><body>
+<div class="stage">
+<p style="left:16px;top:10px">BACKDROP FILTER</p>
+<p style="left:16px;top:88px">Text behind glass</p>
+<p style="left:256px;top:88px">Text behind glass</p>
+<p style="left:16px;top:214px">Text behind glass</p>
+<p style="left:256px;top:214px">Text behind glass</p>
+<div class="glass g1">blur(6px)</div>
+<div class="glass g2">grayscale + contrast</div>
+<div class="glass g3">blur + saturate</div>
+<div class="glass g4">invert + hue-rotate</div>
+</div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("backdrop_filter", "Graphics & Effects", "Backdrop Filter",
+    "backdrop-filter on frosted-glass panels over a gradient and text: blur, grayscale + contrast, blur + saturate, and invert + hue-rotate, each applied to what was painted behind the panel and clipped to its rounded corners.",
+    backdropFilterHtml, pdfConfig);
+
+// --- PDF/A-1 with flattened transparency showcase ---
+
+const string flattenedTransparencyHtml = """
+<html><head><style>
+body { margin: 20px; font-family: sans-serif; }
+.stage { position: relative; width: 480px; height: 250px; background: linear-gradient(90deg,#e33,#fc3,#3c6,#36f); margin-bottom: 30px; }
+.card { position: absolute; padding: 10px; border-radius: 14px; }
+.a { left: 20px; top: 20px; width: 200px; height: 80px; background: rgba(255,255,255,.55); }
+.b { left: 260px; top: 20px; width: 190px; height: 80px; background: #000; opacity: .45; color: #fff; }
+.c { left: 40px; top: 150px; width: 180px; height: 60px; background: #fff; box-shadow: 0 6px 14px rgba(0,0,0,.5); }
+.d { left: 260px; top: 150px; width: 190px; height: 60px; background: #f80; mix-blend-mode: multiply; }
+</style></head><body>
+<h2>PDF/A-1b with transparency, flattened</h2>
+<p>PDF/A-1 forbids transparency. With <code>TransparencyPolicy.Flatten</code> each translucent element below is rendered, with what is behind it, into an opaque bitmap; the rest of the page stays vector, and the text stays selectable.</p>
+<div class="stage">
+  <div class="card a">rgba background over a gradient</div>
+  <div class="card b">opacity .45 group with text</div>
+  <div class="card c">box-shadow with blur</div>
+  <div class="card d">mix-blend-mode multiply</div>
+</div>
+<p style="color: rgba(0,0,0,.5); font-size: 20px">Half-transparent text</p>
+</body></html>
+""";
+
+await SaveShowcaseAsync("pdfa1_flattened_transparency", "Standards & Accessibility", "PDF/A-1 with Flattened Transparency",
+    "A PDF/A-1b document that uses rgba backgrounds, opacity, a blurred shadow, mix-blend-mode and translucent text - all forbidden by PDF/A-1 - generated with TransparencyPolicy.Flatten, which renders each affected region as an opaque bitmap.",
+    flattenedTransparencyHtml,
+    new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PdfAConformance = PdfAConformance.PdfA1B,
+        TransparencyPolicy = TransparencyPolicy.Flatten,
+        Metadata = new PdfDocumentMetadata { CreationDate = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero) },
+    });
+
+// --- CSS perspective and 3D transforms showcase ---
+
+const string perspectiveHtml = """
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 0; font-family: sans-serif; background: #eef; }
+.row { display: flex; gap: 30px; padding: 20px; }
+.scene { width: 200px; height: 160px; perspective: 400px; background: #dde; position: relative; }
+.card { position: absolute; left: 40px; top: 30px; width: 120px; height: 90px; background: linear-gradient(135deg,#e33,#fc3); border: 3px solid #333; color: #000; font-size: 18px; font-weight: bold; padding: 8px; box-sizing: border-box; }
+.a { transform: rotateY(50deg); }
+.b { transform: rotateX(45deg); }
+.c { transform: perspective(300px) rotateY(-40deg); }
+.d { transform: translateZ(100px); }
+.e { transform: rotateY(180deg); backface-visibility: hidden; }
+.f { transform: rotateY(180deg); }
+.g { transform: rotateY(30deg) rotateX(20deg); opacity: .7; }
+.cap { font-size: 11px; text-align: center; margin-top: 4px; }
+</style></head><body>
+<div class="row">
+  <div><div class="scene"><div class="card a">rotateY 50 (persp 400)</div></div><div class="cap">parent perspective, rotateY(50deg)</div></div>
+  <div><div class="scene"><div class="card b">rotateX 45</div></div><div class="cap">rotateX(45deg)</div></div>
+  <div><div class="scene"><div class="card c">perspective() fn</div></div><div class="cap">perspective(300px) rotateY(-40deg)</div></div>
+</div>
+<div class="row">
+  <div><div class="scene"><div class="card d">translateZ 100</div></div><div class="cap">translateZ(100px): closer, larger</div></div>
+  <div><div class="scene"><div class="card e">hidden back</div></div><div class="cap">rotateY(180) backface hidden: nothing</div></div>
+  <div><div class="scene"><div class="card f">shows back</div></div><div class="cap">rotateY(180): mirrored</div></div>
+</div>
+<div class="row">
+  <div><div class="scene"><div class="card g">g 30/20 op .7</div></div><div class="cap">rotateY+rotateX, opacity</div></div>
+</div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("perspective_3d_transforms", "Graphics & Effects", "Perspective and 3D Transforms",
+    "CSS perspective on a parent and perspective() in a transform: rotateX/rotateY cards foreshortened in real perspective, translateZ scaling, backface-visibility, and a perspective card with opacity - warped from a bitmap of the element at the raster resolution.",
+    perspectiveHtml, pdfConfig);
+
 // --- CSS mix-blend-mode showcase ---
 
 static string BlendSwatch(string desc, string blendMode) =>
@@ -12388,6 +12659,76 @@ await SaveShowcaseAsync("vertical_writing_mode_background_clip_text", "Typograph
     "one whose font carries real vhea/vmtx vertical metrics - instead of falling back to " +
     "a plain border-box fill.",
     verticalBackgroundClipTextHtml, pdfConfig);
+
+// --- Font-relative units showcase: ex/ch/cap/ic/lh measured from the font, plus the root-element forms ---
+//
+// The units are measured from the used font (CSS Values and Units 4 section 6.1), not a fixed fraction of the font
+// size, so every bar below is sized by a unit and lines up with the text or the ruler it claims to measure. Source
+// Code Pro is monospace (its "0" is exactly 0.6em); Source Sans 3 is proportional, so the same 20ch is a different
+// width in each. The grey "0.5em" bars are what these units resolved to before they were measured.
+var fontRelativeUnitsHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'SS3'; src: url('data:font/truetype;base64,{sourceSans3B64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'SCP'; src: url('data:font/opentype;base64,{sourceCodeProB64}') format('opentype'); }}" +
+    $"@font-face {{ font-family: 'STIX'; src: url('data:font/truetype;base64,{stixTwoMathB64}') format('truetype'); }}" +
+    "html { font-size: 12pt } body { font-family: 'SS3', serif; margin: 0; color: #222 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { font-size: 9pt; margin: 0 0 0.6em; color: #555; font-family: Arial, sans-serif }" +
+    ".lab { font: 7pt Arial, sans-serif; color: #666; margin: 5px 0 1px }" +
+    ".bar { height: 8px; background: steelblue; margin: 0 0 2px } .old { height: 4px; background: #bbb; margin: 0 0 4px }" +
+    ".mono { font-family: 'SCP', monospace } .sans { font-family: 'SS3', serif } .big { font-size: 20pt }" +
+    ".ruler { font-size: 20pt; line-height: 1; white-space: pre; border-bottom: 1px solid #c33 }" +
+    ".capbox { display: inline-block; width: 6ch; height: 1cap; background: #e8a; vertical-align: baseline }" +
+    ".exbox { display: inline-block; width: 6ch; height: 1ex; background: #8ae; vertical-align: baseline }" +
+    ".lhstack div { height: 1lh; border-top: 1px solid #c33; font-size: 10pt }" +
+    "svg { border: 1px solid #ddd }" +
+    "</style></head><body>" +
+    "<h1>Font-relative units</h1>" +
+    "<p class=\"intro\"><code>ex</code>, <code>ch</code>, <code>cap</code>, <code>ic</code> and <code>lh</code> " +
+    "(and the root-element <code>rex</code>/<code>rch</code>/<code>rcap</code>/<code>ric</code>/<code>rlh</code>) are " +
+    "measured from the font an element actually uses.</p>" +
+
+    "<h2>ch: the width of the \"0\" glyph</h2>" +
+    "<div class=\"ruler big mono\">00000000000000000000</div>" +
+    "<div class=\"lab\">Source Code Pro, 20pt, width: 20ch (blue) vs. the old 0.5em approximation (grey)</div>" +
+    "<div class=\"big mono\"><div class=\"bar\" style=\"width: 20ch\"></div><div class=\"old\" style=\"width: 10em\"></div></div>" +
+    "<div class=\"ruler big sans\">00000000000000000000</div>" +
+    "<div class=\"lab\">Source Sans 3, 20pt, width: 20ch - a proportional font, so a different width</div>" +
+    "<div class=\"big sans\"><div class=\"bar\" style=\"width: 20ch\"></div><div class=\"old\" style=\"width: 10em\"></div></div>" +
+
+    "<h2>ex and cap: the x-height and cap height</h2>" +
+    "<div class=\"big sans\"><span class=\"exbox\"></span> <span class=\"capbox\"></span> xxxx HHHH</div>" +
+    "<div class=\"lab\">boxes 1ex tall (blue) and 1cap tall (pink), for comparing their heights with a lowercase x and a capital H</div>" +
+
+    "<h2>lh: the used line-height</h2>" +
+    "<div class=\"lhstack\" style=\"line-height: 18pt\"><div>line-height: 18pt - each row is 1lh tall</div><div>second row</div><div>third row</div></div>" +
+    "<div class=\"lhstack\" style=\"line-height: 1.6\"><div>line-height: 1.6 - each row is 1lh tall</div><div>second row</div><div>third row</div></div>" +
+
+    "<h2>Root-element forms follow the root, not the element</h2>" +
+    "<div class=\"lab\">html is 12pt Source Sans 3. Both bars sit in a 30pt Source Code Pro box, but the blue bar is 10rch - ten of the ROOT's zeros - " +
+    "while the green bar is 10ch of the box's own font</div>" +
+    "<div class=\"mono\" style=\"font-size: 30pt\"><div class=\"bar\" style=\"width: 10rch\"></div><div class=\"bar\" style=\"width: 10ch; background: seagreen\"></div></div>" +
+
+    "<h2>SVG</h2>" +
+    "<svg width=\"400\" height=\"70\" font-family=\"SCP\" font-size=\"20\" viewBox=\"0 0 400 70\">" +
+    "<rect x=\"1ch\" y=\"1ch\" width=\"10ch\" height=\"1cap\" fill=\"steelblue\"/>" +
+    "<rect x=\"1ch\" y=\"3em\" width=\"10ch\" height=\"6\" fill=\"#bbb\" stroke=\"#222\" stroke-width=\"calc(1em / 10)\" stroke-dasharray=\"1ch 1ch\"/>" +
+    "<text x=\"16ch\" y=\"1.2em\" font-size=\"1em\">0000000000</text>" +
+    "</svg>" +
+    "<div class=\"lab\">Widths, heights and the dashed stroke in ch/em/cap against Source Code Pro; the text is ten zeros wide - the same ten as the blue bar's 10ch</div>" +
+
+    "<h2>MathML</h2>" +
+    "<div style=\"font-size: 16pt; font-family: 'STIX'\">" +
+    "<math><mi>a</mi><mspace width=\"4ch\" style=\"background:#fcc\"/><mi>b</mi><mspace width=\"2em\"/><mi>c</mi></math>" +
+    " <span style=\"font: 7pt Arial\">mspace width=\"4ch\" then \"2em\" - measured from the math font</span></div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("font_relative_units", "Typography & Text", "Font-relative units: ex, ch, cap, ic, lh",
+    "ex, ch, cap, ic and lh - and their root-element rex/rch/rcap/ric/rlh forms - measured from the font an element " +
+    "actually uses instead of a fixed 0.5em, in HTML lengths, SVG geometry/stroke/text and MathML spacing.",
+    fontRelativeUnitsHtml, pdfConfig);
 
 const string declarativeApiSource =
     """"

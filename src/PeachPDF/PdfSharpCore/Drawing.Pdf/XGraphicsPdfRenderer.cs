@@ -427,14 +427,16 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             // generators register different subset files with the same internal family/style name.
             // Merely reading the descriptor does not realize/embed the color font below.
             OpenTypeDescriptor descriptor = font.Descriptor;
-            bool isColorFont = font.Unicode && descriptor.IsColorFont;
+            // Invisible text (see XGraphics.InvisibleText) is always the plain outline text object, never colour artwork.
+            bool invisible = Gfx.InvisibleText;
+            bool isColorFont = font.Unicode && descriptor.IsColorFont && !invisible;
             IReadOnlyList<ShapedGlyph>? colorGlyphs = isColorFont ? descriptor.Shape(s, features) : null;
             double width = colorGlyphs is not null && CanMeasureAsSingleShapedRun(s)
                 ? MeasureShapedRunWidth(s, font, descriptor, colorGlyphs)
                 : _gfx.MeasureString(s, font, features).Width;
 
             if (!isColorFont)
-                Realize(font, brush, boldSimulation ? 2 : 0, letterSpacing);
+                Realize(font, brush, invisible ? 3 : boldSimulation ? 2 : 0, letterSpacing);
 
             switch (format.Alignment)
             {
@@ -609,7 +611,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 #endif
             }
 
-            if (underline)
+            if (underline && !invisible)
             {
                 double underlinePosition = lineSpace * descriptor.UnderlinePosition / font.CellSpace;
                 double underlineThickness = lineSpace * descriptor.UnderlineThickness / font.CellSpace;
@@ -620,7 +622,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 DrawRectangle(null, brush, x, underlineRectY, width, underlineThickness);
             }
 
-            if (strikeout)
+            if (strikeout && !invisible)
             {
                 double strikeoutPosition = lineSpace * descriptor.StrikeoutPosition / font.CellSpace;
                 double strikeoutSize = lineSpace * descriptor.StrikeoutSize / font.CellSpace;

@@ -23,9 +23,9 @@ real behavior regression, not a fix), while `@supports` genuinely is stricter (d
 schema exists for exactly this split: `cssDataType` keeps gating real dispatch; `supportsDataType`, when
 present, is a separate, stricter grammar `Supports_*`/`SupportsDeclaration` uses instead. `transform`'s
 `supportsDataType: "transform"` (`CssValueParser.IsValidTransformValue`) checks against the exact set of
-functions `BuildFunctionMatrix` implements at paint time — `perspective()` parses as valid CSS but paint
-silently drops it, so `@supports (transform: perspective(500px))` correctly reports unsupported even
-though the declaration itself is still accepted and stored by real dispatch. `break-before`/`break-after`'s
+functions `BuildFunctionMatrix` implements at paint time — a function the CSS grammar accepts but paint
+silently drops reports unsupported there even though the declaration itself is still accepted and stored
+by real dispatch (`perspective()` was that case until it was implemented). `break-before`/`break-after`'s
 `supportsDataType` excludes `region`/`avoid-region` (parsed and stored, per `CssUtilsTests
 .Cascade_BreakBefore_StoresOnlySpecValues`, but inert — no `FragmentationContext.Region` exists).
 
@@ -54,4 +54,4 @@ implemented (`FontObliqueAngleResolver`) and was independently verified against 
 Auditing the remaining `"cssom"` properties in the same test-driven way (JSON grammar → build → run the
 full suite → fix any real dispatch regression the way `overflow`'s `auto`/`scroll` and `break-before`'s
 `region` were caught here) is future work, not a blocking prerequisite — none of them are known to have
-`transform`/`perspective()`'s specific false-positive shape.
+`transform`'s specific false-positive shape.

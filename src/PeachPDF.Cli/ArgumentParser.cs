@@ -122,6 +122,8 @@ internal static class ArgumentParser
                 case "page-margin": ParsePageMargin(_options, RequireValue(name, inlineValue)); break;
 
                 case "no-compress": _options.NoCompress = true; break;
+                case "raster-dpi": SetRasterDpi(_options, RequireValue(name, inlineValue)); break;
+                case "flatten-transparency": _options.FlattenTransparency = true; break;
                 case "tagged-pdf": _options.TaggedPdf = true; break;
                 case "interactive-pdf-forms": _options.InteractivePdfForms = true; break;
                 case "pdf-title": _options.PdfTitle = RequireValue(name, inlineValue) ?? _options.PdfTitle; break;
@@ -218,6 +220,23 @@ internal static class ArgumentParser
         if (value is not null)
         {
             options.HttpHeaders.Add(value);
+        }
+    }
+
+    private static void SetRasterDpi(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var dpi) && dpi is >= 72 and <= 1200)
+        {
+            options.RasterDpi = dpi;
+        }
+        else
+        {
+            options.Errors.Add($"invalid --raster-dpi value '{value}' (expected a resolution from 72 to 1200 pixels per inch)");
         }
     }
 

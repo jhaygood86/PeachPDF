@@ -25,6 +25,8 @@ using PeachPDF.Network;
 - [Enabling tagged PDF (PDF/UA) output](#enabling-tagged-pdf-pdfua-output)
 - [PDF 2.0 output](#pdf-20-output)
 - [Enabling interactive PDF forms](#enabling-interactive-pdf-forms)
+- [Rasterized effects and resolution](#rasterized-effects-and-resolution)
+- [Flattening transparency for PDF/A-1 and PDF/X](#flattening-transparency-for-pdfa-1-and-pdfx)
 - [ASP.NET Core controller endpoint](#aspnet-core-controller-endpoint)
 - [ASP.NET Core Minimal API endpoint](#aspnet-core-minimal-api-endpoint)
 - [Azure Functions (isolated worker) HTTP handler](#azure-functions-isolated-worker-http-handler)
@@ -518,7 +520,7 @@ If you don't have a specific requirement for PDF/A-1 or PDF/A-3, `PdfA2B` (or `P
 
 ### PDF/A-1 and transparency
 
-CSS/SVG `opacity` below 1, `fill-opacity`/`stroke-opacity` below 1, a semi-transparent gradient color stop, and an SVG `<mask>` all render via a PDF transparency group — a construct PDF/A-1 forbids outright. PeachPDF has no engine to flatten these into a PDF/A-1-legal form, so rather than silently emit a non-conformant file, generation throws an `InvalidOperationException` naming the offending feature if the document uses any of them under `PdfA1B`/`PdfA1A`. A document that doesn't use any of these features generates normally under PDF/A-1. If your content needs transparency, target `PdfA2*`/`PdfA3*` instead — both permit it.
+CSS/SVG `opacity` below 1, `fill-opacity`/`stroke-opacity` below 1, a semi-transparent gradient color stop, an SVG `<mask>`, and a CSS `filter` PeachPDF renders as a bitmap (`blur()`, `grayscale()`, `sepia()`, `saturate()`, `hue-rotate()`; see [Rasterized effects](#rasterized-effects-and-resolution)) all need a PDF transparency group or soft mask — constructs PDF/A-1 forbids outright. By default, rather than silently emit a non-conformant file, generation throws an `InvalidOperationException` naming the offending feature if the document uses any of them under `PdfA1B`/`PdfA1A`. A document that doesn't use any of these features generates normally under PDF/A-1. Set `PdfGenerateConfig.TransparencyPolicy` to `Flatten` to have PeachPDF render what needs transparency as opaque bitmaps instead — see [Flattening transparency](#flattening-transparency-for-pdfa-1-and-pdfx) — or target `PdfA2*`/`PdfA3*`, which permit it.
 
 ### The accessible "A" levels
 
@@ -745,7 +747,7 @@ var config = new PdfGenerateConfig
 
 ### X1a and X3: no live transparency
 
-Same restriction, and the same mechanism, as [PDF/A-1](#pdfa-1-and-transparency): CSS/SVG `opacity` below 1, `fill-opacity`/`stroke-opacity` below 1, a semi-transparent gradient color stop, and an SVG `<mask>` all render via a PDF transparency group, which `X1a`/`X3` forbid outright. Generation throws an `InvalidOperationException` naming the offending feature rather than silently emitting a non-conformant file. Target `X4` instead if your content needs transparency.
+Same restriction, and the same mechanism, as [PDF/A-1](#pdfa-1-and-transparency): CSS/SVG `opacity` below 1, `fill-opacity`/`stroke-opacity` below 1, a semi-transparent gradient color stop, an SVG `<mask>`, and a CSS `filter` PeachPDF renders as a bitmap all need a PDF transparency group or soft mask, which `X1a`/`X3` forbid outright. Generation throws an `InvalidOperationException` naming the offending feature rather than silently emitting a non-conformant file. Set `TransparencyPolicy` to `Flatten` ([see below](#flattening-transparency-for-pdfa-1-and-pdfx)) to render it as opaque bitmaps instead, or target `X4`, which permits transparency.
 
 ### X1a: CMYK-only content
 
@@ -786,6 +788,59 @@ var config = new PdfGenerateConfig
 - **`GrayscaleViaK`** converts every color into `FallbackCmykProfile`'s CMYK space and keeps only the resulting K (black) channel — true ink-based grayscale, not a luminosity approximation.
 
 A color's source profile is always well-defined for an RGB-authored color (the ICC-published sRGB profile PeachPDF already bundles for PDF/A — CSS colors are sRGB by definition outside of `device-cmyk()`). A `device-cmyk()`-authored color is uncalibrated ink by definition and has no source profile unless `FallbackCmykProfile` supplies one — without that set, a `device-cmyk()` color is left exactly as authored even under a conversion mode, since there is nothing to convert *from*.
+
+## Rasterized effects and resolution
+
+A few effects cannot be drawn as vector PDF content: the CSS `filter` functions `blur()`, `grayscale()`, `sepia()`, `saturate()`, `hue-rotate()` and `drop-shadow()`, blurred `box-shadow`s and `text-shadow`s (see [Rasterized effects](html-css-support.md#rasterized-effects) for exactly what is rendered this way), and SVG `<filter>` elements that use a blur, lighting, morphology, convolution, turbulence, displacement or another pixel primitive (see [SVG filters](supported-svg-features.md#filters)). For those, PeachPDF renders the affected element into a bitmap and embeds it; the rest of the page stays vector.
+
+`RasterizationDpi` sets how sharp that bitmap is, in pixels per inch of *paper*:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    RasterizationDpi = 300,   // the default; 72 to 1200
+};
+
+var document = await new PdfGenerator().GeneratePdf(html, config);
+```
+
+The default of 300 is the print-quality convention and leaves room to zoom a viewer to several hundred percent. Raise it for large-format printing, or lower it to make the file smaller.
+
+The value is a physical resolution and does not depend on `PixelsPerInch`. A bitmap is always placed at exactly the size of the content it replaces, so one inch on the page is still one inch, and only the number of pixels behind it changes. For example, with `PixelsPerInch = 96` and `RasterizationDpi = 288`, each CSS pixel is backed by 288 / 96 = 3 bitmap pixels in each direction, 9 in all, and the bitmap is scaled down to occupy the same one CSS pixel it always did.
+
+Two related settings:
+
+- `MaxRasterPixels` (default 64 million) bounds one bitmap. A region that would be larger — a full page at a very high DPI, say — is rendered at a lower resolution just large enough to fit. Its placed size is unchanged. Each bitmap is held in memory as four bytes per pixel while it is composed, so raise the limit only as far as the memory available allows.
+- Bitmaps are never resampled by `DownscaleImages`. That option exists to shrink oversized source images, and applying it to a bitmap PeachPDF rendered at a chosen resolution would undo that choice.
+
+A value outside 72 to 1200 throws an `ArgumentOutOfRangeException` when generation starts. On the command line the setting is `--raster-dpi`; see [the CLI reference](cli.md).
+
+Text inside a rasterized HTML element is drawn into the bitmap and also kept as invisible, positioned text over it, so it stays selectable and searchable. A document targeting PDF/A-1 or PDF/X-1a/X-3 is rejected if it uses one of these effects, unless it asks for [flattening](#flattening-transparency-for-pdfa-1-and-pdfx) — see [PDF/A-1 and transparency](#pdfa-1-and-transparency).
+
+## Flattening transparency for PDF/A-1 and PDF/X
+
+PDF/A-1 and PDF/X-1a/X-3 forbid transparency, which CSS uses everywhere: `opacity`, `rgba()` colours, gradients with an alpha stop, PNGs with an alpha channel, `mix-blend-mode`, blurred shadows, `filter`, SVG masks and filters. By default a document that targets one of these levels and uses any of it is rejected. `TransparencyPolicy.Flatten` turns the rejection into a conversion:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    PdfAConformance = PdfAConformance.PdfA1B,
+    TransparencyPolicy = TransparencyPolicy.Flatten,
+    RasterizationDpi = 300, // resolution of the flattened regions
+};
+```
+
+What needs transparency is worked out by the PDF writer's own rules, so nothing that would have been rejected slips through. Each such element is rendered, together with everything painted behind it, into an opaque bitmap at `RasterizationDpi`, and the bitmap replaces the element's region. The file then contains no soft mask, no alpha value, no blend mode and no transparency group. Everything that needs no transparency stays vector, so a page with one translucent card is one bitmap and otherwise ordinary content.
+
+- **Text stays selectable.** The text of a flattened element is placed again over the bitmap as invisible text, so it can still be selected, searched and copied, and tagged-PDF structure still points at it.
+- **Placed size is exact.** The bitmap is placed at exactly the size of the region it replaces; only its pixel count depends on `RasterizationDpi`.
+- **PDF/X-1a** forbids RGB, so the bitmaps are embedded as DeviceCMYK, converted from the rendered colours by the usual naive formula (no colour management). Other content in an X-1a document is subject to that level's usual colour rules.
+- **Limits.** An element under a CSS `transform` cannot be flattened (its backdrop is in another coordinate space) and is still rejected. A region of the page is a bitmap, so it is as sharp as `RasterizationDpi`, not infinitely, and file size grows with the flattened area. Where two flattened regions meet, some viewers' image smoothing can show a faint one-pixel seam.
+- **Other levels.** PDF/A-2, PDF/A-3 and PDF/X-4 permit transparency and are unaffected by the policy.
+
+`backdrop-filter` needs none of this: its bitmap is opaque (it sits over white paper), so it is legal under PDF/A-1 as it is. On the command line, the option is `--flatten-transparency`; see [the CLI reference](cli.md).
 
 ## ASP.NET Core controller endpoint
 

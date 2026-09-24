@@ -102,6 +102,13 @@ internal static class CliProgram
               --interactive-pdf-forms
                                      Emit fillable AcroForm fields for form elements.
               --no-compress          Do not compress PDF content streams.
+              --raster-dpi=DPI       Resolution, in pixels per inch of paper (72-1200,
+                                     default 300), of effects PeachPDF renders as bitmaps,
+                                     such as CSS filter: blur(). Higher is sharper and
+                                     larger; the printed size never changes.
+              --flatten-transparency
+                                     Under PDF/A-1 or PDF/X-1a/X-3, render what needs
+                                     transparency as opaque bitmaps instead of failing.
 
         Network (HTTP inputs and resources):
               --http-timeout=SEC     HTTP request timeout in seconds.

@@ -43,7 +43,9 @@ namespace PeachPDF.MathML
                 referenceFont.FontUnitsPerEm > 0 ? referenceFont.FontUnitsPerEm : 1000,
                 g.PixelsPerPoint,
                 document.ResolveFont,
-                g);
+                g,
+                document.RootFonts,
+                document.RootFontSizePt ?? document.Root.FontSizePt);
 
             return LayoutNode(document.Root, metrics);
         }

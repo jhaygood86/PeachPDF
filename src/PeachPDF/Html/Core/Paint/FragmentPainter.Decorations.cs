@@ -526,10 +526,10 @@ namespace PeachPDF.Html.Core.Paint
         /// later <c>drop-shadow()</c> would see the *previous* filter step's output, not the original box -
         /// is out of scope for this same reason.
         /// </summary>
-        private static void PaintFilterDropShadows(RGraphics g, CssBox box, in BoxDecorationGeometry geometry)
+        private void PaintFilterDropShadows(RGraphics g, CssBox box, in BoxDecorationGeometry geometry)
         {
             var functions = box.ActualFilterFunctions;
-            if (functions.Count == 0) return;
+            if (functions.Count == 0 || _dropShadowsInRaster.Contains(box)) return;
 
             var borderBox = geometry.DecorationRect;
 
@@ -625,6 +625,10 @@ namespace PeachPDF.Html.Core.Paint
                 return;
             }
 
+            // A graphics that can rasterize paints a real Gaussian blur; otherwise fall back to concentric fills.
+            if (color.A > 0 && TryPaintBlurredOutsetShadow(g, box, borderBox, shadowRect, baseRadii, blur, color))
+                return;
+
             var steps = BlurSteps(blur, g.PixelsPerPoint);
             var layerColors = ComputeBlurLayerColors(color, steps);
             if (layerColors.Length == 0) return;
@@ -678,6 +682,10 @@ namespace PeachPDF.Html.Core.Paint
             {
                 // Solid ring = padding box minus the inner hole.
                 FillRingRects(g, paddingBox, inner, color);
+            }
+            else if (color.A > 0 && TryPaintBlurredInsetShadow(g, box, borderBox, paddingBox, inner, blur, spread, color))
+            {
+                // Painted as a real Gaussian blur in a bitmap (see TryPaintBlurredInsetShadow).
             }
             else
             {

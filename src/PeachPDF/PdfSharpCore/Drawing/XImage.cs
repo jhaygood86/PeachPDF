@@ -31,6 +31,7 @@
 
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.Raster;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using PeachPDF.PdfSharpCore.Utils;
 using System;
@@ -260,6 +261,28 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// JPEG resize-fallback path to write a matching <c>/ColorSpace</c>.
         /// </summary>
         internal bool IsGrayscale => _source.IsGrayscale;
+
+        /// <summary>
+        /// True for an image produced by the raster backend (see <c>RGraphics.DrawRaster</c>), whose pixel
+        /// dimensions were chosen on purpose to give a stated physical resolution. The PDF embedder must
+        /// keep such an image at its own size: <see cref="PdfImageTable"/> would otherwise resample it down
+        /// to its on-page display size and discard exactly the resolution the raster was rendered at.
+        /// </summary>
+        internal bool IsRasterOutput { get; set; }
+
+        /// <summary>
+        /// Decodes this image to straight-alpha RGBA8 for the raster backend, or returns false when the
+        /// source cannot supply an RGB rendition (a CMYK image) or does not expose pixels.
+        /// </summary>
+        internal bool TryGetRgba(out int width, out int height, out byte[] rgba)
+        {
+            if (_source is IRgbaPixelProvider provider)
+                return provider.TryGetRgba(out width, out height, out rgba);
+
+            width = height = 0;
+            rgba = [];
+            return false;
+        }
 
         public MemoryStream AsJpeg(int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null)
         {

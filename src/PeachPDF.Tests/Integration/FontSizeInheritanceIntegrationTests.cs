@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -77,9 +78,9 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(parent);
             Assert.NotNull(child);
-            // Length.ToPixels resolves ex as emFactor / 2 * value - "4ex" against parent's font size is
-            // 4 * (parent / 2) = 2 * parent.
-            Assert.Equal(parent!.ActualFont.Size * 2, child!.ActualFont.Size, 6);
+            // ex is the parent font's x-height (0.5em where the font carries none) - "4ex" is 4 of those.
+            var xHeightEm = FontMetricMeasurement.Ratio(parent!.ActualFont, FontMetric.Ex);
+            Assert.Equal(parent.ActualFont.Size * 4 * xHeightEm, child!.ActualFont.Size, 6);
         }
 
         [Fact]
@@ -103,14 +104,15 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(grandparent);
             Assert.NotNull(middle);
             Assert.NotNull(leaf);
-            Assert.Equal(grandparent!.ActualFont.Size * 2, middle!.ActualFont.Size, 6);
+            var xHeightEm = FontMetricMeasurement.Ratio(grandparent!.ActualFont, FontMetric.Ex);
+            Assert.Equal(grandparent.ActualFont.Size * 4 * xHeightEm, middle!.ActualFont.Size, 6);
             Assert.Equal(middle.ActualFont.Size, leaf!.ActualFont.Size, 6);
         }
 
         [Fact]
         public async Task FontSize_ChThreeLevelsDeep_DoesNotCompoundAcrossNonOverridingDescendants()
         {
-            // ch shares ex's exact 0.5em-per-unit formula (Length.ToPixels), and needs the exact same
+            // ch is measured from the parent's font like ex (Length.ToPixels), and needs the exact same
             // eager cascade-time resolution for the exact same reason (CssBox.StyleProperties.cs'
             // ResolveFontSizeValueComputation) - this mirrors FontSize_ExThreeLevelsDeep_... above.
             var html = """
@@ -131,8 +133,9 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(grandparent);
             Assert.NotNull(middle);
             Assert.NotNull(leaf);
-            // "4ch" against parent's font size is 4 * (parent * 0.5) = 2 * parent.
-            Assert.Equal(grandparent!.ActualFont.Size * 2, middle!.ActualFont.Size, 6);
+            // "4ch" is four "0" advances of the PARENT's font.
+            var zeroAdvanceEm = FontMetricMeasurement.Ratio(grandparent!.ActualFont, FontMetric.Ch);
+            Assert.Equal(grandparent.ActualFont.Size * 4 * zeroAdvanceEm, middle!.ActualFont.Size, 6);
             Assert.Equal(middle.ActualFont.Size, leaf!.ActualFont.Size, 6);
         }
 

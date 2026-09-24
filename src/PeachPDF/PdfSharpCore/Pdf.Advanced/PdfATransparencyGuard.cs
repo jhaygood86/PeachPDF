@@ -32,13 +32,17 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// </summary>
         internal static void RequireAllowed(PdfDocument document, string featureDescription)
         {
+            // A probe (see PeachPDF.Adapters.TransparencyProbe) only wants to know whether something needs transparency.
+            if (PeachPDF.Adapters.TransparencyProbe.Observe())
+                return;
+
             var conformance = document.Options.PdfAConformance;
             if (conformance is PdfAConformance.PdfA1B or PdfAConformance.PdfA1A)
             {
                 throw new PdfAConformanceException(
                     $"{featureDescription} requires a PDF transparency group, which PDF/A-1 forbids. " +
-                    "Remove this feature from the document, or target PdfAConformance.PdfA2B/PdfA2U/PdfA2A " +
-                    "or PdfA3B/PdfA3U/PdfA3A instead - PDF/A-2 and PDF/A-3 both permit transparency groups.");
+                    "Remove this feature from the document, set PdfGenerateConfig.TransparencyPolicy to Flatten, or target " +
+                    "PdfAConformance.PdfA2B/PdfA2U/PdfA2A or PdfA3B/PdfA3U/PdfA3A instead - PDF/A-2 and PDF/A-3 both permit transparency groups.");
             }
 
             var xConformance = document.Options.PdfXConformance;
@@ -46,8 +50,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             {
                 throw new PdfXConformanceException(
                     $"{featureDescription} requires a PDF transparency group, which PDF/X-1a and PDF/X-3 " +
-                    "forbid. Remove this feature from the document, or target PdfXConformance.X4 instead - " +
-                    "PDF/X-4 permits transparency groups.");
+                    "forbid. Remove this feature from the document, set PdfGenerateConfig.TransparencyPolicy to Flatten, or " +
+                    "target PdfXConformance.X4 instead - PDF/X-4 permits transparency groups.");
             }
         }
 

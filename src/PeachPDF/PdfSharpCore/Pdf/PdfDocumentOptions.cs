@@ -107,6 +107,12 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.DownscaleImages"/> - see there for behavior.
         /// </summary>
+        /// <summary>
+        /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.TransparencyPolicy"/> being <see cref="PeachPDF.TransparencyPolicy.Flatten"/>.
+        /// Read by the painter, which flattens what <see cref="Pdf.Advanced.PdfATransparencyGuard"/> would otherwise reject.
+        /// </summary>
+        internal bool FlattenTransparency { get; set; }
+
         public bool DownscaleImages
         {
             get { return _downscaleImages; }

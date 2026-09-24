@@ -101,6 +101,7 @@ namespace PeachPDF.Html.Core.Paint
 
             g.PushClip(pageClip);
 
+            _pageRoot = fragmentainer.Root;
             PaintFragment(g, fragmentainer.Root);
 
             g.PopClip();
@@ -131,6 +132,16 @@ namespace PeachPDF.Html.Core.Paint
             Console.WriteLine($"paint: {box}");
 #endif
 
+            // A backdrop repaint (see FragmentPainter.Backdrop.cs) ends where the element it is repainting for begins.
+            if (_stopped)
+                return;
+
+            if (ReferenceEquals(fragment, _stopAt))
+            {
+                _stopped = true;
+                return;
+            }
+
             try
             {
                 if (box.DerivedStyle.ActualDisplay == Keywords.None || box.Visibility.Value != Visibility.Visible) return;
@@ -151,7 +162,10 @@ namespace PeachPDF.Html.Core.Paint
 
                 if (visible)
                 {
-                    var transformed = box.IsTransformed;
+                    // A transform that is not affine once projected onto the element's plane (perspective, or a 3D transform under a
+                    // parent's perspective) cannot be a PDF `cm`: the element is painted untransformed into a bitmap and warped.
+                    var projective = _textOnly ? null : ResolveProjective(fragment);
+                    var transformed = box.IsTransformed && projective is null;
 
                     if (transformed)
                     {
@@ -162,59 +176,27 @@ namespace PeachPDF.Html.Core.Paint
                         g.PushTransform(box.ActualTransformMatrix.RebaseOrigin(fragment.WholeBoxRect.X, fragment.WholeBoxRect.Y));
                     }
 
-                    // clip-path clips the entire element rendering (background, border, content, children).
-                    // It is established inside the transform push so the clip and the content it clips are
-                    // transformed together (CSS Masking 1: the clip is in the element's local coordinate
-                    // system, which any `transform` then maps). The whole (unfragmented) border box is
-                    // passed for the same reason as the transform pivot above; CssClipPathResolver itself
-                    // resolves the actual reference box from there, honoring an optional `<geometry-box>`
-                    // keyword in the value (border-box is only the default when one isn't present).
-                    var clipped = false;
-                    if (box.ClipPath != Keywords.None && !string.IsNullOrEmpty(box.ClipPath))
+                    if (projective is { Affine: { } affine })
                     {
-                        if (CssClipPathResolver.TryBuildClipPath(g, box.ClipPath, fragment.WholeBoxRect, box, out var clipGeometry, out _)
-                            && clipGeometry is not null)
-                        {
-                            g.PushClip(clipGeometry);
-                            clipped = true;
-                        }
+                        // Affine once the parent's perspective is in: a plain transform after all (a plane brought nearer is just larger).
+                        g.PushTransform(affine);
+                        PaintClippedWithEffects(g, fragment);
+                        g.PopTransform();
                     }
-
-                    // Legacy CSS 2.1 `clip` (§11.1.2): "Applies to: absolutely positioned elements" - no
-                    // independent `overflow` requirement (confirmed against the spec text directly), so
-                    // this is gated on `position` alone, matching real browsers too. Order relative to the
-                    // `clip-path` push above is not load-bearing - clip-stack intersection is commutative -
-                    // this is appended after purely for readability alongside the existing block.
-                    var legacyClipPushed = 0;
-                    var isAbsolutelyPositioned = box.Position.Value is PositionMode.Absolute or PositionMode.Fixed;
-                    if (isAbsolutelyPositioned && box.Clip != Keywords.Auto && !string.IsNullOrEmpty(box.Clip))
+                    else if (projective is { } warp)
                     {
-                        if (CssClipRectResolver.TryBuildClipRect(box.Clip, fragment.WholeBoxRect, box, out var clipRect))
+                        if (!PaintProjective(g, fragment, warp))
                         {
-                            legacyClipPushed = RenderUtils.ClipGraphicsByOverflow(g, clipRect, null);
+                            // No raster context (a measure-only pass): the affine linearisation of the transform is the best that is left.
+                            g.PushTransform(box.ActualTransformMatrix.RebaseOrigin(fragment.WholeBoxRect.X, fragment.WholeBoxRect.Y));
+                            PaintClippedWithEffects(g, fragment);
+                            g.PopTransform();
                         }
-                    }
-
-                    // The fast (untiled) path only applies when nothing needs group compositing: full
-                    // opacity, a normal blend mode, and no filter function that actually changes the
-                    // result (a filter list of only documented no-ops - grayscale()/hue-rotate()/etc. -
-                    // takes this path too, same as `filter: blur()` always has).
-                    var filter = FilterEffectResolver.Resolve(box.ActualFilterFunctions);
-                    if (box.IsOpaque && box.ActualMixBlendMode == BlendMode.Normal &&
-                        filter is { OpacityMultiplier: >= 1.0, HasColorMatrix: false })
-                    {
-                        PaintTagged(g, fragment);
                     }
                     else
                     {
-                        PaintWithOpacity(g, fragment, filter);
+                        PaintClippedWithEffects(g, fragment);
                     }
-
-                    for (var i = 0; i < legacyClipPushed; i++)
-                        g.PopClip();
-
-                    if (clipped)
-                        g.PopClip();
 
                     if (transformed)
                         g.PopTransform();
@@ -239,7 +221,98 @@ namespace PeachPDF.Html.Core.Paint
                 if (box.HtmlContainer is { } container)
                     throw container.RenderError(HtmlRenderErrorType.Paint, "Exception in box paint", ex);
             }
+            finally
+            {
+                // A flatten repaint ends when the box it is repainting for has been painted.
+                if (ReferenceEquals(fragment, _stopAfter))
+                    _stopped = true;
+            }
         }
+
+        /// <summary>
+        /// Paints one fragment inside its own clips - <c>clip-path</c>, the legacy <c>clip</c> - and with its group effects (opacity, blend
+        /// mode, filter): everything an element does between "its transform is in place" and "its transform is undone".
+        /// </summary>
+        private void PaintClippedWithEffects(RGraphics g, BoxFragment fragment)
+        {
+            var box = fragment.Box;
+
+            // clip-path clips the entire element rendering (background, border, content, children).
+            // It is established inside the transform push so the clip and the content it clips are
+            // transformed together (CSS Masking 1: the clip is in the element's local coordinate
+            // system, which any `transform` then maps). The whole (unfragmented) border box is
+            // passed for the same reason as the transform pivot above; CssClipPathResolver itself
+            // resolves the actual reference box from there, honoring an optional `<geometry-box>`
+            // keyword in the value (border-box is only the default when one isn't present).
+            var clipped = false;
+            if (!_textOnly && box.ClipPath != Keywords.None && !string.IsNullOrEmpty(box.ClipPath))
+            {
+                if (CssClipPathResolver.TryBuildClipPath(g, box.ClipPath, fragment.WholeBoxRect, box, out var clipGeometry, out _)
+                    && clipGeometry is not null)
+                {
+                    g.PushClip(clipGeometry);
+                    clipped = true;
+                }
+            }
+
+            // Legacy CSS 2.1 `clip` (§11.1.2): "Applies to: absolutely positioned elements" - no
+            // independent `overflow` requirement (confirmed against the spec text directly), so
+            // this is gated on `position` alone, matching real browsers too. Order relative to the
+            // `clip-path` push above is not load-bearing - clip-stack intersection is commutative -
+            // this is appended after purely for readability alongside the existing block.
+            var legacyClipPushed = 0;
+            var isAbsolutelyPositioned = box.Position.Value is PositionMode.Absolute or PositionMode.Fixed;
+            if (!_textOnly && isAbsolutelyPositioned && box.Clip != Keywords.Auto && !string.IsNullOrEmpty(box.Clip))
+            {
+                if (CssClipRectResolver.TryBuildClipRect(box.Clip, fragment.WholeBoxRect, box, out var clipRect))
+                {
+                    legacyClipPushed = RenderUtils.ClipGraphicsByOverflow(g, clipRect, null);
+                }
+            }
+
+            // The fast (untiled) path only applies when nothing needs group compositing: full
+            // opacity, a normal blend mode, and no filter function that actually changes the
+            // result (a filter list of only documented no-ops - grayscale()/hue-rotate()/etc. -
+            // takes this path too, same as `filter: blur()` always has).
+            var filter = FilterEffectResolver.Resolve(box.ActualFilterFunctions);
+            if (_textOnly)
+            {
+                // The visible content was drawn already; this pass only supplies its text, so no effect applies.
+                PaintTagged(g, fragment);
+            }
+            else if (TryFlatten(g, fragment, filter))
+            {
+                // Needs transparency the document forbids: painted as an opaque bitmap in its place.
+            }
+            else if ((filter.RequiresRaster || (g.PrefersRasterGroups && NeedsGroupCompositing(box, filter))) &&
+                     PaintRasterized(g, fragment, filter))
+            {
+                // Rendered to a bitmap, filtered and drawn (blur, grayscale, ...): nothing left to paint.
+            }
+            else if (box.IsOpaque && box.ActualMixBlendMode == BlendMode.Normal &&
+                filter is { OpacityMultiplier: >= 1.0, HasColorMatrix: false })
+            {
+                PaintTagged(g, fragment);
+            }
+            else
+            {
+                PaintWithOpacity(g, fragment, filter);
+            }
+
+            for (var i = 0; i < legacyClipPushed; i++)
+                g.PopClip();
+
+            if (clipped)
+                g.PopClip();
+
+        }
+
+        /// <summary>
+        /// Whether the element needs group compositing - opacity, a blend mode or a colour function - which a graphics that
+        /// composites bitmaps directly (<see cref="RGraphics.PrefersRasterGroups"/>) does in a tight bitmap of the element.
+        /// </summary>
+        private static bool NeedsGroupCompositing(CssBox box, FilterEffectResolver.Resolved filter) =>
+            !box.IsOpaque || box.ActualMixBlendMode != BlendMode.Normal || filter.OpacityMultiplier < 1.0 || filter.HasColorMatrix;
 
         /// <summary>
         /// Whether any of <paramref name="fragment"/>'s own decoration rectangles survives
@@ -363,7 +436,9 @@ namespace PeachPDF.Html.Core.Paint
                 return;
 
             var box = fragment.Box;
-            var builder = box.HtmlContainer?.StructureTagBuilder;
+            // The bitmap pass creates no structure elements: the overlay pass that follows it tags the same boxes (see
+            // PaintSelectableText), and two sets of elements for one box would be wrong.
+            var builder = _taggingSuppressed ? null : box.HtmlContainer?.StructureTagBuilder;
 
             // Outside the structure element this box opens below, so a scope's outlines - which belong
             // to many boxes, most of them already closed - are never drawn into one box's marked content.
@@ -503,7 +578,13 @@ namespace PeachPDF.Html.Core.Paint
         internal void PaintContent(RGraphics g, BoxFragment fragment)
         {
             if (FragmentContentPainters.For(fragment.Box) is { } contentPainter)
+            {
+                // Replaced content (images, SVG, MathML, form fields) has no text this pass can supply.
+                if (_textOnly && contentPainter is not MarkerFragmentPainter)
+                    return;
+
                 contentPainter.Paint(this, g, fragment);
+            }
             else
                 PaintBoxContent(g, fragment);
         }
@@ -541,7 +622,8 @@ namespace PeachPDF.Html.Core.Paint
             // painted everything else (see FragmentPainter.Outlines.cs).
             List<OutlineRect>? outlinePaints = null;
 
-            for (var i = 0; i < lines.Count; i++)
+            // A text-only pass paints no shadows, backgrounds, borders or outlines.
+            for (var i = 0; !_textOnly && i < lines.Count; i++)
             {
                 var actualRect = lines[i].Rect;
 
@@ -558,6 +640,9 @@ namespace PeachPDF.Html.Core.Paint
                 // so it's suppressed on this box alongside the border stroke itself, not on its own
                 // flag - painting it here too would double the shadow (once at this box's own,
                 // caption-inclusive rect, once at the decoration box's grid-only one).
+                if (box.ActualBackdropFilterFunctions.Count > 0)
+                    PaintBackdropFilter(g, fragment, geometry);
+
                 if (!box.SuppressOwnBorderPaint && BoxDecorationGeometry.HasBoxShadow(box))
                     PaintBoxShadows(g, box, geometry, inset: false);
 
@@ -665,7 +750,7 @@ namespace PeachPDF.Html.Core.Paint
                     geometry.HasBottomEdge));
             }
 
-            if (box.ColumnRuleSegments is { Count: > 0 } && box.ActualColumnRuleWidth > 0)
+            if (!_textOnly && box.ColumnRuleSegments is { Count: > 0 } && box.ActualColumnRuleWidth > 0)
             {
                 PaintColumnRules(g, box, fragment.OriginY, clip);
             }
@@ -678,7 +763,11 @@ namespace PeachPDF.Html.Core.Paint
             // in-flow inline content, so the line spans that content, not the box's full width. The
             // per-line rectangles a line-hosted box carries already are that content, so only the
             // one-rectangle (Line: null) case needs the content found for it.
-            if (lines is [{ Line: null }])
+            if (_textOnly)
+            {
+                // Text decorations (underline, line-through) are drawn shapes, not text.
+            }
+            else if (lines is [{ Line: null }])
             {
                 PaintPropagatedDecoration(g, box, fragment, clip);
             }
@@ -714,7 +803,7 @@ namespace PeachPDF.Html.Core.Paint
             // collapsed borders and marker below included - so they are set aside and painted last.
             List<List<StackingOrder.StackingParticipant>>? raisedLayers = null;
 
-            foreach (var layerBoxes in StackingOrder.ByLayers(StackingOrder.Flatten(fragment)))
+            foreach (var layerBoxes in _ownOnly ? [] : StackingOrder.ByLayers(StackingOrder.Flatten(fragment)))
             {
                 if (StackingOrder.LayerOf(layerBoxes[0]) > 0)
                     (raisedLayers ??= []).Add(layerBoxes);
@@ -727,13 +816,13 @@ namespace PeachPDF.Html.Core.Paint
             // boxes paint in tree order, so a later row's opaque cell background would otherwise erase
             // the border the row above it shares with it. Before the outline pass, because an outline is
             // always on top (CSS UI 4 §3.1).
-            if (box.CollapsedBorderSegments is { Count: > 0 })
+            if (!_textOnly && !_stopped && box.CollapsedBorderSegments is { Count: > 0 })
             {
                 PaintCollapsedTableBorders(g, box, fragment.OriginY, clip);
             }
 
             // Before this box's own overflow clip is popped: a deferred outline records it for replay.
-            if (outlinePaints is not null)
+            if (outlinePaints is not null && !_stopped)
                 PaintOrDeferOutline(g, box, outlinePaints);
 
             PopOverflowClip(overflowClipRecorded);
@@ -741,7 +830,7 @@ namespace PeachPDF.Html.Core.Paint
             for (var i = 0; i < clipsPushed; i++)
                 g.PopClip();
 
-            if (paintMarkers)
+            if (paintMarkers && !_stopped)
             {
                 var markerFragment = FindMarkerFragment(fragment);
                 if (markerFragment != null)
@@ -750,9 +839,10 @@ namespace PeachPDF.Html.Core.Paint
                 }
             }
 
-            PaintContentImage(g, box, fragment);
+            if (!_textOnly && !_stopped)
+                PaintContentImage(g, box, fragment);
 
-            if (raisedLayers is null) return;
+            if (raisedLayers is null || _stopped) return;
 
             // The scope this box opened draws its outlines here, under its raised layers - an overlay
             // covers a ring - and over the rest of its content (see FragmentPainter.Outlines.cs).

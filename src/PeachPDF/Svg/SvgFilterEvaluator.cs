@@ -27,6 +27,10 @@ namespace PeachPDF.Svg
     /// </summary>
     internal static class SvgFilterEvaluator
     {
+        /// <inheritdoc cref="Render(RGraphics, SvgFilter, SvgElement, RRect?, Action{RGraphics})"/>
+        public static void Render(RGraphics g, SvgFilter filter, SvgElement element, Action<RGraphics> paintSourceGraphic) =>
+            Render(g, filter, element, null, paintSourceGraphic);
+
         /// <summary>
         /// Evaluates <paramref name="filter"/> for <paramref name="element"/> and draws the final
         /// composited result onto <paramref name="g"/> at the resolved filter region - this REPLACES
@@ -38,9 +42,20 @@ namespace PeachPDF.Svg
         /// aren't available in the current rendering context (e.g. a measure-only pass - <c>CreateTile</c>
         /// returns null there), mirroring <c>BuildMaskTile</c>'s own graceful-bailout contract.
         /// </summary>
-        public static void Render(RGraphics g, SvgFilter filter, SvgElement element, Action<RGraphics> paintSourceGraphic)
+        /// <param name="g">The graphics to draw the filtered result onto.</param>
+        /// <param name="filter">The filter to evaluate.</param>
+        /// <param name="element">The element being filtered.</param>
+        /// <param name="viewportBounds">Stands in for the element's bounding box when that cannot be measured (see <see cref="ElementBounds"/>); null keeps the region as authored.</param>
+        /// <param name="paintSourceGraphic">Paints the element's ordinary content (the <c>SourceGraphic</c>).</param>
+        public static void Render(RGraphics g, SvgFilter filter, SvgElement element, RRect? viewportBounds, Action<RGraphics> paintSourceGraphic)
         {
-            var bbox = SvgGeometryBounds.GetBoundingBox(element);
+            if (filter.RequiresRaster)
+            {
+                SvgRasterFilterEvaluator.Render(g, filter, element, viewportBounds, paintSourceGraphic);
+                return;
+            }
+
+            var bbox = ElementBounds(element, viewportBounds);
             var (x, y, width, height) = ResolveFilterRect(filter, bbox);
             if (width <= 0 || height <= 0)
                 return;
@@ -337,7 +352,15 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Resolves a filter's region, same objectBoundingBox/userSpaceOnUse handling as <c>SvgRenderer.ResolveMaskRect</c>.</summary>
-        private static (double X, double Y, double Width, double Height) ResolveFilterRect(SvgFilter filter, RRect? bbox)
+        /// <summary>
+        /// The element's bounding box, or the viewport when it cannot be measured statically (text has no geometry until it is
+        /// laid out): an <c>objectBoundingBox</c> filter region of a text-only element would otherwise collapse to a
+        /// sliver at the origin and hide the element entirely.
+        /// </summary>
+        internal static RRect? ElementBounds(SvgElement element, RRect? viewportBounds) =>
+            SvgGeometryBounds.GetBoundingBox(element) ?? viewportBounds;
+
+        internal static (double X, double Y, double Width, double Height) ResolveFilterRect(SvgFilter filter, RRect? bbox)
         {
             if (filter.FilterUnitsUserSpaceOnUse)
                 return (filter.X, filter.Y, filter.Width, filter.Height);

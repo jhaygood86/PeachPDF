@@ -890,7 +890,7 @@ namespace PeachPDF.Html.Core.Parse
             if (!Length.TryParse(value.Trim().ToLowerInvariant(), out var length))
                 return null;
 
-            return length.Type is Length.Unit.Em or Length.Unit.Ex or Length.Unit.Ch or Length.Unit.Rem
+            return length.IsFontRelative
                 ? length.ToPixels(context.EmPt, context.RemPt, context.HundredPercentPt)
                 : null;
         }

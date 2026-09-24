@@ -210,6 +210,7 @@ namespace PeachPDF.SourceGenerators.Emit
                     null => "value",
                     "no-ems" => "box.NoEms(value)",
                     "font-size" => "box.ResolveFontSizeValueComputation(value)",
+                    "line-height" => "box.ResolveLineHeightValueComputation(value)",
                     _ => throw new NotSupportedException(
                         $"\"{entry.Name}\" declares a keyword-or-value cssDataType with html.valueComputation " +
                         $"\"{html.ValueComputation}\", which RegistryEmitter does not implement."),
@@ -385,12 +386,16 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("        /// <summary>Reclassifies a url()-referencing SvgPaint as a gradient vs. pattern reference against the current document's id registries — see SvgTreeBuilder.ResolveUrlPaintKind. The nominal @supports context uses the identity function.</summary>");
             sb.AppendLine("        public Func<SvgPaint, SvgPaint> ResolveUrlPaintKind { get; }");
             sb.AppendLine();
-            sb.AppendLine("        public SvgPropertyContext(RAdapter adapter, RColor contextColor, double? viewportDiagonal, Func<SvgPaint, SvgPaint> resolveUrlPaintKind)");
+            sb.AppendLine("        /// <summary>The element's own font, for the font-relative units (em/ex/ch/cap/ic/lh and the root-element variants) in a stroke-width/dashoffset/dasharray length; null where no font is in scope, which resolves them against the 16px initial size and each unit's spec fallback.</summary>");
+            sb.AppendLine("        public ISvgLengthBasis? LengthBasis { get; }");
+            sb.AppendLine();
+            sb.AppendLine("        public SvgPropertyContext(RAdapter adapter, RColor contextColor, double? viewportDiagonal, Func<SvgPaint, SvgPaint> resolveUrlPaintKind, ISvgLengthBasis? lengthBasis = null)");
             sb.AppendLine("        {");
             sb.AppendLine("            Adapter = adapter;");
             sb.AppendLine("            ContextColor = contextColor;");
             sb.AppendLine("            ViewportDiagonal = viewportDiagonal;");
             sb.AppendLine("            ResolveUrlPaintKind = resolveUrlPaintKind;");
+            sb.AppendLine("            LengthBasis = lengthBasis;");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
             sb.AppendLine();
@@ -470,10 +475,10 @@ namespace PeachPDF.SourceGenerators.Emit
                     "if (!global::PeachPDF.Svg.SvgValueParsers.TryParseOpacity(value, out var parsed)) return false;\n" +
                     $"element.{svg.PropertyPath} = parsed;\nreturn true;",
                 DataTypeKind.SvgLength =>
-                    "var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal);\n" +
+                    "var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal, ctx.LengthBasis);\n" +
                     $"if (parsed is null) return false;\nelement.{svg.PropertyPath} = parsed.Value;\nreturn true;",
                 DataTypeKind.SvgLengthList =>
-                    "var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal);\n" +
+                    "var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal, ctx.LengthBasis);\n" +
                     $"if (parsed is null) return false;\nelement.{svg.PropertyPath} = parsed;\nreturn true;",
                 _ => throw new NotSupportedException(
                     $"DataTypeKind.{kind} has no default SVG setter and \"{entry.Name}\" declares no customSetter."),

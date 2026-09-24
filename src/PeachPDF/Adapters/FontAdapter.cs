@@ -258,5 +258,13 @@ namespace PeachPDF.Adapters
         public override int GetGlyphIndex(System.Text.Rune rune) => Font.Descriptor?.CharCodeToGlyphIndex(rune) ?? 0;
 
         public override int GetGlyphAdvanceWidthDesignUnits(int glyphIndex) => Font.Descriptor?.GlyphIndexToWidth(glyphIndex) ?? 0;
+
+        public override double? XHeightEm =>
+            Font.Descriptor is { HasAuthenticXHeight: true, UnitsPerEm: > 0 } d ? (double)d.XHeight / d.UnitsPerEm : null;
+
+        // FontDescriptor.CapHeight already falls back to the ascender when OS/2 has no sCapHeight - the
+        // fallback CSS Values 4 §6.1.1 prescribes for cap.
+        public override double? CapHeightEm =>
+            Font.Descriptor is { UnitsPerEm: > 0, CapHeight: > 0 } d ? (double)d.CapHeight / d.UnitsPerEm : null;
     }
 }

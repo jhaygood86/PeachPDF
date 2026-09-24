@@ -23,3 +23,7 @@ describes — which is out of scope for the one-line root fix.
 
 **Workaround for authors:** set paint properties on the definition's content directly (documented as
 a limitation in `docs/supported-svg-features.md`, *Clipping, Masking, Patterns*).
+
+The same applies to font-relative lengths in that content (and in gradient coordinates): `em`/`ex`/`ch`/`cap`/`ic`/`lh` and their
+`r*` forms resolve against the initial 16px font with the spec fallbacks, not the definition's ancestors' `font-size`/`font-family`,
+because `_lengthBasis` is only set while a rendered element is being built, not while `CollectDefinitions` builds definitions.
