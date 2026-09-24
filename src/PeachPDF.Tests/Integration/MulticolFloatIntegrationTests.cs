@@ -102,7 +102,7 @@ namespace PeachPDF.Tests.Integration
             // coordinates but are not beside the float, so they keep their full four words per line - a
             // scan that tests only the block axis left them one word each.
             var (root, container) = await BuildAndLayout(@"
-                <div id='mc' style='columns:2; column-gap:10px; width:200px; font:10px monospace'>
+                <div id='mc' style='columns:2; column-gap:10px; width:200px; font:10px McFixture'>
                     <p id='p1' style='margin:0'><span id='f1' style='float:right; width:30px; height:20px'></span>aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm nnn ooo ppp aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm nnn ooo ppp</p>
                 </div>");
 
@@ -110,7 +110,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             // Word counts per row are compared with each other, not with fixed numbers: how many words fit a
-            // row depends on the metrics of whatever `monospace` resolves to on the machine running this.
+            // row depends on the font's metrics, so the counts are related to each other.
             static List<int> WordsPerRow(IEnumerable<TestRecordingGraphics.DrawStringCall> words) =>
                 words.GroupBy(w => Math.Round(w.Point.Y)).OrderBy(r => r.Key).Select(r => r.Count()).ToList();
 
@@ -135,7 +135,7 @@ namespace PeachPDF.Tests.Integration
             // float beside it used to send the container through the columns engine, which laid out the
             // float and none of the text.
             var (root, container) = await BuildAndLayout(@"
-                <div id='mc' style='columns:2; column-gap:10px; width:200px; font:10px monospace'>
+                <div id='mc' style='columns:2; column-gap:10px; width:200px; font:10px McFixture'>
                     <span id='f1' style='float:left; width:30px; height:20px;'></span>aaa bbb ccc ddd eee fff ggg hhh</div>");
 
             var g = new TestRecordingGraphics();
@@ -186,7 +186,7 @@ namespace PeachPDF.Tests.Integration
             // A multi-column container is placed beside a preceding float by narrowing its lines, as a block
             // is, so making it contain its own floats must not stop it seeing floats outside it.
             var (root, container) = await BuildAndLayout(@"
-                <div id='outer' style='width:200px; font:10px monospace'>
+                <div id='outer' style='width:200px; font:10px McFixture'>
                     <div id='before' style='float:left; width:40px; height:60px'></div>
                     <div id='mc' style='columns:2; column-gap:10px'><p style='margin:0'>aaa bbb ccc ddd eee fff ggg hhh</p></div>
                 </div>");
@@ -204,7 +204,7 @@ namespace PeachPDF.Tests.Integration
         public async Task MulticolContainer_KeepsItsLastChildsBottomMarginInTheGapAfterIt()
         {
             var (root, _) = await BuildAndLayout(@"
-                <div id='mc' style='columns:2; column-gap:10px; width:200px; font:10px monospace'><p id='p' style='margin:0 0 24pt'>aaa bbb ccc</p></div>
+                <div id='mc' style='columns:2; column-gap:10px; width:200px; font:10px McFixture'><p id='p' style='margin:0 0 24pt'>aaa bbb ccc</p></div>
                 <div id='next' style='margin:0'>next</div>");
 
             var p = FindById(root, "p")!;
@@ -235,7 +235,7 @@ namespace PeachPDF.Tests.Integration
             // Only floats keep the column's own geometry: an absolutely positioned child's containing block
             // is the multi-column container itself.
             var (root, _) = await BuildAndLayout(@"
-                <div id='mc' style='columns:2; column-gap:10px; width:200px; position:relative; font:10px monospace'>
+                <div id='mc' style='columns:2; column-gap:10px; width:200px; position:relative; font:10px McFixture'>
                     <p style='margin:0'>aaa bbb ccc ddd eee fff ggg hhh iii jjj</p>
                     <div id='abs' style='position:absolute; right:0; top:0; width:20px; height:10px'></div>
                 </div>");
@@ -247,7 +247,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         private const string TwoParagraphsAndAFloat = @"
-            <div id='mc' style='columns:2; column-gap:10px; width:200px; font:10px monospace'>
+            <div id='mc' style='columns:2; column-gap:10px; width:200px; font:10px McFixture'>
                 <p id='p1' style='margin:0'>aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm nnn ooo ppp</p>
                 <div id='f1' style='float:right; width:30px; height:20px; background:#f00'></div>
                 <p id='p2' style='margin:0'>aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm nnn ooo ppp</p>
@@ -265,6 +265,9 @@ namespace PeachPDF.Tests.Integration
                 MarginRight = 0,
                 MarginBottom = 0
             };
+            // A bundled monospace font, so how many words fit a row does not depend on what `monospace`
+            // resolves to on the machine running this.
+            await BundledFonts.RegisterFont(adapter, BundledFonts.Otf, "McFixture");
             await container.SetHtml(html, null);
 
             var size = new XSize(400, 1000);
