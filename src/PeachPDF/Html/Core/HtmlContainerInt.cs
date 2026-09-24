@@ -602,6 +602,20 @@ namespace PeachPDF.Html.Core
         internal void RestoreFragmentainer(FragmentainerContext? previous) => CurrentFragmentainer = previous;
 
         /// <summary>
+        /// The inline flows currently walking their content (<see cref="CssLayoutEngine.CreateLineBoxes"/>
+        /// between its start and the moment its lines are final), outermost first.
+        /// </summary>
+        /// <remarks>
+        /// An absolutely positioned box inside a float, or inside an inline-block holding block-level
+        /// content, is laid out as part of that box's own content - while the inline flow that owns the
+        /// box's positioned inline ancestor is still mid-walk and that inline has no line fragments yet.
+        /// Knowing which flows are open lets such a box be handed to the flow that owns its containing
+        /// block, to be laid out once that flow's fragments exist
+        /// (<see cref="CssLayoutEngine.TryDeferToEnclosingInlineFlow"/>).
+        /// </remarks>
+        internal List<CssLineBoxCoordinates> ActiveInlineFlows { get; } = [];
+
+        /// <summary>
         /// Increments once per <see cref="LayoutDocument"/> invocation. A box records the generation it
         /// last laid out in, so resumption state left behind by an earlier invocation — the
         /// unrestricted-width double layout, the per-page-width reflow loop, <c>ShrinkToFit</c>'s

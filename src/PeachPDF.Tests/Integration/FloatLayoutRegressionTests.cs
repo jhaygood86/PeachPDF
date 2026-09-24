@@ -594,6 +594,117 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task PrecedingFloat_DoesNotShortenTheLinesOfAnAbsolutelyPositionedBox()
+        {
+            // CSS 2.1 §9.4.1: a line box is shortened only by floats in its own block formatting context,
+            // and an absolutely positioned box establishes a new one (issue #1335). The ancestor walk
+            // used to start at the positioned box itself and find the float that precedes it as a sibling.
+            var html = Wrap(@"
+                <div style='position:relative; width:300pt; height:80pt;'>
+                    <div style='float:left; width:100pt; height:50pt;'></div>
+                    <div id='abs' style='position:absolute; left:0; top:0; width:200pt;'>Hello world</div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var firstWord = FindFirstWord(FindById(root, "abs")!);
+
+            Assert.NotNull(firstWord);
+            Assert.True(firstWord!.Rectangle.Left < 50,
+                $"the positioned box's text must not be pushed past the float, was at {firstWord.Rectangle.Left}");
+        }
+
+        [Fact]
+        public async Task PrecedingFloat_DoesNotDisplaceAnInlineBlockInsideAnAbsolutelyPositionedBox()
+        {
+            // The #1335 reproduction: the badge stayed visible but the link's background was culled,
+            // because the inline-block was flowed after the float (X ~ 523pt) and then translated again
+            // with its positioned parent, off the page.
+            var html = Wrap(@"
+                <style>
+                  .header { position: fixed; left: 0; width: 100%; height: 52px; }
+                  .row { position: relative; width: 100%; height: 52px; overflow: hidden; }
+                  .preceding { float: left; width: 500pt; height: 39pt; }
+                  .cart { position: absolute; right: 15px; top: 0; }
+                  .cart a { display: inline-block; width: 52px; height: 52px; padding: 9px 9px 0; background: red; }
+                  .cart span { position: absolute; top: 2px; right: -5px; }
+                </style>
+                <div class='header'><div class='row'>
+                  <div class='preceding'></div>
+                  <div class='cart' id='cart'><a id='link'><span>6</span></a></div>
+                </div></div>");
+
+            var (root, container) = await BuildAndLayout(html);
+            var link = FindById(root, "link")!;
+            var pageWidth = container.PageSize.Width;
+
+            Assert.True(link.ActualRight <= pageWidth + 0.5,
+                $"the link must stay inside the {pageWidth}pt page, right edge was {link.ActualRight}");
+            Assert.True(link.Location.X > pageWidth - 100,
+                $"the cart is right-aligned, link X was {link.Location.X} (page {pageWidth})");
+        }
+
+        [Fact]
+        public async Task FloatInsideAnAbsolutelyPositionedBox_StillShortensItsOwnLines()
+        {
+            // The contrast for the tests above: the formatting-context boundary only shields a box from
+            // floats OUTSIDE it. A float inside the positioned box shares its formatting context with the
+            // box's lines and must still push them.
+            var html = Wrap(@"
+                <div style='position:relative; width:300pt; height:80pt;'>
+                    <div style='position:absolute; left:0; top:0; width:200pt;'>
+                        <div style='float:left; width:100pt; height:50pt;'></div>
+                        <p id='text' style='margin:0;'>Hello world</p>
+                    </div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var firstWord = FindFirstWord(FindById(root, "text")!);
+
+            Assert.NotNull(firstWord);
+            Assert.True(firstWord!.Rectangle.Left >= 90,
+                $"text beside the box's own float must still be pushed, was at {firstWord.Rectangle.Left}");
+        }
+
+        [Fact]
+        public async Task OverflowHiddenBlock_BesideAPrecedingFloat_StillWrapsItsTextBesideIt()
+        {
+            // An in-flow formatting-context root has to avoid the floats next to it (CSS 2.1 §9.5), which
+            // this engine does by narrowing its lines - so #1335's boundary must not reach it.
+            var html = Wrap(@"
+                <div style='width:300pt;'>
+                    <div style='float:left; width:100pt; height:50pt;'></div>
+                    <div id='text' style='overflow:hidden;'>Hello world</div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var firstWord = FindFirstWord(FindById(root, "text")!);
+
+            Assert.NotNull(firstWord);
+            Assert.True(firstWord!.Rectangle.Left >= 90,
+                $"text in an overflow:hidden block must still clear the float, was at {firstWord.Rectangle.Left}");
+        }
+
+        [Fact]
+        public async Task PrecedingFloat_DoesNotShortenTheLinesOfATableCell()
+        {
+            // The same boundary for another formatting-context root that flows inline content as its own
+            // line owner: a float in one cell must not displace the text of the cell beside it.
+            var html = Wrap(@"
+                <table style='width:300pt; border-collapse:collapse;'><tr>
+                    <td style='width:150pt; vertical-align:top;'><div style='float:left; width:100pt; height:50pt;'></div></td>
+                    <td id='cell' style='width:150pt; vertical-align:top; padding:0;'>Hello world</td>
+                </tr></table>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var cell = FindById(root, "cell")!;
+            var firstWord = FindFirstWord(cell);
+
+            Assert.NotNull(firstWord);
+            Assert.True(firstWord!.Rectangle.Left < cell.Location.X + 20,
+                $"the cell's text must start at the cell's own left edge ({cell.Location.X}), was at {firstWord.Rectangle.Left}");
+        }
+
+        [Fact]
         public async Task FloatAmidInlineContent_SharesOneLineWithTextBeforeAndAfter()
         {
             // The accepted-gap's own repro (issue #1038): a float that FOLLOWS some inline content and
