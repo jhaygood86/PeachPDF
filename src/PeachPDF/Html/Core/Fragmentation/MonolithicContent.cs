@@ -1,5 +1,6 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
 
@@ -32,7 +33,84 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <summary>
         /// Whether §2 forbids breaking inside <paramref name="box"/>.
         /// </summary>
-        internal static bool IsMonolithic(CssBox box) => IsReplaced(box) || IsScrollContainer(box);
+        internal static bool IsMonolithic(CssBox box) =>
+            IsReplaced(box)
+            || (IsScrollContainer(box) && (!BreaksInBlockFlow(box) || HasConstrainedBlockSize(box)));
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is a block box whose breaks its parent's block flow decides, the
+        /// only placement where an auto-height scroll container is fragmented rather than kept monolithic.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// An <c>inline-block</c> is excluded because §2 lets inline-level boxes that establish an
+        /// independent formatting context stay monolithic, and because PeachPDF cannot yet fragment one
+        /// inside its line. Letting it try clipped the whole box to nothing.
+        /// </para>
+        /// <para>
+        /// A float is excluded although it computes to <c>display: block</c>. A float is placed at its
+        /// assigned position (<c>CssBox.LayoutContentAtItsAssignedPosition</c>), which cannot carry a
+        /// break into the next fragmentainer. Letting its content break there silently dropped every line
+        /// after the boundary.
+        /// </para>
+        /// <para>
+        /// A flex or grid item is excluded because its engine sets and pins the item's own <c>height</c>
+        /// while measuring and committing it (<c>ItemContentCommit</c>). A block-size test would then
+        /// answer differently before and after the commit, and the line-relocation mover and the commit
+        /// layout would disagree about the same item.
+        /// </para>
+        /// </remarks>
+        private static bool BreaksInBlockFlow(CssBox box) =>
+            box.DerivedStyle.ActualDisplay is Keywords.Block or Keywords.ListItem
+            && !IsFloat(box)
+            && box.ParentBox?.DerivedStyle.ActualDisplay is not (Keywords.Flex or Keywords.InlineFlex
+                or Keywords.Grid or Keywords.InlineGrid)
+            && EveryAncestorCarriesABreak(box);
+
+        /// <summary>
+        /// Whether every ancestor of <paramref name="box"/> is a kind known to carry a break taken inside
+        /// it on into the next fragmentainer: an in-flow block or list item, a block-level flex or grid
+        /// container, or a block-level table and its row groups, rows and cells.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// An allow-list, not a deny-list, because the failure is silent and the deny-list kept missing
+        /// cases. Several placements lay their content out at an assigned position that drops a break
+        /// token: an <c>inline-block</c>, a float or page float (<c>LayoutContentAtItsAssignedPosition</c>),
+        /// a vertical writing-mode block (<c>LayoutVerticalBlockChildren</c>, see
+        /// <see cref="IsUnresumableOrthogonalFlow"/>), an <c>inline-table</c>, and a table caption
+        /// (<c>LayoutCaptionGroup</c>). A break taken anywhere inside one loses every line after it. Each
+        /// was found only after the previous one was excluded, by measuring lines disappear.
+        /// </para>
+        /// <para>
+        /// Anything not listed keeps a scroll container inside it monolithic, which is the behaviour
+        /// before auto-height scroll containers became fragmentable. So an unlisted placement can only
+        /// leave that fix out, never lose content.
+        /// </para>
+        /// </remarks>
+        private static bool EveryAncestorCarriesABreak(CssBox box)
+        {
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                var carriesABreak = ancestor.DerivedStyle.ActualDisplay
+                        is Keywords.Block or Keywords.ListItem or Keywords.Flex or Keywords.Grid
+                        or Keywords.Table or Keywords.TableRowGroup or Keywords.TableHeaderGroup
+                        or Keywords.TableFooterGroup or Keywords.TableRow or Keywords.TableCell
+                    && !IsFloat(ancestor)
+                    && !IsUnresumableOrthogonalFlow(ancestor);
+
+                if (!carriesABreak) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> floats, beside inline content (<c>left</c>/<c>right</c>/
+        /// <c>inside</c>/<c>outside</c>) or to a page edge (<c>top</c>/<c>bottom</c>/<c>top-bottom</c>/
+        /// <c>snap</c>). A page float is moved to its edge whole, so it cannot continue a break either.
+        /// </summary>
+        private static bool IsFloat(CssBox box) => box.IsFloated || box.IsPageFloated;
 
         /// <summary>
         /// Whether <paramref name="box"/> is a replaced element, whose content the UA cannot fragment
@@ -86,6 +164,114 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         internal static bool IsScrollContainer(CssBox box) =>
             box.Overflow.Value != Overflow.Visible && !IsViewportPropagationSource(box);
+
+        /// <summary>
+        /// Whether <paramref name="box"/>'s block size is capped by its own style (a non-auto logical
+        /// height, or a specified maximum logical height), so that its content can actually overflow it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// §2 calls elements that actually scroll monolithic, and makes the rest of the overflow set
+        /// optional: "UAs may consider as monolithic any elements with <c>overflow</c> set to <c>auto</c>
+        /// or <c>scroll</c> and any elements with <c>overflow: hidden</c> and a non-auto logical height
+        /// (and no specified maximum logical height)". PeachPDF draws the line at whether the block size
+        /// can clip anything. A scroll container whose block size grows with its content has nothing to
+        /// scroll or clip in the block axis on paper, so it fragments like any block, as browsers do when
+        /// printing. Treating it as monolithic instead means slicing it once it is taller than a page,
+        /// and a line on the slice boundary is then lost.
+        /// </para>
+        /// <para>
+        /// This rule differs from §2's sentence in two places. Auto-height <c>auto</c>/<c>scroll</c> are
+        /// not treated as monolithic, which the "may" allows. <c>overflow: hidden</c> with a
+        /// <c>max-height</c> is treated as monolithic although the sentence leaves it out: the cap makes
+        /// the box clip, which is what makes it behave like a scrolled element.
+        /// </para>
+        /// <para>
+        /// A percentage against an indefinite base behaves as <c>auto</c>/<c>none</c> (CSS 2.1 §10.5,
+        /// §10.7), and is treated as such here. Each is tested against the base layout itself resolves it
+        /// against: <c>height</c> against the box's percentage base (for an absolutely positioned box, its
+        /// nearest positioned ancestor), <c>max-height</c> against its in-flow containing block. A block
+        /// size can also be fixed without either property, by a preferred <c>aspect-ratio</c> or by both
+        /// block-axis insets of an absolutely positioned box, and those cap the box too.
+        /// </para>
+        /// <para>
+        /// In a vertical writing mode the logical height is the physical width. Its percentages resolve
+        /// against the containing block's width, which is definite unless that block is itself vertical.
+        /// Most vertical blocks lay their children out at assigned positions and so keep them monolithic
+        /// regardless (<see cref="EveryAncestorCarriesABreak"/>). A vertical multi-column container
+        /// with block children does not, which is why the test is kept here.
+        /// </para>
+        /// </remarks>
+        internal static bool HasConstrainedBlockSize(CssBox box)
+        {
+            var vertical = IsVertical(box);
+            var (size, maxSize) = vertical ? (box.Width, box.MaxWidth) : (box.Height, box.MaxHeight);
+
+            // The height and max-height percentages resolve against different bases in layout: height
+            // against the box's own percentage base (GetBoxHeight), max-height against its in-flow
+            // containing block (ApplyHeight's clamp), whatever the box's position. Each mirrors its own.
+            return Constrains(size, isMax: false)
+                || Constrains(maxSize, isMax: true)
+                || HasPreferredAspectRatio(box)
+                || IsSizedByBothBlockInsets(box, vertical);
+
+            // Only a length caps anything: layout applies a height or max-height only when it passes
+            // IsValidLength, so a keyword (auto, none) leaves the box unconstrained whatever its spelling.
+            bool Constrains(string value, bool isMax) =>
+                CssValueParser.IsValidLength(value)
+                && (!CssValueParser.DependsOnPercentage(value)
+                    || IsInsideAFlexOrGridItem(box)
+                    || (vertical ? !IsVertical(box.ContainingBlock) : HeightPercentageResolves(isMax)));
+
+            bool HeightPercentageResolves(bool isMax) => isMax
+                ? CssLayoutEngine.IsHeightDefinite(box.ContainingBlock)
+                : CssLayoutEngine.PercentageHeightResolves(box);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> declares a preferred <c>aspect-ratio</c>, which gives an
+        /// auto-sized block axis a size from the other axis rather than from content (CSS Box Sizing 4 §5).
+        /// A scroll container's automatic minimum size is zero, so its content can overflow that size.
+        /// </summary>
+        /// <remarks>
+        /// Asked of the declaration rather than through <c>CssLayoutEngine.TryGetAspectRatioHeight</c>,
+        /// which needs the box's used width and so would answer differently before its width is laid out.
+        /// </remarks>
+        private static bool HasPreferredAspectRatio(CssBox box) =>
+            !string.IsNullOrEmpty(box.AspectRatio)
+            && !string.Equals(box.AspectRatio, Keywords.Auto, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is absolutely positioned with both block-axis insets set, so an
+        /// auto block size fills the space between them rather than growing with content (CSS 2.1
+        /// §10.6.4, and §10.3.7 for the physical width a vertical writing mode uses as its block size).
+        /// </summary>
+        private static bool IsSizedByBothBlockInsets(CssBox box, bool vertical) =>
+            box.Position.Value is PositionMode.Absolute
+            && (vertical
+                ? box.Left.Value.IsValue && box.Right.Value.IsValue
+                : box.Top.Value.IsValue && box.Bottom.Value.IsValue);
+
+        /// <summary>
+        /// Whether <paramref name="box"/> descends from a flex or grid item. The item's own height is set
+        /// and pinned by its engine partway through layout, so whether a percentage against it resolves
+        /// would change within one pass. A percentage there is treated as capping the box, the stable
+        /// answer this file gave before auto-height scroll containers became fragmentable.
+        /// </summary>
+        private static bool IsInsideAFlexOrGridItem(CssBox box)
+        {
+            for (var item = box.ParentBox; item?.ParentBox is { } parent; item = parent)
+            {
+                if (parent.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
+                    or Keywords.Grid or Keywords.InlineGrid)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsVertical(CssBox box) =>
+            box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr;
 
         private static bool IsViewportPropagationSource(CssBox box)
         {

@@ -22,10 +22,18 @@ continuing onto a later page.
 </div>
 ```
 
+**It is not only a float taller than a page.** Measured while fixing #1321: a 100pt float (five 20pt
+lines) whose top sits 85pt above a page's band end keeps F1–F3 and loses F4–F5, with `overflow: visible`,
+among inline content or alone in its parent. Nothing moves a straddling float to the next page, so the
+same loss hits any float that crosses a boundary. `MonolithicContent.BreaksInBlockFlow` keeps an
+auto-height scroll-container float monolithic for exactly this reason. Monolithic, its content lays out
+unbroken, so every line is placed, but the line on the boundary is drawn past the band (the
+`StraddlingAutoHeightScrollContainerFloat_PlacesEveryLine` fixtures).
+
 The float itself, "Before", and "after" are all placed correctly and safely - nothing crashes or
 duplicates content - but the float's own overflowing lines are simply absent rather than resuming on
-the next page. A float whose own content fits one page (the overwhelmingly common case) is
-unaffected: only a float tall enough to need pagination *of its own content* hits this. The
+the next page. A float that sits wholly on one page is unaffected. A float that crosses a
+page boundary is affected, whether or not it is taller than a page. The
 *surrounding* document's own pagination is unaffected either way - a float's presence does not stop
 the container it sits in from pausing and resuming across a page boundary the ordinary way (see
 `PeachPDF.Tests.Integration.FloatLayoutRegressionTests.FloatAmidInlineContent_SurroundingContentResumesAcrossAPageBoundary_WithNoWordLostOrDuplicated`).

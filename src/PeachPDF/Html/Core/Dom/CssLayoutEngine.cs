@@ -2604,6 +2604,16 @@ namespace PeachPDF.Html.Core.Dom
             if (!CssValueParser.IsValidLength(box.Height)) return false;
             if (!CssValueParser.DependsOnPercentage(box.Height)) return true;
 
+            return PercentageHeightResolves(box);
+        }
+
+        /// <summary>
+        /// Whether a percentage block size on <paramref name="box"/> (its <c>height</c>, <c>min-height</c>
+        /// or <c>max-height</c>) resolves, rather than behaving as <c>auto</c>/<c>none</c> against an
+        /// indefinite base (CSS 2.1 §10.5, §10.7).
+        /// </summary>
+        internal static bool PercentageHeightResolves(CssBox box)
+        {
             // A fixed box's percentage height resolves against the page area (CSS 2.1 §10.1: the initial
             // containing block), which always has a definite height - the same basis GetBoxHeight's own
             // isFixedToPage branch uses. PercentageBase would instead hand back the nearest in-flow block

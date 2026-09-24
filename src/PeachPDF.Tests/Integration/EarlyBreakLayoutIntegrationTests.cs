@@ -53,7 +53,7 @@ namespace PeachPDF.Tests.Integration
         public async Task RelocatedMonolithicBox_HasNoInteriorGap(double fillerHeight)
         {
             var (root, _) = await LayoutHarness.LayoutAsync(
-                GapDocument(fillerHeight, "overflow:hidden"), pageHeight: PageHeight, margin: Margin);
+                GapDocument(fillerHeight, "overflow:hidden;max-height:1000pt"), pageHeight: PageHeight, margin: Margin);
 
             AssertLinesAreEvenlySpaced(LayoutHarness.FindById(root, "card")!);
         }
@@ -373,7 +373,7 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         [Theory]
         [InlineData("break-inside:avoid")]
-        [InlineData("overflow:hidden")]
+        [InlineData("overflow:hidden;max-height:1000pt")]
         public async Task RelocatedFirstChild_TakesItsContainerWithIt(string cardCss)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
