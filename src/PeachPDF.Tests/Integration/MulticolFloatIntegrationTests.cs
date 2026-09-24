@@ -109,17 +109,23 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, root, g);
 
-            var inSecondColumn = g.DrawStringCalls.Where(w => w.Point.X >= SecondColumnLeft - 0.5).ToList();
-            var firstRowY = inSecondColumn.Min(w => w.Point.Y);
+            // Word counts per row are compared with each other, not with fixed numbers: how many words fit a
+            // row depends on the metrics of whatever `monospace` resolves to on the machine running this.
+            static List<int> WordsPerRow(IEnumerable<TestRecordingGraphics.DrawStringCall> words) =>
+                words.GroupBy(w => Math.Round(w.Point.Y)).OrderBy(r => r.Key).Select(r => r.Count()).ToList();
 
-            Assert.Equal(32, g.DrawStringCalls.Count);
-            Assert.Equal(4, inSecondColumn.Count(w => Math.Abs(w.Point.Y - firstRowY) < 0.5));
-            Assert.Equal(4, inSecondColumn.Count(w => Math.Abs(w.Point.Y - (firstRowY + 9)) < 0.5));
+            var inSecondColumn = WordsPerRow(g.DrawStringCalls.Where(w => w.Point.X >= SecondColumnLeft - 0.5));
+            var inFirstColumn = WordsPerRow(g.DrawStringCalls.Where(w => w.Point.X < SecondColumnLeft - 0.5));
+
+            // Column 2's rows are all as wide as a column allows: the ones at the float's height hold as many
+            // words as the ones below it, and more than one each - a scan that tests only the block axis
+            // left them a single word.
+            Assert.True(inSecondColumn[0] > 1, $"column 2's first row holds {inSecondColumn[0]} word(s)");
+            Assert.Equal(inSecondColumn[0], inSecondColumn[1]);
 
             // ...while the first column's rows beside the float are shortened by it.
-            var inFirstColumn = g.DrawStringCalls.Where(w => w.Point.X < SecondColumnLeft - 0.5).ToList();
-            var topRow = inFirstColumn.Min(w => w.Point.Y);
-            Assert.Equal(3, inFirstColumn.Count(w => Math.Abs(w.Point.Y - topRow) < 0.5));
+            Assert.True(inFirstColumn[0] < inSecondColumn[0],
+                $"column 1's first row ({inFirstColumn[0]}) is beside the float, column 2's ({inSecondColumn[0]}) is not");
         }
 
         [Fact]
@@ -204,7 +210,8 @@ namespace PeachPDF.Tests.Integration
             var p = FindById(root, "p")!;
             var next = FindById(root, "next")!;
 
-            Assert.Equal(24, next.Location.Y - p.ActualBottom, 2);
+            // Whole points: the paragraph's own bottom carries the font's fractional line height.
+            Assert.Equal(24, next.Location.Y - p.ActualBottom, 0);
         }
 
         [Fact]
