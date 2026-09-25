@@ -541,8 +541,11 @@ namespace PeachPDF.Html.Core.Dom
         /// The font this box uses for <paramref name="codepoint"/> specifically. See
         /// <see cref="DerivedStyle.ActualFontForCodepoint"/>.
         /// </summary>
-        public RFont ActualFontForCodepoint(System.Text.Rune codepoint, double sizeScale = 1.0) =>
-            DerivedStyle.ActualFontForCodepoint(codepoint, sizeScale);
+        public RFont ActualFontForCodepoint(System.Text.Rune codepoint, double sizeScale = 1.0, EmojiPresentation presentation = EmojiPresentation.NoPreference) =>
+            DerivedStyle.ActualFontForCodepoint(codepoint, sizeScale, presentation);
+
+        /// <summary>This box's <c>font-variant-emoji</c> keyword - see <see cref="DerivedStyle.ActualFontVariantEmoji"/>.</summary>
+        public FontVariantEmojiMode ActualFontVariantEmoji => DerivedStyle.ActualFontVariantEmoji;
 
         /// <summary>
         /// Gets the size of 1em in the specified units, per spec: an element's own computed font-size, not

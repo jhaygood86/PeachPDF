@@ -737,11 +737,11 @@ h1 { color: blue }");
         {
             var decl = ParseDeclarations("font: bold 1em/2em monospace; content: \" (\" attr(href) \")\"");
             Assert.NotNull(decl);
-            // 13 longhands the `font` shorthand expands to (font-family, font-size, font-stretch,
+            // 14 longhands the `font` shorthand expands to (font-family, font-size, font-stretch,
             // font-style, font-variant-caps, font-variant-ligatures, font-variant-numeric,
-            // font-variant-east-asian, font-variant-position, font-variant-alternates, font-kerning,
-            // font-weight, line-height) + content.
-            Assert.Equal(14, decl.Length);
+            // font-variant-east-asian, font-variant-position, font-variant-emoji,
+            // font-variant-alternates, font-kerning, font-weight, line-height) + content.
+            Assert.Equal(15, decl.Length);
 
             Assert.Equal("bold 1em / 2em monospace", decl.GetPropertyValue("font"));
 

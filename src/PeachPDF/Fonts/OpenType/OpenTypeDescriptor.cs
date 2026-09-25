@@ -578,7 +578,18 @@ namespace PeachPDF.Fonts.OpenType
         /// True when this font carries COLR + CPAL color-glyph data over glyf outlines, so its color
         /// glyphs can be drawn as vector fills. CFF-flavored color fonts report false (no glyf).
         /// </summary>
-        public bool IsColorFont => (FontFace.colr != null && FontFace.cpal != null && FontFace.glyf != null) || FontFace.bitmap != null;
+        public bool IsColorFont => FontFace.IsColorFont;
+
+        /// <summary>
+        /// Whether the font's cmap format 14 (Unicode Variation Sequences) lists <paramref name="baseCodepoint"/>
+        /// followed by <paramref name="selector"/> (U+FE0E or U+FE0F), and if it gives the sequence a
+        /// dedicated glyph, which.
+        /// </summary>
+        public VariationSequenceSupport LookupVariationSequence(int baseCodepoint, int selector, out int glyph)
+        {
+            glyph = 0;
+            return FontFace.cmap.cmap14?.Lookup(baseCodepoint, selector, out glyph) ?? VariationSequenceSupport.None;
+        }
 
         /// <summary>True when this font carries bitmap colour glyphs (CBDT/CBLC or sbix): a picture per glyph and size, not outlines.</summary>
         public bool HasBitmapGlyphs => FontFace.bitmap != null;

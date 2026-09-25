@@ -163,6 +163,12 @@ namespace PeachPDF.Fonts.OpenType
 
         /// <summary>The bitmap colour glyphs (CBDT/CBLC or sbix), or null when the font has none.</summary>
         internal BitmapGlyphSource? bitmap;
+
+        /// <summary>
+        /// True when this font draws colour glyphs: COLR + CPAL layers over glyf outlines, or CBDT/CBLC/sbix
+        /// bitmaps. (A COLR font over CFF outlines is not one this renderer can paint, so it is not counted.)
+        /// </summary>
+        internal bool IsColorFont => (colr != null && cpal != null && glyf != null) || bitmap != null;
         internal GlyphMathTable math = null!; // optional - only dedicated math fonts carry one
         internal VerticalHeaderTable vhea = null!; // optional - absent on purely-horizontal fonts
         internal VerticalMetricsTable vmtx = null!; // optional - absent on purely-horizontal fonts

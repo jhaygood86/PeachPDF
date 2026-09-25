@@ -30,6 +30,7 @@
 #define VERBOSE_
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using PeachPDF.PdfSharpCore;
@@ -219,6 +220,157 @@ namespace PeachPDF.Fonts.OpenType
         }
     }
 
+    /// <summary>How a font's cmap format 14 subtable answers a (base, variation selector) query.</summary>
+    internal enum VariationSequenceSupport
+    {
+        /// <summary>The font lists no such sequence.</summary>
+        None,
+
+        /// <summary>A default UVS record: the sequence is supported and uses the base character's ordinary glyph.</summary>
+        Default,
+
+        /// <summary>A non-default UVS record: the sequence is supported and has a glyph of its own.</summary>
+        NonDefault
+    }
+
+    /// <summary>
+    /// CMap format 14: Unicode Variation Sequences. Records, per variation selector, which base characters
+    /// the font supports in a sequence with it - either "use the ordinary glyph" (default UVS) or a
+    /// dedicated glyph (non-default UVS). Every selector the font lists is read. Which sequences count as
+    /// support for font *selection* is narrower - CSS Fonts 4 lets only U+FE0E and U+FE0F steer that (see
+    /// <see cref="PeachPDF.Text.EmojiProperties.FaceMatches"/>) - but a dedicated glyph for any selector
+    /// (standardized variants, ideographic variation sequences, ...) is used by shaping.
+    /// </summary>
+    internal class CMap14 : OpenTypeFontTable
+    {
+        private sealed class SelectorRecord
+        {
+            public int Selector;
+            public (int Start, int End)[] DefaultRanges = [];
+            public int[] NonDefaultBases = [];
+            public ushort[] NonDefaultGlyphs = [];
+        }
+
+        private SelectorRecord[] _records = [];
+
+        public CMap14(OpenTypeFontface fontData)
+            : base(fontData, "----")
+        {
+            Read();
+        }
+
+        /// <summary>Fails (as a malformed font) unless <paramref name="count"/> records of <paramref name="size"/> bytes still fit in the font, before any array is sized from it.</summary>
+        private void RequireRemaining(uint count, int size)
+        {
+            if ((long)count * size > _fontData.FontSource.Bytes.Length - _fontData.Position)
+                throw new InvalidOperationException("cmap format 14 record count exceeds the font data.");
+        }
+
+        private static int OffsetWithinFont(int subtableStart, uint offset) => offset > int.MaxValue - subtableStart
+            ? throw new InvalidOperationException("cmap format 14 offset exceeds the font data.")
+            : subtableStart + (int)offset;
+
+        private int ReadUInt24() => (_fontData.ReadByte() << 16) | (_fontData.ReadByte() << 8) | _fontData.ReadByte();
+
+        internal void Read()
+        {
+            try
+            {
+                int subtableStart = _fontData.Position;
+
+                ushort format = _fontData.ReadUShort();
+                Debug.Assert(format == 14, "Only format 14 expected.");
+                _fontData.ReadULong(); // length
+                uint numRecords = _fontData.ReadULong();
+                RequireRemaining(numRecords, 11);
+
+                var directory = new (int Selector, uint DefaultOffset, uint NonDefaultOffset)[numRecords];
+                for (int i = 0; i < numRecords; i++)
+                    directory[i] = (ReadUInt24(), _fontData.ReadULong(), _fontData.ReadULong());
+
+                var records = new List<SelectorRecord>(directory.Length);
+                foreach (var (selector, defaultOffset, nonDefaultOffset) in directory)
+                {
+                    var record = new SelectorRecord { Selector = selector };
+
+                    if (defaultOffset != 0)
+                    {
+                        _fontData.Position = OffsetWithinFont(subtableStart, defaultOffset);
+                        uint count = _fontData.ReadULong();
+                        RequireRemaining(count, 4);
+                        record.DefaultRanges = new (int, int)[count];
+                        for (int i = 0; i < count; i++)
+                        {
+                            int start = ReadUInt24();
+                            record.DefaultRanges[i] = (start, start + _fontData.ReadByte());
+                        }
+                    }
+
+                    if (nonDefaultOffset != 0)
+                    {
+                        _fontData.Position = OffsetWithinFont(subtableStart, nonDefaultOffset);
+                        uint count = _fontData.ReadULong();
+                        RequireRemaining(count, 5);
+                        record.NonDefaultBases = new int[count];
+                        record.NonDefaultGlyphs = new ushort[count];
+                        for (int i = 0; i < count; i++)
+                        {
+                            record.NonDefaultBases[i] = ReadUInt24();
+                            record.NonDefaultGlyphs[i] = _fontData.ReadUShort();
+                        }
+                    }
+
+                    records.Add(record);
+                }
+
+                _records = [.. records];
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+            }
+        }
+
+        /// <summary>
+        /// Looks up the sequence <paramref name="baseCodepoint"/> + <paramref name="selector"/>. For a
+        /// <see cref="VariationSequenceSupport.NonDefault"/> answer <paramref name="glyph"/> is the dedicated
+        /// glyph; otherwise it is 0.
+        /// </summary>
+        public VariationSequenceSupport Lookup(int baseCodepoint, int selector, out int glyph)
+        {
+            glyph = 0;
+
+            foreach (var record in _records)
+            {
+                if (record.Selector != selector)
+                    continue;
+
+                int index = Array.BinarySearch(record.NonDefaultBases, baseCodepoint);
+                if (index >= 0)
+                {
+                    glyph = record.NonDefaultGlyphs[index];
+                    return VariationSequenceSupport.NonDefault;
+                }
+
+                int lo = 0, hi = record.DefaultRanges.Length - 1;
+                while (lo <= hi)
+                {
+                    int mid = (lo + hi) >> 1;
+                    if (baseCodepoint < record.DefaultRanges[mid].Start)
+                        hi = mid - 1;
+                    else if (baseCodepoint > record.DefaultRanges[mid].End)
+                        lo = mid + 1;
+                    else
+                        return VariationSequenceSupport.Default;
+                }
+
+                return VariationSequenceSupport.None;
+            }
+
+            return VariationSequenceSupport.None;
+        }
+    }
+
     /// <summary>
     /// This table defines the mapping of character codes to the glyph index values used in the font.
     /// It may contain more than one subtable, in order to support more than one character encoding scheme.
@@ -242,6 +394,12 @@ namespace PeachPDF.Fonts.OpenType
         /// such as emoji. Null when the font has no format-12 subtable.
         /// </summary>
         public CMap12? cmap12;
+
+        /// <summary>
+        /// Optional format-14 (Unicode Variation Sequences) subtable, present when the font declares which
+        /// base characters it supports with the emoji/text presentation selectors. Null otherwise.
+        /// </summary>
+        public CMap14? cmap14;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CMapTable"/> class.
@@ -274,6 +432,12 @@ namespace PeachPDF.Fonts.OpenType
 
                     int currentPosition = _fontData.Position;
 
+                    // A record pointing outside the font cannot be one of the subtables we want; skipping it
+                    // (rather than letting the peek throw) keeps a font that only has such a trailing record
+                    // - which the old early exit below never reached - loading exactly as before.
+                    if (offset < 0 || (long)tableOffset + offset + 2 > _fontData.FontSource.Bytes.Length)
+                        continue;
+
                     // Peek the subtable's format so we parse it with the right reader and never force-read
                     // a non-format-4 subtable as format 4.
                     _fontData.Position = tableOffset + offset;
@@ -297,10 +461,24 @@ namespace PeachPDF.Fonts.OpenType
                     {
                         cmap12 = new CMap12(_fontData, WinEncodingId.Unicode);
                     }
+                    // The Unicode Variation Sequences subtable (platform 0, encoding 5).
+                    else if (cmap14 is null && subtableFormat == 14)
+                    {
+                        // Optional and only ever a hint about presentation support: a malformed one must not
+                        // stop an otherwise usable font from loading.
+                        try
+                        {
+                            cmap14 = new CMap14(_fontData);
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            cmap14 = null;
+                        }
+                    }
 
                     _fontData.Position = currentPosition;
 
-                    if (cmap4Found && cmap12 is not null)
+                    if (cmap4Found && cmap12 is not null && cmap14 is not null)
                         break;
                 }
                 if (!cmap4Found)

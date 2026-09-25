@@ -326,6 +326,14 @@ namespace PeachPDF.CSS
                 {Keywords.Sub, FontVariantPosition.Sub},
                 {Keywords.Super, FontVariantPosition.Super}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, FontVariantEmoji> FontVariantEmojiKeywords =
+            new Dictionary<string, FontVariantEmoji>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Normal, FontVariantEmoji.Normal},
+                {Keywords.Text, FontVariantEmoji.Text},
+                {Keywords.Emoji, FontVariantEmoji.Emoji},
+                {Keywords.Unicode, FontVariantEmoji.Unicode}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         // The restricted `<font-variant-css2>` grammar (normal | small-caps) - the only caps values
         // reachable from inside the `font` shorthand's embedded variant slot, per spec.
         public static readonly FrozenDictionary<string, FontVariantCaps> FontVariantCss2Keywords =
@@ -513,6 +521,14 @@ namespace PeachPDF.CSS
                 {Keywords.Normal, FontVariantPositionMode.Normal},
                 {Keywords.Sub, FontVariantPositionMode.Sub},
                 {Keywords.Super, FontVariantPositionMode.Super}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, FontVariantEmojiMode> FontVariantEmojiModes =
+            new Dictionary<string, FontVariantEmojiMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Normal, FontVariantEmojiMode.Normal},
+                {Keywords.Text, FontVariantEmojiMode.Text},
+                {Keywords.Emoji, FontVariantEmojiMode.Emoji},
+                {Keywords.Unicode, FontVariantEmojiMode.Unicode}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, FontVariantCapsMode> FontVariantCapsModes =
             new Dictionary<string, FontVariantCapsMode>(StringComparer.OrdinalIgnoreCase)

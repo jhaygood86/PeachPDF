@@ -417,9 +417,9 @@ namespace PeachPDF.Adapters
             return new FontAdapter(xFont, PixelsPerPoint);
         }
 
-        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint)
+        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachPDF.Text.EmojiPresentation presentation)
         {
-            var fallbackFamily = _fontResolver.FindFamilyCoveringCodepoint(codepoint);
+            var fallbackFamily = _fontResolver.FindFamilyCoveringCodepoint(codepoint, presentation);
             if (fallbackFamily is null)
                 return null;
 

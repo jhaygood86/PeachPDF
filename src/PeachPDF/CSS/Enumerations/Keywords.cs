@@ -85,6 +85,8 @@
         public const string SmallCaption = "small-caption";
         public const string StatusBar = "status-bar";
         public const string Normal = "normal";
+        public const string Emoji = "emoji";
+        public const string Unicode = "unicode";
         public const string Italic = "italic";
         public const string Oblique = "oblique";
         public const string UltraCondensed = "ultra-condensed";

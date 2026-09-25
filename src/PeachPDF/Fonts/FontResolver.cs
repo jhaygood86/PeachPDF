@@ -67,7 +67,7 @@ namespace PeachPDF.Fonts
         /// Instance-scoped for the same reason as <see cref="_coverageCache"/> - never shared across
         /// <c>PdfGenerator</c> instances/threads.
         /// </summary>
-        private readonly Dictionary<int, string?> _systemFallbackCache = new();
+        private readonly Dictionary<(int Codepoint, EmojiPresentation Presentation), string?> _systemFallbackCache = new();
 
         /// <summary>
         /// This instance's own typeface-key-keyed glyph-typeface cache, used only for custom
@@ -557,6 +557,29 @@ namespace PeachPDF.Fonts
         private IReadOnlyList<RuneRange> EffectiveCoverage(FontFaceEntry entry) =>
             entry.ExplicitRanges ?? GetOrComputeCoverage(entry.Description.FontNameInvariantCulture);
 
+        /// <summary>
+        /// Whether <paramref name="entry"/> is a face to prefer for <paramref name="rune"/> drawn in
+        /// <paramref name="presentation"/> - see <see cref="EmojiProperties.FaceMatches"/>. Reads the face's
+        /// tables through the same shared font-source cache <see cref="GetOrComputeCoverage"/> uses.
+        /// </summary>
+        private bool FacePresentationMatches(FontFaceEntry entry, Rune rune, EmojiPresentation presentation)
+        {
+            if (presentation == EmojiPresentation.NoPreference)
+                return true;
+
+            var faceName = entry.Description.FontNameInvariantCulture;
+            try
+            {
+                var fontFace = XFontSource.GetOrCreateFrom(GetFont(faceName)).Fontface;
+                return fontFace is null || EmojiProperties.FaceMatches(fontFace, rune.Value, presentation);
+            }
+            catch
+            {
+                // A face this reader cannot parse could not be drawn in either presentation.
+                return false;
+            }
+        }
+
         private IReadOnlyList<RuneRange> GetOrComputeCoverage(string faceName)
         {
             if (_coverageCache.TryGetValue(faceName, out var cached))
@@ -588,15 +611,23 @@ namespace PeachPDF.Fonts
         /// <see cref="_systemFallbackCache"/> - since a document missing coverage for one character often
         /// repeats it many times.
         /// </summary>
-        internal string? FindFamilyCoveringCodepoint(Rune codepoint)
+        /// <param name="codepoint">the character no declared family covers</param>
+        /// <param name="presentation">
+        /// the emoji/text presentation the caller wants (CSS <c>font-variant-emoji</c>): with a request, only
+        /// faces that <see cref="EmojiProperties.FaceMatches">match it</see> count, so the answer can be
+        /// null even though a face covers the codepoint - the caller then retries without a preference.
+        /// </param>
+        internal string? FindFamilyCoveringCodepoint(Rune codepoint, EmojiPresentation presentation = EmojiPresentation.NoPreference)
         {
-            if (_systemFallbackCache.TryGetValue(codepoint.Value, out var cached))
+            if (_systemFallbackCache.TryGetValue((codepoint.Value, presentation), out var cached))
                 return cached;
+
+            bool Usable(FontFaceEntry face) => FaceCovers(face, codepoint) && FacePresentationMatches(face, codepoint, presentation);
 
             var candidates = new List<string>();
             foreach (var (key, family) in InstalledFonts)
             {
-                if (family.Faces.Any(f => FaceCovers(f, codepoint)))
+                if (family.Faces.Any(Usable))
                     candidates.Add(key);
             }
 
@@ -612,10 +643,10 @@ namespace PeachPDF.Fonts
             else
             {
                 candidates.Sort(StringComparer.Ordinal);
-                winner = PickScriptAwareWinner(candidates, codepoint);
+                winner = PickScriptAwareWinner(candidates, codepoint, Usable);
             }
 
-            _systemFallbackCache[codepoint.Value] = winner;
+            _systemFallbackCache[(codepoint.Value, presentation)] = winner;
             return winner;
         }
 
@@ -628,7 +659,7 @@ namespace PeachPDF.Fonts
         /// codepoint with no real script of its own (punctuation, digits, unassigned codepoints), since
         /// there is nothing meaningful to score against.
         /// </summary>
-        private string PickScriptAwareWinner(List<string> candidates, Rune codepoint)
+        private string PickScriptAwareWinner(List<string> candidates, Rune codepoint, Func<FontFaceEntry, bool> usable)
         {
             var script = ScriptTable.Of(codepoint);
             if (script is ScriptTable.Common or ScriptTable.Inherited or ScriptTable.Unknown)
@@ -644,7 +675,7 @@ namespace PeachPDF.Fonts
             foreach (var key in candidates)
             {
                 var family = InstalledFonts[key];
-                var coveringFace = family.Faces.First(f => FaceCovers(f, codepoint));
+                var coveringFace = family.Faces.First(usable);
                 var overlap = OverlapLength(EffectiveCoverage(coveringFace), scriptRanges);
 
                 if (overlap > bestOverlap)
