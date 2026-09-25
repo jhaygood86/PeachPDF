@@ -9,9 +9,13 @@ a multi-column container cannot be: the columns engine records each column for o
 attached fragmentainer, and laid out unbroken it lost its last column lines (#1376 is the same cause). It keeps
 the breaking path, so a break inside it ends the pass, and the next pass resumes inside it on the next page.
 
-For such a box that is its parent's first child, `DomUtils.GetPreviousSibling` still returns it
-(`IsAPrecedingBreakingAbsoluteBox`), exactly as on `main` before #1349: the content after it is laid out below
-it and paginated normally. Three attempts to put that content at its §9.3.1 position failed review:
+When such a box precedes a box with only stepped-over boxes before it, `DomUtils.GetPreviousSibling` still
+returns the parent's absolutely positioned first child (`IsAPrecedingBreakingAbsoluteBox`), exactly as on
+`main` before #1349: the content after it is laid out below that first child and paginated normally. The
+first child need not be the multi-column box: checking only that lost the content after a plain absolute box
+(`top: 80pt; height: 80pt`) followed by a multi-column one, which `main` draws on page 2.
+
+Three attempts to put that content at its §9.3.1 position failed review:
 
 - **At its position, nothing else** (`b9d015e9`): it landed on the page the resumed pass had already emitted,
   and a paragraph after the box, or all ten paragraphs of a following block, were drawn on no page.

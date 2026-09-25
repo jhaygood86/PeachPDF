@@ -470,9 +470,10 @@ namespace PeachPDF.Tests.Integration
         // Such a box keeps the breaking path, so a break inside it ends the pass, and the next pass resumes
         // inside it on page 2. The content after it, placed at its parent's top on page 1, landed on the page
         // that pass had already emitted and was lost; re-opening that page drew a short block but sliced a long
-        // one across the margin and lost a following multi-column block's first page. As on main, a first
-        // child like this is treated as preceding the content after it, which is laid out below it and
-        // paginated normally.
+        // one across the margin and lost a following multi-column block's first page. As on main, the
+        // parent's absolutely positioned first child is treated as preceding the content after it, which is
+        // laid out below it and paginated normally, including when that first child is a plain absolute box
+        // and the multi-column one follows it.
         [Theory]
         [InlineData("<p>B1</p><div>{0}<p>W9</p></div>", 9)]
         [InlineData("<p>B1</p><div>{0}<p>W9</p><p>W10</p><p>W11</p><p>W12</p><p>W13</p><p>W14</p><p>W15</p><p>W16</p><p>W17</p><p>W18</p></div>", 18)]
@@ -487,6 +488,34 @@ namespace PeachPDF.Tests.Integration
             var placed = await WordFragments(string.Format(shape, box, many, thirteen));
 
             AssertEachDrawnOnceInsideABand(placed, count);
+        }
+
+        // A plain absolute box as the first child, then the multi-column one: main returned the plain first
+        // child as the previous sibling, and the content after both was laid out below it. Checking only
+        // whether the first child held columns lost that content and the paragraph after the block again.
+        [Fact]
+        public async Task ContentAfterAPlainThenAMultiColumnAbsoluteBox_IsDrawnInsideAPageBand()
+        {
+            // Through the PdfGenerator pipeline with an @page rule, as the review measured it. The content goes
+            // below the plain first child, so X1 reaches page 2 for it to be drawn there, as on main.
+            var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><head><style>@page{size:300pt 200pt;margin:20pt} " +
+                "body{margin:0;font:10pt/12pt Arial} p{margin:0}</style></head><body>" +
+                "<p>BEFORE</p><div><div style='position:absolute;top:80pt;left:200pt;height:80pt'>X1</div>" +
+                "<div style='position:absolute;top:120pt;width:200pt;columns:2'>" +
+                string.Concat(Enumerable.Range(1, 8).Select(i => $"<p>W{i}</p>")) + "</div>" +
+                "<p>AFTER</p></div><p>END</p></body></html>",
+                new PdfGenerateConfig { PageSize = PageSize.Letter });
+
+            var placed = container.FragmentTree!.Fragmentainers
+                .SelectMany(page => Flatten(page.Root).SelectMany(f => f.Words))
+                .Where(w => w.Word.Text is "AFTER" or "END")
+                .ToList();
+
+            Assert.Equal(["AFTER", "END"], placed.Select(w => w.Word.Text!).Order());
+            Assert.All(placed, w => Assert.True(
+                w.Rect.Top >= Margin - 0.01 && w.Rect.Bottom <= PageHeight - Margin + 0.01,
+                $"{w.Word.Text} lies outside its page band ({w.Rect.Top:F2}-{w.Rect.Bottom:F2})"));
         }
 
         // An absolute multi-column box placed on an earlier page than the content around it moves nothing:

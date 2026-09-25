@@ -168,16 +168,25 @@ namespace PeachPDF.Html.Core.Utils
                 if (!IsSteppedOverAsPreviousSibling(sib, includeFloats)) return sib;
             }
 
-            // Everything before b was stepped over. An absolutely positioned first child that is or holds a
-            // multi-column container is still returned, as it always was before #1349: see
-            // IsAPrecedingBreakingAbsoluteBox.
+            // Everything before b was stepped over. When one of those boxes is an absolutely positioned box
+            // that is or holds a multi-column container, an absolutely positioned first child is still
+            // returned, as it always was before #1349: see IsAPrecedingBreakingAbsoluteBox.
             var first = b.ParentBox.Boxes[0];
-            return IsAPrecedingBreakingAbsoluteBox(first) ? first : null;
+            if (first.Position.Value is not PositionMode.Absolute) return null;
+
+            for (var i = 0; i < index; i++)
+            {
+                if (IsAPrecedingBreakingAbsoluteBox(b.ParentBox.Boxes[i])) return first;
+            }
+
+            return null;
         }
 
         /// <summary>
         /// Whether <paramref name="box"/> is an absolutely positioned box that is or holds a multi-column
-        /// container, which <see cref="GetPreviousSibling"/> still returns when it is its parent's first child.
+        /// container. When one precedes a box with nothing but stepped-over boxes before it,
+        /// <see cref="GetPreviousSibling"/> still returns an absolutely positioned first child, whether or not
+        /// that first child is this box.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -190,9 +199,11 @@ namespace PeachPDF.Html.Core.Utils
         /// below the box for every such box moved it backwards when the box sat on an earlier page.
         /// </para>
         /// <para>
-        /// So for these boxes the placement stays exactly what it was on <c>main</c>: a first child is
-        /// returned, and the content after it is laid out below it, on the page the pass continues on. The
-        /// position still differs from §9.3.1 (#1377).
+        /// So wherever such a box is involved the placement stays exactly what it was on <c>main</c>, where the
+        /// walk's end returned any absolutely positioned first child: the content after it is laid out below
+        /// that first child, on the page the pass continues on. Checking only whether the first child itself
+        /// held columns missed a plain absolute box followed by a multi-column one, and the content after
+        /// both was lost again. The position still differs from §9.3.1 (#1377).
         /// </para>
         /// </remarks>
         private static bool IsAPrecedingBreakingAbsoluteBox(CssBox box) =>

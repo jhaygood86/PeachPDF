@@ -272,8 +272,10 @@ content loss for what follows it:
    laid out behind it: a following `columns: 2` block lost its whole first page and a long paragraph run was
    sliced across the margin. Ungated, that check also made 5,000 wrappers take 24.4s instead of 4.4s.
 
-What stands is `main`'s own placement for exactly that case (`DomUtils.IsAPrecedingBreakingAbsoluteBox`: a
-first-child absolute box that is or holds columns is returned as the previous sibling). Every shape from the
+What stands is `main`'s own placement for exactly that case (`DomUtils.IsAPrecedingBreakingAbsoluteBox`: when
+such a box is among the stepped-over siblings, the absolutely positioned first child is returned as the
+previous sibling; a fourth review found that checking only the first child missed a plain absolute box
+followed by the multi-column one). Every shape from the
 three rounds, eight probes, now draws the same words at the same positions as `main`. The §9.3.1 position is
 an [accepted gap](../accepted-gaps/content-after-an-absolute-multi-column-box-is-placed-below-it.md) (#1377).
 An attempt to lay these boxes out unbroken by making the columns engine unpaginated when detached still lost
