@@ -3151,7 +3151,12 @@ namespace PeachPDF.Html.Core
             if (box.ActualBottom <= 0) return;
 
             var first = PageIndexOf(Math.Max(box.Location.Y, 0) + PageBoundaryEpsilon);
-            var last = PageIndexOf(Math.Max(box.ActualBottom - PageBoundaryEpsilon, 0));
+            // Content that overflows the box (overflow: visible) is drawn past its border box, on pages the
+            // border box does not reach; those have to be re-opened too, or the overflowing lines are lost.
+            var bottom = box.Overflow.Value == PeachPDF.CSS.Overflow.Visible
+                ? CssBox.GetMaximumBottom(box, box.ActualBottom)
+                : box.ActualBottom;
+            var last = PageIndexOf(Math.Max(bottom - PageBoundaryEpsilon, 0));
 
             _emitter.InvalidateFrom(Math.Max(first, 0), box, throughSlot: Math.Max(last, first));
         }

@@ -1945,7 +1945,14 @@ namespace PeachPDF.Html.Core.Dom
                     // (collision scanning, line wrapping, shrink-to-fit, "floats share the line") reads
                     // EffectiveFloatSide rather than the raw Float value, so it applies to all four the
                     // same way.
-                    startY = Math.Max(startY, LowestOuterTopOfAnEarlierFloat(containingBox, currentBoxIdx) + box.ActualMarginTop);
+                    // Compared in document Y, which orders floats only in page space: every column of a
+                    // multi-column container spans the same Y range, so a float low in column 1 would push a
+                    // later one at the top of column 2 down. A float is moved to the next page only on pages
+                    // anyway (CssBox.MoveWholeOntoTheNextPageIfItFits), so columns keep the old placement.
+                    if (box.HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true })
+                    {
+                        startY = Math.Max(startY, LowestOuterTopOfAnEarlierFloat(containingBox, currentBoxIdx) + box.ActualMarginTop);
+                    }
                     if (box.EffectiveFloatSide == Floating.Right) FloatBoxRight(box, containingBox, startX, startY);
                     else FloatBoxLeft(box, containingBox, startX, startY);
                     break;

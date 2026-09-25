@@ -281,6 +281,18 @@ an [accepted gap](../accepted-gaps/content-after-an-absolute-multi-column-box-is
 An attempt to lay these boxes out unbroken by making the columns engine unpaginated when detached still lost
 W18–W20: the per-slot column records are the deeper cause.
 
+## Later review findings
+
+- **Rule 5 across columns.** `LowestOuterTopOfAnEarlierFloat` compares document Y, which orders floats only in
+  page space: every column spans the same Y range, so a float low in column 1 held a later float at the top of
+  column 2 down to its height (B1 at y=128 instead of 32). The clamp now runs only outside a column; a float is
+  moved to the next page only on pages anyway.
+- **Absolute box content past its border box.** `InvalidateEmittedFragmentainersReceiving` re-opened only the
+  pages the border box covers, so `overflow: visible` text past a short absolute box's height, on a page already
+  emitted, was lost (X15–X25 of 25). It now takes the content's extent (`GetMaximumBottom`).
+- **Fixed or running box with a float value.** Excluded from the float path in `LayoutBlockChild`, as the rule 5
+  scan already excluded it (CSS 2.1 §9.7). No render differed in a probe; the footer case is wrong on `main` too.
+
 ## A box capped only by max-height breaks, as Chrome prints it
 
 Comparing the showcase against Chrome after the float round showed its capped box, `overflow: hidden;

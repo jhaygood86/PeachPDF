@@ -3390,7 +3390,9 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            if (child.IsFloated
+            // A fixed or running box keeps its float value but is not a float (CSS 2.1 §9.7); an absolute
+            // one never reaches here.
+            if (child.IsFloated && !child.IsAbsolutelyPositioned && !child.IsRunningPositioned
                 && child.HtmlContainer is { CurrentFragmentainer.HasOwnBand: false } floatContainer
                 && !IsOrHoldsAMultiColumnContainer(child))
             {

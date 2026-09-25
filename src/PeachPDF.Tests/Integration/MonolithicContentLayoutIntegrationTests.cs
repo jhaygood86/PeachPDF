@@ -388,6 +388,34 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(container.PageTopOf(0), real.Location.Y, 2);
         }
 
+        // Rule 5 is enforced in page space only. Every column spans the same Y range, so a float low in column
+        // 1 pushed a later float at the top of column 2 down to its own height.
+        [Fact]
+        public async Task FloatInALaterColumn_IsNotHeldBelowAFloatInAnEarlierOne()
+        {
+            var (root, _) = await LayoutFloats(
+                $"<div style='columns:2;column-fill:auto;height:150pt'><div>{Lines("C", 9)}</div>" +
+                $"<div id='a' style='float:left;width:40pt'>A1</div><div>{Lines("D", 5)}</div>" +
+                $"<div id='b' style='float:left;width:40pt'>B1</div><div>{Lines("E", 6)}</div></div>");
+            var earlier = LayoutHarness.FindById(root, "a")!;
+            var later = LayoutHarness.FindById(root, "b")!;
+
+            Assert.True(later.Location.X > earlier.ActualRight, "the later float must be in the second column");
+            Assert.True(later.Location.Y < earlier.Location.Y,
+                $"the later float at {later.Location.Y:F2} was held down to the earlier one's {earlier.Location.Y:F2}");
+        }
+
+        // An absolutely positioned box placed on an emitted page re-opens every page its content reaches, not
+        // only the pages its border box covers: overflowing text past a short box's height was lost.
+        [Fact]
+        public async Task AbsoluteBoxOnAnEmittedPage_DrawsItsOverflowingContent()
+        {
+            var placed = await WordFragments(
+                $"{Lines("P", 40)}<div style='position:absolute;top:0;left:150pt;width:100pt;height:30pt'>{Lines("W", 25)}</div>");
+
+            Assert.Equal(Enumerable.Range(1, 25).Select(i => $"W{i}"), placed.Select(w => w.Text).Distinct().Order(WordNumber.Instance));
+        }
+
         // A float moves onto the next page's usable band: below a float: top figure there, not on top of it.
         [Fact]
         public async Task MovedFloat_StartsBelowATopPageFloatOnItsNewPage()
