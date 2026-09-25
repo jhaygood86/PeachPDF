@@ -651,7 +651,8 @@ namespace PeachPDF.CSS
                 {Keywords.SansSerif, "Arial"},
                 {Keywords.Monospace, "Consolas"},
                 {Keywords.Cursive, "Cursive"},
-                {Keywords.Fantasy, "Comic Sans"}
+                {Keywords.Fantasy, "Comic Sans"},
+                {Keywords.Math, "Cambria Math"}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, BackgroundAttachment> BackgroundAttachments =
             new Dictionary<string, BackgroundAttachment>(StringComparer.OrdinalIgnoreCase)

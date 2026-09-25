@@ -80,7 +80,11 @@ namespace PeachPDF.Adapters
             // whichever distro doesn't happen to have it.
             foreach (var generic in GenericFontFamilyResolver.Generics)
             {
-                var target = isLinux ? LinuxSystemFontResolver.ResolveGenericFamily(generic) : null;
+                // math is the one generic with no per-platform single name (nor a fontconfig answer worth
+                // trusting): it is the first installed family of a candidate chain - see ResolveMathFamily.
+                var target = generic == PeachPDF.CSS.Keywords.Math
+                    ? GenericFontFamilyResolver.ResolveMathFamily(isWindows, isMacOS, isAndroid, IsFontExists)
+                    : isLinux ? LinuxSystemFontResolver.ResolveGenericFamily(generic) : null;
                 target ??= GenericFontFamilyResolver.ResolvePlatformDefault(generic, isWindows, isMacOS, isAndroid);
 
                 // Apply the same "verify installed, else fall back to the platform default font" correction

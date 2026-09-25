@@ -62,5 +62,46 @@ namespace PeachPDF.Tests.Html.Core.Utils
             // installed-family verification step can substitute a real fallback.
             Assert.Equal(Keywords.Monospace, GenericFontFamilyResolver.ResolvePlatformDefault(Keywords.Monospace, isWindows: false, isMacOS: false, isAndroid: false));
         }
+
+        [Fact]
+        public void Math_IsOneOfTheMappedGenerics()
+        {
+            Assert.Contains(Keywords.Math, GenericFontFamilyResolver.Generics);
+        }
+
+        [Theory]
+        [InlineData(true, false, false, "Latin Modern Math", "Latin Modern Math")]
+        [InlineData(true, false, false, "Cambria Math", "Cambria Math")]
+        [InlineData(false, true, false, "STIX Two Math", "STIX Two Math")]
+        [InlineData(false, false, true, "Noto Sans Math", "Noto Sans Math")]
+        [InlineData(false, false, false, "DejaVu Math TeX Gyre", "DejaVu Math TeX Gyre")]
+        public void Math_ResolvesToTheInstalledPlatformCandidate(bool isWindows, bool isMacOS, bool isAndroid, string installed, string expected)
+        {
+            var resolved = GenericFontFamilyResolver.ResolveMathFamily(isWindows, isMacOS, isAndroid,
+                family => family == installed);
+
+            Assert.Equal(expected, resolved);
+        }
+
+        [Fact]
+        public void Math_PrefersLatinModernMathOverCambriaMath_WhenBothInstalledOnWindows()
+        {
+            // Chromium's own choice first; Cambria Math is only the fallback that ships with Windows.
+            Assert.Equal("Latin Modern Math",
+                GenericFontFamilyResolver.ResolveMathFamily(isWindows: true, isMacOS: false, isAndroid: false, _ => true));
+        }
+
+        [Fact]
+        public void Math_PrefersTheAndroidChain_WhenAndroidAndWindowsFlagsBothTrue()
+        {
+            Assert.Equal("Noto Sans Math",
+                GenericFontFamilyResolver.ResolveMathFamily(isWindows: true, isMacOS: false, isAndroid: true, _ => true));
+        }
+
+        [Fact]
+        public void Math_ResolvesToNull_WhenNoCandidateIsInstalled()
+        {
+            Assert.Null(GenericFontFamilyResolver.ResolveMathFamily(false, false, false, _ => false));
+        }
     }
 }

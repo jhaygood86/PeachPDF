@@ -8411,7 +8411,7 @@ fontShowcase.Append("<p style=\"font-family: StretchDemo; font-stretch: condense
 // DefaultFontResolver.DefaultFont).
 fontShowcase.Append("<h2>Generic families (platform-matched)</h2>");
 fontShowcase.Append("<p class=\"note\">Each generic family resolves to a real installed font: via fontconfig on the docs build machine, via the Chromium-matched platform table elsewhere.</p>");
-foreach (var generic in new[] { "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui" })
+foreach (var generic in new[] { "serif", "sans-serif", "monospace", "cursive", "fantasy", "math", "system-ui" })
 {
     fontShowcase.Append($"<p style=\"font-family: {generic}\">{generic}: The quick brown fox jumps over the lazy dog</p>");
 }

@@ -77,6 +77,7 @@
         public const string Monospace = "monospace";
         public const string Cursive = "cursive";
         public const string Fantasy = "fantasy";
+        public const string Math = "math";
         public const string Caption = "caption";
         public const string Icon = "icon";
         public const string Menu = "menu";
