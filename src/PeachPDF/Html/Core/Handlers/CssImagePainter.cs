@@ -476,22 +476,51 @@ namespace PeachPDF.Html.Core.Handlers
             return (outC.ToArray(), outA.ToArray());
         }
 
-        private static (RColor[] Colors, double[] AnglesRad) NormalizeConicStops(ParsedConicGradient g)
+        /// <summary>
+        /// CSS Images 3 §3.4.3 step 2: a color stop positioned before an earlier stop takes that earlier stop's
+        /// position, so positions never decrease. Without it a hard-stop pair written as <c>#ddd 0% 25%, #fff 0% 50%</c>
+        /// (the standard checkerboard idiom - the second stop's 0% is below the first's 25%) hands the shading
+        /// function decreasing <c>/Bounds</c>, which strict readers reject and lenient ones smear. Only stops with a
+        /// position are clamped; an unpositioned interior stop is spaced afterwards, between its already-ordered
+        /// neighbours. An unpositioned last stop defaults to <paramref name="lastDefault"/> but is raised the same way.
+        /// </summary>
+        internal static void ClampStopPositionsToRunningMaximum(double?[] positions, double lastDefault)
+        {
+            int n = positions.Length;
+            if (n < 2) return;
+
+            double max = positions[0] ?? 0.0;
+            for (int i = 1; i < n; i++)
+            {
+                if (positions[i] is not { } position) continue;
+
+                max = Math.Max(position, max);
+                positions[i] = max;
+            }
+
+            if (positions[n - 1] is null && max > lastDefault)
+                positions[n - 1] = max;
+        }
+
+        internal static (RColor[] Colors, double[] AnglesRad) NormalizeConicStops(ParsedConicGradient g)
         {
             const double TwoPi = 2.0 * Math.PI;
             var rawStops = g.Stops.Where(s => !s.IsHint).ToArray();
             int n = rawStops.Length;
 
+            var rawPos = rawStops.Select(s => s.PositionRad).ToArray();
+            ClampStopPositionsToRunningMaximum(rawPos, TwoPi);
+
             var pos = new double[n];
-            pos[0]     = rawStops[0].PositionRad ?? 0.0;
-            pos[n - 1] = rawStops[n - 1].PositionRad ?? TwoPi;
+            pos[0]     = rawPos[0] ?? 0.0;
+            pos[n - 1] = rawPos[n - 1] ?? TwoPi;
 
             int runStart = -1;
             for (int i = 1; i < n - 1; i++)
             {
-                if (rawStops[i].PositionRad.HasValue)
+                if (rawPos[i].HasValue)
                 {
-                    pos[i] = rawStops[i].PositionRad!.Value;
+                    pos[i] = rawPos[i]!.Value;
                     if (runStart >= 0)
                     {
                         double pA = pos[runStart - 1], pB = pos[i];
@@ -660,6 +689,8 @@ namespace PeachPDF.Html.Core.Handlers
             var rawPos = new double?[n];
             for (int i = 0; i < n; i++)
                 rawPos[i] = ConvertLength(colorStops[i].Position, gradientLength, box, pixelsPerPoint, emSizePt);
+
+            ClampStopPositionsToRunningMaximum(rawPos, 1.0);
 
             var resolved = new (RColor Color, double Position)[n];
             double first = rawPos[0] ?? 0.0;

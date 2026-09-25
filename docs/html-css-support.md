@@ -51,6 +51,7 @@ A context with no font of its own — a [media query](#css-media-queries) or an 
 | Attribute | MDN Reference | Notes |
 |-----------|--------------|-------|
 | `dir` | [dir](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/dir) | `ltr`, `rtl`, and `auto` are all supported on any element. `auto` (and `<bdi>`'s implicit default when it carries no `dir` of its own) resolves the element's base direction from the first strong-directional character in its own text content, per the HTML Standard's directionality algorithm — skipping into a descendant only if that descendant has no `dir` of its own, and never descending into a nested element that sets its own direction |
+| `hidden` | [hidden](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/hidden) | Any element carrying it — valueless, empty or with any value other than `until-found` — computes to `display: none`, so it generates no box, takes no space and paints nothing, exactly as the HTML Standard's [hidden elements rendering rules](https://html.spec.whatwg.org/multipage/rendering.html#hidden-elements) specify. The rule is in the user-agent style sheet, so an author `display` declaration on the element overrides it (`<div hidden style="display: block">` is shown), as in a browser. `<embed hidden>` is kept as a zero-sized inline box instead. `hidden=until-found` is not hidden: it maps to `content-visibility: hidden`, which PeachPDF does not support, so that content stays visible. The same style sheet hides `area`, `base`, `basefont`, `datalist`, `head`, `link`, `meta`, `noembed`, `noframes`, `param`, `rp`, `script`, `style`, `template` and `title`, and `<input type=hidden>` (in any letter case) unconditionally. |
 
 ### Document Structure
 
@@ -234,7 +235,7 @@ Form elements are rendered as static boxes by default. There is no interactive b
 |---------|--------------|-------|
 | `frame` | [frame](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/frame) | Deprecated element; no frame content is loaded |
 | `frameset` | [frameset](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/frameset) | Deprecated element; rendered as a block |
-| `noframes` | [noframes](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/noframes) | Deprecated element; content is rendered |
+| `noframes` | [noframes](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/noframes) | Deprecated element; hidden (`display: none`), as the HTML Standard's rendering rules specify |
 
 ### Malformed markup
 
@@ -719,9 +720,10 @@ What follows from having no box:
   still reaches into its text.
 - A `counter-reset`, `counter-increment` or `counter-set` on it has no effect
   ([CSS Lists 3 §4.5](https://www.w3.org/TR/css-lists-3/#nobox)), including the implicit `list-item`
-  counters of a `<ol style="display: contents">`; its `<li>` children still count and get their markers, but
-  a counter they increment stays in scope for the elements that follow the list (a second `contents` list
-  continues the first one's numbering).
+  counters of a `<ol style="display: contents">`; its `<li>` children still count and get their markers, and
+  they are numbered by the list element that owns them, so a second `contents` list starts again at 1. A
+  marker hangs outside the content edge of its item, so with the list's own indent gone it is drawn in the
+  page margin.
 - `unicode-bidi` on it (so a `<bdi>`, `<bdo>` or `[dir]` element with `display: contents`) does not isolate or
   override its content, which stays in the surrounding paragraph — `unicode-bidi` acts on an inline box
   ([CSS Writing Modes 4](https://www.w3.org/TR/css-writing-modes-4/#unicode-bidi)). Its `direction` is still
@@ -745,8 +747,7 @@ Elements whose rendering CSS does not fully control compute to `display: none` i
 `<legend>` just lose their box. A `::before`/`::after` with `display: contents` is laid out as `inline`.
 
 **Known gaps:** `display: contents` on an element *inside* an inline `<svg>` or `<math>` (`<g>`, `<tspan>`,
-`<use>`, `<mrow>`, …) has no effect, because those renderers do not read the CSS `display` property. A counter
-incremented by a child of a `display: contents` list leaks into the elements after the list (above).
+`<use>`, `<mrow>`, …) has no effect, because those renderers do not read the CSS `display` property.
 
 #### Atomic inline-level layout is approximated, not fully atomic
 
@@ -1203,12 +1204,13 @@ This is deliberately **not** blanket acceptance of anything unknown: a genuine t
 | Selector | Syntax | Notes |
 |----------|--------|-------|
 | Presence | `[attr]` | Element has the named attribute |
-| Exact match | `[attr=value]` | Attribute value exactly equals `value` |
+| Exact match | `[attr=value]` | Attribute value equals `value`. In an HTML document values are compared ASCII case-insensitively by default |
 | Whitespace list | `[attr~=value]` | Attribute is a whitespace-separated list containing `value` |
 | Contains | `[attr*=value]` | Attribute value contains `value` as a substring |
 | Starts with | `[attr^=value]` | Attribute value starts with `value` |
 | Ends with | `[attr$=value]` | Attribute value ends with `value` |
 | Hyphen prefix | `[attr\|=value]` | Attribute value equals `value` or starts with `value-` |
+| Case-sensitivity modifier | `[attr=value i]`, `[attr=value s]` | An `i` after the value forces an ASCII case-insensitive comparison and an `s` a case-sensitive one, for any of the value operators above ([Selectors 4 §6.3](https://www.w3.org/TR/selectors-4/#attribute-case)). Without a modifier the comparison follows the document language: case-insensitive for every attribute in an HTML document |
 
 ### Combinators
 

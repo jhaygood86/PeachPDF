@@ -20,6 +20,7 @@ namespace PeachPDF.CSS
         private string _attrValue;
         private string _attrOp;
         private string _attrNs;
+        private AttrCaseSensitivity _attrCase;
         private bool _valid;
         private bool _ready;
         private AttributeSelectorFactory _attributeSelector;
@@ -191,6 +192,7 @@ namespace PeachPDF.CSS
             _attrName = null;
             _attrValue = null;
             _attrNs = null;
+            _attrCase = AttrCaseSensitivity.Default;
             _attrOp = string.Empty;
             _state = State.Data;
             _combinators.Clear();
@@ -217,6 +219,7 @@ namespace PeachPDF.CSS
                     _attrValue = null;
                     _attrOp = string.Empty;
                     _attrNs = null;
+                    _attrCase = AttrCaseSensitivity.Default;
                     _state = State.Attribute;
                     _ready = false;
                     break;
@@ -324,11 +327,33 @@ namespace PeachPDF.CSS
         private void OnAttributeEnd(Token token)
         {
             if (token.Type == TokenType.Whitespace) return;
+
+            // Selectors 4 §6.3: `[attr=value i]` / `[attr=value s]` - the modifier is an identifier
+            // (matched ASCII case-insensitively) that may follow the value, whitespace optional
+            // (`[a="b"i]`), and is only meaningful with an operator and a value. Anything else in this
+            // slot, or a second modifier, leaves the selector invalid.
+            if (token.Type == TokenType.Ident && _attrValue != null && _attrCase == AttrCaseSensitivity.Default)
+            {
+                var flag = token.Data.ToString();
+
+                if (flag.Equals("i", StringComparison.OrdinalIgnoreCase))
+                {
+                    _attrCase = AttrCaseSensitivity.Insensitive;
+                    return;
+                }
+
+                if (flag.Equals("s", StringComparison.OrdinalIgnoreCase))
+                {
+                    _attrCase = AttrCaseSensitivity.Sensitive;
+                    return;
+                }
+            }
+
             _state = State.Data;
             _ready = true;
             if (token.Type == TokenType.SquareBracketClose)
             {
-                var selector = _attributeSelector.Create(_attrOp, _attrName, _attrValue, _attrNs);
+                var selector = _attributeSelector.Create(_attrOp, _attrName, _attrValue, _attrNs, _attrCase);
                 Insert(selector);
             }
             else

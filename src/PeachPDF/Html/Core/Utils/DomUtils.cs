@@ -69,10 +69,21 @@ namespace PeachPDF.Html.Core.Utils
         /// An absolutely positioned child is inline-compatible for the same reason: it is out of flow, so
         /// it is not the block-level content CSS 2.1 §9.2.1.1 separates inline content from, and
         /// <c>FlowBox</c> has a dispatch branch for it too.
+        /// <para>
+        /// A <c>display: none</c> child generates no box at all (CSS Display 3 §2.5), so it can neither make
+        /// this box's content block-level nor be a reason to stop treating it as one inline formatting
+        /// context. <c>DomParser.ContainsVariantBoxes</c> and <c>ContainsInlinesOnlyDeep</c> already skip
+        /// it; these three predicates must answer the same question. Without it, a document with head
+        /// content but no <c>&lt;body&gt;</c> tag - <c>&lt;style&gt;…&lt;/style&gt;text</c>, where the parser
+        /// builds no implied body and the <c>display: none</c> <c>style</c> is a sibling of the text - was
+        /// routed to the block-children path, whose bare text box is never measured or placed, so the text
+        /// vanished.
+        /// </para>
         /// </remarks>
         public static bool ContainsInlinesOnly(CssBox box)
         {
-            return box.Boxes.All(b => b.IsInline || b.IsFloated || b.IsAbsolutelyPositioned);
+            return box.Boxes.All(b => b.IsInline || b.IsFloated || b.IsAbsolutelyPositioned
+                                      || b.DerivedStyle.ActualDisplay == Keywords.None);
         }
 
         /// <summary>

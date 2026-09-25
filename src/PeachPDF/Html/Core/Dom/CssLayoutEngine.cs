@@ -4997,6 +4997,14 @@ namespace PeachPDF.Html.Core.Dom
                 // ordinary inline child, flowed exactly like any other word/box below.
                 if (CssBox.IsOutsideMarker(b)) continue;
 
+                // A `display: none` child generates no box (CSS Display 3 §2.5): nothing of it - not its
+                // words, and not its margin, border or padding - takes part in the line. DomUtils.
+                // ContainsInlinesOnly lets such a child sit among the inline content of a box that is
+                // still flowed as one inline formatting context (`<style>…</style>text`, `a<script/>b`),
+                // so it reaches this loop and must be stepped over here. The box itself is exempt: the
+                // self-iteration convention above hands FlowBox a box that is its own only child.
+                if (b.DerivedStyle.ActualDisplay == Keywords.None && !ReferenceEquals(b, box)) continue;
+
                 // The same question as `opensHere` above, asked of this child: has the walk reached the
                 // resume point yet, or is it still fast-forwarding through content an earlier
                 // fragmentainer placed?

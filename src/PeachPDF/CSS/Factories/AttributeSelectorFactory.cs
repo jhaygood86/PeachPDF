@@ -14,7 +14,8 @@ namespace PeachPDF.CSS
 
         internal static AttributeSelectorFactory Instance => Lazy.Value;
 
-        public IAttrSelector Create(string combinator, string match, string value, string prefix)
+        public IAttrSelector Create(string combinator, string match, string value, string prefix,
+            AttrCaseSensitivity caseSensitivity = AttrCaseSensitivity.Default)
         {
             var name = match;
 
@@ -29,13 +30,13 @@ namespace PeachPDF.CSS
             // upstream ExCSS commit c497ca7. Unknown combinators fall back to a presence selector.
             return combinator switch
             {
-                Combinators.Exactly => new AttrMatchSelector(name, value),
-                Combinators.InList => new AttrListSelector(name, value),
-                Combinators.InToken => new AttrHyphenSelector(name, value),
-                Combinators.Begins => new AttrBeginsSelector(name, value),
-                Combinators.Ends => new AttrEndsSelector(name, value),
-                Combinators.InText => new AttrContainsSelector(name, value),
-                Combinators.Unlike => new AttrNotMatchSelector(name, value),
+                Combinators.Exactly => new AttrMatchSelector(name, value, caseSensitivity),
+                Combinators.InList => new AttrListSelector(name, value, caseSensitivity),
+                Combinators.InToken => new AttrHyphenSelector(name, value, caseSensitivity),
+                Combinators.Begins => new AttrBeginsSelector(name, value, caseSensitivity),
+                Combinators.Ends => new AttrEndsSelector(name, value, caseSensitivity),
+                Combinators.InText => new AttrContainsSelector(name, value, caseSensitivity),
+                Combinators.Unlike => new AttrNotMatchSelector(name, value, caseSensitivity),
                 _ => new AttrAvailableSelector(name, value),
             };
         }

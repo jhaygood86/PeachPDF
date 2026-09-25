@@ -83,20 +83,24 @@ namespace PeachPDF.Html.Core.Paint
         internal void Paint(RGraphics g, FragmentainerFragment fragmentainer)
         {
             var pageClip = container.PageClipOverride ?? container.PageBoxRect;
-            var outlineReach = MaximumOutlineReach(g, fragmentainer.Root);
-            if (outlineReach > 0)
+            var reach = MeasurePaintReach(g, fragmentainer.Root, pageClip);
+            if (reach.Outline > 0 || reach.MarkerLeft > 0)
             {
                 // The page's ordinary content clip starts at the content-area edge. An outline is
                 // explicitly allowed to paint outside the border box and therefore into the page
                 // margin; clipping it to the ordinary window reduces a declared multi-point band to
-                // an antialiased hairline when the element starts at that edge. Widen only the
-                // page-level clip here. Any ancestor/own overflow clips pushed below still constrain
-                // the outline normally.
+                // an antialiased hairline when the element starts at that edge. An outside marker hangs
+                // off the item's inline-start edge (CSS Lists 3 §3.1 - it is positioned outside the
+                // principal box, in whatever room the item's own margin or padding leaves), so an item
+                // at the content edge - a list with no padding, or a `display: contents` list whose own
+                // box, and with it the indent, is gone - hangs into the margin, and clipping it to the
+                // ordinary window deleted the marker outright. Widen only the page-level clip here. Any
+                // ancestor/own overflow clips pushed below still constrain all of it normally.
                 pageClip = RRect.FromLTRB(
-                    pageClip.Left - outlineReach,
-                    pageClip.Top - outlineReach,
-                    pageClip.Right + outlineReach,
-                    pageClip.Bottom + outlineReach);
+                    pageClip.Left - reach.Outline - reach.MarkerLeft,
+                    pageClip.Top - reach.Outline,
+                    pageClip.Right + reach.Outline,
+                    pageClip.Bottom + reach.Outline);
             }
 
             g.PushClip(pageClip);
@@ -107,16 +111,59 @@ namespace PeachPDF.Html.Core.Paint
             g.PopClip();
         }
 
-        private static double MaximumOutlineReach(RGraphics g, BoxFragment fragment)
+        /// <summary>
+        /// How far painted content reaches past the page-level clip: the widest outline in every direction,
+        /// and how far an outside marker overhangs the window on the left. Only the left: a marker is always
+        /// laid out on the left of its item (<c>CssBoxMarker.PerformLayoutImp</c> does not mirror it for
+        /// <c>direction: rtl</c>), so nothing hangs past the right edge.
+        /// </summary>
+        private readonly record struct PaintReach(double Outline, double MarkerLeft)
         {
-            var maximum = fragment.Lines.Count > 0
+            internal PaintReach Union(PaintReach other) => new(
+                Math.Max(Outline, other.Outline),
+                Math.Max(MarkerLeft, other.MarkerLeft));
+        }
+
+        private static PaintReach MeasurePaintReach(RGraphics g, BoxFragment fragment, RRect pageClip)
+        {
+            var outline = fragment.Lines.Count > 0
                 ? OutlineDrawHandler.OutwardReach(g, fragment.Box)
                 : 0;
 
-            foreach (var child in fragment.Children)
-                maximum = Math.Max(maximum, MaximumOutlineReach(g, child));
+            var reach = new PaintReach(outline, 0);
 
-            return maximum;
+            if (fragment.Box is CssBoxMarker marker && CssBox.IsOutsideMarker(marker) && TryGetMarkerInk(fragment, marker, out var ink))
+            {
+                // Capped at the sheet's own edge: a marker hung far off it (`left: -9999px` around a list, the
+                // usual visually-hidden idiom) has nothing to show there, and widening the clip by thousands
+                // of points would let everything else that overhangs the margin on this page paint too.
+                reach = reach with { MarkerLeft = Math.Min(pageClip.Left, Math.Max(0, pageClip.Left - ink.Left)) };
+            }
+
+            foreach (var child in fragment.Children)
+                reach = reach.Union(MeasurePaintReach(g, child, pageClip));
+
+            return reach;
+        }
+
+        /// <summary>
+        /// The rectangle an outside marker's own content paints into - the same one
+        /// <see cref="MarkerFragmentPainter"/> draws at - or false for a marker that draws nothing on this
+        /// page (<c>list-style-type: none</c>, or its word landed in another fragmentainer).
+        /// </summary>
+        private static bool TryGetMarkerInk(BoxFragment fragment, CssBoxMarker marker, out RRect ink)
+        {
+            if (marker.ContentImage is not null)
+            {
+                ink = fragment.PrimaryRect;
+                return ink is { Width: > 0, Height: > 0 };
+            }
+
+            if (marker.Words.Count > 0 && fragment.TryGetWordRect(marker.Words[0], out ink))
+                return true;
+
+            ink = RRect.Empty;
+            return false;
         }
 
         /// <summary>
