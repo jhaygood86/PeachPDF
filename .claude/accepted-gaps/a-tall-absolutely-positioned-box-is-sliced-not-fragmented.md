@@ -7,7 +7,10 @@ mechanism as [#1328](https://github.com/jhaygood86/PeachPDF/issues/1328)._
 
 A `position: absolute` box in block flow is laid out unbroken (`CssBox.LayoutBlockChildUnbroken`): the
 fragmentainer is detached and word page breaks are suppressed. One taller than the page runs on across
-pages and each page draws its own slice. Two consequences:
+pages and each page draws its own slice. A box that is or holds a multi-column container keeps the breaking
+path, because the columns engine needs the fragmentainer: laid out unbroken, 20 paragraphs in `columns: 2`
+after an in-flow paragraph lost W18–W20 (a review of #1334). As its block's first child it loses them on
+`main` too, tracked as #1376. Two consequences:
 
 - A line that straddles a page boundary is cut, half drawn at the foot of one page and half at the head
   of the next. No word is lost from the PDF text, but the line is not readable on either page. A probe

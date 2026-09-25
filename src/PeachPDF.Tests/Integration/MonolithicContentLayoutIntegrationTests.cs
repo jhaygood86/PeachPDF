@@ -453,6 +453,20 @@ namespace PeachPDF.Tests.Integration
             AssertEachDrawnOnceInsideABand(placed, 20);
         }
 
+        // An absolutely positioned box that is or holds a multi-column container keeps the breaking path too.
+        // Laid out unbroken, its columns lost the fragmentainer and W18–W20 with it.
+        [Theory]
+        [InlineData("<p>X1</p><div style='position:absolute;top:120pt;width:200pt;columns:2'>{0}</div>")]
+        [InlineData("<p>X1</p><div style='position:absolute;top:120pt;width:200pt'><div style='columns:2'>{0}</div></div>")]
+        [InlineData("<div style='position:relative'><p>X1</p><div style='position:absolute;top:120pt;width:200pt;columns:2'>{0}</div></div>")]
+        public async Task AbsoluteBoxThatIsOrHoldsAMultiColumnContainer_PlacesEveryWordInsideAPageBand(string shape)
+        {
+            var paragraphs = string.Concat(Enumerable.Range(1, 20).Select(i => $"<p>W{i}</p>"));
+            var placed = await WordFragments(string.Format(shape, paragraphs));
+
+            AssertEachDrawnOnceInsideABand(placed, 20);
+        }
+
         // Which boxes clip is decided per layout. A box that clipped its content and was kept whole may fit
         // under its cap once widened, and the next layout of the same container lets it break again, as a
         // fresh layout of the wider box does.

@@ -12,7 +12,8 @@ block), and the content after it in the same block starts at the block's top, wh
 the absolute box. An absolutely positioned box's own content is laid out in one piece: one taller than a
 page used to break between its lines, and every in-flow box after it in the same block was lost (drawn on
 no page) when it was not its block's first child. It now runs on across pages with each page showing its
-slice, and the content after it is kept. A line of the box that straddles a page boundary is cut, part on
+slice, and the content after it is kept. A box that is or holds a multi-column container still breaks
+between its column lines as before. A line of the box that straddles a page boundary is cut, part on
 each page, and an image, `break-inside: avoid` block or table inside it is sliced rather than moved or
 broken between rows.
 

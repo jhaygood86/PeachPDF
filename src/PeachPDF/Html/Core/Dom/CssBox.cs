@@ -3368,7 +3368,8 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             if (child.Position.Value is PositionMode.Absolute
-                && child.HtmlContainer is { CurrentFragmentainer: not null } absoluteContainer)
+                && child.HtmlContainer is { CurrentFragmentainer: not null } absoluteContainer
+                && !IsOrHoldsAMultiColumnContainer(child))
             {
                 await LayoutBlockChildUnbroken(g, child, absoluteContainer, framePlacesChild);
                 return;
@@ -3376,8 +3377,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (child.IsFloated
                 && child.HtmlContainer is { CurrentFragmentainer.HasOwnBand: false } floatContainer
-                && !child.EstablishesMultiColumnContext
-                && !HoldsAMultiColumnContainer(child))
+                && !IsOrHoldsAMultiColumnContainer(child))
             {
                 await LayoutBlockChildUnbroken(g, child, floatContainer, framePlacesChild);
                 MoveWholeOntoTheNextPageIfItFits(child, floatContainer);
@@ -3433,9 +3433,16 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Whether <paramref name="box"/> contains a multi-column container, whose columns engine needs the
-        /// fragmentainer that <see cref="LayoutBlockChildUnbroken"/> detaches. Kept for the layout generation
-        /// it was answered in, since every pass asks it of every float.
+        /// Whether <paramref name="box"/> is or contains a multi-column container, whose columns engine needs
+        /// the fragmentainer that <see cref="LayoutBlockChildUnbroken"/> detaches. Laid out unbroken, its
+        /// columns lost their last lines. Such a float or absolutely positioned box keeps the breaking path.
+        /// </summary>
+        private static bool IsOrHoldsAMultiColumnContainer(CssBox box) =>
+            box.EstablishesMultiColumnContext || HoldsAMultiColumnContainer(box);
+
+        /// <summary>
+        /// Whether <paramref name="box"/> contains a multi-column container. Kept for the layout generation
+        /// it was answered in, since every pass asks it of every float and absolutely positioned box.
         /// </summary>
         private static bool HoldsAMultiColumnContainer(CssBox box)
         {
