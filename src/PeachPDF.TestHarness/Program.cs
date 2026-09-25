@@ -2434,6 +2434,11 @@ var scrollContainersAcrossPagesHtml = $$"""
       background: #fffbeb;
       padding: 4pt 8pt;
     }
+    .layout { overflow: hidden; border-top: 0.75pt solid #16a34a; padding-top: 4pt; }
+    .menu { float: left; width: 62pt; background: #f0fdf4; border: 0.75pt solid #16a34a; padding: 4pt; }
+    .article { margin-left: 74pt; }
+    .article p { margin: 0 0 4pt; }
+    .note { float: right; width: 110pt; margin: 0 0 4pt 8pt; background: #fff7ed; border: 0.75pt solid #ea580c; padding: 4pt; }
     .stamp {
       position: absolute;
       top: 0;
@@ -2461,8 +2466,8 @@ var scrollContainersAcrossPagesHtml = $$"""
     are sliced at the page edge, as box-decoration-break: slice does for any block.</p>
     <p>Before this change the panel would have been laid out in one piece and cut into page-sized slices,
     and the line on each cut drawn on neither page.</p>
-    <p>A wrapper holding floats, absolutely positioned boxes or a multi-column, flex or grid layout still
-    stays in one piece, because those parts cannot yet continue on the next page.</p>
+    <p>A wrapper holding absolutely positioned boxes or a multi-column, flex or grid layout still stays in
+    one piece, because those parts cannot yet continue on the next page.</p>
     <p>Add break-inside: avoid to keep a short panel together instead.</p>
     <p>This is the case the clearfix idiom produces most often: a long, auto-height wrapper whose only job
     is to establish a new block formatting context, with ordinary paragraphs inside it.</p>
@@ -2486,6 +2491,37 @@ var scrollContainersAcrossPagesHtml = $$"""
     <p>To keep a short auto-height box together as well, give it break-inside: avoid.</p>
     </div>
 
+    <h2>A floated menu inside a clearfix wrapper</h2>
+    <div class="layout">
+    <div class="menu"><b>Contents</b><br>Introduction<br>Method<br>Results<br>Discussion</div>
+    <div class="article">
+    <p>This wrapper has overflow: hidden only to contain the floated menu on its left, the way many web
+    page layouts are built. The text column beside the menu is long enough to cross the page edge.</p>
+    <p>The menu is laid out in one piece, so the wrapper can still break between the lines of the text
+    column: every paragraph is drawn, on this page or the next, with none lost at the page edge.</p>
+    <p>Before this change the whole wrapper was kept in one piece and cut into page-sized slices, and the
+    line on each cut was drawn on neither page.</p>
+    <p>Text beside a float is laid out against the float's final position, so the lines that wrap past the
+    menu's foot use the full width of the column.</p>
+    <p>A menu short enough to fit on one page is never split: if it would straddle the page edge it moves
+    to the next page whole, as the note further down does.</p>
+    <p>The text column continues here, on the next page, still inside the same wrapper, and ends it.</p>
+    </div>
+    </div>
+
+    <h2>A float moves whole</h2>
+    <p>The orange note below is floated to the right. It starts too close to the foot of its page to fit
+    there, but it fits on one page, so it moves whole to the top of the next page instead of being split
+    across the page edge. A float taller than a page is drawn across the pages instead, a slice on each.</p>
+    <div class="note"><b>Note</b><br>This floated note has moved whole to the top of this page rather than
+    being split across the page edge.</div>
+    <p>The text after the note does not wait for it. It fills the rest of the note's first page at full
+    width, and the text that reaches the next page wraps around the note there, until it passes the
+    note's foot and uses the full width again. A browser printing the same page lays it out the same way.</p>
+    <p>A later float is never placed above an earlier one, so a second note after this one would follow it
+    onto the next page rather than stay behind. Nothing is drawn twice at the page boundary, and nothing
+    is lost there.</p>
+
     <p>The DRAFT stamp at the top right of the first page is written at the very end of this document.
     It has no positioned ancestor, so it is placed against the first page's area and drawn there, and the
     paragraph after it is not moved by it.</p>
@@ -2496,7 +2532,7 @@ var scrollContainersAcrossPagesHtml = $$"""
     """;
 
 await SaveShowcaseAsync("scroll_containers_across_pages", "Paged Media", "Scroll Containers Across Pages",
-    "An auto-height overflow: auto code listing and an overflow: hidden panel breaking cleanly between their lines across page boundaries, a max-height-capped box moving whole to the next page instead, and an absolutely positioned DRAFT stamp declared at the end of the document drawn on the first page.",
+    "An auto-height overflow: auto code listing and an overflow: hidden panel breaking cleanly between their lines across page boundaries, a max-height-capped box moving whole to the next page instead, a clearfix wrapper around a floated menu breaking between the lines of the text beside it, a floated note moving whole to the next page with the text wrapping around it there, and an absolutely positioned DRAFT stamp declared at the end of the document drawn on the first page.",
     scrollContainersAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──

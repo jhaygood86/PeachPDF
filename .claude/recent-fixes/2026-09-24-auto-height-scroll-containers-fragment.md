@@ -140,14 +140,11 @@ Flex/grid descendants are excluded although the flex probe lost nothing: the rev
 holding a `break-inside: avoid` paragraph losing words, which did not reproduce here, and an unlisted
 kind costs only the old behaviour.
 
-**Inline-blocks were excluded at first, and are not now; floats were let in and then excluded again.**
-The inline-block loss above was #1201, which main closed with #1348 while this was in review:
-`FlowAtomicBlockContentChild` now lays the content out unbroken (`CssLayoutEngine.LayoutContentUnbroken`),
-so an inline-block keeps every line whatever breaks around it. #1348 did the same for a float placed by
-the *inline* flow (`FlowFloatChild`), and floats were let in on that basis, motivated by a customer page
-(a `#contentcontainer { overflow: hidden }` holding a floated category menu and a long text column) that
-loses a text line at every page boundary while the wrapper is monolithic. The tenth round below took
-them out again.
+**Inline-blocks and floats were excluded at first, and are not now.** The inline-block loss above was
+#1201, which main closed with #1348 while this was in review: `FlowAtomicBlockContentChild` now lays the
+content out unbroken (`CssLayoutEngine.LayoutContentUnbroken`), so an inline-block keeps every line
+whatever breaks around it. #1348 did the same for a float placed by the *inline* flow (`FlowFloatChild`).
+Floats took two more rounds.
 
 A tenth round, from the next PR review, found three float shapes that lost content `main` keeps
 (a 300×200pt page, 12pt lines):
@@ -162,19 +159,56 @@ A tenth round, from the next PR review, found three float shapes that lost conte
 - **A wrapper beside a floated sibling** (media object): the second `overflow: hidden` block, placed beside
   a float that crosses the boundary, lost B1–B3 and drew B4 at y=16.3, above the page margin.
 
-`EveryDescendantCarriesABreak` rejects every float again (`IsFloat`), and the new
-`FollowsAFloatInItsFormattingContext` keeps a wrapper monolithic when any float precedes it in its block
-formatting context (the walk climbs ancestors to the first `EstablishesIndependentFormattingContext`, as
-`DomUtils.FindIntersectingFloatBox` does, and answers at once when `HasFloatedBoxes` is false). Whether the
-float really reaches the wrapper is geometry still moving while the question is asked, so any preceding
-float counts. The per-parent answer is cached for the generation (`CssBox.FirstChildHoldingAFloat`), so a
-run of sibling wrappers walks the parent once. The customer clearfix page goes back to `main`'s monolithic
-slice, losing the #1328 boundary line, which is the lesser loss. Float fragmentation proper (#317) is
-what would let it fragment.
+That round first kept every wrapper holding or following a float monolithic. It passed the review repros
+but put the customer page that motivated this PR back to `main`'s behaviour: a
+`#contentcontainer { overflow: hidden }` holding a floated category menu and a long text column, whose
+sentence at the page 1/2 boundary was drawn in page 1's bottom margin and clipped. The eleventh round
+replaced it with the fix for the cause: **a block-level float is laid out unbroken**, the same way the
+inline flow's float and the absolutely positioned box below are (`CssBox.LayoutBlockChild` →
+`LayoutBlockChildUnbroken`). Its break no longer ends the pass, so the content beside it is laid out on the
+pages it belongs to. A float that then straddles a page boundary but fits on a page is moved whole to the
+next page (`CssBox.MoveWholeOntoTheNextPageIfItFits`, called from both the block frame and
+`FlowFloatChild`), which is safe because the float is placed before the in-flow content after it; one
+taller than a page is sliced ([its gap](../accepted-gaps/a-float-taller-than-a-page-is-sliced-not-fragmented.md),
+#317). A float holding a multi-column container keeps the breaking path: an earlier attempt at laying every
+float out unbroken broke those, because the columns engine needs the fragmentainer that detaching removes.
+With that, floats are allowed back inside a fragmenting wrapper and the preceding-float rule is gone.
+
+A review of the float change found five more things, each reproduced on a 300×200pt page:
+
+- **A float in a column** was laid out unbroken too, and its lines past the column's foot were drawn
+  below the column, outside the page band. A column does not continue a slice the way the next page does,
+  so a float in a column (`CurrentFragmentainer.HasOwnBand`) keeps the breaking path.
+- **A later float rose above the moved one**: its static position was still on the page before, and
+  `FloatBox` placed it there. CSS 2.1 §9.5.1 rule 5 is now enforced against the earlier floats among the
+  same containing block's children (`LowestOuterTopOfAnEarlierFloat`). Placing two `float: right` boxes
+  side by side is broken on `main` independently of this (#1374), so the test asserts only the top for
+  right floats.
+- **A moved `inside`/`outside` float kept the old page's side.** After the move the float is placed again
+  at the new page top (`FloatPositionBesideTheFloatsAt`, the position-only core split out of
+  `FloatBoxLeft`/`FloatBoxRight`, so the box is not relocated twice), and translated there with its content.
+- **A relative offset decided the move and was then dropped.** The move is decided on `StaticTop`/
+  `StaticBottom` and keeps `RelativeOffsetY`.
+- **A forced break inside a float is no longer honoured**, since the fragmentainer is detached.
+  css-break-3 §3.1 makes that optional outside the root's flow, so it is documented, not tracked.
+
+Each fix has a test that fails without it (checked by removing the fix): the rule 5 theory, the outside
+float, the relative theory, the column float, and a float taller than a page that must not move.
+
+The float change also fixes two `main` bugs found in the previous round: #1339 (a block beside a 30-line
+float drew only B27–B30; now all 30) and #1340 (the line after a float moved to the next page was drawn on
+both pages; now once). The customer page draws the sentence at the top of page 2. Measured on the 300-document
+fuzz below, the float change recovers far more than it loses: net-better documents go from 118 (3,655 words)
+to 156 (4,582 words), and net-worse from 14 (150 words) to 31 (253 words). The added losses that were
+traced are the same pre-existing classes landing somewhere new (#1328 slice-boundary lines, `break-inside:
+avoid` blocks, #1369/#1373); the two checked by hand (seeds 91, 269) were one each. After the review fixes
+the numbers are net-better 155 (4,602 words) and net-worse 24 (189 words). The one document newly worse than
+before them (seed 164) reduces to a float inside a column, which is back on the breaking path and loses
+exactly what `main` loses (commented on #1339).
 
 The same round fixed the reviewer's absolutely positioned case in `CssBox.LayoutBlockChild`: a
 `position: absolute` block child is laid out unbroken (`LayoutBlockChildUnbroken`, shared with the column
-page float), for the same reason as the block-level float above. Its break ended the pass, and the in-flow
+page float), for the same reason as the block-level float. Its break ended the pass, and the in-flow
 content after it, which it does not displace (§9.3.1), was placed back on the page the break left. `main`
 lost that content too whenever the box was not its parent's first child; once #1349's
 `GetPreviousSibling` fix stopped placing it *below* the first-child box, this branch lost it in that case

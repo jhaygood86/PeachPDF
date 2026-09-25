@@ -1945,6 +1945,7 @@ namespace PeachPDF.Html.Core.Dom
                     // (collision scanning, line wrapping, shrink-to-fit, "floats share the line") reads
                     // EffectiveFloatSide rather than the raw Float value, so it applies to all four the
                     // same way.
+                    startY = Math.Max(startY, LowestOuterTopOfAnEarlierFloat(containingBox, currentBoxIdx) + box.ActualMarginTop);
                     if (box.EffectiveFloatSide == Floating.Right) FloatBoxRight(box, containingBox, startX, startY);
                     else FloatBoxLeft(box, containingBox, startX, startY);
                     break;
@@ -1973,6 +1974,47 @@ namespace PeachPDF.Html.Core.Dom
                 else if (box.EffectiveFloatSide == Floating.Left)
                     FloatBoxLeft(box, containingBox, startX, box.Location.Y);
             }
+        }
+
+        /// <summary>
+        /// The lowest outer top among the floats before index <paramref name="boxIndex"/> in
+        /// <paramref name="containingBox"/>, which CSS 2.1 §9.5.1 rule 5 keeps a later float from rising above.
+        /// </summary>
+        /// <remarks>
+        /// A float's static position is never above an earlier float's, except when that float was moved whole
+        /// to the next page (<c>CssBox.MoveWholeOntoTheNextPageIfItFits</c>); without this the later float was
+        /// placed on the page before it.
+        /// </remarks>
+        /// <param name="containingBox">the box whose children are scanned</param>
+        /// <param name="boxIndex">the float's index among them, or -1 when it is not a direct child</param>
+        /// <returns>the lowest outer top, or <see cref="double.MinValue"/> when there is no earlier float</returns>
+        private static double LowestOuterTopOfAnEarlierFloat(CssBox containingBox, int boxIndex)
+        {
+            var lowest = double.MinValue;
+            for (var i = 0; i < boxIndex; i++)
+            {
+                var sibling = containingBox.Boxes[i];
+                if (!sibling.IsFloated || sibling.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                lowest = Math.Max(lowest, sibling.StaticTop - sibling.ActualMarginTop);
+            }
+
+            return lowest;
+        }
+
+        /// <summary>
+        /// Where a left/right float starting at <paramref name="startY"/> is placed, against the floats
+        /// already there and the side of the spread that Y is on (<c>inside</c>/<c>outside</c>). The box is
+        /// not moved.
+        /// </summary>
+        /// <param name="box">a float</param>
+        /// <param name="startY">the top it starts from, with no relative offset</param>
+        /// <returns>the float's static location</returns>
+        internal static RPoint FloatPositionBesideTheFloatsAt(CssBox box, double startY)
+        {
+            var containingBox = box.ContainingBlock!;
+            return box.EffectiveFloatSide == Floating.Right
+                ? FloatBoxRightPosition(box, containingBox, containingBox.ClientLeft, startY)
+                : FloatBoxLeftPosition(box, containingBox, containingBox.ClientLeft, startY);
         }
 
         /// <summary>
@@ -3244,7 +3286,10 @@ namespace PeachPDF.Html.Core.Dom
             return clearance;
         }
 
-        private static void FloatBoxLeft(CssBox box, CssBox containingBox, double startX, double startY)
+        private static void FloatBoxLeft(CssBox box, CssBox containingBox, double startX, double startY) =>
+            box.Location = FloatBoxLeftPosition(box, containingBox, startX, startY);
+
+        private static RPoint FloatBoxLeftPosition(CssBox box, CssBox containingBox, double startX, double startY)
         {
             var limitRight = ContentRightOf(containingBox, startY);
 
@@ -3294,11 +3339,13 @@ namespace PeachPDF.Html.Core.Dom
                 }
             } while (true);
 
-            box.Location = new RPoint(coordinates.Left, coordinates.Top);
-
+            return new RPoint(coordinates.Left, coordinates.Top);
         }
 
-        private static void FloatBoxRight(CssBox box, CssBox containingBox, double startX, double startY)
+        private static void FloatBoxRight(CssBox box, CssBox containingBox, double startX, double startY) =>
+            box.Location = FloatBoxRightPosition(box, containingBox, startX, startY);
+
+        private static RPoint FloatBoxRightPosition(CssBox box, CssBox containingBox, double startX, double startY)
         {
             var limitRight = ContentRightOf(containingBox, startY);
 
@@ -3343,7 +3390,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
             } while (true);
 
-            box.Location = new RPoint(coordinates.FloatRightStartX, coordinates.Top);
+            return new RPoint(coordinates.FloatRightStartX, coordinates.Top);
         }
 
         /// <summary>
@@ -4174,7 +4221,9 @@ namespace PeachPDF.Html.Core.Dom
 
             (coordinates.InlineFloats ??= []).Add(b);
 
+            var onPages = b.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: false } };
             await LayoutContentUnbroken(g, b);
+            if (onPages) CssBox.MoveWholeOntoTheNextPageIfItFits(b, b.HtmlContainer!);
         }
 
         /// <summary>

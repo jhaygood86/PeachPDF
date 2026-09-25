@@ -276,12 +276,13 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(Enumerable.Range(1, 14).Select(i => $"W{i}"), placed.Order(WordNumber.Instance));
         }
 
-        // A float that crosses a page boundary near an auto-height wrapper. Made fragmentable, the wrapper
-        // lost the text beside a float inside it (the float's break ended the pass, and the text was placed
-        // back on the page already emitted), clipped a float's boundary line at the page foot instead of
-        // moving it, and, placed beside a floated sibling, lost its first lines and drew the next above the
-        // page's top margin. The same holds for in-flow content after a tall absolutely positioned first
-        // child, whose break ended the pass the same way. Each W word is drawn once, inside a page band.
+        // A float that crosses a page boundary near an auto-height wrapper. While a float's own break ended
+        // the pass, the wrapper lost the text beside a float inside it (the text was placed back on the page
+        // already emitted), clipped a float's boundary line at the page foot instead of moving it, and,
+        // placed beside a floated sibling, lost its first lines and drew the next above the page's top
+        // margin. The same held for in-flow content after a tall absolutely positioned first child. Floats
+        // and absolutely positioned boxes are now laid out unbroken, and a float that fits on a page moves
+        // whole. Each W word is drawn once, inside a page band.
         [Theory]
         [InlineData("<div style='overflow:hidden'><div style='float:left;width:100pt'>{0}</div><p>W1</p></div><p>W2</p>", 20, 2)]
         [InlineData("<div style='overflow:hidden'><div style='float:left;width:100pt'>{0}</div>{1}</div>", 45, 10)]
@@ -309,6 +310,165 @@ namespace PeachPDF.Tests.Integration
             Assert.All(placed, w => Assert.True(
                 w.Rect.Top >= Margin - 0.01 && w.Rect.Bottom <= PageHeight - Margin + 0.01,
                 $"{w.Word.Text} lies outside its page band ({w.Rect.Top:F2}-{w.Rect.Bottom:F2})"));
+        }
+
+        // The clearfix page layout: an auto-height overflow: hidden wrapper holding a short floated menu and a
+        // long column of text. The float is laid out unbroken, so the wrapper fragments, and the text line at
+        // each page boundary moves to the next page instead of being sliced off it. Kept monolithic for the
+        // float, the wrapper lost one line per boundary.
+        [Fact]
+        public async Task ClearfixWrapperAroundAShortFloat_DrawsEveryTextLineInsideAPageBand()
+        {
+            var placed = await WordFragments(
+                "<div style='overflow:hidden;padding-top:13pt'><div style='float:left;width:60pt'>menu</div>" +
+                "<div style='margin-left:70pt'>" + string.Concat(Enumerable.Range(1, 30).Select(i => $"<p>W{i}</p>")) +
+                "</div></div>");
+
+            AssertEachDrawnOnceInsideABand(placed, 30);
+        }
+
+        // A block beside a float taller than a page, with and without a formatting context of its own. The
+        // float's break used to end the pass, and every line of the block laid out beside it was placed back
+        // on a page already emitted: only the lines after the float ended were drawn. Laid out unbroken, the
+        // float is sliced across the pages and the block's lines flow beside it onto each page.
+        [Theory]
+        [InlineData("")]
+        [InlineData("overflow:hidden")]
+        public async Task BlockBesideAFloatTallerThanAPage_DrawsEveryLine(string blockStyle)
+        {
+            var placed = await WordFragments(
+                $"<div style='float:right;width:80pt'>{Lines("A", 30)}</div><div style='{blockStyle}'>{Lines("W", 30)}</div>");
+
+            AssertEachDrawnOnceInsideABand(placed, 30);
+        }
+
+        // A float that does not fit in what is left of a page, and fits on one page, moves whole to the next
+        // one, and the text after it is not drawn twice at the boundary. It used to be broken, and the
+        // following block's boundary line was drawn at the foot of one page and again above the next one's
+        // top margin.
+        [Fact]
+        public async Task FloatThatFitsOnAPage_MovesWholeToTheNextPage()
+        {
+            var placed = await WordFragments(
+                $"<div>{Lines("C", 12)}</div><div style='float:right;width:80pt'>{Lines("F", 4)}</div><div>{Lines("W", 30)}</div>");
+
+            AssertEachDrawnOnceInsideABand(placed, 30);
+        }
+
+        // The moved float's own top is the next page's top, and a later float is not placed above it
+        // (CSS 2.1 §9.5.1 rule 5). The later float's static position is still on the page before, and it
+        // used to be placed there, higher than the float it follows.
+        [Theory]
+        [InlineData("left")]
+        [InlineData("right")]
+        public async Task MovedFloat_StartsTheNextPage_AndALaterFloatIsNotPlacedAboveIt(string side)
+        {
+            var (root, container) = await LayoutFloats(
+                $"<div>{Lines("C", 11)}</div><div id='f' style='float:{side};width:60pt'>{Lines("F", 4)}</div>" +
+                $"<div id='g' style='float:{side};width:60pt'>G1</div><div>{Lines("W", 20)}</div>");
+            var moved = LayoutHarness.FindById(root, "f")!;
+            var later = LayoutHarness.FindById(root, "g")!;
+
+            Assert.Equal(container.PageTopOf(1), moved.Location.Y, 2);
+            Assert.True(later.Location.Y >= moved.Location.Y - 0.01,
+                $"the later float's top {later.Location.Y:F2} is above the moved float's {moved.Location.Y:F2}");
+            if (side == "left") Assert.True(later.Location.X >= moved.ActualRight - 0.01, "the later float overlaps the moved one");
+        }
+
+        // A float taller than a page cannot be moved whole, so it stays where it was placed and is sliced.
+        [Fact]
+        public async Task FloatTallerThanAPage_IsNotMoved()
+        {
+            var (root, container) = await LayoutFloats(
+                $"<div>{Lines("C", 2)}</div><div id='f' style='float:left;width:60pt'>{Lines("F", 20)}</div><div>{Lines("W", 5)}</div>");
+            var tall = LayoutHarness.FindById(root, "f")!;
+
+            Assert.Equal(container.PageTopOf(0) + 24, tall.Location.Y, 2);
+        }
+
+        // float: outside resolves to the page's outer side, which is the right on the first (right) page and
+        // the left on the second. Moved to the second, the float takes that page's side; it used to keep the
+        // first page's and sat on the inner side.
+        [Fact]
+        public async Task MovedOutsideFloat_TakesTheSideOfItsNewPage()
+        {
+            var (root, container) = await LayoutFloats(
+                $"<div>{Lines("C", 11)}</div><div id='f' style='float:outside;width:60pt'>{Lines("F", 4)}</div><div>{Lines("W", 20)}</div>");
+            var moved = LayoutHarness.FindById(root, "f")!;
+
+            Assert.Equal(container.PageTopOf(1), moved.Location.Y, 2);
+            Assert.Equal(moved.ContainingBlock.ClientLeft, moved.Location.X, 2);
+        }
+
+        // A relative offset does not take part in layout (CSS 2.1 §9.4.3), so it neither decides whether the
+        // float moves nor is lost when it does. The first float fits where it is placed and stays, though its
+        // offset carries it across the boundary; the second straddles, moves, and keeps its offset.
+        [Theory]
+        [InlineData(8, 30, false)]
+        [InlineData(11, 10, true)]
+        public async Task RelativeFloat_IsMovedByItsStaticPosition_AndKeepsItsOffset(int lines, int offset, bool moves)
+        {
+            var (root, container) = await LayoutFloats(
+                $"<div>{Lines("C", lines)}</div><div id='f' style='float:left;width:60pt;position:relative;top:{offset}pt'>{Lines("F", 4)}</div>" +
+                $"<div>{Lines("W", 20)}</div>");
+            var box = LayoutHarness.FindById(root, "f")!;
+
+            var staticTop = moves ? container.PageTopOf(1) : container.PageTopOf(0) + lines * 12;
+            Assert.Equal(staticTop, box.StaticTop, 2);
+            Assert.Equal(staticTop + offset, box.Location.Y, 2);
+        }
+
+        // A float inside a column breaks into the next column, as before. Laid out unbroken, its lines past the
+        // column's foot were drawn below the column, outside the page band.
+        [Fact]
+        public async Task FloatInAColumn_ContinuesInTheNextColumn()
+        {
+            var placed = await WordFragments(
+                $"<div style='columns:2;column-fill:auto;height:150pt;column-gap:10pt'><div>{Lines("C", 10)}</div>" +
+                $"<div style='float:left;width:50pt'>{Lines("W", 4)}</div><div>{Lines("D", 14)}</div></div>");
+
+            AssertEachDrawnOnceInsideABand(placed, 4);
+        }
+
+        // A float holding a multi-column container keeps the breaking path, because the columns engine needs
+        // the fragmentainer that laying the float out unbroken detaches.
+        [Fact]
+        public async Task FloatHoldingAMultiColumnContainer_PlacesEveryWordInsideAPageBand()
+        {
+            var placed = await WordFragments(
+                $"<div>{Lines("C", 10)}</div><div style='float:left;width:200pt'>" +
+                $"<div style='display:none'><div style='columns:2'>x</div></div><div style='columns:2'>{Lines("W", 20)}</div></div>");
+
+            AssertEachDrawnOnceInsideABand(placed, 20);
+        }
+
+        private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutFloats(string body) =>
+            LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><head><style>body{margin:0;font:10pt/12pt Arial} p{margin:0}</style>" +
+                $"</head><body>{body}</body></html>", pageWidth: 300, pageHeight: PageHeight, margin: Margin);
+
+        private static string Lines(string prefix, int count) =>
+            string.Join("<br>", Enumerable.Range(1, count).Select(i => $"{prefix}{i}"));
+
+        private static async Task<List<(int Page, string Text, double Top, double Bottom)>> WordFragments(string body)
+        {
+            var html = "<!DOCTYPE html><html><head><style>body{margin:0;font:10pt/12pt Arial} p{margin:0}</style>" +
+                       $"</head><body>{body}</body></html>";
+            var (_, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: PageHeight, margin: Margin);
+
+            return container.FragmentTree!.Fragmentainers
+                .SelectMany((page, index) => Flatten(page.Root).SelectMany(f => f.Words)
+                    .Select(w => (index, w.Word.Text ?? "", w.Rect.Top, w.Rect.Bottom)))
+                .Where(w => w.Item2.Length > 1 && w.Item2[0] == 'W' && char.IsDigit(w.Item2[1]))
+                .ToList();
+        }
+
+        private static void AssertEachDrawnOnceInsideABand(List<(int Page, string Text, double Top, double Bottom)> placed, int count)
+        {
+            Assert.Equal(Enumerable.Range(1, count).Select(i => $"W{i}"), placed.Select(w => w.Text).Order(WordNumber.Instance));
+            Assert.All(placed, w => Assert.True(
+                w.Top >= Margin - 0.01 && w.Bottom <= PageHeight - Margin + 0.01,
+                $"{w.Text} lies outside its page band ({w.Top:F2}-{w.Bottom:F2})"));
         }
 
         // The absolutely positioned box itself is laid out unbroken: every one of its lines is placed, on
