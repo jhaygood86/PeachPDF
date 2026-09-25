@@ -388,6 +388,22 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(container.PageTopOf(0), real.Location.Y, 2);
         }
 
+        // Rule 5 across nesting: a float moved to page 2 from inside an earlier block holds a later float in the
+        // same formatting context, which is not its sibling, on page 2 as well. The sibling scan missed it, and
+        // the later float stayed on page 1, above the earlier one.
+        [Fact]
+        public async Task FloatMovedFromInsideAnEarlierBlock_HoldsALaterFloatBelowIt()
+        {
+            var (root, _) = await LayoutFloats(
+                $"<div>{Lines("C", 10)}</div><div><div id='a' style='float:left;width:60pt'>{Lines("A", 4)}</div></div>" +
+                $"<div id='b' style='float:right;width:60pt'>B1</div><div>{Lines("W", 15)}</div>");
+            var moved = LayoutHarness.FindById(root, "a")!;
+            var later = LayoutHarness.FindById(root, "b")!;
+
+            Assert.True(later.Location.Y >= moved.Location.Y - 0.01,
+                $"the later float's top {later.Location.Y:F2} is above the moved float's {moved.Location.Y:F2}");
+        }
+
         // Rule 5 is enforced in page space only. Every column spans the same Y range, so a float low in column
         // 1 pushed a later float at the top of column 2 down to its own height.
         [Fact]
@@ -613,6 +629,21 @@ namespace PeachPDF.Tests.Integration
             var card = LayoutHarness.FindById(root, "card")!;
 
             Assert.Contains(card, container.ScrollContainersThatClip);
+        }
+
+        // A clipping box whose visible part itself crosses the page: its clip edge is past the page's foot, so
+        // asking only whether the clipped lines cross a page missed it. Broken, the lines after the break landed
+        // beyond the cap and were lost; it is noted, kept whole, and every visible line is drawn.
+        [Fact]
+        public async Task ClippingScrollContainerWhoseVisiblePartCrossesThePage_IsNoted()
+        {
+            var (root, container) = await LayoutFloats(
+                $"<div>{Lines("C", 2)}</div><div id='card' style='overflow:hidden;max-height:150pt'>{Lines("X", 15)}</div>" +
+                $"<div>{Lines("W", 3)}</div>");
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.Contains(card, container.ScrollContainersThatClip);
+            Assert.Equal(container.SlotStartingAt(card.Location.Y), container.SlotEndingAt(card.ActualBottom));
         }
 
         // Which boxes clip is decided per layout. A box that clipped its content and was kept whole may fit

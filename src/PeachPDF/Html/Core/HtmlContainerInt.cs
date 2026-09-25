@@ -203,6 +203,14 @@ namespace PeachPDF.Html.Core
         private bool _aScrollContainerStartedClipping;
 
         /// <summary>
+        /// The floats moved whole to the next page in this layout attempt, with the root of the block
+        /// formatting context each is placed in and its outer top. A later float in the same context may not
+        /// rise above one (CSS 2.1 §9.5.1 rule 5), even when it is not the moved float's sibling: a float
+        /// inside an earlier block moved to page 2 while a later float beside that block stayed on page 1.
+        /// </summary>
+        internal Dictionary<CssBox, (CssBox FormattingContextRoot, double OuterTop)> MovedFloats { get; } = [];
+
+        /// <summary>
         /// Records that <paramref name="box"/>, an <c>overflow: hidden</c> box that broke like a plain block,
         /// clips its content, so the document is laid out again with it kept in one piece. A break among its
         /// clipped lines would end the pass past the box's end and lose the content after it.
@@ -2464,6 +2472,7 @@ namespace PeachPDF.Html.Core
         private async ValueTask LayoutDocumentOnce(RGraphics g)
         {
             LayoutGeneration++;
+            MovedFloats.Clear();
             FragmentainerPasses = 0;
             LastResortRelayouts = 0;
             PassRewinds = 0;

@@ -1,6 +1,6 @@
 # An auto-height scroll container breaks across pages instead of being monolithic
 
-**Before (v0.9.19):** every box with `overflow: hidden`, `auto` or `scroll` was monolithic. One that
+**Before (v0.9.20):** every box with `overflow: hidden`, `auto` or `scroll` was monolithic. One that
 straddled a page boundary moved whole to the next page. One taller than a page was sliced, and the line
 on each slice boundary was lost (clipped on the page it started on, missing from the next).
 
@@ -30,5 +30,5 @@ fits under the cap, is now split across the break instead of moving whole. Add
 **Why:** css-break-3 §2 only lets a UA treat `overflow: hidden` as monolithic when its logical height is
 non-auto with no max, and it only permits (never requires) the same for `auto`/`scroll`.
 
-Confirmed against `v0.9.19`: `MonolithicContent.IsMonolithic` was `IsReplaced(box) || IsScrollContainer(box)`,
+Confirmed against `v0.9.20`: `MonolithicContent.IsMonolithic` was `IsReplaced(box) || IsScrollContainer(box)`,
 and `docs/html-css-support.md` listed "Scroll containers — any box whose `overflow` is not `visible` or `clip`".

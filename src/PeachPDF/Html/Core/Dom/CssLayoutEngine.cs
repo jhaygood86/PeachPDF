@@ -1949,9 +1949,10 @@ namespace PeachPDF.Html.Core.Dom
                     // multi-column container spans the same Y range, so a float low in column 1 would push a
                     // later one at the top of column 2 down. A float is moved to the next page only on pages
                     // anyway (CssBox.MoveWholeOntoTheNextPageIfItFits), so columns keep the old placement.
-                    if (box.HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true })
+                    if (box.HtmlContainer is { CurrentFragmentainer: not { HasOwnBand: true } } floatContainer)
                     {
                         startY = Math.Max(startY, LowestOuterTopOfAnEarlierFloat(containingBox, currentBoxIdx) + box.ActualMarginTop);
+                        startY = Math.Max(startY, LowestOuterTopOfAnEarlierMovedFloat(floatContainer, box) + box.ActualMarginTop);
                     }
                     if (box.EffectiveFloatSide == Floating.Right) FloatBoxRight(box, containingBox, startX, startY);
                     else FloatBoxLeft(box, containingBox, startX, startY);
@@ -2009,6 +2010,55 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return lowest;
+        }
+
+        /// <summary>
+        /// The lowest outer top among the floats moved whole to the next page earlier in tree order than
+        /// <paramref name="box"/>, in the same block formatting context: rule 5 across nesting, which the
+        /// sibling scan (<see cref="LowestOuterTopOfAnEarlierFloat"/>) does not see.
+        /// </summary>
+        /// <param name="container">the container recording the moved floats</param>
+        /// <param name="box">the float being placed</param>
+        /// <returns>the lowest outer top, or <see cref="double.MinValue"/> when there is none</returns>
+        private static double LowestOuterTopOfAnEarlierMovedFloat(HtmlContainerInt container, CssBox box)
+        {
+            if (container.MovedFloats.Count == 0) return double.MinValue;
+
+            var root = CssBox.FormattingContextRootOf(box);
+            var lowest = double.MinValue;
+            foreach (var (moved, (movedRoot, outerTop)) in container.MovedFloats)
+            {
+                if (ReferenceEquals(moved, box) || !ReferenceEquals(movedRoot, root) || outerTop <= lowest) continue;
+                if (IsBeforeInTreeOrder(moved, box)) lowest = outerTop;
+            }
+
+            return lowest;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="a"/> comes before <paramref name="b"/> in tree order, neither containing the
+        /// other.
+        /// </summary>
+        private static bool IsBeforeInTreeOrder(CssBox a, CssBox b)
+        {
+            var chainA = new List<CssBox>();
+            for (var box = a; box is not null; box = box.ParentBox) chainA.Add(box);
+
+            var ancestorsOfA = new HashSet<CssBox>(chainA);
+            CssBox? childOfCommonOnB = null;
+            var common = b;
+            while (common is not null && !ancestorsOfA.Contains(common))
+            {
+                childOfCommonOnB = common;
+                common = common.ParentBox;
+            }
+
+            // No common ancestor, or b inside a (the common ancestor is b itself, or a).
+            var indexOfCommon = common is null ? -1 : chainA.IndexOf(common);
+            if (common is null || childOfCommonOnB is null || indexOfCommon <= 0) return false;
+
+            var childOfCommonOnA = chainA[indexOfCommon - 1];
+            return common.Boxes.IndexOf(childOfCommonOnA) < common.Boxes.IndexOf(childOfCommonOnB);
         }
 
         /// <summary>

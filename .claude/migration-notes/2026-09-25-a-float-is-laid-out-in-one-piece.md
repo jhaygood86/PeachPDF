@@ -1,6 +1,6 @@
 # A block-level float is laid out in one piece, and moves whole when it fits on a page
 
-**Before (v0.9.19):** a `left`/`right` float placed among block-level siblings broke between its lines
+**Before (v0.9.20):** a `left`/`right` float placed among block-level siblings broke between its lines
 at a page boundary. Its break ended the layout pass, so the in-flow content laid out beside it was placed
 back on the page the break left, which was already emitted:
 
@@ -22,7 +22,7 @@ container, and a float inside a column of one, keep the old behaviour.
 **Why:** CSS Fragmentation 3 §4.4 (content must not be lost) and CSS 2.1 §9.5 (line boxes beside a float
 keep flowing around it). Tracked as #1339 and #1340; full float fragmentation is #317.
 
-Confirmed against `v0.9.19`: `CssBox.LayoutBlockChild` was a bare `PerformLayoutImp` call with the
-fragmentainer attached, and `CssLayoutEngine.LayoutContentUnbroken` did not exist, so neither path laid a
-float out unbroken. #1348, after v0.9.19, did so for a float among inline content (`FlowFloatChild`); a
-floated block child was first laid out unbroken by this change.
+Confirmed against `v0.9.20`: `CssBox.LayoutBlockChild` was a bare `PerformLayoutImp` call with the
+fragmentainer attached, so a floated block child broke between its lines like any block.
+`CssLayoutEngine.LayoutContentUnbroken` exists (#1348, in v0.9.20), but only for a float among inline content
+(`FlowFloatChild`); a floated block child is first laid out unbroken by this change.

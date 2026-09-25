@@ -1,6 +1,6 @@
 # An absolutely positioned box after page 1 is drawn, and no longer displaces the content after it
 
-**Before (v0.9.19):** an absolutely positioned box with no positioned ancestor, reached after earlier
+**Before (v0.9.20):** an absolutely positioned box with no positioned ancestor, reached after earlier
 content had pushed layout past page 1, was drawn on no page. If it was the first child of its block, the
 rest of that block was lost as well. If the content before it was monolithic (an image, an
 `overflow: hidden` box), that block's content was instead drawn at the top of page 1, over what was
@@ -21,5 +21,5 @@ broken between rows.
 **Why:** CSS 2.1 §9.3.1: an absolutely positioned box is removed from normal flow and has no effect on
 the layout of later siblings. CSS Fragmentation 3 §4.4: content must not be lost. Tracked as #1349.
 
-Confirmed against `v0.9.19`: `DomUtils.GetPreviousSibling`'s end check omitted `PositionMode.Absolute`,
+Confirmed against `v0.9.20`: `DomUtils.GetPreviousSibling`'s end check omitted `PositionMode.Absolute`,
 and `HtmlContainerInt` had no path re-opening an emitted fragmentainer for a newly placed box.

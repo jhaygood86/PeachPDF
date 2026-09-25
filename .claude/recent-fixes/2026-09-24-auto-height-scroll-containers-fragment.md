@@ -290,6 +290,15 @@ W18–W20: the per-slot column records are the deeper cause.
 - **Absolute box content past its border box.** `InvalidateEmittedFragmentainersReceiving` re-opened only the
   pages the border box covers, so `overflow: visible` text past a short absolute box's height, on a page already
   emitted, was lost (X15–X25 of 25). It now takes the content's extent (`GetMaximumBottom`).
+- **Rule 5 across nesting.** The sibling scan missed a float moved to page 2 from inside an earlier block: a
+  later `float: right` beside that block stayed on page 1, above it. Moved floats are recorded per layout attempt
+  with their formatting context root (`HtmlContainerInt.MovedFloats`), and a later float in the same context and
+  after it in tree order is held below it.
+- **Which clipping boxes cost a re-layout.** Noting only boxes whose *clipped* lines cross a page (to spare an
+  ordinary clipped card the extra layout) missed a box whose visible part itself crosses the page (fuzz seeds 75
+  and 145 lost words): any break inside a clipping box loses content, because the lines after it land beyond the
+  cap, measured in document space. The check is now whether the content reaches past the end of the page the box
+  starts on.
 - **Fixed or running box with a float value.** Excluded from the float path in `LayoutBlockChild`, as the rule 5
   scan already excluded it (CSS 2.1 §9.7). No render differed in a probe; the footer case is wrong on `main` too.
 

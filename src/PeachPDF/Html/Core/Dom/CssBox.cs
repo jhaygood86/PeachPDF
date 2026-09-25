@@ -3397,7 +3397,10 @@ namespace PeachPDF.Html.Core.Dom
                 && !IsOrHoldsAMultiColumnContainer(child))
             {
                 await LayoutBlockChildUnbroken(g, child, floatContainer, framePlacesChild);
-                MoveWholeOntoTheNextPageIfItFits(child, floatContainer);
+
+                // Only a float this frame placed: one an engine placed (the inline flow, a flex or grid commit)
+                // keeps the position that engine gave it, and the inline flow moves its own floats.
+                if (framePlacesChild) MoveWholeOntoTheNextPageIfItFits(child, floatContainer);
                 return;
             }
 
@@ -3434,6 +3437,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (!container.HasRealPageGrid) return;
 
+            // Laid out again (a rewound pass), it is recorded again only if it moves again.
+            container.MovedFloats.Remove(box);
+
             var top = box.StaticTop;
             var bottom = box.StaticBottom;
             var page = container.SlotStartingAt(top);
@@ -3456,6 +3462,19 @@ namespace PeachPDF.Html.Core.Dom
             var shiftX = placed.X + box.RelativeOffsetX - box.Location.X;
             if (shiftX != 0) box.OffsetLeft(shiftX);
             if (placed.Y != staticTop) box.OffsetTop(placed.Y - staticTop);
+
+            container.MovedFloats[box] = (FormattingContextRootOf(box), box.StaticTop - box.ActualMarginTop);
+        }
+
+        /// <summary>
+        /// The root of the block formatting context <paramref name="box"/> is placed in: its nearest ancestor
+        /// that establishes an independent formatting context. The root always does, so there is one.
+        /// </summary>
+        internal static CssBox FormattingContextRootOf(CssBox box)
+        {
+            var ancestor = box.ParentBox ?? box;
+            while (!DomUtils.EstablishesIndependentFormattingContext(ancestor)) ancestor = ancestor.ParentBox!;
+            return ancestor;
         }
 
         /// <summary>
@@ -7023,12 +7042,14 @@ namespace PeachPDF.Html.Core.Dom
                 contentBottom = Math.Max(contentBottom, GetMaximumBottom(child, contentBottom));
             }
 
-            // Only clipped content that runs past the end of the fragmentainer the clip edge is in can take a
-            // break among its lines; one clipped within it loses nothing, and laying the whole document out again
-            // for it would only cost time. Nor can a box inside unbroken content (no fragmentainer attached). The
-            // clip edge is a bottom edge, so its page is the one it ends in (SlotEndingAt). A column never gets
-            // here: a scroll container inside a multi-column container is monolithic (EveryAncestorCarriesABreak).
-            var bandEnd = container.PageBottomOf(container.SlotEndingAt(clipEdge));
+            // Only a box whose content reaches past the end of the page it starts on can take a break inside
+            // it, and any break inside a clipping box loses content: among its clipped lines the pass ends past
+            // the box's end, and before them the lines after the break land beyond the cap, which is measured in
+            // document space across the page gap. One clipped within its page loses nothing, and laying the whole
+            // document out again for it would only cost time. Nor can a box inside unbroken content (no
+            // fragmentainer attached). A column never gets here: a scroll container inside a multi-column
+            // container is monolithic (EveryAncestorCarriesABreak).
+            var bandEnd = container.PageBottomOf(container.SlotStartingAt(Location.Y));
 
             if (contentBottom > clipEdge + HtmlContainerInt.PageBoundaryEpsilon
                 && contentBottom > bandEnd + HtmlContainerInt.PageBoundaryEpsilon)
