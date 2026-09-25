@@ -4211,7 +4211,7 @@ var calcHtml = "<!DOCTYPE html><html><head>" + CalcCss + "</head><body>" +
     ) +
 
     "<h2>5 — Negative Result</h2>" +
-    "<p class=\"intro\">PeachPDF doesn't clamp a negative calc() result to zero, matching how a plain negative length is already handled.</p>" +
+    "<p class=\"intro\">A negative calc() result is clamped to zero for a property that cannot be negative (CSS Values 4 §10.2), so this width is 0 - only its 1px dashed border paints, as a thin vertical line.</p>" +
     Row(
         CalcSwatch("calc(50px - 100px)", "width: calc(50px - 100px); height: 20px; border: 1px dashed red;")
     ) +
