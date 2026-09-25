@@ -24,11 +24,19 @@ namespace PeachPDF.Tests.Integration
             var besideFloat = lines.Where(line => line.Words[0].Top < floatBox.ActualBottom).ToList();
 
             Assert.NotEmpty(besideFloat);
+            Assert.True(besideFloat.Any(line => line != lines[^1]),
+                "the fixture must include a non-final line beside the float");
             Assert.All(besideFloat, line =>
             {
                 var rightmost = line.Words.Max(word => word.Right);
                 var availableRight = floatBox.Location.X - floatBox.ActualMarginLeft;
-                Assert.Equal(availableRight, rightmost, 1);
+                Assert.True(rightmost <= availableRight + 0.1,
+                    $"{alignment}: word ends at {rightmost:F1} beyond available edge {availableRight:F1}");
+
+                // justify leaves the paragraph's last line ragged; RTL start alignment is flush right
+                // on every line, including the last one. Font metrics decide how many lines there are.
+                if (alignment == "direction:rtl" || line != lines[^1])
+                    Assert.Equal(availableRight, rightmost, 1);
             });
         }
     }
