@@ -75,6 +75,7 @@ namespace PeachPDF.Html.Core
             var, address    { font-style: italic }
             pre, tt, code,
             kbd, samp       { font-family: monospace }
+            math            { font-family: math }
             pre             { white-space: pre }
             button, textarea,
             input, select   { display: inline-block }

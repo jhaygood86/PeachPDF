@@ -199,7 +199,7 @@ generator.AddFontFamilyMapping("Segoe UI","sans-serif"); // or any other system 
 
 ### Generic families and `system-ui`
 
-`serif`, `sans-serif`, `monospace`, `cursive`, `fantasy`, and `system-ui` resolve to a real installed font, matching actual Chromium behavior per platform (Times New Roman/Arial/Consolas/Comic Sans MS/Impact on Windows, Times/Helvetica/Menlo/Apple Chancery/Papyrus on macOS, Noto Serif/Roboto/Droid Sans Mono/Dancing Script on Android, and delegated to the system's own `fontconfig` on Linux) rather than one invented cross-platform table — see [Fonts](https://peachpdf.net/usage-examples.html#fonts) for the full breakdown. Every mapping, including custom ones set via `AddFontFamilyMapping`, is verified against what's actually installed before use.
+`serif`, `sans-serif`, `monospace`, `cursive`, `fantasy`, `math`, and `system-ui` resolve to a real installed font, matching actual Chromium behavior per platform (Times New Roman/Arial/Consolas/Comic Sans MS/Impact on Windows, Times/Helvetica/Menlo/Apple Chancery/Papyrus on macOS, Noto Serif/Roboto/Droid Sans Mono/Dancing Script on Android, and delegated to the system's own `fontconfig` on Linux) rather than one invented cross-platform table — see [Fonts](https://peachpdf.net/usage-examples.html#fonts) for the full breakdown. Every mapping, including custom ones set via `AddFontFamilyMapping`, is verified against what's actually installed before use.
 
 ### Font weight, style, and stretch matching
 

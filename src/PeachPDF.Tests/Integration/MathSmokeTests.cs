@@ -195,11 +195,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task NoMathTable_FallsBackGracefully()
         {
-            // Deliberately no font-family override - the default resolved font almost certainly has no
-            // MATH table, exercising MathMetrics' TeX-derived fallback path end to end.
+            // The UA sheet gives <math> the math generic, which on a host with a real math font installed
+            // would no longer exercise the fallback - so pin an ordinary text font that has no MATH table,
+            // exercising MathMetrics' TeX-derived fallback path end to end.
             var generator = new PdfGenerator();
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
-            var doc = await generator.GeneratePdf("<html><body><math><mfrac><mi>x</mi><mi>y</mi></mfrac></math></body></html>", config);
+            var doc = await generator.GeneratePdf("<html><head><style>math { font-family: serif }</style></head><body><math><mfrac><mi>x</mi><mi>y</mi></mfrac></math></body></html>", config);
             var ms = new MemoryStream();
             doc.Save(ms);
             var pdfText = Encoding.Latin1.GetString(ms.ToArray());

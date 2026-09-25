@@ -8411,7 +8411,7 @@ fontShowcase.Append("<p style=\"font-family: StretchDemo; font-stretch: condense
 // DefaultFontResolver.DefaultFont).
 fontShowcase.Append("<h2>Generic families (platform-matched)</h2>");
 fontShowcase.Append("<p class=\"note\">Each generic family resolves to a real installed font: via fontconfig on the docs build machine, via the Chromium-matched platform table elsewhere.</p>");
-foreach (var generic in new[] { "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui" })
+foreach (var generic in new[] { "serif", "sans-serif", "monospace", "cursive", "fantasy", "math", "system-ui" })
 {
     fontShowcase.Append($"<p style=\"font-family: {generic}\">{generic}: The quick brown fox jumps over the lazy dog</p>");
 }
@@ -10727,6 +10727,57 @@ await SaveShowcaseAsync("color_emoji", "Typography & Text", "Color Fonts (COLR/C
     "native PDF vector content: layered palette colors, gradients, transforms, and blend-mode " +
     "compositing, with an invisible embedded subset for searchable, selectable, exact-copy text.",
     colorEmojiHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// font-variant-emoji and the U+FE0E/U+FE0F presentation selectors: two fonts that both cover U+2764 -
+// a colour one (Noto Color Emoji) and an outline one (Source Sans 3) - so only the requested
+// presentation can tell which one draws it. Each cell is the same character three ways: bare, followed
+// by U+FE0E (text), and followed by U+FE0F (emoji).
+var textFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.ttf")));
+string EmojiRow(string mode, string stackClass, string stackLabel) =>
+    $"<tr><td class=\"lbl\"><b>{mode}</b><br><span>{stackLabel}</span></td>" +
+    $"<td class=\"pv {stackClass}\" style=\"font-variant-emoji: {mode}\">❤</td>" +
+    $"<td class=\"pv {stackClass}\" style=\"font-variant-emoji: {mode}\">❤&#xFE0E;</td>" +
+    $"<td class=\"pv {stackClass}\" style=\"font-variant-emoji: {mode}\">❤&#xFE0F;</td>" +
+    $"<td class=\"pv {stackClass}\" style=\"font-variant-emoji: {mode}\">\U0001F44D</td></tr>";
+var fontVariantEmojiRows = new StringBuilder();
+foreach (var emojiMode in new[] { "normal", "text", "emoji", "unicode" })
+{
+    fontVariantEmojiRows.Append(EmojiRow(emojiMode, "colour-first", "colour font first"));
+    fontVariantEmojiRows.Append(EmojiRow(emojiMode, "text-first", "text font first"));
+}
+var fontVariantEmojiHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'NotoColor'; src: url('data:font/truetype;base64,{notoColorB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'PlainText'; src: url('data:font/truetype;base64,{textFontB64}') format('truetype'); }}" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table { border-collapse: collapse; width: 100% }" +
+    "th { font-size: 8pt; color: #444; text-align: center; padding: 3px; border-bottom: 1px solid #999 }" +
+    "td { padding: 4px 6px; border-bottom: 1px solid #ddd; text-align: center }" +
+    "td.lbl { text-align: left; width: 26% } td.lbl span { font-size: 7pt; color: #666 }" +
+    "td.pv { font-size: 30pt; line-height: 1.15; color: #b22 }" +
+    ".colour-first { font-family: 'NotoColor', 'PlainText' }" +
+    ".text-first { font-family: 'PlainText', 'NotoColor' }" +
+    "</style></head><body>" +
+    "<h1>font-variant-emoji</h1>" +
+    "<p class=\"intro\">Characters with both a text and an emoji form (❤, ©, ☺ …) are drawn in whichever the " +
+    "author asks for. <code>text</code> and <code>emoji</code> behave as if U+FE0E / U+FE0F were appended to " +
+    "every such character; <code>unicode</code> follows each character's <code>Emoji_Presentation</code> " +
+    "(❤ is text-default, \U0001F44D is emoji-default); <code>normal</code> leaves it to the font-family order. " +
+    "An explicit U+FE0E / U+FE0F in the text always wins over the property. Each row lists the same four " +
+    "characters — bare, followed by U+FE0E, followed by U+FE0F, and an emoji-default one — in two " +
+    "font stacks that differ only in which of the two fonts (both cover U+2764) comes first; the text form is " +
+    "the outline heart, the emoji form the colour one.</p>" +
+    "<table><tr><th></th><th>❤</th><th>❤ + U+FE0E</th><th>❤ + U+FE0F</th><th>\U0001F44D</th></tr>" +
+    fontVariantEmojiRows +
+    "</table></body></html>";
+await SaveShowcaseAsync("font_variant_emoji", "Typography & Text", "font-variant-emoji",
+    "Choosing between the text (outline) and emoji (colour) form of a character: the four " +
+    "font-variant-emoji keywords, and how an explicit U+FE0E / U+FE0F variation selector overrides them, " +
+    "shown with a colour font and an outline font that both cover the same heart.",
+    fontVariantEmojiHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // CSS font-palette: selecting among a color font's CPAL palettes, defining custom palettes via
 // @font-palette-values (base-palette + override-colors), the light/dark keywords, and palette-mix().

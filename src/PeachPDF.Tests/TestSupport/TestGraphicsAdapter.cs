@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.TestSupport
     /// for the small, focused test documents this is used with - anything actually needed but not
     /// stubbed here will fail loudly rather than silently.
     /// </summary>
-    internal sealed class TestGraphicsAdapter : RAdapter
+    internal class TestGraphicsAdapter : RAdapter
     {
         public override RUri? BaseUri => null;
 
@@ -72,7 +72,7 @@ namespace PeachPDF.Tests.TestSupport
 
         // No family this stub knows about ever "wins" the last-resort search - there is no real
         // InstalledFonts registry backing it, so the only faithful answer is "nothing found".
-        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint) => null;
+        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachPDF.Text.EmojiPresentation presentation) => null;
 
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => false;
 
@@ -144,7 +144,7 @@ namespace PeachPDF.Tests.TestSupport
     }
 
     /// <summary>A deterministic fixed-metric font, independent of any real font file/rasterizer.</summary>
-    internal sealed class TestFont(double size) : RFont
+    internal class TestFont(double size) : RFont
     {
         public override double Size => size;
         public override double Height => size * 1.2;

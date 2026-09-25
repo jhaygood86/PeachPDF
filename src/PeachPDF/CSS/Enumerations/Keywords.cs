@@ -77,6 +77,7 @@
         public const string Monospace = "monospace";
         public const string Cursive = "cursive";
         public const string Fantasy = "fantasy";
+        public const string Math = "math";
         public const string Caption = "caption";
         public const string Icon = "icon";
         public const string Menu = "menu";
@@ -84,6 +85,8 @@
         public const string SmallCaption = "small-caption";
         public const string StatusBar = "status-bar";
         public const string Normal = "normal";
+        public const string Emoji = "emoji";
+        public const string Unicode = "unicode";
         public const string Italic = "italic";
         public const string Oblique = "oblique";
         public const string UltraCondensed = "ultra-condensed";

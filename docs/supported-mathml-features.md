@@ -23,7 +23,7 @@ below for what happens without one.
 
 | Element | MDN Reference | Notes |
 |---------|---------------|-------|
-| `math` | [math](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/math) | The `display` attribute (`"block"`/`"inline"`, MathML Core §2.1) sets the formula's initial `displaystyle`. This only affects MathML Core's own sizing rules (e.g. whether a fraction's numerator/denominator shrink) — it does not change the CSS box-level `display` of the element itself; a `<math>` element always participates in ordinary HTML inline flow, the same way an inline `<svg>` does. Genuine CSS properties — `color`, `font-family`, `font-size`, `background` — cascade into `<math>` content normally, from the surrounding document. An explicit CSS `width`/`height` (including a percentage, resolved against the containing block) resizes the element's own box independently of its content — per MathML Core, `<math>` is not a replaced element the way `<img>`/`<svg>` are, so the formula's internal typesetting is never rescaled to fit; content can overflow a box smaller than its natural size, or leave extra space in a larger one, exactly like an ordinary block whose content doesn't fill its author-specified size |
+| `math` | [math](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/math) | The `display` attribute (`"block"`/`"inline"`, MathML Core §2.1) sets the formula's initial `displaystyle`. This only affects MathML Core's own sizing rules (e.g. whether a fraction's numerator/denominator shrink) — it does not change the CSS box-level `display` of the element itself; a `<math>` element always participates in ordinary HTML inline flow, the same way an inline `<svg>` does. Genuine CSS properties — `color`, `font-family`, `font-size`, `background` — cascade into `<math>` content normally, from the surrounding document. The user-agent stylesheet gives `<math>` `font-family: math` (per MathML Core), so a formula is typeset in the first installed math font (see [generic families](usage-examples.md#generic-families-and-system-ui)) unless the author sets a `font-family`. An explicit CSS `width`/`height` (including a percentage, resolved against the containing block) resizes the element's own box independently of its content — per MathML Core, `<math>` is not a replaced element the way `<img>`/`<svg>` are, so the formula's internal typesetting is never rescaled to fit; content can overflow a box smaller than its natural size, or leave extra space in a larger one, exactly like an ordinary block whose content doesn't fill its author-specified size |
 
 ## Token Elements
 
@@ -93,8 +93,8 @@ clamping at the font's largest pre-sized step.
 
 ## Fallback When No `MATH` Table Is Present
 
-A font with no `MATH` table (the common case — only dedicated math fonts like STIX Two Math or Latin
-Modern Math carry one) still renders a formula: every constant the layout algorithm needs falls back to
+A font with no `MATH` table (the common case for ordinary text fonts — only dedicated math fonts like STIX Two Math or Latin
+Modern Math carry one; it is also what a `<math>` element gets when the host has no math font installed at all) still renders a formula: every constant the layout algorithm needs falls back to
 a fixed ratio of the current font size (e.g. axis height ≈ 0.25em, fraction rule thickness ≈ 0.04em) —
 MathML Core's own documented fallback strategy for this case. Structural correctness (fractions,
 radicals, scripts, tables) is preserved; stretchy operators fall back to their plain, unstretched glyph,

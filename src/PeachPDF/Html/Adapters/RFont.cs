@@ -193,6 +193,15 @@ namespace PeachPDF.Html.Adapters
         /// </summary>
         public virtual double NormalLineHeight => 1.2 * Size;
 
+        /// <summary>
+        /// Whether this font is one to prefer for <paramref name="baseCodepoint"/> when it must be drawn in
+        /// <paramref name="presentation"/> (CSS <c>font-variant-emoji</c>): its own variation-sequence data
+        /// says so, or it is a colour font for emoji / an outline font for text. Every font accepts
+        /// <see cref="EmojiPresentation.NoPreference"/>; the default answers true for every request so a
+        /// font with no such data never loses a match it could not judge.
+        /// </summary>
+        public virtual bool MatchesEmojiPresentation(System.Text.Rune baseCodepoint, PeachPDF.Text.EmojiPresentation presentation) => true;
+
         // ---- MATH table query surface (mathematical typesetting fonts) ------------------------
         // Lets MathLayoutEngine/MathRenderer read a font's OpenType MATH table (constants, per-glyph
         // italics correction/top-accent attachment, stretchy glyph variants) without depending on the

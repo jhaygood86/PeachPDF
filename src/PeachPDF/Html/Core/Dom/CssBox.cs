@@ -2117,6 +2117,7 @@ namespace PeachPDF.Html.Core.Dom
                 originalText = text;
 
             var checkOrientation = IsVerticalMixedOrientation();
+            var emojiMode = ActualFontVariantEmoji;
 
             var index = 0;
             var first = true;
@@ -2124,7 +2125,7 @@ namespace PeachPDF.Html.Core.Dom
             while (index < text.Length)
             {
                 Rune.DecodeFromUtf16(text.AsSpan(index), out var rune, out var consumed);
-                var faceKey = ActualFontForCodepoint(rune, fontSizeScale).FaceKey;
+                var faceKey = ActualFontForCodepoint(rune, fontSizeScale, EmojiProperties.ResolveAt(emojiMode, text, index)).FaceKey;
                 var upright = checkOrientation && IsEffectivelyUpright(rune);
                 var start = index;
                 index += consumed;
@@ -2138,7 +2139,7 @@ namespace PeachPDF.Html.Core.Dom
                     // joins). It stays with the run it is inside - see NeedsPerCodepointFont.
                     if (!UnicodeDefaultIgnorables.IsDefaultIgnorable(next.Value))
                     {
-                        if (ActualFontForCodepoint(next, fontSizeScale).FaceKey != faceKey)
+                        if (ActualFontForCodepoint(next, fontSizeScale, EmojiProperties.ResolveAt(emojiMode, text, index)).FaceKey != faceKey)
                             break;
                         if (checkOrientation && IsEffectivelyUpright(next) != upright)
                             break;
@@ -2239,18 +2240,30 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var font = ActualFont;
-            foreach (var rune in text.EnumerateRunes())
+            var emojiMode = ActualFontVariantEmoji;
+            for (var index = 0; index < text.Length;)
             {
+                Rune.DecodeFromUtf16(text.AsSpan(index), out var rune, out var consumed);
+
                 // A Default_Ignorable_Code_Point (variation selector, ZWJ, a bidi control) is *expected*
                 // to have no glyph, so an uncovered one is not a reason to go looking for another face -
                 // no font in the stack would cover it either, and splitting the run here would strand it
                 // in a fragment of its own under whatever fallback face it landed on. Shaping hides it
                 // instead (OpenTypeDescriptor.DropHiddenIgnorables).
-                if (UnicodeDefaultIgnorables.IsDefaultIgnorable(rune.Value))
-                    continue;
+                if (!UnicodeDefaultIgnorables.IsDefaultIgnorable(rune.Value))
+                {
+                    if (!font.HasGlyph(rune))
+                        return true;
 
-                if (!font.HasGlyph(rune))
-                    return true;
+                    // A character asked to be drawn in a presentation (font-variant-emoji, or a U+FE0E/U+FE0F
+                    // right after it) that the box's own font does not match must be resolved per codepoint,
+                    // so a later family - or a system fallback - can supply the matching one.
+                    var presentation = EmojiProperties.ResolveAt(emojiMode, text, index);
+                    if (presentation != EmojiPresentation.NoPreference && !font.MatchesEmojiPresentation(rune, presentation))
+                        return true;
+                }
+
+                index += consumed;
             }
 
             return false;
@@ -2286,7 +2299,9 @@ namespace PeachPDF.Html.Core.Dom
             if (word.UsesPerCodepointFont && (word.OriginalText ?? word.Text) is { Length: > 0 } text)
             {
                 Rune.DecodeFromUtf16(text, out var rune, out _);
-                return styleSource.ActualFontForCodepoint(rune, word.FontSizeScale);
+                // The presentation is re-derived from the word's own first character and the selector
+                // after it, exactly as EmitPerCodepointFragments derived it when it chose the split.
+                return styleSource.ActualFontForCodepoint(rune, word.FontSizeScale, EmojiProperties.ResolveAt(styleSource.ActualFontVariantEmoji, text, 0));
             }
 
             return word.ScaledFontKind switch
@@ -9675,9 +9690,9 @@ namespace PeachPDF.Html.Core.Dom
             return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, weight, stretch, obliqueSkewSinus);
         }
 
-        internal RFont? GetCachedFontForCodepoint(string fontFamily, double fsize, RFontStyle st, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
+        internal RFont? GetCachedFontForCodepoint(string fontFamily, double fsize, RFontStyle st, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, EmojiPresentation presentation = EmojiPresentation.NoPreference)
         {
-            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, codepoint, weight, stretch, obliqueSkewSinus);
+            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, codepoint, weight, stretch, obliqueSkewSinus, presentation);
         }
 
         internal RColor GetActualColor(string colorStr)
