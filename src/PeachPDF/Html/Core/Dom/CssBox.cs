@@ -3376,6 +3376,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (child.IsFloated
                 && child.HtmlContainer is { CurrentFragmentainer.HasOwnBand: false } floatContainer
+                && !child.EstablishesMultiColumnContext
                 && !HoldsAMultiColumnContainer(child))
             {
                 await LayoutBlockChildUnbroken(g, child, floatContainer, framePlacesChild);

@@ -170,7 +170,8 @@ pages it belongs to. A float that then straddles a page boundary but fits on a p
 next page (`CssBox.MoveWholeOntoTheNextPageIfItFits`, called from both the block frame and
 `FlowFloatChild`), which is safe because the float is placed before the in-flow content after it; one
 taller than a page is sliced ([its gap](../accepted-gaps/a-float-taller-than-a-page-is-sliced-not-fragmented.md),
-#317). A float holding a multi-column container keeps the breaking path: an earlier attempt at laying every
+#317). A float that is or holds a multi-column container keeps the breaking path (the float's own
+`columns` was missed at first, and a `float: left; columns: 2` box lost W18–W20 until a review caught it): an earlier attempt at laying every
 float out unbroken broke those, because the columns engine needs the fragmentainer that detaching removes.
 With that, floats are allowed back inside a fragmenting wrapper and the preceding-float rule is gone.
 

@@ -30,7 +30,8 @@ and it was placed there, above the float it follows. The move is decided on the 
 
 A new path that lays a float, an absolutely positioned box, or anything else out of tree-order position
 must do the same, or keep the scroll container around it monolithic. The one standing exception is a float
-holding a multi-column container, whose columns engine needs the attached fragmentainer, and a float
+that is or holds a multi-column container, whose columns engine needs the attached fragmentainer (a
+review found `float: left; columns: 2` itself was missed and lost its last lines), and a float
 inside a column, which a column does not continue the way a page does: laid out unbroken, its lines past the
 column's foot were drawn below the page band. Both still break and still have #1339's loss (see the accepted
 gap on tall floats).

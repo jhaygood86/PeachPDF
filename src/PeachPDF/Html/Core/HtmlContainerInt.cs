@@ -187,9 +187,9 @@ namespace PeachPDF.Html.Core
         internal Dictionary<CssBox, double> PageFloatPlacements { get; private set; } = [];
 
         /// <summary>
-        /// <c>overflow: hidden</c> boxes that were allowed to break across pages but whose content ran past
-        /// their own end in an earlier layout attempt. <see cref="Fragmentation.MonolithicContent"/> keeps
-        /// each of them in one piece from then on.
+        /// Scroll containers that were allowed to break across pages but whose content ran past their own
+        /// end in an earlier attempt of the current layout. <see cref="Fragmentation.MonolithicContent"/>
+        /// keeps each of them in one piece for the rest of that layout; the next one starts empty.
         /// </summary>
         internal HashSet<CssBox> ScrollContainersThatClip { get; } = [];
 
@@ -1648,6 +1648,12 @@ namespace PeachPDF.Html.Core
         private async ValueTask PerformLayoutOnePass(RGraphics g)
         {
             ActualSize = RSize.Empty;
+
+            // Which boxes clip is a fact about one layout: a box widened since the last one may fit under
+            // its cap now, and must be allowed to break again.
+            ScrollContainersThatClip.Clear();
+            _aScrollContainerStartedClipping = false;
+
             FloatScanCalls = 0;
             FloatScanBoxVisits = 0;
             BuildDraftCalls = 0;
@@ -1700,10 +1706,10 @@ namespace PeachPDF.Html.Core
                 await LayoutDocument(g);
             }
 
-            // An overflow: hidden box capped only by max-height breaks like a plain block (css-break-3 §2),
-            // unless its content turns out to overflow the cap, which only this layout can tell. Such a box
-            // is kept in one piece from then on and the document laid out again; a box only ever joins the
-            // set, so this settles. See MonolithicContent.HasConstrainedBlockSize.
+            // A scroll container capped only by max-height breaks like a plain block (css-break-3 §2), unless
+            // its content turns out to overflow the cap, which only this layout can tell. Such a box is kept in
+            // one piece for the rest of this layout and the document laid out again; within a layout a box only
+            // ever joins the set, so this settles. See MonolithicContent.HasConstrainedBlockSize.
             for (var attempt = 0; attempt < MaxClippingRelayouts && _aScrollContainerStartedClipping; attempt++)
             {
                 _aScrollContainerStartedClipping = false;

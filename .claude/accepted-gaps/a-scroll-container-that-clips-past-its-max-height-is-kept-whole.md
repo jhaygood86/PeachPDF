@@ -19,7 +19,9 @@ So `CssBox.NoteIfAFragmentingScrollContainerClips` records such a box after `App
 (`HtmlContainerInt.ScrollContainersThatClip`), and `PerformLayout` lays the document out again with it
 monolithic: it moves whole, or is sliced when taller than a page (with
 [the capped-box slice loss](a-capped-scroll-container-taller-than-a-page-loses-its-boundary-lines.md)).
-Boxes only join the set, so the retry settles; it is bounded at three attempts.
+Boxes only join the set within one layout, so the retry settles; it is bounded at three attempts. The set
+is cleared at the start of each layout (`PerformLayoutOnePass`): a box widened since the last one may fit
+under its cap and must be allowed to break again. A review caught it surviving across layouts.
 
 Breaking it properly needs the capped height to count the block size consumed across fragments (the clamp
 measures `Location.Y + max-height` in document space, which includes the page gap), and the clipped lines to

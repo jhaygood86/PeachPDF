@@ -14,7 +14,7 @@ in-flow line laid out beside it was placed back on the page already emitted: a b
 float drew only its last four lines (#1339). Real fragmentation needs the float's break to be resumed
 independently of the in-flow token chain, which is #317.
 
-A float holding a multi-column container is not laid out unbroken, because the columns engine needs the
+A float that is or holds a multi-column container is not laid out unbroken, because the columns engine needs the
 fragmentainer that detaching removes; it still breaks between its lines, with #1339's loss for the text
 beside it. A scroll container around such a float stays monolithic, since the multi-column container
 fails its descendant check; one *beside* it, such as the `overflow: hidden` block of a media object, now

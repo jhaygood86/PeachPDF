@@ -442,6 +442,40 @@ namespace PeachPDF.Tests.Integration
             AssertEachDrawnOnceInsideABand(placed, 20);
         }
 
+        // The same holds for a float that is itself the multi-column container. Only its descendants were
+        // checked, so it was laid out unbroken and its last lines were lost.
+        [Fact]
+        public async Task FloatThatIsAMultiColumnContainer_PlacesEveryWordInsideAPageBand()
+        {
+            var placed = await WordFragments(
+                $"<div>{Lines("C", 10)}</div><div style='float:left;width:200pt;columns:2'>{Lines("W", 20)}</div>");
+
+            AssertEachDrawnOnceInsideABand(placed, 20);
+        }
+
+        // Which boxes clip is decided per layout. A box that clipped its content and was kept whole may fit
+        // under its cap once widened, and the next layout of the same container lets it break again, as a
+        // fresh layout of the wider box does.
+        [Fact]
+        public async Task ScrollContainerThatStopsClipping_BreaksAgainOnTheNextLayout()
+        {
+            var words = string.Join(" ", Enumerable.Range(1, 16).Select(i => $"Word{i}"));
+            await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap($"<div id='card' style='overflow:hidden;max-height:60pt;width:60pt;line-height:20pt;font-size:10pt'>{words}</div>"),
+                pageHeight: PageHeight, margin: Margin,
+                after: async (root, container, graphics) =>
+                {
+                    var card = LayoutHarness.FindById(root, "card")!;
+                    Assert.Contains(card, container.ScrollContainersThatClip);
+
+                    card.Width = "260pt";
+                    await container.PerformLayout(graphics);
+
+                    Assert.DoesNotContain(card, container.ScrollContainersThatClip);
+                    Assert.False(PeachPDF.Html.Core.Fragmentation.MonolithicContent.IsMonolithic(card));
+                });
+        }
+
         private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutFloats(string body) =>
             LayoutHarness.LayoutAsync(
                 "<!DOCTYPE html><html><head><style>body{margin:0;font:10pt/12pt Arial} p{margin:0}</style>" +
