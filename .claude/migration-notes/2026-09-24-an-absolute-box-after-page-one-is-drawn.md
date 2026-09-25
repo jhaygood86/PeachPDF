@@ -13,8 +13,8 @@ the absolute box. An absolutely positioned box's own content is laid out in one 
 page used to break between its lines, and every in-flow box after it in the same block was lost (drawn on
 no page) when it was not its block's first child. It now runs on across pages with each page showing its
 slice, and the content after it is kept. A box that is or holds a multi-column container still breaks
-between its column lines as before; the content after it is still placed where it would be without it,
-and drawn. A line of the box that straddles a page boundary is cut, part on
+between its column lines as before, and as its parent's first child it still pushes the content after it
+below itself. A line of the box that straddles a page boundary is cut, part on
 each page, and an image, `break-inside: avoid` block or table inside it is sliced rather than moved or
 broken between rows.
 

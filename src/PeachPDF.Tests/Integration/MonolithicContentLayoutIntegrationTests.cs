@@ -468,22 +468,25 @@ namespace PeachPDF.Tests.Integration
         }
 
         // Such a box keeps the breaking path, so a break inside it ends the pass, and the next pass resumes
-        // inside it on page 2. The content after it belongs at its parent's top on page 1 (CSS 2.1 §9.3.1),
-        // which that pass had already emitted, so it was drawn on no page (all ten paragraphs of a following
-        // block). The page is re-opened for it, and it is drawn there.
+        // inside it on page 2. The content after it, placed at its parent's top on page 1, landed on the page
+        // that pass had already emitted and was lost; re-opening that page drew a short block but sliced a long
+        // one across the margin and lost a following multi-column block's first page. As on main, a first
+        // child like this is treated as preceding the content after it, which is laid out below it and
+        // paginated normally.
         [Theory]
         [InlineData("<p>B1</p><div>{0}<p>W9</p></div>", 9)]
         [InlineData("<p>B1</p><div>{0}<p>W9</p><p>W10</p><p>W11</p><p>W12</p><p>W13</p><p>W14</p><p>W15</p><p>W16</p><p>W17</p><p>W18</p></div>", 18)]
-        [InlineData("<div><p>B1</p>{0}<p>W9</p></div>", 9)]
-        public async Task ContentAfterAnAbsoluteMultiColumnBox_IsDrawnWhereItBelongs(string shape, int count)
+        [InlineData("<p>B1</p><div>{0}<div style='columns:2'>{1}</div></div>", 34)]
+        [InlineData("<p>B1</p><div>{0}<div>{2}</div></div>", 21)]
+        public async Task ContentAfterAnAbsoluteMultiColumnBox_IsDrawnInsideAPageBand(string shape, int count)
         {
-            var box = "<div style='position:absolute;top:120pt;width:200pt;columns:2'>" +
+            var box = "<div style='position:absolute;top:120pt;left:180pt;width:80pt;columns:2'>" +
                       string.Concat(Enumerable.Range(1, 8).Select(i => $"<p>W{i}</p>")) + "</div>";
-            var placed = await WordFragments(string.Format(shape, box));
+            var many = string.Concat(Enumerable.Range(9, 26).Select(i => $"<p>W{i}</p>"));
+            var thirteen = string.Concat(Enumerable.Range(9, 13).Select(i => $"<p>W{i}</p>"));
+            var placed = await WordFragments(string.Format(shape, box, many, thirteen));
 
             AssertEachDrawnOnceInsideABand(placed, count);
-            Assert.Equal(0, placed.Single(w => w.Text == "W9").Page);
-            Assert.Equal(Margin + 12, placed.Single(w => w.Text == "W9").Top, 0);
         }
 
         // An absolute multi-column box placed on an earlier page than the content around it moves nothing:

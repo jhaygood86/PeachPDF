@@ -37,12 +37,9 @@ inside a column, which a column does not continue the way a page does: laid out 
 column's foot were drawn below the page band. Both still break and still have #1339's loss (see the accepted
 gap on tall floats).
 
-Such an absolute box's break still ends the pass, and the next pass resumes inside it on the following page.
-The in-flow content after it belongs where it would be without the box (CSS 2.1 §9.3.1), usually on the page
-the box started on, which that pass had already emitted: a following paragraph, and all ten paragraphs of a
-following block, were drawn on no page. `CssBox.PerformLayoutEpilogue` re-opens the emitted page for an
-in-flow box that completes behind the pass and that no emitted page holds yet
-(`HtmlContainerInt.InvalidateEmittedFragmentainersReceiving`, the same call #1349 uses for absolute boxes). A
-first fix instead placed that content below the absolute box; with the box on an earlier page (`top: 0`)
-that moved the content backwards and lost it together with the content before it inside an
-`overflow: hidden` wrapper. Do not reintroduce a sibling-order workaround for it.
+Such an absolute box's break still ends the pass. The content after it cannot simply be put at its §9.3.1
+position: that page is already emitted. Re-opening it draws a short block, but no pass paginates content
+laid out behind it, so a long following block was sliced across the page margin and a following multi-column
+block lost its first page. `DomUtils.GetPreviousSibling` therefore keeps `main`'s placement for this one case,
+a first-child absolute box that is or holds columns, and the content after it goes below it (#1377, and the
+accepted gap on it for the three attempts that failed).

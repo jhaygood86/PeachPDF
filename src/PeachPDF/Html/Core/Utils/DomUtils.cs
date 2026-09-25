@@ -168,8 +168,37 @@ namespace PeachPDF.Html.Core.Utils
                 if (!IsSteppedOverAsPreviousSibling(sib, includeFloats)) return sib;
             }
 
-            return null;
+            // Everything before b was stepped over. An absolutely positioned first child that is or holds a
+            // multi-column container is still returned, as it always was before #1349: see
+            // IsAPrecedingBreakingAbsoluteBox.
+            var first = b.ParentBox.Boxes[0];
+            return IsAPrecedingBreakingAbsoluteBox(first) ? first : null;
         }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is an absolutely positioned box that is or holds a multi-column
+        /// container, which <see cref="GetPreviousSibling"/> still returns when it is its parent's first child.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Such a box keeps the breaking path (<see cref="CssBox.IsOrHoldsAMultiColumnContainer"/>), so a
+        /// break inside it ends the layout pass, and the next pass resumes inside it on the following page.
+        /// The content after it, placed at its parent's top where CSS 2.1 §9.3.1 puts it, then landed on the
+        /// page that pass had already emitted and was drawn on no page. Re-opening that page drew a short
+        /// following block but no pass paginates content there: a following multi-column block lost its
+        /// first page, and a following paragraph was sliced across the page margin. Placing the content
+        /// below the box for every such box moved it backwards when the box sat on an earlier page.
+        /// </para>
+        /// <para>
+        /// So for these boxes the placement stays exactly what it was on <c>main</c>: a first child is
+        /// returned, and the content after it is laid out below it, on the page the pass continues on. The
+        /// position still differs from §9.3.1 (#1377).
+        /// </para>
+        /// </remarks>
+        private static bool IsAPrecedingBreakingAbsoluteBox(CssBox box) =>
+            box.Position.Value is PositionMode.Absolute
+            && box.DerivedStyle.ActualDisplay != Keywords.None
+            && CssBox.IsOrHoldsAMultiColumnContainer(box);
 
         /// <summary>
         /// Whether <see cref="GetPreviousSibling"/> steps over <paramref name="sib"/>: a box that takes no

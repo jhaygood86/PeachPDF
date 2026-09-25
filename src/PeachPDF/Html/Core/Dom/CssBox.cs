@@ -7253,25 +7253,6 @@ namespace PeachPDF.Html.Core.Dom
             if (Position.Value is PositionMode.Absolute)
             {
                 HtmlContainer?.InvalidateEmittedFragmentainersReceiving(this);
-
-                // Only one that keeps the breaking path can end a pass; one laid out unbroken never does.
-                if (HtmlContainer is { CurrentFragmentainer: { HasOwnBand: false } absolutePass } absoluteContainer
-                    && IsOrHoldsAMultiColumnContainer(this)
-                    && Location.Y < absoluteContainer.PageTopOf(absolutePass.SlotIndex) - HtmlContainerInt.PageBoundaryEpsilon)
-                {
-                    absoluteContainer.AnAbsoluteBoxCompletedBehindThePass = true;
-                }
-            }
-            else if (!IsOutOfFlow
-                     && HtmlContainer is { AnAbsoluteBoxCompletedBehindThePass: true, CurrentFragmentainer: { HasOwnBand: false } pass } passContainer
-                     && Location.Y < passContainer.PageTopOf(pass.SlotIndex) - HtmlContainerInt.PageBoundaryEpsilon)
-            {
-                // An in-flow box can also land behind the pass, on a page already emitted. An absolutely
-                // positioned box that is or holds a multi-column container keeps breaking, and the pass that
-                // resumes inside it goes on to the content after it, which belongs at its own position on the
-                // page the box started on (CSS 2.1 §9.3.1). A box that spans pages is already held by the page
-                // it started on and is left alone. Asked only once such a box has completed behind the pass.
-                passContainer.InvalidateEmittedFragmentainersReceiving(this);
             }
 
             // Named-page registration tail: block containers already registered before child layout

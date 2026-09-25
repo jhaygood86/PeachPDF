@@ -257,25 +257,27 @@ An auto-height `overflow: hidden|auto|scroll` card that straddles a page boundar
 instead of moving whole to the next page (see the migration note). That is what browsers do when
 printing. Authors who want the old result can add `break-inside: avoid`, or a fixed `height`.
 
-## Content after an absolute multi-column box is drawn where it belongs
+## Content after an absolute multi-column box keeps main's placement
 
 An absolutely positioned box that is or holds a multi-column container keeps the breaking path, since the
 columns engine records each column for one page slot and needs the attached fragmentainer (laid out unbroken
-it lost W18–W20; #1376 is the same cause). A review then found its break ends the pass: the next pass resumes
-inside it on page 2, and the content after it, correctly placed at its parent's top on page 1 (CSS 2.1
-§9.3.1), landed on a page already emitted and was lost (one paragraph; all ten of a following block).
+it lost W18–W20; #1376 is the same cause). Its break ends the pass, which three review rounds turned into
+content loss for what follows it:
 
-The first fix placed that content below the box in `GetPreviousSibling`, as `main` had for a first child.
-The next review showed that moves content backwards when the box sits on an earlier page (`top: 0` inside
-an `overflow: hidden` wrapper on page 2): the wrapper's content before and after it vanished and page 2 went
-blank. Reverted. `PerformLayoutEpilogue` now re-opens the emitted page for an in-flow box that completes
-behind the pass and that no emitted page holds (`InvalidateEmittedFragmentainersReceiving`), so the content is
-drawn at its own position. A box spanning pages is already held by its first page and is skipped, so ordinary
-forward layout re-emits nothing. The check is gated on `HtmlContainerInt.AnAbsoluteBoxCompletedBehindThePass`, set only
-when such a box completes behind the pass: ungated, ordinary boxes that finish behind a pass that stepped over
-to the next page without holding fragments re-opened emitted pages, and 5,000 sibling wrappers took 24.4s
-instead of 4.4s. An attempt to lay these boxes out unbroken by making the columns engine
-unpaginated when detached still lost W18–W20: the per-slot column records are the deeper cause (#1376).
+1. With #1349's `GetPreviousSibling` fix, the content after it went to its parent's top on page 1, which the
+   pass resuming inside the box on page 2 had already emitted: lost.
+2. Placing it below every such box moved it backwards when the box sat on an earlier page (`top: 0` inside an
+   `overflow: hidden` wrapper): the wrapper's content vanished with it.
+3. Re-opening the emitted page from `PerformLayoutEpilogue` drew a short block, but no pass paginates content
+   laid out behind it: a following `columns: 2` block lost its whole first page and a long paragraph run was
+   sliced across the margin. Ungated, that check also made 5,000 wrappers take 24.4s instead of 4.4s.
+
+What stands is `main`'s own placement for exactly that case (`DomUtils.IsAPrecedingBreakingAbsoluteBox`: a
+first-child absolute box that is or holds columns is returned as the previous sibling). Every shape from the
+three rounds, eight probes, now draws the same words at the same positions as `main`. The §9.3.1 position is
+an [accepted gap](../accepted-gaps/content-after-an-absolute-multi-column-box-is-placed-below-it.md) (#1377).
+An attempt to lay these boxes out unbroken by making the columns engine unpaginated when detached still lost
+W18–W20: the per-slot column records are the deeper cause.
 
 ## A box capped only by max-height breaks, as Chrome prints it
 
