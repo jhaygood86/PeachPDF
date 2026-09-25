@@ -208,7 +208,7 @@ A requested `font-weight`/`font-style`/`font-stretch` PeachPDF can't find an exa
 ### Adding custom fonts
 
 The recommended way to install custom fonts is to install them into your operating system.
-PeachPDF by default picks up TrueType/OpenType fonts from the operating system (`%SystemRoot%\Fonts` and `%LOCALAPPDATA%\Microsoft\Windows\Fonts` on Windows; `/System/Library/Fonts`, `/Library/Fonts`, and `~/Library/Fonts` on macOS; primarily the system's own `fontconfig` on Linux, falling back to `/usr/share/fonts`, `/usr/local/share/fonts`, and `$HOME/.fonts` if `fontconfig` isn't available; `/system/fonts`, `/product/fonts`, and `/data/fonts` on Android). iOS has no system font file discovery at all — apps must embed and register their own fonts via `AddFontFromStream` below.
+PeachPDF by default picks up TrueType/OpenType fonts and font collections (`.ttf`, `.otf`, `.ttc`, `.otc` — every face of a collection) from the operating system (`%SystemRoot%\Fonts` and `%LOCALAPPDATA%\Microsoft\Windows\Fonts` on Windows; `/System/Library/Fonts`, `/Library/Fonts`, and `~/Library/Fonts` on macOS; primarily the system's own `fontconfig` on Linux, falling back to `/usr/share/fonts`, `/usr/local/share/fonts`, and `$HOME/.fonts` if `fontconfig` isn't available; `/system/fonts`, `/product/fonts`, and `/data/fonts` on Android). iOS has no system font file discovery at all — apps must embed and register their own fonts via `AddFontFromStream` below.
 
 You can also add a font at runtime by loading the font into a Stream, and then using the AddFontFromStream API:
 

@@ -13,7 +13,6 @@ math font - which changes the glyphs and, where the font carries a `MATH` table,
 `<math>` element that did not already set its own `font-family`. An author `math { font-family: ... }`
 rule still wins.
 
-On a host with none of those fonts installed (a stock Windows machine - Cambria Math ships in a `.ttc`, which
-system-font discovery does not read - or a minimal Linux container), `math` resolves to the platform default font,
-so a `<math>` element now renders in that font instead of inheriting the surrounding text's font, as it did
+On a host with none of those fonts installed (a minimal Linux container, say), `math` resolves to the platform default
+font, so a `<math>` element now renders in that font instead of inheriting the surrounding text's font, as it did
 before the UA rule existed. Set `math { font-family: ... }` (or register a math font) to keep a specific font.

@@ -73,7 +73,7 @@ namespace PeachPDF.Tests.TestSupport
             return [.. result];
         }
 
-        private static SortedDictionary<string, byte[]> ReadTables(byte[] font, out uint sfntVersion)
+        internal static SortedDictionary<string, byte[]> ReadTables(byte[] font, out uint sfntVersion)
         {
             sfntVersion = BinaryPrimitives.ReadUInt32BigEndian(font);
             int count = BinaryPrimitives.ReadUInt16BigEndian(font.AsSpan(4));

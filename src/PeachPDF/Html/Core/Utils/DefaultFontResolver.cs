@@ -126,18 +126,22 @@ namespace PeachPDF.Html.Core.Utils
         {
             foreach (var path in FontResolver.SupportedFonts)
             {
-                string? family = null;
+                IReadOnlyList<(int FaceIndex, TtfFontDescription Description)> faces = [];
                 try
                 {
-                    family = TtfFontDescription.LoadDescription(path).FontFamilyInvariantCulture;
+                    // Every face of a .ttc/.otc collection, not just the first.
+                    faces = TtfFontDescription.LoadDescriptions(path);
                 }
                 catch
                 {
                     // Ignore unparsable/corrupt font files, same tolerance FontResolver itself uses.
                 }
 
-                if (!string.IsNullOrEmpty(family))
-                    yield return family;
+                foreach (var (_, description) in faces)
+                {
+                    if (!string.IsNullOrEmpty(description.FontFamilyInvariantCulture))
+                        yield return description.FontFamilyInvariantCulture;
+                }
             }
         }
 

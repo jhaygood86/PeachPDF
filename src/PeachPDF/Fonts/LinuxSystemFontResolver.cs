@@ -224,7 +224,9 @@ namespace PeachPDF.Fonts
 
         internal static bool IsSupportedFontFile(string path) =>
             path.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase) ||
-            path.EndsWith(".otf", StringComparison.OrdinalIgnoreCase);
+            path.EndsWith(".otf", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".ttc", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".otc", StringComparison.OrdinalIgnoreCase);
 
         public static string[] Resolve()
         {

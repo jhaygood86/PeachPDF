@@ -80,6 +80,25 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public void Math_OnWindows_ResolvesToCambriaMath_WhenNoLatinModernMathIsInstalled()
+        {
+            // Cambria Math ships only inside cambria.ttc, so this holds only because font discovery reads
+            // font collections. Skipped (returns) on any host that isn't stock-Windows-with-Cambria.
+            var cambria = System.IO.Path.Combine(Environment.ExpandEnvironmentVariables(@"%SystemRoot%\Fonts"), "cambria.ttc");
+            if (!OperatingSystem.IsWindows() || !System.IO.File.Exists(cambria))
+                return;
+
+            var adapter = new PdfSharpAdapter();
+            if (adapter.IsFontExists("Latin Modern Math"))
+                return;
+
+            var font = adapter.GetFont("math", 12, RFontStyle.Regular) as FontAdapter;
+
+            Assert.NotNull(font);
+            Assert.Equal("Cambria Math", font!.Font.Name);
+        }
+
+        [Fact]
         public void Math_IsAlwaysAnInstalledFamily_OnEveryPlatform()
         {
             // Whichever math font the host has, or the platform default when it has none, the generic must
