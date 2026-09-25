@@ -2400,20 +2400,6 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
-        /// Lays the document out once, filling one fragmentainer at a time: a pass targets a
-        /// fragmentainer, and where content does not fit it records where it stopped so the next pass
-        /// can resume from exactly that point
-        /// (<see href="https://www.w3.org/TR/css-break-3/#breaking-controls">CSS Fragmentation Level 3
-        /// §2/§4.4</see>).
-        /// </summary>
-        /// <remarks>
-        /// This is the atom the three re-layout loops in <see cref="PerformLayout"/> and
-        /// <c>PdfGenerator</c>'s <c>ShrinkToFit</c> pass all share. The named-page registry and page
-        /// geometry table are reset here, once per invocation and never per fragmentainer — a
-        /// document's registrations accumulate <i>across</i> its fragmentainers, and only a whole new
-        /// layout invalidates them.
-        /// </remarks>
-        /// <summary>
         /// Lays the document out once from the root size and location the caller set, and again for each
         /// scroll container found clipping its content (<see cref="NoteScrollContainerClips"/>).
         /// </summary>
@@ -2443,6 +2429,21 @@ namespace PeachPDF.Html.Core
             }
         }
 
+        /// <summary>
+        /// Lays the document out once, filling one fragmentainer at a time: a pass targets a
+        /// fragmentainer, and where content does not fit it records where it stopped so the next pass
+        /// can resume from exactly that point
+        /// (<see href="https://www.w3.org/TR/css-break-3/#breaking-controls">CSS Fragmentation Level 3
+        /// §2/§4.4</see>).
+        /// </summary>
+        /// <remarks>
+        /// One attempt of <see cref="LayoutDocument"/>, the atom the three re-layout loops in
+        /// <see cref="PerformLayout"/> and <c>PdfGenerator</c>'s <c>ShrinkToFit</c> pass all share. The named-page registry and page
+        /// geometry table are reset here, once per invocation and never per fragmentainer — a
+        /// document's registrations accumulate <i>across</i> its fragmentainers, and only a whole new
+        /// layout invalidates them.
+        /// </remarks>
+        /// <param name="g">the graphics to measure with</param>
         private async ValueTask LayoutDocumentOnce(RGraphics g)
         {
             LayoutGeneration++;

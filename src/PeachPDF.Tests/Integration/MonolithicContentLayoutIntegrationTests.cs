@@ -375,6 +375,19 @@ namespace PeachPDF.Tests.Integration
             if (side == "left") Assert.True(later.Location.X >= moved.ActualRight - 0.01, "the later float overlaps the moved one");
         }
 
+        // An absolutely positioned box keeps its float value but is not a float (CSS 2.1 §9.7), so rule 5 does not
+        // hold a later float below it: placed by its offsets far down, it pushed the real float onto page 2.
+        [Fact]
+        public async Task AbsoluteBoxWithAFloatValue_DoesNotHoldALaterFloatBelowIt()
+        {
+            var (root, container) = await LayoutFloats(
+                "<div><div style='position:absolute;float:left;top:600pt;left:0'>ABS</div>" +
+                "<div id='f' style='float:left;width:60pt'>REAL</div><p>TEXT</p></div>");
+            var real = LayoutHarness.FindById(root, "f")!;
+
+            Assert.Equal(container.PageTopOf(0), real.Location.Y, 2);
+        }
+
         // A float moves onto the next page's usable band: below a float: top figure there, not on top of it.
         [Fact]
         public async Task MovedFloat_StartsBelowATopPageFloatOnItsNewPage()

@@ -1994,7 +1994,10 @@ namespace PeachPDF.Html.Core.Dom
             for (var i = 0; i < boxIndex; i++)
             {
                 var sibling = containingBox.Boxes[i];
-                if (!sibling.IsFloated || sibling.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                // An absolutely positioned, fixed or running box keeps its float value but is not a float
+                // (CSS 2.1 §9.7): placed by its offsets, it would otherwise push every later float down to it.
+                if (!sibling.IsFloated || sibling.IsAbsolutelyPositioned || sibling.IsRunningPositioned
+                    || sibling.DerivedStyle.ActualDisplay == Keywords.None) continue;
                 lowest = Math.Max(lowest, sibling.StaticTop - sibling.ActualMarginTop);
             }
 
