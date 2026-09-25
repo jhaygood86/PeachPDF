@@ -283,6 +283,14 @@ namespace PeachPDF.Tests.Integration
             return page.FootnoteAreas!.OrderBy(a => a.DividerRect.X).ToList();
         }
 
+        /// <summary>
+        /// <see cref="LayoutHarness.LayoutAsync"/> with <c>sans-serif</c> pinned to a bundled font: these
+        /// fixtures fill columns with a fixed number of lines and assert where the notes land, so the line
+        /// height has to be the same on every host rather than whatever the platform maps the generic to.
+        /// </summary>
+        private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(string html, double pageHeight = 842) =>
+            LayoutHarness.LayoutAsync(html, pageHeight: pageHeight, configureAdapter: BundledFonts.PinSansSerifAsync);
+
         private static CssBoxFootnoteCall CallOf(HtmlContainerInt container, string id) =>
             container.FootnoteCalls.First(c => c.Body.HtmlTag?.TryGetAttribute("id") == id);
 

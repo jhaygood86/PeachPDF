@@ -2816,6 +2816,24 @@
       }
     },
     {
+      "name": "font-variant-emoji",
+      "comment": "CSS Fonts 4 §9.3, single mutually-exclusive keyword. Only Emoji Presentation Participating Code Points (the bases in emoji-variation-sequences.txt) are affected; the value acts as an implied U+FE0E/U+FE0F on each of them, and an explicit variation selector in the content overrides it. It selects among fonts (colour vs outline) at per-character font resolution - it is not a GSUB feature.",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontVariantEmojiMode",
+        "keywordMap": "Map.FontVariantEmojiModes",
+        "fallback": "FontVariantEmojiMode.Normal"
+      },
+      "html": {
+        "propertyPath": "FontVariantEmoji",
+        "csharpDataType": "CssProperty<FontVariantEmojiMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontVariantEmoji.ToString()"
+      }
+    },
+    {
       "name": "font-variant-alternates",
       "comment": "cssDataType 'cssom-grammar' calls FontVariantAlternatesGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip - CSS Fonts 4 §6.8's seven-clause `||` combinator grammar isn't expressible as a plain keyword/value-list. Cross-referencing a clause's ident(s) against an @font-feature-values registration happens later, at resolve time (DerivedStyle.ActualFontVariantAlternates), not here.",
       "inherited": true,

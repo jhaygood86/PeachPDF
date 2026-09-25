@@ -12,9 +12,12 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [InlineData("/usr/share/fonts/Foo-Regular.TTF", true)]
         [InlineData("/usr/share/fonts/Foo-Regular.otf", true)]
         [InlineData("/usr/share/fonts/Foo-Regular.OTF", true)]
-        [InlineData("/usr/share/fonts/Foo-Regular.ttc", false)]
+        [InlineData("/usr/share/fonts/Foo-Regular.ttc", true)]
+        [InlineData("/usr/share/fonts/Foo-Regular.TTC", true)]
+        [InlineData("/usr/share/fonts/Foo-Regular.otc", true)]
+        [InlineData("/usr/share/fonts/Foo-Regular.woff", false)]
         [InlineData("/usr/share/fonts/readme.txt", false)]
-        public void IsSupportedFontFile_MatchesTtfAndOtfOnly(string path, bool expected)
+        public void IsSupportedFontFile_MatchesOpenTypeFontsAndCollections(string path, bool expected)
         {
             Assert.Equal(expected, LinuxSystemFontResolver.IsSupportedFontFile(path));
         }

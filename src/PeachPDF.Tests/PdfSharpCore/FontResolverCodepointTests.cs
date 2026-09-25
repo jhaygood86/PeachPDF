@@ -105,6 +105,25 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         }
 
         [Fact]
+        public void FindFamilyCoveringCodepoint_WithAPresentation_OnlyConsidersFacesThatMatchIt()
+        {
+            var resolver = new FontResolver { NullIfFontNotFound = true };
+            // Both cover U+2764. The '!' prefix sorts before any real family name under ordinal comparison,
+            // and U+2764 has no script of its own, so the alphabetically first matching candidate wins -
+            // whatever fonts the host happens to have installed.
+            resolver.AddFont(File.OpenRead(BundledFonts.ColorEmoji), "!AColour");
+            resolver.AddFont(File.OpenRead(BundledFonts.Ttf), "!BText");
+            var heart = new Rune(0x2764);
+
+            Assert.Equal("!acolour", resolver.FindFamilyCoveringCodepoint(heart));
+            Assert.Equal("!acolour", resolver.FindFamilyCoveringCodepoint(heart, EmojiPresentation.Emoji));
+            // The colour family is filtered out for a text request, so the next candidate wins - and each
+            // presentation is cached on its own, not overwritten by the request before it.
+            Assert.Equal("!btext", resolver.FindFamilyCoveringCodepoint(heart, EmojiPresentation.Text));
+            Assert.Equal("!acolour", resolver.FindFamilyCoveringCodepoint(heart));
+        }
+
+        [Fact]
         public void FindFamilyCoveringCodepoint_ReturnsNull_WhenNothingRegisteredCoversTheCodepoint()
         {
             var resolver = new FontResolver { NullIfFontNotFound = true };

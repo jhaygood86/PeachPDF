@@ -47,17 +47,41 @@ namespace PeachPDF.Html.Core.Utils
         /// when that also finds nothing (the caller then falls back to the box's own default font, which
         /// ultimately renders <c>.notdef</c>). The coverage filter on each candidate is a fast pre-narrow;
         /// the <see cref="RFont.HasGlyph"/> check is authoritative (it guards the rare cmap over-report).
+        /// <paramref name="presentation"/> is the emoji/text presentation the character was asked to be
+        /// drawn in - see <see cref="PeachPDF.Text.EmojiProperties.Resolve"/>.
         /// </summary>
-        internal static RFont? Resolve(RAdapter adapter, string fontFamilyList, double fsize, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
+        internal static RFont? Resolve(RAdapter adapter, string fontFamilyList, double fsize, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, PeachPDF.Text.EmojiPresentation presentation = PeachPDF.Text.EmojiPresentation.NoPreference)
         {
+            // With a presentation request (CSS font-variant-emoji, or an explicit U+FE0E/U+FE0F), CSS Fonts 4
+            // §5.3's cluster matching order applies: a family whose font supports the requested sequence
+            // wins; failing that, system fallback is asked for a font that does; and only when no font
+            // supports it is the variation selector ignored and the first font that merely covers the
+            // character used. A covering font that does not match is therefore remembered, not returned.
+            RFont? firstCoveringFont = null;
+
             foreach (var family in fontFamilyList.Split(','))
             {
                 var selectedFamily = family.Trim().TrimStart('"', '\'').TrimEnd('"', '\'');
 
                 var font = adapter.GetFontForCodepoint(selectedFamily, fsize, style, codepoint, weight, stretch, obliqueSkewSinus);
 
-                if (font is not null && font.HasGlyph(codepoint))
+                if (font is null || !font.HasGlyph(codepoint))
+                    continue;
+
+                if (presentation == PeachPDF.Text.EmojiPresentation.NoPreference || font.MatchesEmojiPresentation(codepoint, presentation))
                     return font;
+
+                firstCoveringFont ??= font;
+            }
+
+            if (presentation != PeachPDF.Text.EmojiPresentation.NoPreference)
+            {
+                var matchingFallback = adapter.GetSystemFallbackFontForCodepoint(fsize, style, codepoint, weight, stretch, obliqueSkewSinus, presentation);
+                if (matchingFallback is not null && matchingFallback.HasGlyph(codepoint))
+                    return matchingFallback;
+
+                if (firstCoveringFont is not null)
+                    return firstCoveringFont;
             }
 
             var fallbackFont = adapter.GetSystemFallbackFontForCodepoint(fsize, style, codepoint, weight, stretch, obliqueSkewSinus);

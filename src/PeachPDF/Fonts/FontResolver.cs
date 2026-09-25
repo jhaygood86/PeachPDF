@@ -23,7 +23,7 @@ namespace PeachPDF.Fonts
 
     internal class FontResolver : IFontResolver
     {
-        private static readonly FrozenDictionary<string, string> _systemFontPaths;
+        private static readonly FrozenDictionary<string, (string Path, int FaceIndex)> _systemFontPaths;
         private static readonly FrozenDictionary<string, FontFamilyModel> _systemFamilies;
 
         // A system font file never changes during the process's lifetime (same rationale as
@@ -34,7 +34,7 @@ namespace PeachPDF.Fonts
         // also makes XFontSource.GetOrCreateFrom's own buffer-identity checksum memo (see XFontSource.cs)
         // actually hit for system fonts, not just custom ones - see .claude/recent-fixes for the measured
         // effect.
-        private static readonly ConcurrentDictionary<string, byte[]> _systemFontBytesCache = new();
+        private static readonly ConcurrentDictionary<(string Path, int FaceIndex), byte[]> _systemFontBytesCache = new();
 
         private readonly Dictionary<string, byte[]> _CustomFonts = [];
         private readonly Dictionary<string, FontFamilyModel> InstalledFonts;
@@ -67,7 +67,7 @@ namespace PeachPDF.Fonts
         /// Instance-scoped for the same reason as <see cref="_coverageCache"/> - never shared across
         /// <c>PdfGenerator</c> instances/threads.
         /// </summary>
-        private readonly Dictionary<int, string?> _systemFallbackCache = new();
+        private readonly Dictionary<(int Codepoint, EmojiPresentation Presentation), string?> _systemFallbackCache = new();
 
         /// <summary>
         /// This instance's own typeface-key-keyed glyph-typeface cache, used only for custom
@@ -115,9 +115,13 @@ namespace PeachPDF.Fonts
         /// </summary>
         internal static IEnumerable<string> SystemFamilyDisplayNames => _systemFamilies.Values.Select(f => f.Name);
 
-        private static readonly string[] FontExtensions = ["*.ttf", "*.otf"];
+        // Collections (.ttc/.otc) come last so a machine's first discovered font is still an ordinary one. A
+        // collection is where a platform ships some of its own fonts - Windows' Cambria Math and MS Gothic,
+        // macOS's Helvetica, Times and Menlo, the Noto CJK fonts on Linux - so leaving them out left those
+        // families invisible.
+        private static readonly string[] FontExtensions = ["*.ttf", "*.otf", "*.ttc", "*.otc"];
 
-        private static string[] GetFontFiles(string dir)
+        internal static string[] GetFontFiles(string dir)
         {
             if (!Directory.Exists(dir))
                 return [];
@@ -229,17 +233,7 @@ namespace PeachPDF.Fonts
 
             public XFontStyle GuessFontStyle() => this.FontDescription.Style;
 
-            public static FontFileInfo Load(string path)
-            {
-                var fontDescription = TtfFontDescription.LoadDescription(path);
-                return new FontFileInfo(fontDescription);
-            }
-
-            public static FontFileInfo Load(Stream stream)
-            {
-                var fontDescription = TtfFontDescription.LoadDescription(stream);
-                return new FontFileInfo(fontDescription);
-            }
+            public static FontFileInfo From(TtfFontDescription fontDescription) => new(fontDescription);
         }
 
         public void AddFont(Stream stream, string fontFamilyName)
@@ -264,9 +258,15 @@ namespace PeachPDF.Fonts
             stream.CopyTo(memoryStream);
 
             var fontBytes = memoryStream.ToArray();
-            memoryStream.Seek(0, SeekOrigin.Begin);
 
-            var fontFileInfo = FontFileInfo.Load(memoryStream);
+            // A .ttc/.otc collection registers its first face: the rest of the pipeline reads one standalone
+            // font per registration, so the face is rebuilt as one.
+            if (FontCollection.IsCollection(fontBytes))
+                fontBytes = FontCollection.ExtractFace(fontBytes, 0);
+
+            memoryStream = new MemoryStream(fontBytes);
+
+            var fontFileInfo = FontFileInfo.From(TtfFontDescription.LoadDescription(memoryStream));
             var key = fontFamilyName.ToLowerInvariant();
             _customFamilyNames.Add(key);
 
@@ -349,22 +349,28 @@ namespace PeachPDF.Fonts
             return true;
         }
 
-        private static (FrozenDictionary<string, string> Paths, FrozenDictionary<string, FontFamilyModel> Families) ParseSystemFonts(string[] sSupportedFonts)
+        internal static (FrozenDictionary<string, (string Path, int FaceIndex)> Paths, FrozenDictionary<string, FontFamilyModel> Families) ParseSystemFonts(string[] sSupportedFonts)
         {
-            var fontPaths = new Dictionary<string, string>();
+            var fontPaths = new Dictionary<string, (string Path, int FaceIndex)>();
             var tempFontInfoList = new List<FontFileInfo>();
 
             foreach (var fontPathFile in sSupportedFonts)
             {
                 try
                 {
-                    var fontInfo = FontFileInfo.Load(fontPathFile);
                     Debug.WriteLine(fontPathFile);
-                    tempFontInfoList.Add(fontInfo);
 
-                    if (!fontPaths.ContainsKey(fontInfo.FontDescription.FontNameInvariantCulture))
+                    // One entry per face: an ordinary font file has one, a .ttc/.otc collection several,
+                    // each its own family/weight/style (and so its own place in the family model).
+                    foreach (var (faceIndex, description) in TtfFontDescription.LoadDescriptions(fontPathFile))
                     {
-                        fontPaths.Add(fontInfo.FontDescription.FontNameInvariantCulture, fontPathFile);
+                        var fontInfo = FontFileInfo.From(description);
+                        tempFontInfoList.Add(fontInfo);
+
+                        if (!fontPaths.ContainsKey(description.FontNameInvariantCulture))
+                        {
+                            fontPaths.Add(description.FontNameInvariantCulture, (fontPathFile, faceIndex));
+                        }
                     }
                 }
                 catch (System.Exception e)
@@ -416,12 +422,32 @@ namespace PeachPDF.Fonts
                 return fontBytes;
             }
 
-            if (_systemFontPaths.TryGetValue(fontFaceName, out var fontPath))
+            if (_systemFontPaths.TryGetValue(fontFaceName, out var systemFont))
             {
-                return _systemFontBytesCache.GetOrAdd(fontPath, File.ReadAllBytes);
+                return _systemFontBytesCache.GetOrAdd(systemFont, static face => LoadSystemFontBytes(face.Path, face.FaceIndex));
             }
 
             throw new ArgumentOutOfRangeException(nameof(fontFaceName), "Unknown Font Face Name");
+        }
+
+        /// <summary>
+        /// The bytes of one font face as the rest of the pipeline expects them: the file itself for an
+        /// ordinary font, and for a face of a <c>.ttc</c>/<c>.otc</c> collection a standalone font rebuilt
+        /// from just that face's tables (see <see cref="FontCollection.ExtractFace(Stream, int)"/>).
+        /// </summary>
+        internal static byte[] LoadSystemFontBytes(string path, int faceIndex)
+        {
+            using var stream = File.OpenRead(path);
+
+            Span<byte> tag = stackalloc byte[4];
+            stream.ReadExactly(tag);
+            if (FontCollection.IsCollection(tag))
+                return FontCollection.ExtractFace(stream, faceIndex);
+
+            stream.Seek(0, SeekOrigin.Begin);
+            var bytes = new byte[stream.Length];
+            stream.ReadExactly(bytes);
+            return bytes;
         }
 
         public bool HasFont(string fontFaceName)
@@ -557,6 +583,29 @@ namespace PeachPDF.Fonts
         private IReadOnlyList<RuneRange> EffectiveCoverage(FontFaceEntry entry) =>
             entry.ExplicitRanges ?? GetOrComputeCoverage(entry.Description.FontNameInvariantCulture);
 
+        /// <summary>
+        /// Whether <paramref name="entry"/> is a face to prefer for <paramref name="rune"/> drawn in
+        /// <paramref name="presentation"/> - see <see cref="EmojiProperties.FaceMatches"/>. Reads the face's
+        /// tables through the same shared font-source cache <see cref="GetOrComputeCoverage"/> uses.
+        /// </summary>
+        private bool FacePresentationMatches(FontFaceEntry entry, Rune rune, EmojiPresentation presentation)
+        {
+            if (presentation == EmojiPresentation.NoPreference)
+                return true;
+
+            var faceName = entry.Description.FontNameInvariantCulture;
+            try
+            {
+                var fontFace = XFontSource.GetOrCreateFrom(GetFont(faceName)).Fontface;
+                return fontFace is null || EmojiProperties.FaceMatches(fontFace, rune.Value, presentation);
+            }
+            catch
+            {
+                // A face this reader cannot parse could not be drawn in either presentation.
+                return false;
+            }
+        }
+
         private IReadOnlyList<RuneRange> GetOrComputeCoverage(string faceName)
         {
             if (_coverageCache.TryGetValue(faceName, out var cached))
@@ -588,15 +637,23 @@ namespace PeachPDF.Fonts
         /// <see cref="_systemFallbackCache"/> - since a document missing coverage for one character often
         /// repeats it many times.
         /// </summary>
-        internal string? FindFamilyCoveringCodepoint(Rune codepoint)
+        /// <param name="codepoint">the character no declared family covers</param>
+        /// <param name="presentation">
+        /// the emoji/text presentation the caller wants (CSS <c>font-variant-emoji</c>): with a request, only
+        /// faces that <see cref="EmojiProperties.FaceMatches">match it</see> count, so the answer can be
+        /// null even though a face covers the codepoint - the caller then retries without a preference.
+        /// </param>
+        internal string? FindFamilyCoveringCodepoint(Rune codepoint, EmojiPresentation presentation = EmojiPresentation.NoPreference)
         {
-            if (_systemFallbackCache.TryGetValue(codepoint.Value, out var cached))
+            if (_systemFallbackCache.TryGetValue((codepoint.Value, presentation), out var cached))
                 return cached;
+
+            bool Usable(FontFaceEntry face) => FaceCovers(face, codepoint) && FacePresentationMatches(face, codepoint, presentation);
 
             var candidates = new List<string>();
             foreach (var (key, family) in InstalledFonts)
             {
-                if (family.Faces.Any(f => FaceCovers(f, codepoint)))
+                if (family.Faces.Any(Usable))
                     candidates.Add(key);
             }
 
@@ -612,10 +669,10 @@ namespace PeachPDF.Fonts
             else
             {
                 candidates.Sort(StringComparer.Ordinal);
-                winner = PickScriptAwareWinner(candidates, codepoint);
+                winner = PickScriptAwareWinner(candidates, codepoint, Usable);
             }
 
-            _systemFallbackCache[codepoint.Value] = winner;
+            _systemFallbackCache[(codepoint.Value, presentation)] = winner;
             return winner;
         }
 
@@ -628,7 +685,7 @@ namespace PeachPDF.Fonts
         /// codepoint with no real script of its own (punctuation, digits, unassigned codepoints), since
         /// there is nothing meaningful to score against.
         /// </summary>
-        private string PickScriptAwareWinner(List<string> candidates, Rune codepoint)
+        private string PickScriptAwareWinner(List<string> candidates, Rune codepoint, Func<FontFaceEntry, bool> usable)
         {
             var script = ScriptTable.Of(codepoint);
             if (script is ScriptTable.Common or ScriptTable.Inherited or ScriptTable.Unknown)
@@ -644,7 +701,7 @@ namespace PeachPDF.Fonts
             foreach (var key in candidates)
             {
                 var family = InstalledFonts[key];
-                var coveringFace = family.Faces.First(f => FaceCovers(f, codepoint));
+                var coveringFace = family.Faces.First(usable);
                 var overlap = OverlapLength(EffectiveCoverage(coveringFace), scriptRanges);
 
                 if (overlap > bestOverlap)

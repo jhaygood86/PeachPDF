@@ -1282,7 +1282,8 @@ namespace PeachPDF.Html.Core.Dom
                     MergeExplicitFeatures(ActualFontFeatureSettings, ActualFontVariantAlternates),
                     Kerning: ActualFontKerning,
                     Language: Owner.Language,
-                    Position: ActualFontVariantPosition);
+                    Position: ActualFontVariantPosition,
+                    EmojiMode: ActualFontVariantEmoji);
 
                 _actualTextShapingFeatures = resolved;
                 return resolved;
@@ -1604,26 +1605,31 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        private Dictionary<(int Codepoint, double Scale), RFont>? _codepointFontCache;
+        private Dictionary<(int Codepoint, double Scale, EmojiPresentation Presentation), RFont>? _codepointFontCache;
+
+        /// <summary>This box's <c>font-variant-emoji</c> keyword.</summary>
+        public FontVariantEmojiMode ActualFontVariantEmoji => Style.Font.FontVariantEmoji.Value;
 
         /// <summary>
         /// The font this box uses for <paramref name="codepoint"/> specifically - the first family in the
         /// <c>font-family</c> stack whose face both covers the codepoint (its <c>unicode-range</c>/cmap
         /// coverage) and has a glyph for it. Falls back to <see cref="ActualFont"/> (or
         /// <see cref="ActualSmallCapsFont"/> when <paramref name="sizeScale"/> marks a small-caps run) when
-        /// no declared family covers it. Cached per (codepoint, scale); mirrors <see cref="ActualSmallCapsFont"/>'s
-        /// size/style derivation.
+        /// no declared family covers it. Cached per (codepoint, scale, presentation); mirrors
+        /// <see cref="ActualSmallCapsFont"/>'s size/style derivation. <paramref name="presentation"/> is the
+        /// emoji/text presentation the character is to be drawn in (<see cref="EmojiProperties.ResolveAt"/>),
+        /// which steers the choice between a colour and an outline font that both cover it.
         /// </summary>
-        public RFont ActualFontForCodepoint(Rune codepoint, double sizeScale = 1.0)
+        public RFont ActualFontForCodepoint(Rune codepoint, double sizeScale = 1.0, EmojiPresentation presentation = EmojiPresentation.NoPreference)
         {
-            var cacheKey = (codepoint.Value, sizeScale);
+            var cacheKey = (codepoint.Value, sizeScale, presentation);
             if (_codepointFontCache is not null && _codepointFontCache.TryGetValue(cacheKey, out var cached))
                 return cached;
 
             var size = ActualFont.Size * sizeScale;
             // Resolve against the full authored font-family stack (not the cascade-collapsed single family)
             // so a codepoint the first family can't supply falls back to a later one.
-            var font = Owner.GetCachedFontForCodepoint(Style.Font.FontFamilyList ?? Style.Font.FontFamily!, size, GetActualFontStyleFlags(), codepoint, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
+            var font = Owner.GetCachedFontForCodepoint(Style.Font.FontFamilyList ?? Style.Font.FontFamily!, size, GetActualFontStyleFlags(), codepoint, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, presentation)
                        ?? (sizeScale == 1.0 ? ActualFont : ActualSmallCapsFont);
 
             (_codepointFontCache ??= [])[cacheKey] = font;

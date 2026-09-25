@@ -178,6 +178,9 @@ namespace PeachPDF.Adapters
 
         public override bool HasGlyph(System.Text.Rune rune) => Font.Descriptor?.HasGlyph(rune) ?? false;
 
+        public override bool MatchesEmojiPresentation(System.Text.Rune baseCodepoint, EmojiPresentation presentation) =>
+            Font.Descriptor is not { } descriptor || EmojiProperties.FaceMatches(descriptor.FontFace, baseCodepoint.Value, presentation);
+
         public override bool SupportsFontVariantCaps(FontVariantCapsFeature feature) =>
             Font.Descriptor?.SupportsFeatureTags(GsubShaper.GetFeatureTags(feature)) ?? false;
 

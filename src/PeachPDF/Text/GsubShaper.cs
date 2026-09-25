@@ -183,7 +183,11 @@ namespace PeachPDF.Text
         // Appended last, and passed by name at every call site: the existing constructions here and in
         // SvgTreeBuilder are positional, so inserting this next to its font-variant-* siblings would
         // silently re-bind their arguments rather than fail to compile.
-        FontVariantPositionFeature Position = FontVariantPositionFeature.None)
+        FontVariantPositionFeature Position = FontVariantPositionFeature.None,
+        // font-variant-emoji acts "as if" U+FE0E/U+FE0F followed every participating character, so a font's
+        // own cmap format-14 glyph for that sequence has to be reachable without the selector in the text.
+        // It selects a glyph here, not a GSUB feature, so it never reaches GetActiveLookupIndices.
+        PeachPDF.CSS.FontVariantEmojiMode EmojiMode = PeachPDF.CSS.FontVariantEmojiMode.Normal)
     {
         // NOT `new()` - for a record struct, a bare `new()` invokes the struct's implicit,
         // zero-initializing parameterless constructor, NOT this primary constructor's own declared
@@ -309,7 +313,7 @@ namespace PeachPDF.Text
         /// as <c>IReadOnlyList&lt;ShapedGlyph&gt;</c>).</summary>
         public static List<ShapedGlyph> Shape(OpenTypeDescriptor descriptor, string text, TextShapingFeatures features)
         {
-            List<ShapedGlyph> glyphs = MapToGlyphs(descriptor, text);
+            List<ShapedGlyph> glyphs = MapToGlyphs(descriptor, text, features.EmojiMode);
             if (glyphs.Count == 0 || IsEmpty(features))
                 return glyphs;
 
@@ -463,11 +467,12 @@ namespace PeachPDF.Text
             && (features.JoiningForms is null || features.JoiningForms.Count == 0)
             && (features.UseCategories is null || features.UseCategories.Count == 0);
 
-        private static List<ShapedGlyph> MapToGlyphs(OpenTypeDescriptor descriptor, string text)
+        private static List<ShapedGlyph> MapToGlyphs(OpenTypeDescriptor descriptor, string text, PeachPDF.CSS.FontVariantEmojiMode emojiMode)
         {
             var result = new List<ShapedGlyph>(text.Length);
             bool symbol = descriptor.FontFace.cmap.symbol;
             int clusterStart = 0;
+            int previousCodepoint = -1;
 
             foreach (Rune rune in text.EnumerateRunes())
             {
@@ -478,13 +483,37 @@ namespace PeachPDF.Text
 
                 int glyphIndex = descriptor.CharCodeToGlyphIndex(lookup);
 
+                // A character asked to be drawn in a presentation - by the selector after it, or by
+                // font-variant-emoji standing in for one - takes the font's dedicated glyph for that
+                // sequence when its cmap format 14 has one (a non-default UVS record).
+                if (glyphIndex != 0)
+                {
+                    var presentation = EmojiProperties.ResolveAt(emojiMode, text, clusterStart);
+                    if (presentation != EmojiPresentation.NoPreference
+                        && descriptor.LookupVariationSequence(rune.Value, EmojiProperties.SelectorFor(presentation), out int presentationGlyph) == VariationSequenceSupport.NonDefault)
+                    {
+                        glyphIndex = presentationGlyph;
+                    }
+                }
+
                 // A variation selector never contributes an independent glyph advance, even when a font
                 // maps it in its ordinary cmap. Other default ignorables are hidden when unmapped; a real
                 // mapped glyph remains available to GSUB (notably for ZWJ-driven emoji composition).
                 var hiddenIgnorable = UnicodeDefaultIgnorables.IsVariationSelector(rune.Value)
                     || glyphIndex == 0 && UnicodeDefaultIgnorables.IsDefaultIgnorable(rune.Value);
 
+                // Any other variation selector after a base the font gives a dedicated glyph for (a
+                // non-default UVS record in cmap format 14) swaps that glyph in for the base's ordinary one
+                // (U+FE0E/U+FE0F were handled above, together with font-variant-emoji). The selector itself
+                // is still emitted and flagged - it is only deleted at the very end.
+                if (UnicodeDefaultIgnorables.IsVariationSelector(rune.Value) && !EmojiProperties.IsPresentationSelector(rune.Value) && result.Count > 0 && previousCodepoint >= 0
+                    && descriptor.LookupVariationSequence(previousCodepoint, rune.Value, out int sequenceGlyph) == VariationSequenceSupport.NonDefault)
+                {
+                    result[^1] = result[^1] with { GlyphIndex = sequenceGlyph };
+                }
+
                 result.Add(new ShapedGlyph(glyphIndex, clusterStart, utf16Length, IsHiddenIgnorable: hiddenIgnorable));
+                previousCodepoint = rune.Value;
                 clusterStart += utf16Length;
             }
 

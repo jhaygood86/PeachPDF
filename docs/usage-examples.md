@@ -325,7 +325,7 @@ generator.AddFontFamilyMapping("Segoe UI","sans-serif"); // or any other system 
 
 ### Generic families and `system-ui`
 
-`serif`, `sans-serif`, `monospace`, `cursive`, `fantasy`, and `system-ui` all resolve to a real installed font, matching actual Chromium behavior per platform rather than one invented cross-platform table:
+`serif`, `sans-serif`, `monospace`, `cursive`, `fantasy`, `math`, and `system-ui` all resolve to a real installed font, matching actual Chromium behavior per platform rather than one invented cross-platform table:
 
 | Generic | Windows | macOS | Android | Linux |
 |---|---|---|---|---|
@@ -334,9 +334,12 @@ generator.AddFontFamilyMapping("Segoe UI","sans-serif"); // or any other system 
 | `monospace` | Consolas | Menlo | Droid Sans Mono | *(delegated to fontconfig's own `monospace` alias)* |
 | `cursive` | Comic Sans MS | Apple Chancery | Dancing Script | *(delegated to fontconfig's own `cursive` alias)* |
 | `fantasy` | Impact | Papyrus | Dancing Script | *(delegated to fontconfig's own `fantasy` alias)* |
+| `math` | *(first installed of Latin Modern Math, Cambria Math, STIX Two Math)* | *(first installed of Latin Modern Math, STIX Two Math, Cambria Math)* | *(first installed of Noto Sans Math, STIX Two Math, Latin Modern Math)* | *(first installed of Latin Modern Math, STIX Two Math, DejaVu Math TeX Gyre, Cambria Math, Noto Sans Math; not asked of fontconfig)* |
 | `system-ui` | Segoe UI | *(platform default font)* | *(platform default font)* | *(delegated to fontconfig's own `system-ui` alias)* |
 
 On Linux, PeachPDF delegates directly to the system's own `fontconfig` library (`libfontconfig.so.1`) at startup — the managed equivalent of running `fc-match <generic>` — so the resolved family always matches whatever that distro's own font configuration actually maps each generic to, rather than a name that might not be installed. `system-ui` on Windows is an exact match for Chromium's own `system-ui` → Segoe UI resolution, and on Linux it goes through fontconfig exactly like the five generics above — which is also what Chromium does there — falling back to the platform default font only if fontconfig cannot answer or names a family that is not installed. On macOS/Android it remains a pragmatic approximation using the platform's default font rather than true native system-UI-font detection (e.g. macOS's actual system-ui is the private San Francisco font, not something cleanly resolvable via plain TTF/OTF file discovery).
+
+`math` is a *list* rather than one name, because Chromium's own choice (Latin Modern Math) is not installed by default on Windows or macOS: PeachPDF uses the first family of the platform's list that is installed, and the platform default font when none is - a `<math>` element then renders in that default font rather than the surrounding text's font, since its `font-family` is the (unresolvable) generic. On a stock Windows machine that is Cambria Math, which Windows ships inside a font collection (`cambria.ttc`). It is deliberately not delegated to fontconfig on Linux — `fc-match math` matches no rule and answers with the ordinary default sans-serif family, which would win over a real math font. A `<math>` element uses this generic by default (see [MathML](supported-mathml-features.md)), and `AddFontFamilyMapping("math", "Your Math Font")` overrides the choice.
 
 Every mapping above — including a custom one set via `AddFontFamilyMapping` — is verified against the fonts actually installed on the running machine before use; if the target isn't present, PeachPDF falls back to the platform's default font instead of silently substituting whatever arbitrary font happened to be discovered first.
 
@@ -353,7 +356,7 @@ See [Color & Typography](html-css-support.md#color--typography) in HTML & CSS Su
 
 ### Adding custom fonts
 
-The recommended way to install custom fonts is to install them into your operating system. PeachPDF picks up TrueType/OpenType fonts from the operating system's own installed fonts:
+The recommended way to install custom fonts is to install them into your operating system. PeachPDF picks up TrueType/OpenType fonts (`.ttf`/`.otf`) and font collections (`.ttc`/`.otc`) from the operating system's own installed fonts. Every face of a collection is discovered as its own font — this is where platforms ship several of their own fonts, such as Windows' Cambria Math and MS Gothic, macOS's Helvetica, Times and Menlo, and the Noto CJK fonts on Linux:
 
 - **Windows**: `%SystemRoot%\Fonts` and `%LOCALAPPDATA%\Microsoft\Windows\Fonts`
 - **macOS**: `/System/Library/Fonts`, `/Library/Fonts`, and `~/Library/Fonts`
@@ -361,7 +364,7 @@ The recommended way to install custom fonts is to install them into your operati
 - **Android**: `/system/fonts`, `/product/fonts`, and `/data/fonts`
 - **iOS**: none — iOS sandboxes apps away from system font files entirely, and CoreText only exposes fonts as opaque handles with no API to extract raw file bytes. iOS apps must embed their own fonts and register them via `AddFontFromStream` below
 
-You can also add a font at runtime by loading the font into a Stream, and then using the AddFontFromStream API:
+You can also add a font at runtime by loading the font into a Stream, and then using the AddFontFromStream API. A `.ttc`/`.otc` collection passed this way registers only its first face:
 
 ```csharp
 PdfGenerator generator = new();
