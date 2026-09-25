@@ -2,6 +2,8 @@
 
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 
@@ -43,9 +45,52 @@ namespace PeachPDF.Fonts
             return LoadDescription(stream);
         }
 
-        public static TtfFontDescription LoadDescription(Stream stream)
+        /// <summary>
+        /// The description of every face in the font file at <paramref name="path"/>, paired with its face
+        /// index: one entry for an ordinary <c>.ttf</c>/<c>.otf</c>, one per face for a <c>.ttc</c>/<c>.otc</c>
+        /// collection. A face of a collection that cannot be read is skipped (the rest of the collection is
+        /// still usable); an ordinary font that cannot be read throws, as <see cref="LoadDescription(string)"/> does.
+        /// </summary>
+        public static IReadOnlyList<(int FaceIndex, TtfFontDescription Description)> LoadDescriptions(string path)
         {
-            // TTF/OTF files are big-endian. Read the offset table to locate the name/OS2 tables.
+            using var stream = File.OpenRead(path);
+
+            var offsets = FontCollection.ReadFaceOffsets(stream);
+            if (offsets is null)
+                return [(0, LoadDescription(stream, 0))];
+
+            var faces = new List<(int, TtfFontDescription)>(offsets.Length);
+            for (var i = 0; i < offsets.Length; i++)
+            {
+                try
+                {
+                    faces.Add((i, LoadDescription(stream, i)));
+                }
+                catch (Exception e) when (e is InvalidOperationException or InvalidDataException or EndOfStreamException or ArgumentOutOfRangeException)
+                {
+                    Debug.WriteLine($"{path} face {i}: {e.Message}");
+                }
+            }
+
+            return faces;
+        }
+
+        /// <summary>
+        /// The description of face 0 - the only face of an ordinary font, and the first face of a collection.
+        /// </summary>
+        public static TtfFontDescription LoadDescription(Stream stream) => LoadDescription(stream, 0);
+
+        /// <summary>
+        /// The description of face <paramref name="faceIndex"/> of the font at the start of
+        /// <paramref name="stream"/>: index 0 for an ordinary font, any face of a collection.
+        /// </summary>
+        public static TtfFontDescription LoadDescription(Stream stream, int faceIndex)
+        {
+            // TTF/OTF files are big-endian. Read the offset table to locate the name/OS2 tables. Table
+            // offsets are absolute from the start of the file, in a collection as in a single font, so only
+            // the directory's own position depends on the face.
+            stream.Seek(FontCollection.FaceOffset(stream, faceIndex), SeekOrigin.Begin);
+
             Span<byte> buf4 = stackalloc byte[4];
             Span<byte> buf2 = stackalloc byte[2];
 

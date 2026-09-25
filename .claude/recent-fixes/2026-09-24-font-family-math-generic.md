@@ -14,7 +14,7 @@ The chain lives in a pure function taking platform booleans and an `exists` dele
 tested on any host (same shape as `ResolveSystemUiFamily`); the adapter constructor's existing
 "not installed -> `DefaultFontResolver.DefaultFont`" correction covers the empty-chain case.
 
-**Cambria Math is currently unreachable on Windows** - it ships in `cambria.ttc`, which system-font discovery skips (see [the accepted gap](../accepted-gaps/system-font-discovery-skips-truetype-collections.md)); the chain keeps it for when collections are readable.
+**Cambria Math is only reachable because discovery reads `.ttc` files** - see [font collections](2026-09-24-font-collections-are-discovered.md).
 
 **Test trap:** `MathSmokeTests.NoMathTable_FallsBackGracefully` relied on `<math>` having no font rule so the
 default (non-math) font exercised the fallback constants. With the UA rule a host that has a math font

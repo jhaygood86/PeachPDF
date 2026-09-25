@@ -23,7 +23,7 @@ namespace PeachPDF.Fonts
 
     internal class FontResolver : IFontResolver
     {
-        private static readonly FrozenDictionary<string, string> _systemFontPaths;
+        private static readonly FrozenDictionary<string, (string Path, int FaceIndex)> _systemFontPaths;
         private static readonly FrozenDictionary<string, FontFamilyModel> _systemFamilies;
 
         // A system font file never changes during the process's lifetime (same rationale as
@@ -34,7 +34,7 @@ namespace PeachPDF.Fonts
         // also makes XFontSource.GetOrCreateFrom's own buffer-identity checksum memo (see XFontSource.cs)
         // actually hit for system fonts, not just custom ones - see .claude/recent-fixes for the measured
         // effect.
-        private static readonly ConcurrentDictionary<string, byte[]> _systemFontBytesCache = new();
+        private static readonly ConcurrentDictionary<(string Path, int FaceIndex), byte[]> _systemFontBytesCache = new();
 
         private readonly Dictionary<string, byte[]> _CustomFonts = [];
         private readonly Dictionary<string, FontFamilyModel> InstalledFonts;
@@ -115,9 +115,13 @@ namespace PeachPDF.Fonts
         /// </summary>
         internal static IEnumerable<string> SystemFamilyDisplayNames => _systemFamilies.Values.Select(f => f.Name);
 
-        private static readonly string[] FontExtensions = ["*.ttf", "*.otf"];
+        // Collections (.ttc/.otc) come last so a machine's first discovered font is still an ordinary one. A
+        // collection is where a platform ships some of its own fonts - Windows' Cambria Math and MS Gothic,
+        // macOS's Helvetica, Times and Menlo, the Noto CJK fonts on Linux - so leaving them out left those
+        // families invisible.
+        private static readonly string[] FontExtensions = ["*.ttf", "*.otf", "*.ttc", "*.otc"];
 
-        private static string[] GetFontFiles(string dir)
+        internal static string[] GetFontFiles(string dir)
         {
             if (!Directory.Exists(dir))
                 return [];
@@ -229,17 +233,7 @@ namespace PeachPDF.Fonts
 
             public XFontStyle GuessFontStyle() => this.FontDescription.Style;
 
-            public static FontFileInfo Load(string path)
-            {
-                var fontDescription = TtfFontDescription.LoadDescription(path);
-                return new FontFileInfo(fontDescription);
-            }
-
-            public static FontFileInfo Load(Stream stream)
-            {
-                var fontDescription = TtfFontDescription.LoadDescription(stream);
-                return new FontFileInfo(fontDescription);
-            }
+            public static FontFileInfo From(TtfFontDescription fontDescription) => new(fontDescription);
         }
 
         public void AddFont(Stream stream, string fontFamilyName)
@@ -264,9 +258,15 @@ namespace PeachPDF.Fonts
             stream.CopyTo(memoryStream);
 
             var fontBytes = memoryStream.ToArray();
-            memoryStream.Seek(0, SeekOrigin.Begin);
 
-            var fontFileInfo = FontFileInfo.Load(memoryStream);
+            // A .ttc/.otc collection registers its first face: the rest of the pipeline reads one standalone
+            // font per registration, so the face is rebuilt as one.
+            if (FontCollection.IsCollection(fontBytes))
+                fontBytes = FontCollection.ExtractFace(fontBytes, 0);
+
+            memoryStream = new MemoryStream(fontBytes);
+
+            var fontFileInfo = FontFileInfo.From(TtfFontDescription.LoadDescription(memoryStream));
             var key = fontFamilyName.ToLowerInvariant();
             _customFamilyNames.Add(key);
 
@@ -349,22 +349,28 @@ namespace PeachPDF.Fonts
             return true;
         }
 
-        private static (FrozenDictionary<string, string> Paths, FrozenDictionary<string, FontFamilyModel> Families) ParseSystemFonts(string[] sSupportedFonts)
+        internal static (FrozenDictionary<string, (string Path, int FaceIndex)> Paths, FrozenDictionary<string, FontFamilyModel> Families) ParseSystemFonts(string[] sSupportedFonts)
         {
-            var fontPaths = new Dictionary<string, string>();
+            var fontPaths = new Dictionary<string, (string Path, int FaceIndex)>();
             var tempFontInfoList = new List<FontFileInfo>();
 
             foreach (var fontPathFile in sSupportedFonts)
             {
                 try
                 {
-                    var fontInfo = FontFileInfo.Load(fontPathFile);
                     Debug.WriteLine(fontPathFile);
-                    tempFontInfoList.Add(fontInfo);
 
-                    if (!fontPaths.ContainsKey(fontInfo.FontDescription.FontNameInvariantCulture))
+                    // One entry per face: an ordinary font file has one, a .ttc/.otc collection several,
+                    // each its own family/weight/style (and so its own place in the family model).
+                    foreach (var (faceIndex, description) in TtfFontDescription.LoadDescriptions(fontPathFile))
                     {
-                        fontPaths.Add(fontInfo.FontDescription.FontNameInvariantCulture, fontPathFile);
+                        var fontInfo = FontFileInfo.From(description);
+                        tempFontInfoList.Add(fontInfo);
+
+                        if (!fontPaths.ContainsKey(description.FontNameInvariantCulture))
+                        {
+                            fontPaths.Add(description.FontNameInvariantCulture, (fontPathFile, faceIndex));
+                        }
                     }
                 }
                 catch (System.Exception e)
@@ -416,12 +422,32 @@ namespace PeachPDF.Fonts
                 return fontBytes;
             }
 
-            if (_systemFontPaths.TryGetValue(fontFaceName, out var fontPath))
+            if (_systemFontPaths.TryGetValue(fontFaceName, out var systemFont))
             {
-                return _systemFontBytesCache.GetOrAdd(fontPath, File.ReadAllBytes);
+                return _systemFontBytesCache.GetOrAdd(systemFont, static face => LoadSystemFontBytes(face.Path, face.FaceIndex));
             }
 
             throw new ArgumentOutOfRangeException(nameof(fontFaceName), "Unknown Font Face Name");
+        }
+
+        /// <summary>
+        /// The bytes of one font face as the rest of the pipeline expects them: the file itself for an
+        /// ordinary font, and for a face of a <c>.ttc</c>/<c>.otc</c> collection a standalone font rebuilt
+        /// from just that face's tables (see <see cref="FontCollection.ExtractFace(Stream, int)"/>).
+        /// </summary>
+        internal static byte[] LoadSystemFontBytes(string path, int faceIndex)
+        {
+            using var stream = File.OpenRead(path);
+
+            Span<byte> tag = stackalloc byte[4];
+            stream.ReadExactly(tag);
+            if (FontCollection.IsCollection(tag))
+                return FontCollection.ExtractFace(stream, faceIndex);
+
+            stream.Seek(0, SeekOrigin.Begin);
+            var bytes = new byte[stream.Length];
+            stream.ReadExactly(bytes);
+            return bytes;
         }
 
         public bool HasFont(string fontFaceName)
