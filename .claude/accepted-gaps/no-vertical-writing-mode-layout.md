@@ -471,21 +471,15 @@ entry point every other out-of-flow child already uses — `position: absolute`/
 §9.7 (`DomParser.BlockifyPositionedBox`) before it can ever reach an inline-only box's word stream in the
 first place, so this closes the gap fully for that case (reserves no column space, resolves its own
 `left`/`top`/`right`/`bottom` against its nearest positioned ancestor exactly as a block-level positioned
-descendant already does). **Float column wrap-around** is real too: `DomUtils.GetVerticalFloatConstraint`
-(mirroring `FindNarrowestRightFloatBox`'s ancestor/preceding-sibling traversal shape, but testing a column's
-own block-axis point against a physical-X span rather than a physical-Y point against a row) narrows a
-column's own usable inline-axis extent whenever a floated sibling's physical-X span covers that column's own
-block-axis position — computed once per column (`CreateVerticalLineBoxes`'s own `ComputeEffectiveWrapLimit`),
-not once per word, since a column's block-axis position never changes mid-column. Confirmed via spec research
-that `float: left`/`right` stay strictly physical under a vertical writing mode, matching real, current
-browser behavior (MDN's dedicated logical-floating guide's live examples show `float: left` staying physical,
-with `float: inline-start`/`inline-end` — a separate CSS Logical Properties Level 1 feature, not something
-this engine parses — as the actual writing-mode-aware mechanism) — this engine's own physical-only `Floating`
-enum needed no changes. A post-change review pass found CSS Writing Modes 4 §7.1 does name "floating" once,
-in passing, as one of the features it says get reinterpreted via line-left/line-right — but that is the
-*only* mention of float/clear anywhere in the whole document, with no normative algorithm anywhere backing
-it, so it reads as an unfollowed-through aspiration rather than a rule real implementations honor; the MDN-
-verified, real-browser-behavior conclusion above stands.
+descendant already does). **Floats** are line-relative, not physical, and were made so in #796 (see
+[the fix](../recent-fixes/2026-09-24-vertical-floats-and-clear-are-line-relative.md)): `float: left`/`right` and
+`clear` resolve against the containing block's writing mode, so in `vertical-rl`/`vertical-lr` line-left is the
+physical top and line-right the physical bottom, whatever the `direction` (CSS Writing Modes 4 §6.4 and §7.5).
+An earlier version of this entry concluded they stay physical on the strength of MDN's logical-floating guide;
+that guide only shows `float: left` is independent of `direction`, which line-relative also means, and the same
+spec section it quoted as an aspiration is the normative statement. A float sits at the current block-axis
+position of its container and slides along the inline axis; text in later columns starts below a top float and
+stops above a bottom one, computed once per column (`CreateVerticalLineBoxes`'s `ComputeColumnInlineSpan`).
 **Real per-character hyphenation** splices a hyphenated prefix/suffix into both the flat word list and the
 owning box's own `Words` at the current loop index, gated by `hyphenate-limit-lines`/`-zone` against a local
 per-column streak counter (the method has no fragmentainer-resume state to seed a shared one from, and
@@ -520,8 +514,9 @@ tests, zero regressions).
 
 Three narrower, pre-existing bugs were found (not introduced) while building and testing #768, confirmed
 independent of its own five features — each had its own tracking issue since each needed its own focused
-fix: a float's own starting position inside a vertical box's block content is physically meaningless, and
-`clear` on an ordinary block child is unimplemented ([#796](https://github.com/jhaygood86/PeachPDF/issues/796));
+fix: a float's own starting position inside a vertical box's block content was physically meaningless, and
+`clear` on an ordinary block child was unimplemented (both fixed in
+[#796](https://github.com/jhaygood86/PeachPDF/issues/796));
 a direction:rtl vertical box positioned its own inline content's words against the placement-time
 provisional bottom edge rather than the box's own final settled one (#797, from #761/#778-era code, since
 fixed — see `.claude/recent-fixes/`); and `CreateVerticalLineBoxes`'s own auto-width shrink (#761) corrupted
@@ -561,11 +556,16 @@ would double-apply the same shift.
   instead of merely failing to break it — see
   [text-decoration-skip-ink-and-atomic-inline-exclusion-are-horizontal-only.md](text-decoration-skip-ink-and-atomic-inline-exclusion-are-horizontal-only.md),
   which also records why that guard must not be removed as dead code.
-- **A float's own starting position inside a vertical box's block-level content is physically meaningless
-  (derived from an unrelated preceding sibling's own inline-axis extent), and `clear` on an ordinary,
-  non-floated block child is unimplemented** ([#796](https://github.com/jhaygood86/PeachPDF/issues/796)).
-  Column wrap-around avoidance for text flowing around a float ([#768](https://github.com/jhaygood86/PeachPDF/issues/768),
-  closed) is unaffected by this — it queries wherever the float actually ends up, not where it "should".
+- **Floats in a vertical box are not yet complete** (what remains of
+  [#796](https://github.com/jhaygood86/PeachPDF/issues/796), see
+  [the fix](../recent-fixes/2026-09-24-vertical-floats-and-clear-are-line-relative.md) for what shipped): a float
+  in a *nested* block does not take part in `clear` of a later sibling of its parent (only the box's own floats
+  do, where horizontal flow also scans descendants); an orthogonal float (a `horizontal-tb` float inside a
+  vertical box, css-writing-modes-4 §7.3) is not sized by the two-phase rule that lets its block size feed the
+  parent's shrink-to-fit; a bottom float in an auto-height box is placed against the height the box ends up
+  with, but text beside it wraps against the provisional (page-height) edge until then; and text in a *nested*
+  vertical block whose own height is auto wraps against the page rather than its parent's height, so a bottom
+  float only cuts its columns when that block has an explicit height.
 - **A nested inline element's own border/padding/margin does not reserve inline-axis (physical left/right,
   for `vertical-rl`/`vertical-lr`) space** ([#769](https://github.com/jhaygood86/PeachPDF/issues/769)), and
   its block-axis (physical top/bottom) padding/border is applied once per column it spans rather than once

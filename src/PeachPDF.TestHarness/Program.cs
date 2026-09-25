@@ -2358,12 +2358,30 @@ var pageFloatsHtml = """
     verso page.</div>
     </div>
 
+    <div style="break-before: page;">
+    <h1>float-reference: column</h1>
+    <p>Inside a two-column container a page float can name the column instead of the page. Only the
+    column holding the float gives up room: the left column below keeps its full height and starts at
+    the top of the band, while the right column starts under its own float-reference: column figure.</p>
+    <div style="column-count: 2; column-gap: 24pt;">
+      <div class="figure" style="float-reference: column; float: bottom; margin: 12pt 0 0;">float: bottom, float-reference: column - flush with the foot of the left column, which stops above it.</div>
+      <p>Column one. This paragraph is anchored in the left column, so the callout belongs to that column and to no other: its strip is reserved at the left column's foot and the right column is unaffected by it.</p>
+      <p>The left column keeps flowing down to the callout. Every line up to the callout is in the left column's own band.</p>
+      <p>More left-column text, so that the flow reaches the right column: the container balances its columns, and the room each float takes is part of the balance.</p>
+      <p>Still the left column, until the balance moves the flow across.</p>
+      <div class="figure" style="float-reference: column; margin: 0 0 12pt;">float: top, float-reference: column - pinned to the top of the right column, whose text starts below it.</div>
+      <p>Right column. This paragraph follows the second float in the source, so it is anchored in the right column and the figure sits at that column's top edge, not the page's.</p>
+      <p>Right column. The left column beside it began at the top of the band and is untouched by this float.</p>
+      <p>Right column. A little more text so that the two columns are of a similar length.</p>
+    </div>
+    </div>
+
     </body>
     </html>
     """;
 
 await SaveShowcaseAsync("paged_media_page_floats", "Paged Media", "Page floats",
-    "css-page-floats' float: top/bottom/top-bottom/snap/inside/outside: a float: top figure landing flush at the true top of its landing page with flow content starting below the reserved strip, a float: bottom callout landing flush at the true bottom with flow content stopping above it, float: top-bottom falling back to the bottom edge once the top edge has no room left, and inside/outside resolving to opposite physical sides depending on whether the landing page is a right-hand (recto) or left-hand (verso) page.",
+    "css-page-floats' float: top/bottom/top-bottom/snap/inside/outside: a float: top figure landing flush at the true top of its landing page with flow content starting below the reserved strip, a float: bottom callout landing flush at the true bottom with flow content stopping above it, float: top-bottom falling back to the bottom edge once the top edge has no room left, inside/outside resolving to opposite physical sides depending on whether the landing page is a right-hand (recto) or left-hand (verso) page, and float-reference: column pinning a float to the edge of the column its anchor sits in so only that column gives up room.",
     pageFloatsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── Scroll containers across page breaks ───────────────────────────────────
@@ -8260,19 +8278,58 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "</div><div class=\"label\">position: absolute, nested in otherwise inline-only vertical text — reserves no column space and resolves fully against its own nearest positioned ancestor</div></div>" +
     "</div>" +
 
-    "<h2>10e &mdash; float column wrap-around inside vertical line flow (issue #768)</h2>" +
-    "<div class=\"row\">" +
-    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 260px; height: 200px\">" +
-    "<div style=\"float: right; width: 30px; height: 60px; background: #7cc0e0\"></div>" +
-    "Alpha Beta Gamma Delta Epsilon Zeta Eta Theta." +
-    "</div><div class=\"label\">float: right — later columns narrow to avoid the float's own physical footprint, the same way a horizontal line already wraps around a float</div></div>" +
-    "</div>" +
-
     "</body></html>";
 
 await SaveShowcaseAsync("writing_mode", "Typography & Text", "writing-mode (Vertical Text)",
     "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), writing-mode-aware Flexbox and Table layout (including captions, thead/tfoot, collapsed borders, vertical-align and rowspan row-axis sizing), block-level/orthogonal-flow content inside a vertical box, direction: rtl block children anchoring to the physical bottom edge, real CSS2.1 margin collapse (sibling-to-sibling and box-own-edge) between block-axis-stacked children, and text-align, Unicode Bidi Algorithm reordering, hyphenation, position: absolute/fixed, and float column wrap-around all working inside vertical line flow.",
     writingModeHtml, pdfConfig);
+
+// --- float and clear in a vertical writing mode (issue #796) ---
+// float: left/right (and clear) are line-relative - CSS Writing Modes 4 section 7.5 - so in vertical-rl and
+// vertical-lr the line-left side is the physical top and the line-right side the physical bottom, whatever the
+// direction. A float sits at the current block-axis position and slides along the inline axis; the columns
+// beside it start below a top float and stop above a bottom one.
+var verticalFloatsHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a4; margin: 15mm }
+    body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.4; color: #222 }
+    h1 { font-size: 16pt; margin: 0 0 6pt }
+    .note { color: #555; font-size: 9pt; margin: 0 0 10pt }
+    .row { display: flex; gap: 14pt; flex-wrap: wrap; margin-bottom: 14pt }
+    .cell { width: 150pt }
+    .vbox { border: 1.5pt solid #1a6b8a; background: #f4f9fc; font-size: 10pt }
+    .label { font-size: 8pt; color: #555; margin-top: 3pt }
+    .top { background: #7cc0e0 } .bottom { background: #e0a87c }
+    </style></head><body>
+    <h1>Floats and clear in vertical text</h1>
+    <p class="note">float: left and float: right are line-relative: in vertical-rl and vertical-lr the line-left
+    side is the physical top and the line-right side the physical bottom, whatever the direction.</p>
+    <div class="row">
+    <div class="cell"><div class="vbox" style="writing-mode: vertical-rl; width: 140pt; height: 150pt">
+    <div class="top" style="float: left; width: 22pt; height: 50pt"></div>
+    <p style="margin: 0; width: 120pt; height: 150pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p></div>
+    <div class="label">float: left - pinned to the physical top; the columns beside it start below it</div></div>
+    <div class="cell"><div class="vbox" style="writing-mode: vertical-rl; width: 140pt; height: 150pt">
+    <div class="bottom" style="float: right; width: 22pt; height: 50pt"></div>
+    <p style="margin: 0; width: 120pt; height: 150pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p></div>
+    <div class="label">float: right - pinned to the physical bottom; the columns beside it stop above it</div></div>
+    <div class="cell"><div class="vbox" style="writing-mode: vertical-lr; direction: rtl; width: 140pt; height: 150pt">
+    <div class="top" style="float: left; width: 22pt; height: 50pt"></div>
+    <div class="bottom" style="float: right; width: 22pt; height: 50pt"></div>
+    <p style="margin: 0; width: 120pt; height: 150pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p></div>
+    <div class="label">vertical-lr with direction: rtl - the top float is still float: left; both sides at once</div></div>
+    <div class="cell"><div class="vbox" style="writing-mode: vertical-rl; width: 140pt; height: 150pt">
+    <div class="top" style="float: left; width: 40pt; height: 50pt"></div>
+    <div style="width: 16pt; height: 90pt; background: #d5e8d4">A</div>
+    <div style="clear: left; width: 30pt; height: 90pt; background: #f8cecc">B</div></div>
+    <div class="label">clear: left - B is moved past the block-end edge of the float (the gap); A, uncleared, ignores it</div></div>
+    </div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("vertical_floats", "Typography & Text", "Floats and clear in vertical text",
+    "float and clear in a vertical writing mode: left and right are line-relative (top and bottom), floats slide along the inline axis and text wraps around them.",
+    verticalFloatsHtml, pdfConfig);
 
 // --- text-overflow: ellipsis showcase (issue #694) ---
 // Per-line truncation of whatever content genuinely overflows an overflow:hidden container's

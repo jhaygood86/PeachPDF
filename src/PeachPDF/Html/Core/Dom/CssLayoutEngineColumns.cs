@@ -234,21 +234,22 @@ namespace PeachPDF.Html.Core.Dom
                 // What is left of this container's own page. A column, or a spanning box standing in for
                 // one, can never be taller than that, so it is the ceiling on every target below.
                 //
-                // The page's footnote-area reservation comes off that ceiling. This is deliberately NOT
+                // The page's whole block-end reservation - its footnote area and any page float pinned to its
+                // foot - comes off that ceiling. This is deliberately NOT
                 // done by calling ReserveBandEnd on each column's own FragmentainerContext: a nested
                 // context's band bottom is the COLUMN's (boxTop + target), not the page's, so a band-end
                 // inset there would stop content that far above a balanced column bottom which already
                 // sits well above the note area - a fresh bug rather than a fix. Shrinking the ceiling is
                 // the right lever, and since pageBudget is only ever used as one (Math.Min, the
                 // target >= pageBudget stop, and EstimateBalancedColumnHeight's own cap), it changes
-                // nothing at all for a document with no footnotes.
+                // nothing at all for a document with neither.
                 //
                 // ReserveBandEnd on a column context is reserved for a COLUMN-scoped note area, whose
                 // band bottom genuinely is where that area sits. The two must never both be applied for
                 // the same amount - they compose, and would double-count it.
                 var pageBudget = htmlContainer.HasRealPageGrid
                     ? htmlContainer.PageBottomOf(startSlot)
-                      - htmlContainer.FootnoteAreaHeightsBySlot.GetValueOrDefault(startSlot, 0)
+                      - htmlContainer.TotalBandEndReservationFor(startSlot)
                       - boxTop
                     : double.MaxValue / 4;
 
@@ -645,11 +646,31 @@ namespace PeachPDF.Html.Core.Dom
                 // advances, and the container defers page after page until HasAlreadyBeenEntered trips
                 // the monolithic last resort. Declining lets the area overflow the column instead, which
                 // is the same answer the page path already gives for an over-tall note area.
-                var columnFootnoteInset = htmlContainer.ColumnFootnoteInsetFor(columnKey);
-                if (columnFootnoteInset > 0 && columnFootnoteInset < target)
+                //
+                // A column-scoped page float (float-reference: column) claims room at the column's own edges
+                // the same way: its block-end strip composes with the note area into that one reservation,
+                // and its block-start strip is the mirror at the head. Both are declined together if the
+                // pair would leave no room, for the reason above.
+                var columnTopInset = htmlContainer.ColumnPageFloatTopInsetFor(columnKey);
+                var columnBottomInset = htmlContainer.ColumnFootnoteInsetFor(columnKey)
+                                        + htmlContainer.ColumnPageFloatBottomInsetFor(columnKey);
+
+                if (columnTopInset + columnBottomInset >= target)
                 {
-                    column.ReserveBandEnd(startSlot, columnFootnoteInset);
+                    columnTopInset = columnBottomInset = 0;
                 }
+
+                if (columnBottomInset > 0)
+                {
+                    column.ReserveBandEnd(startSlot, columnBottomInset);
+                }
+
+                if (columnTopInset > 0)
+                {
+                    column.ReserveBandStart(startSlot, columnTopInset);
+                }
+
+                column.ColumnKey = columnKey;
 
                 var previousContext = htmlContainer.EnterNestedFragmentainer(column);
 

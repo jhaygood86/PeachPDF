@@ -61,6 +61,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal HtmlContainerInt Container { get; }
 
         /// <summary>
+        /// Which column of a multi-column container this context fills, or null for anything else. Set by
+        /// the columns engine, so a box laid out inside the column can say exactly where it landed rather
+        /// than have that inferred later from a position that later passes move.
+        /// </summary>
+        internal ColumnAreaKey? ColumnKey { get; set; }
+
+        /// <summary>
         /// The box that owns this fragmentation context. A field rather than the document root so a
         /// nested context (multi-column columns are fragmentainers too, per §2) can be introduced
         /// without reshaping this type.
