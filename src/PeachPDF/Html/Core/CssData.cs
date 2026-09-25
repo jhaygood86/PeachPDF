@@ -1121,8 +1121,19 @@ namespace PeachPDF.Html.Core
 
         // Attribute selectors read the value once via node.GetAttribute (case-sensitivity of the
         // attribute-name lookup is the node's own: case-insensitive for HTML/CssBox, case-sensitive for
-        // SVG), then compare the value with node.NameComparison (OrdinalIgnoreCase for HTML, which is
-        // what "ASCII case-insensitively" means - Ordinal for SVG).
+        // SVG), then compare the value with AttributeValueComparison: an explicit `i`/`s` modifier
+        // (Selectors 4 §6.3) wins, otherwise the node's own NameComparison (OrdinalIgnoreCase for HTML,
+        // which is what "ASCII case-insensitively" means - Ordinal for SVG).
+        private static StringComparison AttributeValueComparison(IAttrSelector s, ICssDomNode node)
+        {
+            return s.CaseSensitivity switch
+            {
+                AttrCaseSensitivity.Insensitive => StringComparison.OrdinalIgnoreCase,
+                AttrCaseSensitivity.Sensitive => StringComparison.Ordinal,
+                _ => node.NameComparison
+            };
+        }
+
         private static bool DoesSelectorMatch(AttrAvailableSelector s, ICssDomNode? node)
         {
             return node?.GetAttribute(s.Attribute) is not null;
@@ -1132,7 +1143,7 @@ namespace PeachPDF.Html.Core
         {
             if (node is null) return false;
             var value = node.GetAttribute(s.Attribute);
-            return value is not null && value.Equals(s.Value, node.NameComparison);
+            return value is not null && value.Equals(s.Value, AttributeValueComparison(s, node));
         }
 
         private static bool DoesSelectorMatch(AttrListSelector s, ICssDomNode? node)
@@ -1140,36 +1151,38 @@ namespace PeachPDF.Html.Core
             if (node is null) return false;
             var value = node.GetAttribute(s.Attribute);
             if (value is null) return false;
-            return value.Split(' ').Where(x => x.Length > 0).Any(x => x.Equals(s.Value, node.NameComparison));
+            var comparison = AttributeValueComparison(s, node);
+            return value.Split(' ').Where(x => x.Length > 0).Any(x => x.Equals(s.Value, comparison));
         }
 
         private static bool DoesSelectorMatch(AttrContainsSelector s, ICssDomNode? node)
         {
             if (node is null) return false;
             var value = node.GetAttribute(s.Attribute);
-            return value is not null && value.Contains(s.Value, node.NameComparison);
+            return value is not null && value.Contains(s.Value, AttributeValueComparison(s, node));
         }
 
         private static bool DoesSelectorMatch(AttrBeginsSelector s, ICssDomNode? node)
         {
             if (node is null) return false;
             var value = node.GetAttribute(s.Attribute);
-            return value is not null && value.StartsWith(s.Value, node.NameComparison);
+            return value is not null && value.StartsWith(s.Value, AttributeValueComparison(s, node));
         }
 
         private static bool DoesSelectorMatch(AttrEndsSelector s, ICssDomNode? node)
         {
             if (node is null) return false;
             var value = node.GetAttribute(s.Attribute);
-            return value is not null && value.EndsWith(s.Value, node.NameComparison);
+            return value is not null && value.EndsWith(s.Value, AttributeValueComparison(s, node));
         }
 
         private static bool DoesSelectorMatch(AttrHyphenSelector s, ICssDomNode? node)
         {
             if (node is null) return false;
             var value = node.GetAttribute(s.Attribute);
-            return value is not null && (value.Equals(s.Value, node.NameComparison)
-                || value.StartsWith(s.Value + "-", node.NameComparison));
+            if (value is null) return false;
+            var comparison = AttributeValueComparison(s, node);
+            return value.Equals(s.Value, comparison) || value.StartsWith(s.Value + "-", comparison);
         }
 
         private static bool DoesSelectorMatch(PseudoClassSelector pseudoClassSelector, ICssDomNode? node)

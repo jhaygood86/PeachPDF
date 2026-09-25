@@ -39,12 +39,27 @@ namespace PeachPDF.Html.Core
             h5, h6, 
             hgroup, main, nav,
             section, search,
-            noframes,
             ol, p, ul, center,
             dir, menu, pre,
             hr               { display: block }
             li              { display: list-item }
-            head            { display: none }
+            /* HTML Standard 15.3.1 "Hidden elements", verbatim except where noted. */
+            area, base, basefont, datalist, head, link, meta, noembed,
+            noframes, param, rp, script, style, template, title
+                            { display: none }
+            [hidden]:not([hidden=until-found i]):not(embed)
+                            { display: none }
+            /* The spec also gives [hidden=until-found i]:not(embed) content-visibility: hidden, which
+               PeachPDF has no property for: until-found content stays visible, which is what a static
+               page wants. */
+            embed[hidden]   { display: inline; height: 0; width: 0 }
+            input[type=hidden i]
+                            { display: none !important }
+            /* `scripting` reports none for a PDF, so this block never matches and <noscript> content
+               renders; it is here so the sheet stays the spec's own. */
+            @media (scripting) {
+              noscript      { display: none !important }
+            }
             table           { display: table }
             tr              { display: table-row }
             thead           { display: table-header-group }
@@ -79,8 +94,6 @@ namespace PeachPDF.Html.Core
             pre             { white-space: pre }
             button, textarea,
             input, select   { display: inline-block }
-            input[type=hidden]
-                            { display: none }
             big             { font-size: 1.17em }
             small, sub, sup { font-size: .83em }
             sub             { vertical-align: sub }
@@ -213,10 +226,6 @@ namespace PeachPDF.Html.Core
             a               { color: #0055BB; text-decoration:underline }
             table           { border-color:#dfdfdf; }
             td, th          { border-color:#dfdfdf; }
-            style, title,
-            script, link,
-            meta, area,
-            base, param     { display:none }
             pre             { font-size: 10pt; margin-top: 15px; }
 
             /* Default -peachpdf-pdf-tag-type mapping (used only when tagged PDF output is
