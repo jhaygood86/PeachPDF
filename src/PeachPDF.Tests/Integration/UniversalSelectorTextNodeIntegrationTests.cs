@@ -127,5 +127,43 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal("rgb(255, 0, 0)", LayoutHarness.FindById(root, "e")!.Color);
         }
+
+        [Fact]
+        public async Task Universal_DoesNotResetNonInheritedPropertiesOnGeneratedBefore()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>* { margin-left: 7pt } #e::before { content: 'A'; margin-left: 3pt }" +
+                "#f::before { content: 'B' }</style><span id='e'>x</span><span id='f'>y</span>"));
+
+            var e = LayoutHarness.FindById(root, "e")!;
+            var f = LayoutHarness.FindById(root, "f")!;
+
+            Assert.Equal(7d, e.ActualMarginLeft, 3);
+            // The element's own ::before rule still applies, and a bare "*" never reached the box.
+            Assert.Equal(3d, Assert.Single(e.Boxes, b => b.IsBeforePseudoElement).ActualMarginLeft, 3);
+            Assert.Equal(0d, Assert.Single(f.Boxes, b => b.IsBeforePseudoElement).ActualMarginLeft, 3);
+        }
+
+        [Fact]
+        public async Task UniversalPseudoElementSelector_StillStylesGeneratedBoxes()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>*::before { content: 'A'; margin-left: 5pt } " +
+                "div:not(.x)::after { content: 'B'; margin-left: 6pt }</style><div id='e'>x</div>"));
+
+            var e = LayoutHarness.FindById(root, "e")!;
+            Assert.Equal(5d, Assert.Single(e.Boxes, b => b.IsBeforePseudoElement).ActualMarginLeft, 3);
+            Assert.Equal(6d, Assert.Single(e.Boxes, b => b.IsAfterPseudoElement).ActualMarginLeft, 3);
+        }
+
+        [Fact]
+        public async Task Not_DoesNotMatchGeneratedBoxAsSubject()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>:not(.nope) { margin-left: 7pt } #e::before { content: 'A' }</style><span id='e'>x</span>"));
+
+            var e = LayoutHarness.FindById(root, "e")!;
+            Assert.Equal(0d, Assert.Single(e.Boxes, b => b.IsBeforePseudoElement).ActualMarginLeft, 3);
+        }
     }
 }

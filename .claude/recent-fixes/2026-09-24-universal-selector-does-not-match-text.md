@@ -6,16 +6,14 @@ parent element (any specificity, any source order) could reach it. Cascade 4 §1
 targeted by selectors", all their values come from inheritance; Selectors 4 defines `*`, `:not()` and
 `:lang()` over elements.
 
-**Fix:** `CssData.CanBeMatched(node)` = has a `TagName`, or is a generated pseudo-element box. Applied in
+**Fix:** `CssData.IsElementNode(node)` = has a `TagName`. Applied in
 `AllSelector`, `NotSelector`, `LangSelector` only — the other selectors already reject non-elements
 (type/class/id/attribute have nothing to match; every structural pseudo-class checks `TagName is null`
 and filters siblings by `TagName`, so `:nth-child`'s default `Kind = AllSelector` was already element-only).
 
 **Traps:**
-- Pseudo-element boxes were deliberately kept matchable (they have no `TagName`, so a plain
-  `TagName is not null` guard would silently break `::before`/`::marker`/`::first-letter` rules that reach
-  them through the compound path). Whether a bare `*` *should* match them is a separate, unfixed deviation
-  — see [the accepted gap](../accepted-gaps/universal-selector-still-matches-generated-pseudo-element-boxes.md).
+- This fix first kept generated pseudo-element boxes matchable; #1361 then removed that too — see
+  [the pseudo-element follow-up](2026-09-24-universal-selector-does-not-match-pseudo-elements.md).
 - The `box.HtmlTag is null` guard in `DoesSelectorMatch(CompoundSelector, ...)` (the `*::before` text-box
   hang, `UniversalPseudoElementIntegrationTests`) is now mostly redundant but stays as a last line of defence.
 - `FontFamily` collapses to the first *installed* family, so a test asserting a Segoe UI stack must compare
