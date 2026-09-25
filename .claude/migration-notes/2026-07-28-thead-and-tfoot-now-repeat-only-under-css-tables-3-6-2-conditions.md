@@ -1,7 +1,0 @@
-# `<thead>`/`<tfoot>` now repeat only under the CSS Tables 3 §6.2 conditions
-
-**Landed:** 2026-07-28 (a6171b71) — Repeat a `<thead>`/`<tfoot>` only where css-tables-3 §6.2 says it may, and fit the one that does not (#519)
-**Doc section:** docs/html-css-support.md § [Page Breaks](../../docs/html-css-support.md#page-breaks)
-**Verified against v0.9.6:** this note was not present in the `v0.9.6` tag's docs — confirmed genuine behavior change since 0.9.6, in scope for the next release notes.
-
-A `<thead>` or `<tfoot>` used to repeat whenever the table had one. It is now subject to the two conditions above. The user-agent `break-inside: avoid` keeps the default unchanged, so an ordinary table renders exactly as before — a one-row header is a few percent of a page, nowhere near the quarter cap. Three documents do change: one whose group is **taller than a quarter of its page** now prints that group once instead of on every page, and may therefore **lose** pages; one that sets `break-inside: auto` on a `<thead>`/`<tfoot>`, which now means "do not repeat" rather than nothing; and one holding a `<thead>`/`<tfoot>` that is **not a row group at all** — most often under the responsive `table { display: block }` idiom — where the user-agent rule now applies to it as an ordinary block, so a group that used to be split by a page boundary is carried whole onto the next page instead. See [Forward compatibility](#forward-compatibility).
