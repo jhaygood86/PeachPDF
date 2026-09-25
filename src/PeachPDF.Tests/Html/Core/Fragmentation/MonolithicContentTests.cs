@@ -117,14 +117,17 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
 
         // An auto-height scroll container fragments only when everything inside it can carry a break on to
         // the next page, and none of its ancestors is a multi-column container. An absolutely or fixed
-        // positioned box, a page float, a multi-column/flex/grid container or a table caption inside it
-        // keeps it monolithic, and so does a multi-column container above it. A float or an atomic inline
-        // does not: the inline flow that places one lays its content out unbroken, so the clearfix wrapper
-        // around a floated menu fragments and the float keeps every line. display:none content generates
-        // nothing.
+        // positioned box, a float or page float, a multi-column/flex/grid container or a table caption
+        // inside it keeps it monolithic, and so does a multi-column container above it. A block-level float
+        // that crosses a boundary ends the pass inside itself, and the text beside it lands on the page the
+        // break left, already emitted. An atomic inline does not: the inline flow that places one lays its
+        // content out unbroken. Table parts, columns included, carry a break. display:none content
+        // generates nothing.
         [Theory]
-        [InlineData("<div id='t' style='overflow:hidden'><div style='float:left'>f</div></div>", false)]
-        [InlineData("<div id='t' style='overflow:hidden'><div><div style='float:right'>f</div></div></div>", false)]
+        [InlineData("<div id='t' style='overflow:hidden'><div style='float:left'>f</div></div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden'><div><div style='float:right'>f</div></div></div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden'><p>a <span style='float:left'>f</span> b</p></div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden'><table><colgroup><col></colgroup><tbody><tr><td>a</td></tr></tbody></table></div>", false)]
         [InlineData("<div id='t' style='overflow:hidden'><div style='float:bottom'>f</div>a</div>", true)]
         [InlineData("<div id='t' style='overflow:hidden;position:relative'>a<div style='position:absolute'>b</div></div>", true)]
         [InlineData("<div id='t' style='overflow:hidden'>a<div style='position:fixed'>b</div></div>", true)]
@@ -146,6 +149,71 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             Assert.Equal(expected, MonolithicContent.IsMonolithic(LayoutHarness.FindById(root, "t")!));
         }
 
+        // A float before the container in its block formatting context may sit beside it, and one that
+        // crosses a boundary there lost the container's first lines. Only floats inside the formatting
+        // context count: one inside a preceding formatting-context root, or outside an ancestor that
+        // establishes its own context, cannot reach it. A float after it cannot either.
+        [Theory]
+        [InlineData("<div style='float:right'>f</div><div id='t' style='overflow:hidden'>a</div>", true)]
+        [InlineData("<p>x <span style='float:left'>f</span></p><div id='t' style='overflow:hidden'>a</div>", true)]
+        [InlineData("<div style='float:left'>f</div><div><div id='t' style='overflow:hidden'>a</div></div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden'>a</div><div style='float:right'>f</div>", false)]
+        [InlineData("<div style='overflow:hidden'><div style='float:left'>f</div></div><div id='t' style='overflow:hidden'>a</div>", false)]
+        [InlineData("<div style='position:absolute'><div style='float:left'>f</div></div><div id='t' style='overflow:hidden'>a</div>", false)]
+        [InlineData("<div style='display:none'><div style='float:left'>f</div></div><div id='t' style='overflow:hidden'>a</div>", false)]
+        [InlineData("<div style='float:left'>f</div><div style='overflow:auto'><p>b</p><div id='t' style='overflow:hidden'>a</div></div>", false)]
+        [InlineData("<div style='float:left'>f</div><div id='t' style='overflow:auto'><p>b</p><div style='overflow:hidden'>a</div></div>", true)]
+        [InlineData("<div style='float:left'>f</div><table><tr><td><div id='t' style='overflow:hidden'>a</div></td></tr></table>", false)]
+        public async Task AutoHeightScrollContainer_AfterAFloatInItsFormattingContext_StaysMonolithic(string markup, bool expected)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup));
+
+            Assert.Equal(expected, MonolithicContent.IsMonolithic(LayoutHarness.FindById(root, "t")!));
+        }
+
+        // A box that avoids breaks inside itself, or sits in one that does, has no break to carry: it moves
+        // whole when it fits, and when it is taller than a page the relaxation that breaks it lost the lines
+        // at the boundary inside a fragmenting scroll container. That includes the user agent's own
+        // `thead, tfoot { break-inside: avoid }`.
+        [Theory]
+        [InlineData("<div id='t' style='overflow:hidden;break-inside:avoid'>a</div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden;break-inside:avoid-page'>a</div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden;break-inside:avoid-column'>a</div>", false)]
+        [InlineData("<div style='break-inside:avoid'><div><div id='t' style='overflow:hidden'>a</div></div></div>", true)]
+        [InlineData("<div style='page-break-inside:avoid'><div id='t' style='overflow:hidden'>a</div></div>", true)]
+        [InlineData("<table><thead><tr><td><div id='t' style='overflow:hidden'>a</div></td></tr></thead><tbody><tr><td>b</td></tr></tbody></table>", true)]
+        public async Task AutoHeightScrollContainer_WhereBreaksInsideAreAvoided_StaysMonolithic(string markup, bool expected)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup));
+
+            Assert.Equal(expected, MonolithicContent.IsMonolithic(LayoutHarness.FindByIdIncludingHeaderFooterProxies(root, "t")!));
+        }
+
+        // Both subtree answers are kept for the layout generation that computed them, and asked again in a
+        // new one, in case the tree changed.
+        [Fact]
+        public async Task SubtreeAnswers_AreKeptForTheirGenerationOnly()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div style='float:left'>f</div><div id='t' style='overflow:hidden'><p>a</p></div>"));
+            var box = LayoutHarness.FindById(root, "t")!;
+            var parent = box.ParentBox!;
+            var generation = container.LayoutGeneration;
+            var index = parent.Boxes.IndexOf(box);
+
+            // A stale answer is recomputed: the float before it keeps it monolithic.
+            parent.FirstFloatHoldingChildCache = (generation - 1, int.MaxValue);
+            box.DescendantsCarryABreak = (generation - 1, true);
+            Assert.True(MonolithicContent.IsMonolithic(box));
+            Assert.Equal((generation, index - 1), parent.FirstFloatHoldingChildCache);
+
+            // A current answer is used as it stands.
+            parent.FirstFloatHoldingChildCache = (generation, int.MaxValue);
+            Assert.False(MonolithicContent.IsMonolithic(box));
+            box.DescendantsCarryABreak = (generation, false);
+            Assert.True(MonolithicContent.IsMonolithic(box));
+        }
+
         // The ancestors that carry a break on: a table and its row groups, rows and cells, and a block-level
         // flex or grid container (below the item, which is itself excluded). A scroll container under each
         // fragments, which the allow-list must keep; dropping an entry would make these monolithic.
@@ -154,11 +222,15 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         [InlineData("<table><tbody><tr><td><div id='t' style='overflow:hidden'>a</div></td></tr></tbody></table>")]
         [InlineData("<div style='display:flex'><div><div id='t' style='overflow:hidden'>a</div></div></div>")]
         [InlineData("<div style='display:grid'><div><div id='t' style='overflow:hidden'>a</div></div></div>")]
+        [InlineData("<ul><li><div id='t' style='overflow:hidden'>a</div></li></ul>")]
+        // The user agent's `thead, tfoot { break-inside: avoid }` is overridden so the group itself is tested.
+        [InlineData("<table><thead style='break-inside:auto'><tr><td><div id='t' style='overflow:hidden'>a</div></td></tr></thead><tbody><tr><td>b</td></tr></tbody></table>")]
+        [InlineData("<table><tbody><tr><td>b</td></tr></tbody><tfoot style='break-inside:auto'><tr><td><div id='t' style='overflow:hidden'>a</div></td></tr></tfoot></table>")]
         public async Task AutoHeightScrollContainer_UnderAnAncestorThatCarriesABreak_Fragments(string markup)
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup));
 
-            Assert.False(MonolithicContent.IsMonolithic(LayoutHarness.FindById(root, "t")!));
+            Assert.False(MonolithicContent.IsMonolithic(LayoutHarness.FindByIdIncludingHeaderFooterProxies(root, "t")!));
         }
 
         // A vertical box's logical height is its width, whose percentage base is the containing block's

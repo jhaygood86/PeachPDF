@@ -276,32 +276,53 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(Enumerable.Range(1, 14).Select(i => $"W{i}"), placed.Order(WordNumber.Instance));
         }
 
-        // The clearfix page layout: an auto-height overflow: hidden wrapper holding a short floated menu and a
-        // long column of text. The float keeps its own content (it is laid out unbroken), so the wrapper
-        // fragments, and the text line at each page boundary moves to the next page instead of being sliced
-        // off it. Kept monolithic for the float, the wrapper lost one line per boundary.
-        [Fact]
-        public async Task ClearfixWrapperAroundAShortFloat_DrawsEveryTextLineInsideAPageBand()
+        // A float that crosses a page boundary near an auto-height wrapper. Made fragmentable, the wrapper
+        // lost the text beside a float inside it (the float's break ended the pass, and the text was placed
+        // back on the page already emitted), clipped a float's boundary line at the page foot instead of
+        // moving it, and, placed beside a floated sibling, lost its first lines and drew the next above the
+        // page's top margin. The same holds for in-flow content after a tall absolutely positioned first
+        // child, whose break ended the pass the same way. Each W word is drawn once, inside a page band.
+        [Theory]
+        [InlineData("<div style='overflow:hidden'><div style='float:left;width:100pt'>{0}</div><p>W1</p></div><p>W2</p>", 20, 2)]
+        [InlineData("<div style='overflow:hidden'><div style='float:left;width:100pt'>{0}</div>{1}</div>", 45, 10)]
+        [InlineData("{2}<div style='overflow:hidden'><div style='float:right;width:80pt'>{3}</div></div><p>W11</p>", 0, 11)]
+        [InlineData("<p>x</p><div style='overflow:hidden'>{0}</div><div style='float:right;width:80pt'>F1<br>F2<br>F3<br>F4<br>F5</div><div style='overflow:hidden'>{3}</div>", 9, 4)]
+        [InlineData("<div style='position:absolute;top:5pt;left:0;width:120pt'>{0}</div>{1}", 14, 10)]
+        public async Task WrapperNearAFloatOrTallAbsoluteBox_DrawsEveryWordInsideAPageBand(string shape, int fillerLines, int count)
         {
-            const int count = 30;
-            var html = LayoutHarness.Wrap(
-                "<div style='overflow:hidden;padding-top:13pt;line-height:1.6;font-size:10.5pt'>" +
-                "<div style='float:left;width:60pt'>menu</div>" +
-                "<div style='margin-left:70pt'>" +
-                string.Concat(Enumerable.Range(1, count).Select(i => $"<p style='margin:0'>L{i}</p>")) +
-                "</div></div>");
+            var filler = string.Join("<br>", Enumerable.Range(1, fillerLines).Select(i => $"F{i}"));
+            var paragraphs = string.Concat(Enumerable.Range(1, count).Select(i => $"<p>W{i}</p>"));
+            var nine = string.Concat(Enumerable.Range(1, 9).Select(i => $"<p>P{i}</p>"));
+            var lines = string.Join("<br>", Enumerable.Range(1, Math.Min(count, 10)).Select(i => $"W{i}"));
+            var html = "<!DOCTYPE html><html><head><style>body{margin:0;font:10pt/12pt Arial} p{margin:0}</style>" +
+                       $"</head><body>{string.Format(shape, filler, paragraphs, nine, lines)}</body></html>";
 
-            var (_, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+            var (_, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: PageHeight, margin: Margin);
 
             var placed = container.FragmentTree!.Fragmentainers
                 .SelectMany(page => Flatten(page.Root).SelectMany(f => f.Words))
-                .Where(w => w.Word.Text?.StartsWith('L') == true)
+                .Where(w => w.Word.Text is { Length: > 1 } text && text[0] == 'W' && char.IsDigit(text[1]))
                 .ToList();
 
-            Assert.Equal(Enumerable.Range(1, count).Select(i => $"L{i}"), placed.Select(w => w.Word.Text).Distinct());
+            Assert.Equal(Enumerable.Range(1, count).Select(i => $"W{i}"),
+                placed.Select(w => w.Word.Text!).Order(WordNumber.Instance));
             Assert.All(placed, w => Assert.True(
                 w.Rect.Top >= Margin - 0.01 && w.Rect.Bottom <= PageHeight - Margin + 0.01,
                 $"{w.Word.Text} lies outside its page band ({w.Rect.Top:F2}-{w.Rect.Bottom:F2})"));
+        }
+
+        // The absolutely positioned box itself is laid out unbroken: every one of its lines is placed, on
+        // the page its slice falls in, rather than the lines after its first page boundary being lost.
+        [Fact]
+        public async Task TallAbsoluteBox_PlacesEveryOneOfItsOwnLines()
+        {
+            var lines = string.Join("<br>", Enumerable.Range(1, 37).Select(i => $"W{i}"));
+            var placed = await WordsPlaced(
+                "<p>P1</p><p>P2</p><p>P3</p>" +
+                $"<div style='position:absolute;top:0;right:0;width:60pt'>{lines}</div>" +
+                string.Concat(Enumerable.Range(1, 20).Select(i => $"<p>Q{i}</p>")), "W", pageWidth: 300);
+
+            Assert.Equal(Enumerable.Range(1, 37).Select(i => $"W{i}"), placed.Order(WordNumber.Instance));
         }
 
         [Fact]

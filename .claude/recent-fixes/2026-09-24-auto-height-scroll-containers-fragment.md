@@ -94,10 +94,10 @@ inside a flex item needs no such walk: it splits and keeps every line.
 
 A sixth round added **page floats** (`float: top/bottom/top-bottom/snap`, `CssBox.IsPageFloated`), which
 `IsFloated` does not cover, to both float checks through `IsFloat`. No fixture showed a difference from
-`main`: a straddling 5-line page float is moved to a page edge and never breaks. A 12-line
-`float: bottom` loses lines (only up to F5 placed) on `main` and on this branch alike, a pre-existing
-defect, now tracked as #1332 ([gap](../accepted-gaps/a-page-float-taller-than-a-page-loses-the-lines-that-dont-fit.md)). The exclusion is there by construction: a page float is moved to its edge
-whole, like a float, so it cannot continue a break either.
+`main`: a straddling 5-line page float is moved to a page edge and never breaks. The exclusion is there
+by construction: a page float is moved to its edge whole, like a float, so it cannot continue a break
+either. (A 12-line `float: bottom` lost its lines past F5 at the time, on `main` too; #1348 fixed that on
+`main` while this was in review, #1332.)
 
 A seventh round added **vertical writing-mode ancestors** to the walk (`IsUnresumableOrthogonalFlow`).
 Such a block lays its children out through `LayoutVerticalBlockChildren` →
@@ -140,16 +140,51 @@ Flex/grid descendants are excluded although the flex probe lost nothing: the rev
 holding a `break-inside: avoid` paragraph losing words, which did not reproduce here, and an unlisted
 kind costs only the old behaviour.
 
-**Floats and inline-blocks were excluded at first, and are not now.** The float and inline-block losses
-above were #1201, which main closed with #1348 while this was in review: `FlowFloatChild` and
-`FlowAtomicBlockContentChild` now lay the content out unbroken (`CssLayoutEngine.LayoutContentUnbroken`),
-so a float or inline-block keeps every line whatever breaks around it. Excluding them had a real cost,
-found on a customer page (a `#contentcontainer { overflow: hidden }` holding a floated category menu and
-a long text column): the wrapper stayed monolithic and a text line was lost at every page boundary, as on
-`main`. An interim fix laid floats out unbroken here, first for every float (which broke a float holding a
-multi-column container: the columns engine needs the fragmentainer that detaches) and then only for floats
-inside a fragmenting wrapper; #1348 made both unnecessary. `ClearfixWrapperAroundAShortFloat_DrawsEveryTextLineInsideAPageBand`
-fails with the float exclusion back in.
+**Inline-blocks were excluded at first, and are not now; floats were let in and then excluded again.**
+The inline-block loss above was #1201, which main closed with #1348 while this was in review:
+`FlowAtomicBlockContentChild` now lays the content out unbroken (`CssLayoutEngine.LayoutContentUnbroken`),
+so an inline-block keeps every line whatever breaks around it. #1348 did the same for a float placed by
+the *inline* flow (`FlowFloatChild`), and floats were let in on that basis, motivated by a customer page
+(a `#contentcontainer { overflow: hidden }` holding a floated category menu and a long text column) that
+loses a text line at every page boundary while the wrapper is monolithic. The tenth round below took
+them out again.
+
+A tenth round, from the next PR review, found three float shapes that lost content `main` keeps
+(a 300×200pt page, 12pt lines):
+
+- **Text beside a float inside the wrapper** (`<div overflow:hidden><div float:left>F1…F20</div><p>side</p></div>`):
+  `side` was drawn on no page, and with a 45-line float all ten paragraphs after it were lost. A
+  *block-level* float is not placed by `FlowFloatChild`: it goes through the block frame, its content
+  breaks at the page boundary, and the next pass resumes inside it on page 2. The paragraphs beside it are
+  then placed back on page 1, which was already emitted.
+- **A float's boundary line clipped instead of moved** (nine paragraphs, then a wrapper around a 10-line
+  `float: right`): F2 drawn at the page foot past the band, where `main` moves the float to page 2.
+- **A wrapper beside a floated sibling** (media object): the second `overflow: hidden` block, placed beside
+  a float that crosses the boundary, lost B1–B3 and drew B4 at y=16.3, above the page margin.
+
+`EveryDescendantCarriesABreak` rejects every float again (`IsFloat`), and the new
+`FollowsAFloatInItsFormattingContext` keeps a wrapper monolithic when any float precedes it in its block
+formatting context (the walk climbs ancestors to the first `EstablishesIndependentFormattingContext`, as
+`DomUtils.FindIntersectingFloatBox` does, and answers at once when `HasFloatedBoxes` is false). Whether the
+float really reaches the wrapper is geometry still moving while the question is asked, so any preceding
+float counts. The per-parent answer is cached for the generation (`CssBox.FirstChildHoldingAFloat`), so a
+run of sibling wrappers walks the parent once. The customer clearfix page goes back to `main`'s monolithic
+slice, losing the #1328 boundary line, which is the lesser loss. Float fragmentation proper (#317) is
+what would let it fragment.
+
+The same round fixed the reviewer's absolutely positioned case in `CssBox.LayoutBlockChild`: a
+`position: absolute` block child is laid out unbroken (`LayoutBlockChildUnbroken`, shared with the column
+page float), for the same reason as the block-level float above. Its break ended the pass, and the in-flow
+content after it, which it does not displace (§9.3.1), was placed back on the page the break left. `main`
+lost that content too whenever the box was not its parent's first child; once #1349's
+`GetPreviousSibling` fix stopped placing it *below* the first-child box, this branch lost it in that case
+as well. Now each page shows the slice of the box that falls in it. The cost, a line cut at each page
+boundary inside the box and no §4.3 relocation of its contents, is recorded in
+[its gap](../accepted-gaps/a-tall-absolutely-positioned-box-is-sliced-not-fragmented.md).
+
+The same round kept a scroll container monolithic where it, or an ancestor, has `break-inside: avoid`
+(`AvoidsBreakInside`): fuzz seeds 238 and 273 lost lines there, and the same documents with plain `div`s
+lose the same lines on `main` ([#1369's gap](../accepted-gaps/a-break-inside-avoid-block-taller-than-a-page-can-lose-a-line.md)).
 
 A content-preservation fuzz (random nesting of wrappers, floats, abspos, multicol, grid, flex, tables,
 `break-inside: avoid`, inline-blocks; unique numbered words; 160–260pt pages) compared the branch with

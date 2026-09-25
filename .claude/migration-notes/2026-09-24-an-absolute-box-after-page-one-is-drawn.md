@@ -9,7 +9,12 @@ content below that child rather than at its own top.
 
 **Now:** the absolute box is drawn on the page its offsets put it on (page 1 for the initial containing
 block), and the content after it in the same block starts at the block's top, where it would be without
-the absolute box.
+the absolute box. An absolutely positioned box's own content is laid out in one piece: one taller than a
+page used to break between its lines, and every in-flow box after it in the same block was lost (drawn on
+no page) when it was not its block's first child. It now runs on across pages with each page showing its
+slice, and the content after it is kept. A line of the box that straddles a page boundary is cut, part on
+each page, and an image, `break-inside: avoid` block or table inside it is sliced rather than moved or
+broken between rows.
 
 **Why:** CSS 2.1 §9.3.1: an absolutely positioned box is removed from normal flow and has no effect on
 the layout of later siblings. CSS Fragmentation 3 §4.4: content must not be lost. Tracked as #1349.

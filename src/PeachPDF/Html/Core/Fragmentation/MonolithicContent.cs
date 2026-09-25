@@ -63,14 +63,21 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// answer differently before and after the commit, and the line-relocation mover and the commit
         /// layout would disagree about the same item.
         /// </para>
+        /// <para>
+        /// A box that avoids breaks inside itself, or sits in one that does, is excluded
+        /// (<see cref="AvoidsBreakInside"/>), and so is one that a float precedes in its block formatting
+        /// context (<see cref="FollowsAFloatInItsFormattingContext"/>). Each lost content when let through.
+        /// </para>
         /// </remarks>
         private static bool BreaksInBlockFlow(CssBox box) =>
             box.DerivedStyle.ActualDisplay is Keywords.Block or Keywords.ListItem
             && !IsFloat(box)
+            && !AvoidsBreakInside(box)
             && box.ParentBox?.DerivedStyle.ActualDisplay is not (Keywords.Flex or Keywords.InlineFlex
                 or Keywords.Grid or Keywords.InlineGrid)
             && EveryAncestorCarriesABreak(box)
-            && EveryDescendantCarriesABreak(box);
+            && EveryDescendantCarriesABreak(box)
+            && !FollowsAFloatInItsFormattingContext(box);
 
         /// <summary>
         /// Whether every ancestor of <paramref name="box"/> is a kind known to carry a break taken inside
@@ -109,7 +116,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                         or Keywords.TableFooterGroup or Keywords.TableRow or Keywords.TableCell
                     && !IsFloat(ancestor)
                     && !ancestor.EstablishesMultiColumnContext
-                    && !IsUnresumableOrthogonalFlow(ancestor);
+                    && !IsUnresumableOrthogonalFlow(ancestor)
+                    && !AvoidsBreakInside(ancestor);
 
                 if (!carriesABreak) return false;
             }
@@ -119,9 +127,9 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         /// <summary>
         /// Whether everything inside <paramref name="box"/> is a kind known to carry a break taken inside
-        /// the box on into the next fragmentainer: inline content (floats and atomic inlines included),
-        /// blocks and list items that are not multi-column containers, and tables with their row groups,
-        /// rows, cells and columns.
+        /// the box on into the next fragmentainer: inline content (atomic inlines included), blocks and list
+        /// items that are not multi-column containers, and tables with their row groups, rows, cells and
+        /// columns. No float qualifies.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -135,11 +143,17 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// that the monolithic slice used to draw; a multi-column child lost 29 words on a single page.
         /// </para>
         /// <para>
-        /// A float and an atomic inline (<c>inline-block</c>, <c>inline-table</c>) are allowed. The inline
-        /// flow that places one lays its content out unbroken (<c>CssLayoutEngine.LayoutContentUnbroken</c>),
-        /// so it keeps every line whatever breaks around it, the same slice a monolithic wrapper gave it.
-        /// Excluding them kept the commonest clearfix page layout, a floated menu beside a long column of
-        /// text, monolithic, and a line of that text was lost at every page boundary.
+        /// An atomic inline (<c>inline-block</c>, <c>inline-table</c>) is allowed. The inline flow that
+        /// places one lays its content out unbroken (<c>CssLayoutEngine.LayoutContentUnbroken</c>), so it
+        /// keeps every line whatever breaks around it, the same slice a monolithic wrapper gave it.
+        /// </para>
+        /// <para>
+        /// A float is not, wherever it sits. A block-level float that crosses a boundary ends the pass
+        /// inside itself, and the in-flow content beside it is placed back on the fragmentainer the break
+        /// left, which is already emitted: text beside a floated sidebar was drawn on no page. A float's
+        /// boundary line was clipped at the page's foot rather than moved on. Allowing floats kept the
+        /// commonest clearfix layout fragmentable, but a monolithic wrapper loses at most the one line on a
+        /// slice boundary, while a fragmenting one lost every paragraph beside the float.
         /// </para>
         /// <para>
         /// A box with <c>display: none</c> generates nothing, so neither it nor its subtree is inspected.
@@ -168,13 +182,112 @@ namespace PeachPDF.Html.Core.Fragmentation
                         or Keywords.TableHeaderGroup or Keywords.TableFooterGroup or Keywords.TableRow
                         or Keywords.TableCell or Keywords.TableColumn or Keywords.TableColumnGroup
                     && !child.IsAbsolutelyPositioned
-                    && !child.IsPageFloated
+                    && !IsFloat(child)
                     && !child.EstablishesMultiColumnContext;
 
                 if (!carriesABreak || !EveryDescendantCarriesABreak(child)) return false;
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> asks not to be broken inside across pages (<c>break-inside: avoid</c>
+        /// or <c>avoid-page</c>, css-break-3 §3.2).
+        /// </summary>
+        /// <remarks>
+        /// Such a box moves whole when it fits, so a scroll container in it has no break to carry. One taller
+        /// than a page has to break anyway (§4.4). When it does, a scroll container that fragments inside it
+        /// lost the lines at the boundary, as a plain block there can (#1369). Kept monolithic, the scroll
+        /// container is laid out as it was before auto-height scroll containers became fragmentable.
+        /// </remarks>
+        private static bool AvoidsBreakInside(CssBox box) =>
+            BreakValues.AvoidsBreak(box.BreakInside.Value, FragmentationContext.Page);
+
+        /// <summary>
+        /// Whether a float comes before <paramref name="box"/> in tree order within the block formatting
+        /// context <paramref name="box"/> is placed in, and so may sit beside it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A scroll container establishes a formatting context, so a float before it narrows or moves it
+        /// rather than its lines (CSS 2.1 §9.4.1, §9.5). One placed beside a float that crosses a boundary
+        /// lost its first lines and drew the rest above the page's top margin. Whether the float actually
+        /// reaches it depends on geometry that is still moving while the question is asked, so any float
+        /// before it counts; the answer then is the monolithic layout that worked before.
+        /// </para>
+        /// <para>
+        /// The walk climbs from the box through its ancestors, testing each level's preceding siblings,
+        /// and stops at the first ancestor that establishes a formatting context of its own: floats
+        /// outside it cannot reach the content inside (the rule
+        /// <c>DomUtils.FindIntersectingFloatBox</c> applies from its second level up). A document with no
+        /// float at all answers at once.
+        /// </para>
+        /// </remarks>
+        private static bool FollowsAFloatInItsFormattingContext(CssBox box)
+        {
+            if (box.HtmlContainer is { HasFloatedBoxes: false }) return false;
+
+            for (var current = box; current.ParentBox is { } parent; current = parent)
+            {
+                if (IsPrecededByAFloat(parent, current)) return true;
+                if (DomUtils.EstablishesIndependentFormattingContext(parent)) break;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Whether one of <paramref name="parent"/>'s children before <paramref name="child"/> is or holds a
+        /// float. Only the children up to the first one holding a float are scanned, rather than finding
+        /// <paramref name="child"/>'s index, so a run of sibling scroll containers costs each one a scan of
+        /// the few children before the float instead of a walk to its own position.
+        /// </summary>
+        private static bool IsPrecededByAFloat(CssBox parent, CssBox child)
+        {
+            var first = IndexOfFirstChildHoldingAFloat(parent);
+            if (first == int.MaxValue) return false;
+
+            for (var i = 0; i <= first; i++)
+            {
+                if (ReferenceEquals(parent.Boxes[i], child)) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// The index of <paramref name="parent"/>'s first child that is a float or holds one in the
+        /// formatting context it shares with <paramref name="parent"/>, or <see cref="int.MaxValue"/> when
+        /// none does. Kept for the layout generation, so a run of sibling scroll containers walks their
+        /// parent's children once rather than once each.
+        /// </summary>
+        private static int IndexOfFirstChildHoldingAFloat(CssBox parent)
+        {
+            var generation = parent.HtmlContainer?.LayoutGeneration ?? -1;
+            if (parent.FirstFloatHoldingChildCache is { } cached && cached.Generation == generation) return cached.Index;
+
+            var found = parent.Boxes.FindIndex(HoldsAFloat);
+            var index = found < 0 ? int.MaxValue : found;
+
+            parent.FirstFloatHoldingChildCache = (generation, index);
+            return index;
+
+            static bool HoldsAFloat(CssBox box)
+            {
+                if (box.DerivedStyle.ActualDisplay is Keywords.None || box.IsAbsolutelyPositioned) return false;
+
+                // IsFloated, not IsFloat: a page float is moved to a page edge, never placed beside the box.
+                if (box.IsFloated) return true;
+                if (DomUtils.ContainsItsFloats(box)) return false;
+
+                foreach (var child in box.Boxes)
+                {
+                    if (HoldsAFloat(child)) return true;
+                }
+
+                return false;
+            }
         }
 
         /// <summary>

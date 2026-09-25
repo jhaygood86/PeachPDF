@@ -2395,6 +2395,13 @@ namespace PeachPDF.Html.Core.Dom
         internal (int Generation, bool Value)? DescendantsCarryABreak { get; set; }
 
         /// <summary>
+        /// <see cref="Fragmentation.MonolithicContent"/>'s index of this box's first child that is or holds a
+        /// float in this box's formatting context, with the <see cref="HtmlContainerInt.LayoutGeneration"/>
+        /// it was computed in, so a run of sibling scroll containers walks their parent's children once.
+        /// </summary>
+        internal (int Generation, int Index)? FirstFloatHoldingChildCache { get; set; }
+
+        /// <summary>
         /// <see cref="HtmlContainerInt.PassInvalidationCount"/> as it stood when <see cref="_placedByPass"/>
         /// was stamped — what <see cref="PlacedByPassIfStillValid"/> checks the container's
         /// <see cref="Fragmentation.InvalidationHistory"/> against, scoped by this box's own recorded pass
@@ -3356,7 +3363,15 @@ namespace PeachPDF.Html.Core.Dom
 
             if (child.IsPageFloated && child.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: true } } columnContainer)
             {
-                await LayoutPageFloatInColumn(g, child, columnContainer, framePlacesChild);
+                columnContainer.NotePageFloatColumn(child);
+                await LayoutBlockChildUnbroken(g, child, columnContainer, framePlacesChild);
+                return;
+            }
+
+            if (child.Position.Value is PositionMode.Absolute
+                && child.HtmlContainer is { CurrentFragmentainer: not null } absoluteContainer)
+            {
+                await LayoutBlockChildUnbroken(g, child, absoluteContainer, framePlacesChild);
                 return;
             }
 
@@ -3372,15 +3387,28 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Lays a page float inside a column out unbroken. It sits in the strip its own reservation holds back
-        /// from the column's flow, so measured against the column's band its words would all straddle it and
-        /// break into the next column, taking the flow with them. Which column it is in is recorded first: a
-        /// detached fragmentainer no longer says.
+        /// Lays <paramref name="child"/> out as one unbroken run, with the fragmentainer detached and per-word
+        /// page breaks suppressed, for a box whose break the flow after it cannot resume from.
         /// </summary>
-        private async ValueTask LayoutPageFloatInColumn(RGraphics g, CssBox child, HtmlContainerInt container, bool framePlacesChild)
+        /// <remarks>
+        /// <para>
+        /// A page float inside a column sits in the strip its own reservation holds back from the column's
+        /// flow, so measured against the column's band its words would all straddle it and break into the
+        /// next column, taking the flow with them. Which column it is in is recorded before this is called:
+        /// a detached fragmentainer no longer says.
+        /// </para>
+        /// <para>
+        /// An absolutely positioned box is placed by its offsets, usually against a containing block on an
+        /// earlier fragmentainer than the pass that reaches it, and takes no part in placing the in-flow
+        /// boxes after it (CSS 2.1 §9.3.1). A break taken inside it would end the pass, and the next pass
+        /// resumes inside it on the following page while its in-flow siblings are placed back on the page
+        /// the break left, which is already emitted, so they were drawn on no page. Laid out whole, its
+        /// geometry runs on past the page's foot and each page shows the slice that falls in it, as a float
+        /// laid out by the inline flow does (<c>CssLayoutEngine.LayoutContentUnbroken</c>).
+        /// </para>
+        /// </remarks>
+        private async ValueTask LayoutBlockChildUnbroken(RGraphics g, CssBox child, HtmlContainerInt container, bool framePlacesChild)
         {
-            container.NotePageFloatColumn(child);
-
             var detached = container.DetachFragmentainer();
             var previousSuppress = container.SuppressWordPageBreaks;
             container.SuppressWordPageBreaks = true;

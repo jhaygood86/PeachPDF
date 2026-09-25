@@ -2461,8 +2461,8 @@ var scrollContainersAcrossPagesHtml = $$"""
     are sliced at the page edge, as box-decoration-break: slice does for any block.</p>
     <p>Before this change the panel would have been laid out in one piece and cut into page-sized slices,
     and the line on each cut drawn on neither page.</p>
-    <p>A wrapper holding absolutely positioned boxes or a multi-column, flex or grid layout still stays in
-    one piece, because those parts cannot yet continue on the next page.</p>
+    <p>A wrapper holding floats, absolutely positioned boxes or a multi-column, flex or grid layout still
+    stays in one piece, because those parts cannot yet continue on the next page.</p>
     <p>Add break-inside: avoid to keep a short panel together instead.</p>
     <p>This is the case the clearfix idiom produces most often: a long, auto-height wrapper whose only job
     is to establish a new block formatting context, with ordinary paragraphs inside it.</p>
@@ -2471,10 +2471,19 @@ var scrollContainersAcrossPagesHtml = $$"""
     <p>The last paragraphs continue on the next page, still inside the same blue panel.</p>
     </div>
 
+    <p>A box whose own height is capped is different. With a height or max-height it can clip what it
+    holds, so CSS Fragmentation treats it as monolithic content, like an image: it is never broken
+    between its lines. Where it would straddle a page boundary, it is carried to the next page whole.
+    The box below starts low enough on its page that it would straddle one.</p>
+
     <h2>A capped box stays whole</h2>
     <div class="capped">
     <p>This box has max-height: 200pt, so it can clip its content and is treated as monolithic: it moves
     whole to the next page when it does not fit where it starts, rather than breaking.</p>
+    <p>It starts too close to the foot of the page for all of its paragraphs, so the whole box, border
+    and all, has moved to the top of this page instead of leaving its first lines behind.</p>
+    <p>An auto-height box in the same place would have broken between two of these paragraphs.</p>
+    <p>To keep a short auto-height box together as well, give it break-inside: avoid.</p>
     </div>
 
     <p>The DRAFT stamp at the top right of the first page is written at the very end of this document.

@@ -25,9 +25,10 @@ fitting on one page, hid it. Reproduced on `main` with plain `<div>`s and no `ov
 - **Nothing re-opened an emitted fragmentainer for a box placed into it for the first time.**
   `InvalidateEmittedFragmentsFor` only fires for a box that already holds fragments and moves
   (`HoldsFragmentsFor`). An absolute box is reached in the tree on the pass for page 3 but placed by its
-  offsets on page 1. `CommitBlockChildOffset`'s absolute branch now calls
-  `HtmlContainerInt.InvalidateEmittedFragmentainerReceiving`, which calls `FragmentEmitter.InvalidateFrom`
-  for the slot the box landed in. That returns at once when the slot is not frozen yet, so forward layout
+  offsets on page 1. `CssBox.PerformLayoutEpilogue` now calls
+  `HtmlContainerInt.InvalidateEmittedFragmentainersReceiving` for an absolutely positioned box once its
+  position and height are final, which calls `FragmentEmitter.InvalidateFrom` for the slots its border box
+  reaches (`throughSlot`), not everything after them. That returns at once when the slot is not frozen yet, so forward layout
   (every ordinary placement) pays one comparison. When it does re-open a slot, the stale slot is re-emitted
   by `CatchUpStaleSlotsBehind` or `Finish`, the same path a §4.3 mover's re-opening takes.
 
