@@ -588,6 +588,19 @@ namespace PeachPDF.Tests.Integration
             Assert.All(placed, w => Assert.Equal(1, w.Page));
         }
 
+        // A box whose clipped content stays on the page its clip edge is on loses nothing at a break, so it is
+        // not noted and the document is not laid out again for it. Noting every clip doubled the layout time
+        // of a document with an ordinary clipped card.
+        [Fact]
+        public async Task ScrollContainerClippedWithinAPage_IsNotLaidOutAgain()
+        {
+            var (root, container) = await LayoutFloats(
+                $"<div id='card' style='overflow:hidden;max-height:30pt'>{Lines("X", 6)}</div><div>{Lines("W", 3)}</div>");
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.DoesNotContain(card, container.ScrollContainersThatClip);
+        }
+
         // Which boxes clip is decided per layout. A box that clipped its content and was kept whole may fit
         // under its cap once widened, and the next layout of the same container lets it break again, as a
         // fresh layout of the wider box does.

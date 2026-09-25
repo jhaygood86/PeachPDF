@@ -210,8 +210,16 @@ namespace PeachPDF.Html.Core
         /// <param name="box">the box whose content runs past its padding edge</param>
         internal void NoteScrollContainerClips(CssBox box)
         {
+            if (_scrollContainerClipsFrozen) return;
             if (ScrollContainersThatClip.Add(box)) _aScrollContainerStartedClipping = true;
         }
+
+        /// <summary>
+        /// Set for the last attempt <see cref="LayoutDocument"/> allows: a box noted then would never be laid
+        /// out monolithic, yet every later reader of <see cref="ScrollContainersThatClip"/> (the emitter's
+        /// materialization, paint) would treat it as monolithic. So the set stays as that attempt laid it out.
+        /// </summary>
+        private bool _scrollContainerClipsFrozen;
 
         /// <summary>
         /// The room a <c>float-reference: column</c> page float pinned to a column's block-start edge
@@ -2419,13 +2427,22 @@ namespace PeachPDF.Html.Core
 
             await LayoutDocumentOnce(g);
 
-            for (var attempt = 0; attempt < MaxClippingRelayouts && _aScrollContainerStartedClipping; attempt++)
+            try
             {
+                for (var attempt = 0; attempt < MaxClippingRelayouts && _aScrollContainerStartedClipping; attempt++)
+                {
+                    _aScrollContainerStartedClipping = false;
+                    _scrollContainerClipsFrozen = attempt == MaxClippingRelayouts - 1;
+                    Root.Size = rootSize;
+                    Root.Location = rootLocation;
+                    ActualSize = RSize.Empty;
+                    await LayoutDocumentOnce(g);
+                }
+            }
+            finally
+            {
+                _scrollContainerClipsFrozen = false;
                 _aScrollContainerStartedClipping = false;
-                Root.Size = rootSize;
-                Root.Location = rootLocation;
-                ActualSize = RSize.Empty;
-                await LayoutDocumentOnce(g);
             }
         }
 

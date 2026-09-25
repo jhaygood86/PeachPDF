@@ -7007,7 +7007,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (!mayCap
                 || WritingMode.Value is PeachPDF.CSS.WritingMode.VerticalRl or PeachPDF.CSS.WritingMode.VerticalLr
-                || HtmlContainer is not { HasRealPageGrid: true } container
+                || HtmlContainer is not { HasRealPageGrid: true, CurrentFragmentainer: not null } container
                 || container.ScrollContainersThatClip.Contains(this)
                 || !MonolithicContent.IsScrollContainer(this)
                 || MonolithicContent.IsMonolithic(this))
@@ -7023,8 +7023,14 @@ namespace PeachPDF.Html.Core.Dom
                 contentBottom = Math.Max(contentBottom, GetMaximumBottom(child, contentBottom));
             }
 
-            if (contentBottom > clipEdge + HtmlContainerInt.PageBoundaryEpsilon)
+            // Only clipped content that runs past the end of the page the clip edge is on can take a break
+            // among its lines; one clipped within a page loses nothing, and laying the whole document out again
+            // for it would only cost time. Nor can a box inside unbroken content (no fragmentainer attached).
+            if (contentBottom > clipEdge + HtmlContainerInt.PageBoundaryEpsilon
+                && contentBottom > container.PageBottomOf(container.SlotStartingAt(clipEdge)) + HtmlContainerInt.PageBoundaryEpsilon)
+            {
                 container.NoteScrollContainerClips(this);
+            }
         }
 
         /// <summary>
