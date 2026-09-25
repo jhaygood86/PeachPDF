@@ -25,7 +25,9 @@ inline flow. It then shows one slice per page. A float that fits on a page is mo
 in-flow content after it, and because `CssLayoutEngine.FloatBox` keeps a later float from rising above it
 (CSS 2.1 §9.5.1 rule 5). Without that clamp the later float's static position was still on the page before,
 and it was placed there, above the float it follows. The move is decided on the float's static position
-(a relative offset takes no part in layout) and re-places the float at the new page top, which is where an
+(a relative offset takes no part in layout), measures against each page's usable band (net of a `float: top`
+strip, a footnote area and a bottom page float; a review found the bare page top put a moved float on a
+`float: top` figure) and re-places the float at the new band top, which is where an
 `inside`/`outside` float learns its new side.
 
 A new path that lays a float, an absolutely positioned box, or anything else out of tree-order position

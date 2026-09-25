@@ -3420,10 +3420,19 @@ namespace PeachPDF.Html.Core.Dom
             var top = box.StaticTop;
             var bottom = box.StaticBottom;
             var page = container.SlotStartingAt(top);
-            if (page < 0 || bottom - HtmlContainerInt.PageBoundaryEpsilon <= container.PageBottomOf(page)) return;
-            if (bottom - top > container.PageBandHeightOf(page + 1)) return;
+            if (page < 0) return;
 
-            box.OffsetTop(container.PageTopOf(page + 1) - top);
+            // The usable band, not the bare page: a footnote area or a bottom page float holds back the foot,
+            // and a top page float the head, so a float must neither end in the one nor land on the other.
+            var pageEnd = container.PageBottomOf(page) - container.TotalBandEndReservationFor(page);
+            if (bottom - HtmlContainerInt.PageBoundaryEpsilon <= pageEnd) return;
+
+            var next = page + 1;
+            var nextTop = container.PageTopOf(next) + container.TopFloatAreaHeightsBySlot.GetValueOrDefault(next);
+            var nextEnd = container.PageBottomOf(next) - container.TotalBandEndReservationFor(next);
+            if (bottom - top > nextEnd - nextTop) return;
+
+            box.OffsetTop(nextTop - top);
 
             var staticTop = box.StaticTop;
             var placed = CssLayoutEngine.FloatPositionBesideTheFloatsAt(box, staticTop);

@@ -27,6 +27,7 @@ Breaking it properly needs the capped height to count the block size consumed ac
 measures `Location.Y + max-height` in document space, which includes the page gap), and the clipped lines to
 be laid out without ending the pass for the content after the box.
 
-Only the first layout attempt is checked; a box that starts clipping in a later reflow (per-page width,
-footnotes, `target-counter`) is not retried. Vertical writing modes keep the older rule (any capped block
-size is monolithic).
+The retry runs inside every `HtmlContainerInt.LayoutDocument` call, not once after the first: a per-page
+width reflow, the footnote and page-float loop or a `target-counter` reflow lays the document out at a
+different geometry and can make a box clip that the first layout did not (a review of #1334 found it ran only
+once). Vertical writing modes keep the older rule (any capped block size is monolithic).

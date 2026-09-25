@@ -1706,19 +1706,6 @@ namespace PeachPDF.Html.Core
                 await LayoutDocument(g);
             }
 
-            // A scroll container capped only by max-height breaks like a plain block (css-break-3 §2), unless
-            // its content turns out to overflow the cap, which only this layout can tell. Such a box is kept in
-            // one piece for the rest of this layout and the document laid out again; within a layout a box only
-            // ever joins the set, so this settles. See MonolithicContent.HasConstrainedBlockSize.
-            for (var attempt = 0; attempt < MaxClippingRelayouts && _aScrollContainerStartedClipping; attempt++)
-            {
-                _aScrollContainerStartedClipping = false;
-                Root.Size = new RSize(IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width)), 0);
-                Root.Location = Location;
-                ActualSize = RSize.Empty;
-                await LayoutDocument(g);
-            }
-
             // Per-page horizontal reflow (CSS Paged Media 3: "the edges of the page area act as a
             // containing block for layout that occurs between page breaks"). The pass(es) above laid
             // every box out against page 0's own measure - a box's width is resolved (CssBox.PerformLayoutImp
@@ -2426,7 +2413,37 @@ namespace PeachPDF.Html.Core
         /// document's registrations accumulate <i>across</i> its fragmentainers, and only a whole new
         /// layout invalidates them.
         /// </remarks>
+        /// <summary>
+        /// Lays the document out once from the root size and location the caller set, and again for each
+        /// scroll container found clipping its content (<see cref="NoteScrollContainerClips"/>).
+        /// </summary>
+        /// <remarks>
+        /// A scroll container capped only by <c>max-height</c> breaks like a plain block (css-break-3 §2),
+        /// unless its content turns out to overflow the cap, which only a layout can tell. Such a box is kept in
+        /// one piece for the rest of the layout and the document laid out again; within a layout a box only
+        /// ever joins the set, so this settles. It is done here rather than once in <see cref="PerformLayout"/>
+        /// because every caller lays out at its own geometry: a per-page width reflow, the footnote and page
+        /// float loop or a <c>target-counter</c> reflow can make a box clip that the first layout did not.
+        /// </remarks>
+        /// <param name="g">the graphics to measure with</param>
         private async ValueTask LayoutDocument(RGraphics g)
+        {
+            var rootSize = Root!.Size;
+            var rootLocation = Root.Location;
+
+            await LayoutDocumentOnce(g);
+
+            for (var attempt = 0; attempt < MaxClippingRelayouts && _aScrollContainerStartedClipping; attempt++)
+            {
+                _aScrollContainerStartedClipping = false;
+                Root.Size = rootSize;
+                Root.Location = rootLocation;
+                ActualSize = RSize.Empty;
+                await LayoutDocumentOnce(g);
+            }
+        }
+
+        private async ValueTask LayoutDocumentOnce(RGraphics g)
         {
             LayoutGeneration++;
             FragmentainerPasses = 0;

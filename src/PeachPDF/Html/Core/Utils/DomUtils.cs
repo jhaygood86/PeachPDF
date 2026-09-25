@@ -172,7 +172,7 @@ namespace PeachPDF.Html.Core.Utils
             // that is or holds a multi-column container, an absolutely positioned first child is still
             // returned, as it always was before #1349: see IsAPrecedingBreakingAbsoluteBox.
             var first = b.ParentBox.Boxes[0];
-            if (first.Position.Value is not PositionMode.Absolute) return null;
+            if (first.Position.Value is not PositionMode.Absolute || first.DerivedStyle.ActualDisplay == Keywords.None) return null;
 
             for (var i = 0; i < index; i++)
             {

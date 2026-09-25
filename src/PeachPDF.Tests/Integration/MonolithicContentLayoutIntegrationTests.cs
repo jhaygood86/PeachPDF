@@ -375,6 +375,21 @@ namespace PeachPDF.Tests.Integration
             if (side == "left") Assert.True(later.Location.X >= moved.ActualRight - 0.01, "the later float overlaps the moved one");
         }
 
+        // A float moves onto the next page's usable band: below a float: top figure there, not on top of it.
+        [Fact]
+        public async Task MovedFloat_StartsBelowATopPageFloatOnItsNewPage()
+        {
+            var (root, container) = await LayoutFloats(
+                $"<div>{Lines("C", 11)}</div><div id='f' style='float:left;width:80pt'>{Lines("F", 4)}</div>" +
+                $"<div>{Lines("W", 8)}<div id='fig' style='float:top;height:40pt'>FIG</div>{Lines("V", 12)}</div>");
+            var moved = LayoutHarness.FindById(root, "f")!;
+            var figure = LayoutHarness.FindById(root, "fig")!;
+
+            Assert.Equal(container.SlotStartingAt(figure.Location.Y), container.SlotStartingAt(moved.Location.Y));
+            Assert.True(moved.Location.Y >= figure.ActualBottom - 0.01,
+                $"the moved float's top {moved.Location.Y:F2} is inside the figure's strip, which ends at {figure.ActualBottom:F2}");
+        }
+
         // A float taller than a page cannot be moved whole, so it stays where it was placed and is sliced.
         [Fact]
         public async Task FloatTallerThanAPage_IsNotMoved()
