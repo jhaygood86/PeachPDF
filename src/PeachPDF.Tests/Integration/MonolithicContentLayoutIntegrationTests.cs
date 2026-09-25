@@ -601,6 +601,20 @@ namespace PeachPDF.Tests.Integration
             Assert.DoesNotContain(card, container.ScrollContainersThatClip);
         }
 
+        // The clip edge is a bottom edge: one exactly on page 1's foot belongs to page 1, and the clipped lines
+        // past it run onto page 2, so the box is noted and kept whole. Taken as a top edge, it was measured
+        // against page 2's foot and missed, and the box stayed breakable among its clipped lines.
+        [Fact]
+        public async Task ScrollContainerClippedExactlyAtThePageFoot_IsNoted()
+        {
+            var (root, container) = await LayoutFloats(
+                $"<div>{Lines("C", 10)}</div><div id='card' style='overflow:hidden;max-height:40pt'>{Lines("X", 10)}</div>" +
+                $"<div>{Lines("W", 5)}</div>");
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.Contains(card, container.ScrollContainersThatClip);
+        }
+
         // Which boxes clip is decided per layout. A box that clipped its content and was kept whole may fit
         // under its cap once widened, and the next layout of the same container lets it break again, as a
         // fresh layout of the wider box does.

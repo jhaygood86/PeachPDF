@@ -7023,11 +7023,15 @@ namespace PeachPDF.Html.Core.Dom
                 contentBottom = Math.Max(contentBottom, GetMaximumBottom(child, contentBottom));
             }
 
-            // Only clipped content that runs past the end of the page the clip edge is on can take a break
-            // among its lines; one clipped within a page loses nothing, and laying the whole document out again
-            // for it would only cost time. Nor can a box inside unbroken content (no fragmentainer attached).
+            // Only clipped content that runs past the end of the fragmentainer the clip edge is in can take a
+            // break among its lines; one clipped within it loses nothing, and laying the whole document out again
+            // for it would only cost time. Nor can a box inside unbroken content (no fragmentainer attached). The
+            // clip edge is a bottom edge, so its page is the one it ends in (SlotEndingAt). A column never gets
+            // here: a scroll container inside a multi-column container is monolithic (EveryAncestorCarriesABreak).
+            var bandEnd = container.PageBottomOf(container.SlotEndingAt(clipEdge));
+
             if (contentBottom > clipEdge + HtmlContainerInt.PageBoundaryEpsilon
-                && contentBottom > container.PageBottomOf(container.SlotStartingAt(clipEdge)) + HtmlContainerInt.PageBoundaryEpsilon)
+                && contentBottom > bandEnd + HtmlContainerInt.PageBoundaryEpsilon)
             {
                 container.NoteScrollContainerClips(this);
             }
