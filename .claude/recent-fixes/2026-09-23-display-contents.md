@@ -42,9 +42,10 @@ as-authored tree; bidi runs before the splice too, which is why `CssBidiParagrap
 - The `IContainer.Html(...)` declarative path has no container at splice time; its shells travel on
   `CssPropertyFactory.DisplayContentsShells` to `SetDeclarativeRoot`.
 
-**Not done.** A counter leaking out of a contents list ([gap](../accepted-gaps/counter-scope-leaks-out-of-a-display-contents-list.md), #1297). SVG-internal `display: contents`
+**Not done.** SVG-internal `display: contents`
 ([gap](../accepted-gaps/display-contents-on-svg-internal-elements-has-no-effect.md), #1295). The html-vs-body
-canvas precedence inversion found on the way is unrelated and left alone (#1296).
+canvas precedence inversion found on the way is unrelated and left alone (#1296). The counter leak out of a contents list (#1297) was closed
+afterwards, see [2026-09-25-a-contents-list-numbers-by-its-own-element.md](2026-09-25-a-contents-list-numbers-by-its-own-element.md).
 
 **Evidence.** `DisplayContentsIntegrationTests` (layout geometry on every affected box, tagged structure, ids/links/
 bookmarks/`target-*`, `string-set`, canvas background, bidi, declarative API), full net8.0 suite green, and the

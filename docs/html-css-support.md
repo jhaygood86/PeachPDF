@@ -719,9 +719,10 @@ What follows from having no box:
   still reaches into its text.
 - A `counter-reset`, `counter-increment` or `counter-set` on it has no effect
   ([CSS Lists 3 §4.5](https://www.w3.org/TR/css-lists-3/#nobox)), including the implicit `list-item`
-  counters of a `<ol style="display: contents">`; its `<li>` children still count and get their markers, but
-  a counter they increment stays in scope for the elements that follow the list (a second `contents` list
-  continues the first one's numbering).
+  counters of a `<ol style="display: contents">`; its `<li>` children still count and get their markers, and
+  they are numbered by the list element that owns them, so a second `contents` list starts again at 1. A
+  marker hangs outside the content edge of its item, so with the list's own indent gone it is drawn in the
+  page margin.
 - `unicode-bidi` on it (so a `<bdi>`, `<bdo>` or `[dir]` element with `display: contents`) does not isolate or
   override its content, which stays in the surrounding paragraph — `unicode-bidi` acts on an inline box
   ([CSS Writing Modes 4](https://www.w3.org/TR/css-writing-modes-4/#unicode-bidi)). Its `direction` is still
@@ -745,8 +746,7 @@ Elements whose rendering CSS does not fully control compute to `display: none` i
 `<legend>` just lose their box. A `::before`/`::after` with `display: contents` is laid out as `inline`.
 
 **Known gaps:** `display: contents` on an element *inside* an inline `<svg>` or `<math>` (`<g>`, `<tspan>`,
-`<use>`, `<mrow>`, …) has no effect, because those renderers do not read the CSS `display` property. A counter
-incremented by a child of a `display: contents` list leaks into the elements after the list (above).
+`<use>`, `<mrow>`, …) has no effect, because those renderers do not read the CSS `display` property.
 
 #### Atomic inline-level layout is approximated, not fully atomic
 
