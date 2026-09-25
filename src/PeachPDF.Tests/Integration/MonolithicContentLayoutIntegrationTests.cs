@@ -467,20 +467,37 @@ namespace PeachPDF.Tests.Integration
             AssertEachDrawnOnceInsideABand(placed, 20);
         }
 
-        // Such a box keeps the breaking path, so a break inside it ends the pass. The content after it, placed
-        // at its parent's top, landed on the page that pass had already emitted and was drawn on no page (all
-        // ten paragraphs of a following block). It is placed after the box instead, and drawn.
+        // Such a box keeps the breaking path, so a break inside it ends the pass, and the next pass resumes
+        // inside it on page 2. The content after it belongs at its parent's top on page 1 (CSS 2.1 §9.3.1),
+        // which that pass had already emitted, so it was drawn on no page (all ten paragraphs of a following
+        // block). The page is re-opened for it, and it is drawn there.
         [Theory]
         [InlineData("<p>B1</p><div>{0}<p>W9</p></div>", 9)]
         [InlineData("<p>B1</p><div>{0}<p>W9</p><p>W10</p><p>W11</p><p>W12</p><p>W13</p><p>W14</p><p>W15</p><p>W16</p><p>W17</p><p>W18</p></div>", 18)]
         [InlineData("<div><p>B1</p>{0}<p>W9</p></div>", 9)]
-        public async Task ContentAfterAnAbsoluteMultiColumnBox_IsDrawn(string shape, int count)
+        public async Task ContentAfterAnAbsoluteMultiColumnBox_IsDrawnWhereItBelongs(string shape, int count)
         {
             var box = "<div style='position:absolute;top:120pt;width:200pt;columns:2'>" +
                       string.Concat(Enumerable.Range(1, 8).Select(i => $"<p>W{i}</p>")) + "</div>";
             var placed = await WordFragments(string.Format(shape, box));
 
             AssertEachDrawnOnceInsideABand(placed, count);
+            Assert.Equal(0, placed.Single(w => w.Text == "W9").Page);
+            Assert.Equal(Margin + 12, placed.Single(w => w.Text == "W9").Top, 0);
+        }
+
+        // An absolute multi-column box placed on an earlier page than the content around it moves nothing:
+        // the paragraphs before and after it stay on the second page, inside an overflow: hidden wrapper.
+        [Fact]
+        public async Task AbsoluteMultiColumnBoxOnAnEarlierPage_LeavesTheContentAroundItInPlace()
+        {
+            var placed = await WordFragments(
+                "<p style='break-after:page'>B1</p><div style='overflow:hidden'><p>W1</p>" +
+                "<div style='position:absolute;top:0;left:150pt;width:100pt;columns:2'><p>X1</p><p>X2</p></div>" +
+                "<p>W2</p></div>");
+
+            AssertEachDrawnOnceInsideABand(placed, 2);
+            Assert.All(placed, w => Assert.Equal(1, w.Page));
         }
 
         // Which boxes clip is decided per layout. A box that clipped its content and was kept whole may fit

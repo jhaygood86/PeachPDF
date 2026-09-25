@@ -203,6 +203,16 @@ namespace PeachPDF.Html.Core
         private bool _aScrollContainerStartedClipping;
 
         /// <summary>
+        /// Whether an absolutely positioned box that keeps the breaking path (it is or holds a multi-column
+        /// container) has completed, in this layout attempt, on a page before the pass that completed it: it
+        /// broke, and a later pass resumed inside it. Only then can the in-flow content after it land on a
+        /// page already emitted, so <c>CssBox.PerformLayoutEpilogue</c> checks in-flow boxes for that only
+        /// once this is set. Ungated, the check re-opened pages for ordinary boxes and made 5,000 wrappers
+        /// lay out six times slower.
+        /// </summary>
+        internal bool AnAbsoluteBoxCompletedBehindThePass { get; set; }
+
+        /// <summary>
         /// Records that <paramref name="box"/>, an <c>overflow: hidden</c> box that broke like a plain block,
         /// clips its content, so the document is laid out again with it kept in one piece. A break among its
         /// clipped lines would end the pass past the box's end and lose the content after it.
@@ -2429,6 +2439,7 @@ namespace PeachPDF.Html.Core
         private async ValueTask LayoutDocument(RGraphics g)
         {
             LayoutGeneration++;
+            AnAbsoluteBoxCompletedBehindThePass = false;
             FragmentainerPasses = 0;
             LastResortRelayouts = 0;
             PassRewinds = 0;

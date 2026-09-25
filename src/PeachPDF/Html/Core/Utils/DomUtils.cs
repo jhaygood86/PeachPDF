@@ -180,19 +180,10 @@ namespace PeachPDF.Html.Core.Utils
         /// end's omitted <c>position: absolute</c>: an absolutely positioned first child was returned as
         /// the previous sibling of the box after it, which was then placed below the absolutely
         /// positioned box rather than at the top of its parent (#1349).
-        /// <para>
-        /// An absolutely positioned box that is or holds a multi-column container is the exception: it is
-        /// not stepped over. Its columns need the fragmentainer, so it keeps the breaking path
-        /// (<see cref="CssBox.IsOrHoldsAMultiColumnContainer"/>), and a break inside it ends the pass. The
-        /// content after it, placed at its parent's top, then landed on the page that pass had already
-        /// emitted and was drawn on no page. Placed after the box instead, as before #1349, it is drawn on
-        /// the page the pass continues on, though not where CSS 2.1 §9.3.1 puts it (#1377).
-        /// </para>
         /// </remarks>
         private static bool IsSteppedOverAsPreviousSibling(CssBox sib, bool includeFloats) =>
             sib.DerivedStyle.ActualDisplay == Keywords.None
-            || (sib.Position.Value is PositionMode.Absolute && !CssBox.IsOrHoldsAMultiColumnContainer(sib))
-            || sib.Position.Value is PositionMode.Fixed or PositionMode.Running
+            || sib.Position.Value is PositionMode.Absolute or PositionMode.Fixed or PositionMode.Running
             || (!includeFloats && sib.IsFloated)
             || sib.IsPageFloated
             || CssBox.IsOutsideMarker(sib)
