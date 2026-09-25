@@ -94,7 +94,7 @@ namespace PeachPDF.Html.Core.Dom
                     ?? (entry.IsReversed ? CountScopeIncrements(box, entry.Name) + 1 : 0);
 
                 var parentScopeCounter = box.Counters.GetValueOrDefault(entry.Name);
-                box.Counters[entry.Name] = new CssCounter(entry.Name, initialValue, entry.IsReversed, true, parentScopeCounter);
+                box.Counters[entry.Name] = new CssCounter(entry.Name, initialValue, entry.IsReversed, true, parentScopeCounter, ScopeParentOf(box, entry.Name));
             }
         }
 
@@ -112,7 +112,7 @@ namespace PeachPDF.Html.Core.Dom
             var existing = box.Counters.GetValueOrDefault(counterName);
             box.Counters[counterName] = existing is not null
                 ? existing with { Value = value }
-                : new CssCounter(counterName, value, false, false, null);
+                : new CssCounter(counterName, value, false, false, null, ScopeParentOf(box, counterName));
         }
 
         private static void ApplyCounterIncrements(CssBox box)
@@ -154,7 +154,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    var newCounter = new CssCounter(incrementEntry.Key, 1, false, true, null);
+                    var newCounter = new CssCounter(incrementEntry.Key, 1, false, true, null, ScopeParentOf(box, incrementEntry.Key));
                     box.Counters[incrementEntry.Key] = newCounter;
                 }
             }
@@ -301,7 +301,8 @@ namespace PeachPDF.Html.Core.Dom
 
                 InheritAndApplyCounter(parentBox, counterName);
 
-                if (parentBox is not null && parentBox.Counters.TryGetValue(counterName, out var parentCounterValue))
+                if (parentBox is not null && parentBox.Counters.TryGetValue(counterName, out var parentCounterValue)
+                    && IsInScope(currentBox, parentCounterValue))
                 {
                     currentBox.Counters[counterName] = parentCounterValue with
                     {
@@ -317,7 +318,8 @@ namespace PeachPDF.Html.Core.Dom
 
                     InheritAndApplyCounter(lastChildInScope, counterName);
 
-                    if (lastChildInScope.Counters.TryGetValue(counterName, out var lastChildCounterValue))
+                    if (lastChildInScope.Counters.TryGetValue(counterName, out var lastChildCounterValue)
+                        && IsInScope(currentBox, lastChildCounterValue))
                     {
                         currentBox.Counters[counterName] = lastChildCounterValue with
                         {
@@ -332,6 +334,59 @@ namespace PeachPDF.Html.Core.Dom
             ApplyCounterIncrements(currentBox);
             ApplyCounterSets(currentBox);
 
+        }
+
+        /// <summary>
+        /// The element a <c>list-item</c> counter created by <paramref name="box"/> is confined to, when the
+        /// box tree cannot say so itself: the innermost <c>display: contents</c> element <paramref name="box"/>
+        /// was lifted out of, which is its element parent (CSS Display 3 §2.5 removes only that element's own
+        /// box, so its children stay its children in the element tree, which is what CSS Lists 3 §4.4.1
+        /// scopes a counter by). Null for a box no such element lifted - the box tree is the element tree
+        /// there - and for every counter but <c>list-item</c>.
+        /// </summary>
+        /// <remarks>
+        /// Only <c>list-item</c>, deliberately. Browsers number the items of a list by the list element that
+        /// owns them, contents or not, so the items of a second list start again at 1; but a counter an author
+        /// increments without ever resetting it leaks past the element it was first incremented in - through a
+        /// plain wrapper as much as through a <c>display: contents</c> one (Chrome and this engine's ordinary
+        /// inheritance agree). Scoping those strictly for a lifted box alone would make a contents wrapper
+        /// number differently from the same markup with a plain <c>div</c>, which is exactly what
+        /// <c>display: contents</c> must not do.
+        /// </remarks>
+        private static CssBox? ScopeParentOf(CssBox box, string counterName) =>
+            counterName == Keywords.ListItem && box.DisplayContentsAncestors is { Count: > 0 } shells ? shells[^1] : null;
+
+        /// <summary>
+        /// Whether <paramref name="counter"/> is still in scope at <paramref name="box"/>. Only a counter
+        /// with a recorded <see cref="CssCounter.ScopeParent"/> can be out of scope: a lifted item's counter
+        /// is carried by the flattened box tree to whatever follows the list (a paragraph, and through it
+        /// the next list), which the element tree keeps out of it, so <c>c</c> in
+        /// <c>&lt;ol style="display:contents"&gt;&lt;li&gt;a&lt;li&gt;b&lt;/ol&gt;&lt;p&gt;x&lt;/p&gt;&lt;ol
+        /// style="display:contents"&gt;&lt;li&gt;c&lt;/li&gt;&lt;/ol&gt;</c> numbered 3 rather than 1.
+        /// </summary>
+        private static bool IsInScope(CssBox box, CssCounter counter) =>
+            counter.ScopeParent is null || IsAnonymous(box) || IsElementDescendantOf(box, counter.ScopeParent);
+
+        /// <summary>
+        /// A box no element produced: the wrapper the parser puts around an inline run, a bare-text box. It
+        /// has no place in the element tree to be in or out of scope, and it is made after
+        /// <c>display: contents</c> boxes are lifted, so it carries no record of the list it sits in - judging
+        /// it by its box parent would drop the counter of a list item that has bare text after it, and the
+        /// next item would restart at 1. It only passes the counter on; the element that asks for it decides.
+        /// </summary>
+        private static bool IsAnonymous(CssBox box) => box.HtmlTag is null && !box.IsPseudoElement;
+
+        private static bool IsElementDescendantOf(CssBox box, CssBox ancestor)
+        {
+            // A lifted box's element parent is its innermost shell, not its box parent; a shell itself keeps
+            // the box parent it had (CssBox.DisplayContents.cs), which is its element parent too.
+            for (var current = box; current is not null;
+                 current = current.DisplayContentsAncestors is { Count: > 0 } shells ? shells[^1] : current.ParentBox)
+            {
+                if (ReferenceEquals(current, ancestor)) return true;
+            }
+
+            return false;
         }
 
         private static CssBox? GetPreviousSibling(CssBox b)

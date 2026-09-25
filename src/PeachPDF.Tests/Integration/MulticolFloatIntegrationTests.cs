@@ -149,6 +149,35 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task LongBareTextBesideABlockFloat_IsDrawnOnceInOrderAndFillsBothColumns()
+        {
+            // v0.9.19 dropped every word of a multi-column container whose only sibling of the text was a
+            // float (issue #1205 sent it through a path that placed the float and none of the text), and
+            // emitted the emptied page repeatedly. The 8-word test above cannot see that the text still
+            // *fills* the columns: this one is long enough to need both, and its float is a block (`div`), the
+            // shape a real stylesheet writes, not a `span`.
+            var words = Enumerable.Range(1, 150).Select(i => $"w{i:000}").ToList();
+
+            var (root, container) = await BuildAndLayout(
+                "<div id='mc' style='columns:2; column-gap:10px; width:200px; font:10px McFixture'>" +
+                "<div id='f1' style='float:left; width:30pt; height:20px'>tok</div>" +
+                string.Join(' ', words) + "</div>");
+
+            var g = new TestRecordingGraphics();
+            for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
+                FragmentPaintHarness.PaintPage(container, g, page);
+
+            var drawn = g.DrawStringCalls.Select(c => c.Text.Trim()).Where(t => t.StartsWith('w')).ToList();
+
+            Assert.Equal(words, drawn);
+            Assert.Single(container.FragmentTree.Fragmentainers);
+
+            // Both columns are used: the text does not sit in one column that runs off the page.
+            Assert.Contains(g.DrawStringCalls, c => c.Point.X >= SecondColumnLeft - 0.01);
+            Assert.Contains(g.DrawStringCalls, c => c.Text.Trim().StartsWith('w') && c.Point.X < SecondColumnLeft - 0.01);
+        }
+
+        [Fact]
         public async Task FloatInAColumn_IsPaintedWhereItWasPlaced()
         {
             var (root, container) = await BuildAndLayout(TwoParagraphsAndAFloat);

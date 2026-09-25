@@ -343,6 +343,196 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains(i.Boxes, b => b.IsMarkerPseudoElement);
         }
 
+        // ─── Counters: scope follows the element tree, not the flattened box tree ────────────────
+
+        private static string MarkerText(CssBox root, string listItemId) =>
+            ((CssBoxMarker)LayoutHarness.FindById(root, listItemId)!.Boxes.Single(b => b.IsMarkerPseudoElement)).Text!;
+
+        private static int CounterValue(CssBox root, string id, string counter) =>
+            CssCounterEngine.GetCounter(LayoutHarness.FindById(root, id)!, counter)!.Value;
+
+        // Every expectation below was read off Chrome 152 rather than assumed.
+
+        [Fact]
+        public async Task ContentsLists_SeparatedByAParagraph_EachNumberFromOne()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<ol style='display:contents'><li id='a'>a<li id='b'>b</ol><p>x</p>" +
+                "<ol style='display:contents'><li id='c'>c</li></ol>"));
+
+            Assert.Equal(["1.", "2.", "1."], [MarkerText(root, "a"), MarkerText(root, "b"), MarkerText(root, "c")]);
+        }
+
+        [Fact]
+        public async Task ContentsLists_DirectlyAdjacent_EachNumberFromOne()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<ol style='display:contents'><li id='a'>a</ol><ol style='display:contents'><li id='b'>b</ol>"));
+
+            Assert.Equal("1.", MarkerText(root, "a"));
+            Assert.Equal("1.", MarkerText(root, "b"));
+        }
+
+        [Fact]
+        public async Task ContentsLists_InsideAContentsWrapper_StillEndAtTheirOwnElement()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div style='display:contents'><ol style='display:contents'><li id='a'>a<li id='b'>b</ol></div>" +
+                "<p>x</p><ol style='display:contents'><li id='c'>c</li></ol>"));
+
+            Assert.Equal(["1.", "2.", "1."], [MarkerText(root, "a"), MarkerText(root, "b"), MarkerText(root, "c")]);
+        }
+
+        [Fact]
+        public async Task ContentsList_AfterAContentsUnorderedList_NumbersFromOne()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<ul style='display:contents'><li>a</li><li>b</li></ul><ol style='display:contents'><li id='c'>c</li></ol>"));
+
+            Assert.Equal("1.", MarkerText(root, "c"));
+        }
+
+        [Fact]
+        public async Task ContentsWrapperBetweenTwoItemsOfAContentsList_DoesNotRestartTheNumbering()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<ol style='display:contents'><li id='a'>a</li><div style='display:contents'><li id='b'>b</li></div><li id='c'>c</li></ol>"));
+
+            Assert.Equal(["1.", "2.", "3."], [MarkerText(root, "a"), MarkerText(root, "b"), MarkerText(root, "c")]);
+        }
+
+        [Fact]
+        public async Task BareTextBetweenTwoItemsOfAContentsList_DoesNotRestartTheNumbering()
+        {
+            // The text run gets an anonymous wrapper after the display: contents boxes were lifted, so the
+            // wrapper carries no record of the list it sits in; the counter has to pass through it.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<ol style='display:contents'><li id='a'>a</li>text<li id='b'>b</li></ol>"));
+
+            // The fixture only proves anything if the run really was wrapped in an anonymous box between the
+            // two items - the box a counter has to pass through.
+            var b = LayoutHarness.FindById(root, "b")!;
+            var between = b.ParentBox!.Boxes[b.ParentBox.Boxes.IndexOf(b) - 1];
+            Assert.Null(between.HtmlTag);
+            Assert.Contains(LayoutHarness.Descendants(between), d => d.Words.Any(w => w.Text?.Trim() == "text"));
+
+            Assert.Equal(["1.", "2."], [MarkerText(root, "a"), MarkerText(root, "b")]);
+        }
+
+        [Fact]
+        public async Task CounterFunctionOnAnItemAfterBareText_ContinuesTheContentsList()
+        {
+            // `content: counter(list-item)` is resolved from the same counters but on a different path from the
+            // default marker's, and it is where an anonymous box between two items could matter.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>li{list-style:none} li::before{content:counter(list-item) '|'}</style>" +
+                "<ol style='display:contents'><li id='a'>a</li>text<li id='b'>b</li></ol>"));
+
+            string Before(string id) => LayoutHarness.FindById(root, id)!.Boxes.Single(b => b.IsBeforePseudoElement).Text!;
+
+            Assert.Equal(["1|", "2|"], [Before("a"), Before("b")]);
+        }
+
+        [Fact]
+        public async Task ItemCounters_ResolvedAgainOnTheFinalTree_StillPassThroughAnAnonymousBox()
+        {
+            // Markers and counter() content resolve before the passes that wrap an inline run in an anonymous
+            // box (CorrectTextBoxes runs ahead of CorrectInlineBoxesParent), so the ordinary tests above never
+            // ask the question on the final tree. A counter first asked for later - a target-counter(), say -
+            // does. Resolve every counter afresh over the finished tree, where the wrapper between the two
+            // items exists and carries no record of the list it sits in.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<ol style='display:contents'><li id='a'>a</li>text<li id='b'>b</li></ol><p>x</p>" +
+                "<ol style='display:contents'><li id='c'>c</li></ol>"));
+
+            foreach (var box in LayoutHarness.Descendants(root))
+            {
+                box.Counters.Clear();
+                box.FinalizedCounterNames.Clear();
+            }
+
+            Assert.Equal([1, 2, 1],
+                [CounterValue(root, "a", "list-item"), CounterValue(root, "b", "list-item"), CounterValue(root, "c", "list-item")]);
+        }
+
+        [Fact]
+        public async Task ItemCounters_ResolvedAgainOnTheFinalTree_StillPassThroughAContentsWrapper()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<ol style='display:contents'><li id='a'>a</li><div style='display:contents'><li id='b'>b</li></div><li id='c'>c</li></ol>"));
+
+            foreach (var box in LayoutHarness.Descendants(root))
+            {
+                box.Counters.Clear();
+                box.FinalizedCounterNames.Clear();
+            }
+
+            Assert.Equal([1, 2, 3],
+                [CounterValue(root, "a", "list-item"), CounterValue(root, "b", "list-item"), CounterValue(root, "c", "list-item")]);
+        }
+
+        [Fact]
+        public async Task BareTextAfterAContentsList_StillEndsItsNumbering()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<ol style='display:contents'><li id='a'>a</li></ol>text<ol style='display:contents'><li id='b'>b</li></ol>"));
+
+            Assert.Equal(["1.", "1."], [MarkerText(root, "a"), MarkerText(root, "b")]);
+        }
+
+        [Fact]
+        public async Task ContentsList_NestedInAnItem_ContinuesTheOuterList()
+        {
+            // A contents list generates no box, so it cannot reset the counter (CSS Lists 3 §4.5): the item
+            // inside it is one more item of the enclosing list, as in a browser.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<ol><li id='one'>one<ol style='display:contents'><li id='two'>two</li></ol></li><li id='three'>three</li></ol>"));
+
+            Assert.Equal(["1.", "2.", "3."], [MarkerText(root, "one"), MarkerText(root, "two"), MarkerText(root, "three")]);
+        }
+
+        [Fact]
+        public async Task ContentsList_AfterAWrappedOrdinaryList_NumbersFromOne()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div style='display:contents'><ol><li id='a'>a<li id='b'>b</ol></div><ol><li id='c'>c</li></ol>"));
+
+            Assert.Equal(["1.", "2.", "1."], [MarkerText(root, "a"), MarkerText(root, "b"), MarkerText(root, "c")]);
+        }
+
+        [Fact]
+        public async Task CounterResetOutside_ContinuesAcrossAContentsWrapper()
+        {
+            // The counter is created by `.sec`, an ordinary element, so its scope spans the whole element
+            // and the contents wrapper in the middle of it must not cut it. This is what a scope check keyed
+            // on "was lifted out of a contents element" would break.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>.sec{counter-reset:sec} h2{counter-increment:sec}</style>" +
+                "<div class='sec'><h2 id='a'>a</h2><div style='display:contents'><h2 id='b'>b</h2><h2 id='c'>c</h2></div>" +
+                "<h2 id='d'>d</h2></div>"));
+
+            Assert.Equal([1, 2, 3, 4],
+                [CounterValue(root, "a", "sec"), CounterValue(root, "b", "sec"), CounterValue(root, "c", "sec"), CounterValue(root, "d", "sec")]);
+        }
+
+        [Fact]
+        public async Task UnresetCounterIncrementedInsideAContentsElement_LeaksLikeThroughAPlainWrapper()
+        {
+            // Read off Chrome 152: a counter that is only ever incremented, never reset, is instantiated at its
+            // first increment and stays in scope for the rest of that element's parent - through a plain `div`
+            // as much as a `display: contents` one. Only the list-item counter is scoped to the list element
+            // (see ScopeParentOf), so an author counter must number exactly as it does with a plain wrapper.
+            const string Style = "<style>h2{counter-increment:n}</style>";
+
+            var (contents, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                Style + "<div style='display:contents'><h2 id='a'>a</h2><h2 id='b'>b</h2></div><h2 id='c'>c</h2>"));
+            var (plain, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                Style + "<div><h2 id='a'>a</h2><h2 id='b'>b</h2></div><h2 id='c'>c</h2>"));
+
+            Assert.Equal([1, 2, 3], [CounterValue(contents, "a", "n"), CounterValue(contents, "b", "n"), CounterValue(contents, "c", "n")]);
+            Assert.Equal([1, 2, 3], [CounterValue(plain, "a", "n"), CounterValue(plain, "b", "n"), CounterValue(plain, "c", "n")]);
+        }
+
         [Fact]
         public async Task RootElement_ComputesContentsToBlock()
         {
