@@ -255,6 +255,29 @@ namespace PeachPDF.Tests.TestSupport
         }
 
         /// <summary>
+        /// Liberation Sans Regular: metrically identical to Arial (same advance widths, same 1.149em line
+        /// height), which is the font most layout fixtures here were calibrated against.
+        /// </summary>
+        internal static string LiberationSans => Path.Combine(AppContext.BaseDirectory, "LiberationSans-Regular.woff");
+
+        /// <summary>
+        /// Points the <c>sans-serif</c> generic at the bundled Liberation Sans on <paramref name="adapter"/>, so a
+        /// fixture that says <c>font: 12px sans-serif</c> measures the same on every host. Without it the
+        /// generic resolves to whatever the platform maps it to - Arial, Helvetica, DejaVu Sans, a fontconfig
+        /// answer - and those differ in line height (Helvetica's ascent + descent is exactly 1em, Arial's is
+        /// about 1.15em) and glyph widths, which is enough to flip a test whose geometry or guard is
+        /// calibrated to one of them. Arial's metrics are the ones being pinned, because they are what the
+        /// existing fixtures were written against.
+        /// Use it for a layout fixture whose subject is not which font the host resolves.
+        /// </summary>
+        internal static async Task PinSansSerifAsync(PdfSharpAdapter adapter)
+        {
+            const string pinnedFamily = "PinnedSans";
+            await RegisterFont(adapter, LiberationSans, pinnedFamily);
+            adapter.AddFontFamilyMapping("sans-serif", pinnedFamily);
+        }
+
+        /// <summary>
         /// Ensures <paramref name="resolver"/> can resolve at least one font family and
         /// returns its name, using a system font if one was detected or registering the
         /// bundled TTF as a custom font otherwise.

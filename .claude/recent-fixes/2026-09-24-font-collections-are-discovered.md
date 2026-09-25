@@ -25,10 +25,16 @@ working; collections are globbed *last* so that first entry is still an ordinary
 **Bounds:** the face count, table count and every table's offset+length are validated against the file before any
 allocation is sized from them (`FontCollection`), because a collection header is untrusted input.
 
-**Behaviour change to expect on CI:** new fonts become candidates everywhere - macOS gains the fonts above (the
-generic table's macOS names now resolve), Linux gains Noto CJK as a system-fallback candidate. Tests that relied on a
-particular default/fallback font can shift; this is the same class as the earlier font-metric changes that broke
-unpinned Linux/macOS fixtures.
+**The macOS CI fallout was exactly that class, and it was 8 tests.** macOS's `sans-serif` maps to Helvetica, which lives in
+`Helvetica.ttc`; before this change it was "not installed" and fell back to Arial, now it resolves for real. Helvetica's
+ascent + descent is exactly 1em (Arial's is 1.149em) and its widths differ, so fixtures written as `font: 12px sans-serif`
+and calibrated to Arial's metrics flipped: `LineHeightLineBoxExtentTests` (its own guard reported "natural line height (9pt)
+exceeds the declared 9pt" - a 12px font whose line box is exactly 12px), `FloatContainmentTests`, and
+`FootnoteColumnScopeIntegrationTests` (column band arithmetic). Those three files now call `BundledFonts.PinSansSerifAsync`, which
+maps `sans-serif` to the bundled Liberation Sans (Arial's metrics, the ones the fixtures were written against). Pinning to
+Source Sans 3 instead broke other tests in the same files (their wrap widths are Arial-calibrated) - the pin has to match
+the calibration font, not merely be a fixed one. Expect the same shape wherever else a fixture says `sans-serif`/`serif`/
+`monospace` and asserts a metric-dependent number.
 
 **Evidence:** tests build collections from two bundled fonts (`SyntheticFontCollection`, sharing identical tables the way
 a real one does) and assert the extracted face maps characters to the same glyphs through the real table parser; a

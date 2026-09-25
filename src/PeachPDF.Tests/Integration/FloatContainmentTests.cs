@@ -2,6 +2,7 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xunit;
@@ -220,6 +221,7 @@ namespace PeachPDF.Tests.Integration
         private static async Task<(double Width, double Height)> MeasureBoxAsync(string html, string id)
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            await BundledFonts.PinSansSerifAsync(adapter);
             var container = new HtmlContainerInt(adapter)
             {
                 MarginTop = 0,

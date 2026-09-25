@@ -337,6 +337,7 @@ namespace PeachPDF.Tests.Integration
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html)
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            await BundledFonts.PinSansSerifAsync(adapter);
             var container = new HtmlContainerInt(adapter)
             {
                 MarginTop = 0,

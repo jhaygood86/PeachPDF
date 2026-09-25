@@ -27,6 +27,9 @@
     <None Include="..\..\assets\fonts\Inter-Medium.woff2" Link="Inter-Medium.woff2">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\LiberationSans-Regular.woff" Link="LiberationSans-Regular.woff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\..\assets\fonts\NotoEmoji-Regular.ttf" Link="NotoEmoji-Regular.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
