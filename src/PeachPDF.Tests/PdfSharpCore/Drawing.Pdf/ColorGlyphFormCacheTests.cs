@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using System.Collections.Generic;
 using System.IO;
 using PeachPDF.Fonts.OpenType;
@@ -22,7 +23,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing.Pdf
     {
         private static OpenTypeDescriptor Descriptor(string path) =>
             new("color-form-cache-test", "color-form-cache-test", XFontStyle.Regular,
-                XFontSource.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface,
+                FontFileData.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface,
                 new XPdfFontOptions(PdfFontEncoding.Unicode));
 
         private static Dictionary<int, XColor> Overrides(params (int Entry, XColor Color)[] entries)

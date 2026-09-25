@@ -31,7 +31,6 @@
 
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Fonts.OpenType;
-using PeachPDF.PdfSharpCore.Internal;
 using System;
 using System.Collections.Generic;
 
@@ -57,7 +56,7 @@ namespace PeachPDF.Fonts
         //    string fontDescriptorKey = null; // FontDescriptor.ComputeKey(familyName, stlye);
         //    try
         //    {
-        //        Lock.EnterFontFactory();
+        //        FontLock.Enter();
         //        FontDescriptor descriptor;
         //        if (!Singleton._cache.TryGetValue(fontDescriptorKey, out descriptor))
         //        {
@@ -66,7 +65,7 @@ namespace PeachPDF.Fonts
         //        }
         //        return descriptor;
         //    }
-        //    finally { Lock.ExitFontFactory(); }
+        //    finally { FontLock.Exit(); }
         //}
 
         /// <summary>
@@ -82,7 +81,7 @@ namespace PeachPDF.Fonts
             string fontDescriptorKey = FontDescriptor.ComputeKey(font);
             try
             {
-                Lock.EnterFontFactory();
+                FontLock.Enter();
                 FontDescriptor descriptor;
                 if (!Singleton._cache.TryGetValue(fontDescriptorKey, out descriptor))
                 {
@@ -91,7 +90,7 @@ namespace PeachPDF.Fonts
                 }
                 return descriptor;
             }
-            finally { Lock.ExitFontFactory(); }
+            finally { FontLock.Exit(); }
         }
 
         /// <summary>
@@ -107,7 +106,7 @@ namespace PeachPDF.Fonts
             string fontDescriptorKey = FontDescriptor.ComputeKey(fontFamilyName, style);
             try
             {
-                Lock.EnterFontFactory();
+                FontLock.Enter();
                 FontDescriptor descriptor;
                 if (!Singleton._cache.TryGetValue(fontDescriptorKey, out descriptor))
                 {
@@ -120,7 +119,7 @@ namespace PeachPDF.Fonts
                 }
                 return descriptor;
             }
-            finally { Lock.ExitFontFactory(); }
+            finally { FontLock.Exit(); }
         }
 
         /// <summary>
@@ -134,11 +133,11 @@ namespace PeachPDF.Fonts
                 {
                     try
                     {
-                        Lock.EnterFontFactory();
+                        FontLock.Enter();
                         if (_singleton == null)
                             _singleton = new FontDescriptorCache();
                     }
-                    finally { Lock.ExitFontFactory(); }
+                    finally { FontLock.Exit(); }
                 }
                 return _singleton;
             }

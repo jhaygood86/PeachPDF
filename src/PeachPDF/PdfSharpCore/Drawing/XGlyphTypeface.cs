@@ -54,7 +54,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
         const string KeyPrefix = "tk:";  // "typeface key"
 
-        public XGlyphTypeface(string key, XFontSource fontSource, XStyleSimulations styleSimulations = XStyleSimulations.None)
+        public XGlyphTypeface(string key, FontFileData fontSource, XStyleSimulations styleSimulations = XStyleSimulations.None)
         {
             string familyName = fontSource.Fontface.name.Name;
             _fontFamily = new XFontFamily(familyName, false);
@@ -66,18 +66,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
             _key = key;
             //_fontFamily =xfont  FontFamilyCache.GetFamilyByName(familyName);
             _fontSource = fontSource;
-
-            Initialize();
-        }
-
-        // ReSharper disable once UnusedMember.Global
-        public XGlyphTypeface(string key, XFontFamily fontFamily, XFontSource fontSource, XStyleSimulations styleSimulations)
-        {
-            _key = key;
-            _fontFamily = fontFamily;
-            _fontSource = fontSource;
-            _styleSimulations = styleSimulations;
-            _fontface = OpenTypeFontface.CetOrCreateFrom(fontSource);
 
             Initialize();
         }
@@ -115,7 +103,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             }
 
             FontResolverInfo? fontResolverInfo;
-            XFontSource fontSource;
+            FontFileData fontSource;
 
             if (useInstanceCache)
             {
@@ -129,10 +117,10 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 }
 
                 // The actual glyph bytes still safely reuse FontFactory's global, content-addressed
-                // XFontSource cache (keyed by a hash of the font's own bytes, not by family/face name -
+                // FontFileData cache (keyed by a hash of the font's own bytes, not by family/face name -
                 // confirmed collision-free across instances, so there's no need for a third cache here).
                 byte[] bytes = instanceResolver.GetFont(fontResolverInfo.FaceName);
-                fontSource = XFontSource.GetOrCreateFrom(bytes);
+                fontSource = FontFileData.GetOrCreateFrom(bytes);
             }
             else
             {
@@ -144,7 +132,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
                     throw new InvalidOperationException("No appropriate font found.");
                 }
 
-                // We have a valid font resolver info. That means we also have an XFontSource object loaded in the cache.
+                // We have a valid font resolver info. That means we also have a FontFileData object loaded in the cache.
                 fontSource = FontFactory.GetFontSourceByFontName(fontResolverInfo.FaceName);
                 Debug.Assert(fontSource != null);
             }
@@ -183,7 +171,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             if (resolver.InstanceGlyphTypefacesByKey.TryGetValue(key, out var cached))
                 return cached;
 
-            var fontSource = XFontSource.GetOrCreateFrom(resolver.GetFont(info.FaceName));
+            var fontSource = FontFileData.GetOrCreateFrom(resolver.GetFont(info.FaceName));
             var glyphTypeface = new XGlyphTypeface(key, fontSource, info.StyleSimulations)
             {
                 OwningInstanceResolver = resolver
@@ -215,11 +203,11 @@ namespace PeachPDF.PdfSharpCore.Drawing
         }
         readonly OpenTypeFontface _fontface;
 
-        public XFontSource FontSource
+        public FontFileData FontSource
         {
             get { return _fontSource; }
         }
-        readonly XFontSource _fontSource;
+        readonly FontFileData _fontSource;
 
 
 

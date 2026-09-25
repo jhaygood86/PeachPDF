@@ -11,12 +11,12 @@ namespace PeachPDF.Fonts
     /// not itself a font the rest of the pipeline can read.
     /// </summary>
     /// <remarks>
-    /// The pipeline (<c>XFontSource</c>, the OpenType table readers, subsetting, embedding) works on the
+    /// The pipeline (<c>FontFileData</c>, the OpenType table readers, subsetting, embedding) works on the
     /// bytes of one standalone sfnt font. Rather than teach every one of those about collection offsets,
     /// <see cref="ExtractFace(Stream, int)"/> rebuilds one face as an ordinary standalone font - same tables, new
     /// directory - so a face of a collection is, from then on, indistinguishable from a <c>.ttf</c>.
     /// </remarks>
-    internal static class FontCollection
+    internal static class SfntCollection
     {
         private const uint CollectionTag = 0x74746366; // 'ttcf'
 

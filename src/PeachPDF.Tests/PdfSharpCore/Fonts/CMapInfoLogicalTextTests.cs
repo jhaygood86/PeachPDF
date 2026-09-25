@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     {
         private static OpenTypeDescriptor Descriptor()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
             return new OpenTypeDescriptor("logicaltext-test", "logicaltext-test", XFontStyle.Regular, face,
                 new XPdfFontOptions(PdfFontEncoding.Unicode));
         }

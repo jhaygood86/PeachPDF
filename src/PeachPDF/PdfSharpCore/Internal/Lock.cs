@@ -55,19 +55,10 @@ namespace PeachPDF.PdfSharpCore.Internal
         static readonly object GdiPlus = new object();
         static int _gdiPlusLockCount;
 
-        public static void EnterFontFactory()
-        {
-            Monitor.Enter(FontFactory);
-            _fontFactoryLockCount++;
-        }
+        // The font caches live in PeachPDF.Fonts, which owns the lock; the PDF layer's own font family cache
+        // must serialise against those caches with the same monitor.
+        public static void EnterFontFactory() => PeachPDF.Fonts.FontLock.Enter();
 
-        public static void ExitFontFactory()
-        {
-            _fontFactoryLockCount--;
-            Monitor.Exit(FontFactory);
-        }
-        static readonly object FontFactory = new object();
-        [ThreadStatic]
-        static int _fontFactoryLockCount;
+        public static void ExitFontFactory() => PeachPDF.Fonts.FontLock.Exit();
     }
 }

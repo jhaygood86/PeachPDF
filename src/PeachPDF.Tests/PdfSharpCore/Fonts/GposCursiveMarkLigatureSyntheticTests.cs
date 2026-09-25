@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -180,12 +181,12 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, BuildSyntheticGpos());
-            return (XFontSource.GetOrCreateFrom(combined).Fontface, tableStart);
+            return (FontFileData.GetOrCreateFrom(combined).Fontface, tableStart);
         }
 
         private static OpenTypeDescriptor RealDescriptor()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
             return new OpenTypeDescriptor("gpos-cursive-test", "gpos-cursive-test", XFontStyle.Regular, face,
                 new XPdfFontOptions(PdfFontEncoding.Unicode));
         }
@@ -491,7 +492,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int gsubStart = gdefStart + gdefBytes.Length;
             int gposStart = gsubStart + gsubBytes.Length;
             byte[] combined = Concat(Concat3(fontBytes, gdefBytes, gsubBytes), gposBytes);
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var gsub = new GsubTable(face, gsubStart);

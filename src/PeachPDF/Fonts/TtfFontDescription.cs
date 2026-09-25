@@ -55,7 +55,7 @@ namespace PeachPDF.Fonts
         {
             using var stream = File.OpenRead(path);
 
-            var offsets = FontCollection.ReadFaceOffsets(stream);
+            var offsets = SfntCollection.ReadFaceOffsets(stream);
             if (offsets is null)
                 return [(0, LoadDescription(stream, 0))];
 
@@ -89,7 +89,7 @@ namespace PeachPDF.Fonts
             // TTF/OTF files are big-endian. Read the offset table to locate the name/OS2 tables. Table
             // offsets are absolute from the start of the file, in a collection as in a single font, so only
             // the directory's own position depends on the face.
-            stream.Seek(FontCollection.FaceOffset(stream, faceIndex), SeekOrigin.Begin);
+            stream.Seek(SfntCollection.FaceOffset(stream, faceIndex), SeekOrigin.Begin);
 
             Span<byte> buf4 = stackalloc byte[4];
             Span<byte> buf2 = stackalloc byte[2];

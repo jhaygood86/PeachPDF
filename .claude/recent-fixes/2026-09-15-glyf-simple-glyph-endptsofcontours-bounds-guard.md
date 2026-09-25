@@ -17,7 +17,7 @@ same fix's own writeup left one residual, unreproduced failure open in this exac
 *forced 64-thread* stress (`TryGetGlyphOutline_CompositeGlyph_AddsAccentContoursAboveTheBase`) - so a
 subtler residual race in this file was already flagged as a possibility worth revisiting, not ruled out.
 
-A full audit of the call chain (`FontFactory`'s static caches, `XFontSource.GetOrCreateFrom`,
+A full audit of the call chain (`FontFactory`'s static caches, `FontFileData.GetOrCreateFrom`,
 `OpenTypeFontface.CetOrCreateFrom`, the per-instance vs. global font-resolution split for
 `@font-face`/`AddFont`-registered families) found every other shared, process-wide cache correctly
 guarded by `Lock.EnterFontFactory()`/`ExitFontFactory()` or `FontFactory.CacheFontSource`'s check-under-

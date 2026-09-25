@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using System.IO;
 using System.Text;
 using PeachPDF.Fonts.OpenType;
@@ -15,7 +16,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     public class ColrCpalTableTests
     {
         private static OpenTypeFontface Face(string path)
-            => XFontSource.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
+            => FontFileData.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
 
         private static int Gid(OpenTypeFontface face, char ch)
         {
@@ -282,7 +283,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         public void CompositeGlyphClosure_DoesNotMoveSharedFontCursor()
         {
             var bytes = File.ReadAllBytes(BundledFonts.Ttf);
-            var face = new OpenTypeFontface(XFontSource.CreateCompiledFont(bytes));
+            var face = new OpenTypeFontface(FontFileData.CreateCompiledFont(bytes));
             int compositeGlyph = -1;
             for (int glyph = 0; glyph < face.maxp.numGlyphs; glyph++)
             {

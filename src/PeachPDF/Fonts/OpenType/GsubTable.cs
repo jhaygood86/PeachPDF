@@ -352,7 +352,7 @@ namespace PeachPDF.Fonts.OpenType
         public SortedSet<int> GetActiveLookupIndices(IReadOnlyList<string> scriptTagPreference, string? languageTag, IReadOnlySet<string> featureTags)
         {
             // OpenTypeFontface.Position is a plain mutable field on an instance that is cached and
-            // shared process-wide (OpenTypeFontfaceCache), so two threads shaping concurrently on the
+            // shared process-wide (FontFactory's font-source cache owns each one), so two threads shaping concurrently on the
             // same cached font would otherwise interleave their Position writes/reads against each
             // other. Unlike GetLigatureLookup below, this method's result isn't cached at all - it
             // re-reads the ScriptList/FeatureList tables on every single Shape() call - so it is by far

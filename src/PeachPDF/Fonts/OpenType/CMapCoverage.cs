@@ -7,7 +7,7 @@ namespace PeachPDF.Fonts.OpenType
     /// <summary>
     /// Derives the set of codepoints a font actually supports from its <c>cmap</c> subtables (format 4 for
     /// the BMP, plus format 12 for supplementary-plane / astral codepoints such as emoji), as a compact
-    /// list of inclusive <see cref="RuneRange"/>s (the same representation an <c>@font-face</c>
+    /// list of inclusive <see cref="RuneInterval"/>s (the same representation an <c>@font-face</c>
     /// <c>unicode-range</c> produces). Used as a face's effective coverage when it declares no explicit
     /// <c>unicode-range</c>, so per-codepoint font matching can fall back to whichever family actually
     /// covers a character.
@@ -19,7 +19,7 @@ namespace PeachPDF.Fonts.OpenType
         /// the font has a format-12 subtable, its astral ranges - sorted and coalesced into one list. Fast
         /// path (the common case): a font with no format-12 subtable returns exactly its BMP coverage.
         /// </summary>
-        public static IReadOnlyList<RuneRange> Extract(CMapTable? cmap)
+        public static IReadOnlyList<RuneInterval> Extract(CMapTable? cmap)
         {
             if (cmap is null)
                 return [];
@@ -59,7 +59,7 @@ namespace PeachPDF.Fonts.OpenType
 
             segments.Sort((a, b) => a.Start.CompareTo(b.Start));
 
-            var ranges = new List<RuneRange>(segments.Count);
+            var ranges = new List<RuneInterval>(segments.Count);
             foreach (var (start, end) in segments)
             {
                 if (ranges.Count > 0 && start <= ranges[^1].End.Value + 1)
@@ -70,7 +70,7 @@ namespace PeachPDF.Fonts.OpenType
                 }
                 else
                 {
-                    ranges.Add(new RuneRange(new Rune((int)start), new Rune((int)end)));
+                    ranges.Add(new RuneInterval(new Rune((int)start), new Rune((int)end)));
                 }
             }
 
@@ -86,13 +86,13 @@ namespace PeachPDF.Fonts.OpenType
         /// codepoint above U+FFFF is ever reported. Returns an empty list when the font has no format-4
         /// cmap.
         /// </summary>
-        public static IReadOnlyList<RuneRange> Extract(CMap4? cmap4)
+        public static IReadOnlyList<RuneInterval> Extract(CMap4? cmap4)
         {
             if (cmap4?.startCount is null || cmap4.endCount is null)
                 return [];
 
             int segCount = cmap4.segCountX2 / 2;
-            var ranges = new List<RuneRange>(segCount);
+            var ranges = new List<RuneInterval>(segCount);
 
             for (int seg = 0; seg < segCount; seg++)
             {
@@ -130,7 +130,7 @@ namespace PeachPDF.Fonts.OpenType
                 }
                 else
                 {
-                    ranges.Add(new RuneRange(new Rune(start), new Rune(end)));
+                    ranges.Add(new RuneInterval(new Rune(start), new Rune(end)));
                 }
             }
 
@@ -140,9 +140,9 @@ namespace PeachPDF.Fonts.OpenType
         /// <summary>
         /// Whether <paramref name="rune"/> falls inside any of <paramref name="ranges"/>. This is the
         /// single membership test both the codepoint-aware font resolver and the CSS <c>unicode-range</c>
-        /// parser share; the inclusive-on-both-ends convention lives in <see cref="RuneRange.Contains"/>.
+        /// parser share; the inclusive-on-both-ends convention lives in <see cref="RuneInterval.Contains"/>.
         /// </summary>
-        public static bool Contains(IReadOnlyList<RuneRange> ranges, Rune rune)
+        public static bool Contains(IReadOnlyList<RuneInterval> ranges, Rune rune)
         {
             for (var i = 0; i < ranges.Count; i++)
             {

@@ -31,7 +31,6 @@
 
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Fonts.OpenType;
-using PeachPDF.PdfSharpCore.Internal;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -68,7 +67,7 @@ namespace PeachPDF.Fonts
 
             try
             {
-                Lock.EnterFontFactory();
+                FontLock.Enter();
                 // Was this typeface requested before?
                 FontResolverInfo fontResolverInfo;
                 if (FontResolverInfosByName.TryGetValue(typefaceKey, out fontResolverInfo))
@@ -85,7 +84,7 @@ namespace PeachPDF.Fonts
                     fontResolverInfo = customFontResolver.ResolveTypeface(familyName, fontResolvingOptions.Weight, fontResolvingOptions.IsItalic, fontResolvingOptions.Stretch);
 
                     // If resolved by custom font resolver register info and font source.
-                    if (fontResolverInfo != null && !(fontResolverInfo is PlatformFontResolverInfo))
+                    if (fontResolverInfo != null)
                     {
                         string resolverInfoKey = fontResolverInfo.Key;
                         FontResolverInfo existingFontResolverInfo;
@@ -110,7 +109,7 @@ namespace PeachPDF.Fonts
                             FontResolverInfosByName.Add(resolverInfoKey, fontResolverInfo);
 
                             // Create font source if not yet exists.
-                            XFontSource previousFontSource;
+                            FontFileData previousFontSource;
                             if (FontSourcesByName.TryGetValue(fontResolverInfo.FaceName, out previousFontSource))
                             {
                                 // Case: The font source exists, because a previous font resolver info comes
@@ -121,7 +120,7 @@ namespace PeachPDF.Fonts
                             {
                                 // Case: Get font from custom font resolver and create font source.
                                 byte[] bytes = customFontResolver.GetFont(fontResolverInfo.FaceName);
-                                XFontSource fontSource = XFontSource.GetOrCreateFrom(bytes);
+                                FontFileData fontSource = FontFileData.GetOrCreateFrom(bytes);
 
                                 // Add font source's font resolver name if it is different to the face name.
                                 if (string.Compare(fontResolverInfo.FaceName, fontSource.FontName, StringComparison.OrdinalIgnoreCase) != 0)
@@ -132,54 +131,52 @@ namespace PeachPDF.Fonts
                 }
                 else
                 {
-                    // Case: There was no custom font resolver set.
-                    // Use platform font resolver.
-                    // If it was successful resolver info and font source are cached
-                    // automatically by PlatformFontResolver.ResolveTypeface.
-                    fontResolverInfo = PlatformFontResolver.ResolveTypeface(familyName, fontResolvingOptions, typefaceKey);
+                    // Case: There was no custom font resolver set. PeachPDF has no platform resolver of its own
+                    // (system fonts are found by FontResolver, which is always installed), so nothing resolves.
+                    fontResolverInfo = null;
                 }
 
                 // Return value is null if the typeface could not be resolved.
                 // In this case PDFsharp stops.
                 return fontResolverInfo;
             }
-            finally { Lock.ExitFontFactory(); }
+            finally { FontLock.Exit(); }
         }
 
         /// <summary>
         /// Gets the bytes of a physical font with specified face name.
         /// </summary>
-        public static XFontSource GetFontSourceByFontName(string fontName)
+        public static FontFileData GetFontSourceByFontName(string fontName)
         {
-            XFontSource fontSource;
+            FontFileData fontSource;
             if (FontSourcesByName.TryGetValue(fontName, out fontSource))
                 return fontSource;
 
-            Debug.Assert(false, string.Format("An XFontSource with the name '{0}' does not exists.", fontName));
+            Debug.Assert(false, string.Format("A font file with the name '{0}' does not exist.", fontName));
             return null;
         }
 
         /// <summary>
         /// Gets the bytes of a physical font with specified face name.
         /// </summary>
-        public static XFontSource GetFontSourceByTypefaceKey(string typefaceKey)
+        public static FontFileData GetFontSourceByTypefaceKey(string typefaceKey)
         {
-            XFontSource fontSource;
+            FontFileData fontSource;
             if (FontSourcesByName.TryGetValue(typefaceKey, out fontSource))
                 return fontSource;
 
-            Debug.Assert(false, string.Format("An XFontSource with the typeface key '{0}' does not exists.", typefaceKey));
+            Debug.Assert(false, string.Format("A font file with the typeface key '{0}' does not exist.", typefaceKey));
             return null;
         }
 
-        public static bool TryGetFontSourceByKey(ulong key, out XFontSource fontSource)
+        public static bool TryGetFontSourceByKey(ulong key, out FontFileData fontSource)
         {
             try
             {
-                Lock.EnterFontFactory();
+                FontLock.Enter();
                 return FontSourcesByKey.TryGetValue(key, out fontSource);
             }
-            finally { Lock.ExitFontFactory(); }
+            finally { FontLock.Exit(); }
         }
 
         /// <summary>
@@ -195,12 +192,12 @@ namespace PeachPDF.Fonts
             return FontResolverInfosByName.TryGetValue(typeFaceKey, out info);
         }
 
-        public static bool TryGetFontSourceByTypefaceKey(string typefaceKey, out XFontSource source)
+        public static bool TryGetFontSourceByTypefaceKey(string typefaceKey, out FontFileData source)
         {
             return FontSourcesByName.TryGetValue(typefaceKey, out source);
         }
 
-        //public static bool TryGetFontSourceByFaceName(string faceName, out XFontSource source)
+        //public static bool TryGetFontSourceByFaceName(string faceName, out FontFileData source)
         //{
         //    return FontSourcesByName.TryGetValue(faceName, out source);
         //}
@@ -227,13 +224,13 @@ namespace PeachPDF.Fonts
         /// <summary>
         /// Caches a font source under its face name and its key.
         /// </summary>
-        public static XFontSource CacheFontSource(XFontSource fontSource)
+        public static FontFileData CacheFontSource(FontFileData fontSource)
         {
             try
             {
-                Lock.EnterFontFactory();
+                FontLock.Enter();
                 // Check whether an identical font source with a different face name already exists.
-                XFontSource existingFontSource;
+                FontFileData existingFontSource;
                 if (FontSourcesByKey.TryGetValue(fontSource.Key, out existingFontSource))
                 {
 #if DEBUG
@@ -274,52 +271,7 @@ namespace PeachPDF.Fonts
                 FontSourcesByName[fontSource.FontName] = fontSource;
                 return fontSource;
             }
-            finally { Lock.ExitFontFactory(); }
-        }
-
-        internal static string GetFontCachesState()
-        {
-            StringBuilder state = new StringBuilder();
-            string[] keys;
-            int count;
-
-            // FontResolverInfo by name.
-            state.Append("====================\n");
-            state.Append("Font resolver info by name\n");
-            Dictionary<string, FontResolverInfo>.KeyCollection keyCollection = FontResolverInfosByName.Keys;
-            count = keyCollection.Count;
-            keys = new string[count];
-            keyCollection.CopyTo(keys, 0);
-            Array.Sort(keys, StringComparer.OrdinalIgnoreCase);
-            foreach (string key in keys)
-                state.AppendFormat("  {0}: {1}\n", key, FontResolverInfosByName[key].DebuggerDisplay);
-            state.Append("\n");
-
-            // FontSource by key.
-            state.Append("Font source by key and name\n");
-            Dictionary<ulong, XFontSource>.KeyCollection fontSourceKeys = FontSourcesByKey.Keys;
-            count = fontSourceKeys.Count;
-            ulong[] ulKeys = new ulong[count];
-            fontSourceKeys.CopyTo(ulKeys, 0);
-            Array.Sort(ulKeys, delegate (ulong x, ulong y) { return x == y ? 0 : (x > y ? 1 : -1); });
-            foreach (ulong ul in ulKeys)
-                state.AppendFormat("  {0}: {1}\n", ul, FontSourcesByKey[ul].DebuggerDisplay);
-            Dictionary<string, XFontSource>.KeyCollection fontSourceNames = FontSourcesByName.Keys;
-            count = fontSourceNames.Count;
-            keys = new string[count];
-            fontSourceNames.CopyTo(keys, 0);
-            Array.Sort(keys, StringComparer.OrdinalIgnoreCase);
-            foreach (string key in keys)
-                state.AppendFormat("  {0}: {1}\n", key, FontSourcesByName[key].DebuggerDisplay);
-            state.Append("--------------------\n\n");
-
-            // FontFamilyInternal by name.
-            state.Append(FontFamilyCache.GetCacheState());
-            // XGlyphTypeface by name.
-            state.Append(GlyphTypefaceCache.GetCacheState());
-            // OpenTypeFontface by name.
-            state.Append(OpenTypeFontfaceCache.GetCacheState());
-            return state.ToString();
+            finally { FontLock.Exit(); }
         }
 
         // TODO: Move to ctor
@@ -338,17 +290,17 @@ namespace PeachPDF.Fonts
         /// <summary>
         /// Maps typeface key or font name to font source.
         /// </summary>
-        //static readonly Dictionary<string, XFontSource> FontSourcesByTypefaceKey = new Dictionary<string, XFontSource>(StringComparer.OrdinalIgnoreCase);
-        static readonly Dictionary<string, XFontSource> FontSourcesByName = new Dictionary<string, XFontSource>(StringComparer.OrdinalIgnoreCase);
+        //static readonly Dictionary<string, FontFileData> FontSourcesByTypefaceKey = new Dictionary<string, FontFileData>(StringComparer.OrdinalIgnoreCase);
+        static readonly Dictionary<string, FontFileData> FontSourcesByName = new Dictionary<string, FontFileData>(StringComparer.OrdinalIgnoreCase);
 
         ///// <summary>
         ///// Maps font name to font source.
         ///// </summary>
-        //static readonly Dictionary<string, XFontSource> FontSourcesByFontName = new Dictionary<string, XFontSource>();
+        //static readonly Dictionary<string, FontFileData> FontSourcesByFontName = new Dictionary<string, FontFileData>();
 
         /// <summary>
         /// Maps font source key to font source.
         /// </summary>
-        static readonly Dictionary<ulong, XFontSource> FontSourcesByKey = new Dictionary<ulong, XFontSource>();
+        static readonly Dictionary<ulong, FontFileData> FontSourcesByKey = new Dictionary<ulong, FontFileData>();
     }
 }

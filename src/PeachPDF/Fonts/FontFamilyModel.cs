@@ -1,11 +1,10 @@
-using PeachPDF.PdfSharpCore.Utils;
 using System.Collections.Generic;
 
 namespace PeachPDF.Fonts
 {
     /// <summary>
     /// One registered face of a <see cref="FontFamilyModel"/>: its CSS Fonts Level 4 matching axes
-    /// (numeric weight, italic, stretch), the codepoint <see cref="RuneRange"/>s it is restricted to (from
+    /// (numeric weight, italic, stretch), the codepoint <see cref="RuneInterval"/>s it is restricted to (from
     /// an <c>@font-face</c> <c>unicode-range</c> descriptor or an explicit registration list) or null when
     /// it has none - in which case its effective coverage is whatever its font's <c>cmap</c> actually
     /// supports - and the description the resolver hands back once this face is chosen.
@@ -14,7 +13,7 @@ namespace PeachPDF.Fonts
         int Weight,
         bool Italic,
         int Stretch,
-        IReadOnlyList<RuneRange>? ExplicitRanges,
+        IReadOnlyList<RuneInterval>? ExplicitRanges,
         TtfFontDescription Description);
 
     internal class FontFamilyModel

@@ -30,19 +30,19 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     /// <see cref="FontDescriptor.Descender"/>/<see cref="FontDescriptor.LineSpacing"/> block uses (that's the
     /// WPF-derived, PDF-metrics/baseline-positioning triple; this is the separate, browser-matching one).
     ///
-    /// Loads the bundled TrueType font through <see cref="XFontSource.CreateCompiledFont"/> rather than
-    /// <see cref="XFontSource.GetOrCreateFrom"/> - the latter caches by content checksum in the process-wide
+    /// Loads the bundled TrueType font through <see cref="FontFileData.CreateCompiledFont"/> rather than
+    /// <see cref="FontFileData.GetOrCreateFrom"/> - the latter caches by content checksum in the process-wide
     /// <c>FontFactory</c> (see this repo's own CLAUDE.md warning about exactly this), and every test here
     /// mutates the parsed face's <c>OS/2</c> fields directly, which would corrupt that shared cached
     /// instance for every other test loading the same file. <c>CreateCompiledFont</c> returns a fresh,
-    /// uncached <see cref="XFontSource"/> each call, so each test's face is exclusively its own.
+    /// uncached <see cref="FontFileData"/> each call, so each test's face is exclusively its own.
     /// </summary>
     public class NormalLineHeightMetricsTests
     {
         private static OpenTypeFontface FreshUncachedFace()
         {
             var bytes = File.ReadAllBytes(BundledFonts.Ttf);
-            return new OpenTypeFontface(XFontSource.CreateCompiledFont(bytes));
+            return new OpenTypeFontface(FontFileData.CreateCompiledFont(bytes));
         }
 
         private static OpenTypeDescriptor Descriptor(OpenTypeFontface face) =>

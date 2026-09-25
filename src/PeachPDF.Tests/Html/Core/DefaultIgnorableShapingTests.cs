@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
@@ -26,7 +27,7 @@ namespace PeachPDF.Tests.Html.Core
 
         private static OpenTypeDescriptor Descriptor()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.CcmpLigature)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.CcmpLigature)).Fontface;
             return new OpenTypeDescriptor("ccmp-lig-test", "ccmp-lig-test", XFontStyle.Regular, face,
                 new XPdfFontOptions(PdfFontEncoding.Unicode));
         }
@@ -142,7 +143,7 @@ namespace PeachPDF.Tests.Html.Core
             // base plus a separate dot mark, and GPOS mark-to-base then records the base's index on the
             // mark. Appending an unmapped U+FE0F puts a dropped glyph in the same run, so a missing
             // remap would leave the mark anchored to a stale slot (or past the end of the list).
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Arabic)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Arabic)).Fontface;
             var descriptor = new OpenTypeDescriptor("arabic-ignorable-test", "arabic-ignorable-test",
                 XFontStyle.Regular, face, new XPdfFontOptions(PdfFontEncoding.Unicode));
 

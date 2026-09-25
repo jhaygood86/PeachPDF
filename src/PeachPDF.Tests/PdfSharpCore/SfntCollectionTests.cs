@@ -16,13 +16,13 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
     /// collections built from two genuinely different bundled fonts (Source Sans 3, a glyf TTF, and Source
     /// Code Pro, a CFF OTF), so nothing depends on which fonts the host ships.
     /// </summary>
-    public class FontCollectionTests : IDisposable
+    public class SfntCollectionTests : IDisposable
     {
         private readonly byte[] _sans = File.ReadAllBytes(BundledFonts.Ttf);
         private readonly byte[] _code = File.ReadAllBytes(BundledFonts.Otf);
         private readonly string _directory = Path.Combine(Path.GetTempPath(), "peachpdf-ttc-" + Path.GetRandomFileName());
 
-        public FontCollectionTests() => Directory.CreateDirectory(_directory);
+        public SfntCollectionTests() => Directory.CreateDirectory(_directory);
 
         public void Dispose() => Directory.Delete(_directory, recursive: true);
 
@@ -42,24 +42,24 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void IsCollection_RecognisesTheTtcfTagOnly()
         {
-            Assert.True(FontCollection.IsCollection(Collection()));
-            Assert.False(FontCollection.IsCollection(_sans));
-            Assert.False(FontCollection.IsCollection(_code));
-            Assert.False(FontCollection.IsCollection([0x74, 0x74, 0x63]));
+            Assert.True(SfntCollection.IsCollection(Collection()));
+            Assert.False(SfntCollection.IsCollection(_sans));
+            Assert.False(SfntCollection.IsCollection(_code));
+            Assert.False(SfntCollection.IsCollection([0x74, 0x74, 0x63]));
         }
 
         [Fact]
         public void FaceCount_IsTheCollectionsCount_AndOneForAnOrdinaryFont()
         {
-            Assert.Equal(2, FontCollection.FaceCount(new MemoryStream(Collection())));
-            Assert.Equal(1, FontCollection.FaceCount(new MemoryStream(_sans)));
+            Assert.Equal(2, SfntCollection.FaceCount(new MemoryStream(Collection())));
+            Assert.Equal(1, SfntCollection.FaceCount(new MemoryStream(_sans)));
         }
 
         [Fact]
         public void FaceOffset_OfAnOrdinaryFont_IsZeroForFaceZeroOnly()
         {
-            Assert.Equal(0, FontCollection.FaceOffset(new MemoryStream(_sans), 0));
-            Assert.Throws<ArgumentOutOfRangeException>(() => FontCollection.FaceOffset(new MemoryStream(_sans), 1));
+            Assert.Equal(0, SfntCollection.FaceOffset(new MemoryStream(_sans), 0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => SfntCollection.FaceOffset(new MemoryStream(_sans), 1));
         }
 
         [Theory]
@@ -67,7 +67,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [InlineData(2)]
         public void FaceOffset_OutsideTheCollection_Throws(int faceIndex)
         {
-            Assert.Throws<ArgumentOutOfRangeException>(() => FontCollection.FaceOffset(new MemoryStream(Collection()), faceIndex));
+            Assert.Throws<ArgumentOutOfRangeException>(() => SfntCollection.FaceOffset(new MemoryStream(Collection()), faceIndex));
         }
 
         [Fact]
@@ -76,7 +76,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             var bytes = Collection();
             bytes[8] = 0x7F; bytes[9] = 0xFF; bytes[10] = 0xFF; bytes[11] = 0xFF;
 
-            Assert.Throws<InvalidDataException>(() => FontCollection.FaceCount(new MemoryStream(bytes)));
+            Assert.Throws<InvalidDataException>(() => SfntCollection.FaceCount(new MemoryStream(bytes)));
         }
 
         // ---- descriptions --------------------------------------------------------------------------
@@ -141,15 +141,15 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         {
             var original = faceIndex == 0 ? _sans : _code;
 
-            var face = FontCollection.ExtractFace(Collection(), faceIndex);
+            var face = SfntCollection.ExtractFace(Collection(), faceIndex);
 
-            Assert.False(FontCollection.IsCollection(face));
+            Assert.False(SfntCollection.IsCollection(face));
             Assert.Equal(FaceName(original), FaceName(face));
 
             // The rebuilt font is read by the real OpenType table parser and maps characters to the same
             // glyphs as the font it came from.
             OpenTypeDescriptor Descriptor(byte[] bytes) => new("t", "t", XFontStyle.Regular,
-                XFontSource.GetOrCreateFrom(bytes).Fontface, new XPdfFontOptions(PdfFontEncoding.Unicode));
+                FontFileData.GetOrCreateFrom(bytes).Fontface, new XPdfFontOptions(PdfFontEncoding.Unicode));
 
             var extracted = Descriptor(face);
             var source = Descriptor(original);
@@ -163,7 +163,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void ExtractFace_CopiesEveryTableByteForByte()
         {
-            var face = FontCollection.ExtractFace(Collection(), 0);
+            var face = SfntCollection.ExtractFace(Collection(), 0);
 
             var original = SyntheticUvsFont.ReadTables(_sans, out _);
             var extracted = SyntheticUvsFont.ReadTables(face, out _);
@@ -181,7 +181,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             var faceZero = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(12));
             bytes[faceZero + 12 + 12] = 0x7F;
 
-            Assert.Throws<InvalidDataException>(() => FontCollection.ExtractFace(bytes, 0));
+            Assert.Throws<InvalidDataException>(() => SfntCollection.ExtractFace(bytes, 0));
         }
 
         [Fact]
@@ -191,7 +191,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             var faceZero = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(12));
             bytes[faceZero + 4] = 0; bytes[faceZero + 5] = 0;
 
-            Assert.Throws<InvalidDataException>(() => FontCollection.ExtractFace(bytes, 0));
+            Assert.Throws<InvalidDataException>(() => SfntCollection.ExtractFace(bytes, 0));
         }
 
         // ---- registering and discovering -----------------------------------------------------------
@@ -206,7 +206,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
 
             Assert.Equal(FaceName(_sans), face.FaceName);
             var stored = resolver.GetFont(face.FaceName);
-            Assert.False(FontCollection.IsCollection(stored));
+            Assert.False(SfntCollection.IsCollection(stored));
             Assert.Equal(FaceName(_sans), FaceName(stored));
         }
 
@@ -247,7 +247,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             var plain = Write("plain.ttf", _sans);
 
             var face = FontResolver.LoadSystemFontBytes(collection, 1);
-            Assert.False(FontCollection.IsCollection(face));
+            Assert.False(SfntCollection.IsCollection(face));
             Assert.Equal(FaceName(_code), FaceName(face));
 
             Assert.Equal(_sans, FontResolver.LoadSystemFontBytes(plain, 0));
@@ -281,8 +281,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
 
             Assert.NotNull(face);
             var bytes = resolver.GetFont(face.FaceName);
-            Assert.False(FontCollection.IsCollection(bytes));
-            Assert.True(XFontSource.GetOrCreateFrom(bytes).Fontface.math?.Table != null, "Cambria Math should carry a MATH table");
+            Assert.False(SfntCollection.IsCollection(bytes));
+            Assert.True(FontFileData.GetOrCreateFrom(bytes).Fontface.math?.Table != null, "Cambria Math should carry a MATH table");
         }
     }
 }

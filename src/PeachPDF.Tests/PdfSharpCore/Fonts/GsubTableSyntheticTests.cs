@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -320,7 +321,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, BuildSyntheticGsub());
-            return (XFontSource.GetOrCreateFrom(combined).Fontface, tableStart);
+            return (FontFileData.GetOrCreateFrom(combined).Fontface, tableStart);
         }
 
         [Fact]
@@ -342,7 +343,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, BuildEmptyScriptListGsub());
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
             var gsub = new GsubTable(face, tableStart);
 
             var indices = gsub.GetActiveLookupIndices(["aaaa"], new HashSet<string> { "liga" });
@@ -392,7 +393,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, BuildScriptListWithDfltGsub());
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
             var gsub = new GsubTable(face, tableStart);
 
             // Neither "arab" nor "latn" exist - "DFLT" (the second-listed script) must win over "aaaa"

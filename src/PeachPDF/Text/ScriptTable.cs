@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -42,7 +43,7 @@ namespace PeachPDF.Text
 
         private static readonly Lazy<Run[]> Runs = new(LoadRuns);
 
-        private static readonly ConcurrentDictionary<string, IReadOnlyList<RuneRange>> RangesByScript = new(StringComparer.Ordinal);
+        private static readonly ConcurrentDictionary<string, IReadOnlyList<RuneInterval>> RangesByScript = new(StringComparer.Ordinal);
 
         /// <summary>
         /// Resolves a codepoint's raw Unicode <c>Script</c> value - <see cref="Common"/> or
@@ -78,18 +79,18 @@ namespace PeachPDF.Text
         /// Every codepoint range assigned Unicode <c>Script</c> value <paramref name="script"/> (e.g.
         /// every run tagged <c>"Arabic"</c> for <c>"Arabic"</c>), sorted ascending and never straddling
         /// the surrogate block (split around it, the same way <see cref="Fonts.OpenType.CMapCoverage"/>
-        /// splits a format-12 group) since <see cref="RuneRange"/> requires valid scalar values. Used to
+        /// splits a format-12 group) since <see cref="RuneInterval"/> requires valid scalar values. Used to
         /// score a fallback font candidate's own coverage against how much of a codepoint's script it
         /// actually supports - see <see cref="Fonts.FontResolver.FindFamilyCoveringCodepoint"/>. Cached
         /// per script string (this table is static/process-wide and read-only after first load, so a
         /// plain concurrent cache is safe to share across every <c>PdfGenerator</c> instance/thread).
         /// </summary>
-        public static IReadOnlyList<RuneRange> RangesForScript(string script)
+        public static IReadOnlyList<RuneInterval> RangesForScript(string script)
         {
             if (RangesByScript.TryGetValue(script, out var cached))
                 return cached;
 
-            var ranges = new List<RuneRange>();
+            var ranges = new List<RuneInterval>();
             foreach (var run in Runs.Value)
             {
                 if (run.Value != script)
@@ -97,11 +98,11 @@ namespace PeachPDF.Text
 
                 var belowEnd = Math.Min(run.End, 0xD7FF);
                 if (run.Start <= belowEnd)
-                    ranges.Add(new RuneRange(new Rune(run.Start), new Rune(belowEnd)));
+                    ranges.Add(new RuneInterval(new Rune(run.Start), new Rune(belowEnd)));
 
                 var aboveStart = Math.Max(run.Start, 0xE000);
                 if (aboveStart <= run.End)
-                    ranges.Add(new RuneRange(new Rune(aboveStart), new Rune(run.End)));
+                    ranges.Add(new RuneInterval(new Rune(aboveStart), new Rune(run.End)));
             }
 
             return RangesByScript.GetOrAdd(script, ranges);

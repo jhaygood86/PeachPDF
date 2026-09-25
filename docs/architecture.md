@@ -656,7 +656,7 @@ Cross-family fallback needs the whole authored `font-family` stack, which the or
 
 #### Content-addressed font identity
 
-PeachPDF identifies a custom font by its bytes, not by its self-reported internal name — the same model browsers use. Two different files that happen to share an internal name (a common webfont-subset pattern, where each subset file is named identically) therefore no longer collide: `FontResolver._CustomFonts` disambiguates on a content checksum (only when a genuine collision occurs, so the common case keeps `FaceName == internal name`), `PdfFontTable.ComputeKey` folds `FontSource.Key` into its cache key, and the name-keyed caches (`FontFactory.CacheFontSource`, `OpenTypeFontfaceCache.AddFontface`) tolerate a second same-name/different-bytes entry instead of throwing.
+PeachPDF identifies a custom font by its bytes, not by its self-reported internal name — the same model browsers use. Two different files that happen to share an internal name (a common webfont-subset pattern, where each subset file is named identically) therefore no longer collide: `FontResolver._CustomFonts` disambiguates on a content checksum (only when a genuine collision occurs, so the common case keeps `FaceName == internal name`), `PdfFontTable.ComputeKey` folds `FontSource.Key` into its cache key, and the name-keyed cache (`FontFactory.CacheFontSource`) tolerates a second same-name/different-bytes entry instead of throwing.
 
 #### Composite fonts and the Rune-based CID pipeline
 
@@ -691,7 +691,7 @@ Bidirectional layout is a separate engine, `BidiResolver` ([Text/Bidi/](https://
 `PdfGenerator` and everything it owns (font/brush/pen caches, the font resolver, `HtmlContainer`) is instance-scoped and not safe to share across threads — but PeachPDF is designed so that using one `PdfGenerator` per thread is safe, including the process-wide state this pipeline touches:
 
 - System font discovery (scanning OS font directories and parsing TrueType/OpenType `name` tables) runs exactly once per process, in `FontResolver`'s static constructor, into immutable `FrozenDictionary` structures. Every `FontResolver` instance (one per `PdfSharpAdapter`, one per `PdfGenerator`) reads this once-built data without locking; `AddFont`/`AddFontFromStream` clone a family's data before overriding a style, so a custom font registered on one `PdfGenerator` can never mutate the shared system-font data seen by other instances.
-- `FontFactory`'s process-wide caches (`GlyphTypefaceCache`, `FontFamilyCache`, `FontDescriptorCache`, `OpenTypeFontface` records) are guarded by a single reentrant `Lock.EnterFontFactory()` monitor, so concurrent `PdfGenerator` instances resolving different fonts at the same time don't corrupt each other's cache entries.
+- `FontFactory`'s process-wide caches (`GlyphTypefaceCache`, `FontFamilyCache`, `FontDescriptorCache`, and the font sources with their `OpenTypeFontface` records) are guarded by a single reentrant `FontLock` monitor, so concurrent `PdfGenerator` instances resolving different fonts at the same time don't corrupt each other's cache entries.
 
 ### Image pipeline
 

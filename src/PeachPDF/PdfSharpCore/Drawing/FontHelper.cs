@@ -148,40 +148,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
             return size;
         }
 
-        /// <summary>
-        /// Calculates an Adler32 checksum combined with the buffer length
-        /// in a 64 bit unsigned integer.
-        /// </summary>
-        public static ulong CalcChecksum(byte[] buffer)
-        {
-            if (buffer == null)
-                throw new ArgumentNullException("buffer");
-
-            const uint prime = 65521; // largest prime smaller than 65536
-            uint s1 = 0;
-            uint s2 = 0;
-            int length = buffer.Length;
-            int offset = 0;
-            while (length > 0)
-            {
-                int n = 3800;
-                if (n > length)
-                    n = length;
-                length -= n;
-                while (--n >= 0)
-                {
-                    s1 += buffer[offset++];
-                    s2 = s2 + s1;
-                }
-                s1 %= prime;
-                s2 %= prime;
-            }
-            ulong ul1 = (ulong)s2 << 16;
-            ul1 = ul1 | s1;
-            ulong ul2 = (ulong)buffer.Length;
-            return (ul1 << 32) | ul2;
-        }
-
         public static XFontStyle CreateStyle(bool isBold, bool isItalic)
         {
             return (isBold ? XFontStyle.Bold : 0) | (isItalic ? XFontStyle.Italic : 0);

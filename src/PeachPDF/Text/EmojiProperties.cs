@@ -1,4 +1,3 @@
-using PeachPDF.CSS;
 using System;
 using System.Text;
 
@@ -24,7 +23,7 @@ namespace PeachPDF.Text
         /// the text itself. The one place a run's presentation is derived, so measurement, painting and
         /// font selection - which all start from a word's own text - cannot disagree about it.
         /// </summary>
-        internal static EmojiPresentation ResolveAt(FontVariantEmojiMode mode, string text, int index)
+        internal static EmojiPresentation ResolveAt(EmojiMode mode, string text, int index)
         {
             if (index < 0 || index >= text.Length || !Rune.TryGetRuneAt(text, index, out var baseRune))
                 return EmojiPresentation.NoPreference;
@@ -38,7 +37,7 @@ namespace PeachPDF.Text
             {
                 // Overwhelmingly the common case - ordinary text under the initial value - so answer it
                 // before the participant lookup.
-                if (mode == FontVariantEmojiMode.Normal)
+                if (mode == EmojiMode.Normal)
                     return EmojiPresentation.NoPreference;
 
                 // The property is a default for a *presentation sequence* (base + selector). A base that
@@ -86,7 +85,7 @@ namespace PeachPDF.Text
         /// the user agent, and PeachPDF makes none: font-family order decides, exactly as before the
         /// property existed.
         /// </remarks>
-        internal static EmojiPresentation Resolve(FontVariantEmojiMode mode, int baseCodepoint, int followingSelector)
+        internal static EmojiPresentation Resolve(EmojiMode mode, int baseCodepoint, int followingSelector)
         {
             if (!IsPresentationParticipant(baseCodepoint))
                 return EmojiPresentation.NoPreference;
@@ -98,9 +97,9 @@ namespace PeachPDF.Text
 
             return mode switch
             {
-                FontVariantEmojiMode.Text => EmojiPresentation.Text,
-                FontVariantEmojiMode.Emoji => EmojiPresentation.Emoji,
-                FontVariantEmojiMode.Unicode => HasEmojiPresentationProperty(baseCodepoint) ? EmojiPresentation.Emoji : EmojiPresentation.Text,
+                EmojiMode.Text => EmojiPresentation.Text,
+                EmojiMode.Emoji => EmojiPresentation.Emoji,
+                EmojiMode.Unicode => HasEmojiPresentationProperty(baseCodepoint) ? EmojiPresentation.Emoji : EmojiPresentation.Text,
                 _ => EmojiPresentation.NoPreference
             };
         }

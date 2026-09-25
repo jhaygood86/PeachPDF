@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using System.IO;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -18,7 +19,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     /// </summary>
     public class CoverageTableTests
     {
-        private static OpenTypeFontface Face(byte[] bytes) => XFontSource.GetOrCreateFrom(bytes).Fontface;
+        private static OpenTypeFontface Face(byte[] bytes) => FontFileData.GetOrCreateFrom(bytes).Fontface;
 
         private static byte[] AppendBytes(byte[] fontBytes, params byte[][] chunks)
         {

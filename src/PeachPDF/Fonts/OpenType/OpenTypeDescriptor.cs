@@ -28,7 +28,6 @@
 #endregion
 
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf.Internal;
 using PeachPDF.Text;
 using PeachPDF.Text.Bidi;
 using System;
@@ -208,53 +207,7 @@ namespace PeachPDF.Fonts.OpenType
             }
             else
                 XHeight = (int)(0.66 * Ascender);
-
-            //flags = image.
-            Encoding ansi = PdfEncoders.WinAnsiEncoding; // System.Text.Encoding.Default;
-            Encoding unicode = Encoding.Unicode;
-            byte[] bytes = new byte[256];
-
-            bool symbol = FontFace.cmap.symbol;
-            Widths = new int[256];
-            for (int idx = 0; idx < 256; idx++)
-            {
-                bytes[idx] = (byte)idx;
-                // PDFlib handles some font flaws here...
-                // We wait for bug reports.
-
-                char ch = (char)idx;
-                string s = ansi.GetString(bytes, idx, 1);
-                if (s.Length != 0)
-                {
-                    if (s[0] != ch)
-                        ch = s[0];
-                }
-
-                //Debug.Assert(ch == idx);
-
-                //int glyphIndex;
-                //if (symbol)
-                //{
-                //    glyphIndex = idx + (FontFace.os2. usFirstCharIndex & 0xFF00);
-                //    glyphIndex = CharCodeToGlyphIndex((char)glyphIndex);
-                //}
-                //else
-                //{
-                //    //Debug.Assert(idx + (fontData.os2.usFirstCharIndex & 0xFF00) == idx);
-                //    //glyphIndex = CharCodeToGlyphIndex((char)idx);
-                //    glyphIndex = CharCodeToGlyphIndex(ch);
-                //}
-
-                if (symbol)
-                {
-                    // Remap ch for symbol fonts.
-                    ch = (char)(ch | (FontFace.os2.usFirstCharIndex & 0xFF00));  // @@@ refactor
-                }
-                int glyphIndex = CharCodeToGlyphIndex(new Rune(ch));
-                Widths[idx] = GlyphIndexToPdfWidth(glyphIndex);
-            }
         }
-        public int[] Widths = null!;
 
         /// <summary>
         /// Gets a value indicating whether this instance belongs to a bold font.

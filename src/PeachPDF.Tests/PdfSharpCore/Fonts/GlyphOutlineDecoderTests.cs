@@ -23,7 +23,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         private const double Eps = 1e-9;
 
         private static OpenTypeFontface Face(string path)
-            => XFontSource.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
+            => FontFileData.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
 
         private static int Gid(OpenTypeFontface face, char ch)
         {
@@ -172,7 +172,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         [Fact]
         public void ShapingTableReads_UseTheGlyphOutlineCursorMonitor()
         {
-            var face = new OpenTypeFontface(XFontSource.CreateCompiledFont(File.ReadAllBytes(BundledFonts.Ttf)));
+            var face = new OpenTypeFontface(FontFileData.CreateCompiledFont(File.ReadAllBytes(BundledFonts.Ttf)));
             GsubTable gsub = Assert.IsType<GsubTable>(face.gsub.Table);
             GposTable gpos = Assert.IsType<GposTable>(face.gpos.Table);
 
@@ -189,7 +189,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // whose entries aren't monotonically increasing must not walk the per-contour split past
             // xs/ys's bounds. Regression for an IndexOutOfRangeException seen decoding a real glyph.
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
-            var sourceFace = new OpenTypeFontface(XFontSource.CreateCompiledFont(fontBytes));
+            var sourceFace = new OpenTypeFontface(FontFileData.CreateCompiledFont(fontBytes));
             int oGlyph = Gid(sourceFace, 'o');
 
             short numberOfContours = BinaryPrimitives.ReadInt16BigEndian(sourceFace.glyf.GetGlyphData(oGlyph));
@@ -200,7 +200,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int glyphOffset = sourceFace.glyf.GetOffset(oGlyph);
             BinaryPrimitives.WriteUInt16BigEndian(fontBytes.AsSpan(glyphOffset + 10), 0xFFFF);
 
-            var corruptFace = new OpenTypeFontface(XFontSource.CreateCompiledFont(fontBytes));
+            var corruptFace = new OpenTypeFontface(FontFileData.CreateCompiledFont(fontBytes));
 
             // Must not throw - the malformed contour is discarded rather than overrunning the arrays.
             GlyphOutlineDecoder.TryGetGlyphOutline(corruptFace, oGlyph, out var outline);

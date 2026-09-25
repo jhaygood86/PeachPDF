@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using System.IO;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -21,7 +22,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         const ushort ParenLeftGlyphId = 1064;
 
         static OpenTypeFontface Face(string path)
-            => XFontSource.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
+            => FontFileData.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
 
         [Fact]
         public void HasMathTable_TrueForMathFont_FalseForOrdinaryFont()

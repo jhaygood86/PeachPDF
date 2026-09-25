@@ -187,7 +187,7 @@ namespace PeachPDF.Text
         // font-variant-emoji acts "as if" U+FE0E/U+FE0F followed every participating character, so a font's
         // own cmap format-14 glyph for that sequence has to be reachable without the selector in the text.
         // It selects a glyph here, not a GSUB feature, so it never reaches GetActiveLookupIndices.
-        PeachPDF.CSS.FontVariantEmojiMode EmojiMode = PeachPDF.CSS.FontVariantEmojiMode.Normal)
+        PeachPDF.Text.EmojiMode EmojiMode = PeachPDF.Text.EmojiMode.Normal)
     {
         // NOT `new()` - for a record struct, a bare `new()` invokes the struct's implicit,
         // zero-initializing parameterless constructor, NOT this primary constructor's own declared
@@ -467,7 +467,7 @@ namespace PeachPDF.Text
             && (features.JoiningForms is null || features.JoiningForms.Count == 0)
             && (features.UseCategories is null || features.UseCategories.Count == 0);
 
-        private static List<ShapedGlyph> MapToGlyphs(OpenTypeDescriptor descriptor, string text, PeachPDF.CSS.FontVariantEmojiMode emojiMode)
+        private static List<ShapedGlyph> MapToGlyphs(OpenTypeDescriptor descriptor, string text, EmojiMode emojiMode)
         {
             var result = new List<ShapedGlyph>(text.Length);
             bool symbol = descriptor.FontFace.cmap.symbol;

@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -83,7 +84,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, BuildSyntheticGdef());
-            return (XFontSource.GetOrCreateFrom(combined).Fontface, tableStart);
+            return (FontFileData.GetOrCreateFrom(combined).Fontface, tableStart);
         }
 
         [Fact]
@@ -139,7 +140,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, b.ToArray());
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, tableStart);
 
@@ -214,7 +215,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int gdefStart = fontBytes.Length;
             int gsubStart = gdefStart + gdefBytes.Length;
             byte[] combined = Concat(Concat(fontBytes, gdefBytes), gsubBytes);
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var gsub = new GsubTable(face, gsubStart);
@@ -284,7 +285,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int gdefStart = fontBytes.Length;
             int gsubStart = gdefStart + gdefBytes.Length;
             byte[] combined = Concat(Concat(fontBytes, gdefBytes), gsubBytes);
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var gsub = new GsubTable(face, gsubStart);
@@ -385,7 +386,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int gdefStart = fontBytes.Length;
             int gsubStart = gdefStart + gdefBytes.Length;
             byte[] combined = Concat(Concat(fontBytes, gdefBytes), gsubBytes);
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var gsub = new GsubTable(face, gsubStart);
@@ -416,7 +417,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int gdefStart = fontBytes.Length;
             int gsubStart = gdefStart + gdefBytes.Length;
             byte[] combined = Concat(Concat(fontBytes, gdefBytes), gsubBytes);
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var gsub = new GsubTable(face, gsubStart);
@@ -445,7 +446,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int gdefStart = fontBytes.Length;
             int gsubStart = gdefStart + gdefBytes.Length;
             byte[] combined = Concat(Concat(fontBytes, gdefBytes), gsubBytes);
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var gsub = new GsubTable(face, gsubStart);
