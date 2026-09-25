@@ -142,8 +142,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             LastChar = 255;
             PdfArray width = Widths;
             //width.Elements.Clear();
+            int[] charWidths = PdfSimpleFontWidths.Compute(FontDescriptor._descriptor);
             for (int idx = 0; idx < 256; idx++)
-                width.Elements.Add(new PdfInteger(FontDescriptor._descriptor.Widths[idx]));
+                width.Elements.Add(new PdfInteger(charWidths[idx]));
         }
 
         /// <summary>

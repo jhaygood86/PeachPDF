@@ -36,7 +36,6 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [InlineData("ObsoleteFunktionCalled")]
         [InlineData("OwningDocumentRequired")]
         [InlineData("FontDataReadOnly")]
-        [InlineData("ErrorReadingFontData")]
         [InlineData("PointArrayEmpty")]
         [InlineData("NeedPenOrBrush")]
         [InlineData("InvalidPdf")]

@@ -33,7 +33,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
-using PeachPDF.PdfSharpCore;
+// The readers word their errors like the PDF writer's message table did; the text now lives beside them.
+using PSSR = PeachPDF.Fonts.FontMessages;
 
 using Fixed = System.Int32;
 using FWord = System.Int16;

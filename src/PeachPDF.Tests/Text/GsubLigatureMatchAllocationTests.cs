@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
@@ -85,7 +86,7 @@ namespace PeachPDF.Tests.Text
 
             int gdefStart = fontBytes.Length;
             int gsubStart = gdefStart + gdefBytes.Length;
-            var face = XFontSource.GetOrCreateFrom(Concat(fontBytes, gdefBytes, gsubBytes)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(Concat(fontBytes, gdefBytes, gsubBytes)).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var lookup = new GsubTable(face, gsubStart).GetLigatureLookup(0);
@@ -119,7 +120,7 @@ namespace PeachPDF.Tests.Text
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             byte[] gsubBytes = BuildLigatureGsub();
             int gsubStart = fontBytes.Length;
-            var face = XFontSource.GetOrCreateFrom(Concat(fontBytes, gsubBytes)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(Concat(fontBytes, gsubBytes)).Fontface;
             var lookup = new GsubTable(face, gsubStart).GetLigatureLookup(0);
             Assert.NotNull(lookup);
 
@@ -149,7 +150,7 @@ namespace PeachPDF.Tests.Text
             byte[] gsubBytes = BuildContextualIntoLigatureGsub();
 
             int gsubStart = fontBytes.Length;
-            var face = XFontSource.GetOrCreateFrom(Concat(fontBytes, gsubBytes)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(Concat(fontBytes, gsubBytes)).Fontface;
             var gsub = new GsubTable(face, gsubStart);
 
             var contextual = gsub.GetContextualLookup(0);

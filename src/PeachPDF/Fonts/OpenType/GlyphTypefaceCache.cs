@@ -30,7 +30,6 @@
 #nullable disable warnings
 
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Internal;
 using System;
 using System.Collections.Concurrent;
 using System.Text;
@@ -51,22 +50,22 @@ namespace PeachPDF.Fonts.OpenType
         {
             try
             {
-                Lock.EnterFontFactory();
+                FontLock.Enter();
                 bool result = Singleton._glyphTypefacesByKey.TryGetValue(key, out glyphTypeface);
                 return result;
             }
-            finally { Lock.ExitFontFactory(); }
+            finally { FontLock.Exit(); }
         }
 
         public static void AddGlyphTypeface(XGlyphTypeface glyphTypeface)
         {
             try
             {
-                Lock.EnterFontFactory();
+                FontLock.Enter();
                 GlyphTypefaceCache cache = Singleton;
                 cache._glyphTypefacesByKey.TryAdd(glyphTypeface.Key, glyphTypeface);
             }
-            finally { Lock.ExitFontFactory(); }
+            finally { FontLock.Exit(); }
         }
 
         /// <summary>
@@ -81,32 +80,16 @@ namespace PeachPDF.Fonts.OpenType
                 {
                     try
                     {
-                        Lock.EnterFontFactory();
+                        FontLock.Enter();
                         if (_singleton == null)
                             _singleton = new GlyphTypefaceCache();
                     }
-                    finally { Lock.ExitFontFactory(); }
+                    finally { FontLock.Exit(); }
                 }
                 return _singleton;
             }
         }
         static volatile GlyphTypefaceCache _singleton = null!;
-
-        internal static string GetCacheState()
-        {
-            StringBuilder state = new StringBuilder();
-            state.Append("====================\n");
-            state.Append("Glyph typefaces by name\n");
-            var familyKeys = Singleton._glyphTypefacesByKey.Keys;
-            int count = familyKeys.Count;
-            string[] keys = new string[count];
-            familyKeys.CopyTo(keys, 0);
-            Array.Sort(keys, StringComparer.OrdinalIgnoreCase);
-            foreach (string key in keys)
-                state.AppendFormat("  {0}: {1}\n", key, Singleton._glyphTypefacesByKey[key].DebuggerDisplay);
-            state.Append("\n");
-            return state.ToString();
-        }
 
         /// <summary>
         /// Maps typeface key to glyph typeface.

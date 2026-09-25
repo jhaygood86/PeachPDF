@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using System.Collections.Generic;
 using System.IO;
 using PeachPDF.Fonts.OpenType;
@@ -149,7 +150,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, BuildSyntheticGsub());
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
             return new GsubTable(face, tableStart);
         }
 

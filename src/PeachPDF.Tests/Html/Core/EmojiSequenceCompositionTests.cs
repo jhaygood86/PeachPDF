@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
@@ -20,7 +21,7 @@ namespace PeachPDF.Tests.Html.Core
     {
         private static OpenTypeDescriptor Descriptor()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.ColorEmojiSequences)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.ColorEmojiSequences)).Fontface;
             return new OpenTypeDescriptor("emoji-seq-test", "emoji-seq-test", XFontStyle.Regular, face,
                 new XPdfFontOptions(PdfFontEncoding.Unicode));
         }

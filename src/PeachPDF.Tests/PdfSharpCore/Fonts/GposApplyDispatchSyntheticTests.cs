@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using System.Collections.Generic;
 using System.IO;
 using PeachPDF.Fonts.OpenType;
@@ -324,7 +325,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             byte[] withoutRealGpos = RemoveTableDirectoryEntry(fontBytes, "GPOS");
             byte[] combined = SyntheticFontTables.InsertTableDirectoryEntry(withoutRealGpos, "GPOS", BuildSyntheticGpos());
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
             return new OpenTypeDescriptor("gpos-apply-dispatch-test", "gpos-apply-dispatch-test", XFontStyle.Regular, face,
                 new XPdfFontOptions(PdfFontEncoding.Unicode));
         }

@@ -57,9 +57,9 @@ namespace PeachPDF.Fonts.OpenType
         // * An OpenTypeFontface can belong to more than one 
         //   XGlyphTypeface because of StyleSimulations.
         //
-        // * Currently there is a one to one relationship to XFontSource.
+        // * Currently there is a one to one relationship to FontFileData.
         // 
-        // * Consider OpenTypeFontface as an decompiled XFontSource.
+        // * Consider OpenTypeFontface as an decompiled FontFileData.
         //
         // http://www.microsoft.com/typography/otspec/
 
@@ -72,25 +72,11 @@ namespace PeachPDF.Fonts.OpenType
             _fullFaceName = fontface._fullFaceName;
         }
 
-        public OpenTypeFontface(XFontSource fontSource)
+        public OpenTypeFontface(FontFileData fontSource)
         {
             FontSource = fontSource;
             Read();
             _fullFaceName = name.FullFontName;
-        }
-
-        public static OpenTypeFontface CetOrCreateFrom(XFontSource fontSource)
-        {
-            OpenTypeFontface fontface;
-            if (OpenTypeFontfaceCache.TryGetFontface(fontSource.Key, out fontface))
-            {
-                return fontface;
-            }
-            //  Each font source already contains its OpenTypeFontface.
-            Debug.Assert(fontSource.Fontface != null);
-            fontface = OpenTypeFontfaceCache.AddFontface(fontSource.Fontface);
-            Debug.Assert(ReferenceEquals(fontSource.Fontface, fontface));
-            return fontface;
         }
 
         /// <summary>
@@ -108,7 +94,7 @@ namespace PeachPDF.Fonts.OpenType
             get
             {
                 if (_checkSum == 0)
-                    _checkSum = FontHelper.CalcChecksum(FontSource.Bytes);
+                    _checkSum = FontFileData.CalcChecksum(FontSource.Bytes);
                 return _checkSum;
             }
         }
@@ -117,7 +103,7 @@ namespace PeachPDF.Fonts.OpenType
         /// <summary>
         /// Gets the bytes that represents the font data.
         /// </summary>
-        public XFontSource FontSource
+        public FontFileData FontSource
         {
             get { return _fontSource; }
             private set
@@ -128,7 +114,7 @@ namespace PeachPDF.Fonts.OpenType
                 _fontSource = value;
             }
         }
-        XFontSource _fontSource = null!;
+        FontFileData _fontSource = null!;
 
         internal FontTechnology _fontTechnology;
 
@@ -615,7 +601,7 @@ namespace PeachPDF.Fonts.OpenType
 #endif
             writer.Stream.Flush();
             int l = (int)writer.Stream.Length;
-            FontSource = XFontSource.CreateCompiledFont(stream.ToArray());
+            FontSource = FontFileData.CreateCompiledFont(stream.ToArray());
         }
         // 2^entrySelector[n] <= n
         static readonly int[] _entrySelectors = { 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4 };
@@ -630,7 +616,7 @@ namespace PeachPDF.Fonts.OpenType
         /// <summary>
         /// Guards every on-demand read against <see cref="Position"/>/<see cref="Seek(string)"/>/
         /// <see cref="ReadByte"/> and friends that happens AFTER this fontface's one-time, already-safe
-        /// load-time parse (see <c>OpenTypeFontfaceCache</c>'s own lock around construction/caching).
+        /// load-time parse (see <c>FontFactory.CacheFontSource</c>'s lock around construction/caching).
         /// <see cref="_pos"/> is a single mutable cursor shared by every consumer of this cached,
         /// process-wide instance - GSUB/GPOS's per-lookup lazy readers, COLRv1's on-demand paint-graph
         /// decode, and glyf outline decoding are all invoked lazily, well after load, from whichever

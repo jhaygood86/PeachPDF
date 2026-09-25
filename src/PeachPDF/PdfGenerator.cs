@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.Fonts;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
@@ -104,7 +105,16 @@ namespace PeachPDF
         /// <param name="unicodeRanges">The codepoint ranges this font should be used for</param>
         public async Task AddFontFromStream(Stream stream, IReadOnlyList<RuneRange> unicodeRanges)
         {
-            await _pdfSharpAdapter.AddFont(stream, null, weightOverride: null, isItalicOverride: null, stretchOverride: null, unicodeRanges);
+            // A caller from code that is not nullable-aware may still pass null, which has always meant "no restriction".
+            List<RuneInterval>? ranges = null;
+            if (unicodeRanges is not null)
+            {
+                ranges = new List<RuneInterval>(unicodeRanges.Count);
+                foreach (var range in unicodeRanges)
+                    ranges.Add(new RuneInterval(range.Start, range.End));
+            }
+
+            await _pdfSharpAdapter.AddFont(stream, null, weightOverride: null, isItalicOverride: null, stretchOverride: null, ranges);
         }
 
         /// <summary>

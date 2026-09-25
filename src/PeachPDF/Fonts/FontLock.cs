@@ -1,0 +1,17 @@
+using System.Threading;
+
+namespace PeachPDF.Fonts
+{
+    /// <summary>
+    /// The one monitor that serialises access to the process-wide font caches (the font factory's font sources,
+    /// the glyph typeface, font face and font descriptor caches, and the PDF layer's font family cache).
+    /// </summary>
+    internal static class FontLock
+    {
+        private static readonly object Gate = new();
+
+        public static void Enter() => Monitor.Enter(Gate);
+
+        public static void Exit() => Monitor.Exit(Gate);
+    }
+}

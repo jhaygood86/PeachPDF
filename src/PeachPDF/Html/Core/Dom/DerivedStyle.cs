@@ -1283,7 +1283,7 @@ namespace PeachPDF.Html.Core.Dom
                     Kerning: ActualFontKerning,
                     Language: Owner.Language,
                     Position: ActualFontVariantPosition,
-                    EmojiMode: ActualFontVariantEmoji);
+                    EmojiMode: ActualFontVariantEmoji.ToEmojiMode());
 
                 _actualTextShapingFeatures = resolved;
                 return resolved;

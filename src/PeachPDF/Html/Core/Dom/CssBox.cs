@@ -2117,7 +2117,7 @@ namespace PeachPDF.Html.Core.Dom
                 originalText = text;
 
             var checkOrientation = IsVerticalMixedOrientation();
-            var emojiMode = ActualFontVariantEmoji;
+            var emojiMode = ActualFontVariantEmoji.ToEmojiMode();
 
             var index = 0;
             var first = true;
@@ -2240,7 +2240,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var font = ActualFont;
-            var emojiMode = ActualFontVariantEmoji;
+            var emojiMode = ActualFontVariantEmoji.ToEmojiMode();
             for (var index = 0; index < text.Length;)
             {
                 Rune.DecodeFromUtf16(text.AsSpan(index), out var rune, out var consumed);
@@ -2301,7 +2301,7 @@ namespace PeachPDF.Html.Core.Dom
                 Rune.DecodeFromUtf16(text, out var rune, out _);
                 // The presentation is re-derived from the word's own first character and the selector
                 // after it, exactly as EmitPerCodepointFragments derived it when it chose the split.
-                return styleSource.ActualFontForCodepoint(rune, word.FontSizeScale, EmojiProperties.ResolveAt(styleSource.ActualFontVariantEmoji, text, 0));
+                return styleSource.ActualFontForCodepoint(rune, word.FontSizeScale, EmojiProperties.ResolveAt(styleSource.ActualFontVariantEmoji.ToEmojiMode(), text, 0));
             }
 
             return word.ScaledFontKind switch

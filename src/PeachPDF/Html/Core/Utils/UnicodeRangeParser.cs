@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -26,12 +27,12 @@ namespace PeachPDF.Html.Core.Utils
         /// <see cref="Index"/> bounds hold the raw codepoint numbers; both ends are inclusive (see
         /// <see cref="Covers"/>).
         /// </summary>
-        internal static IReadOnlyList<RuneRange>? Parse(string? descriptor)
+        internal static IReadOnlyList<RuneInterval>? Parse(string? descriptor)
         {
             if (string.IsNullOrWhiteSpace(descriptor))
                 return null;
 
-            List<RuneRange>? ranges = null;
+            List<RuneInterval>? ranges = null;
 
             // The value can arrive either in its CSS source form ("U+41-5A, U+61-7A") or, once it has been
             // round-tripped through the CSS-OM, as the tokenizer's stored serialization with the "U+"
@@ -80,7 +81,7 @@ namespace PeachPDF.Html.Core.Utils
                 if (start > end)
                     continue;
 
-                (ranges ??= []).Add(new RuneRange(new Rune(start), new Rune(end)));
+                (ranges ??= []).Add(new RuneInterval(new Rune(start), new Rune(end)));
             }
 
             return ranges;
@@ -91,6 +92,6 @@ namespace PeachPDF.Html.Core.Utils
         /// place the inclusive-on-both-ends convention lives - a codepoint range <c>U+41-5A</c> covers
         /// both <c>U+41</c> and <c>U+5A</c>, unlike a <see cref="Range"/>'s half-open slicing semantics.
         /// </summary>
-        internal static bool Covers(IReadOnlyList<RuneRange> ranges, Rune rune) => CMapCoverage.Contains(ranges, rune);
+        internal static bool Covers(IReadOnlyList<RuneInterval> ranges, Rune rune) => CMapCoverage.Contains(ranges, rune);
     }
 }

@@ -29,7 +29,7 @@ namespace PeachPDF.Tests.Html.Core
     {
         private static OpenTypeDescriptor Descriptor(string fontPath)
         {
-            var face = XFontSource.GetOrCreateFrom(System.IO.File.ReadAllBytes(fontPath)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(System.IO.File.ReadAllBytes(fontPath)).Fontface;
             return new OpenTypeDescriptor("shaping-test", "shaping-test", XFontStyle.Regular, face,
                 new XPdfFontOptions(PdfFontEncoding.Unicode));
         }

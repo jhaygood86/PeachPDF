@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using System.Buffers.Binary;
 using System.Text;
 using PeachPDF.Fonts.OpenType;
@@ -13,7 +14,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         public void CompleteGlyphClosure_IncludesNestedCompositeComponents()
         {
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
-            var sourceFace = new OpenTypeFontface(XFontSource.CreateCompiledFont(fontBytes));
+            var sourceFace = new OpenTypeFontface(FontFileData.CreateCompiledFont(fontBytes));
 
             int accentedGlyph = GlyphId(sourceFace, 'á');
             int baseGlyph = GlyphId(sourceFace, 'a');
@@ -33,7 +34,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             BinaryPrimitives.WriteInt16BigEndian(accentData[14..], 0);
             BinaryPrimitives.WriteInt16BigEndian(accentData[16..], 0);
 
-            var nestedFace = new OpenTypeFontface(XFontSource.CreateCompiledFont(fontBytes));
+            var nestedFace = new OpenTypeFontface(FontFileData.CreateCompiledFont(fontBytes));
             var selected = new Dictionary<int, object> { [accentedGlyph] = null! };
 
             nestedFace.glyf.CompleteGlyphClosure(selected);

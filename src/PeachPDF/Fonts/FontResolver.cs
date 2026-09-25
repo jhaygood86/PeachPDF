@@ -4,7 +4,6 @@
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Fonts;
 using PeachPDF.Fonts.OpenType;
-using PeachPDF.PdfSharpCore.Internal;
 using PeachPDF.Text;
 using System;
 using System.Collections.Concurrent;
@@ -31,7 +30,7 @@ namespace PeachPDF.Fonts
         // means every FontResolver instance after the first to need a given face (e.g. a per-codepoint
         // fallback face like an emoji/CJK font, resolved fresh by every test's own short-lived instance)
         // reuses the same byte[] instead of re-reading a potentially multi-megabyte file from disk. This
-        // also makes XFontSource.GetOrCreateFrom's own buffer-identity checksum memo (see XFontSource.cs)
+        // also makes FontFileData.GetOrCreateFrom's own buffer-identity checksum memo (see FontFileData.cs)
         // actually hit for system fonts, not just custom ones - see .claude/recent-fixes for the measured
         // effect.
         private static readonly ConcurrentDictionary<(string Path, int FaceIndex), byte[]> _systemFontBytesCache = new();
@@ -59,7 +58,7 @@ namespace PeachPDF.Fonts
         /// per-codepoint matching. Instance-scoped (like <see cref="_CustomFonts"/>) so it is collected
         /// with this resolver and never shared across <c>PdfGenerator</c> instances.
         /// </summary>
-        private readonly Dictionary<string, IReadOnlyList<RuneRange>> _coverageCache = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, IReadOnlyList<RuneInterval>> _coverageCache = new(StringComparer.Ordinal);
 
         /// <summary>
         /// Last-resort system-fallback cache (codepoint value → winning family key, or null when no
@@ -252,7 +251,7 @@ namespace PeachPDF.Fonts
         /// <c>@font-face</c> <c>unicode-range</c> descriptor, or an explicit registration list); null
         /// means "no restriction - use this face for whatever its font's cmap actually covers".</para>
         /// </summary>
-        public void AddFont(Stream stream, string fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null)
+        public void AddFont(Stream stream, string fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             var memoryStream = new MemoryStream();
             stream.CopyTo(memoryStream);
@@ -261,8 +260,8 @@ namespace PeachPDF.Fonts
 
             // A .ttc/.otc collection registers its first face: the rest of the pipeline reads one standalone
             // font per registration, so the face is rebuilt as one.
-            if (FontCollection.IsCollection(fontBytes))
-                fontBytes = FontCollection.ExtractFace(fontBytes, 0);
+            if (SfntCollection.IsCollection(fontBytes))
+                fontBytes = SfntCollection.ExtractFace(fontBytes, 0);
 
             memoryStream = new MemoryStream(fontBytes);
 
@@ -286,7 +285,7 @@ namespace PeachPDF.Fonts
             var faceName = internalName;
             if (_CustomFonts.TryGetValue(internalName, out var existingBytes) && !existingBytes.AsSpan().SequenceEqual(fontBytes))
             {
-                faceName = $"{internalName}#{FontHelper.CalcChecksum(fontBytes):x}";
+                faceName = $"{internalName}#{FontFileData.CalcChecksum(fontBytes):x}";
             }
 
             // The STORED description's own Weight/Style/Stretch must reflect the override too, not just
@@ -329,13 +328,13 @@ namespace PeachPDF.Fonts
             _CustomFonts[faceName] = fontBytes;
         }
 
-        private static bool IsSameFaceSlot(FontFaceEntry entry, int weight, bool isItalic, int stretch, IReadOnlyList<RuneRange>? ranges)
+        private static bool IsSameFaceSlot(FontFaceEntry entry, int weight, bool isItalic, int stretch, IReadOnlyList<RuneInterval>? ranges)
         {
             return entry.Weight == weight && entry.Italic == isItalic && entry.Stretch == stretch
                    && RangesEqual(entry.ExplicitRanges, ranges);
         }
 
-        private static bool RangesEqual(IReadOnlyList<RuneRange>? a, IReadOnlyList<RuneRange>? b)
+        private static bool RangesEqual(IReadOnlyList<RuneInterval>? a, IReadOnlyList<RuneInterval>? b)
         {
             if (a is null || b is null)
                 return a is null && b is null;
@@ -433,7 +432,7 @@ namespace PeachPDF.Fonts
         /// <summary>
         /// The bytes of one font face as the rest of the pipeline expects them: the file itself for an
         /// ordinary font, and for a face of a <c>.ttc</c>/<c>.otc</c> collection a standalone font rebuilt
-        /// from just that face's tables (see <see cref="FontCollection.ExtractFace(Stream, int)"/>).
+        /// from just that face's tables (see <see cref="SfntCollection.ExtractFace(Stream, int)"/>).
         /// </summary>
         internal static byte[] LoadSystemFontBytes(string path, int faceIndex)
         {
@@ -441,8 +440,8 @@ namespace PeachPDF.Fonts
 
             Span<byte> tag = stackalloc byte[4];
             stream.ReadExactly(tag);
-            if (FontCollection.IsCollection(tag))
-                return FontCollection.ExtractFace(stream, faceIndex);
+            if (SfntCollection.IsCollection(tag))
+                return SfntCollection.ExtractFace(stream, faceIndex);
 
             stream.Seek(0, SeekOrigin.Begin);
             var bytes = new byte[stream.Length];
@@ -580,7 +579,7 @@ namespace PeachPDF.Fonts
         /// <see cref="FaceCovers"/> uses for a single codepoint, exposed separately so
         /// <see cref="PickScriptAwareWinner"/> can score a whole face's coverage rather than test one rune.
         /// </summary>
-        private IReadOnlyList<RuneRange> EffectiveCoverage(FontFaceEntry entry) =>
+        private IReadOnlyList<RuneInterval> EffectiveCoverage(FontFaceEntry entry) =>
             entry.ExplicitRanges ?? GetOrComputeCoverage(entry.Description.FontNameInvariantCulture);
 
         /// <summary>
@@ -596,7 +595,7 @@ namespace PeachPDF.Fonts
             var faceName = entry.Description.FontNameInvariantCulture;
             try
             {
-                var fontFace = XFontSource.GetOrCreateFrom(GetFont(faceName)).Fontface;
+                var fontFace = FontFileData.GetOrCreateFrom(GetFont(faceName)).Fontface;
                 return fontFace is null || EmojiProperties.FaceMatches(fontFace, rune.Value, presentation);
             }
             catch
@@ -606,15 +605,15 @@ namespace PeachPDF.Fonts
             }
         }
 
-        private IReadOnlyList<RuneRange> GetOrComputeCoverage(string faceName)
+        private IReadOnlyList<RuneInterval> GetOrComputeCoverage(string faceName)
         {
             if (_coverageCache.TryGetValue(faceName, out var cached))
                 return cached;
 
-            IReadOnlyList<RuneRange> coverage;
+            IReadOnlyList<RuneInterval> coverage;
             try
             {
-                var fontSource = XFontSource.GetOrCreateFrom(GetFont(faceName));
+                var fontSource = FontFileData.GetOrCreateFrom(GetFont(faceName));
                 coverage = CMapCoverage.Extract(fontSource.Fontface?.cmap);
             }
             catch
@@ -715,15 +714,15 @@ namespace PeachPDF.Fonts
         }
 
         /// <summary>
-        /// Counts codepoints common to two <see cref="RuneRange"/> lists via a linear two-pointer sweep
+        /// Counts codepoints common to two <see cref="RuneInterval"/> lists via a linear two-pointer sweep
         /// over each sorted ascending by start. <see cref="ScriptTable.RangesForScript"/>'s own
         /// script-partitioned runs already are, but <c>ExplicitRanges</c> is not guaranteed to be - it can
-        /// be a caller-supplied list from the public <see cref="AddFont(Stream, string, int?, bool?, int?, IReadOnlyList{RuneRange}?)"/>
+        /// be a caller-supplied list from the public <see cref="AddFont(Stream, string, int?, bool?, int?, IReadOnlyList{RuneInterval}?)"/>
         /// API, or <see cref="Html.Core.Utils.UnicodeRangeParser.Parse"/> output, which preserves the
         /// <c>unicode-range</c> descriptor's own declaration order (e.g. <c>U+61-7A, U+41-5A</c> stays in
         /// that order, not ascending) - so both inputs are sorted defensively here rather than trusted.
         /// </summary>
-        private static long OverlapLength(IReadOnlyList<RuneRange> a, IReadOnlyList<RuneRange> b)
+        private static long OverlapLength(IReadOnlyList<RuneInterval> a, IReadOnlyList<RuneInterval> b)
         {
             var sortedA = a.OrderBy(r => r.Start.Value).ToList();
             var sortedB = b.OrderBy(r => r.Start.Value).ToList();

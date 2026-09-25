@@ -165,11 +165,6 @@ namespace PeachPDF.PdfSharpCore
             get { return "Font data is read-only."; }
         }
 
-        public static string ErrorReadingFontData
-        {
-            get { return "Error while parsing an OpenType font."; }
-        }
-
         #endregion
 
         #region XGraphics specific messages

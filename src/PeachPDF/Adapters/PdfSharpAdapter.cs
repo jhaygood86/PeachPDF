@@ -226,7 +226,7 @@ namespace PeachPDF.Adapters
             await AddFont(stream, fontFamilyName, weightOverride: null, isItalicOverride: null, stretchOverride: null);
         }
 
-        internal async Task AddFont(Stream stream, string? fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride, IReadOnlyList<RuneRange>? unicodeRanges = null)
+        internal async Task AddFont(Stream stream, string? fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
@@ -444,7 +444,7 @@ namespace PeachPDF.Adapters
 
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => _fontResolver.HasExplicitRanges(family);
 
-        protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null)
+        protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             // A missing format() hint is valid CSS (it's an optional hint, not a requirement) and must
             // still be attempted - real-world stylesheets (e.g. css4.pub's Icelandic dictionary page)
@@ -462,7 +462,7 @@ namespace PeachPDF.Adapters
             return false;
         }
 
-        protected override async Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null)
+        protected override async Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             var hasLocalFont = _fontResolver.HasFont(localFontFaceName);
 

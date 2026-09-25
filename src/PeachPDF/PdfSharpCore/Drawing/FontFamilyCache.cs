@@ -105,22 +105,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
         }
         static volatile FontFamilyCache _singleton = null!;
 
-        internal static string GetCacheState()
-        {
-            StringBuilder state = new StringBuilder();
-            state.Append("====================\n");
-            state.Append("Font families by name\n");
-            Dictionary<string, FontFamilyInternal>.KeyCollection familyKeys = Singleton._familiesByName.Keys;
-            int count = familyKeys.Count;
-            string[] keys = new string[count];
-            familyKeys.CopyTo(keys, 0);
-            Array.Sort(keys, StringComparer.OrdinalIgnoreCase);
-            foreach (string key in keys)
-                state.AppendFormat("  {0}: {1}\n", key, Singleton._familiesByName[key].DebuggerDisplay);
-            state.Append("\n");
-            return state.ToString();
-        }
-
         /// <summary>
         /// Maps family name to internal font family.
         /// </summary>

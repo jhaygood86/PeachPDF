@@ -27,11 +27,11 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Internal;
+using PeachPDF.Fonts;
 using PeachPDF.PdfSharpCore.Pdf;
 using System;
 
-namespace PeachPDF.Fonts
+namespace PeachPDF.PdfSharpCore.Drawing
 {
     /// <summary>
     /// Provides functionality to specify information about the handling of fonts in the current application domain.
@@ -59,7 +59,7 @@ namespace PeachPDF.Fonts
             {
                 try
                 {
-                    Lock.EnterFontFactory();
+                    FontLock.Enter();
                     if (_fontEncodingInitialized)
                     {
                         // Ignore multiple setting e.g. in a web application.
@@ -71,7 +71,7 @@ namespace PeachPDF.Fonts
                     _fontEncoding = value;
                     _fontEncodingInitialized = true;
                 }
-                finally { Lock.ExitFontFactory(); }
+                finally { FontLock.Exit(); }
             }
         }
         static PdfFontEncoding _fontEncoding;

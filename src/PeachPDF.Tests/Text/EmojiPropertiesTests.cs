@@ -67,7 +67,7 @@ namespace PeachPDF.Tests.Text
         [InlineData("Emoji", 0x2764, 0xFE00, "Emoji")]
         public void Resolve_FollowsCssFonts4(string mode, int baseCodepoint, int selector, string expected)
         {
-            Assert.Equal(Enum.Parse<EmojiPresentation>(expected), EmojiProperties.Resolve(Enum.Parse<FontVariantEmojiMode>(mode), baseCodepoint, selector));
+            Assert.Equal(Enum.Parse<EmojiPresentation>(expected), EmojiProperties.Resolve(Enum.Parse<EmojiMode>(mode), baseCodepoint, selector));
         }
 
         [Theory]
@@ -95,7 +95,7 @@ namespace PeachPDF.Tests.Text
         [InlineData("\uD83D", 0, "Emoji", "NoPreference")]
         public void ResolveAt_ReadsTheSelectorThatDirectlyFollowsTheBase(string text, int index, string mode, string expected)
         {
-            Assert.Equal(Enum.Parse<EmojiPresentation>(expected), EmojiProperties.ResolveAt(Enum.Parse<FontVariantEmojiMode>(mode), text, index));
+            Assert.Equal(Enum.Parse<EmojiPresentation>(expected), EmojiProperties.ResolveAt(Enum.Parse<EmojiMode>(mode), text, index));
         }
 
         [Theory]

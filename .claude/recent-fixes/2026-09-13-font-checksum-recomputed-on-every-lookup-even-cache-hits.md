@@ -2,10 +2,10 @@
 
 ## What was wrong
 
-`XFontSource.GetOrCreateFrom(byte[] bytes)` (`src/PeachPDF/PdfSharpCore/Drawing/XFontSource.cs`) called
+`FontFileData.GetOrCreateFrom(byte[] bytes)` (`src/PeachPDF/Fonts/FontFileData.cs`) called
 `FontHelper.CalcChecksum(bytes)` — an O(n) Adler32-style scan of the *entire* font byte buffer —
 **unconditionally, before checking whether the font source was already cached**. `FontFactory`'s
-`FontSourcesByKey` (a `static readonly Dictionary<ulong, XFontSource>`) is correctly process-wide, so a
+`FontSourcesByKey` (a `static readonly Dictionary<ulong, FontFileData>`) is correctly process-wide, so a
 repeat request for the same font should be a cheap cache hit — except computing the key needed to even
 *check* that cache required paying the full scan every single time, cache hit or not.
 
@@ -53,7 +53,7 @@ correctness split for custom fonts (`InstanceGlyphTypefacesByKey`,
    System font paths are already `static readonly` (stable for the process's lifetime, same rationale as
    `_systemFamilies`), so this is safe and makes `GetFont` return the *same* `byte[]` instance for a given
    path across every call, every resolver instance, for the process's lifetime — no more repeat disk reads.
-2. **`XFontSource.GetOrCreateFrom`** now memoizes the checksum by buffer *reference* in a
+2. **`FontFileData.GetOrCreateFrom`** now memoizes the checksum by buffer *reference* in a
    `static readonly ConditionalWeakTable<byte[], object>` (the same established pattern already used for
    process-wide, GC-safe caches in `src/PeachPDF/Text/GposPositioner.cs`/`GsubShaper.cs`) before calling
    `FontHelper.CalcChecksum`. Combined with fix 1 (a stable `byte[]` reference for system fonts), the

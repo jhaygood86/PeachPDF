@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using PeachPDF.Adapters;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
@@ -14,7 +15,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     {
         private static byte[] BaseFont() => File.ReadAllBytes(BundledFonts.Ttf);
 
-        private static BitmapGlyphSource? Source(byte[] font) => XFontSource.GetOrCreateFrom(font).Fontface.bitmap;
+        private static BitmapGlyphSource? Source(byte[] font) => FontFileData.GetOrCreateFrom(font).Fontface.bitmap;
 
         private static byte[] Png(int w, int h, byte r, byte g, byte b) => RasterPngFixture.MakeSolidRgbaPngBytes(w, h, r, g, b);
 
@@ -147,7 +148,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var font = BaseFont();
             var a = BitmapGlyphFontFixture.GlyphId(font, 'A');
             var withBitmaps = BitmapGlyphFontFixture.WithCbdt(font, new BitmapGlyphFontFixture.Picture(20, a, Png(8, 6, 255, 0, 0), 8, 6, 1, 5));
-            var face = XFontSource.GetOrCreateFrom(withBitmaps).Fontface;
+            var face = FontFileData.GetOrCreateFrom(withBitmaps).Fontface;
             var descriptor = new OpenTypeDescriptor("bitmap", "bitmap", XFontStyle.Regular, face,
                 new XPdfFontOptions(PeachPDF.PdfSharpCore.Pdf.PdfFontEncoding.Unicode));
 
@@ -156,7 +157,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.True(descriptor.HasBitmapGlyph(a));
             Assert.False(descriptor.TryGetBitmapGlyph(a + 1000 > 60000 ? 1 : a + 1000, 20, out _));
 
-            var plain = XFontSource.GetOrCreateFrom(font).Fontface;
+            var plain = FontFileData.GetOrCreateFrom(font).Fontface;
             Assert.False(new OpenTypeDescriptor("plain", "plain", XFontStyle.Regular, plain,
                 new XPdfFontOptions(PeachPDF.PdfSharpCore.Pdf.PdfFontEncoding.Unicode)).HasBitmapGlyphs);
         }
