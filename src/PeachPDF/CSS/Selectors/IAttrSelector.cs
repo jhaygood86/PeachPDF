@@ -4,5 +4,6 @@ namespace PeachPDF.CSS
     {
         string Attribute { get; }
         string Value { get; }
+        AttrCaseSensitivity CaseSensitivity { get; }
     }
 }
