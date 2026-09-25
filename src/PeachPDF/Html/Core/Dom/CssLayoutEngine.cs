@@ -2026,8 +2026,9 @@ namespace PeachPDF.Html.Core.Dom
 
             var root = CssBox.FormattingContextRootOf(box);
             var lowest = double.MinValue;
-            foreach (var (moved, (movedRoot, outerTop)) in container.MovedFloats)
+            foreach (var (moved, movedRoot) in container.MovedFloats)
             {
+                var outerTop = moved.StaticTop - moved.ActualMarginTop;
                 if (ReferenceEquals(moved, box) || !ReferenceEquals(movedRoot, root) || outerTop <= lowest) continue;
                 if (IsBeforeInTreeOrder(moved, box)) lowest = outerTop;
             }

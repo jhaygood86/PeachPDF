@@ -3463,7 +3463,7 @@ namespace PeachPDF.Html.Core.Dom
             if (shiftX != 0) box.OffsetLeft(shiftX);
             if (placed.Y != staticTop) box.OffsetTop(placed.Y - staticTop);
 
-            container.MovedFloats[box] = (FormattingContextRootOf(box), box.StaticTop - box.ActualMarginTop);
+            container.MovedFloats[box] = FormattingContextRootOf(box);
         }
 
         /// <summary>

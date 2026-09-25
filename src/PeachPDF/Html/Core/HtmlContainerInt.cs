@@ -204,11 +204,13 @@ namespace PeachPDF.Html.Core
 
         /// <summary>
         /// The floats moved whole to the next page in this layout attempt, with the root of the block
-        /// formatting context each is placed in and its outer top. A later float in the same context may not
-        /// rise above one (CSS 2.1 §9.5.1 rule 5), even when it is not the moved float's sibling: a float
-        /// inside an earlier block moved to page 2 while a later float beside that block stayed on page 1.
+        /// formatting context each is placed in. A later float in the same context may not rise above one
+        /// (CSS 2.1 §9.5.1 rule 5), even when it is not the moved float's sibling: a float inside an earlier
+        /// block moved to page 2 while a later float beside that block stayed on page 1. The position is read
+        /// from the float when it is compared, not stored, so a mover that shifts it afterwards cannot leave a
+        /// stale one behind.
         /// </summary>
-        internal Dictionary<CssBox, (CssBox FormattingContextRoot, double OuterTop)> MovedFloats { get; } = [];
+        internal Dictionary<CssBox, CssBox> MovedFloats { get; } = [];
 
         /// <summary>
         /// Records that <paramref name="box"/>, an <c>overflow: hidden</c> box that broke like a plain block,
