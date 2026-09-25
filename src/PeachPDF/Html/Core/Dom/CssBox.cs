@@ -3437,7 +3437,7 @@ namespace PeachPDF.Html.Core.Dom
         /// the fragmentainer that <see cref="LayoutBlockChildUnbroken"/> detaches. Laid out unbroken, its
         /// columns lost their last lines. Such a float or absolutely positioned box keeps the breaking path.
         /// </summary>
-        private static bool IsOrHoldsAMultiColumnContainer(CssBox box) =>
+        internal static bool IsOrHoldsAMultiColumnContainer(CssBox box) =>
             box.EstablishesMultiColumnContext || HoldsAMultiColumnContainer(box);
 
         /// <summary>

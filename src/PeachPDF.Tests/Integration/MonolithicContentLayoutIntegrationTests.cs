@@ -467,6 +467,22 @@ namespace PeachPDF.Tests.Integration
             AssertEachDrawnOnceInsideABand(placed, 20);
         }
 
+        // Such a box keeps the breaking path, so a break inside it ends the pass. The content after it, placed
+        // at its parent's top, landed on the page that pass had already emitted and was drawn on no page (all
+        // ten paragraphs of a following block). It is placed after the box instead, and drawn.
+        [Theory]
+        [InlineData("<p>B1</p><div>{0}<p>W9</p></div>", 9)]
+        [InlineData("<p>B1</p><div>{0}<p>W9</p><p>W10</p><p>W11</p><p>W12</p><p>W13</p><p>W14</p><p>W15</p><p>W16</p><p>W17</p><p>W18</p></div>", 18)]
+        [InlineData("<div><p>B1</p>{0}<p>W9</p></div>", 9)]
+        public async Task ContentAfterAnAbsoluteMultiColumnBox_IsDrawn(string shape, int count)
+        {
+            var box = "<div style='position:absolute;top:120pt;width:200pt;columns:2'>" +
+                      string.Concat(Enumerable.Range(1, 8).Select(i => $"<p>W{i}</p>")) + "</div>";
+            var placed = await WordFragments(string.Format(shape, box));
+
+            AssertEachDrawnOnceInsideABand(placed, count);
+        }
+
         // Which boxes clip is decided per layout. A box that clipped its content and was kept whole may fit
         // under its cap once widened, and the next layout of the same container lets it break again, as a
         // fresh layout of the wider box does.

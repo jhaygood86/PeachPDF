@@ -32,7 +32,10 @@ A new path that lays a float, an absolutely positioned box, or anything else out
 must do the same, or keep the scroll container around it monolithic. The standing exception is a float or
 an absolutely positioned box that is or holds a multi-column container, whose columns engine needs the
 attached fragmentainer (`CssBox.IsOrHoldsAMultiColumnContainer`; reviews found `float: left; columns: 2`
-and then an absolutely positioned `columns: 2` box each missed, losing their last lines), and a float
+and then an absolutely positioned `columns: 2` box each missed, losing their last lines; such an absolute
+box's break still ends the pass, so the content after it is placed below it
+(`DomUtils.IsSteppedOverAsPreviousSibling`, #1377), where otherwise it would land on an emitted page and be
+lost), and a float
 inside a column, which a column does not continue the way a page does: laid out unbroken, its lines past the
 column's foot were drawn below the page band. Both still break and still have #1339's loss (see the accepted
 gap on tall floats).
