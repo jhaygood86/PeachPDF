@@ -68,15 +68,18 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         // §2 makes a scroll container monolithic only where its block size is capped: "any elements with
         // overflow set to auto or scroll and any elements with overflow: hidden and a non-auto logical
         // height (and no specified maximum logical height)" is a "may", and an auto-height box has nothing
-        // to clip in the block axis. PeachPDF takes the capped case for every overflow value.
+        // to clip in the block axis. PeachPDF takes a fixed block size: a height and no max-height, the
+        // sentence's own case for hidden, and for auto and scroll an aspect-ratio or both insets too.
         [Theory]
         [InlineData("overflow:hidden", false)]
         [InlineData("overflow:auto", false)]
         [InlineData("overflow:scroll", false)]
         [InlineData("overflow:hidden;height:20pt", true)]
         [InlineData("overflow:auto;height:20pt", true)]
-        [InlineData("overflow:scroll;max-height:20pt", true)]
-        [InlineData("overflow:hidden;max-height:20pt", true)]
+        [InlineData("overflow:scroll;max-height:20pt", false)]
+        // A max-height alone does not fix the block size: the box breaks unless its content overflows it.
+        [InlineData("overflow:hidden;max-height:20pt", false)]
+        [InlineData("overflow:hidden;height:20pt;max-height:30pt", false)]
         [InlineData("overflow:visible;height:20pt", false)]
         // A percentage of an indefinite containing block behaves as auto/none (CSS 2.1 §10.5, §10.7).
         [InlineData("overflow:hidden;height:50%", false)]
@@ -252,8 +255,9 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         // A block size can be fixed without height or max-height: by a preferred aspect ratio (CSS Box
         // Sizing 4 §5), or by both block-axis insets of an absolutely positioned box (CSS 2.1 §10.6.4).
         [Theory]
-        [InlineData("overflow:hidden;aspect-ratio:1;width:100pt", true)]
-        [InlineData("overflow:hidden;aspect-ratio:auto", false)]
+        [InlineData("overflow:auto;aspect-ratio:1;width:100pt", true)]
+        [InlineData("overflow:auto;aspect-ratio:auto", false)]
+        [InlineData("overflow:hidden;aspect-ratio:1;width:100pt", false)]
         [InlineData("overflow:auto;position:absolute;top:0;bottom:0", true)]
         [InlineData("overflow:auto;position:absolute;top:0", false)]
         [InlineData("overflow:auto;position:absolute;writing-mode:vertical-rl;left:0;right:0", true)]
@@ -317,7 +321,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         [Fact]
         public async Task Body_UnderARootThatAlreadyDeclaredOverflow_IsAScrollContainer()
         {
-            var box = await BoxOfTag("html { overflow: hidden } body { overflow: auto; max-height: 1000pt }", "body");
+            var box = await BoxOfTag("html { overflow: hidden } body { overflow: auto; height: 1000pt }", "body");
 
             Assert.True(MonolithicContent.IsScrollContainer(box));
             Assert.True(MonolithicContent.IsMonolithic(box));

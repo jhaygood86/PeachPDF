@@ -2,7 +2,8 @@
 
 _CSS Fragmentation Level 3 §4.4. Tracker: [#1328](https://github.com/jhaygood86/PeachPDF/issues/1328)._
 
-A scroll container with a capped block size (a non-auto `height`, or a `max-height`) is monolithic
+A scroll container with a fixed block size (a non-auto `height` and no `max-height`; for `auto`/`scroll`
+also an `aspect-ratio` or both block insets), or one whose content overflows its cap, is monolithic
 (`MonolithicContent.IsMonolithic`). When it is taller than every page's band it can't be moved, so
 `CssBox.LayoutContents` lays its content out with the fragmentainer detached, and each page shows one
 slice of it. A line straddling a slice boundary is claimed only by the fragmentainer its top falls in
@@ -10,7 +11,7 @@ slice of it. A line straddling a slice boundary is claimed only by the fragmenta
 page draws it.
 
 Measured with `MonolithicContentLayoutIntegrationTests.TallAutoHeightScrollContainer_DrawsEveryLineInsideAPageBand`
-given an `overflow: hidden; max-height: 10000pt` row: `L9`, `L19` and `L28` end at 182.78pt, 190.78pt and
+given an `overflow: auto; height: 10000pt` row: `L9`, `L19` and `L28` end at 182.78pt, 190.78pt and
 181.98pt against a band ending at 180pt.
 
 The auto-height case (a panel of paragraphs, a `<pre>` listing) was fixed for #1321 by taking it out

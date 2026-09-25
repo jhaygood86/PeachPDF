@@ -187,6 +187,33 @@ namespace PeachPDF.Html.Core
         internal Dictionary<CssBox, double> PageFloatPlacements { get; private set; } = [];
 
         /// <summary>
+        /// <c>overflow: hidden</c> boxes that were allowed to break across pages but whose content ran past
+        /// their own end in an earlier layout attempt. <see cref="Fragmentation.MonolithicContent"/> keeps
+        /// each of them in one piece from then on.
+        /// </summary>
+        internal HashSet<CssBox> ScrollContainersThatClip { get; } = [];
+
+        /// <summary>
+        /// How many times <see cref="PerformLayout"/> lays the document out again for boxes newly added to
+        /// <see cref="ScrollContainersThatClip"/>. Each attempt can only add boxes, and one is almost always
+        /// enough; the bound covers a box that starts clipping only once another is kept whole.
+        /// </summary>
+        private const int MaxClippingRelayouts = 3;
+
+        private bool _aScrollContainerStartedClipping;
+
+        /// <summary>
+        /// Records that <paramref name="box"/>, an <c>overflow: hidden</c> box that broke like a plain block,
+        /// clips its content, so the document is laid out again with it kept in one piece. A break among its
+        /// clipped lines would end the pass past the box's end and lose the content after it.
+        /// </summary>
+        /// <param name="box">the box whose content runs past its padding edge</param>
+        internal void NoteScrollContainerClips(CssBox box)
+        {
+            if (ScrollContainersThatClip.Add(box)) _aScrollContainerStartedClipping = true;
+        }
+
+        /// <summary>
         /// The room a <c>float-reference: column</c> page float pinned to a column's block-start edge
         /// needs in that column, as resolved on the previous attempt - the column-scoped counterpart of
         /// <see cref="TopFloatAreaHeightsBySlot"/>, seeded into that column's own
@@ -1669,6 +1696,19 @@ namespace PeachPDF.Html.Core
             {
                 // in case the width is not restricted we need to double layout, first will find the width so second can layout by it (center alignment)
                 Root.Size = new RSize((int)Math.Ceiling(ActualSize.Width), 0);
+                ActualSize = RSize.Empty;
+                await LayoutDocument(g);
+            }
+
+            // An overflow: hidden box capped only by max-height breaks like a plain block (css-break-3 §2),
+            // unless its content turns out to overflow the cap, which only this layout can tell. Such a box
+            // is kept in one piece from then on and the document laid out again; a box only ever joins the
+            // set, so this settles. See MonolithicContent.HasConstrainedBlockSize.
+            for (var attempt = 0; attempt < MaxClippingRelayouts && _aScrollContainerStartedClipping; attempt++)
+            {
+                _aScrollContainerStartedClipping = false;
+                Root.Size = new RSize(IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width)), 0);
+                Root.Location = Location;
                 ActualSize = RSize.Empty;
                 await LayoutDocument(g);
             }

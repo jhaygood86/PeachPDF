@@ -5,10 +5,12 @@ straddled a page boundary moved whole to the next page. One taller than a page w
 on each slice boundary was lost (clipped on the page it started on, missing from the next).
 
 **Now:** a scroll container that is a block box in ordinary block flow is monolithic only when its block
-size is fixed. That means a non-auto `height`, a `max-height`, an `aspect-ratio`, or both `top` and
-`bottom` on an absolutely positioned box; in a vertical writing mode, `width`/`max-width`. An auto-height
-one breaks between its lines like any other block, as browsers do when printing, so a tall
-clearfix-style `overflow: hidden` wrapper no longer drops a line per page.
+size is fixed: a non-auto `height` and no `max-height`, and for `overflow: auto`/`scroll` also an
+`aspect-ratio` or both `top` and `bottom` on an absolutely positioned box; in a vertical writing mode,
+`width`/`max-width` (where a `max-width` still counts). A box capped only by `max-height` breaks too, as
+Chrome prints it, unless its content overflows the cap, and then it stays whole as before. An auto-height one breaks between its lines like any other
+block, as browsers do when printing, so a tall clearfix-style `overflow: hidden` wrapper no longer drops
+a line per page.
 
 Everything else stays monolithic as before, whatever its height:
 - an `inline-block`, a float (including a page float), or a flex or grid item;
@@ -21,8 +23,9 @@ Everything else stays monolithic as before, whatever its height:
 A clearfix wrapper around floats does break: a floated menu beside a long column of text no longer loses
 a line of that text at every page boundary (see the float migration note of the same date).
 
-A short auto-height card near the bottom of a page is now split across the break instead of moving whole.
-Add `break-inside: avoid` to keep the old result.
+A short auto-height card near the bottom of a page, or one capped only by `max-height` whose content
+fits under the cap, is now split across the break instead of moving whole. Add
+`break-inside: avoid` to keep the old result.
 
 **Why:** css-break-3 §2 only lets a UA treat `overflow: hidden` as monolithic when its logical height is
 non-auto with no max, and it only permits (never requires) the same for `auto`/`scroll`.

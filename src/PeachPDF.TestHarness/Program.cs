@@ -2386,8 +2386,8 @@ await SaveShowcaseAsync("paged_media_page_floats", "Paged Media", "Page floats",
 
 // ─── Scroll containers across page breaks ───────────────────────────────────
 // An auto-height overflow: hidden/auto box has nothing to clip on paper, so it breaks between its lines
-// like any block (css-break-3 §2 only permits treating it as monolithic). A capped one (max-height) stays
-// whole. The DRAFT stamp is declared last but positioned against the first page's area, and is drawn there.
+// like any block (css-break-3 §2 only permits treating it as monolithic), and so does one capped only by
+// max-height. One with a fixed height stays whole. The DRAFT stamp is declared last but positioned against the first page's area, and is drawn there.
 var scrollContainerCodeLines = string.Join("\n", Enumerable.Range(1, 34).Select(i =>
     $"{i,2}  " + (i % 5) switch
     {
@@ -2428,8 +2428,8 @@ var scrollContainersAcrossPagesHtml = $$"""
     }
     .panel p { margin: 0 0 4pt; }
     .capped {
-      overflow: hidden;
-      max-height: 200pt;
+      overflow: auto;
+      height: 170pt;
       border: 0.75pt solid #b45309;
       background: #fffbeb;
       padding: 4pt 8pt;
@@ -2476,15 +2476,17 @@ var scrollContainersAcrossPagesHtml = $$"""
     <p>The last paragraphs continue on the next page, still inside the same blue panel.</p>
     </div>
 
-    <p>A box whose own height is capped is different. With a height or max-height it can clip what it
-    holds, so CSS Fragmentation treats it as monolithic content, like an image: it is never broken
-    between its lines. Where it would straddle a page boundary, it is carried to the next page whole.
-    The box below starts low enough on its page that it would straddle one.</p>
+    <p>A box whose own height is fixed is different. With a height and no max-height it can scroll or
+    clip what it holds, so CSS Fragmentation lets it be treated as monolithic content, like an image: it
+    is never broken between its lines. Where it would straddle a page boundary, it is carried to the next
+    page whole. The box below starts low enough on its page that it would straddle one. A box capped only
+    by max-height breaks like the panel above, as a browser prints it, as long as its content fits under
+    the cap.</p>
 
-    <h2>A capped box stays whole</h2>
+    <h2>A fixed-height box stays whole</h2>
     <div class="capped">
-    <p>This box has max-height: 200pt, so it can clip its content and is treated as monolithic: it moves
-    whole to the next page when it does not fit where it starts, rather than breaking.</p>
+    <p>This box has overflow: auto and height: 170pt, so it is treated as monolithic: it moves whole
+    to the next page when it does not fit where it starts, rather than breaking.</p>
     <p>It starts too close to the foot of the page for all of its paragraphs, so the whole box, border
     and all, has moved to the top of this page instead of leaving its first lines behind.</p>
     <p>An auto-height box in the same place would have broken between two of these paragraphs.</p>
@@ -2532,7 +2534,7 @@ var scrollContainersAcrossPagesHtml = $$"""
     """;
 
 await SaveShowcaseAsync("scroll_containers_across_pages", "Paged Media", "Scroll Containers Across Pages",
-    "An auto-height overflow: auto code listing and an overflow: hidden panel breaking cleanly between their lines across page boundaries, a max-height-capped box moving whole to the next page instead, a clearfix wrapper around a floated menu breaking between the lines of the text beside it, a floated note moving whole to the next page with the text wrapping around it there, and an absolutely positioned DRAFT stamp declared at the end of the document drawn on the first page.",
+    "An auto-height overflow: auto code listing and an overflow: hidden panel breaking cleanly between their lines across page boundaries, a fixed-height overflow: auto box moving whole to the next page instead, a clearfix wrapper around a floated menu breaking between the lines of the text beside it, a floated note moving whole to the next page with the text wrapping around it there, and an absolutely positioned DRAFT stamp declared at the end of the document drawn on the first page.",
     scrollContainersAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──

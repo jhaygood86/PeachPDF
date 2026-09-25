@@ -21,13 +21,13 @@ namespace PeachPDF.Tests.Integration
         private const double PageHeight = 200;
         private const double Margin = 20;
 
-        // The headline case: a card with overflow: hidden and a capped block size is monolithic, so it may
-        // not be split. The max-height is far above the card's own height, so it changes nothing else.
+        // The headline case: a card with overflow: auto and a fixed block size is monolithic, so it may
+        // not be split. The height is the card's own natural height, so it changes nothing else.
         [Fact]
         public async Task StraddlingScrollContainer_MovesWholeToTheNextPage()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
-                StraddleDocument("overflow: hidden; max-height: 1000pt"), pageHeight: PageHeight, margin: Margin);
+                StraddleDocument("overflow: auto; height: 60pt"), pageHeight: PageHeight, margin: Margin);
 
             var card = LayoutHarness.FindById(root, "card")!;
 
@@ -575,7 +575,7 @@ namespace PeachPDF.Tests.Integration
         public async Task RelocatedBox_MatchesWhatBreakInsideAvoidAlreadyDoes(double fillerHeight)
         {
             var (monolithic, _) = await LayoutHarness.LayoutAsync(
-                GapDocument(fillerHeight, "overflow:hidden;max-height:1000pt"), pageHeight: PageHeight, margin: Margin);
+                GapDocument(fillerHeight, "overflow:auto;height:60pt"), pageHeight: PageHeight, margin: Margin);
             var (avoid, _) = await LayoutHarness.LayoutAsync(
                 GapDocument(fillerHeight, "break-inside:avoid"), pageHeight: PageHeight, margin: Margin);
 
@@ -603,15 +603,56 @@ namespace PeachPDF.Tests.Integration
                 $"<div id='card' style='{cardCss};orphans:1;widows:1;line-height:20pt;font-size:10pt;width:60pt'>" +
                 "Aaa Bbb Ccc Ddd Eee Fff Ggg Hhh</div>");
 
-        // Every overflow value, on the same card as the headline test: the max-height is far above the card's
-        // own height, so only the overflow value varies.
+        // Every overflow value, on the same card as the headline test, with its own natural height fixed: a
+        // fixed height and no max-height is the case §2 names for hidden, and allows for auto and scroll.
+        [Theory]
+        [InlineData("overflow: scroll; height: 60pt")]
+        [InlineData("overflow: auto; height: 60pt")]
+        [InlineData("overflow: hidden; height: 60pt")]
+        public async Task EveryScrollContainerValue_MovesWhole(string css)
+        {
+            Assert.False(await CardStaysOnOnePage("height: 60pt"), "the card must straddle without overflow");
+            Assert.True(await CardStaysOnOnePage(css));
+        }
+
+        // Capped by max-height alone, with content that fits under the cap, a scroll container breaks like a
+        // plain block for every overflow value, as Chrome prints it. §2 names only a fixed height with no
+        // max-height for hidden, and makes auto and scroll optional. An overflow: hidden box capped by an
+        // aspect-ratio breaks too.
         [Theory]
         [InlineData("overflow: scroll; max-height: 1000pt")]
         [InlineData("overflow: auto; max-height: 1000pt")]
         [InlineData("overflow: hidden; max-height: 1000pt")]
-        public async Task EveryScrollContainerValue_MovesWhole(string css)
+        [InlineData("overflow: hidden; height: 1000pt; max-height: 1000pt")]
+        [InlineData("overflow: hidden; aspect-ratio: 1")]
+        public async Task ScrollContainerWithoutAFixedHeight_Breaks(string css)
         {
-            Assert.True(await CardStaysOnOnePage(css));
+            Assert.False(await CardStaysOnOnePage(css));
+        }
+
+        // A scroll container that may break but whose content overflows its max-height is kept whole:
+        // its clipped lines lie past its end, and a break among them lost the content after the box. Layout
+        // notices the clip and lays the document out again with the box monolithic.
+        [Theory]
+        [InlineData("hidden", 10, 96)]
+        [InlineData("hidden", 2, 60)]
+        [InlineData("auto", 10, 96)]
+        public async Task ScrollContainerWhoseContentOverflowsItsMaxHeight_StaysWhole_AndLosesNothingAfterIt(string overflow, int lines, int cap)
+        {
+            var (root, container) = await LayoutFloats(
+                $"<div>{Lines("C", lines)}</div><div id='card' style='overflow:{overflow};max-height:{cap}pt'>{Lines("X", 30)}</div>" +
+                $"<div>{Lines("W", 10)}</div>");
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.Equal(container.SlotStartingAt(card.Location.Y), container.SlotEndingAt(card.ActualBottom));
+            Assert.Contains(card, container.ScrollContainersThatClip);
+
+            var placed = container.FragmentTree!.Fragmentainers
+                .SelectMany((page, index) => Flatten(page.Root).SelectMany(f => f.Words)
+                    .Select(w => (index, w.Word.Text ?? "", w.Rect.Top, w.Rect.Bottom)))
+                .Where(w => w.Item2.Length > 1 && w.Item2[0] == 'W' && char.IsDigit(w.Item2[1]))
+                .ToList();
+            AssertEachDrawnOnceInsideABand(placed, 10);
         }
 
         // A block size fixed some other way than by max-height caps the box too. These do change the card's
@@ -623,7 +664,7 @@ namespace PeachPDF.Tests.Integration
         public async Task ScrollContainerWithAFixedBlockSize_MovesWhole(string sizeCss)
         {
             Assert.False(await CardStaysOnOnePage(sizeCss), "the resized card must straddle without overflow");
-            Assert.True(await CardStaysOnOnePage($"overflow: hidden; {sizeCss}"));
+            Assert.True(await CardStaysOnOnePage($"overflow: auto; {sizeCss}"));
         }
 
         private static async Task<bool> CardStaysOnOnePage(string css)
@@ -846,7 +887,7 @@ namespace PeachPDF.Tests.Integration
         {
             const int linesEachSide = 10;
             var html = LayoutHarness.Wrap(
-                "<div id='card' style='overflow:hidden;max-height:10000pt;margin:0;line-height:22pt;font-size:10pt'>" +
+                "<div id='card' style='overflow:auto;height:462pt;margin:0;line-height:22pt;font-size:10pt'>" +
                 string.Join("<br>", Enumerable.Range(0, linesEachSide).Select(i => $"Before{i}")) +
                 "<p id='afterBreak' style='break-before:page;margin:0'>After</p>" +
                 string.Join("<br>", Enumerable.Range(0, linesEachSide).Select(i => $"After{i}")) +
@@ -902,7 +943,7 @@ namespace PeachPDF.Tests.Integration
         public async Task ScrollContainerEstablishingColumnsButHoldingOnlyInlineContent_IsStillSuppressed()
         {
             var html = LayoutHarness.Wrap(
-                "<div id='card' style='overflow:hidden;max-height:10000pt;columns:2;margin:0;line-height:22pt;font-size:10pt'>" +
+                "<div id='card' style='overflow:auto;height:660pt;columns:2;margin:0;line-height:22pt;font-size:10pt'>" +
                 string.Join("<br>", Enumerable.Range(0, 30).Select(i => $"Line{i}")) +
                 "</div>");
 

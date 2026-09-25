@@ -274,10 +274,15 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// and a line on the slice boundary is then lost.
         /// </para>
         /// <para>
-        /// This rule differs from §2's sentence in two places. Auto-height <c>auto</c>/<c>scroll</c> are
-        /// not treated as monolithic, which the "may" allows. <c>overflow: hidden</c> with a
-        /// <c>max-height</c> is treated as monolithic although the sentence leaves it out: the cap makes
-        /// the box clip, which is what makes it behave like a scrolled element.
+        /// PeachPDF treats a scroll container as monolithic only when its block size is fixed: a non-auto
+        /// <c>height</c> with no <c>max-height</c>, the one case the sentence names for <c>hidden</c>, and
+        /// for <c>auto</c>/<c>scroll</c> also an <c>aspect-ratio</c> or both block-axis insets, which the
+        /// "may" allows. A box capped by <c>max-height</c> alone breaks like a plain block for every
+        /// overflow value, as Chrome prints it. The one exception is a box whose content actually overflows
+        /// its cap. Its clipped lines lie past the box's own end, and a break among them ended the pass while
+        /// the content after the box was placed back on the page the break left, so it was drawn on no page.
+        /// Layout records such a box (<see cref="HtmlContainerInt.NoteScrollContainerClips"/>) and lays the
+        /// document out again with it monolithic.
         /// </para>
         /// <para>
         /// A percentage against an indefinite base behaves as <c>auto</c>/<c>none</c> (CSS 2.1 §10.5,
@@ -301,6 +306,14 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             var vertical = IsVertical(box);
             var (size, maxSize) = vertical ? (box.Width, box.MaxWidth) : (box.Height, box.MaxHeight);
+
+            if (!vertical)
+            {
+                return (Constrains(size, isMax: false) && !Constrains(maxSize, isMax: true))
+                       || box.HtmlContainer?.ScrollContainersThatClip.Contains(box) == true
+                       || (box.Overflow.Value != Overflow.Hidden
+                           && (HasPreferredAspectRatio(box) || IsSizedByBothBlockInsets(box, vertical: false)));
+            }
 
             // The height and max-height percentages resolve against different bases in layout: height
             // against the box's own percentage base (GetBoxHeight), max-height against its in-flow

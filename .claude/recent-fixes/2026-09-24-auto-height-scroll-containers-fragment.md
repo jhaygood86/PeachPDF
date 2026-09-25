@@ -241,7 +241,9 @@ either way: `LayoutContents` already excluded them from suppression by display.
 
 - The 14 failing tests after the change were all fixtures that used a bare `overflow: hidden` card as
   the stock monolithic box. They now add `max-height: 1000pt` (or `10000pt` for the tall ones), which
-  caps the block size without changing any geometry, so each still pins what it pinned.
+  caps the block size without changing any geometry, so each still pins what it pinned. Once
+  `max-height` stopped counting (below) they became `overflow: auto` with a `height` equal to the card's
+  measured natural height (60pt, 462pt, 660pt), which again changes no geometry.
 - The new `TallAutoHeightScrollContainer_DrawsEveryLineInsideAPageBand` reproduces the issue exactly
   against the old classifier (`L9`/`L19`/`L28` end 2–11pt past the 180pt band) and passes with the fix.
 - Given `max-height: 10000pt`, the same fixture still loses those three lines. That is the capped case,
@@ -252,4 +254,27 @@ either way: `LayoutContents` already excluded them from suppression by display.
 
 An auto-height `overflow: hidden|auto|scroll` card that straddles a page boundary is now split across it
 instead of moving whole to the next page (see the migration note). That is what browsers do when
-printing. Authors who want the old result can add `break-inside: avoid` or a `max-height`.
+printing. Authors who want the old result can add `break-inside: avoid`, or a fixed `height`.
+
+## A box capped only by max-height breaks, as Chrome prints it
+
+Comparing the showcase against Chrome after the float round showed its capped box, `overflow: hidden;
+max-height: 200pt` with content under the cap, printed across two pages by Chrome and moved whole by
+PeachPDF. §2's permission for `hidden` is "a non-auto logical height (and no specified maximum logical
+height)", so that box is not in the monolithic set at all; the classifier had deliberately counted
+`max-height` for every overflow value. `HasConstrainedBlockSize` now takes §2's own case for hidden (a
+`height` and no `max-height`). Switching the showcase box to `overflow: auto; max-height` then showed
+Chrome prints that across two pages too, so the same rule now applies to every overflow value (plus
+`aspect-ratio` and both insets for `auto`/`scroll`, which §2's "may" allows).
+
+Letting it break exposed the trap the old rule had been hiding: when the content overflows the cap, the
+clipped lines lie past the box's end, and a break among them ended the pass, so the content after the box
+was placed back on an emitted page (probe: ten lines after a 60pt-capped 30-line box, all lost; three
+after a straddling 96pt one, plus an empty page). The box's height clamp also measures `max-height` in
+document space, across the page gap. Rather than fragment clipped content, `PerformLayoutEpilogue` now
+checks such a box after `ApplyHeight` (`NoteIfAFragmentingScrollContainerClips`: content past its padding
+edge) and `PerformLayout` lays the document out again with it monolithic, at most three times. That keeps
+the old behaviour exactly where it was safe and is an
+[accepted gap](../accepted-gaps/a-scroll-container-that-clips-past-its-max-height-is-kept-whole.md)
+(#1375). The showcase's box now has a fixed `height`. Vertical writing modes keep the old rule, since the clip check reads the
+physical Y axis.
