@@ -2781,14 +2781,21 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             if (!region.Contains(rect)) return false;
 
-            // The line box's own top rather than the ink's (see InkRiseAboveLineTop), unless the ink lies wholly
-            // above the page that top names. The line box's top is only trusted while the ink it holds reaches
-            // that page: a padded `vertical-align: top` inline-block has its words drawn over its padding, above
-            // the line top the flow recorded, and with that top on the next page each page rejected the line -
-            // one because the line was nominally the other's, the other because none of the ink reached it.
+            // The line box's own top rather than the ink's (see InkRiseAboveLineTop), unless most of the ink lies
+            // above the page that top names. A heading whose 13pt glyphs rise 1.5pt above its 12pt line box
+            // belongs to the page its line box is on. A padded `vertical-align: top` inline-block's words are
+            // drawn over its padding, a whole padding above the line top the flow recorded, so near a page foot
+            // their ink is on one page and the line top on the next: claimed by the next page, the line was drawn
+            // there almost wholly above its band and clipped away (at one page height, all but 0.25pt of it).
+            // Asking which page holds more of the ink, not whether any of it reaches the line top's page, keeps
+            // a sliver of overshoot from deciding.
             var claimTop = lineTop;
-            if (lineTop > rect.Top && rect.Bottom <= container.PageTopOf(container.SlotStartingAt(lineTop)) + BandOverlapEpsilon)
-                claimTop = rect.Top;
+            if (lineTop > rect.Top)
+            {
+                var lineTopPageTop = container.PageTopOf(container.SlotStartingAt(lineTop));
+                if (rect.Top < lineTopPageTop && lineTopPageTop - rect.Top > rect.Bottom - lineTopPageTop)
+                    claimTop = rect.Top;
+            }
 
             var nominalSlot = container.SlotStartingAt(claimTop);
 

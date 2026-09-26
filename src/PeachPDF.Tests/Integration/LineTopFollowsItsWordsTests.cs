@@ -72,6 +72,37 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(Enumerable.Range(1, 59).Select(i => $"w{i}").Order(), painted.Order());
         }
 
+        // The same shape at every page height, through the PdfGenerator pipeline, in 0.5pt steps. The words sit
+        // a whole padding above their line top, so near a page foot the line top is on one page and most of the
+        // ink on the one before. Asking whether ANY ink reached the line top's page let a 0.25pt overshoot decide,
+        // and the line was drawn on the later page almost wholly above its band: clipped away at 171.5pt,
+        // 123.5pt and 183.5pt among others. Each word must be drawn once, with at least half of it inside the
+        // band of the page that draws it.
+        [Theory]
+        [InlineData(30)]
+        [InlineData(12)]
+        public async Task APaddedTopAlignedInlineBlock_AtEveryPageHeight_DrawsEveryWordOnceInsideItsBand(int padding)
+        {
+            var words = string.Join(" ", Enumerable.Range(1, 59).Select(i => $"w{i}"));
+            List<string> failures = [];
+
+            for (var height = 110.0; height <= 220.0; height += 0.5)
+            {
+                var size = height.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var html = $"<!DOCTYPE html><html><head><style>@page{{size:300pt {size}pt;margin:20pt}} " +
+                           "body{margin:0;font:10pt/12pt Arial} p{margin:0}</style></head><body><p>X<span style='display:inline-block;" +
+                           $"width:100pt;vertical-align:top;padding:{padding}pt 6pt 0'>{words}</span>Y</p></body></html>";
+
+                var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig { PageSize = PageSize.Letter });
+                var drawn = MostlyVisibleStrings(container).Where(t => t.Length > 1 && t[0] == 'w' && char.IsDigit(t[1])).ToList();
+
+                if (drawn.Count != 59 || drawn.Distinct().Count() != 59)
+                    failures.Add($"{size}pt: {drawn.Distinct().Count()} of 59 drawn, {drawn.Count} draws");
+            }
+
+            Assert.Empty(failures);
+        }
+
         // A bottom-aligned cell with its text directly in it owns the line that text is on, but the
         // alignment moves the cell's children, not the cell. The line's recorded top has to move with its
         // words, since the fragment emitter reads it to decide which page the line is on.
@@ -184,6 +215,43 @@ namespace PeachPDF.Tests.Integration
             foreach (var word in own.Words) word.Line = outer;
 
             Assert.Null(CssLayoutEngine.LastOwnLineBaselineOf(box));
+        }
+
+        // Every string drawn, on every page, with at least half its height inside every rectangle clip in force
+        // when it was drawn: drawn legibly, not a sliver at the edge of a band.
+        private static List<string> MostlyVisibleStrings(HtmlContainerInt container)
+        {
+            var drawn = new List<string>();
+
+            for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
+            {
+                var recording = new RecordingGraphics(new PeachPDF.Adapters.PdfSharpAdapter());
+                FragmentPaintHarness.PaintPage(container, recording, page);
+
+                var clips = new Stack<RRect?>();
+                foreach (var op in recording.Log)
+                {
+                    switch (op.Kind)
+                    {
+                        case PaintOpKind.PushClip:
+                            clips.Push(op.Bounds);
+                            break;
+                        case PaintOpKind.PushClipPath:
+                            clips.Push(null);
+                            break;
+                        case PaintOpKind.PopClip when clips.Count > 0:
+                            clips.Pop();
+                            break;
+                        case PaintOpKind.DrawString when op.Text is { } text
+                                                        && clips.All(c => c is not { } clip
+                                                            || Math.Min(clip.Bottom, op.Bounds.Bottom) - Math.Max(clip.Top, op.Bounds.Top) >= op.Bounds.Height / 2):
+                            drawn.Add(text);
+                            break;
+                    }
+                }
+            }
+
+            return drawn;
         }
 
         // Every string drawn, on every page, with some part of it inside all the rectangle clips in force
