@@ -29,12 +29,13 @@ namespace PeachDrawing.Text.Layout
         private readonly UseCategory[]? _use;
         private readonly bool[] _isGraphemeBoundary;
         private readonly Atom[] _atoms;
+        private readonly Typeface?[]? _fallbackFaces;
         private const int MaxShapedPieces = 8192;
 
         private readonly Dictionary<(int, int), GlyphRun> _shaped = [];
 
         /// <summary>A piece of the text that is shaped as one: one style, one direction level and one script.</summary>
-        internal readonly record struct Atom(int Start, int End, int Run, byte Level, string Script);
+        internal readonly record struct Atom(int Start, int End, int Run, byte Level, string Script, RunStyle Style);
 
         internal Paragraph(string text, (int, int, RunStyle)[] runs, ParagraphStyle style)
         {
@@ -54,6 +55,7 @@ namespace PeachDrawing.Text.Layout
 
             _isGraphemeBoundary[0] = true;
             _isGraphemeBoundary[text.Length] = true;
+            _fallbackFaces = ResolveFallbackFaces();
             _atoms = BuildAtoms();
         }
 
@@ -129,6 +131,50 @@ namespace PeachDrawing.Text.Layout
         /// <summary>The spaces that hang at the end of a line: they are kept in the text, and take no part in fitting or aligning it.</summary>
         internal static bool IsHangingSpace(char c) => c is (char)0x20 or (char)0x09 or (char)0x1680 || (c >= (char)0x2000 && c <= (char)0x2006) || (c >= (char)0x2008 && c <= (char)0x200A) || c == (char)0x205F || c == (char)0x3000;
 
+        /// <summary>
+        /// For every character, the typeface that stands in for the run's own where it cannot draw the character's grapheme cluster, or
+        /// <see langword="null"/> for the run's own; the array itself is null when no run has a fallback.
+        /// </summary>
+        private Typeface?[]? ResolveFallbackFaces()
+        {
+            Typeface?[]? faces = null;
+            foreach (var (start, end, style) in _runs)
+            {
+                if (style.Fallback is not { } fallback)
+                {
+                    continue;
+                }
+
+                for (int i = start; i < end;)
+                {
+                    int next = i + 1;
+                    while (next < end && !_isGraphemeBoundary[next])
+                    {
+                        next++;
+                    }
+
+                    Rune.DecodeFromUtf16(Text.AsSpan(i), out var first, out _);
+                    // Spaces, controls and format characters (zero width space, joiners, bidi marks, the soft hyphen) draw nothing, so no
+                    // face is asked for them: a stand-in would only change the line's height and cut the shaping around it.
+                    if (!IsLineTerminator(Text[i]) && !Rune.IsWhiteSpace(first) && !Rune.IsControl(first)
+                        && Rune.GetUnicodeCategory(first) != System.Globalization.UnicodeCategory.Format
+                        && !style.Typeface.TryMapRune(first, out _)
+                        && fallback(first) is { } face)
+                    {
+                        faces ??= new Typeface?[Text.Length];
+                        for (int k = i; k < next; k++)
+                        {
+                            faces[k] = face;
+                        }
+                    }
+
+                    i = next;
+                }
+            }
+
+            return faces;
+        }
+
         private Atom[] BuildAtoms()
         {
             var atoms = new List<Atom>();
@@ -146,17 +192,20 @@ namespace PeachDrawing.Text.Layout
                 int start = i;
                 byte level = _bidi.Levels[i];
                 string script = _scripts[i];
+                var face = _fallbackFaces?[i];
                 i++;
                 while (i < length
                     && !IsLineTerminator(Text[i])
                     && _runs[run].End > i
                     && _bidi.Levels[i] == level
-                    && _scripts[i] == script)
+                    && _scripts[i] == script
+                    && Equals(_fallbackFaces?[i], face))
                 {
                     i++;
                 }
 
-                atoms.Add(new Atom(start, i, run, level, script));
+                var style = _runs[run].Style;
+                atoms.Add(new Atom(start, i, run, level, script, face is null ? style : style with { Typeface = face }));
             }
 
             return atoms.ToArray();
@@ -228,7 +277,7 @@ namespace PeachDrawing.Text.Layout
                 }
             }
 
-            var style = _runs[atom.Run].Style;
+            var style = atom.Style;
             var settings = style.Shape ?? ShapeSettings.Default;
             settings = settings with
             {
@@ -274,7 +323,83 @@ namespace PeachDrawing.Text.Layout
         }
 
         /// <summary>The width, in layout units, of a shaped piece set in <paramref name="style"/>.</summary>
-        internal static double WidthOf(GlyphRun run, RunStyle style) => run.Advance * style.Size / run.Typeface.Metrics.UnitsPerEm;
+        internal double WidthOf(GlyphRun run, RunStyle style, int from)
+        {
+            double width = run.Advance * style.Size / run.Typeface.Metrics.UnitsPerEm;
+            if (style.LetterSpacing != 0 || style.WordSpacing != 0)
+            {
+                int clusters = 0;
+                for (int i = 0; i < run.Glyphs.Count; i++)
+                {
+                    if (EndsCluster(run, from, i))
+                    {
+                        clusters++;
+                    }
+                }
+
+                width += style.LetterSpacing * clusters + style.WordSpacing * CountSpaces(run, from);
+            }
+
+            return width;
+        }
+
+        /// <summary>Whether <paramref name="c"/> is a word separator, which word spacing and justification widen.</summary>
+        internal static bool IsWordSeparator(char c) => c == ' ' || c == (char)0xA0;
+
+        /// <summary>
+        /// Whether the glyph at <paramref name="index"/> of a piece that starts at <paramref name="from"/> is the last of the glyphs of one
+        /// user-perceived character (a base and its marks are several glyphs, a ligature is one glyph for several characters): the place letter
+        /// and word spacing are added, once for each such character.
+        /// </summary>
+        internal bool EndsCluster(GlyphRun run, int from, int index)
+        {
+            var glyphs = run.Glyphs;
+            var glyph = glyphs[index];
+            if (glyph.ClusterLength <= 0)
+            {
+                return false;
+            }
+
+            for (int next = index + 1; next < glyphs.Count; next++)
+            {
+                if (glyphs[next].ClusterLength > 0)
+                {
+                    return GraphemeStartOf(from + glyph.ClusterStart) != GraphemeStartOf(from + glyphs[next].ClusterStart);
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>Whether the user-perceived character that holds the offset starts with a word separator (a space with a mark on it still is one).</summary>
+        internal bool IsWordSeparatorAt(int index) => index >= 0 && index < Text.Length && IsWordSeparator(Text[GraphemeStartOf(index)]);
+
+        private int GraphemeStartOf(int index)
+        {
+            index = Math.Clamp(index, 0, Text.Length);
+            while (index > 0 && !_isGraphemeBoundary[index])
+            {
+                index--;
+            }
+
+            return index;
+        }
+
+        /// <summary>How many clusters of a piece that starts at <paramref name="from"/> are a word separator.</summary>
+        internal int CountSpaces(GlyphRun run, int from)
+        {
+            int count = 0;
+            for (int i = 0; i < run.Glyphs.Count; i++)
+            {
+                var glyph = run.Glyphs[i];
+                if (EndsCluster(run, from, i) && IsWordSeparatorAt(from + glyph.ClusterStart))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
 
         /// <summary>The width of the text <c>[start, end)</c> laid on one line, with the line-ending characters left out.</summary>
         internal double Measure(int start, int end)
@@ -292,7 +417,7 @@ namespace PeachDrawing.Text.Layout
                 int to = Math.Min(end, atom.End);
                 if (to > from)
                 {
-                    width += WidthOf(ShapePiece(atom, from, to), _runs[atom.Run].Style);
+                    width += WidthOf(ShapePiece(atom, from, to), atom.Style, from);
                 }
             }
 
@@ -392,7 +517,7 @@ namespace PeachDrawing.Text.Layout
         /// </summary>
         /// <param name="baseStyle">The style of text that no pushed run covers.</param>
         /// <exception cref="ArgumentNullException">The style has no typeface.</exception>
-        /// <exception cref="ArgumentOutOfRangeException">The size is not a positive, finite number.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The size is not a positive, finite number, or a spacing is not finite.</exception>
         public ParagraphBuilder(RunStyle baseStyle)
         {
             Validate(baseStyle, nameof(baseStyle));
@@ -412,7 +537,7 @@ namespace PeachDrawing.Text.Layout
         /// <param name="style">The style of the run.</param>
         /// <returns>This builder.</returns>
         /// <exception cref="ArgumentNullException">The style has no typeface.</exception>
-        /// <exception cref="ArgumentOutOfRangeException">The size is not a positive, finite number.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The size is not a positive, finite number, or a spacing is not finite.</exception>
         public ParagraphBuilder PushRun(RunStyle style)
         {
             Validate(style, nameof(style));
@@ -426,6 +551,11 @@ namespace PeachDrawing.Text.Layout
             if (!double.IsFinite(style.Size) || style.Size <= 0)
             {
                 throw new ArgumentOutOfRangeException(name, style.Size, "The size must be a positive, finite number.");
+            }
+
+            if (!double.IsFinite(style.LetterSpacing) || !double.IsFinite(style.WordSpacing))
+            {
+                throw new ArgumentOutOfRangeException(name, "The letter and word spacing must be finite numbers.");
             }
         }
 

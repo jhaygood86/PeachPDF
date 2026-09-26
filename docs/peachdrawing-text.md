@@ -321,9 +321,18 @@ foreach (LineBox line in layout.Lines)
   widest line when only forced breaks end one.
 - **`TextRuler.WidthOf`** measures one piece of text in one face without building a paragraph.
 
-Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Text is set in the typeface of its run: a
-character the face does not have draws that face's missing-glyph shape, and there is no font fallback yet. Justification, letter and word spacing, tabs,
-hyphenation and a line limit with an ellipsis are not part of the layout yet.
+- **Font fallback.** Text is set in the typeface of its run. When `RunStyle.Fallback` is set, it is asked (once for each user-perceived character the
+  face cannot draw, with the character's first code point) for a typeface to stand in, and the character and the marks that follow it are set in that
+  face at the run's size; without one, or where it answers `null`, the face's missing-glyph shape is drawn. `FontSet.CreateFallback(query)` makes one
+  from the families of a set, choosing the family whose coverage best fits the character's script.
+- **Spacing and justification.** `RunStyle.LetterSpacing` and `WordSpacing` add distance after every glyph and every space; both count in where lines
+  break and in the caret positions. `TextAlign.Justify` widens the spaces of every line that is not the last (nor ends in a forced break) so that it
+  fills the width, equally; a line with no space in it is left as it is, and `ParagraphStyle.AlignLast` sets how the last line and forced-break lines
+  are aligned (the start, by default). `PlacedRun.GetGlyphAdvance` gives the pen movement after each glyph, spacing and justification included, which
+  is what a caller draws with.
+
+Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Tabs, `text-indent`, hyphenation, a
+line limit with an ellipsis, inline boxes and justification between characters (as opposed to between words) are not part of the layout yet.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 

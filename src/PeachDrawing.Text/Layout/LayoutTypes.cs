@@ -55,6 +55,12 @@ namespace PeachDrawing.Text.Layout
 
         /// <summary>The middle.</summary>
         Center = 4,
+
+        /// <summary>
+        /// Both edges: the space between the words of each line is widened to fill it. The last line of the paragraph and a line that ends in a forced
+        /// break are aligned as <see cref="ParagraphStyle.AlignLast"/> says (the start, by default), and a line with no spaces in it is not changed.
+        /// </summary>
+        Justify = 5,
     }
 
     /// <summary>What may be done to a word that is too long for a line on its own (CSS <c>overflow-wrap</c>).</summary>
@@ -98,7 +104,17 @@ namespace PeachDrawing.Text.Layout
     /// <param name="Typeface">The face to set the text in.</param>
     /// <param name="Size">The size of the em, in the units the layout is measured in.</param>
     /// <param name="Shape">What to ask of the shaper, or <see langword="null"/> for the defaults. Its script tag, joining forms and direction are filled in from the text.</param>
-    public readonly record struct RunStyle(Typeface Typeface, double Size, ShapeSettings? Shape = null);
+    /// <param name="LetterSpacing">Extra distance after every character, in layout units (CSS <c>letter-spacing</c>); zero for none. It is added once for each cluster of glyphs that stand for one character (a base and its marks, or a ligature), after the last of them.</param>
+    /// <param name="WordSpacing">Extra distance after every space and no-break space, in layout units (CSS <c>word-spacing</c>); zero for none. Both spacings must be finite.</param>
+    /// <param name="Fallback">
+    /// What to ask for a typeface when <paramref name="Typeface"/> has no glyph for a character (see <see cref="FontSet.CreateFallback"/>), or
+    /// <see langword="null"/> to draw the missing-glyph shape. It is asked once for each user-perceived character the face cannot draw, with
+    /// that character's first code point, and answers <see langword="null"/> when it has nothing better; the character and the marks that follow
+    /// it are then set in the typeface it returns, at the run's size. Runs are equal only when their fallbacks are the same delegate, and text in
+    /// runs that differ is shaped and broken separately, so a caller that sets a fallback on many runs should make it once and share it.
+    /// </param>
+    public readonly record struct RunStyle(Typeface Typeface, double Size, ShapeSettings? Shape = null, Func<System.Text.Rune, Typeface?>? Fallback = null,
+        double LetterSpacing = 0, double WordSpacing = 0);
 
     /// <summary>How a paragraph as a whole is set.</summary>
     public readonly record struct ParagraphStyle
@@ -117,6 +133,12 @@ namespace PeachDrawing.Text.Layout
 
         /// <summary>Where lines are aligned.</summary>
         public TextAlign Align { get; init; }
+
+        /// <summary>
+        /// How the last line of the paragraph, and a line that ends in a forced break, are aligned (CSS <c>text-align-last</c>); <see langword="null"/> is
+        /// the same as <see cref="Align"/>, except that justified text starts them at the start.
+        /// </summary>
+        public TextAlign? AlignLast { get; init; }
 
         /// <summary>How CSS <c>word-break</c> and <c>line-break</c> tailor where lines may break.</summary>
         public LineBreakOptions LineBreak { get; init; }

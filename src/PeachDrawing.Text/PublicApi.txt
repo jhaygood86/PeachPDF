@@ -32,6 +32,7 @@ PeachDrawing.Text.FontSet : sealed class
   method Boolean TryFindCoveringFamily(Rune rune, EmojiPresentation presentation, out TypefaceFamily family)
   method Boolean TryFindFamily(String name, out TypefaceFamily family)
   method Boolean TryGetFontData(String fontName, out ReadOnlyMemory<Byte> data)
+  method Func<Rune, Typeface> CreateFallback(in TypefaceQuery query)
   method String ResolveGeneric(GenericFamily generic, Func<String, Boolean> isAvailable = null)
   method TypefaceFamily AddData(ReadOnlyMemory<Byte> data, AddOptions options = null)
   method TypefaceFamily AddFile(String path, AddOptions options = null)
@@ -111,10 +112,12 @@ PeachDrawing.Text.Layout.ParagraphStyle : struct
   property Boolean NoWrap { get; init; }
   property LineBreakOptions LineBreak { get; init; }
   property Nullable<Double> LineHeight { get; init; }
+  property Nullable<TextAlign> AlignLast { get; init; }
   property OverflowWrap OverflowWrap { get; init; }
   property TextAlign Align { get; init; }
 PeachDrawing.Text.Layout.PlacedRun : sealed class
   method Double GetCaretX(Int32 index)
+  method Double GetGlyphAdvance(Int32 glyphIndex)
   property Boolean IsRightToLeft { get; }
   property Byte Level { get; }
   property Double Baseline { get; }
@@ -124,13 +127,16 @@ PeachDrawing.Text.Layout.PlacedRun : sealed class
   property RunStyle Style { get; }
   property TextRange Range { get; }
 PeachDrawing.Text.Layout.RunStyle : struct
-  ctor(Typeface Typeface, Double Size, Nullable<ShapeSettings> Shape = null)
+  ctor(Typeface Typeface, Double Size, Nullable<ShapeSettings> Shape = null, Func<Rune, Typeface> Fallback = null, Double LetterSpacing = 0, Double WordSpacing = 0)
   method Boolean Equals(Object obj)
   method Boolean Equals(RunStyle other)
   method Int32 GetHashCode()
   method String ToString()
-  method Void Deconstruct(out Typeface Typeface, out Double Size, out Nullable<ShapeSettings> Shape)
+  method Void Deconstruct(out Typeface Typeface, out Double Size, out Nullable<ShapeSettings> Shape, out Func<Rune, Typeface> Fallback, out Double LetterSpacing, out Double WordSpacing)
+  property Double LetterSpacing { get; init; }
   property Double Size { get; init; }
+  property Double WordSpacing { get; init; }
+  property Func<Rune, Typeface> Fallback { get; init; }
   property Nullable<ShapeSettings> Shape { get; init; }
   property Typeface Typeface { get; init; }
 PeachDrawing.Text.Layout.TextAffinity : enum Int32
@@ -139,6 +145,7 @@ PeachDrawing.Text.Layout.TextAffinity : enum Int32
 PeachDrawing.Text.Layout.TextAlign : enum Int32
   Center = 4
   End = 1
+  Justify = 5
   Left = 2
   Right = 3
   Start = 0
