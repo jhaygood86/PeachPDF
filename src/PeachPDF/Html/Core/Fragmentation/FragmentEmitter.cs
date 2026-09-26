@@ -1549,7 +1549,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// itself filling or anything after it, since those are not frozen yet, so ordinary forward layout
         /// never re-emits anything.
         /// </remarks>
-        internal void InvalidateFrom(int fromSlot, CssBox relocatedBox)
+        /// <param name="fromSlot">the first slot to re-open</param>
+        /// <param name="relocatedBox">the box whose geometry changed there</param>
+        /// <param name="throughSlot">
+        /// the last slot to re-open, when the change is confined to known slots rather than moving
+        /// everything after it. <c>null</c> re-opens every emitted slot from <paramref name="fromSlot"/> on.
+        /// </param>
+        internal void InvalidateFrom(int fromSlot, CssBox relocatedBox, int? throughSlot = null)
         {
             // Deliberately after the early return, not before it: this method is reached on every
             // block-axis reposition of a box that holds fragments, which during a pass is constant, and
@@ -1569,7 +1575,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             // suffix-minimum over one scope's own reopenings answers this without enumerating boxes.
             HistoryFor(ScopeOwnerOf(relocatedBox)).Record(fromSlot);
 
-            for (var slot = fromSlot; slot <= _lastEmittedSlot; slot++)
+            var lastSlot = Math.Min(_lastEmittedSlot, throughSlot ?? _lastEmittedSlot);
+            for (var slot = fromSlot; slot <= lastSlot; slot++)
             {
 #if DEBUG
                 // Release this slot's claims the moment it is un-frozen, not only when (and if) something

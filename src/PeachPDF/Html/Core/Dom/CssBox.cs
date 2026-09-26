@@ -2386,6 +2386,12 @@ namespace PeachPDF.Html.Core.Dom
         private int _placedByPassGeneration = -1;
 
         /// <summary>
+        /// Whether this box holds a multi-column container, with the <see cref="HtmlContainerInt.LayoutGeneration"/>
+        /// it was computed in (<see cref="HoldsAMultiColumnContainer"/>).
+        /// </summary>
+        internal (int Generation, bool Value)? HoldsAMultiColumnContainerCache { get; set; }
+
+        /// <summary>
         /// <see cref="HtmlContainerInt.PassInvalidationCount"/> as it stood when <see cref="_placedByPass"/>
         /// was stamped — what <see cref="PlacedByPassIfStillValid"/> checks the container's
         /// <see cref="Fragmentation.InvalidationHistory"/> against, scoped by this box's own recorded pass
@@ -3347,7 +3353,16 @@ namespace PeachPDF.Html.Core.Dom
 
             if (child.IsPageFloated && child.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: true } } columnContainer)
             {
-                await LayoutPageFloatInColumn(g, child, columnContainer, framePlacesChild);
+                columnContainer.NotePageFloatColumn(child);
+                await LayoutBlockChildUnbroken(g, child, columnContainer, framePlacesChild);
+                return;
+            }
+
+            if (child.Position.Value is PositionMode.Absolute
+                && child.HtmlContainer is { CurrentFragmentainer: not null } absoluteContainer
+                && !IsOrHoldsAMultiColumnContainer(child))
+            {
+                await LayoutBlockChildUnbroken(g, child, absoluteContainer, framePlacesChild);
                 return;
             }
 
@@ -3363,15 +3378,60 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Lays a page float inside a column out unbroken. It sits in the strip its own reservation holds back
-        /// from the column's flow, so measured against the column's band its words would all straddle it and
-        /// break into the next column, taking the flow with them. Which column it is in is recorded first: a
-        /// detached fragmentainer no longer says.
+        /// Whether <paramref name="box"/> is or contains a multi-column container, whose columns engine needs
+        /// the fragmentainer that <see cref="LayoutBlockChildUnbroken"/> detaches. Laid out unbroken, its
+        /// columns lost their last lines. Such an absolutely positioned box keeps the breaking path.
         /// </summary>
-        private async ValueTask LayoutPageFloatInColumn(RGraphics g, CssBox child, HtmlContainerInt container, bool framePlacesChild)
-        {
-            container.NotePageFloatColumn(child);
+        internal static bool IsOrHoldsAMultiColumnContainer(CssBox box) =>
+            box.EstablishesMultiColumnContext || HoldsAMultiColumnContainer(box);
 
+        /// <summary>
+        /// Whether <paramref name="box"/> contains a multi-column container. Kept for the layout generation
+        /// it was answered in, since every pass asks it of every absolutely positioned box.
+        /// </summary>
+        private static bool HoldsAMultiColumnContainer(CssBox box)
+        {
+            var generation = box.HtmlContainer?.LayoutGeneration ?? -1;
+            if (box.HoldsAMultiColumnContainerCache is { } cached && cached.Generation == generation) return cached.Value;
+
+            var value = false;
+            foreach (var child in box.Boxes)
+            {
+                if (child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (child.EstablishesMultiColumnContext || HoldsAMultiColumnContainer(child))
+                {
+                    value = true;
+                    break;
+                }
+            }
+
+            box.HoldsAMultiColumnContainerCache = (generation, value);
+            return value;
+        }
+
+        /// <summary>
+        /// Lays <paramref name="child"/> out as one unbroken run, with the fragmentainer detached and per-word
+        /// page breaks suppressed, for a box whose break the flow after it cannot resume from.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A page float inside a column sits in the strip its own reservation holds back from the column's
+        /// flow, so measured against the column's band its words would all straddle it and break into the
+        /// next column, taking the flow with them. Which column it is in is recorded before this is called:
+        /// a detached fragmentainer no longer says.
+        /// </para>
+        /// <para>
+        /// An absolutely positioned box is placed by its offsets, usually against a containing block on an
+        /// earlier fragmentainer than the pass that reaches it, and takes no part in placing the in-flow
+        /// boxes after it (CSS 2.1 §9.3.1). A break taken inside it would end the pass, and the next pass
+        /// resumes inside it on the following page while its in-flow siblings are placed back on the page
+        /// the break left, which is already emitted, so they were drawn on no page. Laid out whole, its
+        /// geometry runs on past the page's foot and each page shows the slice that falls in it, as a float
+        /// laid out by the inline flow does (<c>CssLayoutEngine.LayoutContentUnbroken</c>).
+        /// </para>
+        /// </remarks>
+        private async ValueTask LayoutBlockChildUnbroken(RGraphics g, CssBox child, HtmlContainerInt container, bool framePlacesChild)
+        {
             var detached = container.DetachFragmentainer();
             var previousSuppress = container.SuppressWordPageBreaks;
             container.SuppressWordPageBreaks = true;
@@ -7086,6 +7146,13 @@ namespace PeachPDF.Html.Core.Dom
             // equation, it just resolves against the page area instead of an ancestor's padding box.
             // The answer can be provisional here - see ResolvePositionedAutoBlockMargins.
             ResolvePositionedAutoBlockMargins();
+
+            // Its position and height are final now. Placed by its offsets, it can land on a fragmentainer
+            // this pass has already emitted, which has to be re-opened to draw it (#1349).
+            if (Position.Value is PositionMode.Absolute)
+            {
+                HtmlContainer?.InvalidateEmittedFragmentainersReceiving(this);
+            }
 
             // Named-page registration tail: block containers already registered before child layout
             // (see the early registration above the layout-engine dispatch); everything else (e.g. a

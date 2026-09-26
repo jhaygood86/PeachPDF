@@ -3057,6 +3057,47 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
+        /// Un-freezes the already-emitted fragmentainers an absolutely positioned <paramref name="box"/>
+        /// has just been laid out into, so they are emitted again with the box in them. Called once the box
+        /// has its final position and height; a no-op for every box that lands where layout has not yet
+        /// emitted anything, which is every placement in forward layout.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="InvalidateEmittedFragmentsFor"/> covers a box that already holds fragments and moves.
+        /// An absolutely positioned box can instead land behind the pass that places it without ever having
+        /// been emitted: its containing block is laid out on an earlier fragmentainer than the box itself,
+        /// most often the initial containing block on the first page (CSS 2.1 §10.1), while the box is
+        /// reached in the tree on a later pass. Nothing re-opened that fragmentainer, so the box was drawn
+        /// on no page (#1349).
+        /// </para>
+        /// <para>
+        /// Only the fragmentainers the box's border box reaches are re-opened, not everything after them:
+        /// the box is out of flow, so nothing else moved. A box a frozen fragmentainer already holds is
+        /// left to <see cref="InvalidateEmittedFragmentsFor"/>, and one entirely above the first page (a
+        /// skip link at <c>top: -9999px</c>) has nowhere to be drawn. Without those limits a document with
+        /// one badge per paragraph re-emitted every page for each badge on every pass, more than doubling
+        /// its layout time.
+        /// </para>
+        /// </remarks>
+        internal void InvalidateEmittedFragmentainersReceiving(CssBox box)
+        {
+            if (_emitter is null || !HasRealPageGrid) return;
+            if (box.IsInDetachedRepeatingGroup || _emitter.HoldsFragmentsFor(box)) return;
+            if (box.ActualBottom <= 0) return;
+
+            var first = PageIndexOf(Math.Max(box.Location.Y, 0) + PageBoundaryEpsilon);
+            // Content that overflows the box (overflow: visible) is drawn past its border box, on pages the
+            // border box does not reach; those have to be re-opened too, or the overflowing lines are lost.
+            var bottom = box.Overflow.Value == PeachPDF.CSS.Overflow.Visible
+                ? CssBox.GetMaximumBottom(box, box.ActualBottom)
+                : box.ActualBottom;
+            var last = PageIndexOf(Math.Max(bottom - PageBoundaryEpsilon, 0));
+
+            _emitter.InvalidateFrom(Math.Max(first, 0), box, throughSlot: Math.Max(last, first));
+        }
+
+        /// <summary>
         /// Hands one nested fragmentainer — a multi-column column,
         /// <see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>'s other kind — over to the
         /// emitter, with the geometry the subtree had while it was being filled.
