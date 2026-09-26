@@ -1,0 +1,110 @@
+PeachDrawing.Text.Unicode.BaseDirection : enum Byte
+  Auto = 2
+  Ltr = 0
+  Rtl = 1
+PeachDrawing.Text.Unicode.Bidi : static class
+  method static BidiAnalysis Analyze(String text, BaseDirection direction, IReadOnlyList<EmbeddingSpan> spans = null)
+  method static BidiClass ClassOf(Rune rune)
+  method static Boolean TryGetMirror(Rune rune, out Rune mirrored)
+  method static IReadOnlyList<BidiRun> ReorderLine(Byte[] levels, Int32 lineStart, Int32 lineLength)
+  method static String Mirror(String runText, Byte level)
+  method static String Reverse(String text)
+PeachDrawing.Text.Unicode.BidiAnalysis : sealed class
+  property Boolean IsParagraphRtl { get; }
+  property Byte ParagraphLevel { get; }
+  property Byte[] Levels { get; }
+PeachDrawing.Text.Unicode.BidiClass : enum Byte
+  AL = 2
+  AN = 6
+  B = 10
+  BN = 9
+  CS = 7
+  EN = 3
+  ES = 4
+  ET = 5
+  FSI = 22
+  L = 0
+  LRE = 14
+  LRI = 15
+  LRO = 16
+  NSM = 8
+  ON = 13
+  PDF = 20
+  PDI = 21
+  R = 1
+  RLE = 17
+  RLI = 18
+  RLO = 19
+  S = 11
+  WS = 12
+PeachDrawing.Text.Unicode.BidiRun : struct
+  ctor(Int32 Start, Int32 Length, Byte Level)
+  method Boolean Equals(BidiRun other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 Start, out Int32 Length, out Byte Level)
+  property Boolean IsRtl { get; }
+  property Byte Level { get; init; }
+  property Int32 Length { get; init; }
+  property Int32 Start { get; init; }
+PeachDrawing.Text.Unicode.DefaultIgnorables : static class
+  method static Boolean Contains(Int32 codepoint)
+  method static Boolean IsVariationSelector(Int32 codepoint)
+PeachDrawing.Text.Unicode.EmbeddingSpan : struct
+  ctor(Int32 Start, Int32 Length, ExplicitPush Push)
+  method Boolean Equals(EmbeddingSpan other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 Start, out Int32 Length, out ExplicitPush Push)
+  property ExplicitPush Push { get; init; }
+  property Int32 End { get; }
+  property Int32 Length { get; init; }
+  property Int32 Start { get; init; }
+PeachDrawing.Text.Unicode.Emoji : static class
+  field const Int32 EmojiSelector
+  field const Int32 TextSelector
+  method static Boolean IsPresentationParticipant(Rune rune)
+  method static Boolean IsPresentationSelector(Rune rune)
+  method static EmojiPresentation Resolve(EmojiMode mode, Int32 baseCodepoint, Int32 followingSelector)
+  method static EmojiPresentation ResolveAt(EmojiMode mode, String text, Int32 index)
+  method static Int32 SelectorFor(EmojiPresentation presentation)
+PeachDrawing.Text.Unicode.EmojiMode : enum Byte
+  Emoji = 2
+  Normal = 0
+  Text = 1
+  Unicode = 3
+PeachDrawing.Text.Unicode.EmojiPresentation : enum Byte
+  Emoji = 2
+  NoPreference = 0
+  Text = 1
+PeachDrawing.Text.Unicode.ExplicitPush : enum Byte
+  Fsi = 6
+  Lre = 0
+  Lri = 4
+  Lro = 2
+  Rle = 1
+  Rli = 5
+  Rlo = 3
+PeachDrawing.Text.Unicode.Hyphenator : static class
+  method static IReadOnlyList<Int32> FindBreakPoints(String word, String language)
+PeachDrawing.Text.Unicode.OpenTypeTags : static class
+  method static String ForLanguage(String language)
+  method static String ForScript(String script)
+PeachDrawing.Text.Unicode.Scripts : static class
+  field const String Common
+  field const String Inherited
+  field const String Unknown
+  method static IReadOnlyList<String> Resolve(IReadOnlyList<Int32> codepoints)
+  method static IReadOnlyList<String> ResolveLooked(IReadOnlyList<String> scripts)
+  method static String Of(Int32 codepoint)
+  method static String Of(Rune rune)
+PeachDrawing.Text.Unicode.VerticalOrientation : static class
+  method static Boolean IsEffectivelyUpright(Rune rune)
+  method static VerticalOrientationClass Of(Rune rune)
+PeachDrawing.Text.Unicode.VerticalOrientationClass : enum Byte
+  R = 1
+  Tr = 3
+  Tu = 2
+  U = 0

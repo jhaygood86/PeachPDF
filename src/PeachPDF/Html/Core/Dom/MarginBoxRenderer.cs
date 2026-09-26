@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
@@ -8,7 +9,6 @@ using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachDrawing.Text.Internal.Text.Bidi;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -1125,7 +1125,7 @@ namespace PeachPDF.Html.Core.Dom
             .Equals(Keywords.Rtl, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
-        /// Applies real UAX#9 resolution (<see cref="BidiResolver"/>) to a margin box's resolved
+        /// Applies real UAX#9 resolution (<see cref="Bidi"/>) to a margin box's resolved
         /// <c>content</c> text - reordering (L2) and mirroring (L4) it for its own resolved
         /// <c>direction</c>, exactly as in-flow text does (<see cref="CssLayoutEngine"/>), rather than
         /// drawing the logical-order string as-is. Margin-box content is drawn as one already-shaped
@@ -1138,10 +1138,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="logicalText">
         /// <paramref name="text"/>'s true logical-order source, positionally aligned with the returned
         /// visual string (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks on that
-        /// contract) - populated via <c>BidiMirrorResolver.ReverseRunes</c> (position only, no
+        /// contract) - populated via <c>Bidi.Reverse</c> (position only, no
         /// mirroring - mirroring only changes a character's value, reversal alone already recovers its
         /// position) when the returned visual string is a single run's whole-string reversal+mirror
-        /// (<c>BidiMirrorResolver.ApplyMirroring</c>'s own contract), so a caller can recover it for
+        /// (<c>Bidi.Mirror</c>'s own contract), so a caller can recover it for
         /// ToUnicode text-extraction fidelity (see
         /// <see cref="Html.Adapters.RGraphics.DrawString(string, Html.Adapters.RFont, Html.Adapters.Entities.RColor, Html.Adapters.Entities.RPoint, Html.Adapters.Entities.RSize, double, Html.Adapters.Entities.RFontPalette?, PeachDrawing.Text.Internal.Text.TextShapingFeatures?, string?)"/>).
         /// Null whenever that contract doesn't hold: no reordering happened at all (the visual string
@@ -1154,9 +1154,9 @@ namespace PeachPDF.Html.Core.Dom
             logicalText = null;
             if (text.Length == 0) return text;
 
-            var direction = IsRtl(style, pageStyle) ? BidiParagraphDirection.Rtl : BidiParagraphDirection.Ltr;
-            var result = BidiResolver.Resolve(text, direction);
-            var runs = BidiResolver.ReorderLine(result.Levels, 0, text.Length);
+            var direction = IsRtl(style, pageStyle) ? BaseDirection.Rtl : BaseDirection.Ltr;
+            var result = Bidi.Analyze(text, direction);
+            var runs = Bidi.ReorderLine(result.Levels, 0, text.Length);
 
             if (runs.Count == 1 && !runs[0].IsRtl) return text;
 
@@ -1164,11 +1164,11 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var run in runs)
             {
                 var runText = text.Substring(run.Start, run.Length);
-                visual.Append(run.IsRtl ? BidiMirrorResolver.ApplyMirroring(runText, run.Level) : runText);
+                visual.Append(run.IsRtl ? Bidi.Mirror(runText, run.Level) : runText);
             }
 
             if (runs.Count == 1 && runs[0].IsRtl)
-                logicalText = BidiMirrorResolver.ReverseRunes(text);
+                logicalText = Bidi.Reverse(text);
 
             return visual.ToString();
         }

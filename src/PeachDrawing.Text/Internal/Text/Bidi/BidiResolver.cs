@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using System;
 using System.Collections.Generic;
 
@@ -7,7 +8,7 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
     /// The Unicode Bidirectional Algorithm (UAX #9, https://www.unicode.org/reports/tr9/), implementing
     /// P2-P3 (paragraph level), X1-X8 (explicit levels/isolates - a full stack model, not a narrowed
     /// subset, since CSS's own <c>unicode-bidi: embed/isolate/bidi-override/isolate-override/plaintext</c>
-    /// values are implemented as synthetic pushes onto this same stack via <see cref="BidiIsolateOverride"/>),
+    /// values are implemented as synthetic pushes onto this same stack via <see cref="EmbeddingSpan"/>),
     /// X9/§5.2 (retaining BN/explicit-formatting characters rather than physically removing them, so string
     /// indices into the original text stay stable throughout), X10/BD13 (isolating run sequences), W1-W7
     /// (weak types), N0-N2 (neutral/bracket-pair types), I1-I2 (implicit levels), and L1 clauses 1-3
@@ -43,10 +44,10 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
             public bool IsolateInitiator;
         }
 
-        public static BidiResolverResult Resolve(
+        public static BidiAnalysis Resolve(
             string text,
-            BidiParagraphDirection paragraphDirection,
-            IReadOnlyList<BidiIsolateOverride>? explicitOverrides = null)
+            BaseDirection paragraphDirection,
+            IReadOnlyList<EmbeddingSpan>? explicitOverrides = null)
         {
             var n = text.Length;
             var originalTypes = new BidiClass[n];
@@ -56,8 +57,8 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
 
             var paragraphLevel = paragraphDirection switch
             {
-                BidiParagraphDirection.Ltr => (byte)0,
-                BidiParagraphDirection.Rtl => (byte)1,
+                BaseDirection.Ltr => (byte)0,
+                BaseDirection.Rtl => (byte)1,
                 _ => ComputeAutoParagraphLevel(originalTypes, 0, n, overrides)
             };
 
@@ -92,7 +93,7 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
 
             ApplyL1(originalTypes, levels, n, paragraphLevel);
 
-            return new BidiResolverResult(levels, paragraphLevel);
+            return new BidiAnalysis(levels, paragraphLevel);
         }
 
         /// <summary>
@@ -173,7 +174,7 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
         /// </summary>
         private static byte ComputeAutoParagraphLevel(
             BidiClass[] types, int start, int endExclusive,
-            IReadOnlyList<BidiIsolateOverride>? overrides = null, int excludeOverrideIndex = -1)
+            IReadOnlyList<EmbeddingSpan>? overrides = null, int excludeOverrideIndex = -1)
         {
             var isolateDepth = 0;
             var i = start;
@@ -222,8 +223,8 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
             return 0;
         }
 
-        private static bool IsIsolateInitiator(BidiExplicitPush push) =>
-            push is BidiExplicitPush.Lri or BidiExplicitPush.Rli or BidiExplicitPush.Fsi;
+        private static bool IsIsolateInitiator(ExplicitPush push) =>
+            push is ExplicitPush.Lri or ExplicitPush.Rli or ExplicitPush.Fsi;
 
         private static int FindMatchingPdiForFsi(BidiClass[] types, int start, int n)
         {
@@ -253,7 +254,7 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
             BidiClass[] originalTypes,
             BidiClass[] resolvedTypes,
             byte[] levels,
-            IReadOnlyList<BidiIsolateOverride> overrides,
+            IReadOnlyList<EmbeddingSpan> overrides,
             byte paragraphLevel)
         {
             var n = originalTypes.Length;
@@ -271,14 +272,14 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
             // nested override can share an identical Start/Length with its own outer one (e.g. a
             // unicode-bidi:plaintext box whose entire content is one nested unicode-bidi:isolate span)
             // and so can't be told apart from it by value alone.
-            Dictionary<int, List<(BidiIsolateOverride Override, int Index)>>? startsAt = null;
-            Dictionary<int, List<BidiIsolateOverride>>? endsAt = null;
+            Dictionary<int, List<(EmbeddingSpan Override, int Index)>>? startsAt = null;
+            Dictionary<int, List<EmbeddingSpan>>? endsAt = null;
             for (var idx = 0; idx < overrides.Count; idx++)
             {
                 var o = overrides[idx];
                 if (o.Length <= 0) continue;
-                startsAt ??= new Dictionary<int, List<(BidiIsolateOverride, int)>>();
-                endsAt ??= new Dictionary<int, List<BidiIsolateOverride>>();
+                startsAt ??= new Dictionary<int, List<(EmbeddingSpan, int)>>();
+                endsAt ??= new Dictionary<int, List<EmbeddingSpan>>();
                 if (!startsAt.TryGetValue(o.Start, out var sl)) startsAt[o.Start] = sl = [];
                 sl.Add((o, idx));
                 if (!endsAt.TryGetValue(o.End, out var el)) endsAt[o.End] = el = [];
@@ -423,7 +424,7 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
         }
 
         private static void PushSyntheticPush(
-            BidiIsolateOverride o, int overrideIndex, IReadOnlyList<BidiIsolateOverride> overrides,
+            EmbeddingSpan o, int overrideIndex, IReadOnlyList<EmbeddingSpan> overrides,
             BidiClass[] originalTypes, List<StackEntry> stack,
             ref int overflowIsolateCount, ref int overflowEmbeddingCount, ref int validIsolateCount)
         {
@@ -431,19 +432,19 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
             var top = stack[^1];
             switch (push)
             {
-                case BidiExplicitPush.Lre:
-                case BidiExplicitPush.Rle:
-                case BidiExplicitPush.Lro:
-                case BidiExplicitPush.Rlo:
+                case ExplicitPush.Lre:
+                case ExplicitPush.Rle:
+                case ExplicitPush.Lro:
+                case ExplicitPush.Rlo:
                 {
-                    var rtl = push is BidiExplicitPush.Rle or BidiExplicitPush.Rlo;
+                    var rtl = push is ExplicitPush.Rle or ExplicitPush.Rlo;
                     var newLevel = NextLevel(top.Level, rtl);
                     if (newLevel <= MaxDepth && overflowIsolateCount == 0 && overflowEmbeddingCount == 0)
                     {
                         stack.Add(new StackEntry
                         {
                             Level = newLevel,
-                            Override = push == BidiExplicitPush.Rlo ? BidiClass.R : push == BidiExplicitPush.Lro ? BidiClass.L : BidiClass.ON,
+                            Override = push == ExplicitPush.Rlo ? BidiClass.R : push == ExplicitPush.Lro ? BidiClass.L : BidiClass.ON,
                             IsolateInitiator = false
                         });
                     }
@@ -454,9 +455,9 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
                     break;
                 }
 
-                case BidiExplicitPush.Lri:
-                case BidiExplicitPush.Rli:
-                case BidiExplicitPush.Fsi:
+                case ExplicitPush.Lri:
+                case ExplicitPush.Rli:
+                case ExplicitPush.Fsi:
                 {
                     // Unlike a real FSI character (where the matching PDI has to be located by scanning
                     // forward), a synthetic Fsi push (CSS unicode-bidi:plaintext on an inline box) already
@@ -464,8 +465,8 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
                     // flattened content, nothing more - so P2/P3 can run directly over it. Passing
                     // `overrides`/`overrideIndex` makes that scan skip any nested isolate span too
                     // (excluding this override's own entry, so it doesn't just skip its whole self).
-                    var rtl = push == BidiExplicitPush.Rli ||
-                              (push == BidiExplicitPush.Fsi &&
+                    var rtl = push == ExplicitPush.Rli ||
+                              (push == ExplicitPush.Fsi &&
                                ComputeAutoParagraphLevel(originalTypes, o.Start, o.End, overrides, overrideIndex) == 1);
                     var newLevel = NextLevel(top.Level, rtl);
                     if (newLevel <= MaxDepth && overflowIsolateCount == 0 && overflowEmbeddingCount == 0)
@@ -483,7 +484,7 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
         }
 
         private static void PopSyntheticPush(
-            BidiExplicitPush push, List<StackEntry> stack,
+            ExplicitPush push, List<StackEntry> stack,
             ref int overflowIsolateCount, ref int overflowEmbeddingCount, ref int validIsolateCount)
         {
             if (IsIsolateInitiator(push))
@@ -540,7 +541,7 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
 
         private static List<int[]> ComputeIsolatingRunSequences(
             BidiClass[] resolvedTypes, byte[] levels, Dictionary<int, int> matchingPdi, int n,
-            IReadOnlyList<BidiIsolateOverride> overrides)
+            IReadOnlyList<EmbeddingSpan> overrides)
         {
             var sequences = new List<int[]>();
             if (n == 0) return sequences;
@@ -564,7 +565,7 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
             }
 
             // A CSS unicode-bidi: isolate/isolate-override box contributes a synthetic RLI/LRI/FSI-then-PDI
-            // pair (see BidiIsolateOverride) that never occupies an index of its own in the text - unlike a
+            // pair (see EmbeddingSpan) that never occupies an index of its own in the text - unlike a
             // real isolate initiator/PDI, there is no character for resolvedTypes to carry an LRI/RLI/FSI
             // type on, so the lastType-based chaining just below can never see it. Without this, the level
             // run ending right before the box and the one starting right after it are never rejoined into

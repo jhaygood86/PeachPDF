@@ -87,7 +87,7 @@ namespace PeachPDF.Html.Core.Dom
             _logicalUseCategories = useCategories;
         }
 
-        /// <summary>This word's own resolved OpenType script tag (<c>OpenTypeScriptTags</c>), or null
+        /// <summary>This word's own resolved OpenType script tag (<c>OpenTypeTags</c>), or null
         /// when unresolved (a script absent from that curated table, or a word whose script resolved to
         /// a script-neutral value). Unlike <see cref="_logicalJoiningForms"/>, set post-construction by
         /// <c>CssBox.AppendWordsFromText</c>'s own script-boundary word split - the same
@@ -174,7 +174,7 @@ namespace PeachPDF.Html.Core.Dom
         public override string Text => _text;
 
         /// <summary>
-        /// This word's stable, unmirrored text - what <c>PeachDrawing.Text.Internal.Text.Bidi.BidiMirrorResolver.ApplyMirroring</c>
+        /// This word's stable, unmirrored text - what <c>Bidi.Mirror</c>
         /// should always mirror <i>from</i>, regardless of how many times layout has already mirrored
         /// this word via <see cref="ReplaceText"/> (see <see cref="_preMirrorText"/>).
         /// </summary>
@@ -182,7 +182,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Rewrites this word's text in place - used by <c>CssLayoutEngine</c>'s per-line bidi reordering
-        /// step to apply L2 character reversal + L4 mirroring (<c>BidiMirrorResolver.ApplyMirroring</c>)
+        /// step to apply L2 character reversal + L4 mirroring (<c>Bidi.Mirror</c>)
         /// to an RTL word once its final visual position is known. A plain method rather than a settable
         /// <see cref="Text"/> property, since every other <see cref="CssRect"/> subclass's <c>Text</c> is
         /// never meant to be writable at all (the base declares it nullable and get-only for exactly

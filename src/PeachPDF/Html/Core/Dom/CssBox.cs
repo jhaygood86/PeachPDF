@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Unicode;
 using PeachPDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
@@ -1296,7 +1297,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// One resolved Unicode <c>Script</c> value (already run-resolved against surrounding text - see
-        /// <see cref="ScriptRunResolver"/> - never <c>Common</c>/<c>Inherited</c>) per character of
+        /// <see cref="Scripts"/> - never <c>Common</c>/<c>Inherited</c>) per character of
         /// <see cref="Text"/>, set alongside <see cref="BidiLevels"/> by the same
         /// <see cref="CssBidiParagraphResolver.AssignBidiLevels"/> pass (and subject to the same "null
         /// outside any paragraph that pass reached" caveat). Feeds <see cref="ParseToWords"/>'s per-word
@@ -1304,7 +1305,7 @@ namespace PeachPDF.Html.Core.Dom
         /// is deliberately no dedicated script-boundary word split the way there is for a bidi-level
         /// boundary, see <c>AppendWordsFromText</c>'s own remarks) and
         /// <see cref="DerivedStyle.ActualTextShapingFeatures"/>'s per-word GSUB script-tag selection
-        /// (<see cref="OpenTypeScriptTags"/>).
+        /// (<see cref="OpenTypeTags"/>).
         /// </summary>
         internal string[]? CharScripts { get; set; }
 
@@ -1666,7 +1667,7 @@ namespace PeachPDF.Html.Core.Dom
                         // pre-layout stage there's no way to know whether a line break will actually
                         // land at this exact position, so eagerly splitting could only ever show the
                         // hyphen glyph always or never, both wrong. Its position (and, for hyphens:auto
-                        // with a known document language, HyphenationEngine's own suggested positions)
+                        // with a known document language, Hyphenator's own suggested positions)
                         // is instead recorded as a candidate on the whole word and consulted only when
                         // CssLayoutEngine.FlowBox actually needs to break the line - see AddWord.
                         var honorSoftHyphen = Hyphens.Value != PeachPDF.CSS.Hyphens.None;
@@ -1732,7 +1733,7 @@ namespace PeachPDF.Html.Core.Dom
                             // reasonable approximation for the rare mixed-script-with-no-boundary case,
                             // and still strictly better than GsubShaper's prior always-"latn"/"DFLT"
                             // behavior for every other (script-homogeneous) word.
-                            var wordScriptTag = CharScripts is { } wordScripts ? OpenTypeScriptTags.Resolve(wordScripts[startIdx]) : null;
+                            var wordScriptTag = CharScripts is { } wordScripts ? OpenTypeTags.ForScript(wordScripts[startIdx]) : null;
                             var hasSpaceBefore = !preserveSpaces && (startIdx > 0 && Words.Count == 0 && HtmlUtils.IsCollapsibleWhitespace(text[startIdx - 1]));
                             var hasSpaceAfter = !preserveSpaces && (endIdx < text.Length && HtmlUtils.IsCollapsibleWhitespace(text[endIdx]));
                             var rawWord = text.Substring(startIdx, endIdx - startIdx);
@@ -1763,7 +1764,7 @@ namespace PeachPDF.Html.Core.Dom
                                     var language = Language;
                                     if (!string.IsNullOrEmpty(language))
                                     {
-                                        var autoPoints = PeachDrawing.Text.Internal.Text.HyphenationEngine.FindHyphenationPoints(cleanWord, language);
+                                        var autoPoints = Hyphenator.FindBreakPoints(cleanWord, language);
                                         if (autoPoints.Count > 0)
                                             hyphenationCandidates = new List<int>(autoPoints);
                                     }
@@ -2125,7 +2126,7 @@ namespace PeachPDF.Html.Core.Dom
             while (index < text.Length)
             {
                 Rune.DecodeFromUtf16(text.AsSpan(index), out var rune, out var consumed);
-                var faceKey = ActualFontForCodepoint(rune, fontSizeScale, EmojiProperties.ResolveAt(emojiMode, text, index)).FaceKey;
+                var faceKey = ActualFontForCodepoint(rune, fontSizeScale, Emoji.ResolveAt(emojiMode, text, index)).FaceKey;
                 var upright = checkOrientation && IsEffectivelyUpright(rune);
                 var start = index;
                 index += consumed;
@@ -2137,9 +2138,9 @@ namespace PeachPDF.Html.Core.Dom
                     // "owns" it is meaningless, and letting it start a fragment of its own would cut a
                     // word in two around an invisible character (and separate a ZWJ from the sequence it
                     // joins). It stays with the run it is inside - see NeedsPerCodepointFont.
-                    if (!UnicodeDefaultIgnorables.IsDefaultIgnorable(next.Value))
+                    if (!DefaultIgnorables.Contains(next.Value))
                     {
-                        if (ActualFontForCodepoint(next, fontSizeScale, EmojiProperties.ResolveAt(emojiMode, text, index)).FaceKey != faceKey)
+                        if (ActualFontForCodepoint(next, fontSizeScale, Emoji.ResolveAt(emojiMode, text, index)).FaceKey != faceKey)
                             break;
                         if (checkOrientation && IsEffectivelyUpright(next) != upright)
                             break;
@@ -2213,10 +2214,10 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Whether <paramref name="rune"/>'s Unicode <c>Vertical_Orientation</c> is effectively upright -
-        /// delegates to <see cref="VerticalOrientationTable.IsEffectivelyUpright"/>, the single shared
+        /// delegates to <see cref="VerticalOrientation.IsEffectivelyUpright"/>, the single shared
         /// decision the SVG text pipeline (<c>SvgRenderer</c>) also classifies by.
         /// </summary>
-        private static bool IsEffectivelyUpright(Rune rune) => VerticalOrientationTable.IsEffectivelyUpright(rune);
+        private static bool IsEffectivelyUpright(Rune rune) => VerticalOrientation.IsEffectivelyUpright(rune);
 
         /// <summary>
         /// Whether <paramref name="text"/> must be resolved per-codepoint: an <c>@font-face</c>
@@ -2250,7 +2251,7 @@ namespace PeachPDF.Html.Core.Dom
                 // no font in the stack would cover it either, and splitting the run here would strand it
                 // in a fragment of its own under whatever fallback face it landed on. Shaping hides it
                 // instead (OpenTypeDescriptor.DropHiddenIgnorables).
-                if (!UnicodeDefaultIgnorables.IsDefaultIgnorable(rune.Value))
+                if (!DefaultIgnorables.Contains(rune.Value))
                 {
                     if (!font.HasGlyph(rune))
                         return true;
@@ -2258,7 +2259,7 @@ namespace PeachPDF.Html.Core.Dom
                     // A character asked to be drawn in a presentation (font-variant-emoji, or a U+FE0E/U+FE0F
                     // right after it) that the box's own font does not match must be resolved per codepoint,
                     // so a later family - or a system fallback - can supply the matching one.
-                    var presentation = EmojiProperties.ResolveAt(emojiMode, text, index);
+                    var presentation = Emoji.ResolveAt(emojiMode, text, index);
                     if (presentation != EmojiPresentation.NoPreference && !font.MatchesEmojiPresentation(rune, presentation))
                         return true;
                 }
@@ -2301,7 +2302,7 @@ namespace PeachPDF.Html.Core.Dom
                 Rune.DecodeFromUtf16(text, out var rune, out _);
                 // The presentation is re-derived from the word's own first character and the selector
                 // after it, exactly as EmitPerCodepointFragments derived it when it chose the split.
-                return styleSource.ActualFontForCodepoint(rune, word.FontSizeScale, EmojiProperties.ResolveAt(styleSource.ActualFontVariantEmoji.ToEmojiMode(), text, 0));
+                return styleSource.ActualFontForCodepoint(rune, word.FontSizeScale, Emoji.ResolveAt(styleSource.ActualFontVariantEmoji.ToEmojiMode(), text, 0));
             }
 
             return word.ScaledFontKind switch
@@ -7521,7 +7522,7 @@ namespace PeachPDF.Html.Core.Dom
                 // than reverting to unmirrored logical order (issue #553) - BidiLevel is assigned per-word
                 // at ParseToWords time, independent of whether the per-line mirroring pass has run yet.
                 boxWord.FirstLineText = firstLineStyle.TextTransform != TextTransform && boxWord.Text != "\n"
-                    ? PeachDrawing.Text.Internal.Text.Bidi.BidiMirrorResolver.ApplyMirroring(
+                    ? Bidi.Mirror(
                         ApplyTextTransform(boxWord.OriginalText ?? boxWord.Text!, firstLineStyle.TextTransform), boxWord.BidiLevel)
                     : null;
                 // When FirstLineText is null (this box's own TextTransform already matches the

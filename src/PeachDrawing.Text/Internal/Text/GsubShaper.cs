@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -187,7 +188,7 @@ namespace PeachDrawing.Text.Internal.Text
         // font-variant-emoji acts "as if" U+FE0E/U+FE0F followed every participating character, so a font's
         // own cmap format-14 glyph for that sequence has to be reachable without the selector in the text.
         // It selects a glyph here, not a GSUB feature, so it never reaches GetActiveLookupIndices.
-        PeachDrawing.Text.Internal.Text.EmojiMode EmojiMode = PeachDrawing.Text.Internal.Text.EmojiMode.Normal)
+        PeachDrawing.Text.Unicode.EmojiMode EmojiMode = PeachDrawing.Text.Unicode.EmojiMode.Normal)
     {
         // NOT `new()` - for a record struct, a bare `new()` invokes the struct's implicit,
         // zero-initializing parameterless constructor, NOT this primary constructor's own declared

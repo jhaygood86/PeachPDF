@@ -1,6 +1,6 @@
+using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
-using PeachDrawing.Text.Internal.Text.Bidi;
 using System;
 using System.Collections.Frozen;
 
@@ -66,7 +66,7 @@ namespace PeachPDF.Html.Core.Utils
             {
                 foreach (var rune in text.EnumerateRunes())
                 {
-                    var bidiClass = BidiClassTable.Of(rune);
+                    var bidiClass = Bidi.ClassOf(rune);
                     if (bidiClass == BidiClass.L) return Keywords.Ltr;
                     if (bidiClass is BidiClass.R or BidiClass.AL) return Keywords.Rtl;
                 }

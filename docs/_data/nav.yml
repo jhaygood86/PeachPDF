@@ -18,6 +18,8 @@
       url: /declarative-api.html
     - title: Command-line tool
       url: /cli.html
+    - title: PeachDrawing.Text
+      url: /peachdrawing-text.html
     - title: Testing
       url: /testing.html
 - title: Showcase

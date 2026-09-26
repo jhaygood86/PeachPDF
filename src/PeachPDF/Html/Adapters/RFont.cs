@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Html.Adapters.Entities;
 using PeachDrawing.Text.Internal.Text;
 
@@ -200,7 +201,7 @@ namespace PeachPDF.Html.Adapters
         /// <see cref="EmojiPresentation.NoPreference"/>; the default answers true for every request so a
         /// font with no such data never loses a match it could not judge.
         /// </summary>
-        public virtual bool MatchesEmojiPresentation(System.Text.Rune baseCodepoint, PeachDrawing.Text.Internal.Text.EmojiPresentation presentation) => true;
+        public virtual bool MatchesEmojiPresentation(System.Text.Rune baseCodepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation) => true;
 
         // ---- MATH table query surface (mathematical typesetting fonts) ------------------------
         // Lets MathLayoutEngine/MathRenderer read a font's OpenType MATH table (constants, per-glyph

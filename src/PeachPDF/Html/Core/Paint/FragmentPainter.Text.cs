@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -110,7 +111,7 @@ namespace PeachPDF.Html.Core.Paint
                 // unmirrored word's own already-correct (identity) logical text.
                 string? logicalText = null;
                 if (word.FirstLineText is null && word is CssRectWord { } rectWord && rectWord.PreMirrorText != text)
-                    logicalText = PeachDrawing.Text.Internal.Text.Bidi.BidiMirrorResolver.ReverseRunes(rectWord.PreMirrorText);
+                    logicalText = Bidi.Reverse(rectWord.PreMirrorText);
                 DrawWordGlyphs(g, box, word, wordFragment.Rect, text, new RSize(word.Width, word.Height), logicalText: logicalText);
             }
         }
@@ -276,8 +277,8 @@ namespace PeachPDF.Html.Core.Paint
 
         /// <summary>
         /// Paints an upright (unrotated) run within a vertical writing mode - one or more codepoints
-        /// classified <see cref="PeachDrawing.Text.Internal.Text.VerticalOrientationClass.U"/>/
-        /// <see cref="PeachDrawing.Text.Internal.Text.VerticalOrientationClass.Tu"/> (<see cref="CssRect.IsUprightOrientation"/>),
+        /// classified <see cref="PeachDrawing.Text.Unicode.VerticalOrientationClass.U"/>/
+        /// <see cref="PeachDrawing.Text.Unicode.VerticalOrientationClass.Tu"/> (<see cref="CssRect.IsUprightOrientation"/>),
         /// stacked top-to-bottom down <paramref name="rect"/>'s
         /// own physical extent rather than rotated to fill it, since - unlike a rotated run, which is one
         /// natural horizontal glyph run reoriented as a whole (<see cref="SidewaysRotation"/>) - upright

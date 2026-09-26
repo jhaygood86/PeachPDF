@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Utils;
