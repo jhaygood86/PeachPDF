@@ -2385,6 +2385,109 @@ await SaveShowcaseAsync("paged_media_page_floats", "Paged Media", "Page floats",
     "css-page-floats' float: top/bottom/top-bottom/snap/inside/outside: a float: top figure landing flush at the true top of its landing page with flow content starting below the reserved strip, a float: bottom callout landing flush at the true bottom with flow content stopping above it, float: top-bottom falling back to the bottom edge once the top edge has no room left, inside/outside resolving to opposite physical sides depending on whether the landing page is a right-hand (recto) or left-hand (verso) page, and float-reference: column pinning a float to the edge of the column its anchor sits in so only that column gives up room.",
     pageFloatsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── Scroll containers across page breaks ───────────────────────────────────
+// An auto-height overflow: hidden/auto box has nothing to clip on paper, so it breaks between its lines
+// like any block (css-break-3 §2 only permits treating it as monolithic), and so does one capped only by
+// max-height. One with a fixed height stays whole.
+var scrollContainerCodeLines = string.Join("\n", Enumerable.Range(1, 34).Select(i =>
+    $"{i,2}  " + (i % 5) switch
+    {
+        0 => "return total;",
+        1 => "var total = 0;",
+        2 => "foreach (var line in invoice.Lines)",
+        3 => "    total += line.Quantity * line.UnitPrice;",
+        _ => "// apply discounts and taxes per line",
+    }));
+
+var scrollContainersAcrossPagesHtml = $$"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: 105mm 148mm;
+      margin: 12mm 10mm;
+      @bottom-center { content: "Page " counter(page); font-size: 7pt; font-family: Arial; color: #888; }
+    }
+    body { font-family: Arial, sans-serif; font-size: 8.5pt; line-height: 1.35; margin: 0; color: #1f2937; }
+    h1 { font-size: 12pt; margin: 0 0 6pt; }
+    h2 { font-size: 10pt; margin: 10pt 0 4pt; }
+    pre {
+      overflow: auto;
+      background: #f3f4f6;
+      border: 0.75pt solid #9ca3af;
+      padding: 6pt;
+      font-size: 7.5pt;
+      line-height: 1.3;
+      margin: 0;
+    }
+    .panel {
+      overflow: hidden;
+      border: 0.75pt solid #2563eb;
+      background: #eff6ff;
+      padding: 4pt 8pt;
+    }
+    .panel p { margin: 0 0 4pt; }
+    .capped {
+      overflow: auto;
+      height: 170pt;
+      border: 0.75pt solid #b45309;
+      background: #fffbeb;
+      padding: 4pt 8pt;
+    }
+    </style>
+    </head>
+    <body>
+    <h1>Scroll containers across page breaks</h1>
+    <p>A box with <code>overflow: auto</code> or <code>hidden</code> and no height of its own grows with its
+    content, so on paper it has nothing to clip. It breaks between its lines like any other block, as it
+    does when a browser prints it, instead of being sliced with a line lost at every page edge.</p>
+
+    <h2>A code listing with overflow: auto</h2>
+    <pre>{{scrollContainerCodeLines}}</pre>
+
+    <h2>An overflow: hidden panel</h2>
+    <div class="panel">
+    <p>Every paragraph in this panel is drawn whole on one page or the next. The border and background
+    are sliced at the page edge, as box-decoration-break: slice does for any block.</p>
+    <p>Before this change the panel would have been laid out in one piece and cut into page-sized slices,
+    and the line on each cut drawn on neither page.</p>
+    <p>A wrapper holding a float, an inline-block, absolutely positioned boxes or a multi-column, flex or
+    grid layout still stays in one piece, because those parts cannot yet continue on the next page.</p>
+    <p>Add break-inside: avoid to keep a short panel together instead.</p>
+    <p>This is the case the clearfix idiom produces most often: a long, auto-height wrapper whose only job
+    is to establish a new block formatting context, with ordinary paragraphs inside it.</p>
+    <p>Its height grows with its content, so there is nothing it can clip in the block axis, and the page
+    edge simply falls between two of its lines.</p>
+    <p>The last paragraphs continue on the next page, still inside the same blue panel.</p>
+    </div>
+
+    <p>A box whose own height is fixed is different. With a height and no max-height it can scroll or
+    clip what it holds, so CSS Fragmentation lets it be treated as monolithic content, like an image: it
+    is never broken between its lines. Where it would straddle a page boundary, it is carried to the next
+    page whole. The box below starts low enough on its page that it would straddle one. A box capped only
+    by max-height breaks like the panel above, as a browser prints it, as long as its content fits under
+    the cap with room to spare for the space a break leaves at the foot of the page.</p>
+
+    <h2>A fixed-height box stays whole</h2>
+    <div class="capped">
+    <p>This box has overflow: auto and height: 170pt, so it is treated as monolithic: it moves whole
+    to the next page when it does not fit where it starts, rather than breaking.</p>
+    <p>It starts too close to the foot of the page for all of its paragraphs, so the whole box, border
+    and all, has moved to the top of this page instead of leaving its first lines behind.</p>
+    <p>An auto-height box in the same place would have broken between two of these paragraphs.</p>
+    <p>To keep a short auto-height box together as well, give it break-inside: avoid.</p>
+    </div>
+
+    <p>End of document.</p>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("scroll_containers_across_pages", "Paged Media", "Scroll Containers Across Pages",
+    "An auto-height overflow: auto code listing and an overflow: hidden panel breaking cleanly between their lines across page boundaries, and a fixed-height overflow: auto box moving whole to the next page instead.",
+    scrollContainersAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──
 // The classic hand-authored table of contents: leader() fills the gap between a chapter
 // title and its page number with a dotted rule, and target-counter(attr(href), page)

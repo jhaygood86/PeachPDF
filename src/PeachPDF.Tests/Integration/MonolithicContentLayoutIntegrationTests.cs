@@ -21,12 +21,13 @@ namespace PeachPDF.Tests.Integration
         private const double PageHeight = 200;
         private const double Margin = 20;
 
-        // The headline case: a card with overflow: hidden is a scroll container, so it may not be split.
+        // The headline case: a card with overflow: auto and a fixed block size is monolithic, so it may
+        // not be split. The height is the card's own natural height, so it changes nothing else.
         [Fact]
         public async Task StraddlingScrollContainer_MovesWholeToTheNextPage()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
-                StraddleDocument("overflow: hidden"), pageHeight: PageHeight, margin: Margin);
+                StraddleDocument("overflow: auto; height: 60pt"), pageHeight: PageHeight, margin: Margin);
 
             var card = LayoutHarness.FindById(root, "card")!;
 
@@ -53,6 +54,425 @@ namespace PeachPDF.Tests.Integration
             Assert.True(bottom > top, "fixture must straddle a page boundary when nothing forbids it");
         }
 
+        // §2 lets a UA treat a scroll container as monolithic only if its block size can be capped
+        // (a non-auto height, or a max-height). An auto-height one grows with its content, so it has
+        // nothing to clip in the block axis and fragments like any block, as it does in a browser.
+        [Theory]
+        [InlineData("overflow: hidden")]
+        [InlineData("overflow: auto")]
+        [InlineData("overflow: scroll")]
+        public async Task StraddlingAutoHeightScrollContainer_IsSplit(string css)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                StraddleDocument(css), pageHeight: PageHeight, margin: Margin);
+
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            var top = container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+            var bottom = container.PageIndexOf(card.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon);
+
+            Assert.True(bottom > top, "an auto-height scroll container must split like any block");
+            Assert.Equal(140 + Margin, card.Location.Y, 6);
+        }
+
+        // A flex or grid item is not a block in block flow, so its auto-height scroll container stays
+        // monolithic and its line moves whole, rather than being cut with a line lost at the boundary.
+        [Theory]
+        [InlineData("display:flex")]
+        [InlineData("display:grid;grid-template-columns:60pt")]
+        public async Task StraddlingAutoHeightScrollContainerItem_MovesWholeWithItsLine(string containerCss)
+        {
+            var html = LayoutHarness.Wrap(
+                "<div style='height:140pt'>filler</div>" +
+                $"<div style='{containerCss}'>" +
+                "<div id='card' style='overflow:hidden;orphans:1;widows:1;line-height:20pt;font-size:10pt;width:60pt'>" +
+                "Aaa Bbb Ccc Ddd Eee Fff Ggg Hhh</div></div>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            var top = container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+            var bottom = container.PageIndexOf(card.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon);
+
+            Assert.Equal(top, bottom);
+            Assert.Equal(container.PageTopOf(top), card.Location.Y, 6);
+        }
+
+        // An inline-block is not fragmented inside its line either: its content stays whole, rather than
+        // being clipped to nothing when it straddles the boundary.
+        [Fact]
+        public async Task StraddlingAutoHeightScrollContainerInlineBlock_KeepsItsContent()
+        {
+            var html = LayoutHarness.Wrap(
+                "<div style='height:140pt'>filler</div>" +
+                "<div>before <span id='card' style='display:inline-block;overflow:hidden;width:60pt;line-height:20pt;font-size:10pt'>" +
+                "Aaa Bbb Ccc Ddd Eee Fff Ggg Hhh</span> after</div>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var card = LayoutHarness.FindById(root, "card")!;
+            Assert.True(card.ActualBottom - card.Location.Y >= 40, "the inline-block must keep its own content height");
+
+            var placed = container.FragmentTree!.Fragmentainers
+                .SelectMany(page => Flatten(page.Root))
+                .Where(f => f.Box == card || f.Box.ParentBox == card)
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word.Text)
+                .ToList();
+
+            Assert.Contains("Aaa", placed);
+            Assert.Contains("Hhh", placed);
+        }
+
+        // A float is placed at its assigned position, which cannot carry a break into the next
+        // fragmentainer, so an auto-height scroll container float stays monolithic. Letting its content
+        // break silently dropped every line after the boundary. Both placement paths are covered: a float
+        // among inline content, and a parent holding nothing but floats.
+        private const string FloatAmongInlineContent = "<div>before <div id='card' style='float:left;{0}'>{1}</div> after</div>";
+        private const string FloatAlone = "<div><div id='card' style='float:left;{0}'>{1}</div></div>";
+
+        // Kept monolithic, its content lays out unbroken and every line is placed, whether the float fits a
+        // page (5 lines) or not (12). Where one lands on the boundary it is drawn past the band, as on main:
+        // a float's content cannot continue onto the next page at all (the float-pagination gap), which
+        // is also why a plain overflow: visible float in the same place drops every later line.
+        [Theory]
+        [InlineData(FloatAmongInlineContent, 5)]
+        [InlineData(FloatAlone, 5)]
+        [InlineData(FloatAmongInlineContent, 12)]
+        [InlineData(FloatAlone, 12)]
+        public async Task StraddlingAutoHeightScrollContainerFloat_PlacesEveryLine(string shape, int count)
+        {
+            var placed = await FloatLinesPlaced(shape, count);
+
+            Assert.Equal(Enumerable.Range(1, count).Select(i => $"F{i}"), placed.Select(w => w.Word.Text).Distinct());
+        }
+
+        // The same holds one level down: a clearfix block inside an inline-block, a float or a vertical block is laid out
+        // through that ancestor's assigned position, so it stays monolithic too, and keeps every line.
+        [Theory]
+        [InlineData("<div>x <div style='display:inline-block;width:60pt'><div id='card' style='{0}'>{1}</div></div></div>")]
+        [InlineData("<div><div style='float:left;width:60pt'><div id='card' style='{0}'>{1}</div></div></div>")]
+        [InlineData("<div style='writing-mode:vertical-rl;height:150pt'><div id='card' style='writing-mode:horizontal-tb;{0}'>{1}</div></div>")]
+        public async Task AutoHeightScrollContainerInsideAnInlineBlockOrFloat_PlacesEveryLine(string shape)
+        {
+            var placed = await FloatLinesPlaced(shape, count: 5);
+
+            Assert.Equal(Enumerable.Range(1, 5).Select(i => $"F{i}"), placed.Select(w => w.Word.Text).Distinct());
+        }
+
+        // A page float (float: top/bottom/snap) is moved to a page edge whole, so an auto-height scroll
+        // container that is one, or sits inside one, stays monolithic too.
+        [Theory]
+        [InlineData("<div><div id='card' style='float:top;{0}'>{1}</div>after</div>")]
+        [InlineData("<div><div id='card' style='float:bottom;{0}'>{1}</div>after</div>")]
+        [InlineData("<div><div style='float:bottom;width:60pt'><div id='card' style='{0}'>{1}</div></div>after</div>")]
+        public async Task AutoHeightScrollContainerPageFloat_KeepsEveryLineInsideAPageBand(string shape)
+        {
+            var placed = await FloatLinesPlaced(shape, count: 5);
+
+            Assert.Equal(Enumerable.Range(1, 5).Select(i => $"F{i}"), placed.Select(w => w.Word.Text).Distinct());
+            Assert.All(placed, w => Assert.True(w.Rect.Top >= Margin - 0.01 && w.Rect.Bottom <= PageHeight - Margin + 0.01,
+                $"{w.Word.Text} lies outside its page band ({w.Rect.Top:F2}-{w.Rect.Bottom:F2})"));
+        }
+
+        // Whatever ancestor it sits under, a clearfix block straddling a boundary keeps every line: it either
+        // breaks under an ancestor that carries the break on, or stays monolithic under one that doesn't.
+        // The caption and inline-table rows lost F4-F5 when only named placements were excluded.
+        [Theory]
+        [InlineData("<div>x <div style='display:inline-flex'><div style='width:60pt'><div id='card' style='{0}'>{1}</div></div></div></div>")]
+        [InlineData("<div>x <div style='display:inline-grid'><div style='width:60pt'><div id='card' style='{0}'>{1}</div></div></div></div>")]
+        [InlineData("<div>x <table style='display:inline-table'><tr><td><div id='card' style='{0}'>{1}</div></td></tr></table></div>")]
+        [InlineData("<table><caption><div id='card' style='{0}'>{1}</div></caption><tr><td>c</td></tr></table>")]
+        [InlineData("<div style='display:flex'><div style='width:60pt'><div id='card' style='{0}'>{1}</div></div></div>")]
+        [InlineData("<div style='display:grid'><div style='width:60pt'><div id='card' style='{0}'>{1}</div></div></div>")]
+        [InlineData("<table><tr><td><div id='card' style='{0}'>{1}</div></td></tr></table>")]
+        [InlineData("<div style='columns:2'><div id='card' style='{0}'>{1}</div></div>")]
+        [InlineData("<ul><li><div id='card' style='{0}'>{1}</div></li></ul>")]
+        public async Task AutoHeightScrollContainerUnderAnyAncestor_PlacesEveryLine(string shape)
+        {
+            var placed = await FloatLinesPlaced(shape, count: 5);
+            Assert.Equal(Enumerable.Range(1, 5).Select(i => $"F{i}"), placed.Select(w => w.Word.Text).Distinct());
+        }
+
+        private static async Task<List<TextFragment>> FloatLinesPlaced(string shape, int count)
+        {
+            var lines = string.Concat(Enumerable.Range(1, count).Select(i => $"<div>F{i}</div>"));
+            var html = LayoutHarness.Wrap(
+                "<div style='height:95pt'>filler</div>" +
+                string.Format(shape, "overflow:hidden;width:60pt;line-height:20pt;font-size:10pt;orphans:1;widows:1", lines));
+
+            var (_, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            return container.FragmentTree!.Fragmentainers
+                .SelectMany(page => Flatten(page.Root).SelectMany(f => f.Words))
+                .Where(w => w.Word.Text?.StartsWith('F') == true)
+                .ToList();
+        }
+
+        // The case the issue reported: a tall auto-height overflow: hidden wrapper with some top padding.
+        // Sliced as monolithic content, the line straddling each page boundary was drawn only on the page
+        // its top fell on, in the bottom margin where the page clip hid it. Fragmented, every line lies
+        // wholly inside the band of the page that draws it.
+        [Theory]
+        [InlineData("overflow: hidden")]
+        [InlineData("overflow: auto")]
+        public async Task TallAutoHeightScrollContainer_DrawsEveryLineInsideAPageBand(string css)
+        {
+            const int count = 30;
+            var html = LayoutHarness.Wrap(
+                $"<div id='card' style='{css};padding-top:13pt;line-height:1.6;font-size:10.5pt'>" +
+                string.Concat(Enumerable.Range(1, count).Select(i => $"<p style='margin:0'>L{i}</p>")) +
+                "</div>");
+
+            var (_, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var placed = container.FragmentTree!.Fragmentainers
+                .SelectMany(page => Flatten(page.Root).SelectMany(f => f.Words))
+                .Where(w => w.Word.Text?.StartsWith('L') == true)
+                .ToList();
+
+            Assert.Equal(
+                Enumerable.Range(1, count).Select(i => $"L{i}"),
+                placed.Select(w => w.Word.Text).Distinct());
+
+            // Fragment rectangles are page-local, so a page's band is [Margin, PageHeight - Margin).
+            Assert.All(placed, w =>
+            {
+                Assert.True(w.Rect.Top >= Margin - 0.01, $"{w.Word.Text} starts above its page band ({w.Rect.Top:F2})");
+                Assert.True(w.Rect.Bottom <= PageHeight - Margin + 0.01,
+                    $"{w.Word.Text} ends past its page band ({w.Rect.Bottom:F2})");
+            });
+        }
+
+        // A wrapper that fragments has to carry the break through everything inside it, and some content
+        // is laid out by paths that drop it. Each shape here lost every line past the first boundary (the
+        // clearfix float, the .row of floats, the inline-block), the absolutely positioned badge, or the
+        // lines of a scroll container inside a multi-column container, once the wrapper was allowed to break
+        // around it. Kept monolithic, all of it is laid out and placed.
+        private static readonly string ThirtyLines = string.Join("<br>", Enumerable.Range(1, 30).Select(i => $"W{i}"));
+
+        [Theory]
+        [InlineData("<div style='overflow:hidden'><div style='float:left;width:100pt'>{0}</div></div><p>AFTER</p>", 30)]
+        [InlineData("<div style='overflow:hidden'><div style='float:left;width:45%'>{0}</div><div style='float:right;width:45%'>R</div></div>", 30)]
+        [InlineData("<div style='overflow:hidden;position:relative'>{0}<div style='position:absolute;top:5pt;right:0'>W31</div></div>", 31)]
+        public async Task AutoHeightScrollContainerAroundContentThatDropsABreak_PlacesEveryLine(string shape, int count)
+        {
+            var placed = await WordsPlaced(string.Format(shape, ThirtyLines), "W", pageWidth: 300);
+
+            Assert.Equal(Enumerable.Range(1, count).Select(i => $"W{i}"), placed.Order(WordNumber.Instance));
+        }
+
+        // An inline-block's content is laid out at its assigned position in the line, which drops the break
+        // token too: every line of one that reached the end of the page was lost.
+        [Fact]
+        public async Task AutoHeightScrollContainerAroundAnInlineBlock_PlacesEveryLine()
+        {
+            var lines = string.Join("<br>", Enumerable.Range(1, 14).Select(i => $"W{i}"));
+            var placed = await WordsPlaced(
+                "<div style='overflow:hidden'><p>" + string.Join("<br>", Enumerable.Range(1, 10).Select(i => $"P{i}")) +
+                $"</p><div style='display:inline-block;width:45%'><p>{lines}</p></div></div>", "W", pageWidth: 300);
+
+            Assert.Equal(Enumerable.Range(1, 14).Select(i => $"W{i}"), placed.Order(WordNumber.Instance));
+        }
+
+        // A box whose clipped content stays on the page its clip edge is on loses nothing at a break, so it is
+        // not noted and the document is not laid out again for it. Noting every clip doubled the layout time
+        // of a document with an ordinary clipped card.
+        [Fact]
+        public async Task ScrollContainerClippedWithinAPage_IsNotLaidOutAgain()
+        {
+            var (root, container) = await LayoutBody(
+                $"<div id='card' style='overflow:hidden;max-height:30pt'>{Lines("X", 6)}</div><div>{Lines("W", 3)}</div>");
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.DoesNotContain(card, container.ScrollContainersThatClip);
+        }
+
+        // The clip edge is a bottom edge: one exactly on page 1's foot belongs to page 1, and the clipped lines
+        // past it run onto page 2, so the box is noted and kept whole. Taken as a top edge, it was measured
+        // against page 2's foot and missed, and the box stayed breakable among its clipped lines.
+        [Fact]
+        public async Task ScrollContainerClippedExactlyAtThePageFoot_IsNoted()
+        {
+            var (root, container) = await LayoutBody(
+                $"<div>{Lines("C", 10)}</div><div id='card' style='overflow:hidden;max-height:40pt'>{Lines("X", 10)}</div>" +
+                $"<div>{Lines("W", 5)}</div>");
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.Contains(card, container.ScrollContainersThatClip);
+        }
+
+        // A clipping box whose visible part itself crosses the page: its clip edge is past the page's foot, so
+        // asking only whether the clipped lines cross a page missed it. Broken, the lines after the break landed
+        // beyond the cap and were lost; it is noted, kept whole, and every visible line is drawn.
+        [Fact]
+        public async Task ClippingScrollContainerWhoseVisiblePartCrossesThePage_IsNoted()
+        {
+            var (root, container) = await LayoutBody(
+                $"<div>{Lines("C", 2)}</div><div id='card' style='overflow:hidden;max-height:150pt'>{Lines("X", 15)}</div>" +
+                $"<div>{Lines("W", 3)}</div>");
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.Contains(card, container.ScrollContainersThatClip);
+            Assert.Equal(container.SlotStartingAt(card.Location.Y), container.SlotEndingAt(card.ActualBottom));
+        }
+
+        // Which boxes clip is decided per layout. A box that clipped its content and was kept whole may fit
+        // under its cap once widened, and the next layout of the same container lets it break again, as a
+        // fresh layout of the wider box does.
+        [Fact]
+        public async Task ScrollContainerThatStopsClipping_BreaksAgainOnTheNextLayout()
+        {
+            var words = string.Join(" ", Enumerable.Range(1, 16).Select(i => $"Word{i}"));
+            await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap($"<div id='card' style='overflow:hidden;max-height:60pt;width:60pt;line-height:20pt;font-size:10pt'>{words}</div>"),
+                pageHeight: PageHeight, margin: Margin,
+                after: async (root, container, graphics) =>
+                {
+                    var card = LayoutHarness.FindById(root, "card")!;
+                    Assert.Contains(card, container.ScrollContainersThatClip);
+
+                    card.Width = "260pt";
+                    await container.PerformLayout(graphics);
+
+                    Assert.DoesNotContain(card, container.ScrollContainersThatClip);
+                    Assert.False(PeachPDF.Html.Core.Fragmentation.MonolithicContent.IsMonolithic(card));
+                });
+        }
+
+        private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutBody(string body) =>
+            LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><head><style>body{margin:0;font:10pt/12pt Arial} p{margin:0}</style>" +
+                $"</head><body>{body}</body></html>", pageWidth: 300, pageHeight: PageHeight, margin: Margin);
+
+        private static string Lines(string prefix, int count) =>
+            string.Join("<br>", Enumerable.Range(1, count).Select(i => $"{prefix}{i}"));
+
+        private static void AssertEachDrawnOnceInsideABand(List<(int Page, string Text, double Top, double Bottom)> placed, int count)
+        {
+            Assert.Equal(Enumerable.Range(1, count).Select(i => $"W{i}"), placed.Select(w => w.Text).Order(WordNumber.Instance));
+            Assert.All(placed, w => Assert.True(
+                w.Top >= Margin - 0.01 && w.Bottom <= PageHeight - Margin + 0.01,
+                $"{w.Text} lies outside its page band ({w.Top:F2}-{w.Bottom:F2})"));
+        }
+
+        [Fact]
+        public async Task AutoHeightScrollContainerInsideAMultiColumnContainer_PlacesEveryWord()
+        {
+            // Lost on a single page, with no page break at all: the break was taken at a column boundary.
+            var words = string.Join(' ', Enumerable.Range(1, 31).Select(i => $"W{i}"));
+            var tail = string.Join(' ', Enumerable.Range(1, 20).Select(i => $"t{i}"));
+            var placed = await WordsPlaced(
+                "<p style='margin:0 0 4pt'>a1 a2 a3 a4</p><div style='column-count:2;column-gap:10pt'>" +
+                $"<div style='overflow:hidden'><div>{words}</div></div><p style='margin:0 0 4pt'>{tail}</p></div>" +
+                "<p>end</p>", "W", pageWidth: 240, pageHeight: 180, margin: 10);
+
+            Assert.Equal(Enumerable.Range(1, 31).Select(i => $"W{i}"), placed.Order(WordNumber.Instance));
+        }
+
+        // The review's card: an auto-height overflow: hidden card near a page foot now splits instead of
+        // moving whole, and its heading lands on the next page's top with its 13pt ink above its 12pt line.
+        // That line was claimed by the page it left and drawn on no page until the emitter asked the line box's
+        // own top (LineTopFollowsItsWordsTests). Each heading is drawn exactly once.
+        [Fact]
+        public async Task AnOverflowHiddenCardSplitAtAPageFoot_DrawsItsHeadingOnce()
+        {
+            const string greek = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi "
+                                 + "omicron pi rho sigma tau upsilon";
+            string Card(int n) =>
+                "<div style='overflow:hidden;border:1px solid #666;margin:0 0 8pt;padding:4pt'>"
+                + $"<h2 style='font-size:13pt;margin:10pt 0 4pt'>H{n}</h2>"
+                + $"<p style='margin:0 0 6pt'>{greek}</p><p style='margin:0 0 6pt'>second para of card {n}</p></div>";
+
+            var (_, container) = await LayoutBody("<p style='margin:0 0 6pt'>fill0</p>" + Card(1) + Card(2));
+
+            var painted = new List<string>();
+            for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
+            {
+                var recording = new RecordingGraphics(new PeachPDF.Adapters.PdfSharpAdapter());
+                FragmentPaintHarness.PaintPage(container, recording, page);
+                painted.AddRange(VisiblyDrawnStrings(recording.Log).Where(t => t is "H1" or "H2"));
+            }
+
+            Assert.True(container.FragmentTree.Fragmentainers.Count > 1, "the second card must reach the next page");
+            Assert.Equal(["H1", "H2"], painted.Order(StringComparer.Ordinal));
+        }
+
+        // A wrapper inside an absolutely positioned box that straddles a page: a break taken in the wrapper would
+        // end the pass inside the absolute box, and the paragraphs after it, which it does not displace (CSS 2.1
+        // §9.3.1), would go back on the page the break left. Kept monolithic, the wrapper cannot take one.
+        [Fact]
+        public async Task AutoHeightScrollContainerInsideAnAbsoluteBox_LosesNothingAfterIt()
+        {
+            var lines = string.Join("<br>", Enumerable.Range(1, 20).Select(i => $"X{i}"));
+            var placed = await WordsPlaced(
+                "<p>P1</p><p>P2</p>" +
+                $"<div style='position:absolute;top:100pt;right:0;width:80pt'><div style='overflow:hidden'>{lines}</div></div>" +
+                string.Concat(Enumerable.Range(1, 20).Select(i => $"<p>W{i}</p>")), "W", pageWidth: 300);
+
+            Assert.Equal(Enumerable.Range(1, 20).Select(i => $"W{i}"), placed.Order(WordNumber.Instance));
+        }
+
+        private static async Task<List<string>> WordsPlaced(
+            string body, string prefix, double pageWidth = 595, double pageHeight = PageHeight, double margin = Margin)
+        {
+            var html = "<!DOCTYPE html><html><head><style>body{margin:0;font:10pt/12pt Arial} p{margin:0}</style>" +
+                       $"</head><body>{body}</body></html>";
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                html, pageWidth: pageWidth, pageHeight: pageHeight, margin: margin);
+
+            // Painted, not merely present in the fragment tree: a fragmented scroll container in a column
+            // kept every word in its fragments but clipped the first column's to nothing at paint time.
+            var painted = new List<string>();
+            for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
+            {
+                var recording = new RecordingGraphics(new PeachPDF.Adapters.PdfSharpAdapter());
+                FragmentPaintHarness.PaintPage(container, recording, page);
+                painted.AddRange(VisiblyDrawnStrings(recording.Log));
+            }
+
+            return painted
+                .Where(t => t.StartsWith(prefix, StringComparison.Ordinal) && t.Length > prefix.Length
+                            && char.IsDigit(t[prefix.Length]))
+                .Distinct()
+                .ToList();
+        }
+
+        // Every string drawn with some part of it inside all the rectangle clips in force when it was drawn.
+        // A path clip is popped like a rectangle one, so it holds a place on the stack but tests nothing.
+        private static IEnumerable<string> VisiblyDrawnStrings(IEnumerable<PaintOp> log)
+        {
+            var clips = new Stack<PeachPDF.Html.Adapters.Entities.RRect?>();
+            foreach (var op in log)
+            {
+                switch (op.Kind)
+                {
+                    case PaintOpKind.PushClip:
+                        clips.Push(op.Bounds);
+                        break;
+                    case PaintOpKind.PushClipPath:
+                        clips.Push(null);
+                        break;
+                    case PaintOpKind.PopClip when clips.Count > 0:
+                        clips.Pop();
+                        break;
+                    case PaintOpKind.DrawString when op.Text is { } text
+                                                    && clips.All(c => c is not { } clip || clip.IntersectsWith(op.Bounds)):
+                        yield return text;
+                        break;
+                }
+            }
+        }
+
+        private sealed class WordNumber : IComparer<string>
+        {
+            public static readonly WordNumber Instance = new();
+
+            public int Compare(string? x, string? y) =>
+                int.Parse(x.AsSpan(1)).CompareTo(int.Parse(y.AsSpan(1)));
+        }
+
         // The two arms share a mover, so they must agree exactly however the box came to straddle -
         // including where it was already split by a *word-level* break before the epilogue ran, which
         // the headline test's own fixture hides. 140pt of filler is the one alignment in this range
@@ -70,7 +490,7 @@ namespace PeachPDF.Tests.Integration
         public async Task RelocatedBox_MatchesWhatBreakInsideAvoidAlreadyDoes(double fillerHeight)
         {
             var (monolithic, _) = await LayoutHarness.LayoutAsync(
-                GapDocument(fillerHeight, "overflow:hidden"), pageHeight: PageHeight, margin: Margin);
+                GapDocument(fillerHeight, "overflow:auto;height:60pt"), pageHeight: PageHeight, margin: Margin);
             var (avoid, _) = await LayoutHarness.LayoutAsync(
                 GapDocument(fillerHeight, "break-inside:avoid"), pageHeight: PageHeight, margin: Margin);
 
@@ -98,19 +518,97 @@ namespace PeachPDF.Tests.Integration
                 $"<div id='card' style='{cardCss};orphans:1;widows:1;line-height:20pt;font-size:10pt;width:60pt'>" +
                 "Aaa Bbb Ccc Ddd Eee Fff Ggg Hhh</div>");
 
+        // Every overflow value, on the same card as the headline test, with its own natural height fixed: a
+        // fixed height and no max-height is the case §2 names for hidden, and allows for auto and scroll.
         [Theory]
-        [InlineData("overflow: scroll")]
-        [InlineData("overflow: auto")]
+        [InlineData("overflow: scroll; height: 60pt")]
+        [InlineData("overflow: auto; height: 60pt")]
+        [InlineData("overflow: hidden; height: 60pt")]
         public async Task EveryScrollContainerValue_MovesWhole(string css)
+        {
+            Assert.False(await CardStaysOnOnePage("height: 60pt"), "the card must straddle without overflow");
+            Assert.True(await CardStaysOnOnePage(css));
+        }
+
+        // Capped by max-height alone, with content that fits under the cap, a scroll container breaks like a
+        // plain block for every overflow value, as Chrome prints it. §2 names only a fixed height with no
+        // max-height for hidden, and makes auto and scroll optional. An overflow: hidden box capped by an
+        // aspect-ratio breaks too.
+        [Theory]
+        [InlineData("overflow: scroll; max-height: 1000pt")]
+        [InlineData("overflow: auto; max-height: 1000pt")]
+        [InlineData("overflow: hidden; max-height: 1000pt")]
+        [InlineData("overflow: hidden; height: 1000pt; max-height: 1000pt")]
+        [InlineData("overflow: hidden; aspect-ratio: 1")]
+        public async Task ScrollContainerWithoutAFixedHeight_Breaks(string css)
+        {
+            Assert.False(await CardStaysOnOnePage(css));
+        }
+
+        // A scroll container that may break but whose content overflows its max-height is kept whole:
+        // its clipped lines lie past its end, and a break among them lost the content after the box. Layout
+        // notices the clip and lays the document out again with the box monolithic.
+        [Theory]
+        [InlineData("hidden", 10, 96)]
+        [InlineData("hidden", 2, 60)]
+        [InlineData("auto", 10, 96)]
+        public async Task ScrollContainerWhoseContentOverflowsItsMaxHeight_StaysWhole_AndLosesNothingAfterIt(string overflow, int lines, int cap)
+        {
+            var (root, container) = await LayoutBody(
+                $"<div>{Lines("C", lines)}</div><div id='card' style='overflow:{overflow};max-height:{cap}pt'>{Lines("X", 30)}</div>" +
+                $"<div>{Lines("W", 10)}</div>");
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.Equal(container.SlotStartingAt(card.Location.Y), container.SlotEndingAt(card.ActualBottom));
+            Assert.Contains(card, container.ScrollContainersThatClip);
+
+            var placed = container.FragmentTree!.Fragmentainers
+                .SelectMany((page, index) => Flatten(page.Root).SelectMany(f => f.Words)
+                    .Select(w => (index, w.Word.Text ?? "", w.Rect.Top, w.Rect.Bottom)))
+                .Where(w => w.Item2.Length > 1 && w.Item2[0] == 'W' && char.IsDigit(w.Item2[1]))
+                .ToList();
+            AssertEachDrawnOnceInsideABand(placed, 10);
+        }
+
+        // The cap is measured from the box's top in document space, so the space a break leaves unused at the
+        // page's foot counts against it. Here three of the eight 12pt lines fit above the boundary and the
+        // fourth moves to the next page, leaving 4pt: 96pt of content needs a 100pt cap to break, and with a
+        // 98pt one the last line is clipped, so the box is kept whole.
+        [Theory]
+        [InlineData(98, true)]
+        [InlineData(100, false)]
+        public async Task StraddlingScrollContainerCappedByMaxHeight_BreaksOnlyWithRoomForTheSpaceLeftAtThePageFoot(int cap, bool keptWhole)
+        {
+            var (root, container) = await LayoutBody(
+                $"<div>{Lines("C", 10)}</div><div id='card' style='overflow:hidden;max-height:{cap}pt'>{Lines("X", 8)}</div>" +
+                $"<div>{Lines("W", 5)}</div>");
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.Equal(keptWhole, container.ScrollContainersThatClip.Contains(card));
+            Assert.Equal(keptWhole, container.SlotStartingAt(card.Location.Y) == container.SlotEndingAt(card.ActualBottom));
+        }
+
+        // A block size fixed some other way than by max-height caps the box too. These do change the card's
+        // size, so the control checks that the resized card still straddles once it is not a scroll
+        // container: what moves it whole is the rule, not the new size.
+        [Theory]
+        [InlineData("height: 60pt")]
+        [InlineData("aspect-ratio: 1")]
+        public async Task ScrollContainerWithAFixedBlockSize_MovesWhole(string sizeCss)
+        {
+            Assert.False(await CardStaysOnOnePage(sizeCss), "the resized card must straddle without overflow");
+            Assert.True(await CardStaysOnOnePage($"overflow: auto; {sizeCss}"));
+        }
+
+        private static async Task<bool> CardStaysOnOnePage(string css)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
                 StraddleDocument(css), pageHeight: PageHeight, margin: Margin);
 
             var card = LayoutHarness.FindById(root, "card")!;
 
-            Assert.Equal(
-                container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
-                container.PageIndexOf(card.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon));
+            return container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon)
+                   == container.PageIndexOf(card.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon);
         }
 
         // §2 would have content that fits in no fragmentainer overflow rather than be sliced. Overflowing
@@ -280,7 +778,8 @@ namespace PeachPDF.Tests.Integration
         // ── the fact on the fragment ──────────────────────────────────────────
 
         [Theory]
-        [InlineData("<div id='t' style='overflow:hidden'>text</div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden;height:20pt'>text</div>", true)]
+        [InlineData("<div id='t' style='overflow:hidden'>text</div>", false)]
         [InlineData("<img id='t' src='" + RasterPngFixture.OnePixelDataUri + "' style='width:10pt;height:10pt'>", true)]
         [InlineData("<div id='t'>text</div>", false)]
         [InlineData("<div id='t' style='display:flex'><span>text</span></div>", false)]
@@ -321,7 +820,7 @@ namespace PeachPDF.Tests.Integration
         {
             const int linesEachSide = 10;
             var html = LayoutHarness.Wrap(
-                "<div id='card' style='overflow:hidden;margin:0;line-height:22pt;font-size:10pt'>" +
+                "<div id='card' style='overflow:auto;height:462pt;margin:0;line-height:22pt;font-size:10pt'>" +
                 string.Join("<br>", Enumerable.Range(0, linesEachSide).Select(i => $"Before{i}")) +
                 "<p id='afterBreak' style='break-before:page;margin:0'>After</p>" +
                 string.Join("<br>", Enumerable.Range(0, linesEachSide).Select(i => $"After{i}")) +
@@ -377,7 +876,7 @@ namespace PeachPDF.Tests.Integration
         public async Task ScrollContainerEstablishingColumnsButHoldingOnlyInlineContent_IsStillSuppressed()
         {
             var html = LayoutHarness.Wrap(
-                "<div id='card' style='overflow:hidden;columns:2;margin:0;line-height:22pt;font-size:10pt'>" +
+                "<div id='card' style='overflow:auto;height:660pt;columns:2;margin:0;line-height:22pt;font-size:10pt'>" +
                 string.Join("<br>", Enumerable.Range(0, 30).Select(i => $"Line{i}")) +
                 "</div>");
 
