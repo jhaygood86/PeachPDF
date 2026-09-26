@@ -668,12 +668,36 @@ namespace PeachPDF.Html.Core.Utils
             {
                 if (child.ParentBox is null || child.DerivedStyle.ActualDisplay == Keywords.None) continue;
 
-                return GetPreviousSibling(child) ?? child.ParentBox;
+                return PreviousSiblingInDocumentOrder(child) ?? child.ParentBox;
             }
 
             var parent = box.ParentBox;
             while (parent is { IsDisplayContentsShell: true }) parent = parent.ParentBox;
             return parent ?? box;
+        }
+
+        /// <summary>
+        /// The sibling just before <paramref name="box"/> in document order that generates a box, whatever its
+        /// positioning: counters follow the document tree (CSS Lists 3 §4), so an absolutely positioned, fixed
+        /// or floated sibling's <c>counter-increment</c> is in effect after it all the same.
+        /// </summary>
+        /// <remarks>
+        /// Not <see cref="GetPreviousSibling"/>, which answers a layout question (which box places this one)
+        /// and so steps over every out-of-flow box.
+        /// </remarks>
+        private static CssBox? PreviousSiblingInDocumentOrder(CssBox box)
+        {
+            var siblings = box.ParentBox!.Boxes;
+            for (var i = siblings.IndexOf(box) - 1; i >= 0; i--)
+            {
+                var sibling = siblings[i];
+                if (sibling.DerivedStyle.ActualDisplay == Keywords.None || CssBox.IsOutsideMarker(sibling)
+                    || sibling.IsTableGridDecorationBox) continue;
+
+                return sibling;
+            }
+
+            return null;
         }
 
         private static CssBox? FirstLaidOut(IReadOnlyList<CssBox> children)

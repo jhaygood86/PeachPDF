@@ -13,10 +13,12 @@ the absolute box. An absolutely positioned box's own content is laid out in one 
 page used to break between its lines, and every in-flow box after it in the same block was lost (drawn on
 no page) when it was not its block's first child. It now runs on across pages with each page showing its
 slice, and the content after it is kept. A box that is or holds a multi-column container still breaks
-between its column lines as before, and as its parent's first child it still pushes the content after it
-below itself. A line of the box that straddles a page boundary is cut, part on
-each page, and an image, `break-inside: avoid` block or table inside it is sliced rather than moved or
-broken between rows.
+between its column lines as before. When one comes before in-flow content with only out-of-flow siblings
+between, and the parent's first child is absolutely positioned (the multi-column box or a plain one), the
+content still goes below that first child, as before. A line of the box that straddles a page boundary is
+cut, part on each page. An image, `break-inside: avoid` block or table inside it is sliced rather than
+moved or broken between rows, and a forced break inside it (`break-before: page` and the like) is no
+longer taken.
 
 **Why:** CSS 2.1 §9.3.1: an absolutely positioned box is removed from normal flow and has no effect on
 the layout of later siblings. CSS Fragmentation 3 §4.4: content must not be lost. Tracked as #1349.
