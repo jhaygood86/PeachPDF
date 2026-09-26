@@ -15,8 +15,8 @@ With top padding, its text is aligned against its padded rectangle instead of it
 | `middle` | halfway (y=35) |
 | `bottom`, `baseline` | correct |
 
-The words then sit above their own line's `FlowTop`, which `FragmentEmitter.ClaimsLine` guards against by
-falling back to the ink's page (see
+The words then sit above their own line's `FlowTop`. `FragmentEmitter.ClaimsLine` handles that by claiming
+such a line for the page holding most of its ink, instead of the page its line top is on (see
 [the fix](../recent-fixes/2026-09-26-a-line-is-claimed-by-the-page-its-line-box-is-on.md)).
 
 Not fixed with it, because the fix was measured to lose content.

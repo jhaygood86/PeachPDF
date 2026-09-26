@@ -75,12 +75,21 @@ words with `padding: 30pt`, 54 with `12pt`, where `main` and Chrome draw all 59.
   boundary they happened to sit on. Lines of a tall inline-block, which is laid out in one piece and sliced,
   then straddled slice boundaries and were lost (#1328's shape): 53 and 54 of 59 through the CLI, a new
   loss. So it is left to its own change, together with that slicing.
-- **The fix here** is the review's second option. `ClaimsLine` trusts the line top only while the ink reaches
-  the page it names, and otherwise falls back to the ink's page, so no line can be rejected by both pages.
-  - Through the CLI, `main`, the first commit and this one draw 59/59, 48/59 and 59/59 at 30pt padding.
-  - A 1728-document sweep (four `vertical-align` values × eight paddings × three top borders × 18 page
-    heights) draws every word exactly once.
-  - `APaddedTopAlignedInlineBlockAcrossAPageFoot_DrawsEveryWordOnce` fails without it.
+- **The fix here** is the review's second option, in its second form. `ClaimsLine` takes the line's page from
+  its line top unless most of its ink lies above that page, and then from the ink's top.
+  - **The first form measured the wrong thing.** It fell back only when none of the ink reached the line top's
+    page. That was 1e-6 short of the real question, and the review's re-check found it: at 171.5pt the ink
+    overshot into the next page by 0.25pt, so the fallback did not fire. The next page claimed the line and
+    drew it almost wholly above its band, clipped away (56 of 59 words; 53 at 123.5pt, 56 at 183.5pt).
+  - **Why the in-process check missed it.** The 1728-document sweep for the first form used 3.5pt page-height
+    steps and counted a word as drawn wherever it was painted. The clipped words were painted, just outside
+    their band.
+  - **Evidence for the majority rule:**
+    - `APaddedTopAlignedInlineBlock_AtEveryPageHeight_DrawsEveryWordOnceInsideItsBand` sweeps 110–220pt in
+      0.5pt steps through `PdfGeneratorLayoutHarness`. It requires each word to be drawn once with at least half
+      its height inside the band clip of the page that draws it. It fails on the first form and passes now.
+    - Through the CLI, the review's rows (123.5pt, 171.5pt and 183.5pt) draw 59/59, as `main` does.
+    - The heading keeps its line-top page: its ink rises 1.5pt, and most of it is on the new page.
 - **Retract.** `UndoingACellsAlignment_TakesItsOwnLineTopBack` covers `OffsetCellContent` with a negative
   distance, which the suite missed (a mutant skipping the shift for distances of 0 or less survived).
 
