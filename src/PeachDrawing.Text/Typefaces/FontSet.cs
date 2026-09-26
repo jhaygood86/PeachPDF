@@ -13,13 +13,16 @@ namespace PeachDrawing.Text
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A set starts out able to see the installed fonts, and a font added to it shadows an installed family of the
-    /// same name for this set only. Two sets never share the fonts added to them, so two callers can register
-    /// different data under the same family name without one seeing the other's.
+    /// A set starts out able to see the installed fonts. A font added under the name of an installed family joins that
+    /// family for this set only: it takes the place of the face with the same weight, slant, width and code point
+    /// ranges, and the family's other faces stay. Two sets never share the fonts added to them, so two callers can
+    /// register different data under the same family name without one seeing the other's.
     /// </para>
     /// <para>
-    /// Any number of threads may match and look up families at once. Adding fonts is not safe to run at the same
-    /// time as anything else on the same set.
+    /// A set is not safe for concurrent use: matching and searching fill caches that are private to it, so give each
+    /// thread its own set or serialize the calls. What the machine has installed is scanned once per process and is safe
+    /// to share. Adding a font clears what the set has cached, so a match made before a font was added never stands in
+    /// for one made after.
     /// </para>
     /// </remarks>
     public sealed class FontSet
@@ -53,31 +56,29 @@ namespace PeachDrawing.Text
         /// <param name="options">What to say about the font in place of what it says about itself, or <see langword="null"/> for nothing.</param>
         /// <returns>
         /// The family the font was added to: the one named in <paramref name="options"/>, or otherwise the family the font
-        /// declares, spelled as the font reader normalises it (in lower case).
+        /// declares. It is spelled as the set spells that family, which is the spelling it was first registered under
+        /// when the set already had one of that name.
         /// </returns>
         /// <exception cref="TypefaceFormatException">The data is not a font this library can read.</exception>
         public TypefaceFamily AddData(ReadOnlyMemory<byte> data, AddOptions? options = null)
         {
-            byte[] fontBytes;
-            string declaredFamily;
-
             try
             {
-                fontBytes = FontFormatConverter.ToOpenType(data.ToArray());
-                using var probe = new MemoryStream(fontBytes);
-                declaredFamily = TtfFontDescription.LoadDescription(probe).FontFamilyInvariantCulture;
+                byte[] fontBytes = FontFormatConverter.ToOpenType(data.ToArray());
+
+                using var stream = new MemoryStream(fontBytes);
+                var familyName = options?.FamilyName ?? TtfFontDescription.LoadDescription(stream).FontFamilyInvariantCulture;
+
+                stream.Seek(0, SeekOrigin.Begin);
+                Resolver.AddFont(stream, familyName, options?.Weight, options?.IsItalic, options?.Width, options?.UnicodeRanges);
+
+                Resolver.TryGetFamilyName(familyName, out var registered);
+                return new TypefaceFamily(this, registered);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 throw new TypefaceFormatException("The data is not a font this library can read.", ex);
             }
-
-            var familyName = options?.FamilyName ?? declaredFamily;
-
-            using var stream = new MemoryStream(fontBytes);
-            Resolver.AddFont(stream, familyName, options?.Weight, options?.IsItalic, options?.Width, options?.UnicodeRanges);
-
-            return new TypefaceFamily(this, familyName);
         }
 
         /// <summary>Adds a font that is read from a stream, which is read to its end and left open.</summary>
@@ -202,9 +203,12 @@ namespace PeachDrawing.Text
         /// the full name of a face rather than the name of its family.
         /// </remarks>
         /// <param name="fontName">The name of the font.</param>
-        /// <param name="data">The bytes of the font, as a standalone font file.</param>
+        /// <param name="data">
+        /// The bytes of the font, as a standalone font file. They are the set's own, shared with every reader of that
+        /// font, and are handed out read-only.
+        /// </param>
         /// <returns><see langword="false"/> when the set has no font of that name.</returns>
-        public bool TryGetFontData(string fontName, out byte[] data)
+        public bool TryGetFontData(string fontName, out ReadOnlyMemory<byte> data)
         {
             ArgumentNullException.ThrowIfNull(fontName);
 
@@ -214,7 +218,7 @@ namespace PeachDrawing.Text
                 return true;
             }
 
-            data = [];
+            data = ReadOnlyMemory<byte>.Empty;
             return false;
         }
 

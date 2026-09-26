@@ -29,8 +29,9 @@ dotnet add package PeachDrawing.Text
 ## Fonts: `FontSet`, families and matching
 
 A `FontSet` is the fonts a piece of text can be set in: the fonts installed on the machine, plus the ones you add to it.
-A font you add shadows an installed family of the same name for that set only, and two sets never see each other's
-fonts, so two callers can register different data under one family name.
+A font you add under the name of an installed family joins that family for that set only, taking the place of the face
+with the same weight, slant, width and code point ranges. Two sets never see each other's fonts, so two callers can
+register different data under one family name. A set is not safe for concurrent use: give each thread its own.
 
 ```csharp
 using PeachDrawing.Text;

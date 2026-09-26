@@ -10,7 +10,7 @@ PeachDrawing.Text.FontSet : sealed class
   method Boolean HasExplicitRanges(String familyName)
   method Boolean TryFindCoveringFamily(Rune rune, EmojiPresentation presentation, out TypefaceFamily family)
   method Boolean TryFindFamily(String name, out TypefaceFamily family)
-  method Boolean TryGetFontData(String fontName, out Byte[] data)
+  method Boolean TryGetFontData(String fontName, out ReadOnlyMemory<Byte> data)
   method String ResolveGeneric(GenericFamily generic, Func<String, Boolean> isAvailable = null)
   method TypefaceFamily AddData(ReadOnlyMemory<Byte> data, AddOptions options = null)
   method TypefaceFamily AddFile(String path, AddOptions options = null)

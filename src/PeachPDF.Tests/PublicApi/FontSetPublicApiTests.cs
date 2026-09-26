@@ -25,7 +25,7 @@ namespace PeachPDF.Tests.PublicApi
         {
             var (set, family) = SetWith(BundledFonts.Ttf);
 
-            Assert.Equal("Source Sans 3", family.Name, ignoreCase: true);
+            Assert.Equal("Source Sans 3", family.Name);
             Assert.True(set.TryFindFamily("SOURCE SANS 3", out var found));
             Assert.Equal(family.Name, found.Name);
         }
@@ -93,6 +93,65 @@ namespace PeachPDF.Tests.PublicApi
             Assert.Throws<ArgumentNullException>(() => set.HasExplicitRanges(null!));
             Assert.Throws<ArgumentNullException>(() => set.MatchOrFallback(null!, new TypefaceQuery()));
             Assert.Throws<ArgumentNullException>(() => set.TryGetFontData(null!, out _));
+        }
+
+        [Fact]
+        public void AddData_ToAFamilyTheSetAlreadyHas_ReturnsTheSpellingItWasFirstRegisteredUnder()
+        {
+            var set = new FontSet();
+            var first = set.AddFile(BundledFonts.Ttf, new AddOptions { FamilyName = "Brand Family" });
+
+            var second = set.AddFile(BundledFonts.Otf, new AddOptions { FamilyName = "BRAND FAMILY", Weight = 700 });
+
+            Assert.Equal("Brand Family", first.Name);
+            Assert.Equal("Brand Family", second.Name);
+            Assert.True(set.TryFindFamily("brand family", out var found));
+            Assert.Equal("Brand Family", found.Name);
+        }
+
+        [Fact]
+        public void AddData_AfterAMatchWasMade_ChangesWhatALaterMatchFinds()
+        {
+            var name = UniqueName("Grows");
+            var set = new FontSet();
+            var family = set.AddFile(BundledFonts.Ttf, new AddOptions { FamilyName = name });
+
+            Assert.True(family.TryMatch(new TypefaceQuery(TypefaceQuery.BoldWeight), out var before));
+            Assert.Equal(SyntheticStyle.Bold, before.Synthesis);
+
+            set.AddFile(BundledFonts.Otf, new AddOptions { FamilyName = name, Weight = 700 });
+
+            Assert.True(family.TryMatch(new TypefaceQuery(TypefaceQuery.BoldWeight), out var after));
+            Assert.Equal(SyntheticStyle.None, after.Synthesis);
+            Assert.Equal("Source Code Pro", after.Typeface.FamilyName);
+        }
+
+        [Fact]
+        public void AddData_AfterACoveringSearchFoundNothing_LetsALaterSearchFindTheNewFont()
+        {
+            var set = new FontSet();
+            var rune = new Rune(0x10FF10);
+
+            Assert.False(set.TryFindCoveringFamily(rune, EmojiPresentation.NoPreference, out _));
+
+            var name = UniqueName("Late");
+            set.AddFile(BundledFonts.Ttf, new AddOptions
+            {
+                FamilyName = name,
+                UnicodeRanges = [new RuneInterval(new Rune(0x10FF00), new Rune(0x10FFF0))]
+            });
+
+            Assert.True(set.TryFindCoveringFamily(rune, EmojiPresentation.NoPreference, out var family));
+            Assert.Equal(name, family.Name);
+        }
+
+        [Fact]
+        public void Add_WithDataInACollectionThatIsCorrupt_ThrowsTypefaceFormatException()
+        {
+            var bytes = new byte[64];
+            Encoding.ASCII.GetBytes("ttcf").CopyTo(bytes, 0);
+
+            Assert.Throws<TypefaceFormatException>(() => new FontSet().AddData(bytes));
         }
 
         [Fact]
@@ -222,9 +281,9 @@ namespace PeachPDF.Tests.PublicApi
             var ownName = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontNameInvariantCulture;
 
             Assert.True(set.TryGetFontData(ownName, out var data));
-            Assert.NotEmpty(data);
+            Assert.False(data.IsEmpty);
             Assert.False(set.TryGetFontData(UniqueName("NoSuchFont"), out var none));
-            Assert.Empty(none);
+            Assert.True(none.IsEmpty);
         }
 
         [Fact]

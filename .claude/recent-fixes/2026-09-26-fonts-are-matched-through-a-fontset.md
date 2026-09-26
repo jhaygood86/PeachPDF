@@ -15,7 +15,13 @@ wraps it (`Typeface.Face` is that bridge, for the PDF writer, until export and m
   came back" passed with weight 0 by luck, since a lone face is the nearest one; the defaults test caught it.
 - **A custom family's name keeps the spelling it was registered under.** `FontFamilyModel.Name` used to be the lowercased
   lookup key for a custom family, which is invisible inside the resolver and wrong for `TypefaceFamily.Name`. A family
-  added with no name is still lowercase, because that is what the font reader's invariant-culture name is.
+  added with no name takes the spelling in the font's own name table. (A wrong belief that the reader lowercases it was
+  written down and then disproved by reading the fixture's `name` records; the lowercase seen in a failing test was this
+  key.)
+- **Adding a font clears what the resolver cached.** The per-instance typeface cache, the resolver-info cache and the
+  covering-family cache were decided without the new face, so a match made before `AddData` kept answering after it (a
+  bold request kept its synthetic bold once a real bold was added; a character nothing covered stayed uncovered). The
+  HTML pipeline registers its fonts before layout, so it never saw this; a public caller adding fonts late does.
 - **The last-resort family search must not be tested against private-use code points.** An installed font (Gabriola on
   Windows) covers U+E001, so a test that expected its own font to win failed on that machine. Use a range nothing
   installed covers (U+10FF00 to U+10FFF0) and a code point nothing covers (U+10FFFF).

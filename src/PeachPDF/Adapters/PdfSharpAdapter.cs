@@ -194,9 +194,14 @@ namespace PeachPDF.Adapters
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
 
+            AddFont(memoryStream.ToArray(), fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+        }
+
+        private void AddFont(ReadOnlyMemory<byte> data, string? fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride, IReadOnlyList<RuneInterval>? unicodeRanges)
+        {
             // The font set recognises WOFF/WOFF2/TrueType/OpenType by content and reads the family name from the
             // file when the caller gave none.
-            var family = _fontSet.AddData(memoryStream.ToArray(), new AddOptions
+            var family = _fontSet.AddData(data, new AddOptions
             {
                 FamilyName = fontFamilyName,
                 Weight = weightOverride,
@@ -438,14 +443,13 @@ namespace PeachPDF.Adapters
             return false;
         }
 
-        protected override async Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
-            if (!_fontSet.TryGetFontData(localFontFaceName, out var bytes)) return false;
+            if (!_fontSet.TryGetFontData(localFontFaceName, out var data)) return Task.FromResult(false);
 
-            var stream = new MemoryStream(bytes);
-            await AddFont(stream, fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+            AddFont(data, fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
 
-            return true;
+            return Task.FromResult(true);
         }
     }
 }
