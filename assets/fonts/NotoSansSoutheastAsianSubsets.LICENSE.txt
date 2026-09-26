@@ -1,0 +1,15 @@
+NotoSansThaiSubset.ttf and NotoSansLaoSubset.ttf are subsets of the "Noto Sans Thai" and "Noto Sans Lao" fonts:
+
+  Noto Sans Thai  Copyright 2022 The Noto Project Authors (https://github.com/notofonts/thai)
+  Noto Sans Lao   Copyright 2022 The Noto Project Authors (https://github.com/notofonts/lao)
+
+licensed under the SIL Open Font License, Version 1.1 (OFL-1.1). Each was instantiated to a single static (Regular weight, normal width)
+instance from the upstream variable font and cut down to the characters of the paragraphs of the dictionary line breaking showcase and a
+few punctuation marks, digits, space and the basic Latin alphabet, with every GSUB/GPOS layout feature kept intact; the glyph outlines
+themselves are unmodified (generate_southeast_asian_subsets.py, in this directory, makes them).
+
+They are bundled solely as showcase assets, so that the dictionary line breaking of Thai and Lao is shown with real, readable text.
+Nothing here ships in the PeachPDF library or its NuGet packages.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Sources: https://fonts.google.com/noto/specimen/Noto+Sans+Thai and https://fonts.google.com/noto/specimen/Noto+Sans+Lao

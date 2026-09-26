@@ -6,7 +6,8 @@ has to be the only thing that differs between two runs.
 Every character it covers is one em wide (a space is half an em), whatever it is, so a test can size a line in whole ems and
 say exactly which characters fit on it, and the CJK punctuation the CSS `line-break` tailorings are about (the wave dash, the
 katakana double hyphen, the middle dot, the fullwidth exclamation mark, the fullwidth percent and yen signs, the ellipsis ...)
-sits in the same face as the kana and the Latin letters around it, so no character falls back to a system font (which would
+sits in the same face as the kana and the Latin letters around it, and so do the assigned characters of the Thai, Lao, Khmer and Burmese
+blocks (the scripts whose lines break at words a dictionary finds), so no character falls back to a system font (which would
 make the line breaks depend on the machine and cut the text into one word per font). The glyphs are plain squares, solid for letters
 and digits and hollow for punctuation, symbols and the number affixes, so a showcase can show where a line breaks around them; only their
 advance widths matter to the tests.
@@ -43,6 +44,10 @@ EXTRA = (
 )
 
 
+# The scripts a dictionary breaks lines in: every assigned character of their blocks, marks and vowel signs included.
+DICTIONARY_BLOCKS = ((0x0E01, 0x0E5B), (0x0E81, 0x0EDF), (0x1780, 0x17FF), (0x1000, 0x109F))
+
+
 def square(width):
     pen = TTGlyphPen(None)
     pen.moveTo((50, 0))
@@ -69,7 +74,8 @@ def hollow_square():
 
 
 def main():
-    code_points = sorted(set(range(0x21, 0x7F)) | {ord(c) for c in EXTRA})
+    dictionary_scripts = {cp for first, last in DICTIONARY_BLOCKS for cp in range(first, last + 1) if unicodedata.category(chr(cp)) != "Cn"}
+    code_points = sorted(set(range(0x21, 0x7F)) | {ord(c) for c in EXTRA} | dictionary_scripts)
     names = {cp: "uni%04X" % cp for cp in code_points}
     space = {0x20: "space", 0xA0: "nbspace"}
     order = [".notdef"] + list(space.values()) + [names[cp] for cp in code_points]

@@ -39,6 +39,17 @@ public class LicenseInfoTests
     }
 
     [Fact]
+    public void Credits_CarriesTheNoticesOfTheWordListsBrowsersBreakThaiLaoKhmerAndBurmeseWith()
+    {
+        var text = LicenseInfo.Credits;
+        Assert.Contains("ICU word lists", text);
+        Assert.Contains("UNICODE LICENSE V3", text);
+        Assert.Contains("Copyright (C) 2013 Brian Eugene Wilson, Robert Martin Campbell.", text);
+        Assert.Contains("Copyright (c) 2013, LeRoy Benjamin Sharon", text);
+        Assert.Contains("Neither the name Myanmar Karen Word Lists", text);
+    }
+
+    [Fact]
     public async Task ShowLicense_PrintsLicenseAndExitsZero()
     {
         var (exit, output) = await RunCapturingStdout(["--show-license"]);

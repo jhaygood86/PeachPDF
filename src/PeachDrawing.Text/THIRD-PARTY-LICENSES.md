@@ -70,6 +70,136 @@ Each UCD source file carries this notice in its own header, reproduced here rath
 > © 2026 Unicode®, Inc. Unicode and the Unicode Logo are registered trademarks of Unicode, Inc. in the U.S. and other countries. For terms of use and license, see https://www.unicode.org/terms_of_use.html
 
 
+## ICU word lists (Thai, Lao, Khmer and Burmese line breaking)
+
+- **Location:** [`src/PeachDrawing.Text/Internal/Text/Resources/Dictionaries/`](Internal/Text/Resources/Dictionaries/) — `thai.dict`, `lao.dict`, `khmer.dict` and `burmese.dict`, one embedded resource per script, read by `PeachDrawing.Text.Internal.Text.Segmentation.WordDictionary` (raw DEFLATE, not Brotli). Each is the word list of the break-iterator dictionary of the same script in ICU (`thaidict.txt`, `laodict.txt`, `khmerdict.txt`, `burmesedict.txt`), normalized (NFC, without zero width joiners), deduplicated and stored as a sorted, prefix-compressed list. They let the line breaking algorithm allow a break between the words of scripts that are written without spaces.
+- **Upstream source:** [`icu4c/source/data/brkitr/dictionaries/`](https://github.com/unicode-org/icu/tree/release-78.3/icu4c/source/data/brkitr/dictionaries) of the ICU repository at the release tag `release-78.3`. The four files are not vendored: the generator downloads them from that tag and checks a SHA-256 for each.
+- **Generation script:** [`assets/unicode/generate_dictionary_breaking.py`](../../assets/unicode/generate_dictionary_breaking.py)
+- **Not used:** ICU's `cjdict.txt` (Chinese and Japanese break by the rules of the algorithm itself).
+
+The ICU repository's `LICENSE` file, at that tag, puts the Thai and Khmer lists under the Unicode License v3 (they are ICU data: the header of each names Unicode, Inc., IBM and, for the Thai list, Apple), and gives the Lao and Burmese lists licences of their own, reproduced below. Each licence is reproduced in full for the list it covers.
+
+### Thai and Khmer word lists: Unicode License v3
+
+```
+# Copyright (C) 2016 and later: Unicode, Inc. and others.
+# License & terms of use: http://www.unicode.org/copyright.html
+# Copyright (c) 2006-2015 International Business Machines Corporation,
+# Apple Inc., and others. All Rights Reserved.       (thaidict.txt)
+
+# Copyright (C) 2016 and later: Unicode, Inc. and others.
+# License & terms of use: http://www.unicode.org/copyright.html
+# Copyright (c) 2011-2015 International Business Machines Corporation
+# and others. All Rights Reserved.                   (khmerdict.txt)
+```
+
+```
+UNICODE LICENSE V3
+
+COPYRIGHT AND PERMISSION NOTICE
+
+Copyright © 2016-2025 Unicode, Inc.
+
+NOTICE TO USER: Carefully read the following legal agreement. BY
+DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING DATA FILES, AND/OR
+SOFTWARE, YOU UNEQUIVOCALLY ACCEPT, AND AGREE TO BE BOUND BY, ALL OF THE
+TERMS AND CONDITIONS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT
+DOWNLOAD, INSTALL, COPY, DISTRIBUTE OR USE THE DATA FILES OR SOFTWARE.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of data files and any associated documentation (the "Data Files") or
+software and any associated documentation (the "Software") to deal in the
+Data Files or Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, and/or sell
+copies of the Data Files or Software, and to permit persons to whom the
+Data Files or Software are furnished to do so, provided that either (a)
+this copyright and permission notice appear with all copies of the Data
+Files or Software, or (b) this copyright and permission notice appear in
+associated Documentation.
+
+THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+THIRD PARTY RIGHTS.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE
+BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES,
+OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA
+FILES OR SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder shall
+not be used in advertising or otherwise to promote the sale, use or other
+dealings in these Data Files or Software without prior written
+authorization of the copyright holder.
+
+SPDX-License-Identifier: Unicode-3.0
+```
+
+### Lao word list (laodict.txt): BSD-style licence
+
+The list is by Brian Eugene Wilson and Robert Martin Campbell, from <https://github.com/rober42539/lao-dictionary>, with special thanks to Erik Mundall, Arlyta Keosamone and Bualong Nyoukmai; ICU derived its file from the version of that dictionary of November 22, 2020, and modified the header. The notice, conditions and disclaimer of its licence:
+
+```
+Copyright (C) 2013 Brian Eugene Wilson, Robert Martin Campbell.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+	Redistributions of source code must retain the above copyright notice, this
+	list of conditions and the following disclaimer. Redistributions in binary
+	form must reproduce the above copyright notice, this list of conditions and
+	the following disclaimer in the documentation and/or other materials
+	provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### Burmese word list (burmesedict.txt): BSD-style licence
+
+The list is by LeRoy Benjamin Sharon, with special thanks to Robert Martin Campbell, from the Myanmar Karen Word Lists project (<https://github.com/kanyawtech/myanmar-karen-word-lists>); ICU modified the header, deleted duplicate entries and some entries with unusual characters. The notice, conditions and disclaimer of its licence:
+
+```
+Copyright (c) 2013, LeRoy Benjamin Sharon
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+  Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+  Redistributions in binary form must reproduce the above copyright notice, this
+  list of conditions and the following disclaimer in the documentation and/or
+  other materials provided with the distribution.
+
+  Neither the name Myanmar Karen Word Lists, nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
 ## HarfBuzz (ported Arabic/Syriac joining state machine)
 
 - **Location:** [`src/PeachDrawing.Text/Internal/Text/Shaping/Arabic/ArabicJoiningStateTable.cs`](Internal/Text/Shaping/Arabic/ArabicJoiningStateTable.cs), [`src/PeachDrawing.Text/Internal/Text/Shaping/Arabic/ArabicJoiningShaper.cs`](Internal/Text/Shaping/Arabic/ArabicJoiningShaper.cs) — a line-by-line C# port of the cursive-joining state machine (`arabic_state_table`/`arabic_joining`), not merely inspired by it

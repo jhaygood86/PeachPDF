@@ -729,6 +729,9 @@ PeachDrawing.Text.Unicode.BidiRun : struct
   property Byte Level { get; init; }
   property Int32 Length { get; init; }
   property Int32 Start { get; init; }
+PeachDrawing.Text.Unicode.ComplexContextBreaking : enum Int32
+  Dictionary = 0
+  GeneralCategory = 1
 PeachDrawing.Text.Unicode.DefaultIgnorables : static class
   method static Boolean Contains(Int32 codepoint)
   method static Boolean IsVariationSelector(Int32 codepoint)
@@ -775,6 +778,7 @@ PeachDrawing.Text.Unicode.LineBreakOpportunity : enum Byte
   Mandatory = 2
   Prohibited = 0
 PeachDrawing.Text.Unicode.LineBreakOptions : struct
+  property ComplexContextBreaking ComplexContext { get; init; }
   property LineBreakStrictness Strictness { get; init; }
   property String Language { get; init; }
   property WordBreakMode WordBreak { get; init; }
