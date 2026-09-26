@@ -53,6 +53,26 @@ namespace PeachPDF.Tests.PublicApi
             Assert.Equal(0, runs[1].Start);
         }
 
+        [Theory]
+        [InlineData(-1, 1)]
+        [InlineData(0, -1)]
+        [InlineData(0, 4)]
+        [InlineData(2, 2)]
+        public void Bidi_ReorderLine_RejectsALineOutsideTheLevels(int lineStart, int lineLength)
+        {
+            var levels = new byte[] { 0, 0, 1 };
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => Bidi.ReorderLine(levels, lineStart, lineLength));
+        }
+
+        [Fact]
+        public void Bidi_ReorderLine_AcceptsALineThatEndsExactlyAtTheEnd()
+        {
+            var runs = Bidi.ReorderLine([0, 0, 1], 1, 2);
+
+            Assert.Equal(2, runs.Count);
+        }
+
         [Fact]
         public void Bidi_ClassOf_ReportsTheBidiClassProperty()
         {

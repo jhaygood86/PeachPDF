@@ -19,6 +19,10 @@ namespace PeachDrawing.Text.Unicode
         }
 
         /// <summary>The resolved embedding level of each UTF-16 code unit of the analysed text.</summary>
+        /// <remarks>
+        /// This is the analysis's own array, not a copy, so that laying out a long paragraph does not copy it again for
+        /// every line. Treat it as read-only.
+        /// </remarks>
         public byte[] Levels { get; }
 
         /// <summary>The paragraph's embedding level: 0 for a left-to-right paragraph, 1 for a right-to-left one.</summary>

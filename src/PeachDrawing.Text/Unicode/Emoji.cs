@@ -20,11 +20,13 @@ namespace PeachDrawing.Text.Unicode
         /// Decides the presentation of one character from the mode a caller asks for and what follows the character.
         /// </summary>
         /// <remarks>
-        /// A U+FE0E or U+FE0F right after the character always wins, since the text may opt out of what the caller
-        /// asks for. Otherwise <see cref="EmojiMode.Text"/> and <see cref="EmojiMode.Emoji"/> behave as though that
-        /// selector followed every character that can take one, and <see cref="EmojiMode.Unicode"/> draws a character
-        /// as emoji when its default is emoji and as text when its default is text. <see cref="EmojiMode.Normal"/>
-        /// makes no choice, and the order of the font families decides.
+        /// Only a character that can take a variation selector (see <see cref="IsPresentationParticipant"/>) has a
+        /// preference at all; for any other character the answer is <see cref="EmojiPresentation.NoPreference"/>,
+        /// whatever the mode and selector. For one that can, a U+FE0E or U+FE0F right after it always wins, since the
+        /// text may opt out of what the caller asks for. Otherwise <see cref="EmojiMode.Text"/> and
+        /// <see cref="EmojiMode.Emoji"/> behave as though that selector followed the character, and
+        /// <see cref="EmojiMode.Unicode"/> draws a character as emoji when its default is emoji and as text when its
+        /// default is text. <see cref="EmojiMode.Normal"/> makes no choice, and the order of the font families decides.
         /// </remarks>
         /// <param name="mode">The mode the caller asks for.</param>
         /// <param name="baseCodepoint">The character to decide for.</param>
@@ -36,6 +38,12 @@ namespace PeachDrawing.Text.Unicode
         /// Decides the presentation of the character that starts at an index of a text, reading the variation
         /// selector that follows it, if any, from the text itself.
         /// </summary>
+        /// <remarks>
+        /// With no selector after it, a character that continues into a longer emoji sequence (a zero-width joiner,
+        /// a keycap or a skin-tone modifier follows) has no preference, because the font composes such a sequence as
+        /// one glyph and forcing the first character into another font would split it. An index outside the text, or
+        /// one that is not the start of a character, also yields <see cref="EmojiPresentation.NoPreference"/>.
+        /// </remarks>
         /// <param name="mode">The mode the caller asks for.</param>
         /// <param name="text">The text.</param>
         /// <param name="index">Index of the character's first UTF-16 code unit.</param>

@@ -37,6 +37,8 @@ namespace PeachDrawing.Text.Unicode
         /// Gives every code point of a text the script it is to be treated as (UAX #24 section 5.1): a character
         /// with a real script keeps it, and one that is <see cref="Common"/> or <see cref="Inherited"/> takes the
         /// nearest preceding real script, or the nearest following one if the text opens with such characters.
+        /// A text with no real script at all has nothing to resolve against: its <see cref="Inherited"/> characters
+        /// become <see cref="Common"/> and the others stay as they are.
         /// </summary>
         /// <param name="codepoints">The text as code points.</param>
         /// <returns>One script per entry of <paramref name="codepoints"/>.</returns>

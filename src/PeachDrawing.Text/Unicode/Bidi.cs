@@ -54,6 +54,13 @@ namespace PeachDrawing.Text.Unicode
         public static IReadOnlyList<BidiRun> ReorderLine(byte[] levels, int lineStart, int lineLength)
         {
             ArgumentNullException.ThrowIfNull(levels);
+            ArgumentOutOfRangeException.ThrowIfNegative(lineStart);
+            ArgumentOutOfRangeException.ThrowIfNegative(lineLength);
+            if (lineLength > levels.Length - lineStart)
+            {
+                throw new ArgumentOutOfRangeException(nameof(lineLength), lineLength, "The line extends past the end of the levels.");
+            }
+
             return BidiResolver.ReorderLine(levels, lineStart, lineLength);
         }
 

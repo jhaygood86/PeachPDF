@@ -49,7 +49,8 @@ namespace PeachPDF.Tests.PublicApi
                 }
             }
 
-            return text.ToString();
+            // The snapshot is stored with LF line endings whatever the platform's own are.
+            return text.ToString().Replace("\r\n", "\n");
         }
 
         private static bool IsInitOnly(MethodInfo setter)
