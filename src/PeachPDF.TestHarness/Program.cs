@@ -5200,6 +5200,53 @@ await SaveShowcaseAsync("line_break_language", "Typography & Text", "line-break 
     "The breaks CSS Text 3 allows for line-break: normal and loose only in Chinese and Japanese text follow the lang attribute: the wave dash and centred punctuation may start a line, and a suffix or prefix of East Asian width may be split from its number, while English text keeps them together.",
     lineBreakLanguageHtml, pdfConfig);
 
+// --- Dictionary line breaking (Thai and Khmer) showcase ---
+// These scripts write no spaces between words, so where a line may end is found in a word list (ICU's dictionaries, in PeachDrawing.Text).
+// Thai is set in a subset of Noto Sans Thai (assets/fonts/NotoSansThaiSubset.LICENSE.txt) in columns of three widths, so the same paragraph
+// wraps at its words wherever the line ends; Thai and Khmer are also set in the line breaking test font, where every character is a square
+// one em wide, which makes the words themselves visible as blocks (and is the only rendering of Khmer: PeachPDF does not yet shape its
+// subscript consonants).
+static string DictionaryFontFace(string family, string file) =>
+    $"@font-face {{ font-family: '{family}'; src: url('data:font/truetype;base64,{Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, file)))}') format('truetype'); }}";
+
+var dictionaryBreakingThai = "ประเทศไทยเป็นประเทศที่ตั้งอยู่ในเอเชียตะวันออกเฉียงใต้ กรุงเทพมหานครเป็นเมืองหลวงและเมืองที่ใหญ่ที่สุดของประเทศ ประชากรส่วนใหญ่พูดภาษาไทยและนับถือศาสนาพุทธ";
+
+var dictionaryBreakingHtml = $$"""
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    {{DictionaryFontFace("SeaThai", "NotoSansThaiSubset.ttf")}}
+    {{DictionaryFontFace("LineBreakTest", "LineBreakTest.ttf")}}
+    @page { size: A4; margin: 28pt }
+    body { font-family: Arial, sans-serif; color: #222 }
+    h1 { font-size: 18pt; margin: 0 0 5pt }
+    .intro { color: #555; font-size: 9pt; margin: 0 0 12pt; line-height: 1.35 }
+    .row { display: flex; gap: 12pt; margin-bottom: 10pt; padding-bottom: 8pt; border-bottom: 0.5pt solid #ddd }
+    .cell { flex: none }
+    .cap { font-size: 7pt; color: #777; margin-bottom: 2pt; font-family: monospace }
+    .col { margin: 0; padding: 4pt; box-sizing: border-box; font: 11pt/1.55 SeaThai; background: #f4f9ff; border: 0.75pt solid #9db8d8; color: #1b4f8a }
+    .blocks { font: 12pt/1.5 LineBreakTest; width: 6.4em; margin: 0; padding: 3pt; background: #f4f9ff; border: 0.75pt solid #9db8d8; color: #1b4f8a }
+    .blockrow { display: flex; gap: 14pt; margin-top: 4pt }
+    .blockcell { flex: none; width: 90pt }
+</style></head><body>
+<h1>Dictionary line breaking: Thai and Khmer</h1>
+<p class="intro">These scripts put no spaces between words, so no rule can say where a line may end: PeachPDF looks the words up in a word list (ICU's dictionaries) and wraps between them, never inside a syllable. The same Thai paragraph is set in three widths: the words move to the next line whole, whatever the width. The lang attribute does not matter, the script does.</p>
+<div class="row">
+  <div class="cell" style="width:120pt"><div class="cap">120pt</div><p class="col" lang="th">{{dictionaryBreakingThai}}</p></div>
+  <div class="cell" style="width:170pt"><div class="cap">170pt</div><p class="col" lang="th">{{dictionaryBreakingThai}}</p></div>
+  <div class="cell" style="width:210pt"><div class="cap">210pt</div><p class="col" lang="th">{{dictionaryBreakingThai}}</p></div>
+</div>
+<h2 style="font-size:11pt;margin:0 0 3pt">The words as blocks: Thai and Khmer</h2>
+<p class="intro" style="margin-bottom:0">The same idea in the line breaking test font, where every character (a vowel sign or tone mark too) is a square one em wide, and each box holds six of them: a word that does not fit the rest of the line starts the next one, and a syllable is never cut. Khmer is shown this way only: its subscript consonants are not shaped yet.</p>
+<div class="blockrow">
+  <div class="blockcell"><div class="cap">Thai</div><p class="blocks">ฉันรักภาษาไทยมากกว่าหกสิบล้านคน</p></div>
+  <div class="blockcell"><div class="cap">Khmer</div><p class="blocks">ខ្ញុំស្រលាញ់ភាសាខ្មែរមានប្រជាជនច្រើន</p></div>
+</div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("dictionary_line_breaking", "Typography & Text", "Thai and Khmer Line Breaking",
+    "Scripts written without spaces wrap at the words a dictionary finds and never inside a syllable: a Thai paragraph in real Noto Sans glyphs at three widths, and Thai and Khmer as blocks in the line breaking test font, where the word boundaries are visible.",
+    dictionaryBreakingHtml, pdfConfig);
+
 // --- SVG vertical writing-mode text showcase ---
 
 // A subset of Noto Sans JP (see assets/fonts/NotoSansJPSubset.LICENSE.txt) covering the CJK/Latin
