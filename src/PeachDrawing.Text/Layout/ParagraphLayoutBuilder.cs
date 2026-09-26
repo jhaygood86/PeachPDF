@@ -223,9 +223,11 @@ namespace PeachDrawing.Text.Layout
             bool trackBreaks = wrap && p.HasSoftHyphens;
             for (int i = start + 1; i <= length; i++)
             {
-                if (opportunities[i] == LineBreakOpportunity.Prohibited)
+                // A long word is jumped over, not walked: cutting one into many lines must not cost its length for each of them.
+                i = p.NextOpportunityAtOrAfter(i);
+                if (i > length)
                 {
-                    continue;
+                    break;
                 }
 
                 if (wrap)

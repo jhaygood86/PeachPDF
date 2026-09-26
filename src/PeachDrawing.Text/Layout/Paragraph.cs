@@ -29,6 +29,7 @@ namespace PeachDrawing.Text.Layout
         private readonly ArabicJoiningForm[] _joining;
         private readonly UseCategory[]? _use;
         private readonly bool[] _isGraphemeBoundary;
+        private readonly int[] _nextOpportunity;
         private readonly Atom[] _atoms;
         private readonly Typeface?[]? _fallbackFaces;
         private const int MaxShapedPieces = 8192;
@@ -64,6 +65,13 @@ namespace PeachDrawing.Text.Layout
                 }
             }
 
+            _nextOpportunity = new int[text.Length + 2];
+            _nextOpportunity[text.Length + 1] = text.Length + 1;
+            for (int i = text.Length; i >= 0; i--)
+            {
+                _nextOpportunity[i] = i >= 1 && Opportunities[i] != LineBreakOpportunity.Prohibited ? i : _nextOpportunity[i + 1];
+            }
+
             _isGraphemeBoundary = new bool[text.Length + 1];
             foreach (var boundary in Segmenter.FindGraphemeBoundaries(text))
             {
@@ -93,6 +101,9 @@ namespace PeachDrawing.Text.Layout
         internal byte ParagraphLevel => _bidi.ParagraphLevel;
 
         internal byte[] Levels => _bidi.Levels;
+
+        /// <summary>The first offset at or after <paramref name="index"/> that is a place a line may or must end, or one past the text when there is none.</summary>
+        internal int NextOpportunityAtOrAfter(int index) => _nextOpportunity[Math.Min(index, Text.Length + 1)];
 
         internal bool IsGraphemeBoundary(int index) => _isGraphemeBoundary[index];
 
