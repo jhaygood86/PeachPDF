@@ -3097,15 +3097,20 @@ namespace PeachPDF.Html.Core
             if (box.IsInDetachedRepeatingGroup || _emitter.HoldsFragmentsFor(box)) return;
             if (box.ActualBottom <= 0) return;
 
-            var first = PageIndexOf(Math.Max(box.Location.Y, 0) + PageBoundaryEpsilon);
+            var first = Math.Max(SlotStartingAt(Math.Max(box.Location.Y, 0)), 0);
+
+            // Forward layout, which is every ordinary placement: nothing from the box's top on is frozen yet.
+            // Asked before the subtree walk below, since content that overflows the box cannot start above it.
+            if (first > _emitter.LastEmittedSlot) return;
+
             // Content that overflows the box (overflow: visible) is drawn past its border box, on pages the
             // border box does not reach; those have to be re-opened too, or the overflowing lines are lost.
             var bottom = box.Overflow.Value == PeachPDF.CSS.Overflow.Visible
                 ? CssBox.GetMaximumBottom(box, box.ActualBottom)
                 : box.ActualBottom;
-            var last = PageIndexOf(Math.Max(bottom - PageBoundaryEpsilon, 0));
+            var last = SlotEndingAt(Math.Max(bottom, PageBoundaryEpsilon));
 
-            _emitter.InvalidateFrom(Math.Max(first, 0), box, throughSlot: Math.Max(last, first));
+            _emitter.InvalidateFrom(first, box, throughSlot: Math.Max(last, first));
         }
 
         /// <summary>

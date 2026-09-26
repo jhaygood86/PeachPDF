@@ -28,9 +28,12 @@ fitting on one page, hid it. Reproduced on `main` with plain `<div>`s and no `ov
   offsets on page 1. `CssBox.PerformLayoutEpilogue` now calls
   `HtmlContainerInt.InvalidateEmittedFragmentainersReceiving` for an absolutely positioned box once its
   position and height are final, which calls `FragmentEmitter.InvalidateFrom` for the slots its border box
-  reaches (`throughSlot`), not everything after them. That returns at once when the slot is not frozen yet, so forward layout
-  (every ordinary placement) pays one comparison. When it does re-open a slot, the stale slot is re-emitted
-  by `CatchUpStaleSlotsBehind` or `Finish`, the same path a §4.3 mover's re-opening takes.
+  reaches (`throughSlot`), not everything after them.
+  - Forward layout (every ordinary placement) returns after a fragment lookup and one slot lookup: the box's
+    top is past the last emitted slot (`FragmentEmitter.LastEmittedSlot`), checked before the subtree walk
+    that finds overflowing content (`GetMaximumBottom`), which cannot start above the box.
+  - When it does re-open a slot, the stale slot is re-emitted by `CatchUpStaleSlotsBehind` or `Finish`, the
+    same path a §4.3 mover's re-opening takes.
 
 `position: fixed` is not touched: the emitter places a fixed box on every page itself
 (`ComputeFixedPageOffset`).
@@ -100,6 +103,24 @@ previous sibling. A fourth review found that checking only the first child misse
 followed by the multi-column one. Every shape from the three rounds, eight probes, now draws the same words
 at the same positions as `main`. The §9.3.1 position is an
 [accepted gap](../accepted-gaps/content-after-an-absolute-multi-column-box-is-placed-below-it.md) (#1377).
+
+## Review of the split PR
+
+- **Placed twice.** A box whose block position depends on its containing block's height (auto margins
+  between `top` and `bottom`, CSS 2.1 §10.6.4) is placed provisionally in its own epilogue, and finally by its
+  containing block's (`ResolveAbsolutelyPositionedDescendantAutoBlockMargins`). The re-opening ran only for the
+  first, and `OffsetTop`'s notification covers only a box already frozen, so a vertically centred stamp at the
+  end of a long document was drawn on no page. It now re-opens the pages the final position reaches too
+  (`AnAbsoluteBoxCentredByItsContainingBlock_IsDrawnWhereItIsFinallyPlaced`, which also checks it is drawn
+  once). `main` lost it as well.
+- **Counters.** `DomUtils.ResolveCounterAnchor` used `GetPreviousSibling`, a layout question that steps over
+  out-of-flow boxes. With the absolute first child now stepped over too, a `display: contents` element's
+  `target-counter()` missed that child's `counter-increment`. Counters follow the document tree whatever the
+  positioning, so the anchor now comes from `PreviousSiblingInDocumentOrder`. This also corrects `main`, which
+  already missed a non-first absolute or fixed sibling.
+- **Forced breaks** inside an absolute box are no longer taken, because the fragmentainer is detached. Now
+  recorded in [the gap](../accepted-gaps/a-tall-absolutely-positioned-box-is-sliced-not-fragmented.md), the
+  docs and the migration note.
 
 ## Not done
 

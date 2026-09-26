@@ -88,7 +88,8 @@ namespace PeachPDF.Tests.Integration
         public async Task ContentAfterAPlainThenAMultiColumnAbsoluteBox_IsDrawnInsideAPageBand()
         {
             // Through the PdfGenerator pipeline with an @page rule, as the review measured it. The content goes
-            // below the plain first child, so X1 reaches page 2 for it to be drawn there, as on main.
+            // below the plain first child, so X1 reaches page 2 for it to be drawn there, as on main. The @page
+            // rule sets the 300×200pt page the band constants describe; the config's size is only its default.
             var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(
                 "<!DOCTYPE html><html><head><style>@page{size:300pt 200pt;margin:20pt} " +
                 "body{margin:0;font:10pt/12pt Arial} p{margin:0}</style></head><body>" +
@@ -121,6 +122,24 @@ namespace PeachPDF.Tests.Integration
 
             AssertEachDrawnOnceInsideABand(placed, 2);
             Assert.All(placed, w => Assert.Equal(1, w.Page));
+        }
+
+        // A box centred between top and bottom by auto margins (CSS 2.1 §10.6.4) is placed twice: provisionally
+        // in its own epilogue, and finally by its containing block's, once that block's height is known. The
+        // final position can be on a page already emitted, and it was drawn on no page.
+        [Theory]
+        [InlineData("")]
+        [InlineData("position:relative")]
+        public async Task AnAbsoluteBoxCentredByItsContainingBlock_IsDrawnWhereItIsFinallyPlaced(string wrapperCss)
+        {
+            var paragraphs = string.Concat(Enumerable.Range(1, 60).Select(i => $"<p>P{i}</p>"));
+            var placed = await WordsPlaced(
+                $"<div style='{wrapperCss}'>{paragraphs}" +
+                "<div style='position:absolute;top:0;bottom:0;height:20pt;margin:auto 0;left:150pt'>Z1</div></div>",
+                "Z", pageWidth: 300, distinct: false);
+
+            // Once: not also at the provisional position its own epilogue gave it.
+            Assert.Equal(["Z1"], placed);
         }
 
         // In-flow content after a tall absolutely positioned box, first in its block or after other content.
@@ -165,15 +184,16 @@ namespace PeachPDF.Tests.Integration
         }
 
         private static async Task<List<string>> WordsPlaced(
-            string body, string prefix, double pageWidth = 595, double pageHeight = PageHeight, double margin = Margin)
+            string body, string prefix, double pageWidth = 595, double pageHeight = PageHeight, double margin = Margin,
+            bool distinct = true)
         {
             var html = "<!DOCTYPE html><html><head><style>body{margin:0;font:10pt/12pt Arial} p{margin:0}</style>" +
                        $"</head><body>{body}</body></html>";
             var (_, container) = await LayoutHarness.LayoutAsync(
                 html, pageWidth: pageWidth, pageHeight: pageHeight, margin: margin);
 
-            // Painted, not merely present in the fragment tree: a fragmented scroll container in a column
-            // kept every word in its fragments but clipped the first column's to nothing at paint time.
+            // Painted, not merely present in the fragment tree: a word can be in a fragment that paint clips to
+            // nothing, so only strings drawn inside every clip in force count.
             var painted = new List<string>();
             for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
             {
@@ -182,11 +202,11 @@ namespace PeachPDF.Tests.Integration
                 painted.AddRange(VisiblyDrawnStrings(recording.Log));
             }
 
-            return painted
+            var matching = painted
                 .Where(t => t.StartsWith(prefix, StringComparison.Ordinal) && t.Length > prefix.Length
-                            && char.IsDigit(t[prefix.Length]))
-                .Distinct()
-                .ToList();
+                            && char.IsDigit(t[prefix.Length]));
+
+            return (distinct ? matching.Distinct() : matching).ToList();
         }
 
         // Every string drawn with some part of it inside all the rectangle clips in force when it was drawn.

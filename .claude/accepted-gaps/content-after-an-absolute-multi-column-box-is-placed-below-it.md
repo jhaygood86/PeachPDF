@@ -17,11 +17,11 @@ first child need not be the multi-column box: checking only that lost the conten
 
 Three attempts to put that content at its §9.3.1 position failed review:
 
-- **At its position, nothing else** (`b9d015e9`): it landed on the page the resumed pass had already emitted,
+- **At its position, nothing else**: it landed on the page the resumed pass had already emitted,
   and a paragraph after the box, or all ten paragraphs of a following block, were drawn on no page.
-- **Below every such box** (`0758cbee`): a box on an earlier page (`top: 0`, inside an `overflow: hidden`
+- **Below every such box**: a box on an earlier page (`top: 0`, inside an `overflow: hidden`
   wrapper on page 2) pulled the wrapper's content before and after it backwards, and page 2 went blank.
-- **At its position, re-opening the emitted page** (`5ee86a0b`): a short block was drawn, but no pass
+- **At its position, re-opening the emitted page**: a short block was drawn, but no pass
   paginates content laid out behind it. A following `columns: 2` block lost A1–A24, its whole first page,
   and a following 13-paragraph block had A13 sliced across the page margin.
 

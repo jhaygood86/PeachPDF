@@ -15,13 +15,15 @@ If a break is taken *inside* such a box:
   break left;
 - that page is already emitted, so the content is drawn on no page.
 
-Measured symptoms, each on a 300×200pt page with 12pt lines:
-- all ten paragraphs after a 30-line absolutely positioned box were lost (#1349's review);
-- a block beside a 30-line float drew only its last four lines (#1339).
+Measured symptom, on a 300×200pt page with 12pt lines: all ten paragraphs after a 30-line absolutely
+positioned box were lost (#1349's review). A block-level float has the same shape: a block beside a 30-line
+float drew only its last four lines (#1339, still open at the time of writing).
 
 So such a box is laid out unbroken, with the fragmentainer detached and word page breaks suppressed:
-- from the block frame, by `CssBox.LayoutBlockChildUnbroken`;
-- from the inline flow, by `CssLayoutEngine.LayoutContentUnbroken`.
+- an absolutely positioned block child, by `CssBox.LayoutBlockChildUnbroken` from the block frame;
+- a float among inline content, by `CssLayoutEngine.LayoutContentUnbroken` from the inline flow.
+
+A block-level float placed by the block frame still takes the breaking path, and still has #1339's loss.
 
 It then shows one slice per page.
 

@@ -536,6 +536,12 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private int _lastEmittedSlot = -1;
 
+        /// <summary>
+        /// The last slot emitted so far, or -1 before the first: a box placed after it lands where nothing is
+        /// frozen yet, so there is nothing to re-open for it.
+        /// </summary>
+        internal int LastEmittedSlot => _lastEmittedSlot;
+
 #if DEBUG
         /// <summary>
         /// Diagnostic-only invariant check for issue
@@ -1535,8 +1541,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal bool HoldsFragmentsFor(CssBox box) => _frozen.Contains(box);
 
         /// <summary>
-        /// Drops every frozen slot from <paramref name="fromSlot"/> on, so it is emitted again once layout
-        /// has settled.
+        /// Drops every frozen slot from <paramref name="fromSlot"/> on (through <paramref name="throughSlot"/>
+        /// when one is given), so it is emitted again once layout has settled.
         /// </summary>
         /// <remarks>
         /// The one thing per-pass emission cannot assume away: §4.3's retroactive movers are bounded within

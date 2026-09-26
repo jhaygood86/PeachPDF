@@ -2389,7 +2389,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Whether this box holds a multi-column container, with the <see cref="HtmlContainerInt.LayoutGeneration"/>
         /// it was computed in (<see cref="HoldsAMultiColumnContainer"/>).
         /// </summary>
-        internal (int Generation, bool Value)? HoldsAMultiColumnContainerCache { get; set; }
+        private (int Generation, bool Value)? _holdsAMultiColumnContainer;
 
         /// <summary>
         /// <see cref="HtmlContainerInt.PassInvalidationCount"/> as it stood when <see cref="_placedByPass"/>
@@ -3468,7 +3468,7 @@ namespace PeachPDF.Html.Core.Dom
         private static bool HoldsAMultiColumnContainer(CssBox box)
         {
             var generation = box.HtmlContainer?.LayoutGeneration ?? -1;
-            if (box.HoldsAMultiColumnContainerCache is { } cached && cached.Generation == generation) return cached.Value;
+            if (box._holdsAMultiColumnContainer is { } cached && cached.Generation == generation) return cached.Value;
 
             var value = false;
             foreach (var child in box.Boxes)
@@ -3481,7 +3481,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            box.HoldsAMultiColumnContainerCache = (generation, value);
+            box._holdsAMultiColumnContainer = (generation, value);
             return value;
         }
 
@@ -7306,6 +7306,10 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         child.ResolvePositionedAutoBlockMargins(ActualHeight);
                         child.ResolveAbsolutelyPositionedDescendantAutoBlockMargins();
+
+                        // This is the box's final position, and it can be on a fragmentainer already emitted
+                        // that its provisional one, from its own epilogue, did not reach (#1349).
+                        HtmlContainer?.InvalidateEmittedFragmentainersReceiving(child);
                     }
 
                     // A positioned descendant establishes the containing block for anything below it and

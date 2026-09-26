@@ -17,6 +17,11 @@ after an in-flow paragraph lost W18–W20 (a review of #1334). As its block's fi
   with 37 lines on a 300×200pt page cut W17 and W30 (seen on PDFium rasters).
 - Nothing inside the box is relocated by §4.3: an image or a `break-inside: avoid` block is sliced, and a
   table inside it neither repeats its `<thead>` nor breaks between rows.
+- A forced break inside the box (`break-before: page` on one of its children) is not taken, because the
+  fragmentainer is detached: `<div style="position:absolute"><section>A</section><section
+  style="break-before:page">B</section></div>` runs B on straight after A, where the breaking path started a
+  new page. css-break-3 §3.1 requires break properties only in the fragmentation root's own flow, but the
+  old path did honour it.
 
 Before this change (#1349), such a box broke between its lines instead. That was worse: its break ended the
 pass, the next pass resumed inside the box on the following page, and every in-flow box after it in the
