@@ -68,7 +68,7 @@ namespace PeachPDF.Adapters
         /// eagerly, right here, rather than lazily on this font's first <c>RGraphics.MeasureString</c>
         /// call (as a previous version of this constructor did): <paramref name="font"/>'s own descriptor/
         /// metrics are already fully resolved by the time <c>XFont</c>'s constructor returns
-        /// (<c>XFont.Initialize</c> calls <c>CreateDescriptorAndInitializeFontMetrics</c> synchronously), so
+        /// (<c>XFont.Initialize</c> calls <c>InitializeFontMetrics</c> synchronously), so
         /// there was never a real data dependency on "a string having been measured first" - only an
         /// accident of where this arithmetic used to live. Reading <see cref="Height"/>/<see cref="Ascent"/>
         /// before this font's first <c>MeasureString</c> call used to read back a stale, pre-resolution
@@ -82,12 +82,12 @@ namespace PeachPDF.Adapters
             PixelsPerPoint = pixelsPerPoint;
 
             // Read ascent/descent/em-height directly off the font's OWN already-resolved descriptor
-            // instead of re-deriving them via XFontFamily.GetCellAscent/GetCellDescent/GetEmHeight, which
+            // instead of re-deriving them per size, which
             // re-resolve a font by its own internal name (e.g. "Source Code Pro" - not the CSS-facing
             // family alias that was actually registered) through IFontResolver - for a custom/@font-face-
             // registered family this can resolve to an entirely unrelated font, and even when it does find
             // something, it bypasses the per-instance cache routing that keeps two PdfGenerators' same-
-            // named custom fonts from colliding (see XFont.Descriptor and XGlyphTypeface.OwningInstanceResolver).
+            // named custom fonts from colliding (see XFont.Descriptor and Typeface.OwningInstanceResolver).
             var descriptor = font.Descriptor;
             var descent = font.Size * descriptor.Descender / descriptor.UnitsPerEm;
             var ascent = font.Size * descriptor.Ascender / descriptor.UnitsPerEm;

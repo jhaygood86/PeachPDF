@@ -636,10 +636,9 @@ The adapters in [src/PeachPDF/Adapters/](https://github.com/jhaygood86/PeachPDF/
 
 PdfSharpCore's font subsystem is built around OpenType:
 
-- `XFont` / `XFontFamily` — the public API for specifying a font by family name and style.
-- `XGlyphTypeface` ([PdfSharpCore/Drawing/XGlyphTypeface.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/PdfSharpCore/Drawing/XGlyphTypeface.cs)) — holds the resolved typeface metrics and maps to an `OpenTypeFontface`.
+- `Typeface` ([Fonts/Typeface.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Fonts/Typeface.cs)) — one resolved font face, independent of any size: it owns the `OpenTypeFontface` and the `OpenTypeDescriptor` (metrics, glyph mapping, shaping and outlines in design units). The PDF writer's `XFont` is just a `Typeface` plus an em size.
 - `OpenTypeFontface` — reads raw OpenType/TrueType tables (`cmap`, `glyf`, `hmtx`, `loca`, `OS/2`, etc.) from font binary data.
-- `GlyphTypefaceCache` — caches resolved typefaces keyed by family+style to avoid repeated file reads.
+- `TypefaceCache` — caches resolved typefaces keyed by family+style to avoid repeated file reads (system families globally, custom `@font-face` families per `FontResolver` instance).
 - Font subsetting — only the glyphs actually used in the document are embedded in the PDF, significantly reducing output file size for documents that use only a subset of a large font.
 
 The font resolver honours the family mappings registered via `PdfGenerator.AddFontFamilyMapping` and discovers system fonts from the operating-system font directories at startup. On top of that base, font resolution is **codepoint-aware**: matching, layout, and PDF text emission all operate on Unicode codepoints (`System.Text.Rune`), not on the requested family alone. This is what makes per-character font fallback, `@font-face unicode-range`, and supplementary-plane (emoji) text work.
@@ -691,7 +690,7 @@ Bidirectional layout is a separate engine, `BidiResolver` ([Text/Bidi/](https://
 `PdfGenerator` and everything it owns (font/brush/pen caches, the font resolver, `HtmlContainer`) is instance-scoped and not safe to share across threads — but PeachPDF is designed so that using one `PdfGenerator` per thread is safe, including the process-wide state this pipeline touches:
 
 - System font discovery (scanning OS font directories and parsing TrueType/OpenType `name` tables) runs exactly once per process, in `FontResolver`'s static constructor, into immutable `FrozenDictionary` structures. Every `FontResolver` instance (one per `PdfSharpAdapter`, one per `PdfGenerator`) reads this once-built data without locking; `AddFont`/`AddFontFromStream` clone a family's data before overriding a style, so a custom font registered on one `PdfGenerator` can never mutate the shared system-font data seen by other instances.
-- `FontFactory`'s process-wide caches (`GlyphTypefaceCache`, `FontFamilyCache`, `FontDescriptorCache`, and the font sources with their `OpenTypeFontface` records) are guarded by a single reentrant `FontLock` monitor, so concurrent `PdfGenerator` instances resolving different fonts at the same time don't corrupt each other's cache entries.
+- `FontFactory`'s process-wide caches (`TypefaceCache` and the font sources with their `OpenTypeFontface` records) are guarded by a single reentrant `FontLock` monitor, so concurrent `PdfGenerator` instances resolving different fonts at the same time don't corrupt each other's cache entries.
 
 ### Image pipeline
 

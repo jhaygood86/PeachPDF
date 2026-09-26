@@ -199,57 +199,21 @@ namespace PeachPDF.PdfSharpCore.Drawing
             {
             }
 
-            // In principle an XFont is an XGlyphTypeface plus an em-size.
-            _glyphTypeface = XGlyphTypeface.GetOrCreateFrom(_familyName, fontResolvingOptions, fontResolver);
-            CreateDescriptorAndInitializeFontMetrics();
+            // In principle an XFont is a Typeface plus an em-size.
+            _glyphTypeface = Typeface.GetOrCreateFrom(_familyName, fontResolvingOptions, fontResolver);
+            InitializeFontMetrics();
         }
 
-        /// <summary>
-        /// Code separated from Metric getter to make code easier to debug.
-        /// (Setup properties in their getters caused side effects during debugging because Visual Studio calls a getter
-        /// to early to show its value in a debugger window.)
-        /// </summary>
-        void CreateDescriptorAndInitializeFontMetrics()  // TODO: refactor
+        void InitializeFontMetrics()
         {
-            Debug.Assert(_fontMetrics == null, "InitializeFontMetrics() was already called.");
-
-            // FontDescriptorCache is ALSO a global, static cache keyed purely by the typeface key string
-            // (family+style+weight) - with no notion of which FontResolver instance's font bytes actually
-            // produced _glyphTypeface. Left unrouted, it would silently reintroduce the exact cross-
-            // PdfGenerator-instance collision XGlyphTypeface.GetOrCreateFrom's own cache split fixes, one
-            // layer further down (font metrics/embedding data, not just glyph outlines). Route custom
-            // (OwningInstanceResolver != null) fonts through that same resolver's own instance cache.
-            var owningResolver = _glyphTypeface.OwningInstanceResolver;
-            if (owningResolver != null)
-            {
-                var key = GlyphTypeface.Key;
-                if (!owningResolver.InstanceFontDescriptorsByKey.TryGetValue(key, out var instanceDescriptor))
-                {
-                    instanceDescriptor = new OpenTypeDescriptor(key, Name, GlyphTypeface.Fontface);
-                    owningResolver.InstanceFontDescriptorsByKey[key] = instanceDescriptor;
-                }
-
-                _descriptor = (OpenTypeDescriptor)instanceDescriptor;
-            }
-            else
-            {
-                _descriptor = (OpenTypeDescriptor)FontDescriptorCache.GetOrCreateDescriptorFor(this);
-            }
-            _fontMetrics = new XFontMetrics(_descriptor.FontName, _descriptor.UnitsPerEm, _descriptor.Ascender, _descriptor.Descender,
-                _descriptor.Leading, _descriptor.LineSpacing, _descriptor.CapHeight, _descriptor.XHeight, _descriptor.StemV, 0, 0, 0,
-                _descriptor.UnderlinePosition, _descriptor.UnderlineThickness, _descriptor.StrikeoutPosition, _descriptor.StrikeoutSize);
-
-            XFontMetrics fm = Metrics;
-
-            // Already done in CreateDescriptorAndInitializeFontMetrics.
-            //if (_descriptor == null)
-            //    _descriptor = (OpenTypeDescriptor)FontDescriptorStock.Global.CreateDescriptor(this);  //(Name, (XGdiFontStyle)Font.Style);
+            // The descriptor belongs to the typeface (one per typeface, and typefaces are cached per resolver
+            // instance for custom families), so it needs no cache of its own here.
+            _descriptor = _glyphTypeface.Descriptor;
 
             UnitsPerEm = _descriptor.UnitsPerEm;
             CellAscent = _descriptor.Ascender;
             CellDescent = _descriptor.Descender;
             CellSpace = _descriptor.LineSpacing;
-            Debug.Assert(fm.UnitsPerEm == _descriptor.UnitsPerEm);
         }
 
 
@@ -260,20 +224,9 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Gets the XFontFamily object associated with this XFont object.
         /// </summary>
-        [Browsable(false)]
-        public XFontFamily FontFamily
-        {
-            get { return _glyphTypeface.FontFamily; }
-        }
-
-        /// <summary>
-        /// WRONG: Gets the face name of this Font object.
-        /// Indeed it returns the font family name.
-        /// </summary>
-        // [Obsolete("This function returns the font family name, not the face name. Use xxx.FontFamily.Name or xxx.FaceName")]
         public string Name
         {
-            get { return _glyphTypeface.FontFamily.Name; }
+            get { return _glyphTypeface.FamilyName; }
         }
 
         internal string FaceName
@@ -414,26 +367,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
         }
         int _cellDescent;
 
-        /// <summary>
-        /// Gets the font metrics.
-        /// </summary>
-        /// <value>The metrics.</value>
-        public XFontMetrics Metrics
-        {
-            get
-            {
-                // Code moved to InitializeFontMetrics().
-                //if (_fontMetrics == null)
-                //{
-                //    FontDescriptor descriptor = FontDescriptorStock.Global.CreateDescriptor(this);
-                //    _fontMetrics = new XFontMetrics(descriptor.FontName, descriptor.UnitsPerEm, descriptor.Ascender, descriptor.Descender,
-                //        descriptor.Leading, descriptor.LineSpacing, descriptor.CapHeight, descriptor.XHeight, descriptor.StemV, 0, 0, 0);
-                //}
-                Debug.Assert(_fontMetrics != null, "InitializeFontMetrics() not yet called.");
-                return _fontMetrics;
-            }
-        }
-        XFontMetrics _fontMetrics = null!;
 
         /// <summary>
         /// Returns the line spacing, in pixels, of this font. The line spacing is the vertical distance
@@ -458,11 +391,11 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        internal XGlyphTypeface GlyphTypeface
+        internal Typeface GlyphTypeface
         {
             get { return _glyphTypeface; }
         }
-        XGlyphTypeface _glyphTypeface = null!;
+        Typeface _glyphTypeface = null!;
 
 
         internal OpenTypeDescriptor Descriptor

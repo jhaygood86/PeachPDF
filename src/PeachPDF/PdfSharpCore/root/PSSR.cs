@@ -344,21 +344,20 @@ namespace PeachPDF.PdfSharpCore
             {
                 if (_resmngr == null)
                 {
-                    try
+                    lock (ResMngrLock)
                     {
-                        Lock.EnterFontFactory();
                         if (_resmngr == null)
                         {
                             _resmngr = new ResourceManager("PeachPDF.PdfSharpCore.Resources.Messages",
                                 Assembly.GetExecutingAssembly());
                         }
                     }
-                    finally { Lock.ExitFontFactory(); }
                 }
                 return _resmngr;
             }
         }
         static ResourceManager _resmngr = null!;
+        static readonly object ResMngrLock = new();
 
         /// <summary>
         /// Writes all messages defined by PSMsgID.

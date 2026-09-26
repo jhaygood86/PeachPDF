@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachPDF.Fonts;
 using PeachPDF.PdfSharpCore.Drawing;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -102,7 +103,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
         internal static string ComputeKey(XFont font)
         {
-            XGlyphTypeface glyphTypeface = font.GlyphTypeface;
+            Typeface glyphTypeface = font.GlyphTypeface;
             // Include the font source's content checksum, not just its internal FullFaceName: two DIFFERENT
             // font files can share one internal name (a common webfont-subset pattern), and keying the
             // per-document embed cache on the name alone would merge them into a single embedded font -

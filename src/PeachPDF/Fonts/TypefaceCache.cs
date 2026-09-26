@@ -5,7 +5,7 @@
 //
 // Copyright (c) 2005-2016 empira Software GmbH, Cologne Area (Germany)
 //
-// http://www.PdfSharp.com
+// https://www.pdfsharp.com/
 // http://sourceforge.net/projects/pdfsharp
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -29,63 +29,56 @@
 
 #nullable disable warnings
 
-using PeachPDF.PdfSharpCore.Internal;
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Text;
 
-namespace PeachPDF.PdfSharpCore.Drawing
+namespace PeachPDF.Fonts
 {
     /// <summary>
-    /// Global cache of all internal font family objects.
+    /// Global table of all glyph typefaces.
     /// </summary>
-    internal sealed class FontFamilyCache
+    internal class TypefaceCache
     {
-        FontFamilyCache()
+        // A FontResolver instance's own typeface-key-keyed glyph typeface cache, used only for its custom
+        // (AddFont/@font-face) families so two PdfGenerators registering different bytes under one family name
+        // never share a typeface. Held weakly against the resolver, so it is collected along with it.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FontResolver, Dictionary<string, Typeface>> InstanceCaches = new();
+
+        internal static Dictionary<string, Typeface> ForInstance(FontResolver resolver) => InstanceCaches.GetOrCreateValue(resolver);
+
+        TypefaceCache()
         {
-            _familiesByName = new Dictionary<string, FontFamilyInternal>(StringComparer.OrdinalIgnoreCase);
+            _glyphTypefacesByKey = new ConcurrentDictionary<string, Typeface>();
         }
 
-        public static FontFamilyInternal GetFamilyByName(string familyName)
+        public static bool TryGetGlyphTypeface(string key, out Typeface glyphTypeface)
         {
             try
             {
-                Lock.EnterFontFactory();
-                FontFamilyInternal family;
-                Singleton._familiesByName.TryGetValue(familyName, out family);
-                return family;
+                FontLock.Enter();
+                bool result = Singleton._glyphTypefacesByKey.TryGetValue(key, out glyphTypeface);
+                return result;
             }
-            finally { Lock.ExitFontFactory(); }
+            finally { FontLock.Exit(); }
         }
 
-        /// <summary>
-        /// Caches the font family or returns a previously cached one.
-        /// </summary>
-        public static FontFamilyInternal CacheOrGetFontFamily(FontFamilyInternal fontFamily)
+        public static void AddGlyphTypeface(Typeface glyphTypeface)
         {
             try
             {
-                Lock.EnterFontFactory();
-                // Recall that a font family is uniquely identified by its case insensitive name.
-                FontFamilyInternal existingFontFamily;
-                if (Singleton._familiesByName.TryGetValue(fontFamily.Name, out existingFontFamily))
-                {
-#if DEBUG_
-                    if (fontFamily.Name == "xxx")
-                        fontFamily.GetType();
-#endif
-                    return existingFontFamily;
-                }
-                Singleton._familiesByName.Add(fontFamily.Name, fontFamily);
-                return fontFamily;
+                FontLock.Enter();
+                TypefaceCache cache = Singleton;
+                cache._glyphTypefacesByKey.TryAdd(glyphTypeface.Key, glyphTypeface);
             }
-            finally { Lock.ExitFontFactory(); }
+            finally { FontLock.Exit(); }
         }
 
         /// <summary>
         /// Gets the singleton.
         /// </summary>
-        static FontFamilyCache Singleton
+        static TypefaceCache Singleton
         {
             get
             {
@@ -94,20 +87,20 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 {
                     try
                     {
-                        Lock.EnterFontFactory();
+                        FontLock.Enter();
                         if (_singleton == null)
-                            _singleton = new FontFamilyCache();
+                            _singleton = new TypefaceCache();
                     }
-                    finally { Lock.ExitFontFactory(); }
+                    finally { FontLock.Exit(); }
                 }
                 return _singleton;
             }
         }
-        static volatile FontFamilyCache _singleton = null!;
+        static volatile TypefaceCache _singleton = null!;
 
         /// <summary>
-        /// Maps family name to internal font family.
+        /// Maps typeface key to glyph typeface.
         /// </summary>
-        readonly Dictionary<string, FontFamilyInternal> _familiesByName;
+        readonly ConcurrentDictionary<string, Typeface> _glyphTypefacesByKey;
     }
 }

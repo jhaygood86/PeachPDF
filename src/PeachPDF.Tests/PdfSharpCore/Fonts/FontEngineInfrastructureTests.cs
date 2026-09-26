@@ -79,19 +79,40 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         }
 
         [Fact]
-        public void DescriptorCache_CreatesOnceAndReturnsTheSameDescriptorForTheSameFamilyAndStyle()
+        public void Typeface_IsCachedPerFamilyAndStyle_AndOwnsExactlyOneDescriptor()
         {
-            string family = "DescriptorCacheFamily-" + Guid.NewGuid().ToString("N");
+            string family = "TypefaceCacheFamily-" + Guid.NewGuid().ToString("N");
             var resolver = new FontResolver();
             using (var stream = File.OpenRead(BundledFonts.Ttf))
                 resolver.AddFont(stream, family);
 
-            var first = FontDescriptorCache.GetOrCreateDescriptor(family, XFontStyle.Regular, resolver);
-            var second = FontDescriptorCache.GetOrCreateDescriptor(family, XFontStyle.Regular, resolver);
+            var first = Typeface.GetOrCreateFrom(family, new FontResolvingOptions(FaceStyle.Regular), resolver);
+            var second = Typeface.GetOrCreateFrom(family, new FontResolvingOptions(FaceStyle.Regular), resolver);
 
             Assert.Same(first, second);
-            Assert.True(((OpenTypeDescriptor)first).UnitsPerEm > 0);
-            Assert.Throws<ArgumentNullException>(() => FontDescriptorCache.GetOrCreateDescriptor("", XFontStyle.Regular, resolver));
+            Assert.Same(first.Descriptor, second.Descriptor);
+            Assert.True(first.Descriptor.UnitsPerEm > 0);
+            Assert.Equal(first.FamilyName, first.Descriptor.FontName);
+        }
+
+        [Fact]
+        public void Typeface_OfACustomFamily_IsNotSharedWithAnotherResolverInstance()
+        {
+            string family = "TypefaceIsolationFamily-" + Guid.NewGuid().ToString("N");
+            var a = new FontResolver();
+            var b = new FontResolver();
+            foreach (var (resolver, path) in new[] { (a, BundledFonts.Ttf), (b, BundledFonts.Otf) })
+            {
+                using var stream = File.OpenRead(path);
+                resolver.AddFont(stream, family);
+            }
+
+            var fromA = Typeface.GetOrCreateFrom(family, new FontResolvingOptions(FaceStyle.Regular), a);
+            var fromB = Typeface.GetOrCreateFrom(family, new FontResolvingOptions(FaceStyle.Regular), b);
+
+            Assert.NotSame(fromA, fromB);
+            Assert.NotSame(fromA.Descriptor, fromB.Descriptor);
+            Assert.NotEqual(fromA.FontSource.Key, fromB.FontSource.Key);
         }
 
         [Fact]

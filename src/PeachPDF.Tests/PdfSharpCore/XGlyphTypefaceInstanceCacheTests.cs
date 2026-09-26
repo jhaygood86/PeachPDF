@@ -7,7 +7,7 @@ using System.IO;
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {
     /// <summary>
-    /// Direct regression test for <see cref="XGlyphTypeface.GetOrCreateFrom"/>'s per-instance cache
+    /// Direct regression test for <see cref="Typeface.GetOrCreateFrom"/>'s per-instance cache
     /// <b>hit</b> path (a second request for the same custom family+key returns the already-cached
     /// instance) - the companion case to <c>FontFactoryCrossInstanceIsolationTests</c>, which covers the
     /// cross-instance isolation the cache split exists for in the first place.
@@ -24,8 +24,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
 
             var options = new FontResolvingOptions(FaceStyle.Regular);
 
-            var first = XGlyphTypeface.GetOrCreateFrom(family, options, resolver);
-            var second = XGlyphTypeface.GetOrCreateFrom(family, options, resolver);
+            var first = Typeface.GetOrCreateFrom(family, options, resolver);
+            var second = Typeface.GetOrCreateFrom(family, options, resolver);
 
             Assert.Same(first, second);
         }

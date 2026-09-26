@@ -74,18 +74,6 @@ namespace PeachPDF.Fonts
         internal Dictionary<string, FontResolverInfo> InstanceFontResolverInfosByTypefaceKey { get; } = new();
 
         /// <summary>
-        /// This instance's own typeface-key-keyed <see cref="FontDescriptor"/> cache - the per-instance
-        /// counterpart to the global, static <c>FontDescriptorCache</c> (which is ALSO keyed purely by
-        /// the typeface key string, with no notion of which resolver instance produced the underlying
-        /// glyph data - see <c>XGlyphTypeface.OwningInstanceResolver</c>). Used only for custom
-        /// families; without this, a descriptor built from one instance's custom font bytes would leak
-        /// into another instance's request for the same family+style, exactly like the collision the
-        /// glyph-typeface/resolver-info split above fixes, just one layer further down (font metrics/
-        /// embedding data instead of glyph outlines).
-        /// </summary>
-        internal Dictionary<string, FontDescriptor> InstanceFontDescriptorsByKey { get; } = new();
-
-        /// <summary>
         /// Whether <paramref name="familyName"/> was registered via <see cref="AddFont(Stream, string)"/>
         /// on this specific instance (as opposed to being resolvable purely from the shared, immutable,
         /// safe-to-share-globally system-font snapshot).

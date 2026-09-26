@@ -54,7 +54,7 @@ namespace PeachPDF.Adapters
             // of bug one loop earlier in this constructor).
             foreach (var familyName in FontResolver.SystemFamilyDisplayNames)
             {
-                AddFontFamily(new FontFamilyAdapter(new XFontFamily(familyName)));
+                AddFontFamily(new FontFamilyAdapter(familyName));
             }
 
             // "Arial" itself isn't installed on most Linux distros; fall back to whatever
@@ -237,7 +237,7 @@ namespace PeachPDF.Adapters
             var fontDesc = TtfFontDescription.LoadDescription(convertedStream);
             fontFamilyName ??= fontDesc.FontFamilyInvariantCulture;
 
-            AddFontFamily(new FontFamilyAdapter(new XFontFamily(fontFamilyName)));
+            AddFontFamily(new FontFamilyAdapter(fontFamilyName));
 
             AdoptDefaultFontIfMissing(DefaultFontResolver.DefaultFont, fontFamilyName, IsFontExists(DefaultFontResolver.DefaultFont));
 
@@ -399,7 +399,7 @@ namespace PeachPDF.Adapters
         protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null)
         {
             var fontStyle = (XFontStyle)((int)style);
-            var xFont = new XFont(((FontFamilyAdapter)family).FontFamily.Name, size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), weight, stretch, obliqueSkewSinus, _fontResolver);
+            var xFont = new XFont(((FontFamilyAdapter)family).Name, size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), weight, stretch, obliqueSkewSinus, _fontResolver);
             return new FontAdapter(xFont, PixelsPerPoint);
         }
 
