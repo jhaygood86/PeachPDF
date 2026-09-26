@@ -48,6 +48,9 @@
 		<EmbeddedResource Include="Internal\Text\Resources\ArabicJoining\*.br" />
 		<None Remove="Internal\Text\Resources\Use\*.br" />
 		<EmbeddedResource Include="Internal\Text\Resources\Use\*.br" />
+		<!-- Word lists for Thai, Lao, Khmer and Burmese line breaking: raw DEFLATE rather than Brotli, so a WebAssembly host can read them. -->
+		<None Remove="Internal\Text\Resources\Dictionaries\*.dict" />
+		<EmbeddedResource Include="Internal\Text\Resources\Dictionaries\*.dict" />
 	</ItemGroup>
 	<ItemGroup>
 		<!--
