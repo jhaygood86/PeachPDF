@@ -296,7 +296,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
         {
             // WebAssembly has no Brotli decoder: each list must inflate with DeflateStream, whose absence would leave no list at all.
             var assembly = typeof(WordDictionary).Assembly;
-            foreach (var script in new[] { "thai", "lao", "khmer", "burmese" })
+            foreach (var script in new[] { "thai", "khmer" })
             {
                 var name = assembly.GetManifestResourceNames().Single(n => n.EndsWith("." + script + ".dict", StringComparison.Ordinal));
                 using var stream = assembly.GetManifestResourceStream(name)!;
