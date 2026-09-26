@@ -20,8 +20,9 @@ namespace PeachDrawing.Text.Layout
 
         private readonly double[] _advances;
 
-        internal PlacedRun(TextRange range, RunStyle style, GlyphRun glyphs, byte level, double x, double baseline, double width, double[] boundaryX, double[] advances)
+        internal PlacedRun(TextRange range, RunStyle style, GlyphRun glyphs, byte level, double x, double baseline, double width, double[] boundaryX, double[] advances, bool isGenerated = false)
         {
+            IsGenerated = isGenerated;
             _advances = advances;
             Range = range;
             Style = style;
@@ -33,8 +34,14 @@ namespace PeachDrawing.Text.Layout
             _boundaryX = boundaryX;
         }
 
-        /// <summary>The text this run stands for.</summary>
+        /// <summary>The text this run stands for; it is empty, at the place the run is generated, for a run that is <see cref="IsGenerated"/>.</summary>
         public TextRange Range { get; }
+
+        /// <summary>
+        /// Whether the run is not text of the paragraph but drawn in it: the hyphen a line broken inside a word ends with. Its <see cref="Range"/> is empty, and
+        /// a caret at the place it is generated is before it (after it, for a right-to-left paragraph). It is drawn like any other run.
+        /// </summary>
+        public bool IsGenerated { get; }
 
         /// <summary>The face and size the run is set in.</summary>
         public RunStyle Style { get; }
@@ -201,7 +208,7 @@ namespace PeachDrawing.Text.Layout
                 return new TextPosition(line.Range.Start);
             }
 
-            TextPosition At(int index) => new(index, index == line.Range.End && line.End is LineEnd.Soft or LineEnd.Emergency ? TextAffinity.Upstream : TextAffinity.Downstream);
+            TextPosition At(int index) => new(index, index == line.Range.End && IsSoftEnd(line.End) ? TextAffinity.Upstream : TextAffinity.Downstream);
 
             // Left or right of everything: the boundary at that visual edge.
             var first = line.Runs[0];
@@ -245,6 +252,9 @@ namespace PeachDrawing.Text.Layout
 
             return At(line.ContentEnd);
         }
+
+        /// <summary>Whether a line that ends this way continues in the next one at the same place in the text, so that a position there can be on either.</summary>
+        private static bool IsSoftEnd(LineEnd end) => end is LineEnd.Soft or LineEnd.Emergency or LineEnd.Hyphenated;
 
         private int LineIndexAtY(double y)
         {
@@ -305,13 +315,13 @@ namespace PeachDrawing.Text.Layout
                     return _lines[i];
                 }
 
-                if (index == range.Start && !(position.Affinity == TextAffinity.Upstream && i > 0 && _lines[i - 1].End is LineEnd.Soft or LineEnd.Emergency))
+                if (index == range.Start && !(position.Affinity == TextAffinity.Upstream && i > 0 && IsSoftEnd(_lines[i - 1].End)))
                 {
                     return _lines[i];
                 }
 
                 // The end of a line is the start of the next one, except where a soft break lets the position choose.
-                if (index == range.End && (isLast || (position.Affinity == TextAffinity.Upstream && _lines[i].End is LineEnd.Soft or LineEnd.Emergency)))
+                if (index == range.End && (isLast || (position.Affinity == TextAffinity.Upstream && IsSoftEnd(_lines[i].End))))
                 {
                     return _lines[i];
                 }

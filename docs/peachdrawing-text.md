@@ -428,8 +428,20 @@ foreach (LineBox line in layout.Lines)
   the text is written, indent included; a tab at the end of a line hangs; a tab is a run of its own with no glyphs, so it draws nothing, and it is
   not a justification opportunity. `ContentWidth` and `MeasureContent()` count the indent.
 
-Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Hyphenation, a line limit with an
-ellipsis and inline boxes are not part of the layout yet.
+- **Hyphenation.** `ParagraphStyle.Hyphens` is `Manual` by default: a soft hyphen (U+00AD) is a place a line may break, the line then ends with a hyphen
+  (`LineBox.End` is `Hyphenated`), and a soft hyphen the line does not end at draws nothing and takes no room. `None` makes soft hyphens no place to break,
+  and `Auto` also breaks words where the patterns of their language allow (`Hyphenator`; the language is the `ShapeSettings.Language` of the run the word is in, or the
+  `Language` of `ParagraphStyle.LineBreak`; a word with neither is left whole). A word is hyphenated when it would not fit, as far along as it goes, before
+  the emergency cut of `OverflowWrap` is tried. The hyphen is a generated run (`PlacedRun.IsGenerated`, an empty `Range`, drawn like any run) at the end of the line in the
+  paragraph's direction, U+2010 if the face has it and a hyphen-minus otherwise, or `ParagraphStyle.HyphenateCharacter`; it counts in the line's width. If the hyphen
+  would not fit after a soft hyphen the line ends at the last earlier place that has room for it. `HyphenateLimitChars` (word, before and after; 5, 2 and 2
+  by default), `HyphenateLimitLines` (hyphenated lines in a row), `HyphenateLimitZone` (room a line may leave before its last word is hyphenated) and
+  `HyphenateLimitLast` (`Always` keeps the last full line, the one before a rest that fits a line of its own, from ending with a hyphenation) restrict it. A
+  caret at a hyphenated break can be on either line as at any soft break, and lies before the hyphen. `MeasureContent()` counts hyphens, and with `Auto` its minimum
+  is the widest piece between two places a word may be hyphenated.
+
+Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. A line limit with an ellipsis and inline boxes
+are not part of the layout yet.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 

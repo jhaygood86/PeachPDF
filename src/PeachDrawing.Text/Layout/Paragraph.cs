@@ -33,6 +33,10 @@ namespace PeachDrawing.Text.Layout
         private const int MaxShapedPieces = 8192;
 
         private readonly Dictionary<(int, int), GlyphRun> _shaped = [];
+        private readonly Dictionary<(int, int), int[]> _hyphenPoints = [];
+        private readonly Dictionary<(RunStyle, string), (GlyphRun Run, RunStyle Style, double Width)> _hyphens = [];
+        private const int MaxHyphenatedWords = 4096;
+        private const char SoftHyphen = '\u00AD';
 
         /// <summary>A piece of the text that is shaped as one: one style, one direction level and one script.</summary>
         internal readonly record struct Atom(int Start, int End, int Run, byte Level, string Script, RunStyle Style);
@@ -46,6 +50,17 @@ namespace PeachDrawing.Text.Layout
 
             (_scripts, _joining, _use) = ResolveScripts(text);
             Opportunities = LineBreaker.FindOpportunities(text, style.LineBreak);
+            if (style.Hyphens == Hyphens.None)
+            {
+                // Without hyphenation a soft hyphen is not a place to break.
+                for (int i = 1; i <= text.Length; i++)
+                {
+                    if (text[i - 1] == SoftHyphen && Opportunities[i] == LineBreakOpportunity.Allowed)
+                    {
+                        Opportunities[i] = LineBreakOpportunity.Prohibited;
+                    }
+                }
+            }
 
             _isGraphemeBoundary = new bool[text.Length + 1];
             foreach (var boundary in Segmenter.FindGraphemeBoundaries(text))
@@ -318,6 +333,11 @@ namespace PeachDrawing.Text.Layout
             }
 
             var run = Shaper.Shape(style.Typeface, pieceText, settings);
+            if (pieceText.Contains(SoftHyphen))
+            {
+                run = WithoutSoftHyphens(run, pieceText);
+            }
+
             lock (_shaped)
             {
                 // Laying out at many widths (a resize) makes many pieces; what is dropped is only shaped again.
@@ -330,6 +350,42 @@ namespace PeachDrawing.Text.Layout
             }
 
             return run;
+        }
+
+        /// <summary>
+        /// A soft hyphen draws nothing where the line does not end: where it does, the layout generates the hyphen the line ends with. So the glyph a face may have
+        /// for it is dropped from the run (a mark attached to it loses its anchor), and the characters it stood for stay in the text.
+        /// </summary>
+        private static GlyphRun WithoutSoftHyphens(GlyphRun run, string pieceText)
+        {
+            var glyphs = run.Glyphs;
+            var remap = new int[glyphs.Count];
+            var kept = new List<PlacedGlyph>(glyphs.Count);
+            for (int i = 0; i < glyphs.Count; i++)
+            {
+                var glyph = glyphs[i];
+                bool isSoftHyphen = glyph.ClusterLength == 1 && glyph.ClusterStart >= 0 && glyph.ClusterStart < pieceText.Length && pieceText[glyph.ClusterStart] == SoftHyphen;
+                remap[i] = isSoftHyphen ? -1 : kept.Count;
+                if (!isSoftHyphen)
+                {
+                    kept.Add(glyph);
+                }
+            }
+
+            if (kept.Count == glyphs.Count)
+            {
+                return run;
+            }
+
+            for (int i = 0; i < kept.Count; i++)
+            {
+                if (kept[i].AttachedToIndex is { } attached)
+                {
+                    kept[i] = kept[i] with { AttachedToIndex = attached >= 0 && attached < remap.Length && remap[attached] >= 0 ? remap[attached] : null };
+                }
+            }
+
+            return new GlyphRun(run.Typeface, kept);
         }
 
         /// <summary>The width, in layout units, of a shaped piece set in <paramref name="style"/>.</summary>
@@ -425,6 +481,129 @@ namespace PeachDrawing.Text.Layout
             }
 
             return count;
+        }
+
+        /// <summary>The language of the text at <paramref name="index"/>: its run's, or else the one line breaking is tailored for.</summary>
+        internal string? LanguageAt(int index) => StyleAt(index).Shape?.Language ?? Style.LineBreak.Language;
+
+        /// <summary>The style of the atom that holds <paramref name="index"/>: the run's, or the stand-in a fallback chose.</summary>
+        internal RunStyle AtomStyleAt(int index)
+        {
+            int a = FirstAtomAfter(index);
+            return a < _atoms.Length && _atoms[a].Start <= index ? _atoms[a].Style : StyleAt(index);
+        }
+
+        /// <summary>
+        /// The places automatic hyphenation may break the word in <c>[start, end)</c>, as offsets in the text, in increasing order: the patterns of the word's language,
+        /// with <see cref="ParagraphStyle.HyphenateLimitChars"/> applied. A stretch that is not one word of letters has none.
+        /// </summary>
+        internal int[] HyphenationPoints(int start, int end)
+        {
+            var key = (start, end);
+            lock (_hyphenPoints)
+            {
+                if (_hyphenPoints.TryGetValue(key, out var cached))
+                {
+                    return cached;
+                }
+            }
+
+            var found = FindHyphenationPoints(start, end);
+            lock (_hyphenPoints)
+            {
+                if (_hyphenPoints.Count >= MaxHyphenatedWords)
+                {
+                    _hyphenPoints.Clear();
+                }
+
+                _hyphenPoints[key] = found;
+            }
+
+            return found;
+        }
+
+        private int[] FindHyphenationPoints(int start, int end)
+        {
+            while (start < end && !char.IsLetter(Text[start]))
+            {
+                start++;
+            }
+
+            while (end > start && !char.IsLetter(Text[end - 1]))
+            {
+                end--;
+            }
+
+            var limits = Style.HyphenateLimitChars;
+            int minWord = limits.WordLength ?? 5;
+            int minBefore = limits.BeforeBreak ?? 2;
+            int minAfter = limits.AfterBreak ?? 2;
+            if (end - start < Math.Max(minWord, 2) || LanguageAt(start) is not { Length: > 0 } language)
+            {
+                return [];
+            }
+
+            var points = new List<int>();
+            foreach (int index in Hyphenator.FindBreakPoints(Text.Substring(start, end - start), language))
+            {
+                int offset = start + index;
+                if (index >= minBefore && end - offset >= minAfter && IsGraphemeBoundary(offset))
+                {
+                    points.Add(offset);
+                }
+            }
+
+            return points.ToArray();
+        }
+
+        /// <summary>The hyphen a line ends with when it is broken at <paramref name="index"/>: its glyphs, its style (the face of the character before the break) and its width.</summary>
+        internal (GlyphRun Run, RunStyle Style, double Width) HyphenAt(int index)
+        {
+            var style = AtomStyleAt(Math.Max(0, index - 1));
+            var text = Style.HyphenateCharacter;
+            if (text is null)
+            {
+                text = style.Typeface.TryMapRune(new Rune(0x2010), out _) ? "\u2010" : "-";
+            }
+
+            var key = (style, text);
+            lock (_hyphens)
+            {
+                if (_hyphens.TryGetValue(key, out var cached))
+                {
+                    return cached;
+                }
+            }
+
+            Rune.DecodeFromUtf16(text.AsSpan(), out var first, out _);
+            if (!style.Typeface.TryMapRune(first, out _) && style.Fallback?.Invoke(first) is { } stand)
+            {
+                style = style with { Typeface = stand };
+            }
+
+            var run = Shaper.Shape(style.Typeface, text, (style.Shape ?? ShapeSettings.Default) with { ScriptTag = null, JoiningForms = null, UseCategories = null, ReverseForDisplay = false });
+            var clusterStarts = new HashSet<int>();
+            foreach (var glyph in run.Glyphs)
+            {
+                if (glyph.ClusterLength > 0)
+                {
+                    clusterStarts.Add(glyph.ClusterStart);
+                }
+            }
+
+            double width = (run.Advance * style.Size / style.Typeface.Metrics.UnitsPerEm) + (style.LetterSpacing * clusterStarts.Count);
+            var made = (run, style, width);
+            lock (_hyphens)
+            {
+                if (_hyphens.Count >= 256)
+                {
+                    _hyphens.Clear();
+                }
+
+                _hyphens[key] = made;
+            }
+
+            return made;
         }
 
         /// <summary>Whether the atom is one tab character.</summary>
@@ -555,7 +734,7 @@ namespace PeachDrawing.Text.Layout
                 }
                 else
                 {
-                    min = Math.Max(min, Measure(segmentStart, contentEnd, segmentIndent) + segmentIndent);
+                    min = Math.Max(min, MinimumWidth(segmentStart, contentEnd, segmentIndent));
                 }
 
                 if (opportunities[i] == LineBreakOpportunity.Mandatory)
@@ -569,6 +748,35 @@ namespace PeachDrawing.Text.Layout
             }
 
             return new ContentWidths(min, max);
+        }
+
+        /// <summary>
+        /// The narrowest a line that holds the segment <c>[start, contentEnd)</c> can be, indent included: the segment as one piece, or with hyphenation the
+        /// widest piece of it between two places it can be broken, with the hyphen the piece ends with.
+        /// </summary>
+        private double MinimumWidth(int start, int contentEnd, double indent)
+        {
+            if (Style.Hyphens == Hyphens.None)
+            {
+                return Measure(start, contentEnd, indent) + indent;
+            }
+
+            var points = Style.Hyphens == Hyphens.Auto ? HyphenationPoints(start, contentEnd) : [];
+            double widest = 0;
+            int from = start;
+            foreach (int point in points)
+            {
+                widest = Math.Max(widest, Measure(from, point, from == start ? indent : 0) + HyphenAt(point).Width + (from == start ? indent : 0));
+                from = point;
+            }
+
+            double last = Measure(from, contentEnd, from == start ? indent : 0) + (from == start ? indent : 0);
+            if (contentEnd > from && Text[contentEnd - 1] == SoftHyphen)
+            {
+                last += HyphenAt(contentEnd).Width;
+            }
+
+            return Math.Max(widest, last);
         }
 
         /// <summary>The end of the text <c>[start, end)</c> once the hanging spaces and line-ending characters at its end are left out.</summary>
@@ -608,12 +816,33 @@ namespace PeachDrawing.Text.Layout
         /// <summary>Sets how the paragraph as a whole is set.</summary>
         /// <param name="style">The paragraph style.</param>
         /// <returns>This builder.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">The text indent is not a finite number.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The text indent, the hyphenation zone or a hyphenation limit is not a finite number in its range, or the hyphenation character is not from 1 to 32 UTF-16 units long.</exception>
         public ParagraphBuilder SetStyle(ParagraphStyle style)
         {
             if (!double.IsFinite(style.TextIndent.Length))
             {
                 throw new ArgumentOutOfRangeException(nameof(style), style.TextIndent.Length, "The text indent must be a finite number.");
+            }
+
+            var limits = style.HyphenateLimitChars;
+            if (limits.WordLength < 0 || limits.BeforeBreak < 0 || limits.AfterBreak < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(style), limits, "The hyphenation limits must not be negative.");
+            }
+
+            if (style.HyphenateLimitLines < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(style), style.HyphenateLimitLines, "The limit on hyphenated lines must not be negative.");
+            }
+
+            if (!double.IsFinite(style.HyphenateLimitZone) || style.HyphenateLimitZone < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(style), style.HyphenateLimitZone, "The hyphenation zone must be a finite number, zero or more.");
+            }
+
+            if (style.HyphenateCharacter is { } hyphen && (hyphen.Length is < 1 or > 32))
+            {
+                throw new ArgumentOutOfRangeException(nameof(style), hyphen.Length, "The hyphenation character must be from 1 to 32 UTF-16 units long.");
             }
 
             _style = style;

@@ -64,6 +64,42 @@ namespace PeachDrawing.Text.Layout
         Justify = 5,
     }
 
+    /// <summary>Whether and how words are broken with a hyphen at the end of a line (CSS <c>hyphens</c>).</summary>
+    public enum Hyphens
+    {
+        /// <summary>A line breaks inside a word only where the text has a soft hyphen (U+00AD), and ends with a hyphen there.</summary>
+        Manual = 0,
+
+        /// <summary>Soft hyphens are not break opportunities, and no word is hyphenated.</summary>
+        None = 1,
+
+        /// <summary>
+        /// Soft hyphens are used, and words are also hyphenated where the patterns of the language allow (see <see cref="Hyphenator"/>). The language is the
+        /// <see cref="ShapeSettings.Language"/> of the run the word is in, or <see cref="LineBreakOptions.Language"/> of the paragraph's line breaking; a
+        /// word with neither is not hyphenated.
+        /// </summary>
+        Auto = 2,
+    }
+
+    /// <summary>The smallest a hyphenated word and the pieces of it may be (CSS <c>hyphenate-limit-chars</c>).</summary>
+    /// <param name="WordLength">The fewest characters a word must have to be hyphenated, or <see langword="null"/> for 5.</param>
+    /// <param name="BeforeBreak">The fewest characters that must stay before the hyphen, or <see langword="null"/> for 2.</param>
+    /// <param name="AfterBreak">The fewest characters that must go after the hyphen, or <see langword="null"/> for 2.</param>
+    public readonly record struct HyphenateLimitChars(int? WordLength = null, int? BeforeBreak = null, int? AfterBreak = null);
+
+    /// <summary>Whether the last full line of a paragraph may be hyphenated (CSS <c>hyphenate-limit-last</c>).</summary>
+    public enum HyphenateLimitLast
+    {
+        /// <summary>There is no restriction.</summary>
+        None = 0,
+
+        /// <summary>
+        /// The last full line, the one that ends where the rest of the text before the paragraph's end or the next forced break fits on a line of its own,
+        /// does not end with a hyphenation.
+        /// </summary>
+        Always = 1,
+    }
+
     /// <summary>Where a justified line gets its extra room (CSS <c>text-justify</c>).</summary>
     public enum TextJustify
     {
@@ -116,6 +152,12 @@ namespace PeachDrawing.Text.Layout
 
         /// <summary>It is the last line, ending at the end of the text.</summary>
         Last = 3,
+
+        /// <summary>
+        /// Inside a word, at a soft hyphen or a place automatic hyphenation chose, and the line ends with a hyphen: a generated run (see
+        /// <see cref="PlacedRun.IsGenerated"/>) that is not part of the text.
+        /// </summary>
+        Hyphenated = 4,
     }
 
     /// <summary>The narrowest and widest a paragraph can be laid out.</summary>
@@ -249,6 +291,30 @@ namespace PeachDrawing.Text.Layout
 
         /// <summary>Where a justified line gets its room from (CSS <c>text-justify</c>); it matters only where the alignment is <see cref="TextAlign.Justify"/>.</summary>
         public TextJustify TextJustify { get; init; }
+
+        /// <summary>Whether words are broken with a hyphen (CSS <c>hyphens</c>).</summary>
+        public Hyphens Hyphens { get; init; }
+
+        /// <summary>
+        /// The string a hyphenated line ends with (CSS <c>hyphenate-character</c>), from 1 to 32 UTF-16 units, or <see langword="null"/> for the hyphen (U+2010)
+        /// where the face has it and the hyphen-minus otherwise.
+        /// </summary>
+        public string? HyphenateCharacter { get; init; }
+
+        /// <summary>The smallest a hyphenated word and its pieces may be (CSS <c>hyphenate-limit-chars</c>). Counts are of UTF-16 units and must not be negative.</summary>
+        public HyphenateLimitChars HyphenateLimitChars { get; init; }
+
+        /// <summary>The most lines in a row that may end with a hyphenation (CSS <c>hyphenate-limit-lines</c>), or <see langword="null"/> for no limit; it must not be negative.</summary>
+        public int? HyphenateLimitLines { get; init; }
+
+        /// <summary>
+        /// How much room a line may have left at its end before its last word is hyphenated (CSS <c>hyphenate-limit-zone</c>), in layout units; a word is
+        /// hyphenated to fill a line only when the unfilled space would be at least this. It is not negative or infinite, and a percentage is the caller's to resolve.
+        /// </summary>
+        public double HyphenateLimitZone { get; init; }
+
+        /// <summary>Whether the last full line may end with a hyphenation (CSS <c>hyphenate-limit-last</c>).</summary>
+        public HyphenateLimitLast HyphenateLimitLast { get; init; }
 
         /// <summary>How CSS <c>word-break</c> and <c>line-break</c> tailor where lines may break.</summary>
         public LineBreakOptions LineBreak { get; init; }
