@@ -1,3 +1,4 @@
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;

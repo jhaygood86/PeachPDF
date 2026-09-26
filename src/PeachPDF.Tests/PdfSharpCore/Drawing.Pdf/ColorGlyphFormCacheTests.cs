@@ -22,9 +22,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing.Pdf
     public class ColorGlyphFormCacheTests
     {
         private static OpenTypeDescriptor Descriptor(string path) =>
-            new("color-form-cache-test", "color-form-cache-test", XFontStyle.Regular,
-                FontFileData.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            new("color-form-cache-test", "color-form-cache-test", FontFileData.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface);
 
         private static Dictionary<int, XColor> Overrides(params (int Entry, XColor Color)[] entries)
         {

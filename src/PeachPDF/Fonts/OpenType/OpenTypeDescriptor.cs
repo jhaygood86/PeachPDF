@@ -27,7 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Text;
 using PeachPDF.Text.Bidi;
 using System;
@@ -50,30 +49,15 @@ namespace PeachPDF.Fonts.OpenType
         private const int MaxAttachmentChainDepth = 8;
 
         /// <summary>
-        /// New...
+        /// Describes <paramref name="fontface"/>: a font face's metrics, glyph mapping and shaping entry points, in
+        /// design units (nothing here depends on a font size).
         /// </summary>
-        public OpenTypeDescriptor(string fontDescriptorKey, string name, XFontStyle stlye, OpenTypeFontface fontface, XPdfFontOptions options)
+        public OpenTypeDescriptor(string fontDescriptorKey, string name, OpenTypeFontface fontface)
             : base(fontDescriptorKey)
         {
             FontFace = fontface;
             FontName = name;
             Initialize();
-        }
-
-        public OpenTypeDescriptor(string fontDescriptorKey, XFont font)
-            : base(fontDescriptorKey)
-        {
-            try
-            {
-                FontFace = font.GlyphTypeface.Fontface;
-                FontName = font.Name;
-                Initialize();
-            }
-            catch
-            {
-                GetType();
-                throw;
-            }
         }
 
         internal OpenTypeFontface FontFace;

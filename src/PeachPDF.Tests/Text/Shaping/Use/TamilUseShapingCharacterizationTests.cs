@@ -37,8 +37,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
         private static OpenTypeDescriptor Descriptor()
         {
             var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Tamil)).Fontface;
-            return new OpenTypeDescriptor("tamil-test", "tamil-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            return new OpenTypeDescriptor("tamil-test", "tamil-test", face);
         }
 
         private static int[] ShapeGlyphIds(OpenTypeDescriptor descriptor, params int[] codepoints)

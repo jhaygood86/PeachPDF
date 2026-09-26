@@ -31,7 +31,6 @@
 
 #define VERBOSE_
 
-using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
@@ -243,7 +242,7 @@ namespace PeachPDF.Fonts.OpenType
                 if (startTag == TTCF)
                 {
                     _fontTechnology = FontTechnology.TrueTypeCollection;
-                    throw new InvalidOperationException("TrueType collection fonts are not yet supported by PeachPDF.PdfSharpCore.");
+                    throw new InvalidOperationException("TrueType collection fonts are not supported here; a face must be extracted first.");
                 }
 
                 // Read offset table
@@ -273,7 +272,7 @@ namespace PeachPDF.Fonts.OpenType
 
                 // PDFlib checks this, but it is not part of the OpenType spec anymore
                 if (TableDictionary.ContainsKey("bhed"))
-                    throw new NotSupportedException("Bitmap fonts are not supported by PeachPDF.PdfSharpCore.");
+                    throw new NotSupportedException("Bitmap fonts are not supported.");
 
                 // Read required tables
                 if (Seek(CMapTable.Tag) != -1)

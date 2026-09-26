@@ -1,3 +1,4 @@
+using PeachPDF.Fonts;
 using PeachPDF.Adapters;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
@@ -109,7 +110,7 @@ internal sealed partial class RasterGraphics
 
     private static double ItalicSkew(XFont font)
     {
-        var simulated = (font.GlyphTypeface.StyleSimulations & XStyleSimulations.ItalicSimulation) != 0;
+        var simulated = (font.GlyphTypeface.StyleSimulations & SyntheticStyle.Italic) != 0;
         return simulated ? font.ObliqueSkewSinus ?? Const.ItalicSkewAngleSinus : 0;
     }
 
@@ -156,7 +157,7 @@ internal sealed partial class RasterGraphics
         FillPolygons(polygons, evenOdd: false, paint);
 
         // Faux bold: the PDF renderer strokes the outline at 2% of the em (text render mode 2).
-        var boldSimulated = (font.GlyphTypeface.StyleSimulations & XStyleSimulations.BoldSimulation) != 0;
+        var boldSimulated = (font.GlyphTypeface.StyleSimulations & SyntheticStyle.Bold) != 0;
         if (boldSimulated)
         {
             var style = new StrokeStyle(font.Size * Const.BoldEmphasis, StrokeCap.Butt, StrokeJoin.Miter, 10, null, 0);

@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Fonts
         private static OpenTypeFontface Face(byte[] font) => FontFileData.GetOrCreateFrom(font).Fontface;
 
         private static OpenTypeDescriptor Descriptor(byte[] font) =>
-            new("uvs-test", "uvs-test", XFontStyle.Regular, Face(font), new XPdfFontOptions(PdfFontEncoding.Unicode));
+            new("uvs-test", "uvs-test", Face(font));
 
         [Fact]
         public void FontWithoutFormat14_HasNoVariationSequenceTable()

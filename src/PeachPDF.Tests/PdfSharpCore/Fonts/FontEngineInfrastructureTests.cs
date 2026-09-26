@@ -73,7 +73,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         {
             // PeachPDF has no platform resolver of its own: only an installed IFontResolver can resolve a family.
             var info = FontFactory.ResolveTypeface("NoResolverFamily-" + Guid.NewGuid().ToString("N"),
-                new FontResolvingOptions(XFontStyle.Regular), "no-resolver-key-" + Guid.NewGuid().ToString("N"), fontResolver: null!);
+                new FontResolvingOptions(FaceStyle.Regular), "no-resolver-key-" + Guid.NewGuid().ToString("N"), fontResolver: null!);
 
             Assert.Null(info);
         }

@@ -1,6 +1,5 @@
 #nullable disable warnings
 
-using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -19,7 +18,7 @@ namespace PeachPDF.Fonts
 
         public string FontFamilyInvariantCulture { get; init; }
         public string FontNameInvariantCulture { get; init; }
-        public XFontStyle Style { get; init; }
+        public FaceStyle Style { get; init; }
 
         /// <summary>
         /// CSS Fonts Level 4 numeric weight (1-1000), read from the OS/2 table's <c>usWeightClass</c>
@@ -153,15 +152,15 @@ namespace PeachPDF.Fonts
 
             var style = subfamilyName?.ToLowerInvariant() switch
             {
-                "bold italic" or "bold oblique" => XFontStyle.BoldItalic,
-                "bold"                          => XFontStyle.Bold,
-                "italic" or "oblique"           => XFontStyle.Italic,
-                _                               => XFontStyle.Regular
+                "bold italic" or "bold oblique" => FaceStyle.BoldItalic,
+                "bold"                          => FaceStyle.Bold,
+                "italic" or "oblique"           => FaceStyle.Italic,
+                _                               => FaceStyle.Regular
             };
 
             var (weight, stretch) = ReadOs2WeightAndStretch(stream, os2TableOffset);
             if (weight == 0)
-                weight = style is XFontStyle.Bold or XFontStyle.BoldItalic ? 700 : DefaultWeight;
+                weight = style is FaceStyle.Bold or FaceStyle.BoldItalic ? 700 : DefaultWeight;
 
             return new TtfFontDescription
             {

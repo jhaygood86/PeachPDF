@@ -29,18 +29,27 @@
 
 #nullable disable warnings
 
+using PeachPDF.Fonts;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
+using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Text;
 
-namespace PeachPDF.Fonts.OpenType
+namespace PeachPDF.PdfSharpCore.Drawing
 {
     /// <summary>
     /// Global table of all glyph typefaces.
     /// </summary>
     internal class GlyphTypefaceCache
     {
+        // A FontResolver instance's own typeface-key-keyed glyph typeface cache, used only for its custom
+        // (AddFont/@font-face) families so two PdfGenerators registering different bytes under one family name
+        // never share a typeface. Held weakly against the resolver, so it is collected along with it.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FontResolver, Dictionary<string, XGlyphTypeface>> InstanceCaches = new();
+
+        internal static Dictionary<string, XGlyphTypeface> ForInstance(FontResolver resolver) => InstanceCaches.GetOrCreateValue(resolver);
+
         GlyphTypefaceCache()
         {
             _glyphTypefacesByKey = new ConcurrentDictionary<string, XGlyphTypeface>();

@@ -49,8 +49,7 @@ namespace PeachPDF.Tests.Svg
         private static OpenTypeDescriptor Descriptor()
         {
             var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Devanagari)).Fontface;
-            return new OpenTypeDescriptor("svg-devanagari-test", "svg-devanagari-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            return new OpenTypeDescriptor("svg-devanagari-test", "svg-devanagari-test", face);
         }
 
         [Fact]

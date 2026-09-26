@@ -52,9 +52,9 @@ namespace PeachPDF.PdfSharpCore.Drawing
         // * 
         //
 
-        const string KeyPrefix = "tk:";  // "typeface key"
+        const string KeyPrefix = FontResolvingOptions.TypefaceKeyPrefix;
 
-        public XGlyphTypeface(string key, FontFileData fontSource, XStyleSimulations styleSimulations = XStyleSimulations.None)
+        public XGlyphTypeface(string key, FontFileData fontSource, SyntheticStyle styleSimulations = SyntheticStyle.None)
         {
             string familyName = fontSource.Fontface.name.Name;
             _fontFamily = new XFontFamily(familyName, false);
@@ -94,7 +94,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
             if (useInstanceCache)
             {
-                if (instanceResolver!.InstanceGlyphTypefacesByKey.TryGetValue(typefaceKey, out var instanceCached))
+                if (GlyphTypefaceCache.ForInstance(instanceResolver!).TryGetValue(typefaceKey, out var instanceCached))
                     return instanceCached;
             }
             else if (GlyphTypefaceCache.TryGetGlyphTypeface(typefaceKey, out var globalCached))
@@ -146,7 +146,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             if (useInstanceCache)
             {
                 glyphTypeface.OwningInstanceResolver = instanceResolver;
-                instanceResolver!.InstanceGlyphTypefacesByKey[typefaceKey] = glyphTypeface;
+                GlyphTypefaceCache.ForInstance(instanceResolver!)[typefaceKey] = glyphTypeface;
             }
             else
             {
@@ -168,7 +168,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             var simSuffix = (info.MustSimulateBold ? "/b+" : "") + (info.MustSimulateItalic ? "/i+" : "");
             var key = KeyPrefix + "cp/" + info.FaceName.ToLowerInvariant() + simSuffix;
 
-            if (resolver.InstanceGlyphTypefacesByKey.TryGetValue(key, out var cached))
+            if (GlyphTypefaceCache.ForInstance(resolver).TryGetValue(key, out var cached))
                 return cached;
 
             var fontSource = FontFileData.GetOrCreateFrom(resolver.GetFont(info.FaceName));
@@ -176,7 +176,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             {
                 OwningInstanceResolver = resolver
             };
-            resolver.InstanceGlyphTypefacesByKey[key] = glyphTypeface;
+            GlyphTypefaceCache.ForInstance(resolver)[key] = glyphTypeface;
             return glyphTypeface;
         }
 
@@ -185,7 +185,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// OWN per-instance cache for (i.e. a custom/<c>@font-face</c>-registered family - see
         /// <see cref="GetOrCreateFrom"/>), or null if it came from the global, process-wide caches (a
         /// pure system-font request, safe to share). <see cref="Drawing.XFont"/> reads this to route
-        /// <see cref="Fonts.FontDescriptorCache"/> lookups the same way - that cache is ALSO keyed by
+        /// <see cref="FontDescriptorCache"/> lookups the same way - that cache is ALSO keyed by
         /// this typeface's <see cref="Key"/> string alone, so without this it would silently reintroduce
         /// the exact cross-instance collision the split above fixes, just one layer further down.
         /// </summary>
@@ -308,11 +308,11 @@ namespace PeachPDF.PdfSharpCore.Drawing
         }
         bool _isItalic;
 
-        public XStyleSimulations StyleSimulations
+        public SyntheticStyle StyleSimulations
         {
             get { return _styleSimulations; }
         }
-        XStyleSimulations _styleSimulations;
+        SyntheticStyle _styleSimulations;
 
         /// <summary>
         /// Gets the suffix of the face name in a PDF font and font descriptor.
@@ -346,25 +346,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// </summary>
         internal static string ComputeKey(string familyName, FontResolvingOptions fontResolvingOptions)
         {
-            // Compute a human readable key.
-            string simulationSuffix = "";
-            if (fontResolvingOptions.OverrideStyleSimulations)
-            {
-                switch (fontResolvingOptions.StyleSimulations)
-                {
-                    case XStyleSimulations.BoldSimulation: simulationSuffix = "|b+/i-"; break;
-                    case XStyleSimulations.ItalicSimulation: simulationSuffix = "|b-/i+"; break;
-                    case XStyleSimulations.BoldItalicSimulation: simulationSuffix = "|b+/i+"; break;
-                    case XStyleSimulations.None: break;
-                    default: throw new ArgumentOutOfRangeException();
-                }
-            }
-            string key = KeyPrefix + familyName.ToLowerInvariant()
-                + (fontResolvingOptions.IsItalic ? "/i" : "/n") // normal / oblique / italic
-                + "/" + fontResolvingOptions.Weight
-                + "/" + fontResolvingOptions.Stretch
-                + simulationSuffix;
-            return key;
+            return fontResolvingOptions.ComputeTypefaceKey(familyName);
         }
 
         /// <summary>
@@ -372,7 +354,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// </summary>
         internal static string ComputeKey(string familyName, bool isBold, bool isItalic)
         {
-            return ComputeKey(familyName, new FontResolvingOptions(FontHelper.CreateStyle(isBold, isItalic)));
+            return ComputeKey(familyName, new FontResolvingOptions(FontHelper.CreateStyle(isBold, isItalic).ToFaceStyle()));
         }
         public string Key
         {

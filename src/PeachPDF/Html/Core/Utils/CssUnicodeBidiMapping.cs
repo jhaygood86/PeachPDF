@@ -1,7 +1,8 @@
+using PeachPDF.Text.Bidi;
 using PeachPDF.CSS;
 using System.Collections.Generic;
 
-namespace PeachPDF.Text.Bidi
+namespace PeachPDF.Html.Core.Utils
 {
     /// <summary>
     /// The CSS <c>unicode-bidi</c>/<c>direction</c> integration into UAX#9 (CSS Writing Modes Level 3

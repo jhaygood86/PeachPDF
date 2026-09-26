@@ -26,8 +26,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         private static OpenTypeDescriptor Descriptor(byte[] font)
         {
             var face = FontFileData.GetOrCreateFrom(font).Fontface;
-            return new OpenTypeDescriptor("emoji-test", "emoji-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            return new OpenTypeDescriptor("emoji-test", "emoji-test", face);
         }
 
         [Fact]
@@ -62,8 +61,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             // resolves to the missing glyph and is not reported as covered, while BMP still works. This also
             // exercises CMapCoverage.Extract's fast path (no format-12 → BMP ranges only).
             var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
-            var descriptor = new OpenTypeDescriptor("bmp-only", "bmp-only", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var descriptor = new OpenTypeDescriptor("bmp-only", "bmp-only", face);
 
             Assert.Equal(0, descriptor.CharCodeToGlyphIndex(new Rune(Grin)));
             Assert.False(descriptor.HasGlyph(new Rune(Grin)));

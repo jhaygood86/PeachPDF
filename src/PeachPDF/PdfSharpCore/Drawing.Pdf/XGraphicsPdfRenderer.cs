@@ -417,8 +417,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             //bool bold = (font.Style & XFontStyle.Bold) != 0;
             //bool italic = (font.Style & XFontStyle.Italic) != 0;
-            bool italicSimulation = (font.GlyphTypeface.StyleSimulations & XStyleSimulations.ItalicSimulation) != 0;
-            bool boldSimulation = (font.GlyphTypeface.StyleSimulations & XStyleSimulations.BoldSimulation) != 0;
+            bool italicSimulation = (font.GlyphTypeface.StyleSimulations & SyntheticStyle.Italic) != 0;
+            bool boldSimulation = (font.GlyphTypeface.StyleSimulations & SyntheticStyle.Bold) != 0;
             bool strikeout = (font.Style & XFontStyle.Strikeout) != 0;
             bool underline = (font.Style & XFontStyle.Underline) != 0;
 
@@ -656,7 +656,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
 
             double width = designWidth * font.Size / descriptor.UnitsPerEm;
-            if ((font.GlyphTypeface.StyleSimulations & XStyleSimulations.BoldSimulation) != 0)
+            if ((font.GlyphTypeface.StyleSimulations & SyntheticStyle.Bold) != 0)
             {
                 int characterCount = 0;
                 foreach (Rune _ in text.EnumerateRunes())

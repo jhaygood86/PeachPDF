@@ -53,8 +53,7 @@ namespace PeachPDF.Tests.Svg
         private static OpenTypeDescriptor Descriptor(string path)
         {
             var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
-            return new OpenTypeDescriptor("svg-arabic-test", "svg-arabic-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            return new OpenTypeDescriptor("svg-arabic-test", "svg-arabic-test", face);
         }
 
         [Fact]

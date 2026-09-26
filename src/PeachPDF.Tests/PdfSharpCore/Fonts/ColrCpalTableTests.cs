@@ -20,8 +20,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
         private static int Gid(OpenTypeFontface face, char ch)
         {
-            var descriptor = new OpenTypeDescriptor("colr-test", "colr-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var descriptor = new OpenTypeDescriptor("colr-test", "colr-test", face);
             return descriptor.CharCodeToGlyphIndex(new Rune(ch));
         }
 

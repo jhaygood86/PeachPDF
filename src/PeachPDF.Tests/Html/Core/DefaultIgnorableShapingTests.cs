@@ -28,8 +28,7 @@ namespace PeachPDF.Tests.Html.Core
         private static OpenTypeDescriptor Descriptor()
         {
             var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.CcmpLigature)).Fontface;
-            return new OpenTypeDescriptor("ccmp-lig-test", "ccmp-lig-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            return new OpenTypeDescriptor("ccmp-lig-test", "ccmp-lig-test", face);
         }
 
         private static int[] Shape(string text) =>
@@ -144,8 +143,7 @@ namespace PeachPDF.Tests.Html.Core
             // mark. Appending an unmapped U+FE0F puts a dropped glyph in the same run, so a missing
             // remap would leave the mark anchored to a stale slot (or past the end of the list).
             var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Arabic)).Fontface;
-            var descriptor = new OpenTypeDescriptor("arabic-ignorable-test", "arabic-ignorable-test",
-                XFontStyle.Regular, face, new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var descriptor = new OpenTypeDescriptor("arabic-ignorable-test", "arabic-ignorable-test", face);
 
             const string beh = "ب";
             var forms = ArabicJoiningShaper.Resolve([beh[0]]);
