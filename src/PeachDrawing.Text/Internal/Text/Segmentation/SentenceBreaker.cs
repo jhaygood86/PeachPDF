@@ -40,6 +40,19 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
                 effective[effectiveCount++] = k;
             }
 
+            // What SB8 to SB11 look back for, carried forward one character at a time: SATerm Close* Sp*. Whether a lowercase
+            // letter follows without a stopper in between (SB8) is worked out in one pass from the end.
+            var lowerAhead = new bool[effectiveCount + 1];
+            for (int f = effectiveCount - 1; f >= 0; f--)
+            {
+                var c = classes[effective[f]];
+                lowerAhead[f] = c == SentenceBreakClass.Lower || (!IsStopper(c) && lowerAhead[f + 1]);
+            }
+
+            var terminator = SentenceBreakClass.Other;     // ATerm or STerm when SATerm Close* Sp* ends the text so far
+            bool spaces = false;                            // whether that ended in Sp
+            terminator = Advance(terminator, ref spaces, classes[effective[0]]);
+
             for (int e = 1; e < effectiveCount; e++)
             {
                 int k = effective[e];
@@ -56,16 +69,44 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
                 }
                 else
                 {
-                    breaks = Decide(classes, effective, effectiveCount, e);
+                    breaks = Decide(classes, effective, e, terminator, spaces, lowerAhead[e]);
                 }
 
                 boundaries[k] = breaks;
+                terminator = Advance(terminator, ref spaces, classes[k]);
             }
 
             return boundaries;
         }
 
-        private static bool Decide(SentenceBreakClass[] classes, int[] effective, int effectiveCount, int e)
+        private static SentenceBreakClass Advance(SentenceBreakClass terminator, ref bool spaces, SentenceBreakClass c)
+        {
+            if (c is SentenceBreakClass.ATerm or SentenceBreakClass.STerm)
+            {
+                spaces = false;
+                return c;
+            }
+
+            if (c == SentenceBreakClass.Close && terminator != SentenceBreakClass.Other && !spaces)
+            {
+                return terminator;
+            }
+
+            if (c == SentenceBreakClass.Sp && terminator != SentenceBreakClass.Other)
+            {
+                spaces = true;
+                return terminator;
+            }
+
+            spaces = false;
+            return SentenceBreakClass.Other;
+        }
+
+        private static bool IsStopper(SentenceBreakClass c) =>
+            c is SentenceBreakClass.OLetter or SentenceBreakClass.Upper or SentenceBreakClass.Sep or SentenceBreakClass.CR
+                or SentenceBreakClass.LF or SentenceBreakClass.STerm or SentenceBreakClass.ATerm;
+
+        private static bool Decide(SentenceBreakClass[] classes, int[] effective, int e, SentenceBreakClass terminator, bool spaces, bool lowerFollows)
         {
             var a = classes[effective[e - 1]];
             var b = classes[effective[e]];
@@ -83,41 +124,13 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
                 return false;
             }
 
-            // What SB8 to SB11 look back for: SATerm Close* Sp*
-            int spaces = e - 1;
-            while (spaces >= 0 && classes[effective[spaces]] == SentenceBreakClass.Sp)
-            {
-                spaces--;
-            }
-
-            int closes = spaces;
-            while (closes >= 0 && classes[effective[closes]] == SentenceBreakClass.Close)
-            {
-                closes--;
-            }
-
-            bool afterTerminator = closes >= 0 && classes[effective[closes]] is SentenceBreakClass.ATerm or SentenceBreakClass.STerm;
-            bool afterATerm = afterTerminator && classes[effective[closes]] == SentenceBreakClass.ATerm;
-            bool onlyCloseAfterTerminator = afterTerminator && spaces == e - 1;       // SATerm Close*, no Sp
-            bool noSpaceBeforeClose = afterTerminator;
+            bool afterTerminator = terminator != SentenceBreakClass.Other;                 // SATerm Close* Sp*
+            bool onlyCloseAfterTerminator = afterTerminator && !spaces;                    // SATerm Close*
 
             // SB8: ATerm Close* Sp* × ( ¬(OLetter | Upper | Lower | ParaSep | SATerm) )* Lower
-            if (afterATerm)
+            if (terminator == SentenceBreakClass.ATerm && lowerFollows)
             {
-                for (int f = e; f < effectiveCount; f++)
-                {
-                    var c = classes[effective[f]];
-                    if (c == SentenceBreakClass.Lower)
-                    {
-                        return false;
-                    }
-
-                    if (c is SentenceBreakClass.OLetter or SentenceBreakClass.Upper or SentenceBreakClass.Sep or SentenceBreakClass.CR
-                        or SentenceBreakClass.LF or SentenceBreakClass.STerm or SentenceBreakClass.ATerm)
-                    {
-                        break;
-                    }
-                }
+                return false;
             }
 
             // SB8a: SATerm Close* Sp* × (SContinue | SATerm)
@@ -133,7 +146,7 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
             }
 
             // SB10: SATerm Close* Sp* × (Sp | ParaSep)
-            if (noSpaceBeforeClose && (b == SentenceBreakClass.Sp || IsParagraphSeparator(b)))
+            if (afterTerminator && (b == SentenceBreakClass.Sp || IsParagraphSeparator(b)))
             {
                 return false;
             }

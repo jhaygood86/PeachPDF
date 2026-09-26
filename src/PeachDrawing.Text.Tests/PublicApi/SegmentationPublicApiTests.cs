@@ -185,6 +185,83 @@ namespace PeachDrawing.Text.Tests.PublicApi
         }
 
         [Fact]
+        public void Strictness_Anywhere_DoesNotBreakBeforeAHardBreak()
+        {
+            var options = new LineBreakOptions { Strictness = LineBreakStrictness.Anywhere };
+
+            var newline = LineBreaker.FindOpportunities("a\nb", options);
+            Assert.Equal(LineBreakOpportunity.Prohibited, newline[1]);
+            Assert.Equal(LineBreakOpportunity.Mandatory, newline[2]);
+
+            var crlf = LineBreaker.FindOpportunities("a\r\nb", options);
+            Assert.Equal(LineBreakOpportunity.Prohibited, crlf[1]);
+            Assert.Equal(LineBreakOpportunity.Prohibited, crlf[2]);
+            Assert.Equal(LineBreakOpportunity.Mandatory, crlf[3]);
+        }
+
+        [Theory]
+        [InlineData(0x000B)]     // line tabulation (BK)
+        [InlineData(0x000C)]     // form feed (BK)
+        [InlineData(0x2028)]     // line separator (BK)
+        [InlineData(0x2029)]     // paragraph separator (BK)
+        [InlineData(0x0085)]     // next line (NL)
+        [InlineData(0x000D)]     // carriage return
+        [InlineData(0x000A)]     // line feed
+        public void EveryKindOfHardBreak_IsMandatoryAfterItAndProhibitedBefore(int hardBreak)
+        {
+            var opportunities = LineBreaker.FindOpportunities("a" + char.ConvertFromUtf32(hardBreak) + "b");
+
+            Assert.Equal(LineBreakOpportunity.Prohibited, opportunities[1]);
+            Assert.Equal(LineBreakOpportunity.Mandatory, opportunities[2]);
+        }
+
+        [Fact]
+        public void WordBreak_BreakAll_AlsoBreaksBetweenHebrewLetters()
+        {
+            var options = new LineBreakOptions { WordBreak = WordBreakMode.BreakAll };
+
+            Assert.Equal([2], Breaks("אב"));
+            Assert.Equal([1, 2], Breaks("אב", options));
+        }
+
+        [Fact]
+        public void WordBreak_KeepAll_KeepsTheLettersOfBrahmicScriptsTogether()
+        {
+            const string balinese = "ᬅᬅ";     // two Balinese letters (line break class AK)
+
+            Assert.Equal([1, 2], Breaks(balinese));
+            Assert.Equal([2], Breaks(balinese, new LineBreakOptions { WordBreak = WordBreakMode.KeepAll }));
+        }
+
+        [Fact]
+        public void Strictness_Loose_AlsoBreaksBeforeAnEllipsisAfterLatinText()
+        {
+            // The tailoring is not language-aware: see the accepted gap.
+            Assert.Equal([1, 2], Breaks("a…", new LineBreakOptions { Strictness = LineBreakStrictness.Loose }));
+            Assert.Equal([2], Breaks("a…"));
+        }
+
+        [Fact]
+        public void LongRuns_AreLinear()
+        {
+            // Runs like these made a scan-back at every position quadratic; the limit is generous, the point is the order of growth.
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+
+            var flags = string.Concat(Enumerable.Repeat("\U0001F1FA", 100_000));
+            Assert.Equal(flags.Length + 1, LineBreaker.FindOpportunities(flags).Length);
+            Assert.Equal(100_000 / 2 + 1, Segmenter.FindGraphemeBoundaries(flags).Length);     // pairs of regional indicators
+
+            var spaces = "." + new string(' ', 100_000) + "X";
+            Assert.Equal(3, Segmenter.FindSentenceBoundaries(spaces).Length);
+            Assert.Equal(spaces.Length + 1, LineBreaker.FindOpportunities(spaces).Length);
+
+            var closes = "." + new string(')', 100_000) + "X";
+            Assert.Equal(3, Segmenter.FindSentenceBoundaries(closes).Length);
+
+            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"took {watch.Elapsed}");
+        }
+
+        [Fact]
         public void LineBreakOptions_Default_IsNormalWithNoWordBreakTailoring()
         {
             var options = default(LineBreakOptions);

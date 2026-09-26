@@ -31,7 +31,7 @@ namespace PeachDrawing.Text.Unicode
 
         /// <summary>
         /// Finds the boundaries between words, as a search or a double click would treat them: runs of letters and numbers,
-        /// with the punctuation inside them, are one word, and everything else, spaces included, comes in pieces of its own.
+        /// with the punctuation inside them, are one word, a run of spaces is one piece, and every other character is a piece of its own.
         /// </summary>
         /// <param name="text">The text to segment.</param>
         /// <returns>The boundaries, as UTF-16 indices.</returns>

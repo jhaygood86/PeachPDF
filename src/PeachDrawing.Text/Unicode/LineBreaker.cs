@@ -10,8 +10,9 @@ namespace PeachDrawing.Text.Unicode
     /// <para>
     /// The algorithm answers for every position between two characters. <see cref="FindOpportunities"/> returns one answer for
     /// each UTF-16 index of the text and one for its end, so <c>opportunities[i]</c> says what happens to a line that would end
-    /// just before <c>text[i]</c>. Inside a surrogate pair and inside a sequence of a character and its combining marks the
-    /// answer is <see cref="LineBreakOpportunity.Prohibited"/>.
+    /// just before <c>text[i]</c>. Inside a surrogate pair and between a character and the combining marks that follow it the
+    /// answer is <see cref="LineBreakOpportunity.Prohibited"/>, except after a space, a hard break or a zero width space,
+    /// where a combining mark stands alone.
     /// </para>
     /// <para>
     /// The result is the algorithm's own view of the text. A host that lays text out still decides what to do with it:
@@ -20,7 +21,8 @@ namespace PeachDrawing.Text.Unicode
     /// line of them has no opportunities where the script writes no spaces.
     /// </para>
     /// <para>
-    /// The default rules are checked against Unicode's own <c>LineBreakTest.txt</c> conformance file.
+    /// The rules are checked against Unicode's own <c>LineBreakTest.txt</c> conformance file, with <see cref="LineBreakStrictness.Strict"/>,
+    /// which is the algorithm's own default.
     /// </para>
     /// </remarks>
     public static class LineBreaker

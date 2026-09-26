@@ -25,7 +25,8 @@ dotnet add package PeachDrawing.Text
 - **Outlines and colour:** glyph outlines for `glyf` and CFF, COLR v0 and v1 with CPAL, and CBDT/CBLC and sbix bitmaps.
 - **Mathematics:** the `MATH` table: layout constants, per-glyph italics corrections and accent attachment, and the
   variants and assemblies of stretchy glyphs.
-- **Unicode:** the Unicode Line Breaking Algorithm (UAX #14) and the grapheme cluster, word and sentence boundaries of UAX #29, all checked against the Unicode Consortium's conformance files; the Unicode Bidirectional Algorithm, script itemization, vertical orientation, emoji presentation, and
+- **Unicode:** the Unicode Line Breaking Algorithm (UAX #14) and the grapheme cluster, word and sentence boundaries
+  of UAX #29, all checked against the Unicode Consortium's conformance files; the Unicode Bidirectional Algorithm, script itemization, vertical orientation, emoji presentation, and
   TeX/Liang hyphenation for 73 languages.
 
 ## Fonts: `FontSet`, families and matching

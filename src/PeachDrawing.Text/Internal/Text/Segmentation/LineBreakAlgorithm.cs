@@ -30,6 +30,9 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
             internal bool Pictographic;
             internal bool Unassigned;
             internal bool IsDottedCircle;
+
+            /// <summary>How many regional indicators end at this unit, without a gap (LB30a).</summary>
+            internal int RegionalRun;
         }
 
         /// <summary>
@@ -140,11 +143,12 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
                 }
 
                 unit.Class = unit.Resolved;
-                if (options.WordBreak == WordBreakMode.BreakAll && unit.Resolved is LineBreakClass.NU or LineBreakClass.AL)
+                if (options.WordBreak == WordBreakMode.BreakAll && unit.Resolved is LineBreakClass.NU or LineBreakClass.AL or LineBreakClass.HL)
                 {
                     unit.Class = LineBreakClass.ID;
                 }
 
+                unit.RegionalRun = unit.Class == LineBreakClass.RI ? (unitCount > 0 ? units[unitCount - 1].RegionalRun : 0) + 1 : 0;
                 units[unitCount++] = unit;
             }
 
@@ -428,18 +432,9 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
             }
 
             // LB30a
-            if (a == LineBreakClass.RI && b == LineBreakClass.RI)
+            if (a == LineBreakClass.RI && b == LineBreakClass.RI && (units[i - 1].RegionalRun & 1) == 1)
             {
-                int run = 0;
-                for (int j = i - 1; j >= 0 && units[j].Class == LineBreakClass.RI; j--)
-                {
-                    run++;
-                }
-
-                if ((run & 1) == 1)
-                {
-                    return LineBreakOpportunity.Prohibited;
-                }
+                return LineBreakOpportunity.Prohibited;
             }
 
             // LB30b
@@ -587,7 +582,8 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
 
         private static bool IsLetterUnit(LineBreakClass value) =>
             value is LineBreakClass.NU or LineBreakClass.AL or LineBreakClass.ID or LineBreakClass.H2 or LineBreakClass.H3
-                or LineBreakClass.JL or LineBreakClass.JV or LineBreakClass.JT or LineBreakClass.HL or LineBreakClass.SA;
+                or LineBreakClass.JL or LineBreakClass.JV or LineBreakClass.JT or LineBreakClass.HL or LineBreakClass.SA
+                or LineBreakClass.AK or LineBreakClass.AS;
 
         /// <summary>
         /// The characters CSS <c>line-break: loose</c> lets a line start with: iteration marks, centred punctuation and the like,
@@ -601,6 +597,8 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
             _ => false,
         };
 
+        private static bool IsHardBreak(int codePoint) => codePoint is 0x0A or 0x0B or 0x0C or 0x0D or 0x85 or 0x2028 or 0x2029;
+
         /// <summary>CSS <c>line-break: anywhere</c>: a break at every grapheme boundary, and none inside a cluster.</summary>
         private static void ApplyAnywhere(in ScalarText text, LineBreakOpportunity[] result)
         {
@@ -608,8 +606,9 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
             for (int k = 1; k < text.Count; k++)
             {
                 int offset = text.Offset[k];
-                if (result[offset] == LineBreakOpportunity.Mandatory)
+                if (result[offset] == LineBreakOpportunity.Mandatory || IsHardBreak(text.Code[k]))
                 {
+                    // A hard break is not a soft wrap opportunity: what the algorithm said (LB6, LB4) stands.
                     continue;
                 }
 

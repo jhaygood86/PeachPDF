@@ -21,10 +21,10 @@ namespace PeachDrawing.Text.Unicode
         /// <summary>The default rules: words break where the algorithm allows, which for Chinese and Japanese is between characters and for most other scripts is at spaces and hyphens.</summary>
         Normal = 0,
 
-        /// <summary>A line may end between any two letters or digits, as well (<c>word-break: break-all</c>).</summary>
+        /// <summary>A line may end between any two letters or digits, Hebrew letters included, as well (<c>word-break: break-all</c>).</summary>
         BreakAll = 1,
 
-        /// <summary>No break between two letters or digits, ideographs and Hangul included (<c>word-break: keep-all</c>).</summary>
+        /// <summary>No break between two letters or digits, ideographs, Hangul and the letters of Southeast Asian scripts included (<c>word-break: keep-all</c>). Emoji are not letters.</summary>
         KeepAll = 2,
     }
 
@@ -38,7 +38,8 @@ namespace PeachDrawing.Text.Unicode
 
         /// <summary>
         /// The least restrictive rules: a line may also start with a small kana, an iteration mark, a middle dot, a question or
-        /// exclamation mark of Japanese text, or an ellipsis, and with a hyphen after an ideograph (<c>line-break: loose</c>).
+        /// exclamation mark of Japanese text, or an ellipsis, and with a hyphen after an ideograph (<c>line-break: loose</c>). The
+        /// characters are tailored whatever the language of the text.
         /// </summary>
         Loose = 1,
 
@@ -53,7 +54,9 @@ namespace PeachDrawing.Text.Unicode
     }
 
     /// <summary>
-    /// The tailorings CSS applies to the line breaking algorithm. The default value asks for none of them.
+    /// The tailorings CSS applies to the line breaking algorithm. The default value is <see cref="LineBreakStrictness.Auto"/> and
+    /// <see cref="WordBreakMode.Normal"/>, which is <see cref="LineBreakStrictness.Normal"/>: set <see cref="Strictness"/> to
+    /// <see cref="LineBreakStrictness.Strict"/> for the algorithm's own default.
     /// </summary>
     public readonly struct LineBreakOptions
     {

@@ -8,4 +8,5 @@ Two things are missing. The rules the specification limits to a Chinese or Japan
 `normal` and `loose`, the centred punctuation for `loose`) are applied whatever the language, because the entry point takes
 none. And the `loose` breaks before East Asian suffixes and after East Asian prefixes (`PO` and `PR` characters whose East Asian
 Width is Ambiguous, Fullwidth or Wide) are not implemented, because the generated tables carry only the wide, fullwidth and
-halfwidth flag. Tracked in [#1401](https://github.com/jhaygood86/PeachPDF/issues/1401).
+halfwidth flag. Because the tailoring is language-blind, `loose` also breaks before an ellipsis or an exclamation mark that follows
+Latin text. Tracked in [#1401](https://github.com/jhaygood86/PeachPDF/issues/1401).
