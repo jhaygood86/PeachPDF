@@ -38,6 +38,9 @@
     <None Include="..\..\assets\fonts\VariableTest.ttf" Link="VariableTest.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\VariableColorTest.ttf" Link="VariableColorTest.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\..\assets\fonts\VariableAvar2Test.ttf" Link="VariableAvar2Test.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
