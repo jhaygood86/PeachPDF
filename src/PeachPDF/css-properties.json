@@ -2859,6 +2859,36 @@
       }
     },
     {
+      "name": "font-variation-settings",
+      "comment": "CSS Fonts 4 section 6.10. cssDataType 'cssom-grammar' calls FontVariationSettingsProperty.ValueGrammar.Convert, like font-feature-settings. The cascaded string is turned into axis settings by FontVariationSettingsResolver and reaches the font through the variations argument of the font-creation chain (see DerivedStyle.ActualFontVariationSettings).",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FontVariationSettingsProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "FontVariationSettings",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "font-optical-sizing",
+      "comment": "CSS Fonts 4 section 6.5, single keyword.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontOpticalSizingMode",
+        "keywordMap": "Map.FontOpticalSizingModes",
+        "fallback": "FontOpticalSizingMode.Auto"
+      },
+      "html": {
+        "propertyPath": "FontOpticalSizing",
+        "csharpDataType": "CssProperty<FontOpticalSizingMode>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontOpticalSizing.ToString()"
+      }
+    },
+    {
       "name": "font-kerning",
       "comment": "CSS Fonts 3 §7.3, single keyword.",
       "inherited": true,

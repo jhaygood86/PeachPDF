@@ -109,7 +109,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             // per-document embed cache on the name alone would merge them into a single embedded font -
             // the second silently rendering with the first's glyphs. The checksum makes identity content-
             // addressed (identical bytes still coalesce to one embed; different bytes never do).
-            string key = typeface.FullName.ToLowerInvariant() + "/" + typeface.ContentHash +
+            string key = typeface.FullName.ToLowerInvariant() + "/" + typeface.ContentHash + "/" + typeface.VariationKey +
                 (typeface.IsBold ? "/b" : "") + (typeface.IsItalic ? "/i" : "") + font.Unicode;
             return key;
         }

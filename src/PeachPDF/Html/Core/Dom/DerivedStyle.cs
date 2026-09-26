@@ -1235,6 +1235,27 @@ namespace PeachPDF.Html.Core.Dom
         public IReadOnlyList<(string Tag, int Value)> ActualFontFeatureSettings =>
             _actualFontFeatureSettings ??= TextShapingFeatureResolver.ResolveFeatureSettings(Style.Font.FontFeatureSettings);
 
+        private string? _actualFontVariationSettings;
+        private bool _actualFontVariationSettingsResolved;
+
+        /// <summary>
+        /// The resolved <c>font-variation-settings</c> and <c>font-optical-sizing</c> of this box, encoded for the font-creation chain (see
+        /// <see cref="FontVariationSettingsResolver"/>); <see langword="null"/> when both have their initial values.
+        /// </summary>
+        public string? ActualFontVariationSettings
+        {
+            get
+            {
+                if (!_actualFontVariationSettingsResolved)
+                {
+                    _actualFontVariationSettings = FontVariationSettingsResolver.Encode(Style.Font.FontOpticalSizing.Value, Style.Font.FontVariationSettings);
+                    _actualFontVariationSettingsResolved = true;
+                }
+
+                return _actualFontVariationSettings;
+            }
+        }
+
         private IReadOnlyList<(string Tag, int Value)>? _actualFontVariantAlternates;
 
         /// <summary>
@@ -1396,8 +1417,8 @@ namespace PeachPDF.Html.Core.Dom
                     containerInlinePt, containerBlockPt, viewportWidthPt, viewportHeightPt,
                     containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt, sizeFonts);
 
-                _actualFont = Owner.GetCachedFont(Style.Font.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
-                              ?? Owner.GetCachedFont(DefaultFontResolver.DefaultFont, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus);
+                _actualFont = Owner.GetCachedFont(Style.Font.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings)
+                              ?? Owner.GetCachedFont(DefaultFontResolver.DefaultFont, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings);
 
                 if (_actualFont is null)
                 {
@@ -1418,8 +1439,8 @@ namespace PeachPDF.Html.Core.Dom
         internal RFont GetActualFontAtSize(double fsize)
         {
             var st = GetActualFontStyleFlags();
-            return Owner.GetCachedFont(Style.Font.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
-                   ?? Owner.GetCachedFont(DefaultFontResolver.DefaultFont, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
+            return Owner.GetCachedFont(Style.Font.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings)
+                   ?? Owner.GetCachedFont(DefaultFontResolver.DefaultFont, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings)
                    ?? throw new HtmlRenderException($"Cannot find font: {Style.Font.FontFamily} and Default Font {DefaultFontResolver.DefaultFont} is not installed", HtmlRenderErrorType.General);
         }
 
@@ -1524,7 +1545,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (_smallCapsFont != null) return _smallCapsFont;
 
                 var font = ActualFont;
-                _smallCapsFont = Owner.GetCachedFont(Style.Font.FontFamily!, font.Size * CssBox.SmallCapsFontScale, GetActualFontStyleFlags(), ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
+                _smallCapsFont = Owner.GetCachedFont(Style.Font.FontFamily!, font.Size * CssBox.SmallCapsFontScale, GetActualFontStyleFlags(), ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings)
                                  ?? font;
                 return _smallCapsFont;
             }
@@ -1600,7 +1621,7 @@ namespace PeachPDF.Html.Core.Dom
                     return font;
                 }
 
-                _subSuperscriptFont = Owner.GetCachedFont(Style.Font.FontFamily!, font.Size * synthesis.SizeScale, GetActualFontStyleFlags(), ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
+                _subSuperscriptFont = Owner.GetCachedFont(Style.Font.FontFamily!, font.Size * synthesis.SizeScale, GetActualFontStyleFlags(), ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings)
                                       ?? font;
                 return _subSuperscriptFont;
             }
@@ -1630,7 +1651,7 @@ namespace PeachPDF.Html.Core.Dom
             var size = ActualFont.Size * sizeScale;
             // Resolve against the full authored font-family stack (not the cascade-collapsed single family)
             // so a codepoint the first family can't supply falls back to a later one.
-            var font = Owner.GetCachedFontForCodepoint(Style.Font.FontFamilyList ?? Style.Font.FontFamily!, size, GetActualFontStyleFlags(), codepoint, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, presentation)
+            var font = Owner.GetCachedFontForCodepoint(Style.Font.FontFamilyList ?? Style.Font.FontFamily!, size, GetActualFontStyleFlags(), codepoint, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, presentation, ActualFontVariationSettings)
                        ?? (sizeScale == 1.0 ? ActualFont : ActualSmallCapsFont);
 
             (_codepointFontCache ??= [])[cacheKey] = font;

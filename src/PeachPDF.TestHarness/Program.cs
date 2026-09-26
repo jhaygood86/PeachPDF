@@ -10879,6 +10879,60 @@ await SaveShowcaseAsync("font_palette", "Typography & Text", "CSS font-palette",
     "Rendered against a subset of Nabla, a real 7-palette COLR v1 font.",
     fontPaletteHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// Variable fonts: font-weight, font-stretch and font-variation-settings choose a location in one variable font's design space, and each
+// distinct location is embedded as its own static instance. Uses a small synthetic variable font (weight 100-900, width 75-125).
+var variableFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf")));
+string VariableCell(string style, string caption) =>
+    "<td>" +
+    $"<div class=\"vf\" style=\"{style}\">ABC</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+var variableFontHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'VF'; src: url('data:font/truetype;base64,{variableFontB64}') format('truetype'); }}" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table.vt { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.vt td { padding: 6px; vertical-align: top; text-align: center }" +
+    ".vf { font-family: 'VF'; font-size: 44pt; line-height: 1.1 }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>Variable fonts</h1>" +
+    "<p class=\"intro\">One font file holds a whole design space. <code>font-weight</code>, <code>font-stretch</code> and " +
+    "<code>font-variation-settings</code> pick a location in it, and the outlines, advance widths and font-wide metrics all follow. " +
+    "Nothing is faked: the weight comes from the font's <code>wght</code> axis, not from thickening a regular face. In the PDF each " +
+    "location is embedded as an ordinary static font, because PDF cannot embed a variable one.</p>" +
+    "<h2>font-weight</h2>" +
+    "<table class=\"vt\"><tr>" +
+    VariableCell("font-weight: 100", "font-weight: 100") +
+    VariableCell("font-weight: 400", "font-weight: 400") +
+    VariableCell("font-weight: 700", "font-weight: 700") +
+    VariableCell("font-weight: 900", "font-weight: 900") +
+    "</tr></table>" +
+    "<h2>font-stretch</h2>" +
+    "<table class=\"vt\"><tr>" +
+    VariableCell("font-stretch: semi-condensed", "font-stretch: semi-condensed (75%)") +
+    VariableCell("font-stretch: normal", "font-stretch: normal (100%)") +
+    VariableCell("font-stretch: semi-expanded", "font-stretch: semi-expanded (125%)") +
+    "</tr></table>" +
+    "<h2>font-variation-settings</h2>" +
+    "<p class=\"intro\">Any value on any axis, not only the ones the keywords reach, and it wins over <code>font-weight</code> and " +
+    "<code>font-stretch</code>:</p>" +
+    "<table class=\"vt\"><tr>" +
+    VariableCell("font-variation-settings: 'wght' 250", "'wght' 250") +
+    VariableCell("font-variation-settings: 'wght' 650, 'wdth' 110", "'wght' 650, 'wdth' 110") +
+    VariableCell("font-weight: 100; font-variation-settings: 'wght' 900", "font-weight: 100 overridden by 'wght' 900") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("variable_fonts", "Typography & Text", "Variable fonts",
+    "font-weight, font-stretch and font-variation-settings choosing locations in a variable font's design space: " +
+    "the glyph outlines, advances and metrics follow the axes, and each location is embedded in the PDF as a static instance. " +
+    "Rendered against a small synthetic variable font with weight and width axes.",
+    variableFontHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // GSUB ligature substitution: font-variant-ligatures actually turns real GSUB liga/clig ligatures
 // on/off (not just a synthesized effect), and the same shaping applies to SVG <text> outlined for a
 // gradient fill. Source Sans 3's GSUB `liga` feature ligates "ff"/"ft"/"fft" (confirmed via

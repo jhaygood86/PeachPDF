@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 
 namespace PeachDrawing.Text
@@ -16,11 +17,17 @@ namespace PeachDrawing.Text
     /// A character the face has to be able to draw, or <see langword="null"/> for none. A face is taken to cover the
     /// characters of its <c>unicode-range</c> if it has one, and otherwise the ones its <c>cmap</c> maps.
     /// </param>
+    /// <param name="Axes">
+    /// Values for the axes of a variable face (CSS <c>font-variation-settings</c>), or <see langword="null"/> for none. A face that is
+    /// variable is matched at the location the weight, width and slant of the query give (its <c>wght</c>, <c>wdth</c> and <c>ital</c>
+    /// axes), and these settings are applied after that, so they win. A face that is not variable ignores them.
+    /// </param>
     public readonly record struct TypefaceQuery(
         int Weight = TypefaceQuery.NormalWeight,
         int Width = TypefaceQuery.NormalWidth,
         bool IsItalic = false,
-        Rune? MustCover = null)
+        Rune? MustCover = null,
+        IReadOnlyList<AxisSetting>? Axes = null)
     {
         /// <summary>
         /// Creates the query for regular, upright, normal-width text with no character to cover.
@@ -30,7 +37,7 @@ namespace PeachDrawing.Text
         /// zero and a width class of zero, so write <c>new TypefaceQuery()</c> for the normal query.
         /// </remarks>
         public TypefaceQuery()
-            : this(NormalWeight, NormalWidth, false, null)
+            : this(NormalWeight, NormalWidth, false, null, null)
         {
         }
 

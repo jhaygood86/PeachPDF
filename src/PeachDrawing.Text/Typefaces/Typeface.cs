@@ -301,6 +301,13 @@ namespace PeachDrawing.Text
         private IReadOnlyList<NamedVariation>? _namedVariations;
 
         /// <summary>
+        /// A string that names the location of this typeface in its font's design space, such as <c>wght=700;wdth=100</c>, and is empty
+        /// for a typeface at its font's defaults (and for a font that is not variable). Together with <see cref="ContentHash"/> it
+        /// identifies what a typeface draws, so it can key a cache of things made from it.
+        /// </summary>
+        public string VariationKey => Face.Variation?.Key ?? string.Empty;
+
+        /// <summary>
         /// Where this typeface reads its font's design space: the value on every axis, in the order of <see cref="Axes"/>. Empty for a font
         /// that is not variable.
         /// </summary>

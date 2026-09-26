@@ -195,7 +195,7 @@ namespace PeachPDF.Adapters
                 ? (position.SizeScale, position.BaselineShift)
                 : null;
 
-        public override string FaceKey => _faceKey ??= Font.Typeface.ContentHash.ToString("x") + "/" + (int)Font.Synthesis;
+        public override string FaceKey => _faceKey ??= Font.Typeface.ContentHash.ToString("x") + "/" + (int)Font.Synthesis + "/" + Font.Typeface.VariationKey;
 
         private string? _faceKey;
 

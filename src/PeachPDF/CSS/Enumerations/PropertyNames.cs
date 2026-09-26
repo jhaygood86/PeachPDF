@@ -124,6 +124,7 @@
         public static readonly string FontFamily = "font-family";
         public static readonly string FontFeatureSettings = "font-feature-settings";
         public static readonly string FontKerning = "font-kerning";
+        public static readonly string FontOpticalSizing = "font-optical-sizing";
         public static readonly string FontPalette = "font-palette";
         public static readonly string FontSize = "font-size";
         public static readonly string FontSizeAdjust = "font-size-adjust";
@@ -135,6 +136,7 @@
         public static readonly string FontVariantNumeric = "font-variant-numeric";
         public static readonly string FontVariantEastAsian = "font-variant-east-asian";
         public static readonly string FontVariantPosition = "font-variant-position";
+        public static readonly string FontVariationSettings = "font-variation-settings";
         public static readonly string FontVariantEmoji = "font-variant-emoji";
         public static readonly string FontVariantAlternates = "font-variant-alternates";
         public static readonly string FontWeight = "font-weight";

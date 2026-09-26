@@ -68,15 +68,15 @@ namespace PeachPDF.Tests.TestSupport
         // stream's real bytes and returns a fixed-size TestImage instead of throwing.
         protected override RImage ImageFromStreamInt(Stream memoryStream) => new TestImage(40, 30);
 
-        protected override RFont CreateFontInt(string family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null) => new TestFont(size);
+        protected override RFont CreateFontInt(string family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null, string? variations = null) => new TestFont(size);
 
-        protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null) => new TestFont(size);
+        protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null, string? variations = null) => new TestFont(size);
 
-        protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint) => new TestFont(size);
+        protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations) => new TestFont(size);
 
         // No family this stub knows about ever "wins" the last-resort search - there is no real
         // InstalledFonts registry backing it, so the only faithful answer is "nothing found".
-        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation) => null;
+        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations) => null;
 
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => false;
 

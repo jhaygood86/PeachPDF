@@ -266,7 +266,14 @@ namespace PeachDrawing.Text
             };
 
             var face = LoadedTypeface.GetOrCreateFrom(familyName, options, Resolver);
-            return new TypefaceMatch(face.Public, face.StyleSimulations);
+            var typeface = face.Public;
+            var synthesis = face.StyleSimulations;
+            if (typeface.IsVariable)
+            {
+                (typeface, synthesis) = VariableMatching.Apply(typeface, synthesis, query);
+            }
+
+            return new TypefaceMatch(typeface, synthesis);
         }
     }
 }

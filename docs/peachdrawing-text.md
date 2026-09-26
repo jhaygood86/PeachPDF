@@ -205,6 +205,10 @@ if (face.IsVariable)
   means the axis's default, axis tags are compared exactly (`wght`, not `WGHT`), and for a tag given twice the last one counts.
 - `IsBold`, `IsItalic` and the weight the family matching sees are the file's own, whatever the location is: a location changes how
   the glyphs are drawn, not what the file declares.
+- A `TypefaceQuery` given to `TypefaceFamily.TryMatch` is answered with the face of a variable font at the location the query asks for:
+  its weight, width class and italic-ness set the `wght`, `wdth` and `ital` axes (or `slnt`, for a font that has a slant axis and no
+  italic one), the query's own `Axes` are applied after those, and nothing is left for the caller to fake bold or italic where an axis
+  did it. `Typeface.VariationKey` names the location, so a cache of things made from a typeface can tell two instances of one font apart.
 - Outlines (including composite glyphs), advance widths, the font-wide metrics of `Typeface.Metrics` and shaping advances follow the
   location. Reading `TypefaceMetrics.XMin` to `YMax` (the font bounding box) and the vertical advances gives the default design's
   values, `GPOS` kerning and mark positions and `GSUB` feature variations are not applied, and a variable font with CFF2 outlines
