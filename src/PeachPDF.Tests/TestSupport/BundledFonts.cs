@@ -228,6 +228,12 @@ namespace PeachPDF.Tests.TestSupport
         /// </summary>
         internal static string SvgTest => Path.Combine(AppContext.BaseDirectory, "SvgTest.ttf");
 
+        /// <summary>
+        /// A synthetic variable font whose <c>GSUB</c> has <c>FeatureVariations</c> (see VariableFeatureTest.LICENSE.txt): A becomes A.heavy from
+        /// weight 600, and B becomes B.heavy from weight 800.
+        /// </summary>
+        internal static string VariableFeatureTest => Path.Combine(AppContext.BaseDirectory, "VariableFeatureTest.ttf");
+
         /// <summary><see cref="VariableTest"/> without its <c>HVAR</c> table, so advances come from the phantom points of <c>gvar</c>.</summary>
         internal static string VariableTestNoHvar => Path.Combine(AppContext.BaseDirectory, "VariableTestNoHvar.ttf");
 

@@ -560,6 +560,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             return FontFace.bitmap?.TryGet(glyphId, ppem, out glyph) ?? false;
         }
 
+        /// <summary>The <c>GSUB</c> table at this descriptor's location: the table itself, or a view of it whose features follow the <c>FeatureVariations</c> that apply there.</summary>
+        internal GsubTable? SubstitutionTable => Variation is null ? FontFace.gsub?.Table : FontFace.gsub?.Table?.AtLocation(Variation);
+
+        /// <summary>The <c>GPOS</c> table at this descriptor's location, as <see cref="SubstitutionTable"/> is for <c>GSUB</c>.</summary>
+        internal GposTable? PositioningTable => Variation is null ? FontFace.gpos?.Table : FontFace.gpos?.Table?.AtLocation(Variation);
+
         /// <summary>True when this font carries SVG documents that draw glyphs (the <c>SVG </c> table).</summary>
         public bool HasSvgGlyphs => FontFace.svg != null;
 

@@ -87,6 +87,9 @@
     <None Include="..\..\assets\fonts\RecursiveSubset.ttf" Link="RecursiveSubset.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\VariableFeatureTest.ttf" Link="VariableFeatureTest.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\..\assets\fonts\SvgTest.ttf" Link="SvgTest.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
