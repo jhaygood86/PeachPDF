@@ -1,14 +1,12 @@
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
+using PeachDrawing.Text.Unicode;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
-using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
 using System.IO;
 using System.Linq;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.Html.Core
 {
@@ -26,14 +24,10 @@ namespace PeachPDF.Tests.Html.Core
     {
         private const int NotdefGlyph = 0;
 
-        private static OpenTypeDescriptor Descriptor()
-        {
-            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.CcmpLigature)).Fontface;
-            return new OpenTypeDescriptor("ccmp-lig-test", "ccmp-lig-test", face);
-        }
+        private static Typeface Descriptor() => TypefaceFixtures.Shared(BundledFonts.CcmpLigature);
 
         private static int[] Shape(string text) =>
-            Descriptor().Shape(text, ShapeSettings.Default).Select(g => g.GlyphIndex).ToArray();
+            Descriptor().ShapeGlyphs(text, ShapeSettings.Default).Select(g => g.GlyphIndex).ToArray();
 
         [Fact]
         public void CcmpLigature_AppliesWithoutAnyLigatureFeatureRequested()
@@ -71,13 +65,13 @@ namespace PeachPDF.Tests.Html.Core
         [InlineData(0xE01EF)]
         public void VariationSelectorRanges_AreRecognized(int codepoint)
         {
-            Assert.True(UnicodeDefaultIgnorables.IsVariationSelector(codepoint));
+            Assert.True(DefaultIgnorables.IsVariationSelector(codepoint));
         }
 
         [Fact]
         public void MongolianVowelSeparator_IsNotAVariationSelector()
         {
-            Assert.False(UnicodeDefaultIgnorables.IsVariationSelector(0x180E));
+            Assert.False(DefaultIgnorables.IsVariationSelector(0x180E));
         }
 
         [Fact]
@@ -143,14 +137,13 @@ namespace PeachPDF.Tests.Html.Core
             // base plus a separate dot mark, and GPOS mark-to-base then records the base's index on the
             // mark. Appending an unmapped U+FE0F puts a dropped glyph in the same run, so a missing
             // remap would leave the mark anchored to a stale slot (or past the end of the list).
-            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Arabic)).Fontface;
-            var descriptor = new OpenTypeDescriptor("arabic-ignorable-test", "arabic-ignorable-test", face);
+            var descriptor = TypefaceFixtures.Shared(BundledFonts.Arabic);
 
             const string beh = "ب";
-            var forms = ArabicJoiningShaper.Resolve([beh[0]]);
+            var forms = ArabicJoining.Resolve([beh[0]]);
 
-            var plain = descriptor.Shape(beh, new ShapeSettings(ScriptTag: "arab", JoiningForms: forms));
-            var withSelector = descriptor.Shape(beh + "️",
+            var plain = descriptor.ShapeGlyphs(beh, new ShapeSettings(ScriptTag: "arab", JoiningForms: forms));
+            var withSelector = descriptor.ShapeGlyphs(beh + "️",
                 new ShapeSettings(ScriptTag: "arab", JoiningForms: forms));
 
             // The selector contributes no glyph of its own, and changes nothing about the rest.

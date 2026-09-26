@@ -1,6 +1,5 @@
-using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text;
 using PeachPDF.Adapters;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -15,7 +14,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     {
         private static byte[] BaseFont() => File.ReadAllBytes(BundledFonts.Ttf);
 
-        private static BitmapGlyphSource? Source(byte[] font) => FontFileData.GetOrCreateFrom(font).Fontface.bitmap;
+        private static Typeface Source(byte[] font) => TypefaceFixtures.FromBytes(font);
 
         private static byte[] Png(int w, int h, byte r, byte g, byte b) => RasterPngFixture.MakeSolidRgbaPngBytes(w, h, r, g, b);
 
@@ -24,7 +23,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         [Fact]
         public void AFontWithoutBitmapTables_HasNoBitmapGlyphs()
         {
-            Assert.Null(Source(BaseFont()));
+            Assert.False(Source(BaseFont()).HasBitmapGlyphs);
         }
 
         [Fact]
@@ -36,11 +35,11 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
                 new BitmapGlyphFontFixture.Picture(20, a, Png(8, 6, 255, 0, 0), 8, 6, 1, 5));
 
             var source = Source(withBitmaps);
-            Assert.NotNull(source);
-            Assert.True(source!.HasGlyph(a));
-            Assert.False(source.HasGlyph(BitmapGlyphFontFixture.GlyphId(font, 'B')));
+            Assert.True(source.HasBitmapGlyphs);
+            Assert.True(source.TryGetBitmap((ushort)a, 20, out _));
+            Assert.False(source.TryGetBitmap((ushort)BitmapGlyphFontFixture.GlyphId(font, 'B'), 20, out _));
 
-            Assert.True(source.TryGet(a, 20, out var glyph));
+            Assert.True(source.TryGetBitmap((ushort)a, 20, out var glyph));
             Assert.Equal(20, glyph.Ppem);
             Assert.Equal(8, glyph.Width);
             Assert.Equal(6, glyph.Height);
@@ -59,7 +58,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var withBitmaps = BitmapGlyphFontFixture.WithCbdt(font,
                 new BitmapGlyphFontFixture.Picture(24, a, Png(10, 12, 0, 0, 255), 10, 12, -2, 11, imageFormat));
 
-            Assert.True(Source(withBitmaps)!.TryGet(a, 24, out var glyph));
+            Assert.True(Source(withBitmaps).TryGetBitmap((ushort)a, 24, out var glyph));
             Assert.Equal(10, glyph.Width);
             Assert.Equal(12, glyph.Height);
             Assert.Equal(-2, glyph.BearingX);
@@ -79,13 +78,13 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var a = BitmapGlyphFontFixture.GlyphId(font, 'A');
             var withBitmaps = BitmapGlyphFontFixture.WithCbdt(font,
                 new BitmapGlyphFontFixture.Picture(24, a, Png(10, 12, 0, 0, 255), 10, 12, 3, 9, imageFormat, indexFormat));
-            var source = Source(withBitmaps)!;
+            var source = Source(withBitmaps);
 
-            Assert.True(source.TryGet(a, 24, out var glyph));
+            Assert.True(source.TryGetBitmap((ushort)a, 24, out var glyph));
             Assert.Equal(Png(10, 12, 0, 0, 255), glyph.Data);
             Assert.Equal(3, glyph.BearingX);
             Assert.Equal(9, glyph.BearingTop);
-            Assert.False(source.HasGlyph(a + 1));
+            Assert.False(source.TryGetBitmap((ushort)(a + 1), 24, out _));
         }
 
         [Fact]
@@ -97,15 +96,15 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
                 new BitmapGlyphFontFixture.Picture(16, a, Png(4, 4, 1, 1, 1), 4, 4, 0, 4),
                 new BitmapGlyphFontFixture.Picture(32, a, Png(8, 8, 2, 2, 2), 8, 8, 0, 8),
                 new BitmapGlyphFontFixture.Picture(64, a, Png(16, 16, 3, 3, 3), 16, 16, 0, 16));
-            var source = Source(withBitmaps)!;
+            var source = Source(withBitmaps);
 
-            Assert.True(source.TryGet(a, 10, out var small));
+            Assert.True(source.TryGetBitmap((ushort)a, 10, out var small));
             Assert.Equal(16, small.Ppem);
-            Assert.True(source.TryGet(a, 20, out var medium));
+            Assert.True(source.TryGetBitmap((ushort)a, 20, out var medium));
             Assert.Equal(32, medium.Ppem);
-            Assert.True(source.TryGet(a, 32, out var exact));
+            Assert.True(source.TryGetBitmap((ushort)a, 32, out var exact));
             Assert.Equal(32, exact.Ppem);
-            Assert.True(source.TryGet(a, 500, out var huge));
+            Assert.True(source.TryGetBitmap((ushort)a, 500, out var huge));
             Assert.Equal(64, huge.Ppem);
         }
 
@@ -119,9 +118,9 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
                 [new BitmapGlyphFontFixture.Picture(40, a, Png(20, 10, 0, 255, 0), 20, 10, 2, 3)],
                 new Dictionary<(int, int), int> { [(40, b)] = a });
 
-            var source = Source(withBitmaps)!;
+            var source = Source(withBitmaps);
 
-            Assert.True(source.TryGet(a, 40, out var glyph));
+            Assert.True(source.TryGetBitmap((ushort)a, 40, out var glyph));
             Assert.Equal(40, glyph.Ppem);
             Assert.Equal(20, glyph.Width);
             Assert.Equal(10, glyph.Height);
@@ -129,7 +128,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // sbix gives the lower-left corner's offset: the top is that plus the picture's height.
             Assert.Equal(13, glyph.BearingTop);
 
-            Assert.True(source.TryGet(b, 40, out var duplicate));
+            Assert.True(source.TryGetBitmap((ushort)b, 40, out var duplicate));
             Assert.Equal(glyph.Data, duplicate.Data);
         }
 
@@ -139,25 +138,23 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var font = BaseFont();
             var truncated = SyntheticFontTables.InsertTableDirectoryEntry(SyntheticFontTables.InsertTableDirectoryEntry(font, "CBLC", [0, 3, 0, 0, 0, 0, 0, 9]), "CBDT", [0, 3, 0, 0]);
 
-            Assert.Null(Source(truncated));
+            Assert.False(Source(truncated).HasBitmapGlyphs);
         }
 
         [Fact]
-        public void TheDescriptor_ReportsBitmapGlyphs_AndTreatsThemAsAColourFont()
+        public void TheTypeface_ReportsBitmapGlyphs_AndTreatsThemAsAColourFont()
         {
             var font = BaseFont();
             var a = BitmapGlyphFontFixture.GlyphId(font, 'A');
             var withBitmaps = BitmapGlyphFontFixture.WithCbdt(font, new BitmapGlyphFontFixture.Picture(20, a, Png(8, 6, 255, 0, 0), 8, 6, 1, 5));
-            var face = FontFileData.GetOrCreateFrom(withBitmaps).Fontface;
-            var descriptor = new OpenTypeDescriptor("bitmap", "bitmap", face);
+            var typeface = Source(withBitmaps);
 
-            Assert.True(descriptor.HasBitmapGlyphs);
-            Assert.True(descriptor.IsColorFont);
-            Assert.True(descriptor.HasBitmapGlyph(a));
-            Assert.False(descriptor.TryGetBitmapGlyph(a + 1000 > 60000 ? 1 : a + 1000, 20, out _));
+            Assert.True(typeface.HasBitmapGlyphs);
+            Assert.True(typeface.HasColorGlyphs);
+            Assert.True(typeface.TryGetBitmap((ushort)a, 20, out _));
+            Assert.False(typeface.TryGetBitmap((ushort)(a + 1000 > 60000 ? 1 : a + 1000), 20, out _));
 
-            var plain = FontFileData.GetOrCreateFrom(font).Fontface;
-            Assert.False(new OpenTypeDescriptor("plain", "plain", plain).HasBitmapGlyphs);
+            Assert.False(Source(font).HasBitmapGlyphs);
         }
 
         // ---- drawing -------------------------------------------------------------------------------------
@@ -226,19 +223,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             return System.Text.Encoding.Latin1.GetString(ms.ToArray());
         }
 
-        private static string FamilyOf(byte[] font)
-        {
-            var path = Path.Combine(Path.GetTempPath(), $"bitmapglyph-{Guid.NewGuid():N}.ttf");
-            File.WriteAllBytes(path, font);
-            try
-            {
-                return PeachDrawing.Text.Internal.Fonts.TtfFontDescription.LoadDescription(path).FontFamilyInvariantCulture;
-            }
-            finally
-            {
-                File.Delete(path);
-            }
-        }
+        /// <summary>The family name a font set registers the font under, which is the name a page's <c>font-family</c> uses.</summary>
+        private static string FamilyOf(byte[] font) => new FontSet().AddData(font).Name;
 
         [Fact]
         public async Task InAPdf_ABitmapGlyphIsAnImage_WithItsTextStillSelectable()

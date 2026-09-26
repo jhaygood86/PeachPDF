@@ -1,18 +1,15 @@
-using PeachDrawing.Text;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.Tests.TestSupport;
-using System.Text;
+using System.IO;
+using Xunit;
 
-namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
+namespace PeachDrawing.Text.Tests.Fonts
 {
     /// <summary>
-    /// The font engine's own infrastructure - the font-file bytes/identity type, the checksum, the descriptor
-    /// cache and the simple-font <c>/Widths</c> table - which used to live inside the PDF writer's namespaces
-    /// and is now owned by <c>PeachDrawing.Text.Internal.Fonts</c> (or, for the PDF-specific table, sits beside the PDF font objects).
+    /// The font engine's own infrastructure - the font-file bytes/identity type, the checksum and the descriptor
+    /// cache - which used to live inside the PDF writer's namespaces and is now owned by <c>PeachDrawing.Text.Internal.Fonts</c>.
+    /// The simple-font <c>/Widths</c> table, which sits beside the PDF font objects, is tested in PeachPDF.Tests.
     /// </summary>
     public class FontEngineInfrastructureTests
     {
@@ -114,50 +111,6 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.NotSame(fromA, fromB);
             Assert.NotSame(fromA.Descriptor, fromB.Descriptor);
             Assert.NotEqual(fromA.FontSource.Key, fromB.FontSource.Key);
-        }
-
-        [Fact]
-        public void SimpleFontWidths_MapEachWinAnsiCodeToItsGlyphsPdfWidth()
-        {
-            var descriptor = WinAnsiDescriptor(out var font);
-
-            int[] widths = PdfSimpleFontWidths.Compute(font.Typeface);
-
-            Assert.Equal(256, widths.Length);
-            Assert.True(widths['A'] > 0);
-            Assert.Equal(descriptor.GlyphIndexToPdfWidth(descriptor.CharCodeToGlyphIndex(new Rune('A'))), widths['A']);
-            // 0x80 is the euro sign in Windows-1252, not U+0080: the table goes through the WinAnsi mapping.
-            Assert.Equal(descriptor.GlyphIndexToPdfWidth(descriptor.CharCodeToGlyphIndex(new Rune(0x20AC))), widths[0x80]);
-        }
-
-        [Fact]
-        public void WinAnsiFont_IsWrittenAsASimpleTrueTypeFontWithA256EntryWidthsArray()
-        {
-            WinAnsiDescriptor(out var font);
-            var document = new PdfDocument();
-            document.Options.NoCompression = true;
-            var page = document.AddPage();
-            using (var gfx = XGraphics.FromPdfPage(page))
-                gfx.DrawString("Hello", font, XBrushes.Black, new XPoint(20, 40));
-
-            using var stream = new MemoryStream();
-            document.Save(stream);
-            string pdf = Encoding.Latin1.GetString(stream.ToArray());
-
-            Assert.Contains("/Subtype /TrueType", pdf);
-            Assert.Contains("/FirstChar 0", pdf);
-            Assert.Contains("/LastChar 255", pdf);
-        }
-
-        private static OpenTypeDescriptor WinAnsiDescriptor(out XFont font)
-        {
-            var fontSet = new FontSet();
-            string family = "WinAnsiFamily-" + Guid.NewGuid().ToString("N");
-            using (var stream = File.OpenRead(BundledFonts.Ttf))
-                fontSet.AddStream(stream, new AddOptions { FamilyName = family });
-
-            font = TestFonts.Create(family, 12, pdfOptions: new XPdfFontOptions(PdfFontEncoding.WinAnsi), fontSet: fontSet);
-            return font.Typeface.Face.Descriptor;
         }
     }
 }

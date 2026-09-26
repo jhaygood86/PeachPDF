@@ -8,12 +8,11 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using PeachPDF;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -26,7 +25,7 @@ namespace PeachPDF.Tests.Integration
     {
         private static async Task<string> RenderWithColorFont(string fontPath, string body)
         {
-            var family = TtfFontDescription.LoadDescription(fontPath).FontFamilyInvariantCulture;
+            var family = TypefaceFixtures.FamilyNameOf(fontPath);
             var generator = new PdfGenerator();
             await using (var stream = File.OpenRead(fontPath))
                 await generator.AddFontFromStream(stream);
@@ -275,7 +274,7 @@ namespace PeachPDF.Tests.Integration
         public async Task ColorGlyph_WithUnderline_StillDrawsDecoration()
         {
             // Exercises the shared underline/strikeout path on the color-font branch.
-            var family = TtfFontDescription.LoadDescription(BundledFonts.ColorV1).FontFamilyInvariantCulture;
+            var family = TypefaceFixtures.FamilyNameOf(BundledFonts.ColorV1);
             var generator = new PdfGenerator();
             await using (var stream = File.OpenRead(BundledFonts.ColorV1))
                 await generator.AddFontFromStream(stream);
@@ -301,7 +300,7 @@ namespace PeachPDF.Tests.Integration
             var generator = new PdfGenerator();
             await using (var stream = File.OpenRead(BundledFonts.Ttf))
                 await generator.AddFontFromStream(stream);
-            var family = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture;
+            var family = TypefaceFixtures.FamilyNameOf(BundledFonts.Ttf);
 
             var html = $"<!DOCTYPE html><html><head><style>body {{ font-family: '{family}'; }}</style></head><body>Hi</body></html>";
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
