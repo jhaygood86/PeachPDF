@@ -137,6 +137,8 @@ namespace PeachDrawing.Text.Layout
     /// </summary>
     public readonly record struct TabSize
     {
+        private const byte SpacesKind = 1;
+        private const byte LengthKind = 2;
         private readonly byte _kind;
         private readonly double _value;
 
@@ -160,7 +162,7 @@ namespace PeachDrawing.Text.Layout
                 throw new ArgumentOutOfRangeException(nameof(count), count, "The number of spaces must be zero or more, and finite.");
             }
 
-            return count == 8 ? default : new TabSize(1, count);
+            return count == 8 ? default : new TabSize(SpacesKind, count);
         }
 
         /// <summary>A tab stop for every <paramref name="length"/> layout units.</summary>
@@ -174,11 +176,11 @@ namespace PeachDrawing.Text.Layout
                 throw new ArgumentOutOfRangeException(nameof(length), length, "The length must be zero or more, and finite.");
             }
 
-            return new TabSize(2, length);
+            return new TabSize(LengthKind, length);
         }
 
         /// <summary>Whether the distance is a length, and not a number of spaces.</summary>
-        public bool IsLength => _kind == 2;
+        public bool IsLength => _kind == LengthKind;
 
         /// <summary>The number of spaces, or the length in layout units when <see cref="IsLength"/> is set.</summary>
         public double Value => _kind == 0 ? 8 : _value;
@@ -217,7 +219,8 @@ namespace PeachDrawing.Text.Layout
         /// <summary>
         /// The distance between the tab stops a tab character (U+0009) advances the pen to (CSS <c>tab-size</c>). Stops are measured along the line from the
         /// start edge of the paragraph, in the order the text is written, so a tab after right-to-left text in a left-to-right line is placed as if that
-        /// text were where it is in memory. A tab at the end of a line hangs, like any space there.
+        /// text were where it is in memory. A tab at the end of a line hangs, like any space there. Justification widens spaces only, so text after a tab in a justified line
+        /// moves off its stop by what the spaces before it gained.
         /// </summary>
         public TabSize TabSize { get; init; }
 

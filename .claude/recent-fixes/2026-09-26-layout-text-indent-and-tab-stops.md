@@ -26,3 +26,5 @@ Not moved out of PeachPDF: `ExpandTabs` and `GetLineTextIndent` work over the wo
 `ParagraphIndentAndTabTests` (36 tests: which lines get the indent, RTL, alignment and justification in the remainder, negative and oversized indents,
 tab stops with spacing and indent, carets and selection across a tab, hostile widths and a huge word), the existing layout tests unchanged, and
 Debug and Release runs of `PeachDrawing.Text.Tests`.
+
+A review found and this fixed: min-content with `anywhere` under-counted a hanging indent on every character after the first; a pen a rounding error short of a stop made a tab cover nothing (`TabAdvance` allows a relative 1e-9) and a denormal stop overflowed to an infinite tab. Justification widens spaces only, so text after a tab in a justified line leaves its stop; that is documented on `TabSize`, not compensated.

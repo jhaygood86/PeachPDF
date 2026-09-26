@@ -189,6 +189,33 @@ namespace PeachDrawing.Text.Tests.Layout
         }
 
         [Fact]
+        public void TheMinContent_WithBreaksAnywhere_IndentsEveryCharacterOfAHangingParagraph()
+        {
+            var style = new ParagraphStyle { TextIndent = new TextIndent(30, Hanging: true), OverflowWrap = OverflowWrap.Anywhere };
+            var widths = Build("abc", style).MeasureContent();
+
+            Assert.Equal(Math.Max(Advance("a"), 30 + Math.Max(Advance("b"), Advance("c"))), widths.MinContent, 3);
+        }
+
+        [Fact]
+        public void ATabAtAnExactStop_MovesOnAWholeStop_WhateverTheRounding()
+        {
+            var style = new ParagraphStyle { TabSize = TabSize.FromSpaces(8) };
+            var layout = Lay("        \tx", 1000, style);
+
+            var tab = layout.Lines[0].Runs.Single(r => r.Range.Length == 1 && r.Glyphs.Glyphs.Count == 0);
+            Assert.Equal(8 * Space, tab.Width, 6);
+        }
+
+        [Fact]
+        public void ATinyTabStop_DoesNotMakeAnInfiniteTab()
+        {
+            var layout = Lay("abc\tx", 1000, new ParagraphStyle { TabSize = TabSize.FromLength(1e-320) });
+
+            Assert.True(double.IsFinite(layout.Lines[0].Width));
+        }
+
+        [Fact]
         public void AnUnlimitedWidth_IsAsWideAsTheWidestLinePlusItsIndent()
         {
             var layout = Lay("alpha\nbeta gamma", double.PositiveInfinity, new ParagraphStyle { TextIndent = new TextIndent(30) });

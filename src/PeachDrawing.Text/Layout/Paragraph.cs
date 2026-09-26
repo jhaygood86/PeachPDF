@@ -430,9 +430,11 @@ namespace PeachDrawing.Text.Layout
                 return 0;
             }
 
-            double advance = ((Math.Floor(pen / stop) + 1) * stop) - pen;
-            // Rounding when the pen is enormous next to the stop can put the next stop at or behind the pen.
-            return advance > 0 ? advance : 0;
+            // The pen is a sum of scaled advances and the stop a product of another, so a pen that is on a stop can come out a rounding error short of it;
+            // the small allowance keeps such a tab from covering nothing where it should cover a whole stop.
+            double advance = ((Math.Floor((pen / stop) + 1e-9) + 1) * stop) - pen;
+            // A stop far smaller than the pen can overflow the division, and rounding can put the next stop at or behind the pen.
+            return double.IsFinite(advance) && advance > 0 ? advance : 0;
         }
 
         /// <summary>
@@ -524,7 +526,8 @@ namespace PeachDrawing.Text.Layout
                             next++;
                         }
 
-                        min = Math.Max(min, Measure(g, next, segmentIndent) + (g == segmentStart ? segmentIndent : 0));
+                        double graphemeIndent = g == segmentStart ? segmentIndent : IndentOf(false, false);
+                        min = Math.Max(min, Measure(g, next, graphemeIndent) + graphemeIndent);
                         g = next;
                     }
                 }
