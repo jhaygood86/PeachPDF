@@ -235,6 +235,15 @@ namespace PeachPDF.Tests.TestSupport
         internal static string VariableTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableTest.golden.json");
 
         /// <summary>
+        /// A synthetic variable font whose <c>GPOS</c> varies with weight (see VariableLayoutTest.LICENSE.txt): kerning of A V and V A, a single
+        /// adjustment of W and a mark-to-base anchor, with <c>VariationIndex</c> device tables and a <c>GDEF</c> item variation store.
+        /// </summary>
+        internal static string VariableLayoutTest => Path.Combine(AppContext.BaseDirectory, "VariableLayoutTest.ttf");
+
+        /// <summary>What fontTools' instancer leaves in the <c>GPOS</c> of <see cref="VariableLayoutTest"/> at a grid of weights.</summary>
+        internal static string VariableLayoutTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableLayoutTest.golden.json");
+
+        /// <summary>
         /// A real font file path: the first one the host OS reports, or the bundled TTF
         /// if the host reports none.
         /// </summary>
