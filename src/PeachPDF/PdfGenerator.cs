@@ -223,8 +223,15 @@ namespace PeachPDF
                     "PdfGenerateConfig.MaxRasterPixels must be at least 1.");
             }
 
+            if (!Enum.IsDefined(config.TextHinting))
+            {
+                throw new ArgumentOutOfRangeException(nameof(config), config.TextHinting,
+                    "PdfGenerateConfig.TextHinting is not a defined TextHinting value.");
+            }
+
             _pdfSharpAdapter.RasterizationDpi = config.RasterizationDpi;
             _pdfSharpAdapter.MaxRasterPixels = config.MaxRasterPixels;
+            _pdfSharpAdapter.TextHinting = config.TextHinting;
         }
 
         /// <summary>

@@ -355,6 +355,18 @@ namespace PeachPDF
         public long MaxRasterPixels { get; set; } = 64_000_000;
 
         /// <summary>
+        /// Whether the text PeachPDF draws into a bitmap (see <see cref="RasterizationDpi"/>) is fitted to the pixel grid by the font's own
+        /// hinting. Defaults to <see cref="PeachPDF.TextHinting.None"/>, so output does not change unless it is asked for.
+        /// </summary>
+        /// <remarks>
+        /// It helps text set small at a low <see cref="RasterizationDpi"/>, where pixels are big enough to see. It never affects the PDF's own
+        /// text, which is the embedded font. It is used for a piece of text only when that text is drawn without rotation, skew or
+        /// perspective (hinting is meaningless under them), and only for fonts with TrueType instructions; anything else is drawn unhinted.
+        /// Layout is never affected: measurements and line breaks use the unhinted metrics, so turning hinting on cannot move a line break.
+        /// </remarks>
+        public TextHinting TextHinting { get; set; } = TextHinting.None;
+
+        /// <summary>
         /// What happens when a document that targets PDF/A-1 or PDF/X-1a/X-3 (all of which forbid transparency) uses something that needs it.
         /// <see cref="TransparencyPolicy.Reject"/> (the default) fails generation with an error naming the construct;
         /// <see cref="TransparencyPolicy.Flatten"/> renders the affected region into an opaque bitmap at <see cref="RasterizationDpi"/> instead

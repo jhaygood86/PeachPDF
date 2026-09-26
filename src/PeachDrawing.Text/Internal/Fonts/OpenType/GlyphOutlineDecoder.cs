@@ -368,7 +368,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// segments, inserting implied on-curve midpoints between consecutive off-curve points and
         /// elevating each quadratic to a cubic.
         /// </summary>
-        private static OutlineContour? BuildContour(List<RawPoint> points)
+        internal static OutlineContour? BuildContour(List<RawPoint> points)
         {
             int n = points.Count;
             if (n == 0)
@@ -469,6 +469,6 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
         private static double ReadF2Dot14(OpenTypeFontface face) => face.ReadShort() / 16384.0;
 
-        private readonly record struct RawPoint(double X, double Y, bool OnCurve);
+        internal readonly record struct RawPoint(double X, double Y, bool OnCurve);
     }
 }

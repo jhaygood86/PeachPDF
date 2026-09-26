@@ -65,8 +65,9 @@ namespace PeachDrawing.Text.Outlines
     }
 
     /// <summary>
-    /// The shape of one glyph as data: zero or more closed contours of lines and cubic curves, in font design units with the
-    /// y axis up.
+    /// The shape of one glyph as data: zero or more closed contours of lines and cubic curves, with the y axis up. The
+    /// coordinates are in font design units, unless the outline was asked for at a size (see <see cref="OutlineRequest"/>), when
+    /// they are in pixels.
     /// </summary>
     /// <remarks>
     /// A glyph is filled by the nonzero winding rule, which is how a glyph gets its counters (the hole of an <c>o</c>): a
@@ -85,6 +86,47 @@ namespace PeachDrawing.Text.Outlines
 
         /// <summary>Whether the glyph has no ink at all.</summary>
         public bool IsEmpty => ContourList.Count == 0;
+
+        /// <summary>
+        /// Whether the outline was grid-fitted: its points were moved by the font's own hinting so that the glyph lines up with
+        /// the pixel grid at <see cref="PixelsPerEm"/>. It is <see langword="false"/> for an outline in design units, and for one asked
+        /// for at a size that could not be hinted (the font has no hints of a kind that is supported, or its hinting program failed).
+        /// </summary>
+        public bool IsGridFitted { get; internal init; }
+
+        /// <summary>
+        /// The size, in pixels per em, the coordinates are scaled to; 0 when they are in design units.
+        /// </summary>
+        public double PixelsPerEm { get; internal init; }
+
+        /// <summary>
+        /// The advance of the glyph in pixels after grid-fitting, a whole number of pixels as the font's hinting leaves it, or
+        /// <see langword="null"/> when <see cref="IsGridFitted"/> is <see langword="false"/>.
+        /// </summary>
+        public double? GridFittedAdvance { get; internal init; }
+
+        /// <summary>The same shape with every coordinate multiplied by a factor, as an outline that is not grid-fitted at a size.</summary>
+        internal GlyphOutline WithScale(double factor, double pixelsPerEm)
+        {
+            var result = new GlyphOutline { PixelsPerEm = pixelsPerEm };
+
+            OutlinePoint Map(OutlinePoint p) => new(p.X * factor, p.Y * factor);
+
+            foreach (OutlineContour source in ContourList)
+            {
+                var contour = new OutlineContour(Map(source.Start));
+                foreach (OutlineSegment segment in source.SegmentList)
+                {
+                    contour.SegmentList.Add(segment.IsCubic
+                        ? OutlineSegment.Cubic(Map(segment.Control1), Map(segment.Control2), Map(segment.End))
+                        : OutlineSegment.Line(Map(segment.End)));
+                }
+
+                result.ContourList.Add(contour);
+            }
+
+            return result;
+        }
 
         /// <summary>
         /// Finds where the glyph's ink lies across a horizontal band: the horizontal ranges that are painted somewhere between

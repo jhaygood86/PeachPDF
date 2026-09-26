@@ -129,6 +129,9 @@ namespace PeachPDF.Html.Adapters
         /// </summary>
         internal double RasterizationDpi { get; set; } = 300;
 
+        /// <summary>How the raster backend fits glyph outlines to its pixel grid (see <c>PdfGenerateConfig.TextHinting</c>).</summary>
+        internal TextHinting TextHinting { get; set; } = TextHinting.None;
+
         /// <summary>The most pixels one raster surface may have before its resolution is lowered to fit.</summary>
         internal long MaxRasterPixels { get; set; } = 64_000_000;
 
