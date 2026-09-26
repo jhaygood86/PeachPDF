@@ -726,8 +726,32 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(Enumerable.Range(1, 31).Select(i => $"W{i}"), placed.Order(WordNumber.Instance));
         }
 
+        // A heading in 13pt type on the body's 12pt line has a negative half-leading, so its ink rises
+        // above its line box. Moved to the next page's top, the line's ink started above that page's band,
+        // the line was claimed by the page it left, and that page never reached the heading: it was drawn
+        // on no page. An overflow:hidden card used to hide it by moving whole; fragmenting exposed it.
+        [Theory]
+        [InlineData("hidden")]
+        [InlineData("visible")]
+        public async Task AHeadingWhoseInkRisesAboveItsLine_MovedToThePageTop_IsDrawn(string overflow)
+        {
+            const string greek = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi "
+                                 + "omicron pi rho sigma tau upsilon";
+            string Card(int n) =>
+                $"<div style='overflow:{overflow};border:1px solid #666;margin:0 0 8pt;padding:4pt'>"
+                + $"<h2 style='font-size:13pt;margin:10pt 0 4pt'>H{n}</h2>"
+                + $"<p style='margin:0 0 6pt'>{greek}</p><p style='margin:0 0 6pt'>second para of card {n}</p></div>";
+
+            var placed = await WordsPlaced(
+                "<p style='margin:0 0 6pt'>fill0</p>" + Card(1) + Card(2), "H", pageWidth: 300, distinct: false);
+
+            // Once each: the page the line left claiming it too would draw it twice.
+            Assert.Equal(["H1", "H2"], placed.Order(StringComparer.Ordinal));
+        }
+
         private static async Task<List<string>> WordsPlaced(
-            string body, string prefix, double pageWidth = 595, double pageHeight = PageHeight, double margin = Margin)
+            string body, string prefix, double pageWidth = 595, double pageHeight = PageHeight, double margin = Margin,
+            bool distinct = true)
         {
             var html = "<!DOCTYPE html><html><head><style>body{margin:0;font:10pt/12pt Arial} p{margin:0}</style>" +
                        $"</head><body>{body}</body></html>";
@@ -744,11 +768,11 @@ namespace PeachPDF.Tests.Integration
                 painted.AddRange(VisiblyDrawnStrings(recording.Log));
             }
 
-            return painted
+            var matching = painted
                 .Where(t => t.StartsWith(prefix, StringComparison.Ordinal) && t.Length > prefix.Length
-                            && char.IsDigit(t[prefix.Length]))
-                .Distinct()
-                .ToList();
+                            && char.IsDigit(t[prefix.Length]));
+
+            return (distinct ? matching.Distinct() : matching).ToList();
         }
 
         // Every string drawn with some part of it inside all the rectangle clips in force when it was drawn.

@@ -2520,7 +2520,7 @@ var scrollContainersAcrossPagesHtml = $$"""
     being split across the page edge.</div>
     <p>The text after the note does not wait for it. It fills the rest of the note's first page at full
     width, and the text that reaches the next page wraps around the note there, until it passes the
-    note's foot and uses the full width again. A browser printing the same page lays it out the same way.</p>
+    note's foot and uses the full width again.</p>
     <p>A later float is never placed above an earlier one, so a second note after this one would follow it
     onto the next page rather than stay behind. Nothing is drawn twice at the page boundary, and nothing
     is lost there.</p>

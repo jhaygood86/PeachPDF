@@ -130,7 +130,7 @@ wrapper also needs its *contents* to carry the break, and several did not:
 - An **inline-block** holding block content lost all 14 of its lines (fuzz case 1_72): it is laid out
   through `FlowAtomicBlockContentChild` → `LayoutContentAtItsAssignedPosition`, the #1201 path.
 - An absolutely positioned badge in a `position: relative; overflow: hidden` wrapper vanished. That turned
-  out to be #1349 (see [its entry](2026-09-24-an-absolute-box-on-an-emitted-page-is-drawn-there.md)),
+  out to be #1349 (see [its entry](2026-09-26-an-absolute-box-on-an-emitted-page-is-drawn-there.md)),
   fixed here too, so the exclusion is now a safety margin rather than the fix.
 
 `EveryDescendantCarriesABreak` is the matching allow-list over the subtree (block, list-item, inline,

@@ -18,7 +18,7 @@ The auto-height case (a panel of paragraphs, a `<pre>` listing) was fixed for #1
 of the monolithic set wherever the break is known to survive. A wrapper that stays monolithic for another
 reason, such as one under `break-inside: avoid` or one holding an absolutely positioned box or a
 multi-column container, still loses its slice-boundary lines here; see
-[the recent fix](../recent-fixes/2026-09-24-auto-height-scroll-containers-fragment.md). This capped case
+[the recent fix](../recent-fixes/2026-09-26-auto-height-scroll-containers-fragment.md). This capped case
 was left out because either fix changes the emitter's line-membership rule, which
 [#484](https://github.com/jhaygood86/PeachPDF/issues/484) narrowed on purpose
 ([the invariant](../invariants/fragmentation-one-membership-question-is-asked-with-one-tolerance.md)).
