@@ -89,7 +89,7 @@ namespace PeachPDF.Tests.PublicApi
         }
 
         private static string Parameters(ParameterInfo[] parameters)
-            => string.Join(", ", parameters.Select(p => (p.IsOut ? "out " : p.ParameterType.IsByRef ? "ref " : "") + Name(p.ParameterType) + " " + p.Name + (p.HasDefaultValue ? " = " + (p.DefaultValue ?? "null") : "")));
+            => string.Join(", ", parameters.Select(p => (p.IsOut ? "out " : p.IsIn ? "in " : p.ParameterType.IsByRef ? "ref " : "") + Name(p.ParameterType) + " " + p.Name + (p.HasDefaultValue ? " = " + (p.DefaultValue ?? "null") : "")));
 
         private static string Name(Type type)
         {

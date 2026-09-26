@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Text;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachDrawing.Text.Internal.Text;

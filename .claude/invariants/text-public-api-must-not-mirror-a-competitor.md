@@ -27,6 +27,21 @@ the public surface is designed from PeachPDF's requirements and from the specifi
 
 The origin column is where the name and shape come from. "Ours" means we chose it because of what it does here.
 
+### `PeachDrawing.Text` (fonts and matching)
+
+| Public name | Role | Origin of the name and shape |
+|---|---|---|
+| `FontSet` (`AddData`, `AddStream`, `AddFile`, `TryFindFamily`, `TryFindCoveringFamily`, `HasExplicitRanges`, `MatchOrFallback`, `TryGetFontData`, `ResolveGeneric`, `InstalledFamilyNames`) | The fonts text can be set in: installed plus added, per instance | CSS Fonts 4 section 5, whose matching runs over "the set of available fonts". `Add*` and `Try*` follow .NET's own naming. `MatchOrFallback` and `TryGetFontData` are ours. `TryFindCoveringFamily` is the "system fallback" step of the CSS algorithm |
+| `TypefaceFamily` (`Name`, `TryMatch`) | The faces sharing one family name | The family-versus-face split every platform text API has (DirectWrite, CoreText, fontconfig) |
+| `Typeface` (`FamilyName`, `StyleName`, `IsBold`, `IsItalic`) | One face, with no size | Typography's own term. Deliberately size-free, unlike a face-plus-size "font" object; the metrics and glyph members arrive in a later slice |
+| `TypefaceQuery` (`Weight`, `Width`, `IsItalic`, `MustCover`) | What a caller wants: the inputs to CSS face matching | CSS Fonts 4 section 5.2 matching inputs; `Width` is the OpenType `usWidthClass` 1 to 9 that the CSS `font-stretch` keywords map to |
+| `TypefaceMatch` (`Typeface`, `Synthesis`) | A match and what is still missing from it | Ours |
+| `SyntheticStyle` (`None`, `Bold`, `Italic`, `BoldItalic`) | What has to be faked | CSS `font-synthesis` |
+| `AddOptions` (`FamilyName`, `Weight`, `IsItalic`, `Width`, `UnicodeRanges`) | The overrides of an `@font-face` rule | CSS `@font-face` descriptors (`font-weight`, `font-style`, `font-stretch`, `unicode-range`) |
+| `RuneInterval` | An inclusive interval of scalar values | CSS `unicode-range`; the name is ours, the members are `Rune`'s |
+| `GenericFamily` | A generic font family | CSS Fonts 4 generic family keywords |
+| `TypefaceFormatException` | Data that is not a font | .NET exception convention |
+
 ### `PeachDrawing.Text.Unicode`
 
 | Public name | Role | Origin of the name and shape |
@@ -47,4 +62,5 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 Every name above was taken from the specification it implements, and the member sets follow those specifications rather
 than any library's. The author did not consult SixLabors.Fonts while choosing them, and so could not vouch that no name
 coincides with one of theirs; that check is the maintainer's review under rule 5. The maintainer reviewed this slice's
-register on 2026-09-26 and found the naming fine.
+register on 2026-09-26 and found the naming fine. That review covered the `Unicode` table; the `PeachDrawing.Text`
+(fonts and matching) table was added afterwards and is still awaiting the same review.

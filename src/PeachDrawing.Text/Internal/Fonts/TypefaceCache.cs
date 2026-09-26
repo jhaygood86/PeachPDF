@@ -44,16 +44,16 @@ namespace PeachDrawing.Text.Internal.Fonts
         // A FontResolver instance's own typeface-key-keyed glyph typeface cache, used only for its custom
         // (AddFont/@font-face) families so two PdfGenerators registering different bytes under one family name
         // never share a typeface. Held weakly against the resolver, so it is collected along with it.
-        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FontResolver, Dictionary<string, Typeface>> InstanceCaches = new();
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FontResolver, Dictionary<string, LoadedTypeface>> InstanceCaches = new();
 
-        internal static Dictionary<string, Typeface> ForInstance(FontResolver resolver) => InstanceCaches.GetOrCreateValue(resolver);
+        internal static Dictionary<string, LoadedTypeface> ForInstance(FontResolver resolver) => InstanceCaches.GetOrCreateValue(resolver);
 
         TypefaceCache()
         {
-            _glyphTypefacesByKey = new ConcurrentDictionary<string, Typeface>();
+            _glyphTypefacesByKey = new ConcurrentDictionary<string, LoadedTypeface>();
         }
 
-        public static bool TryGetGlyphTypeface(string key, out Typeface glyphTypeface)
+        public static bool TryGetGlyphTypeface(string key, out LoadedTypeface glyphTypeface)
         {
             try
             {
@@ -64,7 +64,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             finally { FontLock.Exit(); }
         }
 
-        public static void AddGlyphTypeface(Typeface glyphTypeface)
+        public static void AddGlyphTypeface(LoadedTypeface glyphTypeface)
         {
             try
             {
@@ -101,6 +101,6 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// <summary>
         /// Maps typeface key to glyph typeface.
         /// </summary>
-        readonly ConcurrentDictionary<string, Typeface> _glyphTypefacesByKey;
+        readonly ConcurrentDictionary<string, LoadedTypeface> _glyphTypefacesByKey;
     }
 }

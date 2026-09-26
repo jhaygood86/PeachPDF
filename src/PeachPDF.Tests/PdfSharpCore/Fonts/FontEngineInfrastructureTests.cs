@@ -1,3 +1,4 @@
+using PeachDrawing.Text;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -86,8 +87,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             using (var stream = File.OpenRead(BundledFonts.Ttf))
                 resolver.AddFont(stream, family);
 
-            var first = Typeface.GetOrCreateFrom(family, new FontResolvingOptions(FaceStyle.Regular), resolver);
-            var second = Typeface.GetOrCreateFrom(family, new FontResolvingOptions(FaceStyle.Regular), resolver);
+            var first = LoadedTypeface.GetOrCreateFrom(family, new FontResolvingOptions(FaceStyle.Regular), resolver);
+            var second = LoadedTypeface.GetOrCreateFrom(family, new FontResolvingOptions(FaceStyle.Regular), resolver);
 
             Assert.Same(first, second);
             Assert.Same(first.Descriptor, second.Descriptor);
@@ -107,8 +108,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
                 resolver.AddFont(stream, family);
             }
 
-            var fromA = Typeface.GetOrCreateFrom(family, new FontResolvingOptions(FaceStyle.Regular), a);
-            var fromB = Typeface.GetOrCreateFrom(family, new FontResolvingOptions(FaceStyle.Regular), b);
+            var fromA = LoadedTypeface.GetOrCreateFrom(family, new FontResolvingOptions(FaceStyle.Regular), a);
+            var fromB = LoadedTypeface.GetOrCreateFrom(family, new FontResolvingOptions(FaceStyle.Regular), b);
 
             Assert.NotSame(fromA, fromB);
             Assert.NotSame(fromA.Descriptor, fromB.Descriptor);
@@ -150,12 +151,12 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
         private static OpenTypeDescriptor WinAnsiDescriptor(out XFont font)
         {
-            var resolver = new FontResolver();
+            var fontSet = new FontSet();
             string family = "WinAnsiFamily-" + Guid.NewGuid().ToString("N");
             using (var stream = File.OpenRead(BundledFonts.Ttf))
-                resolver.AddFont(stream, family);
+                fontSet.AddStream(stream, new AddOptions { FamilyName = family });
 
-            font = new XFont(family, 12, XFontStyle.Regular, new XPdfFontOptions(PdfFontEncoding.WinAnsi), resolver);
+            font = TestFonts.Create(family, 12, pdfOptions: new XPdfFontOptions(PdfFontEncoding.WinAnsi), fontSet: fontSet);
             return font.Descriptor;
         }
     }

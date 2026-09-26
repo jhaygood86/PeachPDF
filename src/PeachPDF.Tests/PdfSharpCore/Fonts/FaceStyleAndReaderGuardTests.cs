@@ -1,3 +1,4 @@
+using PeachDrawing.Text;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -63,8 +64,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.Equal("tk:f/n/400/5", normal);
             Assert.Equal("tk:f/i/400/5", italic);
             Assert.Equal("tk:f/n/600/3", semiBold);
-            Assert.Equal(normal, Typeface.ComputeKey("F", false, false));
-            Assert.Equal(new FontResolvingOptions(FaceStyle.BoldItalic).ComputeTypefaceKey("F"), Typeface.ComputeKey("F", true, true));
+            Assert.Equal(normal, LoadedTypeface.ComputeKey("F", false, false));
+            Assert.Equal(new FontResolvingOptions(FaceStyle.BoldItalic).ComputeTypefaceKey("F"), LoadedTypeface.ComputeKey("F", true, true));
         }
 
         [Theory]
@@ -105,20 +106,6 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var info = FontFactory.ResolveTypeface(family, new FontResolvingOptions(FaceStyle.Regular), "", resolver);
 
             Assert.NotNull(info);
-        }
-
-        [Fact]
-        public void XFont_CanForceWhichSynthesisItNeeds()
-        {
-            string family = "ForcedSynthesisFamily-" + Guid.NewGuid().ToString("N");
-            var resolver = new FontResolver();
-            using (var stream = File.OpenRead(BundledFonts.Ttf))
-                resolver.AddFont(stream, family);
-
-            var font = new XFont(family, 12, XFontStyle.Regular, new XPdfFontOptions(PdfFontEncoding.Unicode), SyntheticStyle.Bold, resolver);
-
-            Assert.Equal(SyntheticStyle.Bold, font.StyleSimulations);
-            Assert.True(font.OverrideStyleSimulations);
         }
 
         [Fact]

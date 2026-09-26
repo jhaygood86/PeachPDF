@@ -54,7 +54,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// </summary>
         /// <param name="familyName">Name of the font family.</param>
         /// <param name="fontResolvingOptions">The font resolving options.</param>
-        /// <param name="typefaceKey">Typeface key if already known by caller, null otherwise.</param>
+        /// <param name="typefaceKey">LoadedTypeface key if already known by caller, null otherwise.</param>
         /// <param name="fontResolver">Font Resolver</param>
         /// <returns>
         /// Information about the typeface, or null if no typeface can be found.

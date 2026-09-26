@@ -1,3 +1,4 @@
+using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
 using PeachPDF;
 using PeachPDF.PdfSharpCore.Drawing;

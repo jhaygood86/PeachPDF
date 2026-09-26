@@ -1,3 +1,4 @@
+﻿using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Text;
@@ -78,9 +79,9 @@ namespace PeachPDF.Tests.TestSupport
 
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => false;
 
-        protected override Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachDrawing.Text.Internal.Fonts.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
+        protected override Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
 
-        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachDrawing.Text.Internal.Fonts.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
+        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
     }
 
     /// <summary>A solid-color brush that remembers the color it was created with, and (for a linear

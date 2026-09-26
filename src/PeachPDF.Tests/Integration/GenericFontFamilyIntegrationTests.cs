@@ -1,3 +1,5 @@
+using PeachDrawing.Text;
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Utils;
@@ -39,7 +41,7 @@ namespace PeachPDF.Tests.Integration
             // Off Linux, and on a Linux host with no libfontconfig.so.1 (or a resolution failure —
             // LinuxSystemFontResolver catches and returns null), there is no fontconfig answer at all.
             Assert.Equal(DefaultFontResolver.DefaultFont,
-                PdfSharpAdapter.ResolveSystemUiFamily(null, _ => true));
+                GenericFamilyTable.Resolve(GenericFamily.SystemUi, null, false, false, false, _ => true) ?? DefaultFontResolver.DefaultFont);
         }
 
         [Fact]
@@ -50,7 +52,7 @@ namespace PeachPDF.Tests.Integration
             // branch would never run and the assertion would hold whether or not the code did
             // anything — the same reason DefaultFontFallbackTests uses a synthetic default.
             Assert.Equal(DefaultFontResolver.DefaultFont,
-                PdfSharpAdapter.ResolveSystemUiFamily("PeachPDF Test Family That Is Not Installed", _ => false));
+                GenericFamilyTable.Resolve(GenericFamily.SystemUi, "PeachPDF Test Family That Is Not Installed", false, false, false, _ => false) ?? DefaultFontResolver.DefaultFont);
         }
 
         [Fact]
@@ -58,7 +60,7 @@ namespace PeachPDF.Tests.Integration
         {
             // The contrast case: without it, the two above also pass if the mapping always fell back.
             Assert.Equal("FreeSans",
-                PdfSharpAdapter.ResolveSystemUiFamily("FreeSans", _ => true));
+                GenericFamilyTable.Resolve(GenericFamily.SystemUi, "FreeSans", false, false, false, _ => true) ?? DefaultFontResolver.DefaultFont);
         }
 
         [Theory]

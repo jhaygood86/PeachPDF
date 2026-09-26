@@ -81,6 +81,25 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// </summary>
         internal bool IsCustomFamily(string familyName) => _customFamilyNames.Contains(familyName);
 
+        /// <summary>Whether this instance can see any family at all, installed or added.</summary>
+        internal bool HasFamilies => InstalledFonts.Count > 0;
+
+        /// <summary>
+        /// Looks a family up by name, ignoring case, and reports its display name (the spelling it was registered
+        /// or discovered under).
+        /// </summary>
+        internal bool TryGetFamilyName(string familyName, out string displayName)
+        {
+            if (InstalledFonts.TryGetValue(familyName.ToLowerInvariant(), out var family))
+            {
+                displayName = family.Name;
+                return true;
+            }
+
+            displayName = string.Empty;
+            return false;
+        }
+
         public static string[] SupportedFonts { get; }
 
         /// <summary>
@@ -290,7 +309,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             // occupying the same slot (same axes AND same range set) - a re-registration - while letting a
             // same-axes face with a *different* range set coexist (that is exactly the unicode-range
             // subset case).
-            var clonedFamily = new FontFamilyModel { Name = InstalledFonts.TryGetValue(key, out var family) ? family.Name : key };
+            var clonedFamily = new FontFamilyModel { Name = InstalledFonts.TryGetValue(key, out var family) ? family.Name : fontFamilyName };
             if (family is not null)
             {
                 foreach (var face in family.Faces)
