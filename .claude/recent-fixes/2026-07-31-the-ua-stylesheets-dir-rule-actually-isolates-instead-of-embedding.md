@@ -54,7 +54,7 @@ reverting each guard and watching the corresponding new test fail exactly as pre
 ## Evidence
 
 Full `net8.0` suite: 7368 passing, 9 skipped, 0 failed (includes 2 new tests in
-`PeachPDF.Tests/Text/Bidi/BidiResolverSyntheticIsolateTests.cs`, both confirmed to fail without their
+`PeachDrawing.Text.Tests/Text/Bidi/BidiResolverSyntheticIsolateTests.cs`, both confirmed to fail without their
 respective guard and pass with it). Unicode's own ~92k-case `BidiCharacterTest.txt` conformance suite
 (`BidiResolverConformanceTests`) still 100% passing — the fix only adds a second, purely additive
 chaining path; it never touches the real-character matching path that suite exercises.

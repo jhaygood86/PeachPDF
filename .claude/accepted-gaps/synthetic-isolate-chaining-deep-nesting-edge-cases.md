@@ -13,7 +13,7 @@ located by index-adjacency (an override's own `Start`/`End`) instead. Two failur
 duplicate-processing when nested isolates close at the same index, and dropped positions when
 sibling isolates merge into one level run with no boundary between them — were found and fixed as
 part of that change (`ComputeIsolatingRunSequences`'s `runEndIndex`-verified chain entries and
-`!visited[...]` guard; see `PeachPDF.Tests/Text/Bidi/BidiResolverSyntheticIsolateTests.cs`).
+`!visited[...]` guard; see `PeachDrawing.Text.Tests/Text/Bidi/BidiResolverSyntheticIsolateTests.cs`).
 
 Two narrower issues remain, deliberately out of scope for that fix:
 
