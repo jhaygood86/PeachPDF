@@ -98,7 +98,7 @@ namespace PeachDrawing.Text.OpenType
         public double AxisHeight { get; }
         /// <summary>The tallest base an accent is placed on without being raised: on a taller base the accent moves up with it.</summary>
         public double AccentBaseHeight { get; }
-        /// <summary>The tallest base that still uses the flattened form of an accent.</summary>
+        /// <summary>The least height of a base for which the flattened form of an accent is used.</summary>
         public double FlattenedAccentBaseHeight { get; }
         /// <summary>The standard distance a subscript is shifted down from the baseline.</summary>
         public double SubscriptShiftDown { get; }
@@ -194,7 +194,7 @@ namespace PeachDrawing.Text.OpenType
         public double RadicalKernBeforeDegree { get; }
         /// <summary>The kern after the degree of a radical, which is usually negative.</summary>
         public double RadicalKernAfterDegree { get; }
-        /// <summary>The height of the bottom of the degree of a radical as a percentage of the height of the radical sign.</summary>
+        /// <summary>The height of the bottom of the degree of a radical as a percentage of the ascent of the radical sign.</summary>
         public double RadicalDegreeBottomRaisePercent { get; }
 
         internal MathConstantsTable(OpenTypeFontface face, int tableStart)
@@ -364,7 +364,7 @@ namespace PeachDrawing.Text.OpenType
             return _topAccentAttachment.HasValue(glyphId) ? _topAccentAttachment.GetValue(glyphId) : null;
         }
 
-        /// <summary>Whether the glyph is an extended shape: an already tall or wide variant whose ink box is used to position an accent instead of the default constants.</summary>
+        /// <summary>Whether the font lists the glyph as an extended shape (its <c>ExtendedShapeCoverage</c> table), which a math layout treats differently from an ordinary glyph when it positions scripts and accents.</summary>
         /// <param name="glyphId">The glyph.</param>
         public bool IsExtendedShape(ushort glyphId) => _extendedShapeCoverage?.IndexOfGlyph(glyphId) >= 0;
     }
@@ -453,7 +453,7 @@ namespace PeachDrawing.Text.OpenType
             return new MathGlyphConstruction
             {
                 Assembly = glyphAssemblyOffset != 0 ? ReadGlyphAssembly(face, offset + glyphAssemblyOffset) : null,
-                Variants = variants,
+                Variants = System.Array.AsReadOnly(variants),
             };
         }
 
@@ -477,7 +477,7 @@ namespace PeachDrawing.Text.OpenType
                     IsExtender: (partFlags & 0x0001) != 0);
             }
 
-            return new MathGlyphAssembly { ItalicsCorrection = italicsCorrectionValue, Parts = parts };
+            return new MathGlyphAssembly { ItalicsCorrection = italicsCorrectionValue, Parts = System.Array.AsReadOnly(parts) };
         }
     }
 

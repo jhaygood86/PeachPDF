@@ -197,7 +197,7 @@ if (face.MathData is MathTable math && face.TryMapRune(new Rune('('), out ushort
 
     foreach (MathGlyphVariant variant in tall?.Variants ?? [])    // smallest to largest
     {
-        // variant.GlyphId is drawn when it is at least variant.AdvanceMeasurement tall
+        // the first variant whose AdvanceMeasurement reaches the size you need is the one to draw
     }
 
     if (tall?.Assembly is MathGlyphAssembly assembly)

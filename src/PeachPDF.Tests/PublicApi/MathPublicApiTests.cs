@@ -98,6 +98,70 @@ namespace PeachPDF.Tests.PublicApi
         }
 
         [Fact]
+        public void GlyphInfo_ReportsTheGlyphsTheFontCoversInEachTable()
+        {
+            var info = Face(BundledFonts.Math).MathData!.GlyphInfo;
+
+            ushort? withAccent = null, extended = null;
+            for (ushort glyph = 0; glyph < 6000; glyph++)
+            {
+                if (withAccent is null && info.GetTopAccentAttachment(glyph) is not null) withAccent = glyph;
+                if (extended is null && info.IsExtendedShape(glyph)) extended = glyph;
+            }
+
+            Assert.NotNull(withAccent);
+            Assert.NotNull(extended);
+            Assert.True(info.GetTopAccentAttachment(withAccent.Value) > 0);
+        }
+
+        [Fact]
+        public void Variants_GrowHorizontallyToo_AndKeepTheirAssemblyOrder()
+        {
+            var variants = Face(BundledFonts.Math).MathData!.Variants;
+
+            MathGlyphConstruction? horizontal = null;
+            MathGlyphAssembly? assembly = null;
+            for (ushort glyph = 0; glyph < 6000 && (horizontal is null || assembly is null); glyph++)
+            {
+                horizontal ??= variants.GetHorizontalConstruction(glyph);
+                assembly ??= variants.GetHorizontalConstruction(glyph)?.Assembly ?? variants.GetVerticalConstruction(glyph)?.Assembly;
+            }
+
+            Assert.NotNull(horizontal);
+            Assert.NotEmpty(horizontal.Variants);
+            Assert.NotNull(assembly);
+            Assert.True(assembly.ItalicsCorrection >= 0);
+            Assert.True(assembly.Parts.Count >= 2);
+        }
+
+        [Fact]
+        public void TheReadOnlyListsCannotBeWrittenThroughACast()
+        {
+            var variants = Face(BundledFonts.Math).MathData!.Variants;
+            var construction = variants.GetVerticalConstruction(GlyphOf('('));
+            Assert.NotNull(construction);
+
+            Assert.False(construction.Variants is MathGlyphVariant[]);
+            Assert.True(((System.Collections.IList)construction.Variants).IsReadOnly);
+
+            MathGlyphAssembly? assembly = null;
+            for (ushort glyph = 0; glyph < 6000 && assembly is null; glyph++)
+            {
+                assembly = variants.GetVerticalConstruction(glyph)?.Assembly;
+            }
+
+            Assert.NotNull(assembly);
+            Assert.False(assembly.Parts is MathGlyphPart[]);
+            Assert.True(((System.Collections.IList)assembly.Parts).IsReadOnly);
+        }
+
+        private static ushort GlyphOf(char c)
+        {
+            Assert.True(Face(BundledFonts.Math).TryMapRune(new Rune(c), out var glyph));
+            return glyph;
+        }
+
+        [Fact]
         public void MathData_IsOneTableForAsLongAsTheFaceLives()
         {
             var math = Face(BundledFonts.Math);
