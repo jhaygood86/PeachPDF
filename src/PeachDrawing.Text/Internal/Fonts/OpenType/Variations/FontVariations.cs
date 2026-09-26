@@ -97,22 +97,24 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
     /// </summary>
     internal sealed class FontVariations
     {
-        private FontVariations(AxisInfo[] axes, NamedInstanceInfo[] instances, double[][][]? avar, GvarTable? gvar, HvarTable? hvar, MvarTable? mvar)
+        private FontVariations(AxisInfo[] axes, NamedInstanceInfo[] instances, AvarTable? avar, GvarTable? gvar, HvarTable? hvar, VvarTable? vvar, MvarTable? mvar)
         {
             Axes = axes;
             Instances = instances;
             _avar = avar;
             Gvar = gvar;
             Hvar = hvar;
+            Vvar = vvar;
             Mvar = mvar;
         }
 
-        private readonly double[][][]? _avar;
+        private readonly AvarTable? _avar;
 
         internal AxisInfo[] Axes { get; }
         internal NamedInstanceInfo[] Instances { get; }
         internal GvarTable? Gvar { get; }
         internal HvarTable? Hvar { get; }
+        internal VvarTable? Vvar { get; }
         internal MvarTable? Mvar { get; }
 
         /// <summary>Reads the variation tables of <paramref name="face"/>, or returns <see langword="null"/> for a font that is not variable.</summary>
@@ -178,11 +180,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                     instances[i] = new NamedInstanceInfo(FindName(nameTable, BigEndian.U16(fvar, at)), coordinates);
                 }
 
-                double[][][]? avar = ParseAvar(Memory("avar").Span, axisCount);
+                AvarTable? avar = Memory("avar") is { Length: > 0 } av ? AvarTable.TryParse(av.Span, axisCount) : null;
                 GvarTable? gvar = Memory("gvar") is { Length: > 0 } g ? GvarTable.TryParse(g, axisCount) : null;
                 HvarTable? hvar = Memory("HVAR") is { Length: > 0 } h ? HvarTable.TryParse(h.Span) : null;
+                VvarTable? vvar = Memory("VVAR") is { Length: > 0 } v ? VvarTable.TryParse(v.Span) : null;
                 MvarTable? mvar = Memory("MVAR") is { Length: > 0 } m ? MvarTable.TryParse(m.Span) : null;
-                return new FontVariations(axes, instances, avar, gvar, hvar, mvar);
+                return new FontVariations(axes, instances, avar, gvar, hvar, vvar, mvar);
             }
             catch (Exception ex) when (ex is IndexOutOfRangeException or ArgumentOutOfRangeException or OverflowException)
             {
@@ -210,6 +213,25 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
             var dy = new double[total];
             // The advance is the distance between the first two phantom points, which are the last four points.
             return gvar.TryAddDeltas(glyph, coordinates.Normalized, total, null, null, null, dx, dy) ? dx[total - 3] - dx[total - 4] : 0;
+        }
+
+        /// <summary>
+        /// How much the vertical advance of <paramref name="glyph"/> differs from its <c>vmtx</c> entry at <paramref name="coordinates"/>, in design
+        /// units: from <c>VVAR</c> when the font has it, otherwise from the phantom points of <c>gvar</c>.
+        /// </summary>
+        internal double GetVerticalAdvanceDelta(OpenTypeFontface face, int glyph, VariationCoordinates coordinates)
+        {
+            if (Vvar is { } vvar)
+                return vvar.GetAdvanceDelta(glyph, coordinates.Normalized);
+
+            if (Gvar is not { } gvar || !gvar.HasVariations(glyph))
+                return 0;
+
+            int total = GlyphOutlineDecoder.GetVariationPointCount(face, glyph);
+            var dx = new double[total];
+            var dy = new double[total];
+            // The vertical advance is the distance between the last two phantom points: the top one, where the glyph hangs from, and the bottom one.
+            return gvar.TryAddDeltas(glyph, coordinates.Normalized, total, null, null, null, dx, dy) ? dy[total - 2] - dy[total - 1] : 0;
         }
 
         /// <summary>
@@ -242,13 +264,28 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
             var normalized = new double[Axes.Length];
             for (int i = 0; i < Axes.Length; i++)
             {
-                normalized[i] = Normalize(i, user[i]);
+                normalized[i] = NormalizeToRange(i, user[i]);
+            }
+
+            // The segment maps (and, at version 2, the cross-axis mapping) of avar; either way the result is rounded to the 2.14 fixed
+            // point the tables are written in.
+            if (_avar is not null)
+            {
+                normalized = _avar.Map(normalized);
+            }
+            else
+            {
+                for (int i = 0; i < normalized.Length; i++)
+                {
+                    normalized[i] = AvarTable.Round14(normalized[i]);
+                }
             }
 
             return new VariationCoordinates(user, normalized, tags);
         }
 
-        private double Normalize(int axis, double value)
+        /// <summary>The value of an axis as a fraction of its range on either side of the default, -1 to 1 (before <c>avar</c>).</summary>
+        private double NormalizeToRange(int axis, double value)
         {
             var info = Axes[axis];
             double n;
@@ -265,71 +302,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                 n = 0;
             }
 
-            n = Math.Clamp(n, -1, 1);
-            if (_avar is not null && axis < _avar.Length)
-            {
-                n = Math.Clamp(MapSegments(_avar[axis], n), -1, 1);
-            }
-
-            // Round half up, as the F2Dot14 conversion of fontTools and FreeType does.
-            return Math.Floor(n * 16384.0 + 0.5) / 16384.0;
-        }
-
-        /// <summary>Piecewise-linear <c>avar</c> mapping of a normalized coordinate.</summary>
-        private static double MapSegments(double[][] map, double value)
-        {
-            if (map.Length < 2)
-            {
-                return value;
-            }
-
-            if (value <= map[0][0])
-            {
-                return map[0][1];
-            }
-
-            for (int i = 1; i < map.Length; i++)
-            {
-                double from = map[i][0];
-                if (value <= from)
-                {
-                    double previousFrom = map[i - 1][0];
-                    if (from == previousFrom)
-                    {
-                        return map[i][1];
-                    }
-
-                    return map[i - 1][1] + (value - previousFrom) * (map[i][1] - map[i - 1][1]) / (from - previousFrom);
-                }
-            }
-
-            return map[^1][1];
-        }
-
-        private static double[][][]? ParseAvar(ReadOnlySpan<byte> avar, int axisCount)
-        {
-            if (avar.Length < 8 || BigEndian.U16(avar, 0) is not (1 or 2) || BigEndian.U16(avar, 6) != axisCount)
-            {
-                return null;
-            }
-
-            var result = new double[axisCount][][];
-            int at = 8;
-            for (int a = 0; a < axisCount; a++)
-            {
-                int count = BigEndian.U16(avar, at);
-                at += 2;
-                var map = new double[count][];
-                for (int i = 0; i < count; i++)
-                {
-                    map[i] = [BigEndian.F2Dot14(avar, at), BigEndian.F2Dot14(avar, at + 2)];
-                    at += 4;
-                }
-
-                result[a] = map;
-            }
-
-            return result;
+            return Math.Clamp(n, -1, 1);
         }
 
         /// <summary>The string with a name ID in the <c>name</c> table, preferring English, or <see langword="null"/>.</summary>

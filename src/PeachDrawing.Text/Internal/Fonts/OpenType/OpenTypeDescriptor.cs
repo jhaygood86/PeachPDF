@@ -114,6 +114,44 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             return (short)System.Math.Clamp(varied, short.MinValue, short.MaxValue);
         }
 
+        private sealed record FontBoxValue(int XMin, int YMin, int XMax, int YMax);
+
+        // Published whole (an immutable object through a volatile write), so a thread never sees half of a box. Two threads that ask at once may
+        // both work it out; they get the same answer.
+        private FontBoxValue? _fontBox;
+
+        /// <summary>
+        /// The box that holds every glyph: <c>head</c>'s, or at a location of a variable font the box of the glyphs as they are drawn there
+        /// (<see cref="Variations.InstanceFontBox"/>), which is worked out the first time it is asked for since it reads every glyph.
+        /// </summary>
+        private FontBoxValue FontBox
+        {
+            get
+            {
+                if (System.Threading.Volatile.Read(ref _fontBox) is { } known)
+                    return known;
+
+                var head = FontFace.head;
+                var box = new FontBoxValue(head.xMin, head.yMin, head.xMax, head.yMax);
+                if (Variation is not null && Variations.InstanceFontBox.TryCompute(FontFace, Variation, out var computed))
+                    box = new FontBoxValue(computed.XMin, computed.YMin, computed.XMax, computed.YMax);
+
+                System.Threading.Volatile.Write(ref _fontBox, box);
+                return box;
+            }
+        }
+        /// <inheritdoc/>
+        public override int XMin => FontBox.XMin;
+
+        /// <inheritdoc/>
+        public override int YMin => FontBox.YMin;
+
+        /// <inheritdoc/>
+        public override int XMax => FontBox.XMax;
+
+        /// <inheritdoc/>
+        public override int YMax => FontBox.YMax;
+
         /// <summary>How much the font-wide metric with the MVAR value tag <paramref name="tag"/> differs from the default at this descriptor's location.</summary>
         private int Adjust(string tag, int value)
         {
@@ -130,11 +168,6 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
             //fontName = image.n
             ItalicAngle = FontFace.post.italicAngle;
-
-            XMin = FontFace.head.xMin;
-            YMin = FontFace.head.yMin;
-            XMax = FontFace.head.xMax;
-            YMax = FontFace.head.yMax;
 
             UnderlinePosition = Adjust("undo", FontFace.post.underlinePosition);
             UnderlineThickness = Adjust("unds", FontFace.post.underlineThickness);
@@ -809,10 +842,17 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
             // glyphIndex >= numMetrics means every remaining glyph shares the last metric's advance
             // height - the same "monospaced tail" convention GlyphIndexToWidth's hmtx lookup uses.
+            int originalGlyphIndex = glyphIndex;
             if (glyphIndex >= numMetrics)
                 glyphIndex = numMetrics - 1;
 
-            return vmtx.Metrics[glyphIndex].advanceHeight;
+            int height = vmtx.Metrics[glyphIndex].advanceHeight;
+
+            // At a location of a variable font the advance follows VVAR, or the phantom points of gvar without it (VVAR is asked with the
+            // original glyph index, as HVAR is).
+            return Variation is null
+                ? height
+                : height + Variations.FontVariations.Round(FontFace.Variations?.GetVerticalAdvanceDelta(FontFace, originalGlyphIndex, Variation) ?? 0);
         }
 
         /// <summary>
@@ -841,15 +881,23 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             int originX = GlyphIndexToWidth(glyphIndex) / 2;
 
             if (HasVerticalOrigin)
-                return (originX, FontFace.vorg.VertOriginYFor(glyphIndex));
+            {
+                int origin = FontFace.vorg.VertOriginYFor(glyphIndex);
+
+                // VORG varies through the vertical origin mapping of VVAR, when the font has one.
+                if (Variation is not null && FontFace.Variations?.Vvar is { } vvar)
+                    origin += Variations.FontVariations.Round(vvar.GetOriginDelta(glyphIndex, Variation.Normalized));
+
+                return (originX, origin);
+            }
 
             VerticalHeaderTable vhea = FontFace.vhea;
             if (vhea != null && vhea.ascent != 0)
-                return (originX, vhea.ascent);
+                return (originX, Adjust("vasc", vhea.ascent));
 
             OS2Table os2 = FontFace.os2;
             if (os2 != null && os2.sTypoAscender != 0)
-                return (originX, os2.sTypoAscender);
+                return (originX, Adjust("hasc", os2.sTypoAscender));
 
             return (originX, FontFace.head.unitsPerEm);
         }
