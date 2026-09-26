@@ -22,8 +22,8 @@ dotnet add package PeachDrawing.Text
 - **Shaping:** GSUB and GPOS (ligatures, kerning, mark attachment, contextual lookups), Arabic and Syriac joining, the
   Universal Shaping Engine for Devanagari, Bengali, Gujarati and Tamil, default-ignorable handling, and `cmap` format 14
   variation sequences.
-- **Outlines and colour:** glyph outlines for `glyf` and CFF, COLR v0 and v1 with CPAL, CBDT/CBLC and sbix bitmaps, and the SVG documents of the `SVG ` table.
-- **Variable fonts:** the axes of a font and reading it at a location (`Typeface.WithAxes`): TrueType outlines, advance widths and font-wide metrics follow the axes.
+- **Outlines and colour:** glyph outlines for `glyf`, CFF and CFF2, COLR v0 and v1 with CPAL, CBDT/CBLC and sbix bitmaps, and the SVG documents of the `SVG ` table.
+- **Variable fonts:** the axes of a font and reading it at a location (`Typeface.WithAxes`): TrueType and CFF2 outlines, advance widths and font-wide metrics follow the axes.
 - **Mathematics:** the `MATH` table: layout constants, per-glyph italics corrections and accent attachment, and the
   variants and assemblies of stretchy glyphs.
 - **Text layout:** a paragraph of styled text, laid out at any width into lines of placed glyph runs, with hit testing, carets and selection boxes.
@@ -280,10 +280,15 @@ if (face.IsVariable)
   range of its own weight, width and slant axes.
 - Outlines (including composite glyphs), advance widths, the font-wide metrics of `Typeface.Metrics` and shaping advances follow the
   location. Reading `TypefaceMetrics.XMin` to `YMax` (the font bounding box) and the vertical advances gives the default design's
-  values, and a variable font with CFF2 outlines has no outlines: what a location changes is what the `gvar`, `HVAR`, `MVAR` and
-  `avar` tables of a font with TrueType outlines say, plus the deltas of the `GPOS` value records and anchors (kerning, single
-  adjustments, mark and cursive attachment) that name the `GDEF` item variation store, and the `FeatureVariations` of `GSUB` and `GPOS`
-  (a feature that uses other lookups at a region of the design space, such as `rvrn` glyph swaps at a weight).
+  values. What a location changes is what the `gvar`, `HVAR`, `MVAR` and `avar` tables of a font with TrueType outlines say, plus the
+  deltas of the `GPOS` value records and anchors (kerning, single adjustments, mark and cursive attachment) that name the `GDEF`
+  item variation store, and the `FeatureVariations` of `GSUB` and `GPOS` (a feature that uses other lookups at a region of the design
+  space, such as `rvrn` glyph swaps at a weight).
+- A variable font with CFF2 outlines (a `CFF2` table) is read the same way: `TryGetOutline` runs the glyph's charstring with every
+  `blend` resolved at the location (the `vsindex` operator and the `vsindex` of each Font DICT's Private DICT choose the regions), so the
+  coordinates of an outline at a location between the masters are not whole numbers. The layout tables and the advances (`HVAR`) follow the
+  location as they do for TrueType outlines. CFF2 outlines are not grid-fitted, and a font with only `COLR` colour glyphs over CFF2
+  outlines is not reported as a colour font, as for CFF.
 - `TypefaceExporter.ExportSubset` (see Embedding below) writes an instance as a static font, with the location's variations applied
   to the outlines and metrics of the glyphs you ask for and no hinting instructions, because a PDF cannot embed a variable font.
 
@@ -340,6 +345,10 @@ byte[] fontFile = subset.Data.ToArray();
 - For a typeface from `WithAxes` the subset is a static font at that location: each glyph's points and component offsets have the
   variations applied, the side bearings and advances of the glyphs are set to match, and the hinting tables are left out.
 - A font with CFF outlines is not cut down: it is returned whole, and `IsSubset` is `false`.
+- A variable font with CFF2 outlines is always written afresh, at its default location or at the one `WithAxes` gave: each glyph you
+  ask for is drawn at the location and written as a charstring of lines and curves over whole-number coordinates (no hints, no
+  subroutines), in a CID-keyed OpenType font with CFF outlines whose glyph indices are its CIDs. `HasCffOutlines` is `true` and
+  `IsSubset` is `true`; a glyph that was not asked for is an empty glyph in its place.
 - `keepCharacterMap` says whether the character map stays. A font whose text is encoded as glyph indices is smaller without it.
 
 What a font descriptor records about a face comes from the members you already have: `Typeface.Metrics` (with `IsSymbolic`,

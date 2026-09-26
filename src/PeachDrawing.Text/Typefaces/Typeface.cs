@@ -76,7 +76,8 @@ namespace PeachDrawing.Text
         /// <remarks>
         /// TrueType (<c>glyf</c>) outlines are supported, with composite glyphs flattened into one outline (a component placed by
         /// matching points and not by an offset is placed at no offset), and so are CFF outlines where the charstrings use the
-        /// supported operators. Nothing is grid-fitted: hinting instructions are not run.
+        /// supported operators, and the CFF2 outlines of a variable font at the location of this typeface (<see cref="WithAxes"/>), with
+        /// every <c>blend</c> resolved (the coordinates are then not whole numbers). Nothing is grid-fitted: hinting instructions are not run.
         /// </remarks>
         /// <param name="glyph">The glyph.</param>
         /// <param name="outline">The outline. It is empty when the method returns <see langword="false"/>.</param>

@@ -19,12 +19,15 @@ namespace PeachDrawing.Text.Export
         /// <summary>The bytes of the font file.</summary>
         public ReadOnlyMemory<byte> Data => _data;
 
-        /// <summary>Whether the glyphs are drawn from CFF outlines (an OpenType font with a <c>CFF </c> table), and not from TrueType outlines.</summary>
+        /// <summary>
+        /// Whether the glyphs are drawn from CFF outlines (an OpenType font with a <c>CFF </c> table, which is what a variable font's CFF2
+        /// outlines are written as), and not from TrueType outlines.
+        /// </summary>
         public bool HasCffOutlines { get; }
 
         /// <summary>
-        /// Whether the font holds only the glyphs that were asked for. It does not when the face's outlines are CFF, which the
-        /// exporter cannot cut down and so hands over whole.
+        /// Whether the font holds only the glyphs that were asked for. It does not when the face's outlines are CFF (a <c>CFF </c>
+        /// table), which the exporter cannot cut down and so hands over whole. A face with CFF2 outlines is written afresh, and does.
         /// </summary>
         public bool IsSubset { get; }
     }

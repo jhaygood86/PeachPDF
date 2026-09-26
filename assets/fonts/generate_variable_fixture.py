@@ -21,9 +21,25 @@ The reference file VariableTest.golden.json holds, for a grid of axis locations,
 the engine raises them), its advance width, and the font-wide metrics MVAR varies. The tests compare the engine with it, within one
 design unit (the instancer rounds coordinates to integers, the engine does not).
 
+A second font, VariableCff2Test.otf, has CFF2 outlines (variable CFF) on the same two axes, with its own reference file
+VariableCff2Test.golden.json made the same way (the instancer draws the CFF2 charstrings it instantiates). Its glyphs, each
+chosen to exercise something:
+
+* A       - straight lines and a counter whose coordinates blend (`blend` inside `hlineto`/`vlineto` runs)
+* B       - cubic curves whose control points blend
+* C       - everything after the moveto is a local subroutine (`callsubr`)
+* D       - starts with `vsindex 1`, a second ItemVariationData that names two of the five regions, and blends six operands at once
+* E       - a second Font DICT (FDSelect picks it) whose Private DICT sets `vsindex 2`, with a local subroutine of its own
+* F       - the path is a global subroutine (`callgsubr`), blended over the five regions of ItemVariationData 0
+* space   - an empty charstring
+
+varLib writes A and B; D, E, F and the subroutines of C are written by hand afterwards (`write_cff2_charstrings`), because varLib
+emits neither subroutines nor a `vsindex` other than the default.
+
 Run from anywhere: python assets/fonts/generate_variable_fixture.py
 Requires fontTools (any recent version).
 """
+import copy
 import json
 import os
 import tempfile
@@ -31,10 +47,15 @@ import tempfile
 # Fixed timestamps, so that running the script again writes the same bytes.
 os.environ.setdefault("SOURCE_DATE_EPOCH", "1767225600")
 
+from fontTools.cffLib import FDSelect, SubrsIndex
 from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, InstanceDescriptor, SourceDescriptor
 from fontTools.fontBuilder import FontBuilder
+from fontTools.misc.psCharStrings import T2CharString
+from fontTools.pens.recordingPen import RecordingPen
+from fontTools.pens.t2CharStringPen import T2CharStringPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
+from fontTools.ttLib.tables import otTables
 from fontTools.varLib import build as varlib_build
 from fontTools.varLib import instancer
 
@@ -42,6 +63,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_FONT = os.path.join(HERE, "VariableTest.ttf")
 OUT_FONT_NO_HVAR = os.path.join(HERE, "VariableTestNoHvar.ttf")
 OUT_GOLDEN = os.path.join(HERE, "VariableTest.golden.json")
+OUT_CFF2_FONT = os.path.join(HERE, "VariableCff2Test.otf")
+OUT_CFF2_GOLDEN = os.path.join(HERE, "VariableCff2Test.golden.json")
 
 UPM = 1000
 
@@ -288,6 +311,236 @@ def describe(font):
     return {"glyphs": glyphs, "metrics": metrics}
 
 
+CFF2_GLYPH_ORDER = [".notdef", "space", "A", "B", "C", "D", "E", "F"]
+CFF2_CMAP = {0x20: "space", 0x41: "A", 0x42: "B", 0x43: "C", 0x44: "D", 0x45: "E", 0x46: "F"}
+
+
+def build_cff_master(name, weight, width):
+    """One master of the CFF2 font, as a CFF (version 1) font that varLib merges into CFF2. D, E and F are stand-ins here: their
+    charstrings are written by hand in write_cff2_charstrings once the masters are merged."""
+    t = stem(weight)
+    sx = width
+    charstrings = {}
+    advances = {}
+
+    def pen(glyph, advance):
+        advances[glyph] = advance
+        return T2CharStringPen(advance, None)
+
+    p = pen(".notdef", 500)
+    p.moveTo((50, 0)); p.lineTo((50, 700)); p.lineTo((450, 700)); p.lineTo((450, 0)); p.closePath()
+    p.moveTo((50 + t, t)); p.lineTo((450 - t, t)); p.lineTo((450 - t, 700 - t)); p.lineTo((50 + t, 700 - t)); p.closePath()
+    charstrings[".notdef"] = p.getCharString()
+
+    charstrings["space"] = pen("space", int(250 * sx)).getCharString()
+
+    p = pen("A", int(500 * sx) + t // 2)
+    p.moveTo((int(50 * sx), 0))
+    p.lineTo((int(250 * sx) - t // 2, 700))
+    p.lineTo((int(250 * sx) + t // 2, 700))
+    p.lineTo((int(450 * sx), 0))
+    p.lineTo((int(450 * sx) - t, 0))
+    p.lineTo((int(50 * sx) + t, 0))
+    p.closePath()
+    p.moveTo((int(250 * sx), 100 + t))
+    p.lineTo((int(250 * sx) - t, 100 + t))
+    p.lineTo((int(250 * sx), 100 + 3 * t))
+    p.closePath()
+    charstrings["A"] = p.getCharString()
+
+    p = pen("B", int(520 * sx) + t)
+    p.moveTo((int(60 * sx), 0))
+    p.lineTo((int(60 * sx), 700))
+    p.curveTo((int(300 * sx) + t, 700), (int(420 * sx) + t, 500), (int(420 * sx) + t, 300))
+    p.curveTo((int(420 * sx) + t, 100), (int(300 * sx), 0), (int(60 * sx), 0))
+    p.closePath()
+    charstrings["B"] = p.getCharString()
+
+    p = pen("C", int(460 * sx) + t)
+    p.moveTo((int(60 * sx), 0))
+    p.lineTo((int(60 * sx), 700))
+    p.lineTo((int(60 * sx) + t, 700))
+    p.lineTo((int(60 * sx) + t, t))
+    p.lineTo((int(400 * sx), t))
+    p.lineTo((int(400 * sx), 0))
+    p.closePath()
+    charstrings["C"] = p.getCharString()
+
+    for glyph, advance in (("D", 460), ("E", 480), ("F", 440)):
+        p = pen(glyph, int(advance * sx) + t // 2)
+        p.moveTo((int(60 * sx), 0)); p.lineTo((int(60 * sx), 600)); p.lineTo((int(360 * sx) + t, 0)); p.closePath()
+        charstrings[glyph] = p.getCharString()
+
+    fb = FontBuilder(UPM, isTTF=False)
+    fb.setupGlyphOrder(CFF2_GLYPH_ORDER)
+    fb.setupCharacterMap(CFF2_CMAP)
+    fb.setupCFF("VariableCff2Test-" + name, {"FullName": "Variable Cff2 Test " + name}, charstrings, {})
+    fb.setupHorizontalMetrics({glyph: (advances[glyph], 0) for glyph in CFF2_GLYPH_ORDER})
+    ascent = 800 + int(round(20 * weight))
+    fb.setupHorizontalHeader(ascent=ascent, descent=-200)
+    fb.setupNameTable({"familyName": "Variable Cff2 Test", "styleName": "Regular"})
+    fb.setupOS2(sTypoAscender=ascent, sTypoDescender=-200, usWinAscent=ascent + 50, usWinDescent=220, version=4, fsSelection=0x40)
+    fb.setupPost()
+    return fb.font
+
+
+def blend(values, deltas):
+    """The operands of a `blend`: the default values, then for each value its deltas (one per region of the current
+    ItemVariationData), then the number of values."""
+    tokens = list(values)
+    for row in deltas:
+        tokens += list(row)
+    return tokens + [len(values), "blend"]
+
+
+def write_cff2_charstrings(path):
+    """Rewrites glyphs C, D, E and F of the merged CFF2 font by hand: a second and third ItemVariationData, a second Font DICT that
+    FDSelect gives to E, a local subroutine in each Font DICT, and a global subroutine, none of which varLib emits by itself."""
+    font = TTFont(path)
+    top = font["CFF2"].cff[0]
+    charstrings = top.CharStrings
+    for glyph in charstrings.keys():
+        charstrings[glyph].decompile()
+
+    # Two more ItemVariationData: regions {0, 3} (thin weight, condensed width) and {2, 4} (black weight, extended width).
+    store = top.VarStore.otVarStore
+    for regions in ([0, 3], [2, 4]):
+        data = otTables.VarData()
+        data.NumShorts = 0
+        data.VarRegionCount = len(regions)
+        data.VarRegionIndex = regions
+        data.Item = []
+        data.ItemCount = 0
+        store.VarData.append(data)
+    store.VarDataCount = len(store.VarData)
+
+    # A second Font DICT whose Private DICT names ItemVariationData 2, and the FDSelect that gives it glyph E.
+    fd0 = top.FDArray[0]
+    fd1 = copy.deepcopy(fd0)
+    fd1.Private.vsindex = 2
+    top.FDArray.append(fd1)
+    select = FDSelect()
+    select.format = 3
+    select.gidArray = [1 if glyph == "E" else 0 for glyph in font.getGlyphOrder()]
+    top.FDSelect = select
+
+    def subroutine(private, program):
+        return T2CharString(program=program + ["return"], private=private, globalSubrs=top.GlobalSubrs)
+
+    def local_subrs(private):
+        subrs = SubrsIndex(private=private, globalSubrs=top.GlobalSubrs, fdSelect=None, fdArray=top.FDArray, isCFF2=True)
+        private.Subrs = subrs
+        return subrs
+
+    # C: everything after the moveto is a local subroutine of Font DICT 0 (the bias for fewer than 1240 subroutines is 107).
+    program = charstrings["C"].program
+    split = next(i for i, token in enumerate(program) if token in ("hmoveto", "vmoveto", "rmoveto")) + 1
+    local_subrs(fd0.Private).append(subroutine(fd0.Private, program[split:]))
+    charstrings["C"].program = program[:split] + [0 - 107, "callsubr"]
+
+    # D: `vsindex 1`, so two regions; six operands blended by one `blend`; then a curve whose operands are only partly blended.
+    charstrings["D"].program = (
+        [1, "vsindex"]
+        + blend([120], [[-20, 15]]) + ["hmoveto"]
+        + blend([300, 0, -40, 600, -260, 0], [[-20, -75], [0, 0], [5, 10], [0, 0], [15, 65], [0, 0]]) + ["rlineto"]
+        + blend([40, 0], [[10, -5], [0, 0]]) + ["rmoveto"]
+        + [80, 0] + blend([60, 100, 40, 0], [[8, 0], [-5, 12], [0, 0], [0, 0]]) + ["rrcurveto"]
+    )
+
+    # E: in Font DICT 1 (`vsindex 2` in its Private DICT), a local subroutine of its own that blends a curve.
+    local_subrs(fd1.Private).append(subroutine(
+        fd1.Private, blend([260, 0, -20, 140, 0, 0], [[30, 10], [0, 0], [-6, 4], [12, 0], [0, 0], [0, 0]]) + ["rrcurveto"]))
+    charstrings["E"].private = fd1.Private
+    charstrings["E"].program = blend([80, 0], [[-10, 20], [0, 0]]) + ["rmoveto", 0 - 107, "callsubr"] + [0, -200, "rlineto"]
+
+    # F: a global subroutine (called with ItemVariationData 0, five regions) that draws two lines with blended operands.
+    top.GlobalSubrs.append(T2CharString(
+        program=blend([200, 0, 0, 500], [[0, 0, 0, -30, 40], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [-10, 20, 12, 0, 25]]) + ["rlineto", "return"],
+        private=None, globalSubrs=top.GlobalSubrs))
+    charstrings["F"].program = blend([70], [[0, 0, 0, -18, 22]]) + ["hmoveto", 0 - 107, "callgsubr"]
+
+    font.save(path)
+
+
+def build_variable_cff2_font(workdir):
+    doc = DesignSpaceDocument()
+
+    weight = AxisDescriptor()
+    weight.name, weight.tag = "Weight", "wght"
+    weight.minimum, weight.default, weight.maximum = 100, 400, 900
+    weight.map = [(100, 100), (400, 400), (700, 600), (900, 900)]
+    weight.labelNames = {"en": "Weight"}
+    doc.addAxis(weight)
+
+    width = AxisDescriptor()
+    width.name, width.tag = "Width", "wdth"
+    width.minimum, width.default, width.maximum = 75, 100, 125
+    width.labelNames = {"en": "Width"}
+    doc.addAxis(width)
+
+    for name, design_weight, design_width, wf, wdf in MASTERS:
+        font = build_cff_master(name, wf, wdf)
+        path = os.path.join(workdir, "cff-master-%s.otf" % name)
+        font.save(path)
+        source = SourceDescriptor()
+        source.path = path
+        source.name = name
+        source.location = {"Weight": design_weight, "Width": design_width}
+        if name == "default":
+            source.copyInfo = True
+        doc.addSource(source)
+
+    for style, wght, wdth in (("Light", 250, 100), ("Bold", 600, 100)):
+        instance = InstanceDescriptor()
+        instance.familyName = "Variable Cff2 Test"
+        instance.styleName = style
+        instance.location = {"Weight": wght, "Width": wdth}
+        doc.addInstance(instance)
+
+    variable, _, _ = varlib_build(doc)
+    merged = os.path.join(workdir, "merged.otf")
+    variable.save(merged)
+    write_cff2_charstrings(merged)
+    return TTFont(merged)
+
+
+def cff2_oracle_font(path):
+    """The CFF2 font with glyph E's `vsindex` written into its charstring instead of its Private DICT. The two mean the same, but
+    fontTools' instancer cannot instantiate a Private DICT that has a `vsindex` (it indexes the integer), so the reference values
+    are made from this copy while the fixture itself keeps the Private DICT entry."""
+    font = TTFont(path)
+    top = font["CFF2"].cff[0]
+    private = top.FDArray[1].Private
+    index = private.vsindex
+    del private.vsindex
+    private.rawDict.pop("vsindex", None)  # the attribute is decoded again from here when it is missing
+    charstring = top.CharStrings["E"]
+    charstring.decompile()
+    charstring.program = [index, "vsindex"] + charstring.program
+    return font
+
+
+def describe_cff2(font):
+    """Every glyph's outline as fontTools' pen draws the instantiated charstring (absolute coordinates, contours closed
+    implicitly), and its advance."""
+    glyph_set = font.getGlyphSet()
+    hmtx = font["hmtx"]
+    glyphs = {}
+    for glyph in font.getGlyphOrder():
+        pen = RecordingPen()
+        glyph_set[glyph].draw(pen)
+        contours = []
+        for op, args in pen.value:
+            if op == "moveTo":
+                contours.append([["M", float(args[0][0]), float(args[0][1])]])
+            elif op == "lineTo":
+                contours[-1].append(["L", float(args[0][0]), float(args[0][1])])
+            elif op == "curveTo":
+                contours[-1].append(["C"] + [float(v) for point in args for v in point])
+        glyphs[glyph] = {"advance": hmtx[glyph][0], "outline": contours}
+    return {"glyphs": glyphs}
+
+
 def main():
     with tempfile.TemporaryDirectory() as workdir:
         variable = build_variable_font(workdir)
@@ -314,6 +567,25 @@ def main():
         f.write("\n")
     print("tables:", " ".join(tags))
     print("wrote", OUT_FONT, os.path.getsize(OUT_FONT), "bytes and", OUT_GOLDEN)
+
+    with tempfile.TemporaryDirectory() as workdir:
+        build_variable_cff2_font(workdir).save(OUT_CFF2_FONT)
+
+    cff2_tags = sorted(TTFont(OUT_CFF2_FONT).keys())
+    assert {"CFF2", "fvar", "avar", "HVAR"} <= set(cff2_tags) and "glyf" not in cff2_tags, cff2_tags
+
+    cff2_golden = {"locations": []}
+    for loc in LOCATIONS:
+        instance = instancer.instantiateVariableFont(cff2_oracle_font(OUT_CFF2_FONT), dict(loc), inplace=False)
+        entry = describe_cff2(instance)
+        entry["location"] = loc
+        cff2_golden["locations"].append(entry)
+
+    with open(OUT_CFF2_GOLDEN, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(cff2_golden, f, indent=1)
+        f.write("\n")
+    print("tables:", " ".join(cff2_tags))
+    print("wrote", OUT_CFF2_FONT, os.path.getsize(OUT_CFF2_FONT), "bytes and", OUT_CFF2_GOLDEN)
 
 
 if __name__ == "__main__":

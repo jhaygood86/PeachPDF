@@ -21,6 +21,10 @@ namespace PeachDrawing.Text.Export
         /// the location's variations applied and carry no hinting instructions, since a PDF cannot embed a variable font.
         /// A TrueType font is cut down, and a font with CFF outlines is returned whole, which
         /// <see cref="ExportedFont.IsSubset"/> reports; the glyphs asked for are not looked at then.
+        /// The exception is a variable font with CFF2 outlines, which is always written afresh, whatever its location, as a static
+        /// font with CFF outlines that holds only the glyphs asked for: each outline is drawn at the location and written as a
+        /// charstring of lines and curves over whole-number coordinates, with no hints and no subroutines, in a CID-keyed CFF font
+        /// (a glyph index is its own CID).
         /// </remarks>
         /// <param name="typeface">The typeface to cut.</param>
         /// <param name="glyphs">The glyph indices to keep.</param>
@@ -30,14 +34,19 @@ namespace PeachDrawing.Text.Export
         /// </param>
         /// <returns>The font file and what it holds.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="typeface"/> or <paramref name="glyphs"/> is <see langword="null"/>.</exception>
-        /// <exception cref="ArgumentOutOfRangeException">A glyph index is not one of the typeface's glyphs (a TrueType face only).</exception>
+        /// <exception cref="ArgumentOutOfRangeException">A glyph index is not one of the typeface's glyphs (a face with TrueType or CFF2 outlines only).</exception>
         public static ExportedFont ExportSubset(Typeface typeface, IEnumerable<int> glyphs, bool keepCharacterMap)
         {
             ArgumentNullException.ThrowIfNull(typeface);
             ArgumentNullException.ThrowIfNull(glyphs);
 
             OpenTypeFontface face = typeface.Face.Fontface;
-            if (face.loca == null)
+
+            // A variable font's CFF2 outlines are written afresh as those of a static CFF font: a PDF has no use for the CFF2 table.
+            // (The outlines are those the descriptor draws, so a font that also has a CFF table, which it should not, is a CFF font.)
+            bool isCff2 = face.loca == null && face.glyf == null && face.cff is not { IsSupported: true }
+                && face.cff2 is { IsSupported: true } && face.maxp.numGlyphs > 0;
+            if (face.loca == null && !isCff2)
             {
                 return new ExportedFont(face.FontSource.Bytes, hasCffOutlines: true, isSubset: false);
             }
@@ -52,6 +61,12 @@ namespace PeachDrawing.Text.Export
                 }
 
                 wanted[glyph] = null!;
+            }
+
+            if (isCff2)
+            {
+                byte[] cff = StaticCffFontBuilder.Build(face, typeface.Face.Descriptor, wanted.Keys, keepCharacterMap);
+                return new ExportedFont(cff, hasCffOutlines: true, isSubset: true);
             }
 
             OpenTypeFontface subset = face.CreateFontSubSet(wanted, cidFont: !keepCharacterMap, typeface.Face.Variation);

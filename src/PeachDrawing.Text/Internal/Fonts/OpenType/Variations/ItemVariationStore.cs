@@ -64,6 +64,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
 
                 // Several entries may name one data set, and a hostile table could name a large one thousands of times, so each is read once.
                 var parsed = new Dictionary<uint, DataSet>();
+                long cells = 0;
                 var sets = new DataSet[dataCount];
                 for (int d = 0; d < dataCount; d++)
                 {
@@ -91,6 +92,14 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                     int byteSize = longWords ? 2 : 1;
                     long rowSize = (long)Math.Min(wordDeltaCount, regionIndexCount) * wordSize + (long)Math.Max(0, regionIndexCount - wordDeltaCount) * byteSize;
                     if ((long)itemCount * rowSize > table.Length - at - 6 - regionIndexCount * 2L)
+                    {
+                        return null;
+                    }
+
+                    // The data sets of a real store do not overlap, and a delta or a region index takes at least a byte, so together they
+                    // cannot hold more values than the table has bytes. A hostile table can point many data sets at the same bytes.
+                    cells += regionIndexCount + (long)itemCount * regionIndexCount;
+                    if (cells > table.Length)
                     {
                         return null;
                     }
@@ -184,6 +193,53 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
 
             return sum;
         }
+
+        /// <summary>
+        /// How far the location <paramref name="coordinates"/> (normalized, one per axis) lies inside each region that data set
+        /// <paramref name="dataSet"/> names, in the order it names them: the factors a <c>CFF2</c> charstring's <c>blend</c> operator scales
+        /// its deltas by. <see langword="null"/> when there is no such data set. A region the store does not have gets 0.
+        /// </summary>
+        internal double[]? GetRegionScalars(int dataSet, ReadOnlySpan<double> coordinates)
+        {
+            if ((uint)dataSet >= (uint)_dataSets.Length)
+            {
+                return null;
+            }
+
+            var indexes = _dataSets[dataSet].RegionIndexes;
+            var scalars = new double[indexes.Length];
+
+            // A hostile data set can name one region tens of thousands of times, and a region can have as many axes: each region's factor
+            // is worked out once, so the work is bounded by the regions the store holds and not by how often they are named.
+            double[]? worked = indexes.Length > 16 ? new double[_regions.Length] : null;
+            if (worked is not null)
+            {
+                Array.Fill(worked, double.NaN);
+            }
+
+            for (int i = 0; i < indexes.Length; i++)
+            {
+                int region = indexes[i];
+                if ((uint)region >= (uint)_regions.Length)
+                {
+                    continue;
+                }
+
+                if (worked is null)
+                {
+                    scalars[i] = RegionScalar(_regions[region], coordinates);
+                }
+                else
+                {
+                    scalars[i] = double.IsNaN(worked[region]) ? (worked[region] = RegionScalar(_regions[region], coordinates)) : worked[region];
+                }
+            }
+
+            return scalars;
+        }
+
+        /// <summary>The number of data sets the store has.</summary>
+        internal int DataSetCount => _dataSets.Length;
 
         /// <summary>How far a location lies inside a region: 1 at the peak, falling to 0 at the region's edges, and 0 outside it.</summary>
         private static double RegionScalar((double Start, double Peak, double End)[] region, ReadOnlySpan<double> coordinates)
