@@ -46,23 +46,21 @@ namespace PeachDrawing.Text.Layout
                 double areaLeft = paragraph.IsRightToLeft ? 0 : indent;
                 double areaWidth = extent - indent;
 
-                // Justification widens the spaces of a line that is not the last, so that it fills the width.
-                double spaceExtra = 0;
+                // Justification shares the room a line that is not the last has left between its opportunities, so that it fills the width.
+                double extra = 0;
+                bool[][]? expandAfter = null;
                 if (align == TextAlign.Justify && !double.IsInfinity(areaWidth) && areaWidth > width)
                 {
-                    int spaces = 0;
-                    foreach (var piece in pieces)
+                    int opportunities;
+                    (expandAfter, opportunities) = FindJustificationOpportunities(paragraph, pieces);
+                    if (opportunities > 0)
                     {
-                        if (!piece.IsTab)
-                        {
-                            spaces += paragraph.CountSpaces(piece.Glyphs, piece.From);
-                        }
-                    }
-
-                    if (spaces > 0)
-                    {
-                        spaceExtra = (areaWidth - width) / spaces;
+                        extra = (areaWidth - width) / opportunities;
                         width = areaWidth;
+                    }
+                    else
+                    {
+                        expandAfter = null;
                     }
                 }
 
@@ -70,10 +68,11 @@ namespace PeachDrawing.Text.Layout
                 double baseline = top + ascent;
                 var runs = new List<PlacedRun>(pieces.Count);
                 double x = left;
-                foreach (var piece in pieces)
+                for (int n = 0; n < pieces.Count; n++)
                 {
+                    var piece = pieces[n];
                     var style = piece.Atom.Style;
-                    var (boundaries, advances, pieceWidth) = PlaceRun(paragraph, piece, style, spaceExtra);
+                    var (boundaries, advances, pieceWidth) = PlaceRun(paragraph, piece, style, extra, expandAfter?[n]);
                     runs.Add(new PlacedRun(new TextRange(piece.From, piece.To), style, piece.Glyphs, piece.Atom.Level, x, baseline, pieceWidth, boundaries, advances));
                     x += pieceWidth;
                 }
@@ -120,6 +119,71 @@ namespace PeachDrawing.Text.Layout
                 TextAlign.Justify => rtl ? areaWidth - lineWidth : 0,
                 _ => 0,
             };
+        }
+
+        // ---- justification ---------------------------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// Finds where a line may be widened: for each piece, a flag for every glyph that ends a cluster the room goes after, and how many there are. A
+        /// space is one, unless the paragraph is justified between characters only; the boundaries between two characters are the others, of the kind
+        /// <see cref="ParagraphStyle.TextJustify"/> asks for. Nothing goes at the end of the line, and a tab is a wall: nothing is added next to it.
+        /// </summary>
+        private static (bool[][]? Expand, int Count) FindJustificationOpportunities(Paragraph p, List<Piece> pieces)
+        {
+            var mode = p.Style.TextJustify;
+            if (mode == TextJustify.None)
+            {
+                return (null, 0);
+            }
+
+            // The clusters of the line in drawing order, as (piece, glyph, offset of the cluster's text); a tab separates the ones before it from those after.
+            var clusters = new List<(int Piece, int Glyph, int Offset)>();
+            var expand = new bool[pieces.Count][];
+            for (int n = 0; n < pieces.Count; n++)
+            {
+                var piece = pieces[n];
+                expand[n] = new bool[piece.Glyphs.Glyphs.Count];
+                if (piece.IsTab)
+                {
+                    clusters.Add((n, -1, -1));
+                    continue;
+                }
+
+                for (int g = 0; g < piece.Glyphs.Glyphs.Count; g++)
+                {
+                    if (p.EndsCluster(piece.Glyphs, piece.From, g))
+                    {
+                        clusters.Add((n, g, piece.From + piece.Glyphs.Glyphs[g].ClusterStart));
+                    }
+                }
+            }
+
+            int count = 0;
+            for (int k = 0; k < clusters.Count; k++)
+            {
+                var (pieceIndex, glyph, offset) = clusters[k];
+                if (glyph < 0)
+                {
+                    continue;
+                }
+
+                bool opportunity = p.IsWordSeparatorAt(offset);
+                if (!opportunity && mode != TextJustify.InterWord && k + 1 < clusters.Count && clusters[k + 1].Glyph >= 0)
+                {
+                    int next = clusters[k + 1].Offset;
+                    opportunity = mode == TextJustify.InterCharacter
+                        ? !p.JoinsNext(Math.Min(offset, next))
+                        : p.IsBlockScriptAt(offset) || p.IsBlockScriptAt(next);
+                }
+
+                if (opportunity)
+                {
+                    expand[pieceIndex][glyph] = true;
+                    count++;
+                }
+            }
+
+            return (expand, count);
         }
 
         // ---- breaking --------------------------------------------------------------------------------------------------------------
@@ -417,7 +481,7 @@ namespace PeachDrawing.Text.Layout
         /// The distance from the left edge of a run to the caret at each boundary of its text, for every offset from the run's start to
         /// its end. A cluster that stands for several characters (a ligature) is shared out equally between its grapheme clusters.
         /// </summary>
-        private static (double[] Boundaries, double[] Advances, double Width) PlaceRun(Paragraph p, Piece piece, RunStyle style, double spaceExtra)
+        private static (double[] Boundaries, double[] Advances, double Width) PlaceRun(Paragraph p, Piece piece, RunStyle style, double extra, bool[]? expandAfter)
         {
             int length = piece.To - piece.From;
             var x = new double[length + 1];
@@ -446,7 +510,12 @@ namespace PeachDrawing.Text.Layout
                     advance += style.LetterSpacing;
                     if (p.IsWordSeparatorAt(piece.From + glyph.ClusterStart))
                     {
-                        advance += style.WordSpacing + spaceExtra;
+                        advance += style.WordSpacing;
+                    }
+
+                    if (expandAfter is not null && expandAfter[glyphNumber])
+                    {
+                        advance += extra;
                     }
                 }
 

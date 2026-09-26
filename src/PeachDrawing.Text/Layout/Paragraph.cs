@@ -289,6 +289,12 @@ namespace PeachDrawing.Text.Layout
                 ReverseForDisplay = (atom.Level & 1) == 1,
             };
 
+            if (style.LetterSpacing != 0)
+            {
+                // CSS Text 3: text with letter spacing does not get its optional ligatures.
+                settings = settings with { Ligatures = settings.Ligatures & ~(LigatureSet.Common | LigatureSet.Discretionary | LigatureSet.Historical) };
+            }
+
             var pieceText = Text.Substring(start, end - start);
             var forms = new List<ArabicJoiningForm>();
             List<UseCategory>? categories = _use is null ? null : [];
@@ -377,6 +383,22 @@ namespace PeachDrawing.Text.Layout
 
         /// <summary>Whether the user-perceived character that holds the offset starts with a word separator (a space with a mark on it still is one).</summary>
         internal bool IsWordSeparatorAt(int index) => index >= 0 && index < Text.Length && IsWordSeparator(Text[GraphemeStartOf(index)]);
+
+        /// <summary>Whether the character at <paramref name="index"/> is a letter of a script written without spaces, so that the boundaries next to it are justification opportunities.</summary>
+        internal bool IsBlockScriptAt(int index)
+        {
+            if (index < 0 || index >= Text.Length)
+            {
+                return false;
+            }
+
+            Rune.DecodeFromUtf16(Text.AsSpan(index), out var rune, out _);
+            // The prolonged sound mark is Common, but it belongs to the kana around it.
+            return rune.Value == 0x30FC || Scripts.Of(rune) is "Han" or "Hiragana" or "Katakana" or "Bopomofo" or "Yi";
+        }
+
+        /// <summary>Whether the character at <paramref name="index"/> is written joined to the one after it (a cursive script), so that room added between them would break the join.</summary>
+        internal bool JoinsNext(int index) => index >= 0 && index < _joining.Length && _joining[index] is ArabicJoiningForm.Init or ArabicJoiningForm.Medi or ArabicJoiningForm.Med2;
 
         private int GraphemeStartOf(int index)
         {

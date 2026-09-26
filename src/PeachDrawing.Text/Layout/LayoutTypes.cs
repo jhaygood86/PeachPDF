@@ -57,10 +57,33 @@ namespace PeachDrawing.Text.Layout
         Center = 4,
 
         /// <summary>
-        /// Both edges: the space between the words of each line is widened to fill it. The last line of the paragraph and a line that ends in a forced
-        /// break are aligned as <see cref="ParagraphStyle.AlignLast"/> says (the start, by default), and a line with no spaces in it is not changed.
+        /// Both edges: the room a line has left is shared out to fill it, at the spaces and, as <see cref="ParagraphStyle.TextJustify"/> says, between characters.
+        /// The last line of the paragraph and a line that ends in a forced break are aligned as <see cref="ParagraphStyle.AlignLast"/> says (the start, by default),
+        /// and a line with nowhere to add room is not changed.
         /// </summary>
         Justify = 5,
+    }
+
+    /// <summary>Where a justified line gets its extra room (CSS <c>text-justify</c>).</summary>
+    public enum TextJustify
+    {
+        /// <summary>
+        /// The room is shared between the spaces of the line and the boundaries next to a letter of a script written without spaces (Han, Hiragana, Katakana,
+        /// Bopomofo and Yi), so a line of Chinese or Japanese is justified too. A line with neither is left as it is.
+        /// </summary>
+        Auto = 0,
+
+        /// <summary>Lines are not justified: <see cref="TextAlign.Justify"/> aligns them as <see cref="TextAlign.Start"/> does.</summary>
+        None = 1,
+
+        /// <summary>The room is shared between the spaces of the line only.</summary>
+        InterWord = 2,
+
+        /// <summary>
+        /// The room is shared between every pair of adjacent characters, spaces included, except where the joined letters of a cursive script would be pulled
+        /// apart. A line of any script is justified, if it has two characters.
+        /// </summary>
+        InterCharacter = 3,
     }
 
     /// <summary>What may be done to a word that is too long for a line on its own (CSS <c>overflow-wrap</c>).</summary>
@@ -223,6 +246,9 @@ namespace PeachDrawing.Text.Layout
         /// moves off its stop by what the spaces before it gained.
         /// </summary>
         public TabSize TabSize { get; init; }
+
+        /// <summary>Where a justified line gets its room from (CSS <c>text-justify</c>); it matters only where the alignment is <see cref="TextAlign.Justify"/>.</summary>
+        public TextJustify TextJustify { get; init; }
 
         /// <summary>How CSS <c>word-break</c> and <c>line-break</c> tailor where lines may break.</summary>
         public LineBreakOptions LineBreak { get; init; }

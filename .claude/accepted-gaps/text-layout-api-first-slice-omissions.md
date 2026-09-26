@@ -1,10 +1,9 @@
 # `PeachDrawing.Text.Layout`: what the layout API still leaves out
 
 The paragraph layout API (`ParagraphBuilder`, `Paragraph`, `ParagraphLayout`) does line breaking (UAX #14 with the CSS tailorings), bidi
-reordering, alignment, carets, hit testing and selection boxes, font fallback, letter and word spacing, inter-word justification with
-`text-align-last`, `text-indent` and tab stops. Tracked in [#1417](https://github.com/jhaygood86/PeachPDF/issues/1417), it does not yet have:
+reordering, alignment, carets, hit testing and selection boxes, font fallback, letter and word spacing, justification
+(`text-justify`) with `text-align-last`, `text-indent` and tab stops. Tracked in [#1417](https://github.com/jhaygood86/PeachPDF/issues/1417), it does not yet have:
 
-- inter-character justification (`text-justify: inter-character`, for text with no spaces such as CJK);
 - hyphenation;
 - a line limit with an ellipsis;
 - the host-driven tier (`LineFlow`, `FlowCursor`, `LineSpace`);
@@ -23,7 +22,9 @@ is shaped per (atom, range), so a break between two clusters loses kerning acros
 Font fallback asks about a user-perceived character by its **first code point only**: a ZWJ emoji sequence, or a base plus a variation
 selector or modifier whose first code point the run's face maps, is never sent to the fallback, so a missing joiner, modifier or emoji
 form shows the face's missing-glyph shape where a covering face could have drawn the sequence. Letter spacing is added after the last glyph
-of each grapheme cluster, and ligatures are not turned off for it (CSS Text 3 says an agent should).
+of each grapheme cluster, and it turns off the optional ligatures of its text; the room justification adds does not (the text is shaped before it is known),
+where CSS Text 3 says an agent should. Justification treats `text-justify: auto` as spaces plus Han, Hiragana, Katakana, Bopomofo and Yi letter boundaries
+(not the clustered scripts of South-East Asia, and no kashida for Arabic).
 
 Tab stops are measured along a line in the order the text is written (logical order), so a tab that follows right-to-left text in a left-to-right
 line is placed as if that text were where it is in memory, not where it is drawn.

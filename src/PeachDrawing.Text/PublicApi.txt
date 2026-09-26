@@ -131,6 +131,7 @@ PeachDrawing.Text.Layout.ParagraphStyle : struct
   property TabSize TabSize { get; init; }
   property TextAlign Align { get; init; }
   property TextIndent TextIndent { get; init; }
+  property TextJustify TextJustify { get; init; }
 PeachDrawing.Text.Layout.PlacedRun : sealed class
   method Double GetCaretX(Int32 index)
   method Double GetGlyphAdvance(Int32 glyphIndex)
@@ -184,6 +185,11 @@ PeachDrawing.Text.Layout.TextIndent : struct
   property Boolean EachLine { get; init; }
   property Boolean Hanging { get; init; }
   property Double Length { get; init; }
+PeachDrawing.Text.Layout.TextJustify : enum Int32
+  Auto = 0
+  InterCharacter = 3
+  InterWord = 2
+  None = 1
 PeachDrawing.Text.Layout.TextPosition : struct
   ctor(Int32 Index, TextAffinity Affinity = Downstream)
   method Boolean Equals(Object obj)

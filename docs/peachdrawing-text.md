@@ -404,11 +404,13 @@ foreach (LineBox line in layout.Lines)
   face at the run's size; without one, or where it answers `null`, the face's missing-glyph shape is drawn. `FontSet.CreateFallback(query)` makes one
   from the families of a set, choosing the family whose coverage best fits the character's script.
 - **Spacing and justification.** `RunStyle.LetterSpacing` and `WordSpacing` add distance after every glyph and every space; both count in where lines
-  break and in the caret positions. `TextAlign.Justify` widens the spaces of every line that is not the last (nor ends in a forced break) so that it
-  fills the width, equally; a line with no space in it is left as it is, and `ParagraphStyle.AlignLast` sets how the last line and forced-break lines
-  are aligned (the start, by default). `PlacedRun.GetGlyphAdvance` gives the pen movement after each glyph, spacing and justification included, which
-  is what a caller draws with.
-
+  break and in the caret positions, and letter spacing turns off the optional ligatures of the text it is on. `TextAlign.Justify` shares the room a line
+  has left between its opportunities so that it fills the width, equally, in every line that is not the last (nor ends in a forced break);
+  `ParagraphStyle.TextJustify` says where the opportunities are: `Auto` (the spaces and the boundaries next to a Han, Hiragana, Katakana, Bopomofo or Yi
+  letter), `InterWord` (the spaces only), `InterCharacter` (every pair of adjacent characters, except joined cursive letters) or `None` (no justification).
+  A line with no opportunity is left as it is, a tab is a wall that nothing is added next to, and `ParagraphStyle.AlignLast` sets how the last line and
+  forced-break lines are aligned (the start, by default). `PlacedRun.GetGlyphAdvance` gives the pen movement after each glyph, spacing and justification
+  included, which is what a caller draws with.
 - **Indent and tab stops.** `ParagraphStyle.TextIndent` moves the start of a line in from the start edge (the left of a left-to-right paragraph, the right
   of a right-to-left one): by default the first line only, with `EachLine` also the line after every forced break, and with `Hanging` every line
   except those. The indent takes room from the line, which breaks earlier, and alignment and justification work in what is left; a negative indent moves
@@ -419,7 +421,7 @@ foreach (LineBox line in layout.Lines)
   not a justification opportunity. `ContentWidth` and `MeasureContent()` count the indent.
 
 Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Hyphenation, a line limit with an
-ellipsis, inline boxes and justification between characters (as opposed to between words) are not part of the layout yet.
+ellipsis and inline boxes are not part of the layout yet.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 
