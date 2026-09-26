@@ -284,9 +284,14 @@ if (face.IsVariable)
   the axes supply. A face oblique over a range that includes 0 also serves upright text. A variable font added with no range covers the
   range of its own weight, width and slant axes.
 - Outlines (including composite glyphs), advance widths, the font-wide metrics of `Typeface.Metrics` and shaping advances follow the
-  location. Reading `TypefaceMetrics.XMin` to `YMax` (the font bounding box) and the vertical advances gives the default design's
-  values. What a location changes is what the `gvar`, `HVAR`, `MVAR` and `avar` tables of a font with TrueType outlines say, plus the
-  deltas of the `GPOS` value records and anchors (kerning, single adjustments, mark and cursive attachment) that name the `GDEF`
+  location. So do the vertical advances (`GetVerticalAdvance`: `VVAR`, or the phantom points of `gvar` in a font without it) and, in a font
+  with a `VORG` table, the vertical origins (`GetVerticalOrigin`, through the vertical origin mapping of `VVAR`); the origin of a font
+  without `VORG` is the `vhea` ascent, which `MVAR` (`vasc`) varies. The font bounding box (`TypefaceMetrics.XMin` to `YMax`) is
+  worked out from the glyphs as they are drawn at the location, since no table says how it moves: for TrueType outlines the box of every
+  point of every glyph (off-curve points included, as a font's own glyph bounds are), for `CFF2` outlines the box of the curves, each
+  rounded to whole design units; a font with more glyphs to read than the engine's limits allow keeps `head`'s box. What a location
+  changes is what the `gvar`, `HVAR`, `VVAR`, `MVAR` and `avar` tables of a font with TrueType outlines say (`avar` version 2,
+  in which the value of an axis depends on the others, included), plus the deltas of the `GPOS` value records and anchors (kerning, single adjustments, mark and cursive attachment) that name the `GDEF`
   item variation store, and the `FeatureVariations` of `GSUB` and `GPOS` (a feature that uses other lookups at a region of the design
   space, such as `rvrn` glyph swaps at a weight).
 - A variable font with CFF2 outlines (a `CFF2` table) is read the same way: `TryGetOutline` runs the glyph's charstring with every

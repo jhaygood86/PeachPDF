@@ -142,6 +142,18 @@ body {{ font-family: 'VF'; font-size: 24pt; }}
         }
 
         [Fact]
+        public async Task EachInstance_DescribesItsOwnFontBox()
+        {
+            // The box that holds every glyph grows with the weight, so the descriptors of the two embedded instances differ.
+            var pdf = await RenderAsync(Html("<p>ABAB</p><p style=\"font-weight: 900\">ABAB</p>"));
+
+            var boxes = Regex.Matches(pdf, @"/FontBBox\s*\[([^\]]*)\]").Select(m => m.Groups[1].Value.Trim()).ToArray();
+
+            Assert.Equal(2, boxes.Length);
+            Assert.NotEqual(boxes[0], boxes[1]);
+        }
+
+        [Fact]
         public async Task ABoldInstance_IsNotAlsoFakedBold()
         {
             // Faux bold strokes the glyphs (text render mode 2); the instance is already heavy, so nothing is stroked.

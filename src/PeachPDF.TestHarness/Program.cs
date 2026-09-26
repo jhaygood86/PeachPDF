@@ -11040,6 +11040,64 @@ await SaveShowcaseAsync("variable_fonts_cff2", "Typography & Text", "Variable fo
     "blend at the location, and each location is embedded in the PDF as a static CFF font. Rendered against a small synthetic font.",
     variableCff2Html, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// Variable fonts, second part: an avar version 2 font whose axes move each other (the plain font next to it is the same design without the
+// cross-axis mapping), and vertical text set in a font whose advance heights follow the axes (VVAR and the phantom points of gvar).
+var avar2FontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableAvar2Test.ttf")));
+var verticalFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableVerticalTest.ttf")));
+string Avar2Cell(string family, string style, string caption) =>
+    "<td>" +
+    $"<div class=\"vf\" style=\"font-family: '{family}'; {style}\">ABAB</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+string VerticalCell(string style, string caption) =>
+    "<td style=\"height: 60mm\">" +
+    $"<div class=\"vv\" style=\"{style}\">ABCABC</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+var variableAvar2Html =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'Plain'; src: url('data:font/truetype;base64,{variableFontB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'Avar2'; src: url('data:font/truetype;base64,{avar2FontB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'Vertical'; src: url('data:font/truetype;base64,{verticalFontB64}') format('truetype'); }}" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table.vt { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.vt td { padding: 6px; vertical-align: top; text-align: center }" +
+    ".vf { font-size: 36pt; line-height: 1.1; white-space: nowrap }" +
+    ".vv { font-family: 'Vertical'; font-size: 30pt; writing-mode: vertical-rl; margin: 0 auto }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>Variable fonts: avar 2 and vertical metrics</h1>" +
+    "<p class=\"intro\">A version 2 <code>avar</code> table lets an axis move the others: in the second font, full weight also narrows " +
+    "the width and a narrow width also makes the weight heavier, so the same <code>font-weight</code> and <code>font-stretch</code> " +
+    "settings read differently than in the plain font of the same design.</p>" +
+    "<h2>font-weight: 900</h2>" +
+    "<table class=\"vt\"><tr>" +
+    Avar2Cell("Plain", "font-weight: 900", "plain font, font-weight: 900") +
+    Avar2Cell("Avar2", "font-weight: 900", "avar 2 font, font-weight: 900") +
+    "</tr></table>" +
+    "<h2>font-variation-settings: 'wght' 700, 'wdth' 120</h2>" +
+    "<table class=\"vt\"><tr>" +
+    Avar2Cell("Plain", "font-variation-settings: 'wght' 700, 'wdth' 120", "plain font") +
+    Avar2Cell("Avar2", "font-variation-settings: 'wght' 700, 'wdth' 120", "avar 2 font") +
+    "</tr></table>" +
+    "<h2>Vertical text</h2>" +
+    "<p class=\"intro\">In vertical text each glyph advances by its <em>vertical</em> advance, which follows the axes through " +
+    "<code>VVAR</code> (or, without it, the phantom points of <code>gvar</code>): the heavier the weight, the longer the column.</p>" +
+    "<table class=\"vt\"><tr>" +
+    VerticalCell("font-weight: 100", "font-weight: 100") +
+    VerticalCell("font-weight: 400", "font-weight: 400") +
+    VerticalCell("font-weight: 900", "font-weight: 900") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("variable_fonts_avar2_vertical", "Typography & Text", "Variable fonts: avar 2 and vertical metrics",
+    "An avar version 2 font, whose axes move each other, beside the same design without the cross-axis mapping, and vertical text whose " +
+    "glyph advances follow the axes through VVAR. Rendered against small synthetic variable fonts.",
+    variableAvar2Html, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // Variable-font ranges: an @font-face rule declares the weights, widths and oblique angles its face covers (font-weight: 100 900,
 // font-stretch: 75% 125%, font-style: oblique 0deg 14deg), and the weight, width and slant of the requesting box set the font's axes inside
 // that range. Uses a small synthetic variable font with weight (100-900), width (75-125) and slant (0 to 15 degrees) axes.

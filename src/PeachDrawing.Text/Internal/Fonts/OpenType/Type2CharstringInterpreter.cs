@@ -1,4 +1,4 @@
-﻿#region PeachPDF - A .NET library for rendering HTML to PDF
+#region PeachPDF - A .NET library for rendering HTML to PDF
 //
 // Decodes a CFF font's Type 2 charstrings (Adobe Technical Note #5177, "The
 // Type 2 Charstring Format") into the same GlyphOutline model
@@ -94,6 +94,17 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// </summary>
         public static bool TryGetGlyphOutline(Cff2Table cff2, int glyphIndex, VariationCoordinates? variation, out GlyphOutline outline)
         {
+            long unlimited = long.MaxValue;
+            return TryGetGlyphOutline(cff2, glyphIndex, variation, out outline, ref unlimited);
+        }
+
+        /// <summary>
+        /// <see cref="TryGetGlyphOutline(Cff2Table, int, VariationCoordinates?, out GlyphOutline)"/> for a caller that reads many glyphs and has a
+        /// limit on the work all of them may take: the operands and operators the glyph executed are taken off <paramref name="stepsLeft"/>,
+        /// and a glyph that would take more than is left fails.
+        /// </summary>
+        public static bool TryGetGlyphOutline(Cff2Table cff2, int glyphIndex, VariationCoordinates? variation, out GlyphOutline outline, ref long stepsLeft)
+        {
             outline = new GlyphOutline();
 
             if (!cff2.IsSupported || !cff2.TryGetFontDict(glyphIndex, out var font))
@@ -101,8 +112,17 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
             try
             {
-                var interpreter = new Interpreter(cff2.GlobalSubrs, font.LocalSubrs, new Cff2Blender(cff2, variation?.Normalized ?? [], font.VariationDataIndex));
-                interpreter.Run(cff2.CharStrings[glyphIndex], 0);
+                var interpreter = new Interpreter(cff2.GlobalSubrs, font.LocalSubrs, new Cff2Blender(cff2, variation?.Normalized ?? [], font.VariationDataIndex),
+                    (int)Math.Min(MaxSteps, Math.Max(0, stepsLeft)));
+                try
+                {
+                    interpreter.Run(cff2.CharStrings[glyphIndex], 0);
+                }
+                finally
+                {
+                    stepsLeft -= interpreter.Steps;
+                }
+
                 interpreter.CloseCurrentContour();
 
                 if (interpreter.Failed) return false;
@@ -144,7 +164,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// whole call tree (a subroutine operates on its caller's stack, not a fresh one), so this is
         /// one mutable instance for the whole (possibly recursive) decode rather than a static method.
         /// </summary>
-        private sealed class Interpreter(CffIndex globalSubrs, CffIndex localSubrs, Cff2Blender? cff2)
+        private sealed class Interpreter(CffIndex globalSubrs, CffIndex localSubrs, Cff2Blender? cff2, int maxSteps = MaxSteps)
         {
             private readonly List<double> _stack = [];
             private readonly List<OutlineContour> _contours = [];
@@ -157,6 +177,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             private int _steps;
 
             public bool Failed { get; private set; }
+            public int Steps => _steps;
             public IReadOnlyList<OutlineContour> Contours => _contours;
 
             /// <summary>Closes and records the in-progress contour, if any - a no-op once already closed.</summary>
@@ -176,7 +197,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 while (p < cs.Length)
                 {
                     if (Failed || _ended) return;
-                    if (++_steps > MaxSteps) { Failed = true; return; }
+                    if (++_steps > maxSteps) { Failed = true; return; }
 
                     int b0 = cs[p];
 
