@@ -66,6 +66,15 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 | `MathGlyphInfoTable` (`GetItalicsCorrection`, `GetTopAccentAttachment`, `IsExtendedShape`) | Per-glyph information | `MathItalicsCorrectionInfo`, `MathTopAccentAttachment`, `ExtendedShapeCoverage` in the specification |
 | `MathVariantsTable` (`MinConnectorOverlap`, `GetVerticalConstruction`, `GetHorizontalConstruction`), `MathGlyphConstruction`, `MathGlyphVariant`, `MathGlyphAssembly`, `MathGlyphPart` | The stretchy glyph data | `MathVariants`, `MathGlyphConstruction`, `MathGlyphVariantRecord`, `GlyphAssembly`, `GlyphPart` in the specification |
 
+### `PeachDrawing.Text.Export`
+
+| Public name | Role | Origin of the name and shape |
+|---|---|---|
+| `TypefaceExporter.ExportSubset` (`typeface`, `glyphs`, `keepCharacterMap`) | Cuts a face down to some glyphs | "Export" and "subset" are the plain words for it; the shape follows what a PDF writer needs (glyph indices in, font file out) |
+| `ExportedFont` (`Data`, `HasCffOutlines`, `IsSubset`) | The font file and what it holds | Ours |
+| `Typeface.FullName`, `Typeface.ContentHash` | The `name` table's full name (ID 4), and a checksum of the data | OpenType `name` table; "content hash" is the ordinary term |
+| `TypefaceMetrics.IsSymbolic`, `IsFixedPitch`, `HasSerifs`, `IsItalicStyle`, `FirstCharIndex` | Flags a font descriptor records | OpenType `cmap`, `post`, `OS/2` (`sFamilyClass`, `fsSelection`, `usFirstCharIndex`) |
+
 ### `PeachDrawing.Text.Shaping`
 
 | Public name | Role | Origin of the name and shape |

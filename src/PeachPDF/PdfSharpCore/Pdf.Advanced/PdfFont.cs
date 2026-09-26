@@ -28,8 +28,7 @@
 #endregion
 
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Text;
+
 using System;
 using System.Diagnostics;
 using System.Text;

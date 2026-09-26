@@ -13,7 +13,6 @@
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.Html.Adapters.Entities;
-using PeachDrawing.Text.Internal.Text;
 
 namespace PeachPDF.Html.Adapters
 {
@@ -169,7 +168,7 @@ namespace PeachPDF.Html.Adapters
         public virtual double GetVerticalAdvance(System.Text.Rune rune) => Height;
 
         /// <summary>Whether this font carries a real OpenType <c>VORG</c> table this reader trusts (see
-        /// <see cref="PeachDrawing.Text.Internal.Fonts.OpenType.OpenTypeDescriptor.HasVerticalOrigin"/> for the CFF-only
+        /// <c>OpenTypeDescriptor.HasVerticalOrigin</c> for the CFF-only
         /// restriction that gates this).</summary>
         public virtual bool HasVerticalOrigin => false;
 

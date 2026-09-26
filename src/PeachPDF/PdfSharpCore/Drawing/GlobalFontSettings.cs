@@ -27,7 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.PdfSharpCore.Pdf;
 using System;
 
@@ -57,9 +56,8 @@ namespace PeachPDF.PdfSharpCore.Drawing
             }
             set
             {
-                try
+                lock (_fontEncodingLock)
                 {
-                    FontLock.Enter();
                     if (_fontEncodingInitialized)
                     {
                         // Ignore multiple setting e.g. in a web application.
@@ -71,9 +69,9 @@ namespace PeachPDF.PdfSharpCore.Drawing
                     _fontEncoding = value;
                     _fontEncodingInitialized = true;
                 }
-                finally { FontLock.Exit(); }
             }
         }
+        static readonly object _fontEncodingLock = new();
         static PdfFontEncoding _fontEncoding;
         static bool _fontEncodingInitialized;
     }

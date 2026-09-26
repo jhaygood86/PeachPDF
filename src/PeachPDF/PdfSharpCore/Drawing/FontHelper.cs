@@ -31,9 +31,6 @@
 
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
-using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Diagnostics;
 using System.Text;
@@ -56,14 +53,13 @@ namespace PeachPDF.PdfSharpCore.Drawing
             // instead of independently re-deriving it from FontDescriptorCache's global, static,
             // typeface-key-keyed cache here, which would silently reintroduce the exact cross-
             // PdfGenerator-instance font collision the instance-vs-global cache split fixes.
-            OpenTypeDescriptor descriptor = font.Descriptor;
-            if (descriptor != null)
+            TypefaceMetrics metrics = font.Typeface.Metrics;
             {
                 // Height is the sum of ascender and descender.
-                var singleLineHeight = (descriptor.Ascender + descriptor.Descender) * font.Size / font.UnitsPerEm;
-                var lineGapHeight = (descriptor.LineSpacing - descriptor.Ascender - descriptor.Descender) * font.Size / font.UnitsPerEm;
+                var singleLineHeight = (metrics.CellAscent + metrics.CellDescent) * font.Size / font.UnitsPerEm;
+                var lineGapHeight = (metrics.LineSpacing - metrics.CellAscent - metrics.CellDescent) * font.Size / font.UnitsPerEm;
 
-                Debug.Assert(descriptor.Ascender > 0);
+                Debug.Assert(metrics.CellAscent > 0);
 
                 int adjustedLength = 0;
                 var height = singleLineHeight;
@@ -87,7 +83,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
                     // this value, and must agree with what XGraphicsPdfRenderer.DrawString actually
                     // paints (see GposPositioner).
                     foreach (PlacedGlyph glyph in Shaper.Shape(font.Typeface, lineText.ToString(), features).Glyphs)
-                        width += (int)Math.Round(descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta);
+                        width += (int)Math.Round(font.Typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta);
                     lineText.Clear();
                 }
 
@@ -134,18 +130,17 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 maxWidth = Math.Max(maxWidth, width);
 
                 // What? size.Width = maxWidth * font.Size * (font.Italic ? 1 : 1) / descriptor.UnitsPerEm;
-                size.Width = maxWidth * font.Size / descriptor.UnitsPerEm;
+                size.Width = maxWidth * font.Size / metrics.UnitsPerEm;
                 size.Height = height;
 
                 // Adjust bold simulation.
-                if ((font.GlyphTypeface.StyleSimulations & SyntheticStyle.Bold) == SyntheticStyle.Bold)
+                if ((font.Synthesis & SyntheticStyle.Bold) == SyntheticStyle.Bold)
                 {
                     // Add 2% of the em-size for each character.
                     // Unsure how to deal with white space. Currently count as regular character.
                     size.Width += adjustedLength * font.Size * Const.BoldEmphasis;
                 }
             }
-            Debug.Assert(descriptor != null, "No OpenTypeDescriptor.");
 
             return size;
         }

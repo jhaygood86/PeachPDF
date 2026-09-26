@@ -28,7 +28,6 @@
 #endregion
 
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Text;
 
 namespace PeachPDF.PdfSharpCore.Drawing
 {

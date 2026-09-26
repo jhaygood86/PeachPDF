@@ -44,7 +44,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
 
             // The bundled fixture is a regular, upright face, so both bold and italic have to be synthesized.
             Assert.Equal(SyntheticStyle.BoldItalic, match.Synthesis);
-            Assert.Equal(SyntheticStyle.BoldItalic, font.GlyphTypeface.StyleSimulations);
+            Assert.Equal(SyntheticStyle.BoldItalic, font.Synthesis);
         }
     }
 }

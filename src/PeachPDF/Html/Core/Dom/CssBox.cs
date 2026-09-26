@@ -20,9 +20,6 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Paint;
-using PeachDrawing.Text.Internal.Text;
-using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
-using PeachDrawing.Text.Internal.Text.Shaping.Use;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -1313,18 +1310,18 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// One resolved <see cref="ArabicJoiningForm"/> per character of <see cref="Text"/>, set
         /// alongside <see cref="BidiLevels"/>/<see cref="CharScripts"/> by the same pass (see
-        /// <see cref="ArabicJoiningShaper"/>) - <see cref="ArabicJoiningForm.None"/> for every character
+        /// <c>ArabicJoiningShaper</c>) - <see cref="ArabicJoiningForm.None"/> for every character
         /// of a paragraph with no Arabic-family joining script in it at all (the overwhelming common
         /// case), computed unconditionally alongside <see cref="CharScripts"/> anyway since a
         /// per-paragraph "does this text need it" pre-scan would cost close to the same
-        /// <see cref="ArabicShapingTable"/> lookups it's trying to avoid.
+        /// <c>ArabicShapingTable</c> lookups it's trying to avoid.
         /// </summary>
         internal ArabicJoiningForm[]? JoiningForms { get; set; }
 
         /// <summary>
         /// One resolved <see cref="UseCategory"/> per character of <see cref="Text"/>, set alongside
         /// <see cref="BidiLevels"/>/<see cref="CharScripts"/>/<see cref="JoiningForms"/> by the same
-        /// pass (see <see cref="UseCategoryClassifier"/>) - null (not an all-<see cref="UseCategory.O"/>
+        /// pass (see <c>UseCategoryClassifier</c>) - null (not an all-<see cref="UseCategory.O"/>
         /// array) for a paragraph with no text in one of the USE-shaped scripts (Devanagari/Bengali/
         /// Gujarati/Tamil - see <see cref="CssBidiParagraphResolver"/>'s own <c>UseShapedScripts</c>) at
         /// all, unlike <see cref="JoiningForms"/>'s own always-allocated convention:

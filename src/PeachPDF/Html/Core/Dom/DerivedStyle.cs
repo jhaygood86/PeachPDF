@@ -6,7 +6,6 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -1256,7 +1255,7 @@ namespace PeachPDF.Html.Core.Dom
         /// and script support it," matching real browser behavior for <c>auto</c>'s UA-discretion
         /// wording. Gates GPOS Lookup Types 1/2 (<c>kern</c>) only - mark-to-base/mark-to-mark
         /// positioning (<c>mark</c>/<c>mkmk</c>) is requested unconditionally by
-        /// <see cref="PeachDrawing.Text.Internal.Text.GposPositioner"/>, since combining-mark attachment isn't a
+        /// <c>GposPositioner</c>, since combining-mark attachment isn't a
         /// stylistic opt-out the way kerning is.
         /// </summary>
         public bool ActualFontKerning =>

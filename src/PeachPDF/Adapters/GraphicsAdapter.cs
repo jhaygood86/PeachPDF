@@ -12,13 +12,11 @@
 
 using PeachDrawing.Text;
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.Raster;
-using PeachDrawing.Text.Internal.Text;
 using PeachPDF.Utilities;
 using System;
 using System.Collections.Generic;

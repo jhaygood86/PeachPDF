@@ -11,8 +11,8 @@ dotnet add package PeachDrawing.Text
 > **Status: pre-1.0.** The library is being opened up area by area. Today the public surface is font loading and
 > matching (`FontSet` and the types around it), what a `Typeface` says about itself (metrics, glyph mapping and advances),
 > shaping, glyph outlines and colour glyphs, the `MATH` table, and the `PeachDrawing.Text.Unicode` namespace, all described
-> below. Font subsetting for embedding and paragraph layout are still internal to the package, so PeachPDF is the only
-> consumer of them, and they will be published in later releases. Until 1.0, the public API may change between releases.
+> below. Font subsetting for embedding, described below, is public too. Paragraph layout is still internal to the package, so
+> PeachPDF is the only consumer of it, and it will be published in a later release. Until 1.0, the public API may change between releases.
 
 ## What the engine does
 
@@ -209,6 +209,31 @@ if (face.MathData is MathTable math && face.TryMapRune(new Rune('('), out ushort
 ```
 
 The per-glyph corner kerning of `MathKernInfo` and the device tables that adjust a value at particular sizes are not read.
+
+## Embedding: `PeachDrawing.Text.Export`
+
+A document that embeds a font wants only the glyphs it uses. `TypefaceExporter.ExportSubset` cuts a typeface down to the glyph
+indices you give it and returns the bytes of a font file, an `ExportedFont`.
+
+```csharp
+using PeachDrawing.Text.Export;
+
+ExportedFont subset = TypefaceExporter.ExportSubset(face, usedGlyphs, keepCharacterMap: false);
+byte[] fontFile = subset.Data.ToArray();
+// subset.HasCffOutlines says which kind of font stream to write; subset.IsSubset says whether it was cut down.
+```
+
+- The glyphs keep their indices, so text already encoded as glyph indices stays valid against the subset. The glyphs a composite
+  glyph is made of come along, and so does the notdef glyph.
+- A colour glyph that has no outline of its own (its shapes are its layers) is given a small outline, so a reader can still
+  select the text it stands for.
+- A subset carries no name table, so it is meant to be embedded, not loaded back into a `FontSet`.
+- A font with CFF outlines is not cut down: it is returned whole, and `IsSubset` is `false`.
+- `keepCharacterMap` says whether the character map stays. A font whose text is encoded as glyph indices is smaller without it.
+
+What a font descriptor records about a face comes from the members you already have: `Typeface.Metrics` (with `IsSymbolic`,
+`IsFixedPitch`, `HasSerifs`, `IsItalicStyle` and `FirstCharIndex` for the descriptor flags), `Typeface.GetAdvance` for widths,
+`Typeface.FullName` for a base font name, and `Typeface.ContentHash` to key a cache of what you made from a face.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 

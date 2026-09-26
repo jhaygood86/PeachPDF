@@ -31,6 +31,19 @@ namespace PeachPDF.Tests.PublicApi
                 + SnapshotFile + ".\n--- actual ---\n" + actual);
         }
 
+        [Fact]
+        public void TheEngineGrantsItsInternalsToNoPeachPdfAssemblyButTheTests()
+        {
+            // PeachPDF must use the public API only: the compiler enforces it as long as no entry for it comes back.
+            var granted = typeof(Bidi).Assembly.GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>()
+                .Select(a => a.AssemblyName)
+                .ToList();
+
+            Assert.DoesNotContain("PeachPDF", granted);
+            Assert.DoesNotContain("PeachPDF.Cli", granted);
+            Assert.All(granted, name => Assert.Equal("PeachPDF.Tests", name));
+        }
+
         private static string Describe(Assembly assembly)
         {
             var text = new StringBuilder();

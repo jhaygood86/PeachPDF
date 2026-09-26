@@ -34,14 +34,11 @@
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Internal;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
-using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -420,22 +417,19 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             //bool bold = (font.Style & XFontStyle.Bold) != 0;
             //bool italic = (font.Style & XFontStyle.Italic) != 0;
-            bool italicSimulation = (font.GlyphTypeface.StyleSimulations & SyntheticStyle.Italic) != 0;
-            bool boldSimulation = (font.GlyphTypeface.StyleSimulations & SyntheticStyle.Bold) != 0;
+            bool italicSimulation = (font.Synthesis & SyntheticStyle.Italic) != 0;
+            bool boldSimulation = (font.Synthesis & SyntheticStyle.Bold) != 0;
             bool strikeout = (font.Style & XFontStyle.Strikeout) != 0;
             bool underline = (font.Style & XFontStyle.Underline) != 0;
 
-            // Reuse the descriptor this XFont resolved through its owning PdfGenerator's instance font
-            // cache. Going back through the global FontDescriptorCache here would collide when separate
-            // generators register different subset files with the same internal family/style name.
-            // Merely reading the descriptor does not realize/embed the color font below.
-            OpenTypeDescriptor descriptor = font.Descriptor;
+            // Merely reading the typeface does not realize/embed the color font below.
+            TypefaceMetrics metrics = font.Typeface.Metrics;
             // Invisible text (see XGraphics.InvisibleText) is always the plain outline text object, never colour artwork.
             bool invisible = Gfx.InvisibleText;
-            bool isColorFont = font.Unicode && descriptor.IsColorFont && !invisible;
+            bool isColorFont = font.Unicode && font.Typeface.HasColorGlyphs && !invisible;
             IReadOnlyList<PlacedGlyph>? colorGlyphs = isColorFont ? Shaper.Shape(font.Typeface, s, features).Glyphs : null;
             double width = colorGlyphs is not null && CanMeasureAsSingleShapedRun(s)
-                ? MeasureShapedRunWidth(s, font, descriptor, colorGlyphs)
+                ? MeasureShapedRunWidth(s, font, colorGlyphs)
                 : _gfx.MeasureString(s, font, features).Width;
 
             if (!isColorFont)
@@ -600,7 +594,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                         // individually positioned Td+Tj instead of one Tj over the whole run - the
                         // common case (no GPOS deltas) never reaches this branch, so existing output is
                         // otherwise byte-for-byte unchanged.
-                        DrawPositionedGlyphs(shapedGlyphs, font, descriptor, new XPoint(x, y + verticalOffset));
+                        DrawPositionedGlyphs(shapedGlyphs, font, new XPoint(x, y + verticalOffset));
                     }
                     else
                     {
@@ -616,8 +610,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             if (underline && !invisible)
             {
-                double underlinePosition = lineSpace * descriptor.UnderlinePosition / font.CellSpace;
-                double underlineThickness = lineSpace * descriptor.UnderlineThickness / font.CellSpace;
+                double underlinePosition = lineSpace * metrics.UnderlinePosition / font.CellSpace;
+                double underlineThickness = lineSpace * metrics.UnderlineThickness / font.CellSpace;
                 //DrawRectangle(null, brush, x, y - underlinePosition, width, underlineThickness);
                 double underlineRectY = Gfx.PageDirection == XPageDirection.Downwards
                     ? y - underlinePosition
@@ -627,8 +621,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             if (strikeout && !invisible)
             {
-                double strikeoutPosition = lineSpace * descriptor.StrikeoutPosition / font.CellSpace;
-                double strikeoutSize = lineSpace * descriptor.StrikeoutSize / font.CellSpace;
+                double strikeoutPosition = lineSpace * metrics.StrikeoutPosition / font.CellSpace;
+                double strikeoutSize = lineSpace * metrics.StrikeoutThickness / font.CellSpace;
                 //DrawRectangle(null, brush, x, y - strikeoutPosition - strikeoutSize, width, strikeoutSize);
                 double strikeoutRectY = Gfx.PageDirection == XPageDirection.Downwards
                     ? y - strikeoutPosition
@@ -648,18 +642,17 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             return true;
         }
 
-        private static double MeasureShapedRunWidth(string text, XFont font, OpenTypeDescriptor descriptor,
-            IReadOnlyList<PlacedGlyph> glyphs)
+        private static double MeasureShapedRunWidth(string text, XFont font, IReadOnlyList<PlacedGlyph> glyphs)
         {
             int designWidth = 0;
             for (int i = 0; i < glyphs.Count; i++)
             {
                 PlacedGlyph glyph = glyphs[i];
-                designWidth += (int)Math.Round(descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta);
+                designWidth += (int)Math.Round(font.Typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta);
             }
 
-            double width = designWidth * font.Size / descriptor.UnitsPerEm;
-            if ((font.GlyphTypeface.StyleSimulations & SyntheticStyle.Bold) != 0)
+            double width = designWidth * font.Size / font.UnitsPerEm;
+            if ((font.Synthesis & SyntheticStyle.Bold) != 0)
             {
                 int characterCount = 0;
                 foreach (Rune _ in text.EnumerateRunes())
@@ -711,10 +704,10 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// writing mode's own advance axis) is intentionally not applied here - this renderer draws
         /// horizontal text only.
         /// </summary>
-        void DrawPositionedGlyphs(IReadOnlyList<PlacedGlyph> glyphs, XFont font, OpenTypeDescriptor descriptor, XPoint startPos)
+        void DrawPositionedGlyphs(IReadOnlyList<PlacedGlyph> glyphs, XFont font, XPoint startPos)
         {
             const string format2 = Config.SignificantFigures4;
-            double scale = font.Size / descriptor.UnitsPerEm;
+            double scale = font.Size / font.UnitsPerEm;
             bool pageDownwards = Gfx.PageDirection == XPageDirection.Downwards;
 
             double penX = startPos.X;
@@ -740,7 +733,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 // XOffset is a placement-only shift (doesn't move where the next glyph starts) - the
                 // pen only ever advances by the natural width plus GPOS's own XAdvanceDelta, matching
                 // FontHelper.MeasureString/GraphicsAdapter.GetTextOutline's identical advance math.
-                penX += (descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta) * scale;
+                penX += (font.Typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta) * scale;
             }
         }
 

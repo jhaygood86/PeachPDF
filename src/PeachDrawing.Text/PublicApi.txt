@@ -5,6 +5,12 @@ PeachDrawing.Text.AddOptions : sealed class
   property Nullable<Int32> Weight { get; init; }
   property Nullable<Int32> Width { get; init; }
   property String FamilyName { get; init; }
+PeachDrawing.Text.Export.ExportedFont : sealed class
+  property Boolean HasCffOutlines { get; }
+  property Boolean IsSubset { get; }
+  property ReadOnlyMemory<Byte> Data { get; }
+PeachDrawing.Text.Export.TypefaceExporter : static class
+  method static ExportedFont ExportSubset(Typeface typeface, IEnumerable<Int32> glyphs, Boolean keepCharacterMap)
 PeachDrawing.Text.FontSet : sealed class
   ctor()
   method Boolean HasExplicitRanges(String familyName)
@@ -397,8 +403,10 @@ PeachDrawing.Text.Typeface : sealed class
   property ColorPalette ColorPalette { get; }
   property MathTable MathData { get; }
   property String FamilyName { get; }
+  property String FullName { get; }
   property String StyleName { get; }
   property TypefaceMetrics Metrics { get; }
+  property UInt64 ContentHash { get; }
 PeachDrawing.Text.TypefaceFamily : sealed class
   method Boolean TryMatch(in TypefaceQuery query, out TypefaceMatch match)
   property String Name { get; }
@@ -417,9 +425,14 @@ PeachDrawing.Text.TypefaceMatch : struct
   property Typeface Typeface { get; init; }
 PeachDrawing.Text.TypefaceMetrics : sealed class
   property Boolean HasMeasuredXHeight { get; }
+  property Boolean HasSerifs { get; }
+  property Boolean IsFixedPitch { get; }
+  property Boolean IsItalicStyle { get; }
+  property Boolean IsSymbolic { get; }
   property Int32 CapHeight { get; }
   property Int32 CellAscent { get; }
   property Int32 CellDescent { get; }
+  property Int32 FirstCharIndex { get; }
   property Int32 LineSpacing { get; }
   property Int32 NormalLineAscent { get; }
   property Int32 NormalLineDescent { get; }

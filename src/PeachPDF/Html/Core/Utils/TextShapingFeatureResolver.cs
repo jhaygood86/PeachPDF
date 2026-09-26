@@ -3,15 +3,14 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using PeachPDF.CSS;
-using PeachDrawing.Text.Internal.Text;
 
 namespace PeachPDF.Html.Core.Utils
 {
     /// <summary>
     /// Resolves the CSS Fonts Level 3/4 text-shaping properties (<c>font-variant-ligatures/-caps/
     /// -numeric/-east-asian</c>, <c>font-feature-settings</c>, <c>font-kerning</c>) from a raw
-    /// cascaded-value string to the typed <see cref="PeachDrawing.Text.Internal.Text"/> request types
-    /// <see cref="GsubShaper.Shape"/>/<see cref="GposPositioner"/> consume - factored out of
+    /// cascaded-value string to the typed <c>PeachDrawing.Text.Shaping</c> request types
+    /// <c>GsubShaper.Shape</c>/<c>GposPositioner</c> consume - factored out of
     /// <see cref="Dom.DerivedStyle"/>'s own <c>ActualFontVariant*</c>/<c>ActualFontFeatureSettings</c>/
     /// <c>ActualFontKerning</c> properties so SVG text (<see cref="Svg.SvgTreeBuilder"/>) can resolve
     /// the exact same grammar from its own presentation-attribute/style strings, per this repo's "one

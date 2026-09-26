@@ -1,4 +1,4 @@
-using PeachDrawing.Text.Internal.Fonts.OpenType;
+using PeachDrawing.Text;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
 using System.Text;
 
@@ -11,11 +11,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// </summary>
     internal static class PdfSimpleFontWidths
     {
-        public static int[] Compute(OpenTypeDescriptor descriptor)
+        public static int[] Compute(Typeface typeface)
         {
             Encoding ansi = PdfEncoders.WinAnsiEncoding;
             byte[] bytes = new byte[256];
-            bool symbol = descriptor.FontFace.cmap.symbol;
+            var metrics = typeface.Metrics;
+            bool symbol = metrics.IsSymbolic;
             var widths = new int[256];
 
             for (int idx = 0; idx < 256; idx++)
@@ -30,11 +31,11 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 if (symbol)
                 {
                     // Remap ch for symbol fonts.
-                    ch = (char)(ch | (descriptor.FontFace.os2.usFirstCharIndex & 0xFF00));
+                    ch = (char)(ch | (metrics.FirstCharIndex & 0xFF00));
                 }
 
-                int glyphIndex = descriptor.CharCodeToGlyphIndex(new Rune(ch));
-                widths[idx] = descriptor.GlyphIndexToPdfWidth(glyphIndex);
+                typeface.TryMapRune(new Rune(ch), out ushort glyphIndex);
+                widths[idx] = PdfTypefaceMetrics.GlyphWidth(typeface, glyphIndex);
             }
 
             return widths;

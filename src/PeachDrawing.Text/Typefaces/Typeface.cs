@@ -37,6 +37,19 @@ namespace PeachDrawing.Text
         /// <summary>The style name the font file declares, in English, such as <c>Bold Italic</c>.</summary>
         public string StyleName => Face.StyleName;
 
+        /// <summary>
+        /// The full name of the face as its font file declares it, such as <c>Arial Bold Italic</c>: the family and the style
+        /// together. A font that does not declare one gets its family name.
+        /// </summary>
+        public string FullName => Face.DisplayName;
+
+        /// <summary>
+        /// A checksum of the font data the face reads. Two typefaces that read the same data have the same hash, so it can
+        /// key a cache of things made from a face, such as an embedded copy of it.
+        /// </summary>
+        /// <remarks>It is a checksum, so equal data always gives equal hashes but the reverse is only overwhelmingly likely; compare typefaces with <see cref="Equals(Typeface)"/> when it must be certain.</remarks>
+        public ulong ContentHash => Face.FontSource.Key;
+
         /// <summary>Whether the font file declares the face bold (in its OS/2 table).</summary>
         public bool IsBold => Face.IsBold;
 

@@ -28,8 +28,7 @@
 #endregion
 
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
+using PeachDrawing.Text.Export;
 using PeachPDF.PdfSharpCore.Pdf.Filters;
 using System.Diagnostics;
 
@@ -56,15 +55,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             // TrueType with WinAnsiEncoding only. Reuse the descriptor XFont itself already resolved
             // (see PdfType0Font's identical fix) instead of independently re-deriving it from
             // FontDescriptorCache's global, static, typeface-key-keyed cache here.
-            OpenTypeDescriptor ttDescriptor = font.Descriptor;
-            FontDescriptor = new PdfFontDescriptor(document, ttDescriptor);
+            FontDescriptor = new PdfFontDescriptor(document, font.Typeface);
             _fontOptions = font.PdfOptions;
             Debug.Assert(_fontOptions != null);
 
-            //cmapInfo = new CMapInfo(null/*ttDescriptor*/);
-            _cmapInfo = new CMapInfo(ttDescriptor);
+            _cmapInfo = new CMapInfo(font.Typeface);
 
-            BaseFont = font.GlyphTypeface.GetBaseName();
+            BaseFont = PdfTypefaceMetrics.GetBaseName(font.Typeface);
 
             BaseFont = PdfFont.CreateEmbeddedFontSubsetName(BaseFont);
             FontDescriptor.FontName = BaseFont;
@@ -122,8 +119,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             base.PrepareForSave();
 
             // Fonts are always embedded.
-            OpenTypeFontface subSet = FontDescriptor._descriptor.FontFace.CreateFontSubSet(_cmapInfo.GlyphIndices, false);
-            byte[] fontData = subSet.FontSource.Bytes;
+            ExportedFont subSet = TypefaceExporter.ExportSubset(FontDescriptor._typeface, _cmapInfo.GlyphIndices.Keys, keepCharacterMap: true);
+            byte[] fontData = subSet.Data.ToArray();
 
             PdfDictionary fontStream = new PdfDictionary(Owner);
             Owner.Internals.AddObject(fontStream);
@@ -142,7 +139,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             LastChar = 255;
             PdfArray width = Widths;
             //width.Elements.Clear();
-            int[] charWidths = PdfSimpleFontWidths.Compute(FontDescriptor._descriptor);
+            int[] charWidths = PdfSimpleFontWidths.Compute(FontDescriptor._typeface);
             for (int idx = 0; idx < 256; idx++)
                 width.Elements.Add(new PdfInteger(charWidths[idx]));
         }

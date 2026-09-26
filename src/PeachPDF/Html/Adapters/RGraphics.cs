@@ -14,7 +14,6 @@ using PeachDrawing.Text.OpenType;
 using PeachDrawing.Text.Shaping;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Raster;
-using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 
