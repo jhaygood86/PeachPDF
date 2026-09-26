@@ -58,8 +58,13 @@ if (brand.TryMatch(new TypefaceQuery(Weight: 600, IsItalic: true), out TypefaceM
 }
 ```
 
-`TryMatch` follows CSS Fonts 4 face matching: the slant first, then the width, then the weight, taking the nearest face
-when none is exact. A face is taken to cover the characters of its `unicode-range` if it has one, and the ones its
+`TryMatch` follows CSS Fonts 4 face matching: the width first, then the slant (upright, italic or oblique), then the
+weight, taking the nearest face when none is exact, so a request for condensed italic text gets the condensed face of a
+family whose condensed face is upright and whose italic face is of normal width, and the lean is faked. Among faces that
+declare an oblique range, the query's `ObliqueAngle` chooses the one that holds the angle or else the nearest; a face
+declared italic beats an oblique range for an italic request with no angle, and the other way round when an angle is
+given. The weight is a number, not a whole number: `350.5` is a weight, and a face whose range holds it is preferred to
+one that only holds 350. A face is taken to cover the characters of its `unicode-range` if it has one, and the ones its
 `cmap` maps otherwise. `Synthesis` says what the caller has to fake because the face falls short: bold when 600 or more
 was asked for and the face is lighter, italic when italic was asked for and the face is upright.
 

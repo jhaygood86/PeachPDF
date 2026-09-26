@@ -416,6 +416,19 @@ namespace PeachPDF.Html.Core.Parse
                 : ParseLength(value.LengthOrCalc!.Value, hundredPercent, box);
 
         /// <summary>
+        /// Parses a plain finite <c>&lt;number&gt;</c> such as <c>350.5</c>, for a keyword-or-value property whose non-keyword side is a
+        /// number (<c>font-weight</c>).
+        /// </summary>
+        public static bool TryParseNumber(string value, out double result)
+        {
+            if (double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out result) && double.IsFinite(result))
+                return true;
+
+            result = 0;
+            return false;
+        }
+
+        /// <summary>
         /// Parses a non-negative <c>&lt;percentage&gt;</c> such as <c>87.5%</c> to the number it states (87.5), for a keyword-or-value
         /// property whose non-keyword side is a percentage of its own scale (<c>font-stretch</c>).
         /// </summary>
