@@ -87,7 +87,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// Whether every ancestor of <paramref name="box"/> is a kind known to carry a break taken inside
         /// it on into the next fragmentainer: an in-flow block or list item that is not a multi-column
         /// container, a block-level flex or grid container, or a block-level table and its row groups,
-        /// rows and cells.
+        /// rows and cells, none of them floated or positioned out of flow.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -105,6 +105,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// boundary, even on a single page.
         /// </para>
         /// <para>
+        /// An absolutely positioned, fixed or running ancestor is excluded for the reason the box itself is
+        /// (<see cref="BreaksInBlockFlow"/>): a break taken anywhere inside it ends the pass, and the in-flow
+        /// content after it is placed back on the page the break left, already emitted. A wrapper inside a
+        /// straddling absolute box lost every paragraph after that box.
+        /// </para>
+        /// <para>
         /// Anything not listed keeps a scroll container inside it monolithic, which is the behaviour
         /// before auto-height scroll containers became fragmentable. So an unlisted placement can only
         /// leave that fix out, never lose content.
@@ -119,6 +125,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                         or Keywords.Table or Keywords.TableRowGroup or Keywords.TableHeaderGroup
                         or Keywords.TableFooterGroup or Keywords.TableRow or Keywords.TableCell
                     && !IsFloat(ancestor)
+                    && !ancestor.IsExcludedFromFlow
                     && !ancestor.EstablishesMultiColumnContext
                     && !IsUnresumableOrthogonalFlow(ancestor)
                     && !AvoidsBreakInside(ancestor);
@@ -351,7 +358,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// Asked of the declaration rather than through <c>CssLayoutEngine.TryGetAspectRatioHeight</c>,
         /// which needs the box's used width and so would answer differently before its width is laid out.
         /// </remarks>
-        private static bool HasPreferredAspectRatio(CssBox box) =>
+        internal static bool HasPreferredAspectRatio(CssBox box) =>
             !string.IsNullOrEmpty(box.AspectRatio)
             && !string.Equals(box.AspectRatio, Keywords.Auto, StringComparison.OrdinalIgnoreCase);
 

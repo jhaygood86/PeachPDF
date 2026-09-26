@@ -194,7 +194,7 @@ namespace PeachPDF.Html.Core
         internal HashSet<CssBox> ScrollContainersThatClip { get; } = [];
 
         /// <summary>
-        /// How many times <see cref="PerformLayout"/> lays the document out again for boxes newly added to
+        /// How many times <see cref="LayoutDocument"/> lays the document out again for boxes newly added to
         /// <see cref="ScrollContainersThatClip"/>. Each attempt can only add boxes, and one is almost always
         /// enough; the bound covers a box that starts clipping only once another is kept whole.
         /// </summary>
@@ -203,7 +203,7 @@ namespace PeachPDF.Html.Core
         private bool _aScrollContainerStartedClipping;
 
         /// <summary>
-        /// Records that <paramref name="box"/>, an <c>overflow: hidden</c> box that broke like a plain block,
+        /// Records that <paramref name="box"/>, a scroll container that broke like a plain block,
         /// clips its content, so the document is laid out again with it kept in one piece. A break among its
         /// clipped lines would end the pass past the box's end and lose the content after it.
         /// </summary>
@@ -2013,6 +2013,10 @@ namespace PeachPDF.Html.Core
             var beforePageAssignment = PageAssignmentSignature();
             var rootWidth = IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width));
 
+            // The scroll containers the original layout kept whole for clipping: the speculative pass lays out at
+            // another geometry and may note more, which the fallback below must not inherit.
+            List<CssBox> clipsBefore = [.. ScrollContainersThatClip];
+
             FragmentTree candidateTree;
             PageGeometry.MaterializedNumberOverrides = overrides;
             try
@@ -2061,6 +2065,8 @@ namespace PeachPDF.Html.Core
             // Fallback-safety: discard the corrected pass and reproduce the original, declined result
             // exactly - one more full layout pass with the override cleared, deterministic because
             // nothing else about the document changed since the pass that produced the ORIGINAL tree.
+            ScrollContainersThatClip.Clear();
+            ScrollContainersThatClip.UnionWith(clipsBefore);
             return await RunLayoutPassForPageCorrection(g, rootWidth);
         }
 
@@ -2454,8 +2460,8 @@ namespace PeachPDF.Html.Core
         /// §2/§4.4</see>).
         /// </summary>
         /// <remarks>
-        /// One attempt of <see cref="LayoutDocument"/>, the atom the three re-layout loops in
-        /// <see cref="PerformLayout"/> and <c>PdfGenerator</c>'s <c>ShrinkToFit</c> pass all share. The named-page registry and page
+        /// One attempt of <see cref="LayoutDocument"/>, which the three re-layout loops in
+        /// <see cref="PerformLayout"/> and <c>PdfGenerator</c>'s <c>ShrinkToFit</c> pass all call. The named-page registry and page
         /// geometry table are reset here, once per invocation and never per fragmentainer — a
         /// document's registrations accumulate <i>across</i> its fragmentainers, and only a whole new
         /// layout invalidates them.

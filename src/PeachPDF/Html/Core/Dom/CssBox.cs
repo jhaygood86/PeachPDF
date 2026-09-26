@@ -6863,10 +6863,10 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private void NoteIfAFragmentingScrollContainerClips()
         {
-            // Only a size that does not grow with the content can clip it; an auto-height box has none.
+            // Only a size that does not grow with the content can clip it; an auto-height box has none. (Both
+            // block insets would too, but only on an absolutely positioned box, which never fragments.)
             var mayCap = CssValueParser.IsValidLength(Height) || CssValueParser.IsValidLength(MaxHeight)
-                         || AspectRatio is { Length: > 0 } and not Keywords.Auto
-                         || (Position.Value is PositionMode.Absolute && Top.Value.IsValue && Bottom.Value.IsValue);
+                         || MonolithicContent.HasPreferredAspectRatio(this);
 
             if (!mayCap
                 || WritingMode.Value is PeachPDF.CSS.WritingMode.VerticalRl or PeachPDF.CSS.WritingMode.VerticalLr

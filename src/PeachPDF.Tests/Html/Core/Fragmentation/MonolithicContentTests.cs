@@ -115,6 +115,9 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         // break inside it would end the pass with that content placed back on an emitted page.
         [InlineData("<div style='position:relative'><div id='t' style='position:absolute;overflow:hidden'>text</div></div>", true)]
         [InlineData("<div><div id='t' style='position:fixed;overflow:auto'>text</div></div>", true)]
+        // The same holds one level up: a scroll container inside a positioned box would take its break inside it.
+        [InlineData("<div style='position:relative'><div style='position:absolute'><div id='t' style='overflow:hidden'>text</div></div></div>", true)]
+        [InlineData("<div><div style='position:fixed'><div><div id='t' style='overflow:hidden'>text</div></div></div></div>", true)]
         public async Task AutoHeightScrollContainer_StaysMonolithicOutsideBlockFlow(string markup, bool expected)
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup));

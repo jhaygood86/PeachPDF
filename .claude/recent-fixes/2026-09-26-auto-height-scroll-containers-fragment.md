@@ -129,6 +129,25 @@ This is an [accepted gap](../accepted-gaps/a-scroll-container-that-clips-past-it
   ([its entry](2026-09-26-a-line-is-claimed-by-the-page-its-line-box-is-on.md)).
   `AnOverflowHiddenCardSplitAtAPageFoot_DrawsItsHeadingOnce` pins it here.
 
+## Review of the split PR
+
+- **An out-of-flow ancestor.** The ancestor allow-list tested display, float, multicol, vertical flow and
+  `break-inside`, but not position, and an absolutely positioned box computes to `display: block`.
+  - A wrapper inside a straddling absolute box fragmented, its break ended the pass inside the absolute
+    box, and every paragraph after that box was lost.
+  - `EveryAncestorCarriesABreak` now rejects `IsExcludedFromFlow`.
+  - `AutoHeightScrollContainerInsideAnAbsoluteBox_LosesNothingAfterIt` fails without it.
+- **The page-correction fallback replay.** `TryApplyDimensionChangingPageCorrection`'s fallback pass
+  inherited the clipping set from its speculative pass, which laid out at another geometry. So it was no
+  longer the exact replay its remarks promise. The set is now snapshotted before that pass and restored
+  before the fallback.
+- **What the `max-height` "page gap" is.** The review read the cap as measured across the page margins,
+  which would keep most straddling capped boxes whole. Measured, it is not: document space is contiguous
+  bands. Only the space a break leaves unused at the page foot counts, which is 4pt for 96pt of content in
+  12pt lines three lines above the boundary. A 100pt cap breaks and a 98pt one is kept whole
+  (`StraddlingScrollContainerCappedByMaxHeight_BreaksOnlyWithRoomForTheSpaceLeftAtThePageFoot`). The docs
+  now say that slack counts.
+
 ## User-visible side effect
 
 An auto-height `overflow: hidden|auto|scroll` card that straddles a page boundary is now split across it

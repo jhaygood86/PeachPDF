@@ -24,7 +24,7 @@ is cleared at the start of each layout (`PerformLayoutOnePass`): a box widened s
 under its cap and must be allowed to break again. A review caught it surviving across layouts.
 
 Breaking it properly needs the capped height to count the block size consumed across fragments (the clamp
-measures `Location.Y + max-height` in document space, which includes the page gap), and the clipped lines to
+measures `Location.Y + max-height` in document space, which includes the space a break leaves unused at the page foot; `StraddlingScrollContainerCappedByMaxHeight_BreaksOnlyWithRoomForTheSpaceLeftAtThePageFoot` pins it), and the clipped lines to
 be laid out without ending the pass for the content after the box.
 
 The retry runs inside every `HtmlContainerInt.LayoutDocument` call, not once after the first: a per-page

@@ -2467,7 +2467,7 @@ var scrollContainersAcrossPagesHtml = $$"""
     is never broken between its lines. Where it would straddle a page boundary, it is carried to the next
     page whole. The box below starts low enough on its page that it would straddle one. A box capped only
     by max-height breaks like the panel above, as a browser prints it, as long as its content fits under
-    the cap.</p>
+    the cap with room to spare for the space a break leaves at the foot of the page.</p>
 
     <h2>A fixed-height box stays whole</h2>
     <div class="capped">

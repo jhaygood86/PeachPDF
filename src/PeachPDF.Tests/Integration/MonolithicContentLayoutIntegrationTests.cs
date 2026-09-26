@@ -399,6 +399,21 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(["H1", "H2"], painted.Order(StringComparer.Ordinal));
         }
 
+        // A wrapper inside an absolutely positioned box that straddles a page: a break taken in the wrapper would
+        // end the pass inside the absolute box, and the paragraphs after it, which it does not displace (CSS 2.1
+        // §9.3.1), would go back on the page the break left. Kept monolithic, the wrapper cannot take one.
+        [Fact]
+        public async Task AutoHeightScrollContainerInsideAnAbsoluteBox_LosesNothingAfterIt()
+        {
+            var lines = string.Join("<br>", Enumerable.Range(1, 20).Select(i => $"X{i}"));
+            var placed = await WordsPlaced(
+                "<p>P1</p><p>P2</p>" +
+                $"<div style='position:absolute;top:100pt;right:0;width:80pt'><div style='overflow:hidden'>{lines}</div></div>" +
+                string.Concat(Enumerable.Range(1, 20).Select(i => $"<p>W{i}</p>")), "W", pageWidth: 300);
+
+            Assert.Equal(Enumerable.Range(1, 20).Select(i => $"W{i}"), placed.Order(WordNumber.Instance));
+        }
+
         private static async Task<List<string>> WordsPlaced(
             string body, string prefix, double pageWidth = 595, double pageHeight = PageHeight, double margin = Margin)
         {
@@ -553,6 +568,24 @@ namespace PeachPDF.Tests.Integration
                 .Where(w => w.Item2.Length > 1 && w.Item2[0] == 'W' && char.IsDigit(w.Item2[1]))
                 .ToList();
             AssertEachDrawnOnceInsideABand(placed, 10);
+        }
+
+        // The cap is measured from the box's top in document space, so the space a break leaves unused at the
+        // page's foot counts against it. Here three of the eight 12pt lines fit above the boundary and the
+        // fourth moves to the next page, leaving 4pt: 96pt of content needs a 100pt cap to break, and with a
+        // 98pt one the last line is clipped, so the box is kept whole.
+        [Theory]
+        [InlineData(98, true)]
+        [InlineData(100, false)]
+        public async Task StraddlingScrollContainerCappedByMaxHeight_BreaksOnlyWithRoomForTheSpaceLeftAtThePageFoot(int cap, bool keptWhole)
+        {
+            var (root, container) = await LayoutBody(
+                $"<div>{Lines("C", 10)}</div><div id='card' style='overflow:hidden;max-height:{cap}pt'>{Lines("X", 8)}</div>" +
+                $"<div>{Lines("W", 5)}</div>");
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.Equal(keptWhole, container.ScrollContainersThatClip.Contains(card));
+            Assert.Equal(keptWhole, container.SlotStartingAt(card.Location.Y) == container.SlotEndingAt(card.ActualBottom));
         }
 
         // A block size fixed some other way than by max-height caps the box too. These do change the card's
