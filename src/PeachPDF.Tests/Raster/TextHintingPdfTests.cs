@@ -9,11 +9,16 @@ namespace PeachPDF.Tests.Raster
     /// </summary>
     public class TextHintingPdfTests
     {
-        private const string PlainPage =
-            "<html><body style=\"margin:10px;font:12px sans-serif\"><p>Hinting does not touch vector text. Hxg 0123456789</p><p style=\"font-size:9px\">Small text, too.</p></body></html>";
+        // The text is set in a bundled TrueType font with hinting programs, named in an @font-face rule: a generic family would be
+        // whatever font the host resolves it to (a system font of macOS or Linux, which may have no programs to run), and the test would
+        // pass or fail with the machine.
+        private static string HintedFace => BundledFonts.FontFaceRule(BundledFonts.Ttf, "HintedTestSans", "font/truetype");
 
-        private const string PageWithRasterText =
-            "<html><body style=\"margin:0;font:11px sans-serif\"><div style=\"filter:grayscale(1);width:200px\">Text drawn into a bitmap: Hxg 0123456789</div></body></html>";
+        private static string PlainPage =>
+            "<html><head><style>" + HintedFace + "</style></head><body style=\"margin:10px;font:12px HintedTestSans\"><p>Hinting does not touch vector text. Hxg 0123456789</p><p style=\"font-size:9px\">Small text, too.</p></body></html>";
+
+        private static string PageWithRasterText =>
+            "<html><head><style>" + HintedFace + "</style></head><body style=\"margin:0;font:11px HintedTestSans\"><div style=\"filter:grayscale(1);width:200px\">Text drawn into a bitmap: Hxg 0123456789</div></body></html>";
 
         private static PdfGenerateConfig Config(TextHinting? hinting) => new PdfGenerateConfig()
         {
@@ -67,8 +72,10 @@ namespace PeachPDF.Tests.Raster
             var plain = await Generate(PageWithRasterText, TextHinting.None);
             var hinted = await Generate(PageWithRasterText, TextHinting.Standard);
 
-            Assert.NotEqual(plain, hinted);
+            // the bitmap is what hinting changes: both files draw text into an image, and the files differ
             Assert.Contains("/Subtype /Image", plain.Replace("/Subtype/Image", "/Subtype /Image"));
+            Assert.Contains("/Subtype /Image", hinted.Replace("/Subtype/Image", "/Subtype /Image"));
+            Assert.NotEqual(plain, hinted);
         }
 
         [Fact]
