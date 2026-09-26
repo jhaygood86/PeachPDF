@@ -183,7 +183,7 @@ namespace PeachPDF.Html.Core.Utils
             // that is or holds a multi-column container, an absolutely positioned first child is still
             // returned, as it always was before #1349: see IsAPrecedingBreakingAbsoluteBox.
             var first = b.ParentBox.Boxes[0];
-            if (first.Position.Value is not PositionMode.Absolute || first.DerivedStyle.ActualDisplay == Keywords.None) return null;
+            if (first.Position.Value is not PositionMode.Absolute || !WasReturnedAtTheWalksEnd(first, includeFloats)) return null;
 
             for (var i = 0; i < index; i++)
             {
@@ -192,6 +192,19 @@ namespace PeachPDF.Html.Core.Utils
 
             return null;
         }
+
+        /// <summary>
+        /// Whether the walk's end check before #1349 returned <paramref name="first"/>, an absolutely positioned
+        /// first child: everything it stepped over except <c>position: absolute</c> still left the first child
+        /// out, so an undisplayed, floated (unless floats were asked for), page-floated, marker or table-grid
+        /// decoration box was not returned. Kept exactly, so the multi-column case keeps that placement.
+        /// </summary>
+        private static bool WasReturnedAtTheWalksEnd(CssBox first, bool includeFloats) =>
+            first.DerivedStyle.ActualDisplay != Keywords.None
+            && (includeFloats || !first.IsFloated)
+            && !first.IsPageFloated
+            && !CssBox.IsOutsideMarker(first)
+            && !first.IsTableGridDecorationBox;
 
         /// <summary>
         /// Whether <paramref name="box"/> is an absolutely positioned box that is or holds a multi-column
