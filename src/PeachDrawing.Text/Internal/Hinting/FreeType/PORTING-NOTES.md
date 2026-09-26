@@ -20,7 +20,49 @@ Only files under the FTL were read for this port. The auto-hinter (`src/autofit`
 
 Every C# file in this directory begins with the header of the FreeType file it derives from, verbatim, followed by a line stating that it was ported to C# for PeachDrawing.Text and modified. The table lists, per C# file, the FreeType file or files it derives from and what changed.
 
-The rows are filled in with the port; see "Deliberate differences" below for what applies to all of them.
+| C# file | Derives from (FreeType 2.14.3) | What changed, beyond "Deliberate differences" below |
+|---|---|---|
+| `FtCalc.cs` | `src/base/ftcalc.c` | `FT_MulFix`, `FT_MulDiv`, `FT_MulDiv_No_Round`, `FT_DivFix`, `FT_MSB` (with `BitOperations.LeadingZeroCount`), `FT_Vector_NormLen` and the pixel-rounding macros of `ftcalc.h` (`FT_PIX_FLOOR`, `FT_PIX_ROUND`, `FT_PIX_CEIL`, `FT_PAD_ROUND`); only the 64-bit-integer code path is ported |
+| `FtTrigon.cs` | `src/base/fttrigon.c` | Only `FT_Hypot` (which is what `FT_Vector_Length` calls) and the CORDIC helpers it needs (`ft_trig_prenorm`, `ft_trig_pseudo_polarize`, `ft_trig_downscale`); nothing else of the file |
+| `TtTypes.cs` | `src/truetype/ttobjs.h`, `ttinterp.h` | The structures the interpreter reads (`TT_GraphicsState`, `TT_CodeRange`, `TT_DefRecord`, zones, the error codes as `TtError`, the version and render-mode enumerations), as C# classes and structs instead of C structs |
+| `TtFace.cs` | `src/truetype/ttobjs.c` (`tt_face_init`, `tt_check_trickyness*`), `ttpload.c` (`tt_face_load_cvt`, `tt_face_load_fpgm`, `tt_face_load_prep`, `tt_face_load_hdmx`, `tt_face_get_device_metrics`), `ttload.c` (`tt_face_load_maxp`, `tt_face_load_loca`), `ttmtx.c` | Tables are read from the font's bytes with span readers instead of a stream, and every offset and length is checked against the table; only the tables the hinter needs are read; the tricky-font list is kept as in `ttobjs.c`; `gasp`, `LTSH` and `VDMX` are not read |
+| `TtSize.cs` | `src/truetype/ttobjs.c` (`tt_size_init`, `tt_size_run_fpgm`, `tt_size_run_prep`, `tt_size_reset`, `tt_size_ready_bytecode`), `ttobjs.h`, `src/base/ftobjs.c` (the ppem and scale computation of `FT_Request_Size`/`FT_Select_Metrics`) | A size is immutable once `prep` has run (see "No shared mutable state"); fpgm and prep are run when the size is created; sizes are rejected outside 1/64 to 65535 pixels |
+| `TtInterp.cs` | `src/truetype/ttinterp.c`, `ttinterp.h` | The execution context, the run loop (`TT_RunIns`), the instruction-length and stack-effect tables, the projection/rounding/move primitives and the `Ins_*` helpers they use, plus the work limit; the function-pointer dispatch became `switch` |
+| `TtInterpInstructions.cs` | `src/truetype/ttinterp.c` | The `Ins_*` instruction implementations, one method per opcode family, in FreeType's order and with its comments; the two deliberate differences in it are the copy-on-write cvt of `WCVTP`/`WCVTF` and the zone clamp of `SHZ` |
+| `TtGload.cs` | `src/truetype/ttgload.c` (`TT_Load_Glyph`, `load_truetype_glyph`, `TT_Process_Simple_Glyph`, `TT_Process_Composite_Glyph`, `TT_Hint_Glyph`, `tt_get_metrics`, `compute_glyph_metrics`, `TT_Get_HMetrics`/`VMetrics`, the phantom-point code), `src/base/ftgloadr.c` | Glyph data is read from the font's bytes with bounds checks; embedded bitmaps, incremental loading and the `FT_LOAD_*` flags other than the ones in "Not ported" are not ported; a variable font's deltas come from this package's `gvar` reader (see "Variable fonts"); the loader returns a hinted point set, tags, contour ends and an advance, not a glyph slot |
+
+The port was made from the C sources of those files only. The files in `Internal/Hinting/` outside this directory (`HintingEngine.cs`, `HintingException.cs`) are PeachDrawing.Text's own code that calls the port and contain nothing of FreeType's.
+
+See "Deliberate differences" below for what applies to all of them.
+
+## Deliberate differences, listed individually
+
+These are the places where the port does something other than FreeType on purpose; everything else was ported as written, and the reference tests (below) show that the result is the same.
+
+* **`SHZ` is clamped to the zone.** FreeType's `Ins_SHZ` bounds its loop by the end of the last contour of `zp2`; in a composite glyph that bound can exceed the number of points of the zone, and FreeType then writes past the end of the array (into allocation slack). The port clamps the loop to the zone's point count, which changes nothing for a glyph FreeType handles inside its arrays.
+* **`WCVTP`/`WCVTF` write a private copy of the cvt.** The size's cvt is shared by every glyph of the size and never changes after `prep`; a glyph program that writes it gets a copy made at the first write.
+* **The twilight zone is copied per glyph** (each glyph starts from what `prep` left) instead of being shared and mutated across glyphs.
+* **A second work limit** on top of the instruction limit (see "Work limit").
+* **Interpreter errors are values, not exceptions**, until a load fails as a whole; the numeric codes are the port's own.
+* **Variable fonts** are approximated (see "Variable fonts" above).
+
+## Tests, and what they derive from
+
+The reference for every claim of exactness is FreeType itself, run over the same fonts, not values worked out by hand or copied from a document:
+
+| Test (in `PeachDrawing.Text.Tests/Hinting/`) | Reference | Derivation |
+|---|---|---|
+| `HintingGoldenTests` | `HintingGolden.json.gz`: 155 (font, mode, size) runs, every glyph, compared point by point in 26.6 | Made by `assets/fonts/generate_hinting_golden.py` with FreeType 2.14.3 (built from the VER-2-14-3 tag as a 32-bit-`long` Windows DLL and driven through `freetype-py`, whose own bundled FreeType is 2.13.2 and is refused by the script). Modes `standard`, `monochrome`, and the two mixed combinations |
+| `HintingOpcodeFixtureTests` | `HintingOpcodes.golden.json.gz` | `HintingOpcodes.ttf` is a synthetic font whose 390 glyphs run random programs that use every opcode, invalid arguments included, and composites of every component-argument form; `generate_hinting_opcode_fixtures.py` writes it and what FreeType makes of each glyph. It is the per-opcode test: it is not derived from a FreeType test file (FreeType has none of this kind) and contains no FreeType code |
+| `FtCalcTests` | `HintingArithmetic.golden.json.gz` | `FT_MulFix`, `FT_DivFix`, `FT_MulDiv` and `FT_Hypot` (`FT_Vector_Length`) called in FreeType with the corner cases of a 32-bit `FT_Long` and random values, by `generate_hinting_arithmetic_golden.py`. The arithmetic edge cases FreeType tests only indirectly |
+| `FreeTypeRegressionTests` | FreeType's `tests/issue-1063/main.c` | Ported: loads glyphs of character codes 59 to 170 and fails on any interpreter error. The font FreeType's test uses (a downloaded third-party font) is not used; the same loop runs over the bundled hinted fonts at four sizes in both interpreter versions. The file keeps the FreeType attribution and FTL notice |
+| `HintingRobustnessTests`, `HostileFonts` | none (own tests) | Hostile fonts built here: scrambled tables, truncated glyphs, infinite loops, stack over- and underflow, deep composites, 30,000-point glyphs, and a seeded random fuzz. FreeType's fuzz corpora were not used, see below |
+
+FreeType's other test material was looked at and deliberately not used:
+
+* **FreeType's `tests/` directory** holds only `issue-1063` in 2.14.3 (ported, above).
+* **`freetype2-testing`** (the fuzzing corpora and harnesses) is distributed under the GNU GPL version 2 only, not the FTL, so nothing of it (harness code or corpus files) was copied into this package. The classes of input its TrueType corpora exercise (broken tables, programs that loop or overflow the stack) are covered by the hostile-font tests above.
+* **`freetype2-demos`** was not available to inspect and is GPL/FTL-mixed; its `ttdebug` step-through tool has no test suite to port.
 
 ## Deliberate differences from FreeType, all files
 

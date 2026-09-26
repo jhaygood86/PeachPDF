@@ -11,15 +11,23 @@ namespace PeachDrawing.Text.Internal.Hinting;
 internal sealed class HintedGlyphResult
 {
     /// <summary>The answer for a glyph that could not be hinted; the caller falls back to the unhinted outline.</summary>
-    public static readonly HintedGlyphResult Failed = new(null, 0);
+    public static readonly HintedGlyphResult Failed = new(null, 0, false);
 
-    public HintedGlyphResult(GlyphOutline? outline, double advance)
+    public HintedGlyphResult(GlyphOutline? outline, double advance, bool isHinted)
     {
         Outline = outline;
         Advance = advance;
+        IsHinted = isHinted;
     }
 
+    /// <summary>Whether the glyph was loaded at all.</summary>
     public bool Succeeded => Outline is not null;
+
+    /// <summary>
+    /// Whether the outline was grid-fitted. It is not when the font's own programs turned hinting off at this size (the CVT program can), in
+    /// which case the outline is only scaled, as FreeType does.
+    /// </summary>
+    public bool IsHinted { get; }
 
     /// <summary>The outline in pixels; empty for a glyph with no ink.</summary>
     public GlyphOutline? Outline { get; }
@@ -77,6 +85,7 @@ internal sealed class HintingEngine
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
+                    NoteFailure(ex);
                     _face = null;
                 }
 
@@ -113,11 +122,12 @@ internal sealed class HintingEngine
         try
         {
             TtHintedGlyph hinted = TtGlyphLoader.Load(size, glyph);
-            return new HintedGlyphResult(ToOutline(hinted, sizeKey.Ppem26Dot6), hinted.Advance / 64.0);
+            return new HintedGlyphResult(ToOutline(hinted, sizeKey.Ppem26Dot6), hinted.Advance / 64.0, hinted.IsHinted);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // HintingException for what is wrong with the glyph, and anything else the interpreter is unhappy about with hostile data
+            NoteFailure(ex);
             return HintedGlyphResult.Failed;
         }
     }
@@ -141,6 +151,7 @@ internal sealed class HintingEngine
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
+                NoteFailure(ex);
                 size = null;
             }
         }
@@ -154,9 +165,9 @@ internal sealed class HintingEngine
     {
         var outline = new GlyphOutline
         {
-            IsGridFitted = true,
+            IsGridFitted = hinted.IsHinted,
             PixelsPerEm = ppem26Dot6 / 64.0,
-            GridFittedAdvance = hinted.Advance / 64.0,
+            GridFittedAdvance = hinted.IsHinted ? hinted.Advance / 64.0 : null,
         };
 
         var points = new List<GlyphOutlineDecoder.RawPoint>();
@@ -176,6 +187,21 @@ internal sealed class HintingEngine
         }
 
         return outline;
+    }
+
+    private static long s_unexpectedFailures;
+
+    /// <summary>
+    /// How many times hinting failed with anything but a <see cref="HintingException"/> (a font's failure to be hinted, which is expected of
+    /// hostile data): an index out of range or the like in the interpreter, which the engine also answers by not hinting but which is a bug.
+    /// The tests watch it.
+    /// </summary>
+    internal static long UnexpectedFailures => System.Threading.Interlocked.Read(ref s_unexpectedFailures);
+
+    private static void NoteFailure(Exception ex)
+    {
+        if (ex is not HintingException)
+            System.Threading.Interlocked.Increment(ref s_unexpectedFailures);
     }
 
     private readonly record struct SizeKey(int Ppem26Dot6, GridFitting Mode);

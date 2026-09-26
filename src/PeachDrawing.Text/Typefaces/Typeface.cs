@@ -171,7 +171,7 @@ namespace PeachDrawing.Text
             }
 
             result = engine.Get(glyph, (int)ppem26Dot6, request.GridFitting);
-            return result.Succeeded;
+            return result.Succeeded && result.IsHinted;
         }
 
         private static void ValidateRequest(in OutlineRequest request)

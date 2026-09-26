@@ -15,6 +15,7 @@
 
 using PeachDrawing.Text.Internal.Fonts.OpenType.Variations;
 using PeachDrawing.Text.Outlines;
+using System;
 using System.Collections.Generic;
 
 namespace PeachDrawing.Text.Internal.Fonts.OpenType
@@ -63,7 +64,16 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             // recursion step, so one whole (possibly multi-component composite) glyph read is atomic.
             lock (face.SyncRoot)
             {
-                DecodeInto(face, glyphIndex, outline, 0, variation);
+                try
+                {
+                    DecodeInto(face, glyphIndex, outline, 0, variation);
+                }
+                catch (IndexOutOfRangeException)
+                {
+                    // Glyph data that reaches past the end of the font (the reads go through the shared cursor, which is bounded
+                    // only by the font's bytes): the font is damaged, and the glyph has no outline.
+                    outline = new GlyphOutline();
+                }
             }
             return !outline.IsEmpty;
         }

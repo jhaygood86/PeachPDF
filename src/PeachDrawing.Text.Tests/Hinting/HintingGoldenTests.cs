@@ -1,6 +1,5 @@
 using PeachDrawing.Text.Internal.Hinting;
 using PeachDrawing.Text.Internal.Hinting.FreeType;
-using PeachDrawing.Text.Tests.Hinting;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -14,12 +13,7 @@ namespace PeachDrawing.Text.Tests.Hinting
     /// </summary>
     public class HintingGoldenTests
     {
-        private static readonly Lazy<GoldenFile> Golden = new(() =>
-        {
-            using var stream = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "HintingGolden.json.gz"));
-            using var zip = new GZipStream(stream, CompressionMode.Decompress);
-            return JsonSerializer.Deserialize<GoldenFile>(zip)!;
-        });
+        private static readonly Lazy<GoldenFile> Golden = new(() => HintingGoldenData.Load<GoldenFile>("HintingGolden.json.gz"));
 
         public static TheoryData<string, string, int> Runs()
         {
@@ -38,6 +32,14 @@ namespace PeachDrawing.Text.Tests.Hinting
             Assert.Equal("VER-2-14-3", Golden.Value.FreeType.Tag);
         }
 
+        [Fact]
+        public void TheReferenceIsNotVacuous()
+        {
+            // a comparison over nothing would pass whatever the port does
+            int glyphs = Golden.Value.Fonts.Sum(f => f.Modes.Values.Sum(runs => runs.Sum(r => r.Glyphs.Count)));
+            Assert.True(glyphs > 8000, $"only {glyphs} glyph loads in the reference");
+        }
+
         [Theory]
         [MemberData(nameof(Runs))]
         public void HintedOutlinesEqualFreeTypesExactly(string fontFile, string mode, int size26Dot6)
@@ -45,17 +47,35 @@ namespace PeachDrawing.Text.Tests.Hinting
             var font = Golden.Value.Fonts.Single(f => f.File == fontFile);
             var run = font.Modes[mode].Single(r => r.Size == size26Dot6);
 
-            var (version, renderMode) = mode switch
-            {
-                "standard" => (TtInterpreterVersion.V40, TtRenderMode.Normal),
-                "monochrome" => (TtInterpreterVersion.V35, TtRenderMode.Mono),
-                "v40mono" => (TtInterpreterVersion.V40, TtRenderMode.Mono),
-                "v35normal" => (TtInterpreterVersion.V35, TtRenderMode.Normal),
-                _ => throw new ArgumentOutOfRangeException(nameof(mode)),
-            };
-
             var face = HintingFixtures.Face(fontFile);
-            var size = TtSize.Create(face, size26Dot6, version, renderMode);
+            HintingGoldenData.CompareRun(face, fontFile, mode, run);
+        }
+    }
+
+    /// <summary>The reference data of the hinting tests, and the comparison of a run of the port with it.</summary>
+    internal static class HintingGoldenData
+    {
+        public static T Load<T>(string fileName)
+        {
+            using var stream = File.OpenRead(Path.Combine(AppContext.BaseDirectory, fileName));
+            using var zip = new GZipStream(stream, CompressionMode.Decompress);
+            return JsonSerializer.Deserialize<T>(zip)!;
+        }
+
+        public static (TtInterpreterVersion Version, TtRenderMode Mode) ModeOf(string mode) => mode switch
+        {
+            "standard" => (TtInterpreterVersion.V40, TtRenderMode.Normal),
+            "monochrome" => (TtInterpreterVersion.V35, TtRenderMode.Mono),
+            "v40mono" => (TtInterpreterVersion.V40, TtRenderMode.Mono),
+            "v35normal" => (TtInterpreterVersion.V35, TtRenderMode.Normal),
+            _ => throw new ArgumentOutOfRangeException(nameof(mode)),
+        };
+
+        /// <summary>Hints every glyph of a run with the port and asserts that each equals what FreeType made of it.</summary>
+        public static void CompareRun(TtFace face, string fontFile, string mode, RunGolden run)
+        {
+            var (version, renderMode) = ModeOf(mode);
+            var size = TtSize.Create(face, run.Size, version, renderMode);
 
             var problems = new List<string>();
             foreach (var (glyphText, expected) in run.Glyphs)
@@ -77,15 +97,13 @@ namespace PeachDrawing.Text.Tests.Hinting
                 }
 
                 var actual = TtGlyphLoader.Load(size, glyph);
-                if (actual.ProgramError != 0)
-                    problems.Add($"glyph {glyph}: the glyph program stopped with error {actual.ProgramError}");
                 Compare(problems, glyph, expected, actual);
                 if (problems.Count > 12)
                     break;
             }
 
             Assert.True(problems.Count == 0,
-                $"{fontFile} {mode} {size26Dot6 / 64.0} ppem: {problems.Count} mismatch(es)\n" + string.Join("\n", problems.Take(12)));
+                $"{fontFile} {mode} {run.Size / 64.0} ppem: {problems.Count} mismatch(es)\n" + string.Join("\n", problems.Take(12)));
         }
 
         private static void Compare(List<string> problems, int glyph, GlyphGolden expected, TtHintedGlyph actual)
@@ -106,7 +124,8 @@ namespace PeachDrawing.Text.Tests.Hinting
             {
                 if (actual.X[i] != expected.X[i] || actual.Y[i] != expected.Y[i])
                 {
-                    problems.Add($"glyph {glyph} point {i}: ({actual.X[i]}, {actual.Y[i]}), FreeType has ({expected.X[i]}, {expected.Y[i]})");
+                    problems.Add($"glyph {glyph} point {i}: ({actual.X[i]}, {actual.Y[i]}), FreeType has ({expected.X[i]}, {expected.Y[i]})" +
+                        (actual.ProgramError != 0 ? $" [the glyph program stopped with error {actual.ProgramError}]" : ""));
                     break;
                 }
 
@@ -117,63 +136,73 @@ namespace PeachDrawing.Text.Tests.Hinting
                 }
             }
         }
+    }
 
-        private sealed class GoldenFile
-        {
-            [JsonPropertyName("freetype")]
-            public FreeTypeInfo FreeType { get; set; } = new();
+    internal sealed class GoldenFile
+    {
+        [JsonPropertyName("freetype")]
+        public FreeTypeInfo FreeType { get; set; } = new();
 
-            [JsonPropertyName("fonts")]
-            public List<FontGolden> Fonts { get; set; } = [];
-        }
+        [JsonPropertyName("fonts")]
+        public List<FontGolden> Fonts { get; set; } = [];
+    }
 
-        private sealed class FreeTypeInfo
-        {
-            [JsonPropertyName("version")]
-            public string Version { get; set; } = "";
+    internal sealed class FreeTypeInfo
+    {
+        [JsonPropertyName("version")]
+        public string Version { get; set; } = "";
 
-            [JsonPropertyName("tag")]
-            public string Tag { get; set; } = "";
-        }
+        [JsonPropertyName("tag")]
+        public string Tag { get; set; } = "";
+    }
 
-        private sealed class FontGolden
-        {
-            [JsonPropertyName("file")]
-            public string File { get; set; } = "";
+    internal sealed class FontGolden
+    {
+        [JsonPropertyName("file")]
+        public string File { get; set; } = "";
 
-            [JsonPropertyName("modes")]
-            public Dictionary<string, List<RunGolden>> Modes { get; set; } = [];
-        }
+        [JsonPropertyName("modes")]
+        public Dictionary<string, List<RunGolden>> Modes { get; set; } = [];
+    }
 
-        private sealed class RunGolden
-        {
-            [JsonPropertyName("size")]
-            public int Size { get; set; }
+    /// <summary>The reference of a fixture that is one font: what FreeType made of every glyph, per mode.</summary>
+    internal sealed class FixtureGolden
+    {
+        [JsonPropertyName("freetype")]
+        public FreeTypeInfo FreeType { get; set; } = new();
 
-            [JsonPropertyName("glyphs")]
-            public Dictionary<string, GlyphGolden> Glyphs { get; set; } = [];
-        }
+        [JsonPropertyName("modes")]
+        public Dictionary<string, List<RunGolden>> Modes { get; set; } = [];
+    }
 
-        private sealed class GlyphGolden
-        {
-            [JsonPropertyName("a")]
-            public int Advance { get; set; }
+    internal sealed class RunGolden
+    {
+        [JsonPropertyName("size")]
+        public int Size { get; set; }
 
-            [JsonPropertyName("e")]
-            public int[] Ends { get; set; } = [];
+        [JsonPropertyName("glyphs")]
+        public Dictionary<string, GlyphGolden> Glyphs { get; set; } = [];
+    }
 
-            [JsonPropertyName("x")]
-            public int[] X { get; set; } = [];
+    internal sealed class GlyphGolden
+    {
+        [JsonPropertyName("a")]
+        public int Advance { get; set; }
 
-            [JsonPropertyName("y")]
-            public int[] Y { get; set; } = [];
+        [JsonPropertyName("e")]
+        public int[] Ends { get; set; } = [];
 
-            [JsonPropertyName("t")]
-            public int[] Tags { get; set; } = [];
+        [JsonPropertyName("x")]
+        public int[] X { get; set; } = [];
 
-            [JsonPropertyName("err")]
-            public int Error { get; set; }
-        }
+        [JsonPropertyName("y")]
+        public int[] Y { get; set; } = [];
+
+        [JsonPropertyName("t")]
+        public int[] Tags { get; set; } = [];
+
+        [JsonPropertyName("err")]
+        public int Error { get; set; }
     }
 
     /// <summary>The bundled fonts as the hinting engine reads them.</summary>

@@ -93,6 +93,7 @@ static PdfGenerateConfig ClonePdfAConfig(PdfGenerateConfig source, DateTimeOffse
     DownscaleQuality = source.DownscaleQuality,
     MaximumDownscaleMultiplier = source.MaximumDownscaleMultiplier,
     RasterizationDpi = source.RasterizationDpi,
+    TextHinting = source.TextHinting,
     MaxRasterPixels = source.MaxRasterPixels,
     MarginTop = source.MarginTop,
     MarginBottom = source.MarginBottom,
@@ -12057,6 +12058,61 @@ var cssFilterRasterHtml = "<!DOCTYPE html><html><head>" + FilterCss + "</head><b
 await SaveShowcaseAsync("css_filter_raster", "Graphics & Effects", "CSS Filter (Rasterized)",
     "filter: blur(), grayscale(), sepia(), saturate(), and hue-rotate() - rendered into a bitmap at the configured RasterizationDpi and embedded at exactly the element's own size, while the rest of the page stays vector.",
     cssFilterRasterHtml, pdfConfig);
+
+// --- Hinted raster text: the same page twice, with TextHinting off and on, at a resolution low enough for the grid to show ---
+
+// A bundled, hinted webfont, so the page renders the same on every machine.
+var hintingFontUri = "data:font/woff;base64," +
+    Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "LiberationSans-Regular.woff")));
+
+var textHintingCss = $$"""
+    <style>
+    @font-face { font-family: 'HintedSans'; src: url('{{hintingFontUri}}') format('woff'); }
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { margin: 0 0 0.9em; color: #555; font-size: 8pt }
+    .raster { filter: grayscale(1); margin-bottom: 8px; font-family: 'HintedSans', Arial, sans-serif }
+    .cap { font-size: 6.5pt; color: #666; margin: 10px 0 2px }
+    </style>
+    """;
+
+string TextHintingHtml(string intro)
+{
+    var html = new System.Text.StringBuilder("<!DOCTYPE html><html><head>" + textHintingCss + "</head><body><h1>Text drawn into bitmaps</h1><p class=\"intro\">" + intro + "</p>");
+    foreach (var px in new[] { 8, 9, 10, 11, 12, 13, 14, 16, 20 })
+    {
+        html.Append($"<div class=\"cap\">{px}px</div>");
+        html.Append($"<div class=\"raster\" style=\"font-size:{px}px\">Hamburgefonstiv: HEH illicit 0123456789 The quick brown fox jumps over the lazy dog</div>");
+    }
+
+    return html.Append("</body></html>").ToString();
+}
+
+var textHintingRasterConfig = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    PageOrientation = PageOrientation.Portrait,
+    ShrinkToFit = true,
+    RasterizationDpi = 72,
+    TextHinting = TextHinting.Standard
+};
+
+await SaveShowcaseAsync("text_hinting_standard", "Graphics & Effects", "Hinted Raster Text",
+    "PdfGenerateConfig.TextHinting = Standard: text that has to be drawn into a bitmap (here under filter: grayscale(1), at a deliberately low RasterizationDpi of 72) follows the font's own TrueType hinting, so stems and baselines land on pixel edges. The PDF's vector text is not affected.",
+    TextHintingHtml("The lines below are rasterized at 72 dpi, so the pixel grid is visible. Compare with the same page without hinting."),
+    textHintingRasterConfig);
+
+await SaveShowcaseAsync("text_hinting_none", "Graphics & Effects", "Raster Text Without Hinting",
+    "The same page as the hinted raster text showcase with TextHinting left at its default, None: outlines are only scaled, so edges cut through pixels and small text is softer.",
+    TextHintingHtml("The lines below are rasterized at 72 dpi, so the pixel grid is visible. Compare with the same page with hinting."),
+    new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PageOrientation = PageOrientation.Portrait,
+        ShrinkToFit = true,
+        RasterizationDpi = 72
+    });
 
 // --- Raster shadows showcase (text-shadow, Gaussian box-shadow, silhouette drop-shadow) ---
 

@@ -1451,6 +1451,12 @@ internal sealed partial class TtExecContext
         else
             limit = 0;
 
+        // In a component of a composite glyph FreeType takes the end of the last contour, which is counted from the start of the whole
+        // outline, as a count from the start of the zone, and so moves points past the zone: into memory of the outline that holds no
+        // point (the loader overwrites it when it loads the next component). Nothing there is ever read, so the loop stops at the zone.
+        if (limit > Zp2.NPoints)
+            limit = (ushort)Zp2.NPoints;
+
         if (ChargeWork(limit))
             return;
 

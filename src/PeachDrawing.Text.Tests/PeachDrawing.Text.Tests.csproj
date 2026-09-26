@@ -112,6 +112,15 @@
     <None Include="..\..\assets\fonts\HintingGolden.json.gz" Link="HintingGolden.json.gz">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\HintingArithmetic.golden.json.gz" Link="HintingArithmetic.golden.json.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingOpcodes.ttf" Link="HintingOpcodes.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingOpcodes.golden.json.gz" Link="HintingOpcodes.golden.json.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\..\assets\fonts\LiberationSerif-Regular.woff" Link="LiberationSerif-Regular.woff">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

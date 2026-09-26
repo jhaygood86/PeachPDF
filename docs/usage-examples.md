@@ -821,6 +821,26 @@ A value outside 72 to 1200 throws an `ArgumentOutOfRangeException` when generati
 
 Text inside a rasterized HTML element is drawn into the bitmap and also kept as invisible, positioned text over it, so it stays selectable and searchable. A document targeting PDF/A-1 or PDF/X-1a/X-3 is rejected if it uses one of these effects, unless it asks for [flattening](#flattening-transparency-for-pdfa-1-and-pdfx) — see [PDF/A-1 and transparency](#pdfa-1-and-transparency).
 
+### Sharper small text in bitmaps: `TextHinting`
+
+Text drawn into one of these bitmaps is, by default, the font's design scaled to the bitmap's pixels. At a low `RasterizationDpi` and a small size, that puts edges through the middle of pixels and softens the text. `TextHinting` asks for the font's own TrueType hinting instructions to be run, so stems, x-heights and baselines land on whole pixels:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    RasterizationDpi = 96,
+    TextHinting = TextHinting.Standard,   // None (the default), Standard or Monochrome
+};
+```
+
+- `Standard` fits glyphs vertically and keeps their horizontal design, which suits anti-aliased text. `Monochrome` fits both directions, as for text drawn without anti-aliasing. `None` changes nothing.
+- It affects **only the raster backend**. The PDF's own text is the embedded font, drawn by the viewer at whatever size it likes, and is never hinted; a document that has no rasterized regions is byte-for-byte the same with any value. Layout is never affected either: measurements and line breaks use the unhinted metrics, so turning hinting on cannot move a line.
+- A piece of text is hinted only when it is drawn without rotation, skew or perspective (its size on the bitmap is then a single number of pixels per em, which is what hinting works on) and the font is a TrueType font with instructions; any other text in the bitmap is drawn unhinted. A font whose instructions fail is treated the same way, so a broken font never breaks a page.
+- It matters most at 72 to 150 dpi. At 300 dpi and above, glyphs are large enough in pixels that the difference is hard to see.
+
+A value that is not one of the three throws an `ArgumentOutOfRangeException` when generation starts.
+
 ## Flattening transparency for PDF/A-1 and PDF/X
 
 PDF/A-1 and PDF/X-1a/X-3 forbid transparency, which CSS uses everywhere: `opacity`, `rgba()` colours, gradients with an alpha stop, PNGs with an alpha channel, `mix-blend-mode`, blurred shadows, `filter`, SVG masks and filters. By default a document that targets one of these levels and uses any of it is rejected. `TransparencyPolicy.Flatten` turns the rejection into a conversion:
