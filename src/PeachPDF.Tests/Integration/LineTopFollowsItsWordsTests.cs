@@ -1,5 +1,6 @@
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
@@ -16,7 +17,15 @@ namespace PeachPDF.Tests.Integration
     public class LineTopFollowsItsWordsTests
     {
         private const string Style =
-            "<style>@page{size:300pt 200pt;margin:20pt} body{margin:0;font:10pt/12pt Arial} p{margin:0}</style>";
+            "<style>@page{size:300pt 200pt;margin:20pt} body{margin:0;font:10pt/12pt " + TestFont + "} p{margin:0}</style>";
+
+        // A bundled font, so the widths that decide where lines wrap and pages break are the same on every
+        // machine rather than whatever each one substitutes for a system font.
+        private const string TestFont = "LineTopTestSans";
+
+        private static Task<(CssBox Root, HtmlContainerInt Container)> Layout(string html, double pageWidth, double pageHeight) =>
+            LayoutHarness.LayoutAsync(html, pageWidth, pageHeight,
+                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, TestFont));
 
         // A heading in 13pt type on the body's 12pt line has a negative half-leading, so its ink rises
         // above its line box (CSS 2.1 §10.8.1). A break moved the line to the next page's top, its ink
@@ -37,7 +46,7 @@ namespace PeachPDF.Tests.Integration
             var body = "<p style='margin:0 0 6pt'>fill0</p>" + Card(1) + Card(2) + Card(3);
             var html = $"<!DOCTYPE html><html><head>{Style}</head><body>{body}</body></html>";
 
-            var (_, container) = await LayoutHarness.LayoutAsync(html, 300, 200);
+            var (_, container) = await Layout(html, 300, 200);
             var painted = PaintedStrings(container).Where(t => t.Length == 2 && t[0] == 'H' && char.IsDigit(t[1]));
 
             // Once each: the page the line left claiming it too would draw it twice.
@@ -55,7 +64,7 @@ namespace PeachPDF.Tests.Integration
             var html = $"<!DOCTYPE html><html><head>{Style}</head><body><table><tr>"
                        + $"<td id='cell' style='vertical-align:{align};height:100pt'>text</td></tr></table></body></html>";
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html, 300, 200);
+            var (root, _) = await Layout(html, 300, 200);
             var cell = LayoutHarness.FindById(root, "cell")!;
             var line = Assert.Single(cell.LineBoxes);
             var word = Assert.Single(line.Words);
@@ -74,8 +83,9 @@ namespace PeachPDF.Tests.Integration
         [InlineData("display:flex")]
         public async Task AnInlineBlockInAnEngineItem_IsDrawnOnceAtItsLine(string containerCss)
         {
-            // The review's minimized fuzz document (seed 226), verbatim: the word lengths and the grey image
-            // decide where the page break falls, and a simplified copy no longer reached the stale line.
+            // The review's minimized fuzz document (seed 226), verbatim and in Arial: the text widths decide
+            // where the item's line wraps, and neither a simplified copy nor the bundled font (swept over page
+            // height and item width) reached the stale line. The font-independent test of the rule is below.
             const string image = "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
             var html = "<!DOCTYPE html><html><head><style>body{margin:0;font:10pt/1.2 Arial}</style></head><body>" +
                        $"<div style='{containerCss}'>z226_26 <div style='width:60%;border:1px dotted #333'>" +
@@ -85,7 +95,7 @@ namespace PeachPDF.Tests.Integration
                        "<span id='ib' style='display:inline-block;font-size:26pt;line-height:0;border:1px solid #888'>z226_38</span>" +
                        "</div></div></body></html>";
 
-            var (root, container) = await LayoutHarness.LayoutAsync(html, 240, 150);
+            var (root, container) = await Layout(html, 240, 150);
             var painted = PaintedStrings(container).Where(t => t is "z226_38");
             var box = LayoutHarness.FindById(root, "ib")!;
             var word = LayoutHarness.Descendants(box).SelectMany(b => b.Words).Single(w => w.Text == "z226_38");
@@ -104,7 +114,7 @@ namespace PeachPDF.Tests.Integration
                        "<span style='font-size:30pt'>Big</span> " +
                        "<span id='ib' style='display:inline-block;border:1px solid'><div>small</div></span></p></body></html>";
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html, 300, 200);
+            var (root, _) = await Layout(html, 300, 200);
             var box = LayoutHarness.FindById(root, "ib")!;
             var line = LayoutHarness.Descendants(box).SelectMany(b => b.LineBoxes).First(l => l.Words.Any(w => w.Text == "small"));
             var word = line.Words.First(w => w.Text == "small");
@@ -113,6 +123,27 @@ namespace PeachPDF.Tests.Integration
             Assert.True(box.Location.Y > paragraph.Location.Y + 5, "the fixture must move the inline-block down");
             Assert.NotNull(line.FlowTop);
             Assert.InRange(word.Top - line.FlowTop!.Value, -2, 2);
+        }
+
+        // The rule the fix above rests on, independent of fonts: a line box whose words have all been flowed onto
+        // another line no longer gives an inline-block its baseline. The document above triggers it only with
+        // Arial's widths; here the stale state is made directly, by pointing the line's words at another line.
+        [Fact]
+        public async Task ALineWhoseWordsLiveOnAnotherLine_IsNotAnInlineBlocksBaseline()
+        {
+            var html = $"<!DOCTYPE html><html><head>{Style}</head><body><p id='p'>a " +
+                       "<span id='ib' style='display:inline-block'><div>x</div></span></p></body></html>";
+
+            var (root, _) = await Layout(html, 300, 200);
+            var box = LayoutHarness.FindById(root, "ib")!;
+            var outer = LayoutHarness.FindById(root, "p")!.LineBoxes[0];
+            var own = LayoutHarness.Descendants(box).SelectMany(b => b.LineBoxes).Single(l => l.Words.Any(w => w.Text == "x"));
+
+            Assert.Equal(own.BaselineY, CssLayoutEngine.LastOwnLineBaselineOf(box));
+
+            foreach (var word in own.Words) word.Line = outer;
+
+            Assert.Null(CssLayoutEngine.LastOwnLineBaselineOf(box));
         }
 
         // Every string drawn, on every page, with some part of it inside all the rectangle clips in force
