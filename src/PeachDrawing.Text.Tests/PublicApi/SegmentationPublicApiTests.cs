@@ -1,0 +1,185 @@
+using PeachDrawing.Text.Unicode;
+
+namespace PeachDrawing.Text.Tests.PublicApi
+{
+    /// <summary>
+    /// The segmentation entry points as a consumer outside the assembly calls them: the shape of the answers, the edges (empty text,
+    /// surrogate pairs) and the CSS tailorings of the line breaker. The rules themselves are checked line by line against Unicode's
+    /// conformance files in <c>SegmentationConformanceTests</c>.
+    /// </summary>
+    public class SegmentationPublicApiTests
+    {
+        private const string Grin = "\U0001F600";
+
+        private static int[] Breaks(string text, LineBreakOptions options = default)
+        {
+            var opportunities = LineBreaker.FindOpportunities(text, options);
+            return opportunities
+                .Select((o, i) => (o, i))
+                .Where(x => x.i > 0 && x.o != LineBreakOpportunity.Prohibited)
+                .Select(x => x.i)
+                .ToArray();
+        }
+
+        [Fact]
+        public void EmptyText_HasNoSegmentBoundaries_AndOneMandatoryLineBreak()
+        {
+            Assert.Empty(Segmenter.FindGraphemeBoundaries(""));
+            Assert.Empty(Segmenter.FindWordBoundaries(""));
+            Assert.Empty(Segmenter.FindSentenceBoundaries(""));
+            Assert.Equal([LineBreakOpportunity.Mandatory], LineBreaker.FindOpportunities(""));
+        }
+
+        [Fact]
+        public void GraphemeBoundaries_KeepACharacterWithItsAccentsAndAFlagWhole()
+        {
+            Assert.Equal([0, 2, 3], Segmenter.FindGraphemeBoundaries("éx"));
+            Assert.Equal([0, 4, 8], Segmenter.FindGraphemeBoundaries("\U0001F1FA\U0001F1F8\U0001F1E9\U0001F1EA"));
+            Assert.Equal([0, 2, 4], Segmenter.FindGraphemeBoundaries(Grin + Grin));
+        }
+
+        [Fact]
+        public void WordBoundaries_SeparatePunctuationAndSpacesFromWords()
+        {
+            Assert.Equal([0, 5, 6, 7, 12], Segmenter.FindWordBoundaries("Hello, world"));
+            Assert.Equal([0, 5], Segmenter.FindWordBoundaries("can’t"));
+            Assert.Equal([0, 4], Segmenter.FindWordBoundaries("3.14"));
+        }
+
+        [Fact]
+        public void SentenceBoundaries_FollowTerminatorsButNotAbbreviationsBeforeLowercase()
+        {
+            Assert.Equal([0, 4, 7], Segmenter.FindSentenceBoundaries("Hi. Yo."));
+            Assert.Equal([0, 20], Segmenter.FindSentenceBoundaries("It costs 3.5 dollars"));
+        }
+
+        [Fact]
+        public void SegmentBoundaries_NeverFallInsideASurrogatePair()
+        {
+            foreach (var boundaries in new[]
+            {
+                Segmenter.FindGraphemeBoundaries("a" + Grin + "b"),
+                Segmenter.FindWordBoundaries("a" + Grin + "b"),
+                Segmenter.FindSentenceBoundaries("a" + Grin + "b"),
+            })
+            {
+                Assert.DoesNotContain(2, boundaries);
+            }
+
+            Assert.Equal(LineBreakOpportunity.Prohibited, LineBreaker.FindOpportunities("a" + Grin + "b")[2]);
+        }
+
+        [Fact]
+        public void LineBreaks_AreAllowedAfterSpaces_AndMandatoryAfterNewlines()
+        {
+            var text = LineBreaker.FindOpportunities("ab cd\nef");
+
+            Assert.Equal(LineBreakOpportunity.Prohibited, text[0]);
+            Assert.Equal(LineBreakOpportunity.Prohibited, text[1]);
+            Assert.Equal(LineBreakOpportunity.Prohibited, text[2]);      // before the space
+            Assert.Equal(LineBreakOpportunity.Allowed, text[3]);         // after it
+            Assert.Equal(LineBreakOpportunity.Prohibited, text[5]);      // before the newline
+            Assert.Equal(LineBreakOpportunity.Mandatory, text[6]);       // after it
+            Assert.Equal(LineBreakOpportunity.Mandatory, text[^1]);      // the end of the text
+        }
+
+        [Fact]
+        public void LineBreaks_TreatCrLfAsOneNewline()
+        {
+            Assert.Equal([3], Breaks("a\r\nb").Where(i => i < 4).ToArray());
+        }
+
+        [Fact]
+        public void LineBreaks_BreakBetweenIdeographsButNotWithinWords()
+        {
+            Assert.Equal([1, 2, 3], Breaks("日本語"));
+            Assert.Equal([3], Breaks("abc"));     // only the end of the text
+        }
+
+        [Fact]
+        public void WordBreak_BreakAll_AllowsBreaksBetweenLettersAndDigits()
+        {
+            var options = new LineBreakOptions { WordBreak = WordBreakMode.BreakAll };
+
+            Assert.Equal([1, 2, 3], Breaks("abc", options));
+            Assert.Equal([1, 2, 3], Breaks("123", options));
+        }
+
+        [Fact]
+        public void WordBreak_KeepAll_ForbidsBreaksBetweenIdeographsAndHangul()
+        {
+            var options = new LineBreakOptions { WordBreak = WordBreakMode.KeepAll };
+
+            Assert.Equal([3], Breaks("日本語", options));
+            Assert.Equal([3], Breaks("한글말", options));
+            // The space still lets a line end, and punctuation still binds as the rules say.
+            Assert.Equal([3, 5], Breaks("日本 語文", options));
+        }
+
+        [Fact]
+        public void Strictness_DecidesWhetherASmallKanaMayStartALine()
+        {
+            const string text = "きゅ";     // ki, small yu
+
+            Assert.Equal([2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Strict }));
+            Assert.Equal([2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Normal }));
+            Assert.Equal([2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Auto }));
+            Assert.Equal([1, 2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Loose }));
+        }
+
+        [Fact]
+        public void Strictness_NormalAndLoose_LetAWaveDashStartALine()
+        {
+            const string text = "日〜";     // a kanji and the wave dash
+
+            Assert.Equal([2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Strict }));
+            Assert.Equal([1, 2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Normal }));
+            Assert.Equal([1, 2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Loose }));
+        }
+
+        [Fact]
+        public void Strictness_Loose_LetsAHyphenStartALineOnlyAfterAnIdeograph()
+        {
+            var loose = new LineBreakOptions { Strictness = LineBreakStrictness.Loose };
+
+            Assert.Equal([1, 2], Breaks("日‐", loose));
+            Assert.Equal([2], Breaks("a‐", loose));
+            Assert.Equal([2], Breaks("日‐", new LineBreakOptions { Strictness = LineBreakStrictness.Normal }));
+        }
+
+        [Fact]
+        public void Strictness_Loose_LetsAnIterationMarkStartALine()
+        {
+            const string text = "日々";     // a kanji and the iteration mark
+
+            Assert.Equal([2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Normal }));
+            Assert.Equal([1, 2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Loose }));
+        }
+
+        [Fact]
+        public void Strictness_Anywhere_BreaksAtEveryGraphemeBoundaryAndOnlyThere()
+        {
+            var options = new LineBreakOptions { Strictness = LineBreakStrictness.Anywhere };
+
+            // Even a no-break space and a word joiner no longer hold a line together.
+            Assert.Equal([1, 2, 3], Breaks("a b", options));
+            Assert.Equal([1, 2, 3], Breaks("a⁠b", options));
+
+            // But an accent stays with its letter and a surrogate pair stays whole.
+            Assert.Equal([2, 3], Breaks("éx", options));
+            Assert.Equal([2, 4], Breaks(Grin + Grin, options));
+
+            // A hard break stays mandatory.
+            Assert.Equal(LineBreakOpportunity.Mandatory, LineBreaker.FindOpportunities("a\nb", options)[2]);
+        }
+
+        [Fact]
+        public void LineBreakOptions_Default_IsNormalWithNoWordBreakTailoring()
+        {
+            var options = default(LineBreakOptions);
+
+            Assert.Equal(WordBreakMode.Normal, options.WordBreak);
+            Assert.Equal(LineBreakStrictness.Auto, options.Strictness);
+        }
+    }
+}

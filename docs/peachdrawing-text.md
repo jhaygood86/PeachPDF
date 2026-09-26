@@ -25,7 +25,7 @@ dotnet add package PeachDrawing.Text
 - **Outlines and colour:** glyph outlines for `glyf` and CFF, COLR v0 and v1 with CPAL, and CBDT/CBLC and sbix bitmaps.
 - **Mathematics:** the `MATH` table: layout constants, per-glyph italics corrections and accent attachment, and the
   variants and assemblies of stretchy glyphs.
-- **Unicode:** the Unicode Bidirectional Algorithm, script itemization, vertical orientation, emoji presentation, and
+- **Unicode:** the Unicode Line Breaking Algorithm (UAX #14) and the grapheme cluster, word and sentence boundaries of UAX #29, all checked against the Unicode Consortium's conformance files; the Unicode Bidirectional Algorithm, script itemization, vertical orientation, emoji presentation, and
   TeX/Liang hyphenation for 73 languages.
 
 ## Fonts: `FontSet`, families and matching
@@ -239,6 +239,43 @@ What a font descriptor records about a face comes from the members you already h
 
 Each entry point is a static class named for the algorithm or property it implements, and takes plain strings, runes
 and arrays.
+
+### Line breaking and text segmentation
+
+`LineBreaker.FindOpportunities` implements the Unicode Line Breaking Algorithm ([UAX #14](https://www.unicode.org/reports/tr14/)).
+It answers for every UTF-16 index of a paragraph, and one past its end: `Prohibited`, `Allowed` or `Mandatory` for a line
+that would end just before that character. Where you break is still yours to decide: whether the space at a break stays on
+the line, how a word too long for a line is split, and where hyphenation adds breaks.
+
+```csharp
+using PeachDrawing.Text.Unicode;
+
+string text = "Wrap this line, please.\nNext line.";
+LineBreakOpportunity[] opportunities = LineBreaker.FindOpportunities(text);
+
+for (int i = 1; i < text.Length; i++)
+{
+    if (opportunities[i] == LineBreakOpportunity.Allowed) { /* a line may end before text[i] */ }
+    if (opportunities[i] == LineBreakOpportunity.Mandatory) { /* it must */ }
+}
+```
+
+`LineBreakOptions` applies the tailorings of CSS Text: `WordBreak` (a `WordBreakMode`: `Normal`, `BreakAll`, `KeepAll`) is `word-break`, and
+`Strictness` (`Auto`, `Loose`, `Normal`, `Strict`, `Anywhere`) is `line-break`. `Strict` is the algorithm's own default,
+in which a small kana or a wave dash may not start a line; `Auto` (which is `Normal`) also lets a wave dash and the katakana
+double hyphen start one, and `Loose` lets a line start with a small kana, an iteration mark, a middle dot, a question or
+exclamation mark of Japanese text or an ellipsis, and with a hyphen after an ideograph. `Anywhere` allows a break after every grapheme cluster, whatever the
+character rules say, and keeps only hard line breaks. Thai, Lao, Khmer and Burmese are broken as their letters, without a
+dictionary, so their lines have no opportunities where the script writes no spaces.
+
+`Segmenter` finds the boundaries of [UAX #29](https://www.unicode.org/reports/tr29/): `FindGraphemeBoundaries` (extended
+grapheme clusters: a letter with its accents, a Hangul syllable, an emoji sequence, a flag), `FindWordBoundaries` and
+`FindSentenceBoundaries`. Each returns increasing UTF-16 indices, including the start and the end of the text, and none
+for empty text; the pieces are the text between neighbouring boundaries.
+
+```csharp
+int[] clusters = Segmenter.FindGraphemeBoundaries("e\u0301\U0001F1FA\U0001F1F8");   // [0, 2, 6]
+```
 
 ### Bidirectional text
 
