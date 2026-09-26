@@ -139,7 +139,7 @@ namespace PeachDrawing.Text.Shaping
     /// One OpenType feature a caller asks for by its tag, in the way CSS <c>font-feature-settings</c> does.
     /// </summary>
     /// <param name="Tag">The four-letter feature tag, such as <c>ss01</c>.</param>
-    /// <param name="Value">0 turns the feature off, 1 turns it on, and a larger number selects that alternate of a feature that has several.</param>
+    /// <param name="Value">0 leaves the feature unrequested, 1 asks for it, and a larger number selects that alternate of a feature that has several. It cannot switch off a feature that shaping applies on its own, such as <c>ccmp</c> and <c>locl</c>.</param>
     public readonly record struct FeatureSetting(string Tag, int Value);
 
     /// <summary>
@@ -167,13 +167,13 @@ namespace PeachDrawing.Text.Shaping
     /// <param name="Caps">The caps feature to apply.</param>
     /// <param name="Numeric">The numeral features to apply.</param>
     /// <param name="EastAsian">The East Asian features to apply.</param>
-    /// <param name="ExplicitFeatures">Features asked for by tag, or <see langword="null"/> for none.</param>
+    /// <param name="ExplicitFeatures">Substitution (<c>GSUB</c>) features asked for by tag, or <see langword="null"/> for none. Positioning is not controlled this way: kerning is the <paramref name="Kerning"/> setting.</param>
     /// <param name="Kerning">Whether to apply the font's kerning.</param>
     /// <param name="Language">A BCP 47 language tag that selects language-specific behaviour in the font, or <see langword="null"/> for none.</param>
     /// <param name="ScriptTag">The OpenType script tag the run is in (see <see cref="OpenTypeTags.ForScript"/>), or <see langword="null"/> to let the font's default script apply.</param>
     /// <param name="JoiningForms">For a run of a joining script, the positional form of each character, one for each code point, as <see cref="ArabicJoining.Resolve"/> returns them; otherwise <see langword="null"/>.</param>
     /// <param name="UseCategories">For a run of an Indic script, the Universal Shaping Engine category of each code point, as <see cref="UniversalShaping.Classify"/> gives them; otherwise <see langword="null"/>.</param>
-    /// <param name="ReverseForDisplay">Whether to reverse the shaped glyphs into visual order at the end, and replace mirrorable glyphs by their mirror images, for a run that is laid out right to left. The text the lookups ran over is never reversed.</param>
+    /// <param name="ReverseForDisplay">Whether to reverse the shaped glyphs into visual order at the end, and replace mirrorable glyphs by their mirror images, for a run that is laid out right to left. The text the lookups ran over is never reversed. Reversing rewrites each glyph's <see cref="PlacedGlyph.XOffset"/> so that it stays in place, and leaves <see cref="PlacedGlyph.AttachedToIndex"/> empty on every glyph of the reversed run.</param>
     /// <param name="Position">The subscript or superscript feature to apply.</param>
     /// <param name="EmojiMode">Which presentation of a character with both a text and an emoji form to choose a glyph for, which is a <c>cmap</c> format 14 lookup and not a feature.</param>
     public readonly record struct ShapeSettings(

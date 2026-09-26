@@ -136,6 +136,25 @@ namespace PeachPDF.Tests.PublicApi
         }
 
         [Fact]
+        public void Shape_RejectsAnExplicitFeatureWithNoTag()
+        {
+            var face = Face(BundledFonts.Ttf);
+            var settings = new ShapeSettings(ExplicitFeatures: [new FeatureSetting(null!, 1)]);
+
+            Assert.Throws<ArgumentException>(() => Shaper.Shape(face, "a", settings));
+        }
+
+        [Fact]
+        public void GetFeatureTags_HandsOutSetsThatCannotBeChangedThroughACast()
+        {
+            var tags = Shaper.GetFeatureTags(CapsMode.SmallCaps);
+
+            Assert.IsNotType<HashSet<string>>(tags);
+            Assert.Throws<NotSupportedException>(() => ((ISet<string>)tags).Add("zzzz"));
+            Assert.DoesNotContain("zzzz", Shaper.GetFeatureTags(CapsMode.SmallCaps));
+        }
+
+        [Fact]
         public void Shape_RejectsNullArguments()
         {
             var face = Face(BundledFonts.Ttf);

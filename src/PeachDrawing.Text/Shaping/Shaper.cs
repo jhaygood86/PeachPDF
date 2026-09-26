@@ -21,17 +21,30 @@ namespace PeachDrawing.Text.Shaping
         /// Shapes a run of text in one face.
         /// </summary>
         /// <remarks>
-        /// The text is shaped as the one run it is: everything the settings ask for applies to all of it. Characters that are
-        /// invisible by definition are removed from the result after they have taken part in substitution and positioning.
+        /// The text is shaped as the one run it is: everything the settings ask for applies to all of it. A variation selector,
+        /// and another invisible character the font has no glyph for, is removed from the result after it has taken part in
+        /// substitution and positioning.
         /// </remarks>
         /// <param name="typeface">The face to shape in.</param>
         /// <param name="text">The text, in logical order unless the settings ask for the result in visual order.</param>
         /// <param name="settings">What to apply; <see cref="ShapeSettings.Default"/> for the defaults.</param>
         /// <returns>The glyphs, in the order they are drawn.</returns>
+        /// <exception cref="ArgumentException">An explicit feature has no tag.</exception>
         public static GlyphRun Shape(Typeface typeface, string text, in ShapeSettings settings)
         {
             ArgumentNullException.ThrowIfNull(typeface);
             ArgumentNullException.ThrowIfNull(text);
+
+            if (settings.ExplicitFeatures is { } features)
+            {
+                foreach (var feature in features)
+                {
+                    if (feature.Tag is null)
+                    {
+                        throw new ArgumentException("An explicit feature has no tag.", nameof(settings));
+                    }
+                }
+            }
 
             return new GlyphRun(typeface, typeface.Face.Descriptor.Shape(text, settings));
         }

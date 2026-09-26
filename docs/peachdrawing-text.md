@@ -132,9 +132,11 @@ foreach (PlacedGlyph glyph in run.Glyphs)
   The names are CSS's, from `font-variant-*` and `font-feature-settings`. A tag that a typed group controls is always decided by
   the group and not by an explicit setting, which is CSS's precedence. Write `new ShapeSettings()` or `ShapeSettings.Default`
   for the defaults; `default(ShapeSettings)` is all zeros and means no ligatures and no kerning.
-- A ligature is one glyph whose cluster covers the matched characters. A character that is invisible by definition (a variation
-  selector, a joiner, a bidi control) takes part in substitution and positioning, so a lookup that matches on it still sees it,
-  and is removed from the result at the end.
+- A ligature is one glyph whose cluster covers the matched characters. A variation selector, and another invisible character
+  (a joiner, a bidi control) that the font has no glyph for, takes part in substitution and positioning, so a lookup that
+  matches on it still sees it, and is removed from the result at the end; a font that does map such a character keeps its glyph.
+- Explicit features (`FeatureSetting`) are substitution features asked for by tag. Kerning is its own setting, and a value of 0
+  leaves a feature unrequested; it cannot switch off one that shaping applies on its own, such as `ccmp` and `locl`.
 - For a run of a joining script, `ArabicJoining.Resolve` gives the positional form of every character, and for an Indic
   script `UniversalShaping.Classify` gives its Universal Shaping Engine category; both go into `ShapeSettings` (`JoiningForms`
   and `UseCategories`). `ReverseForDisplay` asks for the glyphs in visual order for a right-to-left run.

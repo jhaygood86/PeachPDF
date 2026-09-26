@@ -1,6 +1,7 @@
 using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using PeachPDF.CSS;
 using PeachDrawing.Text.Internal.Text;
 
@@ -151,11 +152,19 @@ namespace PeachPDF.Html.Core.Utils
         {
             if (settings.Count == 0) return Array.Empty<FeatureSetting>();
 
-            var result = new FeatureSetting[settings.Count];
-            for (var i = 0; i < result.Length; i++)
-                result[i] = new FeatureSetting(settings[i].Tag, settings[i].Value);
-            return result;
+            // Converted once per source list: every SVG run of one font context passes the same list, and a fresh
+            // array for each would make the shaper's lookup cache (which compares these lists by reference) miss for
+            // every run and keep an entry alive for each.
+            return ConvertedSettings.GetValue(settings, static source =>
+            {
+                var result = new FeatureSetting[source.Count];
+                for (var i = 0; i < result.Length; i++)
+                    result[i] = new FeatureSetting(source[i].Tag, source[i].Value);
+                return result;
+            });
         }
+
+        private static readonly ConditionalWeakTable<IReadOnlyList<(string Tag, int Value)>, IReadOnlyList<FeatureSetting>> ConvertedSettings = new();
 
         /// <summary><c>false</c> only for <c>none</c> - both <c>auto</c> (the initial value) and
         /// <c>normal</c> mean "apply GPOS kerning when the font and script support it."</summary>

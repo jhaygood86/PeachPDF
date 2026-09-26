@@ -2,6 +2,7 @@ using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -82,14 +83,14 @@ namespace PeachDrawing.Text.Internal.Text
         };
 
         private static readonly IReadOnlySet<string> EmptyTags = new HashSet<string>();
-        private static readonly IReadOnlySet<string> SmallCapsTags = new HashSet<string> { "smcp" };
-        private static readonly IReadOnlySet<string> AllSmallCapsTags = new HashSet<string> { "smcp", "c2sc" };
-        private static readonly IReadOnlySet<string> PetiteCapsTags = new HashSet<string> { "pcap" };
-        private static readonly IReadOnlySet<string> AllPetiteCapsTags = new HashSet<string> { "pcap", "c2pc" };
-        private static readonly IReadOnlySet<string> UnicaseTags = new HashSet<string> { "unic" };
-        private static readonly IReadOnlySet<string> TitlingCapsTags = new HashSet<string> { "titl" };
-        private static readonly IReadOnlySet<string> SubscriptTags = new HashSet<string> { "subs" };
-        private static readonly IReadOnlySet<string> SuperscriptTags = new HashSet<string> { "sups" };
+        private static readonly IReadOnlySet<string> SmallCapsTags = new HashSet<string> { "smcp" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> AllSmallCapsTags = new HashSet<string> { "smcp", "c2sc" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> PetiteCapsTags = new HashSet<string> { "pcap" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> AllPetiteCapsTags = new HashSet<string> { "pcap", "c2pc" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> UnicaseTags = new HashSet<string> { "unic" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> TitlingCapsTags = new HashSet<string> { "titl" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> SubscriptTags = new HashSet<string> { "subs" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> SuperscriptTags = new HashSet<string> { "sups" }.ToFrozenSet();
 
         /// <summary>
         /// The GSUB feature tag(s) that implement <paramref name="capsFeature"/> - the single source
