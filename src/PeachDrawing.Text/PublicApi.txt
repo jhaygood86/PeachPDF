@@ -70,6 +70,13 @@ PeachDrawing.Text.Layout.ContentWidths : struct
   method Void Deconstruct(out Double MinContent, out Double MaxContent)
   property Double MaxContent { get; init; }
   property Double MinContent { get; init; }
+PeachDrawing.Text.Layout.FlowCursor : struct
+  method Boolean Equals(FlowCursor other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  property Boolean IsEnd { get; }
+  property Int32 Offset { get; }
 PeachDrawing.Text.Layout.HyphenateLimitChars : struct
   ctor(Nullable<Int32> WordLength = null, Nullable<Int32> BeforeBreak = null, Nullable<Int32> AfterBreak = null)
   method Boolean Equals(HyphenateLimitChars other)
@@ -120,12 +127,29 @@ PeachDrawing.Text.Layout.LineEnd : enum Int32
   Hyphenated = 4
   Last = 3
   Soft = 0
+PeachDrawing.Text.Layout.LineFlow : sealed class
+  method Boolean TryNext(in FlowCursor cursor, in LineSpace space, out LineBox line, out FlowCursor next)
+  method Double GetIndent(in FlowCursor cursor)
+  property FlowCursor Start { get; }
+  property Paragraph Paragraph { get; }
+PeachDrawing.Text.Layout.LineSpace : struct
+  ctor(Double Left, Double Right, Double Indent = 0, Double Top = 0)
+  method Boolean Equals(LineSpace other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double Left, out Double Right, out Double Indent, out Double Top)
+  property Double Indent { get; init; }
+  property Double Left { get; init; }
+  property Double Right { get; init; }
+  property Double Top { get; init; }
 PeachDrawing.Text.Layout.OverflowWrap : enum Int32
   Anywhere = 2
   BreakWord = 1
   Normal = 0
 PeachDrawing.Text.Layout.Paragraph : sealed class
   method ContentWidths MeasureContent()
+  method LineFlow CreateFlow()
   method ParagraphLayout Layout(Double availableWidth)
   property Boolean IsRightToLeft { get; }
   property ParagraphStyle Style { get; }

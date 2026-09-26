@@ -15,9 +15,12 @@ namespace PeachDrawing.Text.Layout
 
         private readonly record struct Break(int Position, double Width, bool Hyphen);
 
+        /// <summary>A line whose breaks are decided and whose runs are shaped and put in order, before it is aligned and placed.</summary>
+        private sealed record MeasuredLine(LineSpec Spec, double Indent, List<Piece> Pieces, double Width, double Ascent, double Descent, double Height);
+
         internal static ParagraphLayout Build(Paragraph paragraph, double availableWidth)
         {
-            var built = new List<(LineSpec Spec, double Indent, List<Piece> Pieces, double Width, double Ascent, double Descent, double Height)>();
+            var built = new List<MeasuredLine>();
             double contentWidth = 0;
             int start = 0;
             int hyphenRun = 0;
@@ -36,10 +39,9 @@ namespace PeachDrawing.Text.Layout
                 truncated |= hidesText;
                 spec = Ellipsize(paragraph, spec, room, indent, hidesText);
 
-                var (pieces, width) = Assemble(paragraph, spec, indent);
-                var (ascent, descent, height) = VerticalExtent(paragraph, spec, pieces);
-                built.Add((spec, indent, pieces, width, ascent, descent, height));
-                contentWidth = Math.Max(contentWidth, width + indent);
+                var measured = MeasureLine(paragraph, spec, indent);
+                built.Add(measured);
+                contentWidth = Math.Max(contentWidth, measured.Width + indent);
                 if (spec.Kind == LineEnd.Last || lastAllowed)
                 {
                     break;
@@ -53,65 +55,94 @@ namespace PeachDrawing.Text.Layout
             double top = 0;
             for (int i = 0; i < built.Count; i++)
             {
-                var (spec, indent, pieces, width, ascent, descent, height) = built[i];
-                bool endsParagraphOrForced = spec.Kind is LineEnd.Last or LineEnd.Forced;
-                var align = ResolveAlign(paragraph, endsParagraphOrForced);
-
+                var measured = built[i];
                 // The indent is taken from the start side; what is left is where the line is aligned.
-                double areaLeft = paragraph.IsRightToLeft ? 0 : indent;
-                double areaWidth = extent - indent;
-
-                // Justification shares the room a line that is not the last has left between its opportunities, so that it fills the width.
-                double extra = 0;
-                bool[][]? expandAfter = null;
-                if (align == TextAlign.Justify && !double.IsInfinity(areaWidth) && areaWidth > width)
-                {
-                    int opportunities;
-                    (expandAfter, opportunities) = FindJustificationOpportunities(paragraph, pieces);
-                    if (opportunities > 0)
-                    {
-                        extra = (areaWidth - width) / opportunities;
-                        width = areaWidth;
-                    }
-                    else
-                    {
-                        expandAfter = null;
-                    }
-                }
-
-                double left = areaLeft + AlignedLeft(paragraph, align, areaWidth, width);
-                double baseline = top + ascent;
-                var runs = new List<PlacedRun>(pieces.Count);
-                double x = left;
-                for (int n = 0; n < pieces.Count; n++)
-                {
-                    var piece = pieces[n];
-                    var style = piece.Atom.Style;
-                    var (boundaries, advances, pieceWidth) = PlaceRun(paragraph, piece, style, extra, expandAfter?[n]);
-                    InlineBox? box = null;
-                    var boxBounds = default(RectangleF);
-                    if (piece.IsBox)
-                    {
-                        var placed = paragraph.BoxAt(piece.From);
-                        double boxTop = placed.VerticalAlign switch
-                        {
-                            VerticalAlign.Top => top,
-                            VerticalAlign.Bottom => top + height - placed.Height,
-                            _ => baseline - BoxExtent(placed, style).Above,
-                        };
-                        box = placed;
-                        boxBounds = new RectangleF((float)x, (float)boxTop, (float)placed.Width, (float)placed.Height);
-                    }
-
-                    runs.Add(new PlacedRun(new TextRange(piece.From, piece.To), style, piece.Glyphs, piece.Atom.Level, x, baseline, pieceWidth, boundaries, advances, piece.IsGenerated, box, boxBounds));
-                    x += pieceWidth;
-                }
-
-                lines[i] = new LineBox(new TextRange(spec.Start, spec.End), ContentEndOf(paragraph, spec), runs, left, top, width, ascent, descent, height, spec.Kind, spec.CutAt >= 0);
-                top += height;
+                lines[i] = PlaceLine(paragraph, measured, paragraph.IsRightToLeft ? 0 : measured.Indent, extent - measured.Indent, top);
+                top += measured.Height;
             }
 
             return new ParagraphLayout(paragraph, lines, extent, contentWidth, top, truncated);
+        }
+
+        /// <summary>
+        /// Lays out the one line that starts at <paramref name="cursor"/> in <paramref name="space"/>, and finds where the next starts. It reads only the paragraph and its arguments and
+        /// keeps nothing, so calling it again with the same arguments gives the same line, whichever other lines were laid out in between.
+        /// </summary>
+        internal static LineBox LayFlowLine(Paragraph paragraph, in FlowCursor cursor, in LineSpace space, out FlowCursor next)
+        {
+            double width = space.Right - space.Left;
+            double room = RoomFor(width, space.Indent);
+            var spec = FitLine(paragraph, cursor.Offset, room, space.Indent, cursor.HyphenatedLines, room);
+            spec = Ellipsize(paragraph, spec, room, space.Indent, hidesText: false);
+            var measured = MeasureLine(paragraph, spec, space.Indent);
+
+            next = spec.Kind == LineEnd.Last
+                ? FlowCursor.Finished(spec.End)
+                : new FlowCursor(spec.End, spec.Kind == LineEnd.Hyphenated ? cursor.HyphenatedLines + 1 : 0, false);
+            return PlaceLine(paragraph, measured, paragraph.IsRightToLeft ? space.Left : space.Left + space.Indent, width - space.Indent, space.Top);
+        }
+
+        private static MeasuredLine MeasureLine(Paragraph paragraph, LineSpec spec, double indent)
+        {
+            var (pieces, width) = Assemble(paragraph, spec, indent);
+            var (ascent, descent, height) = VerticalExtent(paragraph, spec, pieces);
+            return new MeasuredLine(spec, indent, pieces, width, ascent, descent, height);
+        }
+
+        /// <summary>Aligns a measured line in the area <paramref name="areaWidth"/> wide that starts at <paramref name="areaLeft"/>, and puts its runs in place with its top at <paramref name="top"/>.</summary>
+        private static LineBox PlaceLine(Paragraph paragraph, MeasuredLine measured, double areaLeft, double areaWidth, double top)
+        {
+            var (spec, _, pieces, width, ascent, descent, height) = measured;
+            bool endsParagraphOrForced = spec.Kind is LineEnd.Last or LineEnd.Forced;
+            var align = ResolveAlign(paragraph, endsParagraphOrForced);
+
+            // Justification shares the room a line that is not the last has left between its opportunities, so that it fills the width.
+            double extra = 0;
+            bool[][]? expandAfter = null;
+            if (align == TextAlign.Justify && !double.IsInfinity(areaWidth) && areaWidth > width)
+            {
+                int opportunities;
+                (expandAfter, opportunities) = FindJustificationOpportunities(paragraph, pieces);
+                if (opportunities > 0)
+                {
+                    extra = (areaWidth - width) / opportunities;
+                    width = areaWidth;
+                }
+                else
+                {
+                    expandAfter = null;
+                }
+            }
+
+            double left = areaLeft + AlignedLeft(paragraph, align, areaWidth, width);
+            double baseline = top + ascent;
+            var runs = new List<PlacedRun>(pieces.Count);
+            double x = left;
+            for (int n = 0; n < pieces.Count; n++)
+            {
+                var piece = pieces[n];
+                var style = piece.Atom.Style;
+                var (boundaries, advances, pieceWidth) = PlaceRun(paragraph, piece, style, extra, expandAfter?[n]);
+                InlineBox? box = null;
+                var boxBounds = default(RectangleF);
+                if (piece.IsBox)
+                {
+                    var placed = paragraph.BoxAt(piece.From);
+                    double boxTop = placed.VerticalAlign switch
+                    {
+                        VerticalAlign.Top => top,
+                        VerticalAlign.Bottom => top + height - placed.Height,
+                        _ => baseline - BoxExtent(placed, style).Above,
+                    };
+                    box = placed;
+                    boxBounds = new RectangleF((float)x, (float)boxTop, (float)placed.Width, (float)placed.Height);
+                }
+
+                runs.Add(new PlacedRun(new TextRange(piece.From, piece.To), style, piece.Glyphs, piece.Atom.Level, x, baseline, pieceWidth, boundaries, advances, piece.IsGenerated, box, boxBounds));
+                x += pieceWidth;
+            }
+
+            return new LineBox(new TextRange(spec.Start, spec.End), ContentEndOf(paragraph, spec), runs, left, top, width, ascent, descent, height, spec.Kind, spec.CutAt >= 0);
         }
 
         /// <summary>Where the drawn text of a line ends: where it was cut, or else before the spaces that hang at its end.</summary>
@@ -200,6 +231,12 @@ namespace PeachDrawing.Text.Layout
         private static double AlignedLeft(Paragraph paragraph, TextAlign align, double areaWidth, double lineWidth)
         {
             bool rtl = paragraph.IsRightToLeft;
+            if (lineWidth > areaWidth || double.IsInfinity(areaWidth))
+            {
+                // A line that does not fit starts at the start edge and overflows the other (CSS Text 3 text-align), and there is no far edge to align to in an area with no end.
+                return rtl && !double.IsInfinity(areaWidth) ? areaWidth - lineWidth : 0;
+            }
+
             if (align == TextAlign.Start)
             {
                 align = rtl ? TextAlign.Right : TextAlign.Left;

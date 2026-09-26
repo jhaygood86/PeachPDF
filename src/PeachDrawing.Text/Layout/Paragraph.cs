@@ -778,6 +778,12 @@ namespace PeachDrawing.Text.Layout
         }
 
         /// <summary>
+        /// Starts laying the paragraph out one line at a time, for a caller that decides how much room each line has (floats, columns, pages): see <see cref="LineFlow"/>.
+        /// </summary>
+        /// <returns>The flow, which holds nothing but the paragraph and can be used from several threads.</returns>
+        public LineFlow CreateFlow() => new(this);
+
+        /// <summary>
         /// Lays the paragraph out at a width.
         /// </summary>
         /// <param name="availableWidth">The width lines may fill, in layout units, or <see cref="double.PositiveInfinity"/> for lines that break only where they are forced to.</param>

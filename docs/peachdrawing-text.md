@@ -467,6 +467,14 @@ foreach (LineBox line in layout.Lines)
   line of one box is as tall as its text would be. Letter spacing does not apply to a box, a tab measures from the end of it, and it is a wall for justification: no room is added next to it.
   Carets, selection and hit testing treat it as one character.
 
+- **One line at a time.** `Paragraph.CreateFlow()` gives a `LineFlow` for a caller that owns what the text flows around (floats, columns, pages): `TryNext(cursor, space, out line, out next)` lays out
+  the line that starts at a `FlowCursor` in a `LineSpace` (its left and right edges, its indent, and where its top is) and gives back the cursor of the next. `default(FlowCursor)`, or
+  `flow.Start`, is the start of the paragraph; `cursor.IsEnd` says the last line has been laid out. The call is a pure function of the paragraph, the cursor and the space: it never changes its
+  arguments and keeps nothing, so a caller that wants to undo a line (its height grew, a float now intrudes) calls it again with the cursor from before, and one flow can be used from several
+  threads. `flow.GetIndent(cursor)` gives the `text-indent` of the line, for a caller that follows the style. The lines are the same as `Layout` gives when every space is the full width and each
+  line is under the last (a test holds the two to that), except that `MaxLines` is the caller's to apply, tab stops start at the space's edge, and a right-to-left line is placed against the
+  space's left edge, not a right edge the flow does not know, when the space has no end.
+
 Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph.
 
 ## The `PeachDrawing.Text.Unicode` namespace
