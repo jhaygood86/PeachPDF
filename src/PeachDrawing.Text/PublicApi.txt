@@ -35,6 +35,18 @@ PeachDrawing.Text.RuneInterval : struct
   method Void Deconstruct(out Rune Start, out Rune End)
   property Rune End { get; init; }
   property Rune Start { get; init; }
+PeachDrawing.Text.ScriptPlacement : enum Int32
+  Subscript = 0
+  Superscript = 1
+PeachDrawing.Text.ScriptPosition : struct
+  ctor(Double SizeScale, Double BaselineShift)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(ScriptPosition other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double SizeScale, out Double BaselineShift)
+  property Double BaselineShift { get; init; }
+  property Double SizeScale { get; init; }
 PeachDrawing.Text.SyntheticStyle : enum Int32
   Bold = 1
   BoldItalic = 3
@@ -43,12 +55,24 @@ PeachDrawing.Text.SyntheticStyle : enum Int32
 PeachDrawing.Text.Typeface : sealed class
   method Boolean Equals(Object obj)
   method Boolean Equals(Typeface other)
+  method Boolean HasGlyph(Rune rune)
+  method Boolean MatchesEmojiPresentation(Rune rune, EmojiPresentation presentation)
+  method Boolean SupportsFeatures(IReadOnlySet<String> tags)
+  method Boolean TryGetScriptPosition(ScriptPlacement placement, out ScriptPosition position)
+  method Boolean TryMapRune(Rune rune, out UInt16 glyph)
+  method Int32 GetAdvance(UInt16 glyph)
   method Int32 GetHashCode()
+  method Int32 GetVerticalAdvance(UInt16 glyph)
+  method Point GetVerticalOrigin(UInt16 glyph)
   method String ToString()
+  property Boolean HasColorGlyphs { get; }
+  property Boolean HasVerticalMetrics { get; }
+  property Boolean HasVerticalOrigin { get; }
   property Boolean IsBold { get; }
   property Boolean IsItalic { get; }
   property String FamilyName { get; }
   property String StyleName { get; }
+  property TypefaceMetrics Metrics { get; }
 PeachDrawing.Text.TypefaceFamily : sealed class
   method Boolean TryMatch(in TypefaceQuery query, out TypefaceMatch match)
   property String Name { get; }
@@ -65,6 +89,26 @@ PeachDrawing.Text.TypefaceMatch : struct
   method Void Deconstruct(out Typeface Typeface, out SyntheticStyle Synthesis)
   property SyntheticStyle Synthesis { get; init; }
   property Typeface Typeface { get; init; }
+PeachDrawing.Text.TypefaceMetrics : sealed class
+  property Boolean HasMeasuredXHeight { get; }
+  property Int32 CapHeight { get; }
+  property Int32 CellAscent { get; }
+  property Int32 CellDescent { get; }
+  property Int32 LineSpacing { get; }
+  property Int32 NormalLineAscent { get; }
+  property Int32 NormalLineDescent { get; }
+  property Int32 NormalLineGap { get; }
+  property Int32 StrikeoutPosition { get; }
+  property Int32 StrikeoutThickness { get; }
+  property Int32 UnderlinePosition { get; }
+  property Int32 UnderlineThickness { get; }
+  property Int32 UnitsPerEm { get; }
+  property Int32 XHeight { get; }
+  property Int32 XMax { get; }
+  property Int32 XMin { get; }
+  property Int32 YMax { get; }
+  property Int32 YMin { get; }
+  property Single ItalicAngle { get; }
 PeachDrawing.Text.TypefaceQuery : struct
   ctor()
   ctor(Int32 Weight = 400, Int32 Width = 5, Boolean IsItalic = False, Nullable<Rune> MustCover = null)
