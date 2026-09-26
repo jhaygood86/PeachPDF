@@ -45,5 +45,6 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 | `Emoji` (`Resolve`, `ResolveAt`, `IsPresentationParticipant`, `IsPresentationSelector`, `SelectorFor`), `EmojiMode`, `EmojiPresentation` | Choice between text and emoji presentation | UTS #51 and CSS Fonts 4 `font-variant-emoji` (`normal`, `text`, `emoji`, `unicode`) |
 
 Every name above was taken from the specification it implements, and the member sets follow those specifications rather
-than any library's. The author did not consult SixLabors.Fonts while choosing them, and so cannot vouch that no name
-coincides with one of theirs; that check is the maintainer's review under rule 5, and it is still to be done for this slice.
+than any library's. The author did not consult SixLabors.Fonts while choosing them, and so could not vouch that no name
+coincides with one of theirs; that check is the maintainer's review under rule 5. The maintainer reviewed this slice's
+register on 2026-09-26 and found the naming fine.
