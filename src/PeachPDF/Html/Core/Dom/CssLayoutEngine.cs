@@ -1857,6 +1857,10 @@ namespace PeachPDF.Html.Core.Dom
                 OffsetAlongCellAxis(b, dist, isVertical);
                 MoveStaticallyPlacedDescendants(b, b, dist, isVertical);
             }
+
+            // A cell whose inline content sits directly in it owns the lines its children's words are on,
+            // and the cell itself is not moved, so its lines are moved here.
+            if (!isVertical) cell.OffsetOwnLineBoxesTop(dist);
         }
 
         private static void OffsetAlongCellAxis(CssBox box, double dist, bool isVertical)
@@ -8153,7 +8157,6 @@ namespace PeachPDF.Html.Core.Dom
             if (!ReferenceEquals(lineBox.OwnerBox, box) && LastOwnLineBaselineOf(box) is not null)
             {
                 box.OffsetTop(delta);
-                OffsetOwnLineBoxes(box, delta);
             }
 
             if (lineBox.Rectangles.TryGetValue(box, out var r))
@@ -8168,33 +8171,6 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var word in lineBox.WordsOf(box))
             {
                 word.Top += delta;
-            }
-        }
-
-        /// <summary>
-        /// Shifts the cached geometry of every line box inside <paramref name="box"/>'s own subtree by
-        /// <paramref name="delta"/>, alongside the words and rectangles <see cref="CssBox.OffsetTop(double)"/>
-        /// has just moved.
-        /// </summary>
-        /// <remarks>
-        /// <see cref="CssLineBox.FlowTop"/> and <see cref="CssLineBox.BaselineY"/> are numbers a closed
-        /// line records about where it ended up, not views onto the words, so a subtree translation leaves
-        /// them naming the position the box no longer occupies. Everything that asks a line where it
-        /// begins reads <c>FlowTop</c> through <see cref="CssLineBox.LineTop"/> (this repo's rule for that
-        /// question), and <c>CssBoxMarker</c> sits an outside marker on <c>BaselineY</c> — so an atomic
-        /// inline-block moved onto its line's baseline would otherwise carry stale answers for both.
-        /// </remarks>
-        private static void OffsetOwnLineBoxes(CssBox box, double delta)
-        {
-            foreach (var line in box.LineBoxes)
-            {
-                if (line.FlowTop is { } flowTop) line.FlowTop = flowTop + delta;
-                if (line.BaselineY is { } baselineY) line.BaselineY = baselineY + delta;
-            }
-
-            foreach (var child in box.Boxes)
-            {
-                OffsetOwnLineBoxes(child, delta);
             }
         }
 
