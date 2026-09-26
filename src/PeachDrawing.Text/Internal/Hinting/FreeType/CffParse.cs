@@ -83,14 +83,19 @@ internal sealed class CffPrivate
 /// </summary>
 internal static class CffParser
 {
-    private const int MaxStackDepth = 96;
+    // CFF_MAX_STACK_DEPTH; the parser of a Private DICT has one slot more, "for the operator" (cff_load_private_dict), since an operator
+    // is refused when the stack is full
+    private const int TopDictStackDepth = 96;
+    private const int PrivateDictStackDepth = TopDictStackDepth + 1;
 
     // operator codes: the second byte of a two-byte operator is added to 0x100
+    private const int OpFontBBox = 5;
     private const int OpCharset = 15;
     private const int OpEncoding = 16;
     private const int OpCharStrings = 17;
     private const int OpPrivate = 18;
     private const int OpCharstringType = 0x106;
+    private const int OpMultipleMaster = 0x118;
     private const int OpFontMatrix = 0x107;
     private const int OpCidRos = 0x11E;
     private const int OpFdArray = 0x124;
@@ -110,6 +115,10 @@ internal static class CffParser
     private const int OpBlueFuzz = 0x10B;
     private const int OpLanguageGroup = 0x111;
     private const int OpInitialRandomSeed = 0x113;
+    private const int OpForceBold = 0x10E;
+    private const int OpForceBoldThreshold = 0x10F;
+    private const int OpLenIv = 0x110;
+    private const int OpExpansionFactor = 0x112;
 
     private static readonly int[] PowerTens =
     [
@@ -137,7 +146,8 @@ internal static class CffParser
     /// <exception cref="HintingException">The DICT is malformed in a way FreeType refuses.</exception>
     public static void Run(byte[] data, int start, int limit, Kind kind, CffFontDict? top, CffPrivate? priv)
     {
-        var stack = new int[MaxStackDepth]; // the positions of the operands
+        int stackDepth = kind == Kind.Private ? PrivateDictStackDepth : TopDictStackDepth;
+        var stack = new int[stackDepth]; // the positions of the operands
         int stackTop = 0;
         int p = start;
 
@@ -150,7 +160,7 @@ internal static class CffParser
             if (v >= 27 && v != 31 && v != 255)
             {
                 // it's a number; we will push its position on the stack
-                if (stackTop >= MaxStackDepth)
+                if (stackTop >= stackDepth)
                     throw new HintingException("A CFF DICT has too many operands.");
 
                 stack[stackTop++] = p;
@@ -193,7 +203,7 @@ internal static class CffParser
             else
             {
                 // This is not a number, hence it's an operator.  Compute its code and look for it in our current list.
-                if (stackTop >= MaxStackDepth)
+                if (stackTop >= stackDepth)
                     throw new HintingException("A CFF DICT has too many operands.");
 
                 int numArgs = stackTop;
@@ -260,6 +270,28 @@ internal static class CffParser
                 case OpCidRos:
                     ParseCidRos(data, limit, top, stack, numArgs);
                     break;
+
+                case OpFontBBox:
+                    // FreeType reads four numbers and keeps them; only its refusal of fewer matters here
+                    if (numArgs < 4)
+                        throw new HintingException("The FontBBox operator of a CFF DICT lacks an operand.");
+                    break;
+
+                case OpMultipleMaster:
+                    // FreeType keeps the number of designs for the Private DICT's blend, which is not ported; it refuses a count outside 2 to 16
+                    if (numArgs < 5)
+                        throw new HintingException("The MultipleMaster operator of a CFF DICT lacks an operand.");
+
+                    int designs = Num(data, limit, stack[0]);
+                    if (designs > 16 || designs < 2)
+                        throw new HintingException("The MultipleMaster operator of a CFF DICT has an invalid number of designs.");
+                    break;
+
+                default:
+                    // the other fields FreeType reads are numbers, strings (SIDs) or booleans, each of which needs an operand; none is used here
+                    if (IsOneOperandTopField(code))
+                        RequireArgs(stack, numArgs);
+                    break;
             }
 
             return;
@@ -324,9 +356,28 @@ internal static class CffParser
                 case OpNominalWidthX:
                     priv.NominalWidth = (int)Num(data, limit, RequireArgs(stack, numArgs));
                     break;
+
+                case OpForceBold:
+                case OpForceBoldThreshold:
+                case OpLenIv:
+                case OpExpansionFactor:
+                    // read by FreeType and not used here; StemSnapH and StemSnapV are delta arrays, which may be empty
+                    RequireArgs(stack, numArgs);
+                    break;
             }
         }
     }
+
+    // the Top or Font DICT fields of cfftoken.h that are neither read here nor callbacks: version, Notice, Copyright, FullName, FamilyName,
+    // Weight, isFixedPitch, ItalicAngle, UnderlinePosition, UnderlineThickness, PaintType, UniqueID, StrokeWidth, SyntheticBase,
+    // PostScript, CIDFontVersion, CIDFontRevision, CIDFontType, CIDCount, UIDBase, FontName
+    private static bool IsOneOperandTopField(int code) => code switch
+    {
+        0 or 1 or 2 or 3 or 4 or 13 => true,
+        0x100 or 0x101 or 0x102 or 0x103 or 0x104 or 0x105 or 0x108 or 0x114 or 0x115 => true,
+        0x11F or 0x120 or 0x121 or 0x122 or 0x123 or 0x126 => true,
+        _ => false,
+    };
 
     // check that we have enough arguments (FreeType's Stack_Underflow, which fails the font); returns the position of the first operand
     private static int RequireArgs(int[] stack, int numArgs)

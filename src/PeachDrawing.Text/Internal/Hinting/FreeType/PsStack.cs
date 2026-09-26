@@ -85,9 +85,6 @@ internal enum Cf2NumberType : byte
     /// <summary>16.16.</summary>
     Fixed,
 
-    /// <summary>2.30.</summary>
-    Frac,
-
     /// <summary>32.0.</summary>
     Int,
 }
@@ -178,7 +175,6 @@ internal sealed class Cf2Stack
         return _buffer[_top].Type switch
         {
             Cf2NumberType.Int => Cf2Fixed.FromInt(_buffer[_top].Value),
-            Cf2NumberType.Frac => Cf2Fixed.FracToFixed(_buffer[_top].Value),
             _ => _buffer[_top].Value,
         };
     }
@@ -195,38 +191,8 @@ internal sealed class Cf2Stack
         return _buffer[idx].Type switch
         {
             Cf2NumberType.Int => Cf2Fixed.FromInt(_buffer[idx].Value),
-            Cf2NumberType.Frac => Cf2Fixed.FracToFixed(_buffer[idx].Value),
             _ => _buffer[idx].Value,
         };
-    }
-
-    /// <summary><c>cf2_stack_setReal</c>: provides random access to the stack.</summary>
-    public void SetReal(int idx, int val)
-    {
-        if ((uint)idx > (uint)_top)
-        {
-            _error.Set(Cf2Error.StackOverflow);
-            return;
-        }
-
-        // an index equal to the count is the first free slot, which FreeType allows to be written
-        if (idx == _buffer.Length)
-            return;
-
-        _buffer[idx].Value = val;
-        _buffer[idx].Type = Cf2NumberType.Fixed;
-    }
-
-    /// <summary><c>cf2_stack_pop</c>: discards (pops) <paramref name="num"/> values from the stack.</summary>
-    public void Pop(int num)
-    {
-        if ((uint)num > (uint)_top)
-        {
-            _error.Set(Cf2Error.StackUnderflow);
-            return;
-        }
-
-        _top -= num;
     }
 
     /// <summary><c>cf2_stack_roll</c>.</summary>

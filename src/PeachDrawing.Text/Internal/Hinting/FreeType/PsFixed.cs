@@ -71,7 +71,4 @@ internal static class Cf2Fixed
 
     /// <summary><c>cf2_fixedFraction</c>.</summary>
     public static int Fraction(int x) => unchecked(x - Floor(x));
-
-    /// <summary><c>cf2_fracToFixed</c>: from 2.30 to 16.16.</summary>
-    public static int FracToFixed(int x) => unchecked(x + 0x2000 - (x < 0 ? 1 : 0)) >> 14;
 }

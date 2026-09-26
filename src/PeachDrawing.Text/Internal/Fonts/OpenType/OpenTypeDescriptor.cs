@@ -659,12 +659,15 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             // The format-4 cmap only maps the Basic Multilingual Plane. A codepoint above U+FFFF (astral,
             // e.g. emoji) is resolved through the font's format-12 subtable when it has one; a font
             // without format-12 has no astral mapping, so it resolves to the missing glyph.
-            if (value > 0xFFFF)
+            //
+            // A font whose only subtable is format 12 has no format-4 one; its format-12 groups cover the
+            // BMP as well, so they answer for every codepoint.
+            CMap4? cmap4 = FontFace.cmap.cmap4;
+            if (value > 0xFFFF || cmap4 is null)
                 return FontFace.cmap.cmap12?.MapCodeToGlyph(value) ?? 0;
 
             try
             {
-                CMap4 cmap4 = FontFace.cmap.cmap4;
                 int segCount = cmap4.segCountX2 / 2;
                 int seg;
                 for (seg = 0; seg < segCount; seg++)
