@@ -424,12 +424,12 @@ namespace PeachDrawing.Text.Layout
                 int middle = (low + high) >>> 1;
                 if (lineWidth + p.Measure(wordStart, points[middle], at) + p.HyphenAt(points[middle]).Width <= room)
                 {
-                    found = middle;
+                    best = middle;
                     low = middle + 1;
                 }
                 else
                 {
-                    top = middle - 1;
+                    high = middle - 1;
                 }
             }
 
