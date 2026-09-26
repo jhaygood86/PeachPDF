@@ -98,7 +98,8 @@ namespace PeachDrawing.Text
         /// <see cref="GlyphOutline.IsGridFitted"/> is <see langword="false"/>; nothing throws for a font that is merely unusable.
         /// Hinted outlines are cached, so asking again for the same glyph and size is cheap; the outline is then shared by every caller that
         /// asks, which is safe because an outline never changes. Only the outline is fitted: a caller that
-        /// lays text out keeps using the design advances of <see cref="GetAdvance"/>.
+        /// lays text out keeps using the design advances of <see cref="GetAdvance"/>. A font with CFF outlines is also thickened
+        /// at its stems when <see cref="OutlineRequest.StemDarkening"/> asks for it.
         /// </remarks>
         /// <param name="glyph">The glyph.</param>
         /// <param name="request">The size, and how much to fit the outline to the pixel grid.</param>
@@ -173,7 +174,7 @@ namespace PeachDrawing.Text
                 return false;
             }
 
-            result = engine.Get(glyph, (int)ppem26Dot6, request.GridFitting);
+            result = engine.Get(glyph, (int)ppem26Dot6, request.GridFitting, request.StemDarkening);
             return result.Succeeded && result.IsHinted;
         }
 

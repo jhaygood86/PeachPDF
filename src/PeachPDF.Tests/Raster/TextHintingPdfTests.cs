@@ -47,6 +47,46 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public void HintingIsOffUnlessAskedFor() => Assert.Equal(TextHinting.None, new PdfGenerateConfig().TextHinting);
 
+        [Fact]
+        public void StemDarkeningIsOffUnlessAskedFor() => Assert.False(new PdfGenerateConfig().TextStemDarkening);
+
+        private static string CffPageWithRasterText =>
+            "<html><head><style>" + BundledFonts.FontFaceRule(BundledFonts.Otf, "DarkenedTestCode", "font/otf") + "</style></head><body style=\"margin:0;font:9px DarkenedTestCode\">" +
+            "<div style=\"filter:grayscale(1);width:200px\">Text drawn into a bitmap: Hxg 0123456789</div><p>Vector text.</p></body></html>";
+
+        private static async Task<string> GenerateCff(string html, TextHinting hinting, bool stemDarkening)
+        {
+            var config = Config(hinting);
+            config.TextStemDarkening = stemDarkening;
+            var pdf = await PdfObjectReader.GeneratePdf(html, config);
+            pdf = Regex.Replace(pdf, @"/(CreationDate|ModDate)\s*\([^)]*\)", "/$1()");
+            pdf = Regex.Replace(pdf, @"/ID\s*\[[^\]]*\]", "/ID[]");
+            pdf = Regex.Replace(pdf, @"(?m)^%(?! ?PDF|%EOF)[^\r\n]*[\r\n]+", "");
+            pdf = Regex.Replace(pdf, @"/[A-Z]{6}\+", "/XXXXXX+");
+            pdf = Regex.Replace(pdf, @"<xmp:(CreateDate|ModifyDate|MetadataDate)>[^<]*</xmp:\1>", "<xmp:$1/>");
+            pdf = Regex.Replace(pdf, @"<xmpMM:(DocumentID|InstanceID)>[^<]*</xmpMM:\1>", "<xmpMM:$1/>");
+            return pdf;
+        }
+
+        [Fact]
+        public async Task StemDarkeningChangesTheBitmapOfACffFontAndOnlyWhenHintingIsOn()
+        {
+            var hinted = await GenerateCff(CffPageWithRasterText, TextHinting.Standard, stemDarkening: false);
+            var darkened = await GenerateCff(CffPageWithRasterText, TextHinting.Standard, stemDarkening: true);
+            Assert.NotEqual(hinted, darkened);
+
+            // with hinting off it means nothing
+            Assert.Equal(await GenerateCff(CffPageWithRasterText, TextHinting.None, stemDarkening: false), await GenerateCff(CffPageWithRasterText, TextHinting.None, stemDarkening: true));
+        }
+
+        [Fact]
+        public async Task StemDarkeningLeavesAPageWithoutRasterRegionsExactlyAsItWas()
+        {
+            // the PDF's own text is the embedded font: nothing about darkening reaches it
+            var page = "<html><head><style>" + BundledFonts.FontFaceRule(BundledFonts.Otf, "DarkenedTestCode", "font/otf") + "</style></head><body style=\"font:9px DarkenedTestCode\"><p>Vector text only.</p></body></html>";
+            Assert.Equal(await GenerateCff(page, TextHinting.Standard, stemDarkening: false), await GenerateCff(page, TextHinting.Standard, stemDarkening: true));
+        }
+
         [Theory]
         [InlineData(TextHinting.None)]
         [InlineData(TextHinting.Standard)]

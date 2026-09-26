@@ -838,6 +838,7 @@ var config = new PdfGenerateConfig
 - It affects **only the raster backend**. The PDF's own text is the embedded font, drawn by the viewer at whatever size it likes, and is never hinted; a document that has no rasterized regions is byte-for-byte the same with any value. Layout is never affected either: measurements and line breaks use the unhinted metrics, so turning hinting on cannot move a line.
 - A piece of text is hinted only when it is drawn without rotation, skew or perspective (its size on the bitmap is then a single number of pixels per em, which is what hinting works on) and the font is a TrueType font with instructions or a font with CFF outlines; any other text in the bitmap is drawn unhinted. A font whose hinting fails is treated the same way, so a broken font never breaks a page.
 - It matters most at 72 to 150 dpi. At 300 dpi and above, glyphs are large enough in pixels that the difference is hard to see.
+- `TextStemDarkening` (`false` by default) additionally makes the stems of a font with CFF outlines a little heavier, which offsets the way anti-aliasing thins the thinnest stems of small text. It has an effect only together with a `TextHinting` other than `None`, changes nothing for a TrueType font, and never touches the PDF's own vector text. Stems of more than about two and a third pixels (large text) are not changed.
 
 A value that is not one of the three throws an `ArgumentOutOfRangeException` when generation starts.
 
