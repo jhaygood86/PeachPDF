@@ -8040,7 +8040,7 @@ namespace PeachPDF.Html.Core.Dom
         /// itself. Out-of-flow and floated descendants are skipped: §10.8.1 says <i>in the normal flow</i>,
         /// and a float hanging below the box's own content would otherwise supply the baseline.
         /// </remarks>
-        private static double? LastOwnLineBaselineOf(CssBox box)
+        internal static double? LastOwnLineBaselineOf(CssBox box)
         {
             for (var i = box.Boxes.Count - 1; i >= 0; i--)
             {

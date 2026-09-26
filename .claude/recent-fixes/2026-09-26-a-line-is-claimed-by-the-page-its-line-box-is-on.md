@@ -59,6 +59,23 @@ lost a word on this branch while `main` and v0.9.20 drew it (seed 226, a grid it
   - `AnInlineBlockMovedToTheBaseline_KeepsItsOwnLineTopWithItsWords` fails if `OffsetBoxWithinLine` shifts the
     moved box's lines a second time, which the suite did not catch before (the review's mutant M7).
 
+**Test fonts, and a mutant left untested.**
+- **Fonts.** The review's grid document triggers the stale line only with Arial's widths. Neither the bundled
+  Source Sans 3 nor a sweep of page height (120–200pt) and item width (30–100%) reached it. So it stays in Arial
+  as the end-to-end regression, and
+  `ALineWhoseWordsLiveOnAnotherLine_IsNotAnInlineBlocksBaseline` tests the rule directly by making the stale
+  state by hand. The heading and cell tests pin the bundled font, and still fail without the change they guard.
+- **Mutant M4 survives.** Asking the #1054 rescue's "falls past its band" question of `rect.Top` instead of the
+  line top is not caught by the suite. The two differ only when all of these hold:
+  - a line's ink rises across a boundary it sits exactly on;
+  - its slot is re-emitted in isolation (`_currentPassFromSlot` null: `CatchUpStaleSlotsBehind`, `Finish`'s
+    replay);
+  - a later slot asks about it.
+
+  The line top then keeps that later slot from claiming the line a second time. A fixture for it needs a
+  relocated box and a negative-leading line landing exactly on the boundary, with the font sensitivity above,
+  so it is left as a known survivor rather than a brittle test.
+
 **Still true, not changed here:** the verdict is made per box on a line, not per line. On a line that mixes
 a box whose ink rises above the line with a smaller one that does not, the two can resolve different
 nominal slots. That only matters where a line straddles a boundary (a sliced float or monolithic run), and
