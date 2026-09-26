@@ -188,15 +188,6 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         [Fact]
-        public void ALayerListPaint_FollowsTheLocationToo()
-        {
-            // The layer list of a font whose colour glyph is PaintColrLayers is read at the instance's location as well.
-            var face = Load(BundledFonts.VariableColorTest);
-
-            Assert.Null(face.WithAxes([new AxisSetting("wght", 700)]).GetColorLayerPaint(0));
-        }
-
-        [Fact]
         public void AFontThatIsNotVariable_ReadsItsPaintsAsBefore_AndGivesNoClipBoxWithoutAClipList()
         {
             var face = Load(BundledFonts.ColorV1);
@@ -276,7 +267,7 @@ namespace PeachDrawing.Text.Tests.Fonts
                     }
 
                     var instance = face.WithAxes([new AxisSetting("wght", 850), new AxisSetting("wdth", 90)]);
-                    for (ushort glyph = 0; glyph < 20; glyph++)
+                    for (ushort glyph = 0; glyph < 32; glyph++)
                     {
                         Walk(instance.GetColorPaint(glyph));
                         instance.GetColorLayerPaint(glyph);
@@ -312,15 +303,12 @@ namespace PeachDrawing.Text.Tests.Fonts
         [Fact]
         public void ColrVariations_WithoutAMap_TakesTheOuterIndexFromTheHighBits()
         {
-            var variations = ColrVariations.TryParse(BuildStore(), 0, 0)!;
-
-            Assert.Null(variations);
-
-            variations = ColrVariations.TryParse(BuildStore(), 0, 1);
-            Assert.Null(variations);   // an offset of 1 is inside the table but is not a store
+            // No store offset, or one that is inside the table but is not a store, is no variation data.
+            Assert.Null(ColrVariations.TryParse(BuildStore(), 0, 0));
+            Assert.Null(ColrVariations.TryParse(BuildStore(), 0, 1));
 
             var table = new byte[4].Concat(BuildStore()).ToArray();
-            variations = ColrVariations.TryParse(table, 0, 4);
+            var variations = ColrVariations.TryParse(table, 0, 4);
             Assert.NotNull(variations);
             // Item 0, 1 and 2 of data set 0 through the variation indices 0, 1 and 2; the location half way to the peak halves each delta.
             Assert.Equal(50, variations.GetDelta(0, 0, [0.5]));

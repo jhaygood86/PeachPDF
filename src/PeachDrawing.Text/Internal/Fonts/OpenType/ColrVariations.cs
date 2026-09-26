@@ -70,8 +70,14 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 return 0;
             }
 
-            // Without a map the index is the pair itself: the outer index above 16 bits and the inner one in the low 16.
-            var (outer, inner) = _map is null ? ((int)(index >> 16), (int)(index & 0xFFFF)) : index > int.MaxValue ? (int.MaxValue, 0) : _map.Map((int)index);
+            if (_map is null)
+            {
+                // Without a map the index is the pair itself: the outer index in the high 16 bits and the inner one in the low 16.
+                return _store.GetDelta((int)(index >> 16), (int)(index & 0xFFFF), coordinates);
+            }
+
+            // An index past the end of the map uses its last entry.
+            var (outer, inner) = _map.Map((int)Math.Min(index, int.MaxValue));
             return _store.GetDelta(outer, inner, coordinates);
         }
     }

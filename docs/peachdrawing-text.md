@@ -252,9 +252,14 @@ var request = new OutlineRequest { PixelsPerEm = 9, GridFitting = GridFitting.St
 - **Variable fonts** are hinted at the instance's location by moving the points with the `gvar` deltas first and then running the
   instructions. The result is a good approximation, not what FreeType produces bit for bit, and `cvar` (which changes control values by
   location) is not applied.
-- **What the font says about when to hint is not consulted.** The `gasp` table (which sizes want grid-fitting or smoothing), `LTSH` and
-  `VDMX` are not read: a caller that asks for fitting gets it at every size, and decides for itself whether a size is one where hinting
-  is worth having. Pixels are square: one size serves both directions.
+- **The font's `gasp` table decides which sizes are fitted.** A font that has one says, for each range of sizes, whether it wants
+  grid-fitting there (`GASP_GRIDFIT`); fonts often turn hinting off at the smallest sizes, where their programs do more harm than good,
+  and a request for fitting at such a size is answered as for a font that cannot be fitted: the scaled design outline with `IsGridFitted`
+  false, and no fitted advance. The size compared is the whole number of pixels per em the outline is fitted at (11.4 asked of a font that
+  wants whole sizes is 11). A size that no range reaches, a font with no `gasp` table, and a table of a version above 1 or one that is cut
+  short are treated as saying nothing, and the font is fitted. Only `GASP_GRIDFIT`, the flag for standard rasterization, is looked at, for
+  both modes; the flags for ClearType (`GASP_SYMMETRIC_GRIDFIT`, `GASP_SYMMETRIC_SMOOTHING`) are not, since nothing here draws with it.
+  `LTSH` and `VDMX` are not read (FreeType does not use them to load a glyph either). Pixels are square: one size serves both directions.
 
 The instruction interpreter and the CFF engine are ports of FreeType's (the CFF engine is the one Adobe contributed to FreeType), which
 is why the package carries the FreeType Project License notices and Adobe's (see [Licences](#licences)). They give the same fitted
@@ -298,9 +303,14 @@ if (face.IsVariable)
   the axes supply. A face oblique over a range that includes 0 also serves upright text. A variable font added with no range covers the
   range of its own weight, width and slant axes.
 - Outlines (including composite glyphs), advance widths, the font-wide metrics of `Typeface.Metrics` and shaping advances follow the
-  location. Reading `TypefaceMetrics.XMin` to `YMax` (the font bounding box) and the vertical advances gives the default design's
-  values. What a location changes is what the `gvar`, `HVAR`, `MVAR` and `avar` tables of a font with TrueType outlines say, plus the
-  deltas of the `GPOS` value records and anchors (kerning, single adjustments, mark and cursive attachment) that name the `GDEF`
+  location. So do the vertical advances (`GetVerticalAdvance`: `VVAR`, or the phantom points of `gvar` in a font without it) and, in a font
+  with a `VORG` table, the vertical origins (`GetVerticalOrigin`, through the vertical origin mapping of `VVAR`); the origin of a font
+  without `VORG` is the `vhea` ascent, which `MVAR` (`vasc`) varies. The font bounding box (`TypefaceMetrics.XMin` to `YMax`) is
+  worked out from the glyphs as they are drawn at the location, since no table says how it moves: for TrueType outlines the box of every
+  point of every glyph (off-curve points included, as a font's own glyph bounds are), for `CFF2` outlines the box of the curves, each
+  rounded to whole design units; a font with more glyphs to read than the engine's limits allow keeps `head`'s box. What a location
+  changes is what the `gvar`, `HVAR`, `VVAR`, `MVAR` and `avar` tables of a font with TrueType outlines say (`avar` version 2,
+  in which the value of an axis depends on the others, included), plus the deltas of the `GPOS` value records and anchors (kerning, single adjustments, mark and cursive attachment) that name the `GDEF`
   item variation store, and the `FeatureVariations` of `GSUB` and `GPOS` (a feature that uses other lookups at a region of the design
   space, such as `rvrn` glyph swaps at a weight).
 - A variable font with CFF2 outlines (a `CFF2` table) is read the same way: `TryGetOutline` runs the glyph's charstring with every

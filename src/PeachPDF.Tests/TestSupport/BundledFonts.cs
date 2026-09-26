@@ -187,6 +187,12 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Nabla => Path.Combine(AppContext.BaseDirectory, "NablaSubset.ttf");
 
         /// <summary>
+        /// A synthetic TrueType font (CC0, see HintingGasp.LICENSE.txt): the glyphs A and B are rectangles with a small hinting program, and its
+        /// <c>gasp</c> table asks for grid-fitting at 9 to 20 pixels per em and from 41 up, but not below 9 or from 21 to 40.
+        /// </summary>
+        internal static string Gasp => Path.Combine(AppContext.BaseDirectory, "HintingGasp.ttf");
+
+        /// <summary>
         /// The web-platform-tests GSUB conformance font (see gsubtest-lookup3.LICENSE.txt): every
         /// feature tag (smcp/c2sc/pcap/c2pc/etc.) is implemented as a real GSUB <b>Alternate
         /// Substitution</b> (Lookup Type 3) feature - the only publicly available font found with real
@@ -262,6 +268,36 @@ namespace PeachPDF.Tests.TestSupport
 
         /// <summary>The reference values for <see cref="VariableCff2Test"/>: outlines and advances at a grid of locations.</summary>
         internal static string VariableCff2TestGolden => Path.Combine(AppContext.BaseDirectory, "VariableCff2Test.golden.json");
+
+        /// <summary>
+        /// A synthetic TrueType variable font with vertical metrics (see VariableVerticalTest.LICENSE.txt, made by generate_variable_fixture.py): the
+        /// advance heights follow the axes through <c>VVAR</c> and the phantom points of <c>gvar</c>, and <c>MVAR</c> varies the <c>vhea</c> ascent.
+        /// </summary>
+        internal static string VariableVerticalTest => Path.Combine(AppContext.BaseDirectory, "VariableVerticalTest.ttf");
+
+        /// <summary><see cref="VariableVerticalTest"/> without its <c>VVAR</c> table, so the vertical advance has to come from the phantom points of <c>gvar</c>.</summary>
+        internal static string VariableVerticalTestNoVvar => Path.Combine(AppContext.BaseDirectory, "VariableVerticalTestNoVvar.ttf");
+
+        /// <summary>The reference values for <see cref="VariableVerticalTest"/>: vertical advances, the <c>vhea</c> ascent and the font box at a grid of locations.</summary>
+        internal static string VariableVerticalTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableVerticalTest.golden.json");
+
+        /// <summary>
+        /// A synthetic variable font with CFF2 outlines and vertical metrics (see VariableCff2VerticalTest.LICENSE.txt): <c>VVAR</c> varies the advance
+        /// heights and, through its vertical origin mapping, the <c>VORG</c> origins.
+        /// </summary>
+        internal static string VariableCff2VerticalTest => Path.Combine(AppContext.BaseDirectory, "VariableCff2VerticalTest.otf");
+
+        /// <summary>The reference values for <see cref="VariableCff2VerticalTest"/>: vertical advances, vertical origins and the font box at a grid of locations.</summary>
+        internal static string VariableCff2VerticalTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableCff2VerticalTest.golden.json");
+
+        /// <summary>
+        /// <see cref="VariableTest"/> with an <c>avar</c> version 2 table (see VariableAvar2Test.LICENSE.txt): the width and the weight each move by an
+        /// amount that depends on the other axis; <see cref="VariableAvar2TestGolden"/> holds what fontTools' instancer draws at the locations that mapping leads to.
+        /// </summary>
+        internal static string VariableAvar2Test => Path.Combine(AppContext.BaseDirectory, "VariableAvar2Test.ttf");
+
+        /// <summary>The reference values for <see cref="VariableAvar2Test"/>: outlines, advances and the normalized coordinates fontTools maps each location to.</summary>
+        internal static string VariableAvar2TestGolden => Path.Combine(AppContext.BaseDirectory, "VariableAvar2Test.golden.json");
 
         /// <summary>
         /// A synthetic variable font whose <c>GPOS</c> varies with weight (see VariableLayoutTest.LICENSE.txt): kerning of A V and V A, a single

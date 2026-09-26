@@ -241,6 +241,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
         /// <summary>The number of data sets the store has.</summary>
         internal int DataSetCount => _dataSets.Length;
 
+        /// <summary>The number of axes every region of the store has a range for.</summary>
+        internal int AxisCount => _axisCount;
+
         /// <summary>How far a location lies inside a region: 1 at the peak, falling to 0 at the region's edges, and 0 outside it.</summary>
         private static double RegionScalar((double Start, double Peak, double End)[] region, ReadOnlySpan<double> coordinates)
         {

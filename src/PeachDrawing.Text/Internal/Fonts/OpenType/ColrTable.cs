@@ -21,6 +21,7 @@ using PeachDrawing.Text.Internal.Fonts.OpenType.Variations;
 using PeachDrawing.Text.Outlines;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace PeachDrawing.Text.Internal.Fonts.OpenType
 {
@@ -43,6 +44,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         private readonly Dictionary<int, int>? _v1BaseGlyphPaintOffsets;
         private readonly int[]? _v1LayerPaintOffsets;
         private readonly Dictionary<(string Location, int Offset), ColorPaint?> _paintCache = [];
+        private readonly Dictionary<(string Location, int Offset), ColorLine> _lineCache = [];
 
         // v1 variations and clip boxes
         private readonly ColrVariations? _variations;
@@ -151,6 +153,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 // What was read before the damage stays; the rest is left out.
             }
         }
+
         /// <summary>True if this glyph has any color definition (v0 layers or a v1 paint).</summary>
         public bool HasColorGlyph(int glyphId)
             => _baseGlyphRecords.ContainsKey(glyphId)
@@ -318,8 +321,15 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             /// <summary>How much the value at variation index <paramref name="varIndexBase"/> plus <paramref name="field"/> changes here, in the units it is written in.</summary>
             public double Delta(uint varIndexBase, int field) => _variations is null ? 0 : _variations.GetDelta(varIndexBase, field, _coordinates);
 
-            /// <summary>An FWord or UFWord value with its delta.</summary>
+            /// <summary>An FWord value with its delta.</summary>
             public double Units(double value, uint varIndexBase, int field) => value + Delta(varIndexBase, field);
+
+            /// <summary>A UFWord value (a radius) with its delta, which cannot take it below 0.</summary>
+            public double UnsignedUnits(double value, uint varIndexBase, int field)
+            {
+                double delta = Delta(varIndexBase, field);
+                return delta == 0 ? value : Math.Max(0, value + delta);
+            }
 
             /// <summary>A 2.14 fixed-point value with its delta (the delta is in units of 1/16384).</summary>
             public double Fixed14(double value, uint varIndexBase, int field) => value + Delta(varIndexBase, field) / 16384.0;
@@ -333,9 +343,6 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 double delta = Delta(varIndexBase, field);
                 return delta == 0 ? value : Math.Clamp(value + delta / 16384.0, 0, 1);
             }
-
-            /// <summary>Whether the location differs from the default of a font whose table has variation data, so that deltas apply.</summary>
-            public bool Varies => _variations is not null;
 
             /// <summary>An angle written as a 2.14 fixed-point number of half turns, with its delta, in radians.</summary>
             public double Angle(double halfTurns, uint varIndexBase, int field) => Fixed14(halfTurns, varIndexBase, field) * Math.PI;
@@ -412,7 +419,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     if (format == 7)
                     {
                         uint b = _face.ReadULong();
-                        (x0, y0, r0, x1, y1, r1) = (at.Units(x0, b, 0), at.Units(y0, b, 1), at.Units(r0, b, 2), at.Units(x1, b, 3), at.Units(y1, b, 4), at.Units(r1, b, 5));
+                        (x0, y0, r0, x1, y1, r1) = (at.Units(x0, b, 0), at.Units(y0, b, 1), at.UnsignedUnits(r0, b, 2), at.Units(x1, b, 3), at.Units(y1, b, 4), at.UnsignedUnits(r1, b, 5));
                     }
 
                     ColorLine line = ReadColorLine(offset + lineOffset, format == 7, at);
@@ -436,8 +443,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     }
                     else
                     {
-                        startAngle *= System.Math.PI;
-                        endAngle *= System.Math.PI;
+                        startAngle *= Math.PI;
+                        endAngle *= Math.PI;
                     }
 
                     ColorLine line = ReadColorLine(offset + lineOffset, format == 9, at);
@@ -532,7 +539,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 {
                     int paintOffset = ReadOffset24();
                     double angle = ReadF2Dot14();
-                    angle = format == 25 ? at.Angle(angle, _face.ReadULong(), 0) : angle * System.Math.PI;
+                    angle = format == 25 ? at.Angle(angle, _face.ReadULong(), 0) : angle * Math.PI;
                     return WrapTransform(Rotation(angle), offset + paintOffset, visiting, depth, at);
                 }
                 case 26: // PaintRotateAroundCenter
@@ -548,7 +555,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     }
                     else
                     {
-                        angle *= System.Math.PI;
+                        angle *= Math.PI;
                     }
 
                     return WrapTransform(AroundCenter(Rotation(angle), cx, cy), offset + paintOffset, visiting, depth, at);
@@ -565,7 +572,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     }
                     else
                     {
-                        (xSkew, ySkew) = (xSkew * System.Math.PI, ySkew * System.Math.PI);
+                        (xSkew, ySkew) = (xSkew * Math.PI, ySkew * Math.PI);
                     }
 
                     return WrapTransform(Skew(xSkew, ySkew), offset + paintOffset, visiting, depth, at);
@@ -583,7 +590,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     }
                     else
                     {
-                        (xSkew, ySkew) = (xSkew * System.Math.PI, ySkew * System.Math.PI);
+                        (xSkew, ySkew) = (xSkew * Math.PI, ySkew * Math.PI);
                     }
 
                     return WrapTransform(AroundCenter(Skew(xSkew, ySkew), cx, cy), offset + paintOffset, visiting, depth, at);
@@ -607,11 +614,17 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
         private ColorLine ReadColorLine(int offset, bool isVariable, Location at)
         {
+            // Many paints may name one colour line, and a line can have tens of thousands of stops: it is read once for each location.
+            var key = (at.Key, isVariable ? -offset : offset);
+            if (_lineCache.TryGetValue(key, out var cached))
+                return cached;
+
             _face.Position = offset;
             var extend = (ColorExtend)_face.ReadByte();
             int numStops = _face.ReadUShort();
             var line = new ColorLine { Extend = extend };
             bool sorted = true;
+            bool moved = false;
             for (int i = 0; i < numStops; i++)
             {
                 double stopOffset = ReadF2Dot14();
@@ -620,7 +633,13 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 if (isVariable)
                 {
                     uint b = _face.ReadULong();
-                    stopOffset = at.Fixed14(stopOffset, b, 0);
+                    double delta = at.Delta(b, 0);
+                    if (delta != 0)
+                    {
+                        stopOffset += delta / 16384.0;
+                        moved = true;
+                    }
+
                     alpha = at.Alpha(alpha, b, 1);
                 }
 
@@ -628,14 +647,21 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 line.StopList.Add(new ColorStop(stopOffset, paletteIndex, alpha));
             }
 
-            // Deltas can move a stop past its neighbour, and a colour line is defined with its stops in order (a stable sort keeps the
-            // order of stops that share an offset, which is how a hard edge is made).
-            if (!sorted && isVariable && at.Varies)
-                line.StopList.Sort(static (a, b) => a.Offset.CompareTo(b.Offset));
+            // A delta can move a stop past its neighbour, and a colour line is defined with its stops in order. Only where a delta moved a
+            // stop is the order restored (a font's own unsorted line is left as it is), and stably, so that the stops of a hard edge, which
+            // share an offset, keep their order.
+            if (moved && !sorted)
+            {
+                var ordered = line.StopList.OrderBy(static s => s.Offset).ToList();
+                line.StopList.Clear();
+                line.StopList.AddRange(ordered);
+            }
 
+            if (_lineCache.Count >= MaxCachedPaints)
+                _lineCache.Clear();
+            _lineCache[key] = line;
             return line;
         }
-
         private Affine2x3 ReadAffine(int offset, bool isVariable, Location at)
         {
             _face.Position = offset;
@@ -651,7 +677,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
         private static Affine2x3 Rotation(double radians)
         {
-            double cos = System.Math.Cos(radians), sin = System.Math.Sin(radians);
+            double cos = Math.Cos(radians), sin = Math.Sin(radians);
             return new Affine2x3(cos, sin, -sin, cos, 0, 0);
         }
 
@@ -659,7 +685,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             // COLR PaintSkew: x' = x - tan(xSkew)·y, y' = y + tan(ySkew)·x.
             // In Affine2x3 (XX, YX, XY, YY, DX, DY): XY = -tan(xSkew), YX = +tan(ySkew).
-            return new Affine2x3(1, System.Math.Tan(ySkewRadians), -System.Math.Tan(xSkewRadians), 1, 0, 0);
+            return new Affine2x3(1, Math.Tan(ySkewRadians), -Math.Tan(xSkewRadians), 1, 0, 0);
         }
 
         private static Affine2x3 AroundCenter(Affine2x3 m, double cx, double cy)
