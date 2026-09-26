@@ -182,7 +182,13 @@ if (face.TryMapRune(new Rune('g'), out ushort glyph) && face.TryGetOutline(glyph
   A version 1 glyph is a paint graph: `GetColorPaint` returns the root `ColorPaint`, and the sealed types that derive from it are
   named as the `COLR` specification names its paint formats (`PaintSolid`, `PaintLinearGradient`, `PaintRadialGradient`,
   `PaintSweepGradient`, `PaintGlyph`, `PaintTransform`, `PaintComposite`, `PaintColrGlyph`, and `PaintColrLayers`, whose layers
-  are read with `GetColorLayerPaint`). Variable paints are read at the font's default instance.
+  are read with `GetColorLayerPaint`). At a location of a variable font (`WithAxes`) the paints are read there: the variable formats
+  (`PaintVarSolid`, the gradients, `PaintVarTransform` and the translate, scale, rotate and skew variants), their colour lines and the
+  clip boxes have the deltas of the font's `COLR` variation store added, so the nodes carry the numbers that apply at the location (an
+  opacity that a delta pushes outside 0 to 1 is kept inside it, and colour stops a delta moves out of order are put back in order). Nodes are
+  made for each location, and a caller needs to know nothing about variations. `TryGetColorClipBox` gives the rectangle that holds everything a
+  glyph paints (the font's `ClipList`), when the font has one for it. The angles of a sweep gradient are counter-clockwise from the
+  positive x axis, as the specification's half-turn bias is undone.
 - **Colour glyphs from SVG.** A font with an `SVG ` table reports `HasSvgGlyphs`, and `TryGetSvgGlyph` gives the SVG document that draws a glyph (gzip-compressed
   documents are inflated, up to 4 MiB), the id of the element in it that is the glyph (`glyph` and the glyph's number), and the range of glyphs the document covers.
   The library does not render SVG: a caller draws the document with the glyph's origin at (0, 0), y pointing down and one design unit as one unit, with the font's

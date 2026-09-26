@@ -71,8 +71,8 @@ namespace PeachDrawing.Text.Outlines
     /// <remarks>
     /// <para>
     /// The translate, scale, rotate and skew formats, variable ones included, all arrive as a <see cref="PaintTransform"/> with
-    /// the matrix worked out, and a format this library does not know arrives as no node at all. Variable paints are read at the
-    /// default instance of the font, since variation deltas are not applied.
+    /// the matrix worked out, and a format this library does not know arrives as no node at all. The variable paints, colour lines and
+    /// transforms of a variable font arrive with the numbers that apply at the location of the <see cref="Typeface"/> they are read from.
     /// </para>
     /// <para>
     /// The nodes are shared with every other reader of the font and must be treated as read-only. Nodes can be shared within a
@@ -189,10 +189,10 @@ namespace PeachDrawing.Text.Outlines
         /// <summary>The y coordinate of the centre.</summary>
         public double CenterY { get; internal init; }
 
-        /// <summary>The angle of the start of the gradient, in radians.</summary>
+        /// <summary>The angle of the start of the gradient, in radians counter-clockwise from the positive x axis.</summary>
         public double StartAngle { get; internal init; }
 
-        /// <summary>The angle of the end of the gradient, in radians.</summary>
+        /// <summary>The angle of the end of the gradient, in radians counter-clockwise from the positive x axis.</summary>
         public double EndAngle { get; internal init; }
     }
 
