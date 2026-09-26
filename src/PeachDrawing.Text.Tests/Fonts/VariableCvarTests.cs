@@ -342,15 +342,45 @@ namespace PeachDrawing.Text.Tests.Fonts
             }
         }
 
-        [Fact]
-        public void ATableThatAsksForMoreWorkThanItsSizeAllows_IsRefused()
+        /// <summary>A table whose <paramref name="tupleCount"/> tuples all have the size 0, so that every one of them reads the same data: all the points, and 65,535 zero deltas.</summary>
+        private static byte[] BuildOverlappingTuples(int tupleCount)
         {
-            // 4095 tuples over 65535 control values: hundreds of millions of steps for a table of a few dozen kilobytes.
-            var tuple = new Tuple(1.0, [], PrivatePoints: true);
-            var table = Parse(BuildCvar(Enumerable.Repeat(tuple, 4095).ToArray()));
+            int dataOffset = 8 + tupleCount * 6;
+            var w = new Writer().U16(1).U16(0).U16(tupleCount).U16(dataOffset);
+            for (int i = 0; i < tupleCount; i++)
+                w.U16(0).U16(0x8000 | 0x2000).F2Dot14(1.0);
 
-            Assert.Null(table.GetDeltas([1.0], 65535));
-            Assert.Null(table.GetDeltas([1.0], 0));
+            w.U8(0);                                // all points
+            for (int run = 0; run < 1024; run++)
+                w.U8(0x80 | 0x3F);                  // 64 zero deltas
+
+            return w.ToArray();
         }
-    }
+
+        [Fact]
+        public void ATableWhoseTuplesAllReadTheSameData_IsRefusedOnceItsWorkPassesTheBound()
+        {
+            // Tuples of size 0 make the size of the table no bound on the work: 4095 tuples would each read 65,535 deltas.
+            Assert.Null(Parse(BuildOverlappingTuples(4095)).GetDeltas([1.0], 65535));
+
+            // A table of a hundred (6.5 million deltas) is within it.
+            var within = Parse(BuildOverlappingTuples(100)).GetDeltas([1.0], 65535);
+            Assert.NotNull(within);
+            Assert.Equal(65535, within.Length);
+            Assert.Null(Parse(BuildOverlappingTuples(100)).GetDeltas([1.0], 0));
+        }
+
+        [Fact]
+        public void TheHintedOutline_AtALocationBetweenTheMasters_UsesTheFractionalDeltasAsFreeTypeDoes()
+        {
+            // At weight 850 the deltas are fractional (700 + 29.67 for control value 0). The 26.6 value is 729.67, and the size scales the
+            // whole units of it, as FreeType's `cvt / 64` does, so the edge is fitted to 729; the instancer's rounding says 730.
+            var face = Load(BundledFonts.VariableCvarTest);
+            face.TryMapRune(new Rune('H'), out var glyph);
+            var request = new OutlineRequest { PixelsPerEm = 1000, GridFitting = GridFitting.Standard };
+
+            Assert.True(face.WithAxes([new AxisSetting("wght", 850)]).TryGetOutline(glyph, request, out var outline));
+
+            Assert.InRange(outline.Contours.SelectMany(c => c.Segments.Select(s => s.End.Y).Append(c.Start.Y)).Max(), 728.5, 730.5);
+        }    }
 }

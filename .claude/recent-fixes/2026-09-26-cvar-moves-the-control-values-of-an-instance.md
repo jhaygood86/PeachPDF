@@ -30,9 +30,14 @@ issue; what remains of variable-font hinting is [the exactness gap](../accepted-
   fraction (in 26.6), so the tests allow one font unit, exact at the locations where every scalar is 0 or 1 (default, each end of each axis).
 - **varLib writes explicit zero deltas** for control values a tuple does not change; the generator turns them into `None` so the tuples are sparse and
   the packed point numbers, the shared-points flag and the "left alone" rule are exercised by a real table, not only by the hand-written ones.
-- Work bound: each tuple that reaches the location is applied over the whole array, so a hostile table of thousands of tuples over tens of
-  thousands of control values would cost seconds per location. A table whose (tuples times control values) exceeds 2^26 is refused; `TtFace`
-  already refuses a `cvt` of more than 65,535 entries.
+- **The size of the table does not bound the work.** A tuple's data is found by the sizes in the headers, and every size may be 0, so 4,095
+  tuples can each read the same 65,535 deltas (a hostile table of a few dozen kilobytes; a review found the first bound, tuples times control values,
+  missed the case of a private point list that is longer than the `cvt`). The reader now counts the deltas each applied tuple reads (all the control
+  values, or its point count) and refuses a location whose count passes 2^24; a hundred full tuples (6.5 million) are within it. `TtFace` already refuses
+  a `cvt` of more than 65,535 entries.
+- **The fraction is dropped when a size scales the values, on purpose.** `TtFace` keeps `cvt + delta` in 26.6, but `TtSize` scales `cvt / 64` (integer
+  division), which is what FreeType does (its comment says the division must be applied to the multiplicand), so a control value of 729.67 is fitted as
+  729 and the instancer's rounding says 730. The test at weight 850 allows either. The sum is clamped to the int range so that a hostile table cannot wrap it.
 
 ## Deliberately not done
 

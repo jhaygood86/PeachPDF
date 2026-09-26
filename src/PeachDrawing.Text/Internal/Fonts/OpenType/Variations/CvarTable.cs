@@ -16,10 +16,11 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
         private const int PrivatePointNumbers = 0x2000;
 
         /// <summary>
-        /// The most (tuples times control values) a table may ask for: each tuple that reaches the location is applied over the whole array, so a
-        /// hostile table of thousands of tuples over tens of thousands of control values would otherwise cost seconds for every location.
+        /// The most delta values (one for each point of each tuple that reaches the location, or for each control value where a tuple has all
+        /// of them) a table may make this reader read for one location. A tuple's data is found by the sizes in the headers, which may all be
+        /// zero so that every tuple reads the same bytes, so the size of the table does not bound the work; a real font uses a small part of this.
         /// </summary>
-        private const long MaxWork = 1 << 26;
+        private const long MaxWork = 1 << 24;
 
         private readonly ReadOnlyMemory<byte> _table;
         private readonly int _axisCount;
@@ -73,10 +74,6 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
             int tupleField = BigEndian.U16(table, 4);
             int tupleCount = tupleField & 0x0FFF;
             int dataOffset = BigEndian.U16(table, 6);
-            if ((long)tupleCount * cvtCount > MaxWork)
-            {
-                return null;
-            }
 
             // Read every header first: the serialized data of the tuples follows them one after another.
             int headerAt = 8;
@@ -115,6 +112,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
             }
 
             double[]? result = null;
+            long work = 0;
             foreach (var (size, peak, start, end, privatePoints) in tuples)
             {
                 int tupleEnd = at + size;
@@ -129,7 +127,14 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                         points = GvarTable.ReadPointNumbers(table, ref pos, out all);
                     }
 
-                    int[] deltas = GvarTable.ReadDeltas(table, ref pos, all ? cvtCount : points!.Length);
+                    int count = all ? cvtCount : points!.Length;
+                    work += count;
+                    if (work > MaxWork)
+                    {
+                        return null;
+                    }
+
+                    int[] deltas = GvarTable.ReadDeltas(table, ref pos, count);
                     result ??= new double[cvtCount];
                     if (all)
                     {
