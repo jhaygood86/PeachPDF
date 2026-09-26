@@ -7,7 +7,7 @@ namespace PeachDrawing.Text.Layout
     /// The room a line of a paragraph has, as its caller worked it out: where the space starts and ends across the layout, how far the text is indented into it, and where
     /// the line's top is.
     /// </summary>
-    /// <param name="Left">The left edge of the space, in layout units. It is where a left-to-right line starts (after the indent), and the far edge of a right-to-left one. It must be finite.</param>
+    /// <param name="Left">The left edge of the space, in layout units. It is where a left-to-right line starts (after the indent); a right-to-left line is laid out from here to <paramref name="Right"/>, less the indent, and right-aligned in that. It must be finite, and so must its sum with the indent.</param>
     /// <param name="Right">The right edge of the space, or <see cref="double.PositiveInfinity"/> for a line that breaks only where it is forced to. A space that ends before it starts has no width.</param>
     /// <param name="Indent">How far the text is moved in from the start edge of the space (<see cref="LineFlow.GetIndent"/> gives the <see cref="ParagraphStyle.TextIndent"/> of the line); it must be finite.</param>
     /// <param name="Top">The distance from the top of the layout to the top of the line, in layout units; it must be finite.</param>
@@ -75,7 +75,7 @@ namespace PeachDrawing.Text.Layout
     /// <para>
     /// What the flow leaves to its caller: <see cref="ParagraphStyle.MaxLines"/> (the caller decides how many lines there are; <see cref="ParagraphStyle.TextOverflow"/> still cuts a line
     /// that overflows its space), where the next line's top is (the height of the line laid out is <see cref="LineBox.Height"/>), and the indent (see <see cref="GetIndent"/>). The limit on
-    /// hyphenating the last full line is worked out against the space of the line being laid out, since the next line's is not known, and tab stops are measured from the start
+    /// hyphenating the last full line takes the width of the space being laid out, less the indent of a line that is not indented, for the room of the next line, whose space is not known, and tab stops are measured from the start
     /// edge of the space plus the indent, not from the edge of a block that a float narrowed the space of. A line's runs are placed in layout coordinates, at the space's left edge.
     /// </para>
     /// </remarks>
@@ -117,9 +117,9 @@ namespace PeachDrawing.Text.Layout
         public bool TryNext(in FlowCursor cursor, in LineSpace space, [NotNullWhen(true)] out LineBox? line, out FlowCursor next)
         {
             CheckCursor(cursor);
-            if (!double.IsFinite(space.Left) || double.IsNaN(space.Right) || !double.IsFinite(space.Indent) || !double.IsFinite(space.Top))
+            if (!double.IsFinite(space.Left) || double.IsNaN(space.Right) || !double.IsFinite(space.Indent) || !double.IsFinite(space.Top) || !double.IsFinite(space.Left + space.Indent))
             {
-                throw new ArgumentException("The space's left edge, indent and top must be finite, and its right edge a number.", nameof(space));
+                throw new ArgumentException("The space's left edge, indent and top must be finite, and so must the left edge and indent together, and its right edge a number.", nameof(space));
             }
 
             if (cursor.IsEnd)

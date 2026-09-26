@@ -12,8 +12,7 @@ What the paragraph layout API does not do, or does in a simplified way, on purpo
 - **Tab stops** are measured along a line in the order the text is written, so a tab that follows right-to-left text in a left-to-right line is placed as if that text were where it is in memory,
   not where it is drawn. In a `LineFlow` they are measured from the start edge of the line's space plus its indent, not from the edge of a block that a float narrowed the space of. Justification
   widens spaces only, so text after a tab in a justified line leaves its stop.
-- **Hyphenation:** `hyphenate-limit-last` offers `always` only (a paragraph has no columns, pages or spreads), and in a `LineFlow` it is tested against the room of the line being laid out, since
-  the next line's is not known. A word is hyphenated by its longest run of letters up to 128 UTF-16 units, so one with digits or an apostrophe in it is left whole, as the pattern engine does; the
+- **Hyphenation:** `hyphenate-limit-last` offers `always` only (a paragraph has no columns, pages or spreads), and in a `LineFlow` the next line's room, which it is tested against, is guessed from the width of the space being laid out, since the next space is not known. A word is hyphenated by its longest run of letters up to 128 UTF-16 units, so one with digits or an apostrophe in it is left whole, as the pattern engine does; the
   patterns are the TeX ones for about seventy languages, embedded Brotli-compressed, so in a WebAssembly host (which has no Brotli decoder) `Auto` finds no points. The pattern engine's own
   minimums are a floor under `HyphenateLimitChars`. A soft hyphen inside a ligature or a kerned pair stops the ligature or kern, since the text is shaped with it before its glyph is dropped.
 - **Ellipsis:** the cut is at a boundary between grapheme clusters, not at a word (the CSS `line-clamp` algorithm leaves the choice to the agent). `text-overflow: ellipsis` takes a single

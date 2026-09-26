@@ -104,6 +104,7 @@ namespace PeachDrawing.Text.Tests.Layout
             "rtl",
             "line-height",
             "nowrap",
+            "last-line-limit",
         };
 
         private static Paragraph CaseParagraph(string name)
@@ -129,6 +130,7 @@ namespace PeachDrawing.Text.Tests.Layout
                 case "forced-breaks": return Build("one two three four\nfive six seven eight nine ten\n\nlast line here\n");
                 case "rtl": return Build("אבגד אבג דאבגד אב גדאבגד אבגד", new ParagraphStyle { Direction = BaseDirection.Rtl, TextIndent = new TextIndent(15) }, HebrewFace);
                 case "line-height": return Build(Words, new ParagraphStyle { LineHeight = 1.7 });
+                case "last-line-limit": return Build("internationalization of representational characteristics internationalization", new ParagraphStyle { Hyphens = Hyphens.Auto, LineBreak = English, HyphenateLimitLast = HyphenateLimitLast.Always, TextIndent = new TextIndent(40) });
                 case "nowrap": return Build(Words + "\n" + Words, new ParagraphStyle { NoWrap = true });
                 default: throw new ArgumentException(name);
             }
@@ -341,6 +343,7 @@ namespace PeachDrawing.Text.Tests.Layout
         [InlineData(0.0, 0.0)]
         [InlineData(100.0, 50.0)]
         [InlineData(0.0, double.NegativeInfinity)]
+        [InlineData(1e308, -1e308)]
         [InlineData(-500.0, -400.0)]
         public void ASpaceWithNoWidth_StillMakesProgress_UntilTheEnd(double left, double right)
         {
@@ -348,6 +351,13 @@ namespace PeachDrawing.Text.Tests.Layout
             var flow = paragraph.CreateFlow();
             var cursor = flow.Start;
             int lines = 0;
+            Assert.True(flow.TryNext(cursor, new LineSpace(left, right), out var narrow, out _));
+            Assert.True(flow.TryNext(cursor, new LineSpace(left, left), out var none, out _));
+            if (right <= left)
+            {
+                Assert.Equal(none.Range, narrow.Range);
+            }
+
             while (flow.TryNext(cursor, new LineSpace(left, right), out var line, out var next))
             {
                 Assert.True(next.IsEnd || next.Offset > cursor.Offset, "a line took no text");
@@ -357,6 +367,14 @@ namespace PeachDrawing.Text.Tests.Layout
             }
 
             Assert.True(cursor.IsEnd);
+        }
+
+        [Fact]
+        public void APositionThatOverflowsWithItsIndent_IsRefused()
+        {
+            var flow = Build("one two").CreateFlow();
+
+            Assert.Throws<ArgumentException>(() => flow.TryNext(flow.Start, new LineSpace(1e308, double.PositiveInfinity, 1e308), out _, out _));
         }
 
         [Fact]

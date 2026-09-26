@@ -472,8 +472,8 @@ foreach (LineBox line in layout.Lines)
   `flow.Start`, is the start of the paragraph; `cursor.IsEnd` says the last line has been laid out. The call is a pure function of the paragraph, the cursor and the space: it never changes its
   arguments and keeps nothing, so a caller that wants to undo a line (its height grew, a float now intrudes) calls it again with the cursor from before, and one flow can be used from several
   threads. `flow.GetIndent(cursor)` gives the `text-indent` of the line, for a caller that follows the style. The lines are the same as `Layout` gives when every space is the full width and each
-  line is under the last (a test holds the two to that), except that `MaxLines` is the caller's to apply, tab stops start at the space's edge, and a right-to-left line is placed against the
-  space's left edge, not a right edge the flow does not know, when the space has no end.
+  line is under the last (a test holds the two to that), except that `MaxLines` is the caller's to apply, tab stops start at the space's edge, the limit on hyphenating the last full line guesses the next line's room from this space's width, and
+  a right-to-left line is placed against the space's left edge, not a right edge the flow does not know, when the space has no end.
 
 Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph.
 

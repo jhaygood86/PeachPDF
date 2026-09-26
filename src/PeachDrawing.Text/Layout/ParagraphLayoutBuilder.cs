@@ -70,9 +70,10 @@ namespace PeachDrawing.Text.Layout
         /// </summary>
         internal static LineBox LayFlowLine(Paragraph paragraph, in FlowCursor cursor, in LineSpace space, out FlowCursor next)
         {
-            double width = space.Right - space.Left;
+            // A space that ends before it starts has no width (and a difference that overflows to minus infinity is not "no end").
+            double width = Math.Max(0, space.Right - space.Left);
             double room = RoomFor(width, space.Indent);
-            var spec = FitLine(paragraph, cursor.Offset, room, space.Indent, cursor.HyphenatedLines, room);
+            var spec = FitLine(paragraph, cursor.Offset, room, space.Indent, cursor.HyphenatedLines, RoomFor(width, paragraph.IndentOf(false, false)));
             spec = Ellipsize(paragraph, spec, room, space.Indent, hidesText: false);
             var measured = MeasureLine(paragraph, spec, space.Indent);
 
