@@ -1,0 +1,7 @@
+HintingGasp.ttf is a synthetic test font made by generate_hinting_gasp_fixtures.py in this directory: three rectangles with a
+small TrueType program each, and a gasp table. It contains no third-party design and is dedicated to the public domain under CC0 1.0
+Universal (https://creativecommons.org/publicdomain/zero/1.0/).
+
+HintingGasp.golden.json.gz is made by the same script: it holds the answers FreeType 2.14.3 gives about that font (and about variants of
+it that differ only in their gasp table, which it holds as data), and coordinates it computed from the font's outlines. It contains no
+other font.

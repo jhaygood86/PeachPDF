@@ -200,6 +200,28 @@ namespace PeachPDF.Tests.Raster
         }
 
         [Fact]
+        public async Task TextIsHintedOnlyAtTheSizesWhereTheFontsGaspTableAsksForIt()
+        {
+            async Task<byte[]> Draw(TextHinting hinting, double size)
+            {
+                var adapter = new PdfSharpAdapter { TextHinting = hinting };
+                await BundledFonts.RegisterFont(adapter, BundledFonts.Gasp, "RasterGaspFont");
+                var graphics = new RasterGraphics(adapter, new RasterSurface(120, 60, 0, 0, 1, 1), 1);
+                var font = adapter.GetFont("RasterGaspFont", size, RFontStyle.Regular)!;
+                graphics.DrawString("AB", font, Black, new RPoint(10, 40), graphics.MeasureString("AB", font));
+                return Pixels(graphics);
+            }
+
+            // 6 px is below the first range that has the grid-fit flag and 12 px inside one: the text is the plain scaled design at the first
+            // size and is fitted at the second
+            Assert.Equal(await Draw(TextHinting.None, 6), await Draw(TextHinting.Standard, 6));
+            Assert.NotEqual(await Draw(TextHinting.None, 12), await Draw(TextHinting.Standard, 12));
+
+            // and 30 px lies in a range for ClearType only, which the standard rasterizer does not take as asking for fitting
+            Assert.Equal(await Draw(TextHinting.None, 30), await Draw(TextHinting.Standard, 30));
+        }
+
+        [Fact]
         public async Task ItalicTextKeepsItsShearWhenHinted()
         {
             var adapter = new PdfSharpAdapter { TextHinting = TextHinting.Standard };
