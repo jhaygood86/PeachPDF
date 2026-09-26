@@ -97,8 +97,8 @@
 		<!-- The notices the licences of the code in this package require it to carry (PDFsharp, ExCSS); the text engine's ship in its own package. -->
 		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
 		<None Include="..\..\THIRD-PARTY-LICENSES.md" Pack="true" PackagePath="\" />
-			<!-- The FreeType Project License, unaltered: the credit line in THIRD-PARTY-LICENSES.md refers to it, and the text engine this package depends on ports FreeType's TrueType interpreter. -->
-			<None Include="..\PeachDrawing.Text\Internal\Hinting\FreeType\FTL.TXT" Pack="true" PackagePath="\" />
+		<!-- The FreeType Project License, unaltered: the credit line in THIRD-PARTY-LICENSES.md refers to it, and the text engine this package depends on ports FreeType's TrueType interpreter. -->
+		<None Include="..\PeachDrawing.Text\Internal\Hinting\FreeType\FTL.TXT" Pack="true" PackagePath="\" />
 		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
 	</ItemGroup>
 	<Target Name="GeneratePeachPdfProductInfo" BeforeTargets="BeforeBuild">

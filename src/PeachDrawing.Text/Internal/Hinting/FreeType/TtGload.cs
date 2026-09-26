@@ -32,7 +32,7 @@
  *
  */
 
-// Ported to C# for PeachDrawing.Text; modified. This file derives from FreeType 2.14.3 (VER-2-14-3): ttgload.c, ftgloadr.c.
+// Ported to C# for PeachDrawing.Text; modified. This file derives from FreeType 2.14.3 (VER-2-14-3): ttgload.c, ftgloadr.c, ftobjs.c (ft_glyphslot_grid_fit_metrics).
 // The changes are recorded in PORTING-NOTES.md, next to FTL.TXT.
 
 using System;
@@ -245,8 +245,8 @@ internal sealed class TtGlyphLoader
         exec.ResetWorkingCopies();
 
         // The twilight zone starts each glyph as the CVT program left it.
-        exec.Twilight = new TtGlyphZone();
-        exec.Twilight.CopyFrom(size.Twilight);
+        exec.TwilightScratch.CopyFrom(size.Twilight);
+        exec.Twilight = exec.TwilightScratch;
 
         exec.SetProgramRanges(face.FontProgram, face.CvtProgram);
 

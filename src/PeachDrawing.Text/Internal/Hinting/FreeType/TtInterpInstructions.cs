@@ -359,6 +359,10 @@ internal sealed partial class TtExecContext
                 break;
         }
 
+        // the scan is work too: a font can define thousands of functions, each defined after a scan of all before it
+        if (ChargeWork(rec + 1))
+            return;
+
         if (rec == NumFDefs)
         {
             // check that there is enough room for new functions
@@ -436,7 +440,8 @@ internal sealed partial class TtExecContext
         //       range. This is a valid address, and it is why we do not test the result of Ins_Goto_CodeRange() here!
     }
 
-    // Finds the definition of function f (the lookup shared by CALL and LOOPCALL); returns its index or -1.
+    // Finds the definition of function f (the lookup shared by CALL and LOOPCALL); returns its index, -1 when there is none, or -2 when
+    // the search spent the work budget (the error is set).
     private int FindFunction(uint f)
     {
         // Except for some old Apple fonts, all functions in a TrueType font are defined in increasing order, starting from
@@ -449,14 +454,14 @@ internal sealed partial class TtExecContext
         if (MaxFunc + 1 == NumFDefs && f < (uint)FDefs.Length && FDefs[f].Opc == f)
             return (int)f;
 
-        // look up the FDefs table
+        // look up the FDefs table; a font whose functions are out of order makes every call a scan of up to 65,535 entries, so it is charged
         for (int i = 0; i < NumFDefs; i++)
         {
             if (FDefs[i].Opc == f)
-                return i;
+                return ChargeWork(i + 1) ? -2 : i;
         }
 
-        return -1;
+        return ChargeWork(NumFDefs) ? -2 : -1;
     }
 
     /// <summary>CALL[]: CALL function. Opcode 0x2B.</summary>
@@ -477,6 +482,9 @@ internal sealed partial class TtExecContext
         }
 
         int def = FindFunction(f);
+        if (def == -2)
+            return;
+
         if (def < 0)
         {
             Error = TtError.InvalidReference;
@@ -522,6 +530,9 @@ internal sealed partial class TtExecContext
         }
 
         int def = FindFunction(f);
+        if (def == -2)
+            return;
+
         if (def < 0)
         {
             Error = TtError.InvalidReference;
@@ -581,6 +592,9 @@ internal sealed partial class TtExecContext
             if (IDefs[def].Opc == (uint)Stack[a])
                 break;
         }
+
+        if (ChargeWork(def + 1))
+            return;
 
         if (def == NumIDefs)
         {

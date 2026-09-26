@@ -65,7 +65,8 @@ internal sealed partial class RasterGraphics
             }
             else if (hinting is { } request && typeface.TryGetOutline((ushort)glyph.GlyphIndex, request, out var fitted))
             {
-                AddPixelGlyph(contours, fitted, toDevice, penX + glyph.XOffset * scale, baselineY - glyph.YOffset * scale, skew, tolerance);
+                AddPixelGlyph(contours, fitted, toDevice, penX + glyph.XOffset * scale, baselineY - glyph.YOffset * scale, skew, tolerance,
+                    request.GridFitting == GridFitting.Monochrome);
             }
             else if (typeface.TryGetOutline((ushort)glyph.GlyphIndex, out var outline))
             {
@@ -110,7 +111,8 @@ internal sealed partial class RasterGraphics
         foreach (var placement in glyphs)
         {
             if (hinting is { } request && typeface.TryGetOutline((ushort)placement.GlyphIndex, request, out var fitted))
-                AddPixelGlyph(contours, fitted, toDevice, placement.X / _pixelsPerPoint, placement.Y / _pixelsPerPoint, 0, tolerance);
+                AddPixelGlyph(contours, fitted, toDevice, placement.X / _pixelsPerPoint, placement.Y / _pixelsPerPoint, 0, tolerance,
+                    request.GridFitting == GridFitting.Monochrome);
             else if (typeface.TryGetOutline((ushort)placement.GlyphIndex, out var outline))
                 AddGlyph(contours, outline, placement.X / _pixelsPerPoint, placement.Y / _pixelsPerPoint, scale, 0, tolerance);
         }
@@ -147,13 +149,19 @@ internal sealed partial class RasterGraphics
     /// Appends an outline in device pixels (a grid-fitted one, or a scaled one) to <paramref name="target"/>, in user space, with its origin
     /// on the baseline at (<paramref name="x"/>, <paramref name="y"/>) in user space. A grid-fitted glyph has its origin moved to a
     /// whole device pixel vertically, so the baseline the hinting was done for lies on a pixel edge; horizontally it stays where layout put
-    /// it (the interpreter used does not fit glyphs horizontally).
+    /// it, unless the outline was fitted in both directions (<paramref name="fitX"/>, monochrome hinting), when the origin is on a pixel
+    /// edge too, as the stems were fitted relative to it.
     /// </summary>
-    private static void AddPixelGlyph(FlatPath target, GlyphOutline outline, in Affine toDevice, double x, double y, double skew, double tolerance)
+    private static void AddPixelGlyph(FlatPath target, GlyphOutline outline, in Affine toDevice, double x, double y, double skew, double tolerance,
+        bool fitX)
     {
         var (originX, originY) = toDevice.Apply(x, y);
         if (outline.IsGridFitted)
+        {
             originY = Math.Round(originY);
+            if (fitX)
+                originX = Math.Round(originX);
+        }
 
         if (toDevice.Invert() is not { } toUser)
             return;

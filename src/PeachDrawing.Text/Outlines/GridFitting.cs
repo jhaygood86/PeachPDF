@@ -38,7 +38,8 @@ namespace PeachDrawing.Text.Outlines
     {
         /// <summary>
         /// The size the outline will be drawn at, in pixels per em, for an outline that is grid-fitted. It may be fractional; the
-        /// font's hinting works on the size in 1/64 pixel. Ignored, and the outline stays in design units, for
+        /// font's hinting works on the size in 1/64 pixel, except that a TrueType font that asks for whole pixels per em is fitted at the
+        /// nearest whole size (see <see cref="GlyphOutline.PixelsPerEm"/>). Ignored, and the outline stays in design units, for
         /// <see cref="GridFitting.None"/>.
         /// </summary>
         public double PixelsPerEm { get; init; }

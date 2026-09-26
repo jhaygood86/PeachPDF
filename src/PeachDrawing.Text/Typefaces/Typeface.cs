@@ -94,7 +94,8 @@ namespace PeachDrawing.Text
         /// is <see cref="GlyphOutline.IsGridFitted"/> and carries <see cref="GlyphOutline.GridFittedAdvance"/>. A font that cannot be
         /// grid-fitted (it has no TrueType outlines, it has no TrueType instructions to run, or its instructions fail) gets the scaled design outline and
         /// <see cref="GlyphOutline.IsGridFitted"/> is <see langword="false"/>; nothing throws for a font that is merely unusable.
-        /// Hinted outlines are cached, so asking again for the same glyph and size is cheap. Only the outline is fitted: a caller that
+        /// Hinted outlines are cached, so asking again for the same glyph and size is cheap; the outline is then shared by every caller that
+        /// asks, which is safe because an outline never changes. Only the outline is fitted: a caller that
         /// lays text out keeps using the design advances of <see cref="GetAdvance"/>.
         /// </remarks>
         /// <param name="glyph">The glyph.</param>

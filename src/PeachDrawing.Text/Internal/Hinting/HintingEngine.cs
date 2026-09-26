@@ -4,6 +4,7 @@ using PeachDrawing.Text.Internal.Hinting.FreeType;
 using PeachDrawing.Text.Outlines;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace PeachDrawing.Text.Internal.Hinting;
 
@@ -51,7 +52,7 @@ internal sealed class HintingEngine
     // face of a few huge glyphs cannot fill the memory with them.
     private const int MaxSizes = 16;
     private const int MaxGlyphs = 4096;
-    private const long MaxGlyphWeight = 1_000_000;
+    private const long MaxGlyphWeight = 250_000;
 
     private readonly OpenTypeFontface _font;
     private readonly string? _familyName;
@@ -60,7 +61,7 @@ internal sealed class HintingEngine
 
     private readonly object _faceLock = new();
     private TtFace? _face;
-    private bool _faceRead;
+    private bool _faceRead; // written last, with release semantics, so a reader that sees it true sees _face
 
     private readonly LruCache<SizeKey, TtSize?> _sizes = new(MaxSizes);
     private readonly LruCache<GlyphKey, HintedGlyphResult> _glyphs = new(MaxGlyphs, WeightOf, MaxGlyphWeight);
@@ -78,6 +79,9 @@ internal sealed class HintingEngine
 
     private TtFace? GetFace()
     {
+        if (Volatile.Read(ref _faceRead))
+            return _face;
+
         lock (_faceLock)
         {
             if (!_faceRead)
@@ -92,7 +96,7 @@ internal sealed class HintingEngine
                     _face = null;
                 }
 
-                _faceRead = true;
+                Volatile.Write(ref _faceRead, true);
             }
 
             return _face;
@@ -105,6 +109,8 @@ internal sealed class HintingEngine
     /// <param name="mode">The kind of grid-fitting; not <see cref="GridFitting.None"/>.</param>
     public HintedGlyphResult Get(int glyph, int ppem26Dot6, GridFitting mode)
     {
+        ppem26Dot6 = EffectivePpem(ppem26Dot6);
+
         var sizeKey = new SizeKey(ppem26Dot6, mode);
         var key = new GlyphKey(sizeKey, glyph);
 
@@ -114,6 +120,21 @@ internal sealed class HintingEngine
         HintedGlyphResult result = Compute(glyph, sizeKey);
         _glyphs.Set(key, result);
         return result;
+    }
+
+    /// <summary>
+    /// The size a face is actually scaled to. A TrueType font whose <c>head</c> flags ask for integer ppems (nearly all do) is scaled to the
+    /// nearest whole number of pixels per em, as FreeType does: 11.4 ppem is 11. Keying the caches by the size that counts means that every
+    /// fractional size of such a font shares one entry, instead of each running <c>prep</c> again and pushing another out of the cache.
+    /// </summary>
+    private int EffectivePpem(int ppem26Dot6)
+    {
+        TtFace? face = GetFace();
+        if (face is null || (face.HeadFlags & 8) == 0)
+            return ppem26Dot6;
+
+        int rounded = (int)(((long)ppem26Dot6 + 32) >> 6) << 6;
+        return rounded > 0 ? rounded : ppem26Dot6;
     }
 
     private HintedGlyphResult Compute(int glyph, SizeKey sizeKey)
@@ -211,81 +232,15 @@ internal sealed class HintingEngine
     /// hostile data): an index out of range or the like in the interpreter, which the engine also answers by not hinting but which is a bug.
     /// The tests watch it.
     /// </summary>
-    internal static long UnexpectedFailures => System.Threading.Interlocked.Read(ref s_unexpectedFailures);
+    internal static long UnexpectedFailures => Interlocked.Read(ref s_unexpectedFailures);
 
     private static void NoteFailure(Exception ex)
     {
         if (ex is not HintingException)
-            System.Threading.Interlocked.Increment(ref s_unexpectedFailures);
+            Interlocked.Increment(ref s_unexpectedFailures);
     }
 
     private readonly record struct SizeKey(int Ppem26Dot6, GridFitting Mode);
 
     private readonly record struct GlyphKey(SizeKey Size, int Glyph);
-}
-
-/// <summary>A thread-safe cache that keeps the most recently used entries, up to a number of them and, if asked, a total weight.</summary>
-internal sealed class LruCache<TKey, TValue>
-    where TKey : notnull
-{
-    private readonly int _capacity;
-    private readonly Func<TValue, int>? _weigher;
-    private readonly long _maxWeight;
-    private long _weight;
-    private readonly Dictionary<TKey, LinkedListNode<KeyValuePair<TKey, TValue>>> _map = [];
-    private readonly LinkedList<KeyValuePair<TKey, TValue>> _order = new();
-    private readonly object _lock = new();
-
-    /// <param name="capacity">The most entries kept.</param>
-    /// <param name="weigher">What an entry weighs, or null when entries are not weighed.</param>
-    /// <param name="maxWeight">The most weight kept: the newest entry is always kept, however heavy, and the older ones go first.</param>
-    public LruCache(int capacity, Func<TValue, int>? weigher = null, long maxWeight = long.MaxValue)
-    {
-        _capacity = capacity;
-        _weigher = weigher;
-        _maxWeight = maxWeight;
-    }
-
-    public bool TryGet(TKey key, out TValue? value)
-    {
-        lock (_lock)
-        {
-            if (_map.TryGetValue(key, out var node))
-            {
-                _order.Remove(node);
-                _order.AddFirst(node);
-                value = node.Value.Value;
-                return true;
-            }
-        }
-
-        value = default;
-        return false;
-    }
-
-    public void Set(TKey key, TValue value)
-    {
-        lock (_lock)
-        {
-            if (_map.TryGetValue(key, out var existing))
-            {
-                _order.Remove(existing);
-                _map.Remove(key);
-                _weight -= _weigher?.Invoke(existing.Value.Value) ?? 0;
-            }
-
-            var node = new LinkedListNode<KeyValuePair<TKey, TValue>>(new KeyValuePair<TKey, TValue>(key, value));
-            _order.AddFirst(node);
-            _map[key] = node;
-            _weight += _weigher?.Invoke(value) ?? 0;
-
-            while (_map.Count > _capacity || (_weight > _maxWeight && _map.Count > 1))
-            {
-                LinkedListNode<KeyValuePair<TKey, TValue>> last = _order.Last!;
-                _order.RemoveLast();
-                _map.Remove(last.Value.Key);
-                _weight -= _weigher?.Invoke(last.Value.Value) ?? 0;
-            }
-        }
-    }
 }

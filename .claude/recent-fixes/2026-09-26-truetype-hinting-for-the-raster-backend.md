@@ -33,6 +33,14 @@ of FreeType 2.14.3's (`Internal/Hinting/FreeType/`, FTL licensed, `PORTING-NOTES
   kilobytes, 30 components over 6 levels, is 30^6 loads). The instruction and loop-work budgets are shared by everything one glyph load
   runs, one load may read 1,024 glyphs, and the plain-outline decoder (`GlyphOutlineDecoder`) has the same component budget. Loop work
   also counts flips, `ROLL` and skipped code. Caches are bounded by count and, for glyphs, by weight (16 sizes, 4,096 glyphs, 1M weight).
+- **A fractional size is not a size for most TrueType fonts.** A font whose `head` flags ask for integer ppems (nearly all) is scaled at
+  the nearest whole pixel size, so the engine keys its caches by that size (every 11.0 to 11.49 shares one `prep` run and one cache
+  entry, instead of each pushing another out of a 16-size cache) and `GlyphOutline.PixelsPerEm` reports the size the font was fitted at,
+  which the raster backend's hinted glyphs then are, up to a few percent smaller than layout's fractional size. Monochrome fitting also
+  snaps the glyph origin to a pixel column, since its stems are fitted relative to it.
+- **Scans are work too.** `FDEF`, `IDEF` and the function lookup of `CALL`/`LOOPCALL` (a linear scan of up to 65,535 definitions when a
+  font defines its functions out of order) are charged against the loop-work budget; the `cvt` table is capped at 65,535 entries; the
+  twilight zone a glyph starts from is copied into a reused buffer instead of new arrays for every glyph.
 - **No instructions, no grid fitting.** A TrueType font with no `fpgm`, `prep` or glyph programs is not "fitted": scaling it is all the
   loader would do, so `IsGridFitted` stays false and callers can tell (`TtFace.HasInstructions`).
 - **Hinted edges are on pixel edges only if the baseline is.** The raster backend snaps the baseline to a whole device pixel for a

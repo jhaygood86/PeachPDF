@@ -95,6 +95,13 @@ internal sealed partial class TtExecContext
 
     public TtGlyphZone Zp0 = new(), Zp1 = new(), Zp2 = new(), Pts = new(), Twilight = new();
 
+    /// <summary>
+    /// The storage of the twilight zone a glyph program starts from (a copy of what the size's CVT program left). It is kept by the
+    /// context, which is reused, so that a font that declares tens of thousands of twilight points does not cost several megabytes of new
+    /// arrays for every glyph.
+    /// </summary>
+    public readonly TtGlyphZone TwilightScratch = new();
+
     /// <summary>The point size in 26.6 (<c>MPS</c>).</summary>
     public int PointSize;
 

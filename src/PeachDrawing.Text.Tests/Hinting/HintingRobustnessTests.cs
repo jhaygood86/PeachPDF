@@ -79,6 +79,53 @@ namespace PeachDrawing.Text.Tests.Hinting
         }
 
         [Fact]
+        public void FunctionsDefinedOutOfOrderMakeEveryCallAScanThatIsChargedAgainstTheBudget()
+        {
+            // 3,000 empty functions defined from the highest number down, so that no call finds its function by index; function 0 calls
+            // function 1, and the CVT program loops function 0 32,767 times: 100 million entries scanned if the scans were free
+            const int functions = 3000;
+            var fpgm = new List<byte>();
+            for (int group = (functions - 1) / 255; group >= 0; group--)
+            {
+                int first = group * 255, last = Math.Min(functions, first + 255);
+                fpgm.AddRange([0x41, (byte)(last - first)]); // NPUSHW
+                for (int id = first; id < last; id++)
+                    fpgm.AddRange(Be16(id));
+
+                for (int id = last - 1; id >= first; id--) // popped from the top: the last pushed is defined first
+                {
+                    fpgm.Add(0x2C); // FDEF
+                    if (id == 0)
+                        fpgm.AddRange([0xB0, 0x01, 0x2B]); // PUSHB[0] 1, CALL
+                    fpgm.Add(0x2D); // ENDF
+                }
+            }
+
+            byte[] prep = [.. HostileFonts.PushWord(32767), .. HostileFonts.PushWord(0), 0x2A]; // LOOPCALL
+            var original = HostileFonts.Original();
+            var maxp = HostileFonts.TableBytes(original, "maxp");
+            BinaryPrimitives.WriteUInt16BigEndian(maxp.AsSpan(20), 4000);
+            BinaryPrimitives.WriteUInt16BigEndian(maxp.AsSpan(24), 1000);
+            var font = HostileFonts.WithTable(HostileFonts.WithTable(HostileFonts.WithTable(original, "maxp", maxp), "fpgm", fpgm.ToArray()), "prep", prep);
+            var face = FaceOf(font);
+
+            AssertBounded(TimeSpan.FromSeconds(10), () =>
+                Assert.Throws<HintingException>(() => TtSize.Create(face, Size, TtInterpreterVersion.V40, TtRenderMode.Normal)));
+        }
+
+        [Fact]
+        public void ACvtTableWithAbsurdlyManyEntriesMakesTheFontUnhintable()
+        {
+            var cvt = new byte[2 * 70000];
+            var font = HostileFonts.WithTable(HostileFonts.Original(), "cvt ", cvt);
+            var typeface = PeachPDF.Tests.TestSupport.TypefaceFixtures.FromBytes(font);
+
+            Assert.True(typeface.TryMapRune(new System.Text.Rune('!'), out var glyph));
+            Assert.True(typeface.TryGetOutline(glyph, new OutlineRequest { PixelsPerEm = 12, GridFitting = GridFitting.Standard }, out var outline));
+            Assert.False(outline.IsGridFitted);
+        }
+
+        [Fact]
         public void APushThatOverflowsTheStackFailsTheSize()
         {
             // NPUSHW with 255 values, over and over, against a stack of a few hundred elements

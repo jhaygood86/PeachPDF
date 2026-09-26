@@ -107,6 +107,22 @@ namespace PeachPDF.Tests.Raster
         }
 
         [Fact]
+        public async Task MonochromeHintingSnapsTheGlyphToAPixelColumnAsWellAsARow()
+        {
+            async Task<byte[]> One(TextHinting hinting, double x)
+            {
+                var (graphics, font) = await Fixture(hinting, fontSize: 12);
+                graphics.DrawString("H", font, Black, new RPoint(x, 10), graphics.MeasureString("H", font));
+                return Pixels(graphics);
+            }
+
+            // origins 0.2 px apart that round to one pixel column: fitted in both directions, the glyph does not move; fitted vertically
+            // only, it keeps the sub-pixel position layout gave it
+            Assert.Equal(await One(TextHinting.Monochrome, 10.2), await One(TextHinting.Monochrome, 10.4));
+            Assert.NotEqual(await One(TextHinting.Standard, 10.2), await One(TextHinting.Standard, 10.4));
+        }
+
+        [Fact]
         public async Task LargeTextIsHintedToo_AndStillDrawsTheSameGlyphs()
         {
             var none = await Render(TextHinting.None, fontSize: 28, text: "Ag");

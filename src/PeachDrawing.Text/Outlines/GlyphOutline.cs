@@ -95,7 +95,10 @@ namespace PeachDrawing.Text.Outlines
         public bool IsGridFitted { get; internal init; }
 
         /// <summary>
-        /// The size, in pixels per em, the coordinates are scaled to; 0 when they are in design units.
+        /// The size, in pixels per em, the coordinates are scaled to; 0 when they are in design units. For a grid-fitted outline it is the
+        /// size the font was fitted at, which is the size asked for except that a TrueType font whose <c>head</c> table asks for whole
+        /// pixels per em (nearly all of them do) is fitted at the nearest whole number: 11.4 is asked for and 11 is what the glyph is fitted
+        /// at, as in FreeType.
         /// </summary>
         public double PixelsPerEm { get; internal init; }
 

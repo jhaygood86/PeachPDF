@@ -86,6 +86,9 @@ namespace PeachDrawing.Text.Internal.Hinting.FreeType;
 /// <remarks>Immutable after construction, so one instance serves any number of threads.</remarks>
 internal sealed class TtFace
 {
+    /// <summary>The most control values a font may have and still be hinted (see the reading of the <c>cvt</c> table).</summary>
+    private const int MaxCvtEntries = 0xFFFF;
+
     /// <summary>The bytes of the font file (an sfnt: WOFF and WOFF2 fonts are converted before they get here).</summary>
     public byte[] Data { get; }
 
@@ -280,6 +283,12 @@ internal sealed class TtFace
         if (tables.TryGetValue("cvt ", out var cvt) && IsInside(cvt))
         {
             int count = cvt.Length / 2;
+
+            // No real font has anywhere near this many control values (a program addresses them by 16-bit numbers in practice); a
+            // hostile one would cost a copy of the array in every size and in every glyph that writes to it.
+            if (count > MaxCvtEntries)
+                throw new HintingException("The cvt table has too many entries.");
+
             Cvt = new int[count];
             for (int i = 0; i < count; i++)
                 Cvt[i] = BinaryPrimitives.ReadInt16BigEndian(Data.AsSpan(cvt.Offset + 2 * i)) * 64;

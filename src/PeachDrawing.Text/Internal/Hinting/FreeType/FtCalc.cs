@@ -15,7 +15,7 @@
  *
  */
 
-// Ported to C# for PeachDrawing.Text; modified. This file derives from FreeType 2.14.3 (VER-2-14-3): ftcalc.c.
+// Ported to C# for PeachDrawing.Text; modified. This file derives from FreeType 2.14.3 (VER-2-14-3): ftcalc.c, ftobjs.h (the pixel-rounding macros).
 // The changes are recorded in PORTING-NOTES.md, next to FTL.TXT.
 
 using System.Numerics;

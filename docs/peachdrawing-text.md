@@ -198,10 +198,13 @@ if (face.TryGetOutline(glyph, request, out GlyphOutline fitted))
 {
     // fitted.IsGridFitted: the font's instructions ran. Coordinates are in pixels at 11 ppem, y up, origin at (0, 0).
     // fitted.GridFittedAdvance: the advance after fitting, rounded to a whole number of pixels as the font's hinting leaves it
-    // (from the font's hdmx table where it has one for the size).
+    // (in Monochrome mode from the font's hdmx table where it has one for the size).
 }
 ```
 
+- **The size is the size the font is fitted at.** It may be fractional, but a TrueType font whose `head` table asks for whole pixels per
+  em (nearly all do) is fitted at the nearest whole size, as in FreeType: asking for 11.4 gives an outline fitted at 11, which
+  `GlyphOutline.PixelsPerEm` reports. Every fractional size of such a font shares one cached fitting.
 - **`GridFitting.None`** is the default and gives exactly the design-unit outline of the overload without a request.
 - **`GridFitting.Standard`** runs the font's instructions in the interpreter FreeType uses by default (its "v40" behaviour). It fits the
   vertical direction only, so glyphs keep the horizontal positions and widths of the design, which is what anti-aliased text wants. It

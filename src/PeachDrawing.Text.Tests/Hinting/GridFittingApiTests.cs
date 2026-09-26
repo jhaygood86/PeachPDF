@@ -157,13 +157,19 @@ namespace PeachDrawing.Text.Tests.Hinting
         }
 
         [Fact]
-        public void FractionalSizesAreHintedAtTheirOwnSize()
+        public void AFontThatAsksForWholePixelsPerEmIsFittedAtTheNearestWholeSize()
         {
             var glyph = GlyphOf(Sans.Value, 'H');
             Assert.True(Sans.Value.TryGetOutline(glyph, Request(12.5), out var a));
             Assert.True(Sans.Value.TryGetOutline(glyph, Request(12.6), out var b));
-            Assert.Equal(12.5, a.PixelsPerEm);
-            Assert.Equal(12.59375, b.PixelsPerEm); // in 1/64 pixel
+            Assert.True(Sans.Value.TryGetOutline(glyph, Request(13.4), out var c));
+            Assert.True(Sans.Value.TryGetOutline(glyph, Request(12.4), out var d));
+
+            // the outline says what it was fitted at; every size that rounds to 13 is one cached fitting
+            Assert.Equal(13, a.PixelsPerEm);
+            Assert.Same(a, b);
+            Assert.Same(a, c);
+            Assert.Equal(12, d.PixelsPerEm);
         }
 
         [Fact]
