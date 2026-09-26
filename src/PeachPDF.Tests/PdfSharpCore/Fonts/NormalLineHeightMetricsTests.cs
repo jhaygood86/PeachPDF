@@ -1,7 +1,8 @@
 using System.IO;
 using PeachPDF.Adapters;
-using PeachPDF.Fonts;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
@@ -9,18 +10,6 @@ using Xunit;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 {
-    /// <summary>Resolves every request to the bundled TrueType fixture, for a test that needs a real,
-    /// deterministic <see cref="XFont"/> without depending on which fonts happen to be installed on the
-    /// machine running the test (unlike the system-font-dependent resolvers used elsewhere in this
-    /// directory, e.g. <c>SmokeTests.cs</c>'s "Times New Roman"/"Arial").</summary>
-    file sealed class BundledTtfResolver : IFontResolver
-    {
-        public FontResolverInfo ResolveTypeface(string familyName, bool isBold, bool isItalic) => new("bundled-ttf");
-        public FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic) => new("bundled-ttf");
-        public FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic, int stretch) => new("bundled-ttf");
-        public byte[] GetFont(string fontFaceName) => File.ReadAllBytes(BundledFonts.Ttf);
-    }
-
     /// <summary>
     /// <see cref="FontDescriptor.NormalLineHeightAscent"/>/<see cref="FontDescriptor.NormalLineHeightDescent"/>/
     /// <see cref="FontDescriptor.NormalLineHeightGap"/> selection logic (issue #956): the raw <c>hhea</c>
@@ -30,24 +19,23 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     /// <see cref="FontDescriptor.Descender"/>/<see cref="FontDescriptor.LineSpacing"/> block uses (that's the
     /// WPF-derived, PDF-metrics/baseline-positioning triple; this is the separate, browser-matching one).
     ///
-    /// Loads the bundled TrueType font through <see cref="XFontSource.CreateCompiledFont"/> rather than
-    /// <see cref="XFontSource.GetOrCreateFrom"/> - the latter caches by content checksum in the process-wide
+    /// Loads the bundled TrueType font through <see cref="FontFileData.CreateCompiledFont"/> rather than
+    /// <see cref="FontFileData.GetOrCreateFrom"/> - the latter caches by content checksum in the process-wide
     /// <c>FontFactory</c> (see this repo's own CLAUDE.md warning about exactly this), and every test here
     /// mutates the parsed face's <c>OS/2</c> fields directly, which would corrupt that shared cached
     /// instance for every other test loading the same file. <c>CreateCompiledFont</c> returns a fresh,
-    /// uncached <see cref="XFontSource"/> each call, so each test's face is exclusively its own.
+    /// uncached <see cref="FontFileData"/> each call, so each test's face is exclusively its own.
     /// </summary>
     public class NormalLineHeightMetricsTests
     {
         private static OpenTypeFontface FreshUncachedFace()
         {
             var bytes = File.ReadAllBytes(BundledFonts.Ttf);
-            return new OpenTypeFontface(XFontSource.CreateCompiledFont(bytes));
+            return new OpenTypeFontface(FontFileData.CreateCompiledFont(bytes));
         }
 
         private static OpenTypeDescriptor Descriptor(OpenTypeFontface face) =>
-            new("normal-line-height-test", "normal-line-height-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            new("normal-line-height-test", "normal-line-height-test", face);
 
         [Fact]
         public void UseTypoMetricsNotSet_UsesRawHheaTriple()
@@ -114,8 +102,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         [Fact]
         public void NormalLineHeight_ScalesExactlyLinearlyWithPixelsPerPoint()
         {
-            var font = new XFont("bundled", 20, XFontStyle.Regular, new XPdfFontOptions(PdfFontEncoding.Unicode),
-                400, 5, null, new BundledTtfResolver());
+            // A set holding only the bundled fixture, so the metrics do not depend on which fonts the machine has installed.
+            var fontSet = new FontSet();
+            fontSet.AddFile(BundledFonts.Ttf, new AddOptions { FamilyName = "bundled" });
+            var font = TestFonts.Create("bundled", 20, fontSet: fontSet);
 
             var unscaled = new FontAdapter(font, pixelsPerPoint: 1.0);
             var scaled = new FontAdapter(font, pixelsPerPoint: 2.0);

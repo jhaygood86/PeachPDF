@@ -1,4 +1,4 @@
-using PeachPDF.Fonts;
+using PeachDrawing.Text;
 using PeachPDF.PdfSharpCore.Utils;
 using System;
 using System.Collections.Generic;
@@ -122,28 +122,11 @@ namespace PeachPDF.Html.Core.Utils
             return "Segoe UI";
         }
 
-        internal static IEnumerable<string> GetInstalledFontFamilyNames()
-        {
-            foreach (var path in FontResolver.SupportedFonts)
-            {
-                IReadOnlyList<(int FaceIndex, TtfFontDescription Description)> faces = [];
-                try
-                {
-                    // Every face of a .ttc/.otc collection, not just the first.
-                    faces = TtfFontDescription.LoadDescriptions(path);
-                }
-                catch
-                {
-                    // Ignore unparsable/corrupt font files, same tolerance FontResolver itself uses.
-                }
-
-                foreach (var (_, description) in faces)
-                {
-                    if (!string.IsNullOrEmpty(description.FontFamilyInvariantCulture))
-                        yield return description.FontFamilyInvariantCulture;
-                }
-            }
-        }
+        /// <summary>
+        /// The family names of the fonts installed on this machine - every face of a <c>.ttc</c>/<c>.otc</c>
+        /// collection included, and any file the engine could not parse left out.
+        /// </summary>
+        internal static IEnumerable<string> GetInstalledFontFamilyNames() => FontSet.InstalledFamilyNames;
 
         /// <summary>
         /// Picks the best available default font from a list of installed font family

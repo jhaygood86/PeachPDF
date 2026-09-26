@@ -1,10 +1,11 @@
+using PeachDrawing.Text.Outlines;
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using PeachPDF.Fonts;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
@@ -23,12 +24,11 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         private const double Eps = 1e-9;
 
         private static OpenTypeFontface Face(string path)
-            => XFontSource.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
+            => FontFileData.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
 
         private static int Gid(OpenTypeFontface face, char ch)
         {
-            var descriptor = new OpenTypeDescriptor("outline-test", "outline-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var descriptor = new OpenTypeDescriptor("outline-test", "outline-test", face);
             return descriptor.CharCodeToGlyphIndex(new System.Text.Rune(ch));
         }
 
@@ -43,14 +43,14 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
                 [P(0, 0, true), P(10, 0, true), P(10, 10, true), P(0, 10, true)]);
 
             Assert.NotNull(contour);
-            Assert.Equal(new GlyphOutlinePoint(0, 0), contour!.Start);
+            Assert.Equal(new OutlinePoint(0, 0), contour!.Start);
             Assert.Equal(4, contour.Segments.Count);
             Assert.All(contour.Segments, s => Assert.False(s.IsCubic));
             // Walk visits the remaining corners in order, then closes back to the start.
-            Assert.Equal(new GlyphOutlinePoint(10, 0), contour.Segments[0].End);
-            Assert.Equal(new GlyphOutlinePoint(10, 10), contour.Segments[1].End);
-            Assert.Equal(new GlyphOutlinePoint(0, 10), contour.Segments[2].End);
-            Assert.Equal(new GlyphOutlinePoint(0, 0), contour.Segments[3].End);
+            Assert.Equal(new OutlinePoint(10, 0), contour.Segments[0].End);
+            Assert.Equal(new OutlinePoint(10, 10), contour.Segments[1].End);
+            Assert.Equal(new OutlinePoint(0, 10), contour.Segments[2].End);
+            Assert.Equal(new OutlinePoint(0, 0), contour.Segments[3].End);
         }
 
         [Fact]
@@ -62,7 +62,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             Assert.NotNull(contour);
             // First segment is the elevated quadratic.
-            GlyphSegment quad = contour!.Segments[0];
+            OutlineSegment quad = contour!.Segments[0];
             Assert.True(quad.IsCubic);
             AssertPoint(4, 8, quad.Control1);   // (0,0) + 2/3*((6,12)-(0,0)) = (4,8)
             AssertPoint(8, 8, quad.Control2);   // (12,0) + 2/3*((6,12)-(12,0)) = (8,8)
@@ -172,7 +172,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         [Fact]
         public void ShapingTableReads_UseTheGlyphOutlineCursorMonitor()
         {
-            var face = new OpenTypeFontface(XFontSource.CreateCompiledFont(File.ReadAllBytes(BundledFonts.Ttf)));
+            var face = new OpenTypeFontface(FontFileData.CreateCompiledFont(File.ReadAllBytes(BundledFonts.Ttf)));
             GsubTable gsub = Assert.IsType<GsubTable>(face.gsub.Table);
             GposTable gpos = Assert.IsType<GposTable>(face.gpos.Table);
 
@@ -189,7 +189,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // whose entries aren't monotonically increasing must not walk the per-contour split past
             // xs/ys's bounds. Regression for an IndexOutOfRangeException seen decoding a real glyph.
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
-            var sourceFace = new OpenTypeFontface(XFontSource.CreateCompiledFont(fontBytes));
+            var sourceFace = new OpenTypeFontface(FontFileData.CreateCompiledFont(fontBytes));
             int oGlyph = Gid(sourceFace, 'o');
 
             short numberOfContours = BinaryPrimitives.ReadInt16BigEndian(sourceFace.glyf.GetGlyphData(oGlyph));
@@ -200,7 +200,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int glyphOffset = sourceFace.glyf.GetOffset(oGlyph);
             BinaryPrimitives.WriteUInt16BigEndian(fontBytes.AsSpan(glyphOffset + 10), 0xFFFF);
 
-            var corruptFace = new OpenTypeFontface(XFontSource.CreateCompiledFont(fontBytes));
+            var corruptFace = new OpenTypeFontface(FontFileData.CreateCompiledFont(fontBytes));
 
             // Must not throw - the malformed contour is discarded rather than overrunning the arrays.
             GlyphOutlineDecoder.TryGetGlyphOutline(corruptFace, oGlyph, out var outline);
@@ -210,7 +210,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.Single(outline.Contours);
         }
 
-        private static void AssertPoint(double x, double y, GlyphOutlinePoint p)
+        private static void AssertPoint(double x, double y, OutlinePoint p)
         {
             Assert.Equal(x, p.X, Eps);
             Assert.Equal(y, p.Y, Eps);
@@ -219,10 +219,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         private static double MaxY(GlyphOutline outline)
         {
             double max = double.NegativeInfinity;
-            foreach (GlyphContour contour in outline.Contours)
+            foreach (OutlineContour contour in outline.Contours)
             {
                 max = Math.Max(max, contour.Start.Y);
-                foreach (GlyphSegment s in contour.Segments)
+                foreach (OutlineSegment s in contour.Segments)
                 {
                     max = Math.Max(max, s.End.Y);
                     if (s.IsCubic)

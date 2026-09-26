@@ -1,10 +1,12 @@
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Fonts;
 using System.Collections.Generic;
 using System.IO;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using Xunit;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
@@ -170,14 +172,13 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, BuildSyntheticGpos());
-            return (XFontSource.GetOrCreateFrom(combined).Fontface, tableStart);
+            return (FontFileData.GetOrCreateFrom(combined).Fontface, tableStart);
         }
 
         private static OpenTypeDescriptor RealDescriptor()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
-            return new OpenTypeDescriptor("gpos-nested-cursive-markliga-test", "gpos-nested-cursive-markliga-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            return new OpenTypeDescriptor("gpos-nested-cursive-markliga-test", "gpos-nested-cursive-markliga-test", face);
         }
 
         [Fact]
@@ -189,7 +190,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var contextual = gpos.GetContextualLookup(0);
             Assert.NotNull(contextual);
 
-            var glyphs = new List<ShapedGlyph> { new(200, 0, 1), new(201, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(200, 0, 1), new(201, 1, 1) };
             GposPositioner.ApplySequenceContextLookup(descriptor, gpos, contextual.Subtables, glyphs, gdef: null, contextual.LookupFlag, markFilteringSet: null);
 
             // Nested Type 3 (cursive): glyph 200's exit(40,0) is pulled back to the run's end - same

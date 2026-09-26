@@ -1,9 +1,11 @@
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
-using PeachPDF.Text.Shaping.Arabic;
+using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
 using System.IO;
 using System.Linq;
 using Xunit;
@@ -26,13 +28,12 @@ namespace PeachPDF.Tests.Html.Core
 
         private static OpenTypeDescriptor Descriptor()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.CcmpLigature)).Fontface;
-            return new OpenTypeDescriptor("ccmp-lig-test", "ccmp-lig-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.CcmpLigature)).Fontface;
+            return new OpenTypeDescriptor("ccmp-lig-test", "ccmp-lig-test", face);
         }
 
         private static int[] Shape(string text) =>
-            Descriptor().Shape(text, TextShapingFeatures.Default).Select(g => g.GlyphIndex).ToArray();
+            Descriptor().Shape(text, ShapeSettings.Default).Select(g => g.GlyphIndex).ToArray();
 
         [Fact]
         public void CcmpLigature_AppliesWithoutAnyLigatureFeatureRequested()
@@ -142,16 +143,15 @@ namespace PeachPDF.Tests.Html.Core
             // base plus a separate dot mark, and GPOS mark-to-base then records the base's index on the
             // mark. Appending an unmapped U+FE0F puts a dropped glyph in the same run, so a missing
             // remap would leave the mark anchored to a stale slot (or past the end of the list).
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Arabic)).Fontface;
-            var descriptor = new OpenTypeDescriptor("arabic-ignorable-test", "arabic-ignorable-test",
-                XFontStyle.Regular, face, new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Arabic)).Fontface;
+            var descriptor = new OpenTypeDescriptor("arabic-ignorable-test", "arabic-ignorable-test", face);
 
             const string beh = "ب";
             var forms = ArabicJoiningShaper.Resolve([beh[0]]);
 
-            var plain = descriptor.Shape(beh, new TextShapingFeatures(ScriptTag: "arab", JoiningForms: forms));
+            var plain = descriptor.Shape(beh, new ShapeSettings(ScriptTag: "arab", JoiningForms: forms));
             var withSelector = descriptor.Shape(beh + "️",
-                new TextShapingFeatures(ScriptTag: "arab", JoiningForms: forms));
+                new ShapeSettings(ScriptTag: "arab", JoiningForms: forms));
 
             // The selector contributes no glyph of its own, and changes nothing about the rest.
             Assert.Equal(plain.Select(g => g.GlyphIndex), withSelector.Select(g => g.GlyphIndex));

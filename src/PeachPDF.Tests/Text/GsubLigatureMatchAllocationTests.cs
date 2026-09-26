@@ -1,7 +1,9 @@
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -54,8 +56,8 @@ namespace PeachPDF.Tests.Text
                 Subtables = new List<GsubLigatureSubtable> { subtable },
             };
 
-            var glyphs = new List<ShapedGlyph>();
-            for (var i = 0; i < 200; i++) glyphs.Add(new ShapedGlyph(i, i, 1));
+            var glyphs = new List<PlacedGlyph>();
+            for (var i = 0; i < 200; i++) glyphs.Add(new PlacedGlyph(i, i, 1));
 
             const int passes = 50;
             var allocated = AllocationProbe.Bytes(
@@ -85,14 +87,14 @@ namespace PeachPDF.Tests.Text
 
             int gdefStart = fontBytes.Length;
             int gsubStart = gdefStart + gdefBytes.Length;
-            var face = XFontSource.GetOrCreateFrom(Concat(fontBytes, gdefBytes, gsubBytes)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(Concat(fontBytes, gdefBytes, gsubBytes)).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var lookup = new GsubTable(face, gsubStart).GetLigatureLookup(0);
             Assert.NotNull(lookup);
 
             // 400 460 401 | 400 401 - the first pair straddles the mark, the second does not.
-            var glyphs = new List<ShapedGlyph>
+            var glyphs = new List<PlacedGlyph>
             {
                 new(400, 0, 1),
                 new(460, 1, 1),
@@ -119,11 +121,11 @@ namespace PeachPDF.Tests.Text
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             byte[] gsubBytes = BuildLigatureGsub();
             int gsubStart = fontBytes.Length;
-            var face = XFontSource.GetOrCreateFrom(Concat(fontBytes, gsubBytes)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(Concat(fontBytes, gsubBytes)).Fontface;
             var lookup = new GsubTable(face, gsubStart).GetLigatureLookup(0);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph>
+            var glyphs = new List<PlacedGlyph>
             {
                 new(400, 0, 1),
                 new(401, 1, 1, IsHiddenIgnorable: true)
@@ -149,13 +151,13 @@ namespace PeachPDF.Tests.Text
             byte[] gsubBytes = BuildContextualIntoLigatureGsub();
 
             int gsubStart = fontBytes.Length;
-            var face = XFontSource.GetOrCreateFrom(Concat(fontBytes, gsubBytes)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(Concat(fontBytes, gsubBytes)).Fontface;
             var gsub = new GsubTable(face, gsubStart);
 
             var contextual = gsub.GetContextualLookup(0);
             Assert.NotNull(contextual);
 
-            var glyphs = new List<ShapedGlyph> { new(400, 0, 1), new(401, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(400, 0, 1), new(401, 1, 1) };
 
             GsubShaper.ApplySequenceContextLookup(gsub, contextual.Subtables, glyphs, gdef: null,
                 contextual.LookupFlag, markFilteringSet: null);

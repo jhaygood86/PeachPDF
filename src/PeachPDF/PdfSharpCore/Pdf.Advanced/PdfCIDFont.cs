@@ -5,7 +5,7 @@
 //
 // Copyright (c) 2005-2016 empira Software GmbH, Cologne Area (Germany)
 //
-// http://www.PeachPDF.PdfSharpCore.com
+// https://www.pdfsharp.com/
 // http://sourceforge.net/projects/pdfsharp
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -30,7 +30,7 @@
 #nullable disable warnings
 
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Export;
 using PeachPDF.PdfSharpCore.Pdf.Filters;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
@@ -85,22 +85,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         {
             base.PrepareForSave();
 
-#if DEBUG_
-            if (FontDescriptor._descriptor.FontFace.loca == null)
-            {
-                GetType();
-            }
-#endif
             // CID fonts must be always embedded. PDFsharp embedds automatically a subset.
-            OpenTypeFontface subSet = null;
-            if (FontDescriptor._descriptor.FontFace.loca == null)
-                subSet = FontDescriptor._descriptor.FontFace;
-            else
-                subSet = FontDescriptor._descriptor.FontFace.CreateFontSubSet(_cmapInfo.GlyphIndices, true);
-            byte[] fontData = subSet.FontSource.Bytes;
+            ExportedFont subSet = TypefaceExporter.ExportSubset(FontDescriptor._typeface, _cmapInfo.GlyphIndices.Keys, keepCharacterMap: false);
+            byte[] fontData = subSet.Data.ToArray();
             PdfDictionary fontStream = new PdfDictionary(Owner);
             Owner.Internals.AddObject(fontStream);
-            bool isCff = FontDescriptor._descriptor.FontFace.loca == null;
+            bool isCff = subSet.HasCffOutlines;
             if (isCff)
             {
                 FontDescriptor.Elements[PdfFontDescriptor.Keys.FontFile3] = fontStream.Reference;

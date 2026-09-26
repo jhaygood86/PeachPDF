@@ -10,8 +10,8 @@ listed in ArabicShaping.txt defaults to Transparent (T) rather than Non_Joining 
 for Arabic diacritics between joined letters - so this table is the ground truth Joining_Type per
 codepoint without PeachPDF having to re-derive that rule from General_Category data itself.
 
-Output goes to src/PeachPDF/Text/Resources/ArabicJoining/DerivedJoiningType.txt.br, consumed by
-PeachPDF.Text.ArabicShapingTable. Same run-length-encoded (start, end, value) table shape as
+Output goes to src/PeachDrawing.Text/Internal/Text/Resources/ArabicJoining/DerivedJoiningType.txt.br, consumed by
+PeachDrawing.Text.Internal.Text.ArabicShapingTable. Same run-length-encoded (start, end, value) table shape as
 generate_vertical_orientation_table.py/generate_script_table.py.
 
 Re-run this script whenever assets/unicode/DerivedJoiningType.txt is refreshed to a newer Unicode
@@ -25,7 +25,7 @@ import brotli
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.normpath(os.path.join(
-    SCRIPT_DIR, "..", "..", "src", "PeachPDF", "Text", "Resources", "ArabicJoining"))
+    SCRIPT_DIR, "..", "..", "src", "PeachDrawing.Text", "Internal", "Text", "Resources", "ArabicJoining"))
 
 MAX_CODEPOINT = 0x10FFFF
 

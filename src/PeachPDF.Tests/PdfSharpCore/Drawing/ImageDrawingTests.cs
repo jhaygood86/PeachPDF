@@ -4,7 +4,7 @@ using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.Text;
 
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
 {
@@ -62,7 +62,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
             gfx.DrawEllipse(new XPen(XColors.Red, 1.5), XBrushes.White, new XRect(width / 2 - r, height / 2 - r, 2 * r, 2 * r));
 
             // Create a font.
-            var font = new XFont("Arial", 20, XFontStyle.BoldItalic, new FontResolver());
+            var font = TestFonts.Create("Arial", 20, XFontStyle.BoldItalic);
 
             // Draw the text.
             gfx.DrawString("Hello, World!", font, XBrushes.Black,

@@ -3,7 +3,7 @@
 ## What was investigated
 
 macOS CI on PR #1094's run hit an unhandled `IndexOutOfRangeException` inside
-`GlyphOutlineDecoder.DecodeSimple` (`src/PeachPDF/Fonts/OpenType/GlyphOutlineDecoder.cs`), reached via
+`GlyphOutlineDecoder.DecodeSimple` (`src/PeachDrawing.Text/Internal/Fonts/OpenType/GlyphOutlineDecoder.cs`), reached via
 `GraphicsAdapter.MeasureInkCrossings` → `OpenTypeDescriptor.TryGetGlyphOutline` while decoding the letter
 `g` for `GraphicsAdapterInkCrossingsTests.ADescender_CrossesABandBelowTheBaseline`. Ubuntu and Windows
 passed in the same run; a rerun of the identical macOS job on identical code passed cleanly; `main`'s own
@@ -17,7 +17,7 @@ same fix's own writeup left one residual, unreproduced failure open in this exac
 *forced 64-thread* stress (`TryGetGlyphOutline_CompositeGlyph_AddsAccentContoursAboveTheBase`) - so a
 subtler residual race in this file was already flagged as a possibility worth revisiting, not ruled out.
 
-A full audit of the call chain (`FontFactory`'s static caches, `XFontSource.GetOrCreateFrom`,
+A full audit of the call chain (`FontFactory`'s static caches, `FontFileData.GetOrCreateFrom`,
 `OpenTypeFontface.CetOrCreateFrom`, the per-instance vs. global font-resolution split for
 `@font-face`/`AddFont`-registered families) found every other shared, process-wide cache correctly
 guarded by `Lock.EnterFontFactory()`/`ExitFontFactory()` or `FontFactory.CacheFontSource`'s check-under-

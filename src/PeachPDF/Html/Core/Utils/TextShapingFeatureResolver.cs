@@ -1,15 +1,16 @@
+using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using PeachPDF.CSS;
-using PeachPDF.Text;
 
 namespace PeachPDF.Html.Core.Utils
 {
     /// <summary>
     /// Resolves the CSS Fonts Level 3/4 text-shaping properties (<c>font-variant-ligatures/-caps/
     /// -numeric/-east-asian</c>, <c>font-feature-settings</c>, <c>font-kerning</c>) from a raw
-    /// cascaded-value string to the typed <see cref="PeachPDF.Text"/> request types
-    /// <see cref="GsubShaper.Shape"/>/<see cref="GposPositioner"/> consume - factored out of
+    /// cascaded-value string to the typed <c>PeachDrawing.Text.Shaping</c> request types
+    /// <c>GsubShaper.Shape</c>/<c>GposPositioner</c> consume - factored out of
     /// <see cref="Dom.DerivedStyle"/>'s own <c>ActualFontVariant*</c>/<c>ActualFontFeatureSettings</c>/
     /// <c>ActualFontKerning</c> properties so SVG text (<see cref="Svg.SvgTreeBuilder"/>) can resolve
     /// the exact same grammar from its own presentation-attribute/style strings, per this repo's "one
@@ -22,17 +23,17 @@ namespace PeachPDF.Html.Core.Utils
     /// </summary>
     internal static class TextShapingFeatureResolver
     {
-        internal static LigatureFeatures ResolveLigatures(string value)
+        internal static LigatureSet ResolveLigatures(string value)
         {
             if (value == Keywords.None)
-                return LigatureFeatures.Required;
+                return LigatureSet.Required;
 
             var tokens = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var resolved = LigatureFeatures.Required;
-            if (!Contains(tokens, Keywords.NoCommonLigatures)) resolved |= LigatureFeatures.Common;
-            if (!Contains(tokens, Keywords.NoContextual)) resolved |= LigatureFeatures.Contextual;
-            if (Contains(tokens, Keywords.DiscretionaryLigatures)) resolved |= LigatureFeatures.Discretionary;
-            if (Contains(tokens, Keywords.HistoricalLigatures)) resolved |= LigatureFeatures.Historical;
+            var resolved = LigatureSet.Required;
+            if (!Contains(tokens, Keywords.NoCommonLigatures)) resolved |= LigatureSet.Common;
+            if (!Contains(tokens, Keywords.NoContextual)) resolved |= LigatureSet.Contextual;
+            if (Contains(tokens, Keywords.DiscretionaryLigatures)) resolved |= LigatureSet.Discretionary;
+            if (Contains(tokens, Keywords.HistoricalLigatures)) resolved |= LigatureSet.Historical;
             return resolved;
         }
 
@@ -40,74 +41,74 @@ namespace PeachPDF.Html.Core.Utils
         /// check its own resolved font's <c>SupportsFontVariantCaps</c> capability before actually
         /// requesting this from the shaping layer (see this type's own doc comment, and
         /// <c>DerivedStyle.ActualFontVariantCaps</c> for the HTML-side gating).</summary>
-        internal static FontVariantCapsFeature ResolveCapsRequested(FontVariantCapsMode value) => value switch
+        internal static CapsMode ResolveCapsRequested(FontVariantCapsMode value) => value switch
         {
-            FontVariantCapsMode.SmallCaps => FontVariantCapsFeature.SmallCaps,
-            FontVariantCapsMode.AllSmallCaps => FontVariantCapsFeature.AllSmallCaps,
-            FontVariantCapsMode.PetiteCaps => FontVariantCapsFeature.PetiteCaps,
-            FontVariantCapsMode.AllPetiteCaps => FontVariantCapsFeature.AllPetiteCaps,
-            FontVariantCapsMode.Unicase => FontVariantCapsFeature.Unicase,
-            FontVariantCapsMode.TitlingCaps => FontVariantCapsFeature.TitlingCaps,
-            _ => FontVariantCapsFeature.None,
+            FontVariantCapsMode.SmallCaps => CapsMode.SmallCaps,
+            FontVariantCapsMode.AllSmallCaps => CapsMode.AllSmallCaps,
+            FontVariantCapsMode.PetiteCaps => CapsMode.PetiteCaps,
+            FontVariantCapsMode.AllPetiteCaps => CapsMode.AllPetiteCaps,
+            FontVariantCapsMode.Unicase => CapsMode.Unicase,
+            FontVariantCapsMode.TitlingCaps => CapsMode.TitlingCaps,
+            _ => CapsMode.None,
         };
 
         /// <summary>The same, for the keyword text of an SVG presentation attribute; an unrecognized keyword requests nothing.</summary>
-        internal static FontVariantCapsFeature ResolveCapsRequested(string value) =>
-            Map.FontVariantCapsModes.TryGetValue(value, out var mode) ? ResolveCapsRequested(mode) : FontVariantCapsFeature.None;
+        internal static CapsMode ResolveCapsRequested(string value) =>
+            Map.FontVariantCapsModes.TryGetValue(value, out var mode) ? ResolveCapsRequested(mode) : CapsMode.None;
 
         /// <summary>The position feature <paramref name="value"/> requests, ungated - the caller must
         /// still check its own resolved font's <c>SupportsFontVariantPosition</c> capability to decide
         /// between real substitution and a synthesized sub/superscript (see
         /// <c>DerivedStyle.ActualFontVariantPosition</c> for the HTML-side gating).</summary>
-        internal static FontVariantPositionFeature ResolvePositionRequested(FontVariantPositionMode value) => value switch
+        internal static SubSuperMode ResolvePositionRequested(FontVariantPositionMode value) => value switch
         {
-            FontVariantPositionMode.Sub => FontVariantPositionFeature.Sub,
-            FontVariantPositionMode.Super => FontVariantPositionFeature.Super,
-            _ => FontVariantPositionFeature.None,
+            FontVariantPositionMode.Sub => SubSuperMode.Sub,
+            FontVariantPositionMode.Super => SubSuperMode.Super,
+            _ => SubSuperMode.None,
         };
 
         /// <summary>The same, for the keyword text of an SVG presentation attribute; an unrecognized keyword requests nothing.</summary>
-        internal static FontVariantPositionFeature ResolvePositionRequested(string value) =>
-            Map.FontVariantPositionModes.TryGetValue(value, out var mode) ? ResolvePositionRequested(mode) : FontVariantPositionFeature.None;
+        internal static SubSuperMode ResolvePositionRequested(string value) =>
+            Map.FontVariantPositionModes.TryGetValue(value, out var mode) ? ResolvePositionRequested(mode) : SubSuperMode.None;
 
-        internal static NumericFeatures ResolveNumeric(string value)
+        internal static NumeralSet ResolveNumeric(string value)
         {
-            var resolved = NumericFeatures.None;
+            var resolved = NumeralSet.None;
             foreach (var token in value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
                 resolved |= token switch
                 {
-                    Keywords.LiningNums => NumericFeatures.LiningNums,
-                    Keywords.OldstyleNums => NumericFeatures.OldstyleNums,
-                    Keywords.ProportionalNums => NumericFeatures.ProportionalNums,
-                    Keywords.TabularNums => NumericFeatures.TabularNums,
-                    Keywords.DiagonalFractions => NumericFeatures.DiagonalFractions,
-                    Keywords.StackedFractions => NumericFeatures.StackedFractions,
-                    Keywords.Ordinal => NumericFeatures.Ordinal,
-                    Keywords.SlashedZero => NumericFeatures.SlashedZero,
-                    _ => NumericFeatures.None,
+                    Keywords.LiningNums => NumeralSet.LiningNums,
+                    Keywords.OldstyleNums => NumeralSet.OldstyleNums,
+                    Keywords.ProportionalNums => NumeralSet.ProportionalNums,
+                    Keywords.TabularNums => NumeralSet.TabularNums,
+                    Keywords.DiagonalFractions => NumeralSet.DiagonalFractions,
+                    Keywords.StackedFractions => NumeralSet.StackedFractions,
+                    Keywords.Ordinal => NumeralSet.Ordinal,
+                    Keywords.SlashedZero => NumeralSet.SlashedZero,
+                    _ => NumeralSet.None,
                 };
             }
             return resolved;
         }
 
-        internal static EastAsianFeatures ResolveEastAsian(string value)
+        internal static EastAsianSet ResolveEastAsian(string value)
         {
-            var resolved = EastAsianFeatures.None;
+            var resolved = EastAsianSet.None;
             foreach (var token in value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
                 resolved |= token switch
                 {
-                    Keywords.Jis78Forms => EastAsianFeatures.Jis78,
-                    Keywords.Jis83Forms => EastAsianFeatures.Jis83,
-                    Keywords.Jis90Forms => EastAsianFeatures.Jis90,
-                    Keywords.Jis04Forms => EastAsianFeatures.Jis04,
-                    Keywords.Simplified => EastAsianFeatures.Simplified,
-                    Keywords.Traditional => EastAsianFeatures.Traditional,
-                    Keywords.FullWidth => EastAsianFeatures.FullWidth,
-                    Keywords.ProportionalWidth => EastAsianFeatures.ProportionalWidth,
-                    Keywords.Ruby => EastAsianFeatures.Ruby,
-                    _ => EastAsianFeatures.None,
+                    Keywords.Jis78Forms => EastAsianSet.Jis78,
+                    Keywords.Jis83Forms => EastAsianSet.Jis83,
+                    Keywords.Jis90Forms => EastAsianSet.Jis90,
+                    Keywords.Jis04Forms => EastAsianSet.Jis04,
+                    Keywords.Simplified => EastAsianSet.Simplified,
+                    Keywords.Traditional => EastAsianSet.Traditional,
+                    Keywords.FullWidth => EastAsianSet.FullWidth,
+                    Keywords.ProportionalWidth => EastAsianSet.ProportionalWidth,
+                    Keywords.Ruby => EastAsianSet.Ruby,
+                    _ => EastAsianSet.None,
                 };
             }
             return resolved;
@@ -140,6 +141,29 @@ namespace PeachPDF.Html.Core.Utils
             }
             return entries;
         }
+
+        /// <summary>
+        /// The engine's own form of a resolved (tag, value) list, for <see cref="ShapeSettings.ExplicitFeatures"/>. An empty
+        /// list is always the one shared empty array, because the shaper's lookup cache compares these lists by reference and
+        /// nearly every box has none.
+        /// </summary>
+        internal static IReadOnlyList<FeatureSetting> ToFeatureSettings(IReadOnlyList<(string Tag, int Value)> settings)
+        {
+            if (settings.Count == 0) return Array.Empty<FeatureSetting>();
+
+            // Converted once per source list: every SVG run of one font context passes the same list, and a fresh
+            // array for each would make the shaper's lookup cache (which compares these lists by reference) miss for
+            // every run and keep an entry alive for each.
+            return ConvertedSettings.GetValue(settings, static source =>
+            {
+                var result = new FeatureSetting[source.Count];
+                for (var i = 0; i < result.Length; i++)
+                    result[i] = new FeatureSetting(source[i].Tag, source[i].Value);
+                return result;
+            });
+        }
+
+        private static readonly ConditionalWeakTable<IReadOnlyList<(string Tag, int Value)>, IReadOnlyList<FeatureSetting>> ConvertedSettings = new();
 
         /// <summary><c>false</c> only for <c>none</c> - both <c>auto</c> (the initial value) and
         /// <c>normal</c> mean "apply GPOS kerning when the font and script support it."</summary>

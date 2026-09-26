@@ -1,10 +1,12 @@
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Fonts;
 using System.Collections.Generic;
 using System.IO;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using Xunit;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
@@ -324,9 +326,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             byte[] withoutRealGpos = RemoveTableDirectoryEntry(fontBytes, "GPOS");
             byte[] combined = SyntheticFontTables.InsertTableDirectoryEntry(withoutRealGpos, "GPOS", BuildSyntheticGpos());
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
-            return new OpenTypeDescriptor("gpos-apply-dispatch-test", "gpos-apply-dispatch-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
+            return new OpenTypeDescriptor("gpos-apply-dispatch-test", "gpos-apply-dispatch-test", face);
         }
 
         [Fact]
@@ -334,7 +335,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         {
             var descriptor = BuildDescriptorWithSyntheticGpos();
 
-            var glyphs = new List<ShapedGlyph>
+            var glyphs = new List<PlacedGlyph>
             {
                 new(40, 0, 1), new(50, 1, 1), // Type 5: ligature + mark
                 new(60, 2, 1), new(61, 3, 1), // Type 3: cursive pair
@@ -344,7 +345,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             // features.Kerning defaults to true, so "kern" (lookups 1/2/4) activates alongside the
             // unconditionally-requested "mark" (lookup 0).
-            GposPositioner.Apply(descriptor, glyphs, TextShapingFeatures.Default);
+            GposPositioner.Apply(descriptor, glyphs, ShapeSettings.Default);
 
             // Type 5 (MarkToLigature): mark's XOffset/YOffset reflect the (5,5) anchor.
             Assert.NotEqual(0, glyphs[1].XOffset);

@@ -10,8 +10,8 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Text.Shaping.Arabic;
-using PeachPDF.Text.Shaping.Use;
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -60,7 +60,7 @@ namespace PeachPDF.Html.Core.Dom
         /// this field - <c>GsubShaper</c>'s own USE stage still needs true logical order to resolve
         /// syllable/conjunct structure, but the resulting glyph list is never reversed afterward the way
         /// an Arabic-family joining word's is (only locally reordered within each syllable - see
-        /// <c>PeachPDF.Text.Shaping.Use.UseReorderer</c>).
+        /// <c>PeachDrawing.Text.Internal.Text.Shaping.Use.UseReorderer</c>).
         /// </summary>
         private readonly UseCategory[]? _logicalUseCategories;
 
@@ -87,7 +87,7 @@ namespace PeachPDF.Html.Core.Dom
             _logicalUseCategories = useCategories;
         }
 
-        /// <summary>This word's own resolved OpenType script tag (<c>OpenTypeScriptTags</c>), or null
+        /// <summary>This word's own resolved OpenType script tag (<c>OpenTypeTags</c>), or null
         /// when unresolved (a script absent from that curated table, or a word whose script resolved to
         /// a script-neutral value). Unlike <see cref="_logicalJoiningForms"/>, set post-construction by
         /// <c>CssBox.AppendWordsFromText</c>'s own script-boundary word split - the same
@@ -121,7 +121,7 @@ namespace PeachPDF.Html.Core.Dom
         /// silently stop matching once the text they'd apply to has been reversed. Instead, whoever
         /// shapes this word for display (paint, outline extraction, ToUnicode text extraction - all funnel
         /// through <c>CssBox.ResolveWordShapingFeatures</c>) requests
-        /// <c>TextShapingFeatures.ReverseForDisplay</c>, so GSUB/GPOS still run in the logical
+        /// <c>ShapeSettings.ReverseForDisplay</c>, so GSUB/GPOS still run in the logical
         /// order they need and only the resulting glyph list - never the source string - reverses, right
         /// before painting. A no-op read for every other word (plain RTL words keep the older
         /// text-level mirroring path unchanged).
@@ -174,7 +174,7 @@ namespace PeachPDF.Html.Core.Dom
         public override string Text => _text;
 
         /// <summary>
-        /// This word's stable, unmirrored text - what <c>PeachPDF.Text.Bidi.BidiMirrorResolver.ApplyMirroring</c>
+        /// This word's stable, unmirrored text - what <c>Bidi.Mirror</c>
         /// should always mirror <i>from</i>, regardless of how many times layout has already mirrored
         /// this word via <see cref="ReplaceText"/> (see <see cref="_preMirrorText"/>).
         /// </summary>
@@ -182,7 +182,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Rewrites this word's text in place - used by <c>CssLayoutEngine</c>'s per-line bidi reordering
-        /// step to apply L2 character reversal + L4 mirroring (<c>BidiMirrorResolver.ApplyMirroring</c>)
+        /// step to apply L2 character reversal + L4 mirroring (<c>Bidi.Mirror</c>)
         /// to an RTL word once its final visual position is known. A plain method rather than a settable
         /// <see cref="Text"/> property, since every other <see cref="CssRect"/> subclass's <c>Text</c> is
         /// never meant to be writable at all (the base declares it nullable and get-only for exactly

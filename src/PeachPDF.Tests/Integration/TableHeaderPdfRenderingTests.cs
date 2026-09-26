@@ -1,4 +1,5 @@
-using PeachPDF.Text;
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Text;
 using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
@@ -301,7 +302,7 @@ namespace PeachPDF.Tests.Integration
             public DrawStringRecordingGraphics(RAdapter adapter)
                 : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null) => DrawnStrings.Add(str);
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null) => DrawnStrings.Add(str);
             public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color) { }
 
             public override void BeginMarkedContent(string structureType, int mcid) { }
@@ -321,15 +322,15 @@ namespace PeachPDF.Tests.Integration
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
             public override RGraphicsPath GetGraphicsPath() => new NoOpGraphicsPath();
 
-            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null) => null;
+            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) => null;
             public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
             public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
             public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal) { }
             public override void DrawImageWithColorMatrix(RImage image, RRect destRect, ColorMatrix matrix) { }
             public override void DrawImageAlphaMasked(RImage image, RImage maskImage, RRect destRect, bool invert = false) { }
             public override void DrawImageBlendedOver(RImage top, RImage bottom, RRect destRect, RBlendMode blendMode) { }
-            public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) => new(str?.Length * 6 ?? 0, 12);
-            public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
+            public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null) => new(str?.Length * 6 ?? 0, 12);
+            public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null) => str?.Length ?? 0;
             public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
             {
                 charFit = str?.Length ?? 0;

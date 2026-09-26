@@ -88,7 +88,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             }
             catch (System.NotImplementedException)
             {
-                // https://github.com/ststeiger/PeachPDF.PdfSharpCore/issues/46
+                // https://github.com/ststeiger/PdfSharpCore/issues/46
                 // { System.NotImplementedException: Neutral region info
                 // at System.Globalization.RegionInfo..ctor
                 Size = PageSize.A4;

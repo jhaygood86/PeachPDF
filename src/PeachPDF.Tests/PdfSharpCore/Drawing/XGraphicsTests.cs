@@ -7,7 +7,7 @@ using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
 
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 using System.Globalization;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
@@ -88,7 +88,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         {
             using var gfx = XGraphics.CreateMeasureContext(new XSize(200, 200), XGraphicsUnit.Point, XPageDirection.Downwards);
 
-            var font = new XFont("Times New Roman", 12, XFontStyle.Regular, new FontResolver());
+            var font = TestFonts.Create("Times New Roman", 12, XFontStyle.Regular);
             var size = gfx.MeasureString("Hello", font);
 
             Assert.True(size.Width > 0);
@@ -99,7 +99,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         public void MeasureString_EmptyString_ReturnsNonNegativeSize()
         {
             using var gfx = XGraphics.CreateMeasureContext(new XSize(200, 200), XGraphicsUnit.Point, XPageDirection.Downwards);
-            var font = new XFont("Times New Roman", 12, XFontStyle.Regular, new FontResolver());
+            var font = TestFonts.Create("Times New Roman", 12, XFontStyle.Regular);
 
             var size = gfx.MeasureString("", font);
 
@@ -386,7 +386,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
             {
                 var pen = new XPen(XColors.Red, 1.5);
                 var brush = XBrushes.Blue;
-                var font = new XFont("Times New Roman", 14, XFontStyle.Bold, new FontResolver());
+                var font = TestFonts.Create("Times New Roman", 14, XFontStyle.Bold);
 
                 gfx.TranslateTransform(1, 1);
                 gfx.ScaleTransform(1.0);

@@ -45,6 +45,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Portions of PeachPDF are sourced from third parties and are licensed under alternative, BSD-compatible permissive license terms:
 
+The font and text engine is published as its own NuGet package, [`PeachDrawing.Text`](https://www.nuget.org/packages/PeachDrawing.Text), which PeachPDF depends on and which carries its own license notices (`LICENSE` and `THIRD-PARTY-LICENSES.md` inside the package). The PDFsharp-derived font readers, the HarfBuzz ports, the Unicode data tables and the hyphenation data below all live in that package. The PeachPDF package carries the notices for the rest.
+
 | Functionality | Origin | License |
 |---|---|---|
 | CSS engine (parsing, CSS-OM) | Fork of [ExCSS](https://github.com/TylerBrinks/ExCSS) (Tyler Brinks) | [MIT](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/CSS/license.txt) |

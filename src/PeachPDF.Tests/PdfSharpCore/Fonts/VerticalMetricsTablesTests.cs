@@ -1,5 +1,6 @@
+using PeachDrawing.Text.Internal.Fonts;
 using System.IO;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
@@ -43,7 +44,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(basePath);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, tableBytes);
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
             face.TableDictionary[tag] = new TableDirectoryEntry(tag) { Offset = tableStart };
             return (face, tableStart);
         }
@@ -57,7 +58,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int vmtxStart = withVhea.Length;
             byte[] combined = Concat(withVhea, vmtxBytes);
 
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
             face.TableDictionary[TableTagNames.VHea] = new TableDirectoryEntry(TableTagNames.VHea) { Offset = vheaStart };
             face.TableDictionary[TableTagNames.VMtx] = new TableDirectoryEntry(TableTagNames.VMtx) { Offset = vmtxStart };
             return face;
@@ -182,7 +183,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             byte[] spliced = InsertTableDirectoryEntry(fontBytes, TableTagNames.VOrg, b.ToArray());
 
-            var face = XFontSource.GetOrCreateFrom(spliced).Fontface;
+            var face = FontFileData.GetOrCreateFrom(spliced).Fontface;
 
             Assert.NotNull(face.vorg);
             Assert.Equal(500, face.vorg.defaultVertOriginY);
@@ -192,13 +193,12 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         }
 
         private static OpenTypeDescriptor Descriptor(OpenTypeFontface face) =>
-            new("vertical-metrics-test", "vertical-metrics-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            new("vertical-metrics-test", "vertical-metrics-test", face);
 
         [Fact]
         public void GlyphIndexToVerticalAdvance_FallsBackToUnitsPerEm_WhenFontHasNoVerticalTables()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
             Assert.Null(face.vhea);
             Assert.Null(face.vmtx);
 
@@ -335,10 +335,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             ttfWithVorg.vorg = new VerticalOriginTable(ttfWithVorg);
             Assert.False(Descriptor(ttfWithVorg).HasVerticalOrigin); // real VORG, but TrueType-flavored
 
-            var cffWithoutVorg = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Otf)).Fontface;
+            var cffWithoutVorg = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Otf)).Fontface;
             Assert.False(Descriptor(cffWithoutVorg).HasVerticalOrigin); // CFF-flavored, but no VORG
 
-            var ttfWithoutVorg = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            var ttfWithoutVorg = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
             Assert.False(Descriptor(ttfWithoutVorg).HasVerticalOrigin);
         }
 
@@ -360,7 +360,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         [Fact]
         public void GlyphIndexToVerticalOrigin_FallsBackToTypoAscender_WhenNoVorg()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
             Assert.Null(face.vorg);
             Assert.NotEqual(0, face.os2.sTypoAscender);
 
@@ -394,7 +394,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
                 withBoth.maxp.numGlyphs = realNumGlyphs;
             }
 
-            var withNeither = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            var withNeither = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
             Assert.False(Descriptor(withNeither).HasVerticalMetrics);
         }
 
@@ -412,7 +412,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         [Fact]
         public void RealBundledCjkFont_HasVerticalMetrics_AdvanceComesFromARealVmtxEntry()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Cjk)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Cjk)).Fontface;
             Assert.NotNull(face.vhea);
             Assert.NotNull(face.vmtx);
 
@@ -432,7 +432,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         [Fact]
         public void GlyphIndexToVerticalOrigin_FallsBackToUnitsPerEm_WhenNoVorgAndNoTypoAscender()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
             short realAscender = face.os2.sTypoAscender;
             face.os2.sTypoAscender = 0;
             try

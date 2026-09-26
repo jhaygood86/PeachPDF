@@ -1,4 +1,5 @@
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using System.Text;
@@ -17,12 +18,12 @@ namespace PeachPDF.Tests.TestSupport
         /// <summary>The glyph id of <paramref name="ch"/> in <paramref name="fontBytes"/>.</summary>
         internal static int GlyphId(byte[] fontBytes, char ch)
         {
-            var face = XFontSource.GetOrCreateFrom(fontBytes).Fontface;
-            var descriptor = new OpenTypeDescriptor("bitmap-fixture", "bitmap-fixture", XFontStyle.Regular, face, new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var face = FontFileData.GetOrCreateFrom(fontBytes).Fontface;
+            var descriptor = new OpenTypeDescriptor("bitmap-fixture", "bitmap-fixture", face);
             return descriptor.CharCodeToGlyphIndex(new Rune(ch));
         }
 
-        internal static int GlyphCount(byte[] fontBytes) => XFontSource.GetOrCreateFrom(fontBytes).Fontface.maxp.numGlyphs;
+        internal static int GlyphCount(byte[] fontBytes) => FontFileData.GetOrCreateFrom(fontBytes).Fontface.maxp.numGlyphs;
 
         /// <summary>The base font with <c>CBLC</c> and <c>CBDT</c> tables holding <paramref name="pictures"/> (index format 1, image formats 17/18, or 19 with index format 2).</summary>
         internal static byte[] WithCbdt(byte[] fontBytes, params Picture[] pictures)

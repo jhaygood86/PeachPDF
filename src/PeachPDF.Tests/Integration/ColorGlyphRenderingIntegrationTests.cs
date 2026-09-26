@@ -1,3 +1,5 @@
+using PeachDrawing.Text.Outlines;
+using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -6,11 +8,11 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using PeachPDF;
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using Xunit;
 
 namespace PeachPDF.Tests.Integration
@@ -190,7 +192,7 @@ namespace PeachPDF.Tests.Integration
             // Mirrors CMapInfo.AddShapedText's contract. The displayed RTL run was reversed/mirrored
             // from source "(AB)" into "(BA)"; ReverseRunes(source) = ")BA(" is the logical source
             // aligned position-for-position with the displayed glyphs.
-            ShapedGlyph[] glyphs =
+            PlacedGlyph[] glyphs =
             [
                 new(1, 0, 1),
                 new(2, 1, 1),
@@ -207,9 +209,9 @@ namespace PeachPDF.Tests.Integration
         public void ActualTextOwnership_DisjointClusters_DoesNotAllocatePerGlyphBuildersOrSortState()
         {
             const int glyphCount = 200;
-            var glyphs = new ShapedGlyph[glyphCount];
+            var glyphs = new PlacedGlyph[glyphCount];
             for (int i = 0; i < glyphs.Length; i++)
-                glyphs[i] = new ShapedGlyph(i + 1, i, 1);
+                glyphs[i] = new PlacedGlyph(i + 1, i, 1);
             string text = new('A', glyphCount);
 
             for (int i = 0; i < 3; i++)
@@ -230,7 +232,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ActualTextOwnership_OverlappingClusterPrefersWidestSourceSpan()
         {
-            ShapedGlyph[] glyphs =
+            PlacedGlyph[] glyphs =
             [
                 new(1, 1, 1),
                 new(2, 0, 3),
@@ -244,8 +246,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ActualTextOwnership_AttachesDeletedCharactersToAdjacentCluster()
         {
-            ShapedGlyph[] trailingGap = [new(1, 0, 1)];
-            ShapedGlyph[] leadingGap = [new(1, 1, 1)];
+            PlacedGlyph[] trailingGap = [new(1, 0, 1)];
+            PlacedGlyph[] leadingGap = [new(1, 1, 1)];
 
             string?[] trailingActualText = ColorGlyphPainter.BuildActualTextByGlyph("A\uFE0F", null, trailingGap);
             string?[] leadingActualText = ColorGlyphPainter.BuildActualTextByGlyph("\u200DA", null, leadingGap);

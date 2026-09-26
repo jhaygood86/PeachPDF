@@ -393,24 +393,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
             return clipped;
         }
 
-        // ----- AddString ----------------------------------------------------------------------------
-
-        /// <summary>
-        /// Adds a text string to this path.
-        /// </summary>
-        public void AddString(string s, XFontFamily family, XFontStyle style, double emSize, XPoint origin,
-            XStringFormat format)
-        {
-            try
-            {
-                DiagnosticsHelper.HandleNotImplemented("XGraphicsPath.AddString");
-            }
-            catch
-            {
-                throw;
-            }
-        }
-
         // --------------------------------------------------------------------------------------------
 
         /// <summary>

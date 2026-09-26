@@ -10,14 +10,12 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Text;
-using PeachPDF.Text.Bidi;
-using PeachPDF.Text.Shaping.Arabic;
-using PeachPDF.Text.Shaping.Use;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -406,7 +404,7 @@ namespace PeachPDF.Svg
             /// common case: never mirrored) means <see cref="Glyph"/> itself is already the logical
             /// source. Read by <see cref="PaintGlyphs"/>/<see cref="PaintUprightGlyph"/>/
             /// <see cref="PaintRotatedGlyph"/> to build each painted string's positionally-aligned
-            /// ToUnicode logical source (see <c>PeachPDF.Fonts.CMapInfo.AddShapedText</c>'s own remarks
+            /// ToUnicode logical source (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks
             /// on that contract) - unlike HTML's whole-word reversal, SVG's bidi pass physically reorders
             /// individual <see cref="GlyphInfo"/> instances, so each glyph already carries its own
             /// correct logical value directly; nothing needs recomputing from a run-wide position formula.
@@ -509,14 +507,14 @@ namespace PeachPDF.Svg
         /// Renders a whole <c>&lt;text&gt;</c> element: its subtree is flattened to an addressable-character
         /// stream (SVG 1.1 §10.4), laid out (per-character x/y/dx/dy/rotate lists, text chunks, per-chunk
         /// <c>text-anchor</c>), and painted - consecutive same-run, unrotated, in-flow characters as one
-        /// selectable <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>, anything positioned/rotated/gradient/stroked per
+        /// selectable <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>, anything positioned/rotated/gradient/stroked per
         /// glyph. A <c>&lt;textPath&gt;</c> descendant lays out independently along its path.
         /// </summary>
         private static void RenderText(RGraphics g, SvgDocument document, SvgTextElement text, double opacity)
         {
             var glyphs = new List<GlyphInfo>();
             var textPaths = new List<(SvgTextElement Run, double ParentOpacity)>();
-            var overrides = new List<BidiIsolateOverride>();
+            var overrides = new List<EmbeddingSpan>();
             FlattenRun(text, 1.0, glyphs, textPaths, overrides);
 
             if (glyphs.Count > 0)
@@ -550,7 +548,7 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// Real UAX#9 resolution (<see cref="BidiResolver"/>) for one <c>&lt;text&gt;</c> element's
+        /// Real UAX#9 resolution (<see cref="Bidi"/>) for one <c>&lt;text&gt;</c> element's
         /// flattened character stream, matching how CSS text integrates bidi (CSS Writing Modes Level 3
         /// §5.2) - SVG text is defined to follow the same <c>direction</c>/<c>unicode-bidi</c> properties
         /// and the same algorithm (SVG 2 §11.3.1). Must run <b>after</b> <see cref="LayoutGlyphs"/>, not
@@ -568,19 +566,19 @@ namespace PeachPDF.Svg
         /// <see cref="GlyphInfo.Py"/> for a vertical writing mode) - the cross axis is never reassigned
         /// by reordering, since it already belongs to its own glyph, not to a list position.
         /// </summary>
-        private static void ApplyBidiReordering(SvgTextElement text, List<GlyphInfo> glyphs, List<BidiIsolateOverride> overrides, bool isVertical)
+        private static void ApplyBidiReordering(SvgTextElement text, List<GlyphInfo> glyphs, List<EmbeddingSpan> overrides, bool isVertical)
         {
             var paragraphText = string.Concat(glyphs.Select(gi => gi.Glyph));
             var direction = Map.DirectionModes.GetValueOrDefault(text.Direction, DirectionMode.Ltr) == DirectionMode.Rtl
-                ? BidiParagraphDirection.Rtl
-                : BidiParagraphDirection.Ltr;
+                ? BaseDirection.Rtl
+                : BaseDirection.Ltr;
 
             // paragraphText is a UTF-16 string (a surrogate pair - any astral character, e.g. U+10800
             // and above - is two code units), but glyphs is exactly one GlyphInfo per Rune (FlattenRun),
-            // so paragraphText.Length can exceed glyphs.Count. BidiResolver.Resolve returns one level
+            // so paragraphText.Length can exceed glyphs.Count. Bidi.Analyze returns one level
             // per UTF-16 code unit of its input, and overrides (built by FlattenRun) are expressed in
             // glyph ordinals - both need translating against a per-glyph UTF-16 start-offset map before/
-            // after crossing into BidiResolver's own code-unit-indexed world, or everything from the
+            // after crossing into Bidi's own code-unit-indexed world, or everything from the
             // first astral character onward misindexes (issue #555). The equivalent HTML path never hits
             // this because it keys levels to UTF-16 string indices consistently throughout, never
             // re-indexing into a separately-counted glyph list.
@@ -596,13 +594,13 @@ namespace PeachPDF.Svg
                     Length = utf16Starts[o.Start + o.Length] - utf16Starts[o.Start],
                 }).ToList();
 
-            var result = BidiResolver.Resolve(paragraphText, direction, codeUnitOverrides);
+            var result = Bidi.Analyze(paragraphText, direction, codeUnitOverrides);
 
             var glyphLevels = new byte[glyphs.Count];
             for (var i = 0; i < glyphs.Count; i++)
                 glyphLevels[i] = result.Levels[utf16Starts[i]];
 
-            var runs = BidiResolver.ReorderLine(glyphLevels, 0, glyphs.Count);
+            var runs = Bidi.ReorderLine(glyphLevels, 0, glyphs.Count);
 
             if (runs.Count == 1 && !runs[0].IsRtl) return;
 
@@ -637,7 +635,7 @@ namespace PeachPDF.Svg
                             // one atomic block, preserving its own internal logical-order adjacency -
                             // mirroring CssLayoutEngine.MirrorWordTextIfNeeded's HTML precedent (a
                             // joining word's text is never itself reversed/mirrored; only the resulting
-                            // shaped glyph list is, via TextShapingFeatures.ReverseForDisplay - see
+                            // shaped glyph list is, via ShapeSettings.ReverseForDisplay - see
                             // ResolveShapingFeatures). It can never straddle this bidi run's own
                             // boundary: ResolveComplexScriptRuns never lets a run cross an
                             // SvgTextElement (tspan) boundary, and every bidi-level change from an
@@ -671,12 +669,12 @@ namespace PeachPDF.Svg
                         }
 
                         if (System.Text.Rune.DecodeFromUtf16(gi.Glyph, out var rune, out _) == System.Buffers.OperationStatus.Done
-                            && BidiMirroring.TryGetMirror(rune.Value, out var mirrored))
+                            && Bidi.TryGetMirror(rune, out var mirrored))
                         {
                             // The pre-mirror value is this glyph's true logical-order source - captured
                             // before Glyph itself is overwritten below.
                             gi.LogicalGlyph = gi.Glyph;
-                            gi.Glyph = char.ConvertFromUtf32(mirrored);
+                            gi.Glyph = mirrored.ToString();
                             // LayoutGlyphs classified IsUpright from the pre-mirror codepoint; a mirror
                             // pair could in principle have differing Vertical_Orientation classes (most
                             // real mirror pairs - brackets, parens - don't, but nothing guarantees it),
@@ -693,7 +691,7 @@ namespace PeachPDF.Svg
                             // drop real VORG positioning for exactly the reordering case this file
                             // already re-derives IsUpright to handle.
                             gi.OriginYOffset = gi.IsUpright && gi.Font.HasVerticalOrigin
-                                ? gi.Font.GetVerticalOriginY(new System.Text.Rune(mirrored)) - gi.Font.Ascent
+                                ? gi.Font.GetVerticalOriginY(mirrored) - gi.Font.Ascent
                                 : 0;
                         }
 
@@ -744,12 +742,12 @@ namespace PeachPDF.Svg
         /// own <c>unicode-bidi</c> isn't <c>normal</c> contributes a synthetic explicit push
         /// (<see cref="CssUnicodeBidiMapping"/>) over the glyph range it (including its own descendants)
         /// contributed, appended to <paramref name="overrides"/> after recursing into its children so a
-        /// shared start index nests outer-before-inner (see <c>BidiResolver.Resolve</c>'s own handling of
+        /// shared start index nests outer-before-inner (see <c>Bidi.Analyze</c>'s own handling of
         /// multiple overrides sharing an end index).
         /// <paramref name="opacityFactor"/> is the product of the run-chain's <c>opacity</c> below the root
         /// <c>&lt;text&gt;</c> (whose own opacity is already folded into the caller's base opacity).
         /// </summary>
-        private static void FlattenRun(SvgTextElement run, double opacityFactor, List<GlyphInfo> glyphs, List<(SvgTextElement, double)> textPaths, List<BidiIsolateOverride> overrides)
+        private static void FlattenRun(SvgTextElement run, double opacityFactor, List<GlyphInfo> glyphs, List<(SvgTextElement, double)> textPaths, List<EmbeddingSpan> overrides)
         {
             var startIndex = glyphs.Count;
 
@@ -778,7 +776,7 @@ namespace PeachPDF.Svg
                 var unicodeBidi = Map.UnicodeModes.GetValueOrDefault(run.UnicodeBidi, UnicodeMode.Normal);
                 var runDirection = Map.DirectionModes.GetValueOrDefault(run.Direction, DirectionMode.Ltr);
                 foreach (var push in CssUnicodeBidiMapping.MapToPushes(unicodeBidi, runDirection))
-                    overrides.Add(new BidiIsolateOverride(startIndex, contributedLength, push));
+                    overrides.Add(new EmbeddingSpan(startIndex, contributedLength, push));
             }
 
             if (contributedLength > 0 && run.TextDecorationLine != "none")
@@ -842,13 +840,13 @@ namespace PeachPDF.Svg
 
             var rawScripts = new string[count];
             for (var i = 0; i < count; i++)
-                rawScripts[i] = ScriptTable.Of(codepoints[i]);
-            var resolvedScripts = ScriptRunResolver.ResolveRaw(rawScripts);
+                rawScripts[i] = Scripts.Of(codepoints[i]);
+            var resolvedScripts = Scripts.ResolveLooked(rawScripts);
 
             // Run unconditionally over the whole stream, like CssBidiParagraphResolver does - a
             // non-joining codepoint's ArabicJoiningType is already Non_Joining (U), which
             // ArabicJoiningShaper resolves to ArabicJoiningForm.None for free.
-            var joiningForms = ArabicJoiningShaper.Resolve(codepoints);
+            var joiningForms = ArabicJoining.Resolve(codepoints);
 
             // Only classified (and only allocated at all) when the stream actually contains Devanagari
             // text - same "don't activate syllable scanning for every run" reasoning as the HTML side.
@@ -858,13 +856,13 @@ namespace PeachPDF.Svg
                 if (resolvedScripts[i] != "Devanagari")
                     continue;
                 useCategories ??= new UseCategory[count];
-                useCategories[i] = UseCategoryClassifier.Classify(codepoints[i]);
+                useCategories[i] = UniversalShaping.Classify(codepoints[i]);
             }
 
             var pos = 0;
             while (pos < count)
             {
-                var isArabicParticipant = ArabicShapingTable.Of(codepoints[pos]) != ArabicJoiningType.U;
+                var isArabicParticipant = ArabicJoining.TypeOf(codepoints[pos]) != ArabicJoiningType.U;
                 var isUseParticipant = !isArabicParticipant && resolvedScripts[pos] == "Devanagari";
 
                 if (!isArabicParticipant && !isUseParticipant)
@@ -894,7 +892,7 @@ namespace PeachPDF.Svg
                        && glyphs[end].X is null && glyphs[end].Y is null
                        && glyphs[end].Dx is null && glyphs[end].Dy is null
                        && (isArabicParticipant
-                           ? ArabicShapingTable.Of(codepoints[end]) != ArabicJoiningType.U
+                           ? ArabicJoining.TypeOf(codepoints[end]) != ArabicJoiningType.U
                            : resolvedScripts[end] == "Devanagari"))
                 {
                     end++;
@@ -907,7 +905,7 @@ namespace PeachPDF.Svg
 
                 first.ShapingRunFirst = first;
                 first.RunText = text.ToString();
-                first.RunScriptTag = OpenTypeScriptTags.Resolve(resolvedScripts[pos]);
+                first.RunScriptTag = OpenTypeTags.ForScript(resolvedScripts[pos]);
 
                 if (isArabicParticipant)
                 {
@@ -930,7 +928,7 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// This glyph's effective <see cref="TextShapingFeatures"/> for measurement/painting: its own
+        /// This glyph's effective <see cref="ShapeSettings"/> for measurement/painting: its own
         /// run's <see cref="SvgTextElement.ShapingFeatures"/>, layered with the run-wide script tag/
         /// joining forms/USE categories/reverse-for-display request when <paramref name="gi"/> is part
         /// of a multi-character complex-script shaping run (see <see cref="GlyphInfo.ShapingRunFirst"/>/
@@ -939,7 +937,7 @@ namespace PeachPDF.Svg
         /// unchanged (today's exact behavior) for every glyph outside such a run - the overwhelming
         /// common case.
         /// </summary>
-        private static TextShapingFeatures ResolveShapingFeatures(GlyphInfo gi) =>
+        private static ShapeSettings ResolveShapingFeatures(GlyphInfo gi) =>
             gi.ShapingRunFirst is not { } first
                 ? gi.Run.ShapingFeatures
                 : gi.Run.ShapingFeatures with
@@ -1120,14 +1118,14 @@ namespace PeachPDF.Svg
         /// nested <c>&lt;tspan&gt;</c> can genuinely override <c>text-orientation</c>, unlike
         /// <c>writing-mode</c> - see <see cref="LayoutGlyphs"/>'s own remarks); <c>mixed</c> (the
         /// default) classifies the glyph's own single codepoint by Unicode's Vertical_Orientation
-        /// property, the same <see cref="VerticalOrientationTable"/> the HTML pipeline shares.
+        /// property, the same <see cref="VerticalOrientation"/> the HTML pipeline shares.
         /// </summary>
         private static bool IsUprightGlyph(GlyphInfo gi) => gi.Run.TextOrientation switch
         {
             TextOrientation.Upright => true,
             TextOrientation.Sideways => false,
             _ => System.Text.Rune.DecodeFromUtf16(gi.Glyph, out var rune, out _) == System.Buffers.OperationStatus.Done
-                 && VerticalOrientationTable.IsEffectivelyUpright(rune)
+                 && VerticalOrientation.IsEffectivelyUpright(rune)
         };
 
         /// <summary>Whether <paramref name="glyph"/> (one <see cref="System.Text.Rune"/>-worth of
@@ -1138,7 +1136,7 @@ namespace PeachPDF.Svg
 
         /// <summary>
         /// Paints the laid-out character stream. Under <c>horizontal-tb</c>: a maximal contiguous group
-        /// of same-run, unrotated, in-flow characters is painted as one <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>
+        /// of same-run, unrotated, in-flow characters is painted as one <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>
         /// (kept selectable); an explicitly-rotated character is painted on its own, rotated about its
         /// own position (<see cref="PaintRotatedGlyph"/>). Under a vertical writing mode, every glyph
         /// paints individually - never batched into one string - since consecutive upright glyphs stack
@@ -1208,7 +1206,7 @@ namespace PeachPDF.Svg
                     // together (ResolveComplexScriptRuns already required them to share Run and carry no
                     // mid-run explicit position/rotate); a boundary between two different runs, or
                     // between a run and plain text, always breaks the batch - each needs its own
-                    // TextShapingFeatures (see ResolveShapingFeatures), so merging them would apply one
+                    // ShapeSettings (see ResolveShapingFeatures), so merging them would apply one
                     // run's joining forms/USE categories to the other's text.
                     if (!ReferenceEquals(gc.Run, start.Run) || (gc.Rotate ?? 0) != 0
                         || gc.X is not null || gc.Y is not null || (gc.Dx ?? 0) != 0 || (gc.Dy ?? 0) != 0
@@ -1463,17 +1461,17 @@ namespace PeachPDF.Svg
         /// <summary>
         /// Paints one straight-baseline group of characters (<paramref name="text"/>, all sharing one run's
         /// font/fill/stroke) at a given top-left origin. Plain solid, non-stroked text keeps the fast
-        /// <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/> path (a single-color PDF text show, so it stays
+        /// <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/> path (a single-color PDF text show, so it stays
         /// selectable and tagged-PDF-friendly). A gradient/pattern <c>fill</c> or any <c>stroke</c>
         /// needs the glyphs as an addressable vector path (<see cref="RGraphics.GetTextOutline"/>),
         /// filled/stroked through the same brush/pen machinery shapes use - outlined text is vector art
         /// (not selectable). A CFF/bitmap font yields no outline, so it falls back to a solid fill.
         /// <paramref name="logicalText"/> is <paramref name="text"/>'s true logical-order source,
-        /// positionally aligned with it (see <c>PeachPDF.Fonts.CMapInfo.AddShapedText</c>'s own remarks) -
+        /// positionally aligned with it (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks) -
         /// null (the common case) when this run of characters was never bidi-mirrored.
         /// </summary>
         private static void PaintTextGlyphs(RGraphics g, SvgDocument document, SvgTextElement run, string text, RFont font, double drawX, double drawY, RSize size, double opacity,
-            double letterSpacing = 0, TextShapingFeatures? features = null, string? logicalText = null)
+            double letterSpacing = 0, ShapeSettings? features = null, string? logicalText = null)
         {
             var hasStroke = run.Stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
             var needsOutline = run.Fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
@@ -1562,7 +1560,7 @@ namespace PeachPDF.Svg
             // dropped). Each glyph carries its owning run (font/paint) and its assigned dx/dy/rotate.
             var glyphs = new List<GlyphInfo>();
             var ignoredTextPaths = new List<(SvgTextElement, double)>();
-            var overrides = new List<BidiIsolateOverride>();
+            var overrides = new List<EmbeddingSpan>();
             FlattenRun(run, 1.0, glyphs, ignoredTextPaths, overrides);
             if (glyphs.Count == 0)
                 return;
@@ -1634,7 +1632,7 @@ namespace PeachPDF.Svg
             }
         }
 
-        /// <summary>Paints one glyph of a <c>&lt;textPath&gt;</c> at the current (already rotated/translated) frame, centered on the local origin. <paramref name="logicalGlyph"/> is <paramref name="glyph"/>'s true logical-order source when bidi-mirrored it (see <c>PeachPDF.Fonts.CMapInfo.AddShapedText</c>'s own remarks) - null (the common case) otherwise.</summary>
+        /// <summary>Paints one glyph of a <c>&lt;textPath&gt;</c> at the current (already rotated/translated) frame, centered on the local origin. <paramref name="logicalGlyph"/> is <paramref name="glyph"/>'s true logical-order source when bidi-mirrored it (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks) - null (the common case) otherwise.</summary>
         private static void PaintGlyphAlongPath(RGraphics g, SvgDocument document, SvgTextElement run, RFont font, string glyph, double advance, double opacity, bool needsOutline, bool hasStroke, string? logicalGlyph = null)
         {
             var leftX = -advance / 2;
@@ -1904,7 +1902,7 @@ namespace PeachPDF.Svg
 
             var glyphs = new List<GlyphInfo>();
             var textPaths = new List<(SvgTextElement Run, double ParentOpacity)>();
-            var overrides = new List<BidiIsolateOverride>();
+            var overrides = new List<EmbeddingSpan>();
             FlattenRun(text, 1.0, glyphs, textPaths, overrides);
 
             if (glyphs.Count > 0)

@@ -1,9 +1,10 @@
+using PeachPDF.Tests.TestSupport;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Drawing.Layout;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Basics
 {
@@ -34,7 +35,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Basics
                 new XRect(width / 2 - r, height / 2 - r, 2 * r, 2 * r));
 
             // Create a font.
-            var font = new XFont("Times New Roman", 20, XFontStyle.BoldItalic, new FontResolver());
+            var font = TestFonts.Create("Times New Roman", 20, XFontStyle.BoldItalic);
 
             // Draw the text.
             gfx.DrawString("Hello, World!", font, XBrushes.Black,
@@ -98,7 +99,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Basics
                 // Get an XGraphics object for drawing on this page.
                 var gfx = XGraphics.FromPdfPage(page);
 
-                var font = new XFont("Times New Roman", 10, XFontStyle.Bold, new FontResolver());
+                var font = TestFonts.Create("Times New Roman", 10, XFontStyle.Bold);
                 var tf = new XTextFormatter(gfx);
 
                 var rect = new XRect(40, 100, 250, 232);

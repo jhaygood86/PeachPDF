@@ -12,6 +12,8 @@
 
 #nullable enable
 
+using PeachDrawing.Text;
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Handlers;
@@ -256,7 +258,7 @@ namespace PeachPDF.Html.Adapters
         /// <param name="isItalicOverride">the <c>@font-face</c> rule's own <c>font-style</c> descriptor, resolved to italic-or-not - authoritative over the file's own sniffed style when present</param>
         /// <param name="stretchOverride">the <c>@font-face</c> rule's own <c>font-stretch</c> descriptor, resolved to a concrete numeric stretch - authoritative over the file's own sniffed stretch when present</param>
         /// <param name="unicodeRanges">the <c>@font-face</c> rule's own <c>unicode-range</c> descriptor, parsed to codepoint ranges - restricts which characters this face is used for; null means no restriction</param>
-        public async Task<bool> AddFontFamilyFromUrl(string fontFamilyName, string url, string? format, RUri? baseUri = null, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null)
+        public async Task<bool> AddFontFamilyFromUrl(string fontFamilyName, string url, string? format, RUri? baseUri = null, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             RUri resolvedUri;
 
@@ -289,7 +291,7 @@ namespace PeachPDF.Html.Adapters
             return await AddFontFromStream(fontFamilyName, fontStream, format, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
         }
 
-        public async Task<bool> AddLocalFontFamily(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null)
+        public async Task<bool> AddLocalFontFamily(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             return await AddLocalFont(fontFamilyName, localFontFaceName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
         }
@@ -351,12 +353,12 @@ namespace PeachPDF.Html.Adapters
         /// does. Returns null when nothing registered covers it either, so the caller keeps today's
         /// <c>.notdef</c>/tofu-box behavior.
         /// </summary>
-        public RFont? GetSystemFallbackFontForCodepoint(double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, PeachPDF.Text.EmojiPresentation presentation = PeachPDF.Text.EmojiPresentation.NoPreference)
+        public RFont? GetSystemFallbackFontForCodepoint(double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, PeachDrawing.Text.Unicode.EmojiPresentation presentation = PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference)
         {
             return _fontsHandler.GetCachedSystemFallbackFontForCodepoint(size, style, codepoint, weight, stretch, obliqueSkewSinus, presentation);
         }
 
-        internal RFont? CreateSystemFallbackFontForCodepoint(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachPDF.Text.EmojiPresentation presentation)
+        internal RFont? CreateSystemFallbackFontForCodepoint(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation)
         {
             return CreateSystemFallbackFontForCodepointInt(size, style, weight, stretch, obliqueSkewSinus, codepoint, presentation);
         }
@@ -498,15 +500,15 @@ namespace PeachPDF.Html.Adapters
         /// - the CSS Fonts 4 §5 system-fallback step, tried only after every family in the box's own
         /// <c>font-family</c> stack has already missed. Returns null when nothing registered covers it.
         /// </summary>
-        protected abstract RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachPDF.Text.EmojiPresentation presentation);
+        protected abstract RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation);
 
         /// <summary>Whether any face of <paramref name="family"/> declares an explicit <c>unicode-range</c>.</summary>
         protected abstract bool FamilyHasExplicitUnicodeRangesInt(string family);
 
         /// <returns>true if the format was recognized and a load was actually attempted, false if the declared format is one this adapter can't handle (so a caller trying a multi-source <c>@font-face src</c> fallback list knows to move on to the next candidate)</returns>
-        protected abstract Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null);
+        protected abstract Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null);
 
-        protected abstract Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null);
+        protected abstract Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null);
 
         #endregion
     }

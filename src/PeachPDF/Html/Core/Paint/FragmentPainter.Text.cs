@@ -1,10 +1,11 @@
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -110,7 +111,7 @@ namespace PeachPDF.Html.Core.Paint
                 // unmirrored word's own already-correct (identity) logical text.
                 string? logicalText = null;
                 if (word.FirstLineText is null && word is CssRectWord { } rectWord && rectWord.PreMirrorText != text)
-                    logicalText = PeachPDF.Text.Bidi.BidiMirrorResolver.ReverseRunes(rectWord.PreMirrorText);
+                    logicalText = Bidi.Reverse(rectWord.PreMirrorText);
                 DrawWordGlyphs(g, box, word, wordFragment.Rect, text, new RSize(word.Width, word.Height), logicalText: logicalText);
             }
         }
@@ -188,7 +189,7 @@ namespace PeachPDF.Html.Core.Paint
         /// </param>
         /// <param name="logicalText">
         /// <paramref name="text"/>'s true logical-order (pre-bidi-mirroring) source, when known and
-        /// different - see <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?, string?)"/>.
+        /// different - see <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?, string?)"/>.
         /// Null for a truncated/ellipsis <paramref name="text"/> (a caller-kept substring or a synthesized
         /// "…" glyph, neither of which is <paramref name="word"/>'s own full text) and for any word with
         /// no distinct logical-order source to recover.
@@ -276,8 +277,8 @@ namespace PeachPDF.Html.Core.Paint
 
         /// <summary>
         /// Paints an upright (unrotated) run within a vertical writing mode - one or more codepoints
-        /// classified <see cref="PeachPDF.Text.VerticalOrientationClass.U"/>/
-        /// <see cref="PeachPDF.Text.VerticalOrientationClass.Tu"/> (<see cref="CssRect.IsUprightOrientation"/>),
+        /// classified <see cref="PeachDrawing.Text.Unicode.VerticalOrientationClass.U"/>/
+        /// <see cref="PeachDrawing.Text.Unicode.VerticalOrientationClass.Tu"/> (<see cref="CssRect.IsUprightOrientation"/>),
         /// stacked top-to-bottom down <paramref name="rect"/>'s
         /// own physical extent rather than rotated to fill it, since - unlike a rotated run, which is one
         /// natural horizontal glyph run reoriented as a whole (<see cref="SidewaysRotation"/>) - upright
@@ -295,7 +296,7 @@ namespace PeachPDF.Html.Core.Paint
         /// or layout's reservation and paint's actual step disagree. The line-height fallback is
         /// deliberately not each character's individually-measured horizontal advance width
         /// (<see cref="CssLayoutEngine.MeasureUprightRunCharacters"/>'s own per-character <c>Size</c>,
-        /// still used below for cross-axis centering only): <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/> always
+        /// still used below for cross-axis centering only): <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/> always
         /// renders a glyph across the font's full line-height span from its anchor regardless of that
         /// glyph's own advance width, so stepping by a narrower advance (a real CJK codepoint can
         /// measure a materially narrower hmtx advance than its font's line height) visibly overlapped
@@ -306,18 +307,18 @@ namespace PeachPDF.Html.Core.Paint
         /// A real <c>vmtx</c> advance is legitimately, routinely *smaller* than the font's line height (a
         /// CJK vertical font typically advances by one em; ascent+descent is usually well over one em) -
         /// so once real metrics make the per-character step narrower than <see cref="RFont.Height"/>
-        /// again, <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>'s own "always paints a full line-height-tall span"
+        /// again, <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>'s own "always paints a full line-height-tall span"
         /// behavior reintroduces precisely the bleed-into-the-next-character overlap the line-height
         /// fallback above exists to avoid, unless each character's paint is confined to its own reserved
         /// cell. <see cref="RGraphics.PushClip(RRect)"/>/<see cref="RGraphics.PopClip"/> around each
-        /// <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/> call does exactly that when real metrics are in play; the
+        /// <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/> call does exactly that when real metrics are in play; the
         /// line-height fallback needs no clip, since its advance already equals the full painted span by
         /// construction.
         ///
         /// When <paramref name="font"/> additionally carries a real <c>VORG</c> table
         /// (<see cref="RFont.HasVerticalOrigin"/> - issue #775), the anchor is nudged by
         /// <see cref="RFont.GetVerticalOriginY"/> instead of staying at the plain top-of-cell position:
-        /// <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/> always renders <paramref name="font"/>'s baseline at
+        /// <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/> always renders <paramref name="font"/>'s baseline at
         /// <c>point.Y + font.Ascent</c> (traced through <c>XGraphicsPdfRenderer.DrawString</c>'s own
         /// <c>cyAscent</c> shift, which uses the exact same <c>Ascender</c> field <see cref="RFont.Ascent"/>
         /// is built from), while the OpenType spec defines a glyph's vertical origin as a baseline-relative,
@@ -346,7 +347,7 @@ namespace PeachPDF.Html.Core.Paint
         /// margin above a glyph's cap-height, never real ink. Do not "fix" this by shifting the clip to
         /// track the anchor without re-verifying against real rendered output first.
         /// </remarks>
-        private static void PaintUprightVerticalRun(RGraphics g, string text, RFont font, CssBox styleSource, RRect rect, double baselineAdjust, TextShapingFeatures wordFeatures, string? logicalText = null)
+        private static void PaintUprightVerticalRun(RGraphics g, string text, RFont font, CssBox styleSource, RRect rect, double baselineAdjust, ShapeSettings wordFeatures, string? logicalText = null)
         {
             var hasVerticalMetrics = font.HasVerticalMetrics;
             var hasVerticalOrigin = font.HasVerticalOrigin;
@@ -411,7 +412,7 @@ namespace PeachPDF.Html.Core.Paint
         /// against, not the shifted draw position.
         /// </returns>
         private static IEnumerable<UprightGlyphPlacement> EnumerateUprightGlyphPlacements(
-            RGraphics g, string text, RFont font, RRect rect, double baselineAdjust, double letterSpacing, TextShapingFeatures wordFeatures)
+            RGraphics g, string text, RFont font, RRect rect, double baselineAdjust, double letterSpacing, ShapeSettings wordFeatures)
         {
             var hasVerticalMetrics = font.HasVerticalMetrics;
             var hasVerticalOrigin = font.HasVerticalOrigin;

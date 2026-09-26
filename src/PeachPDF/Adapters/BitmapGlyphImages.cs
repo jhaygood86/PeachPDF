@@ -1,4 +1,5 @@
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text;
+using PeachDrawing.Text.Outlines;
 using PeachPDF.PdfSharpCore.Drawing;
 using System.Collections.Generic;
 using System.IO;
@@ -12,11 +13,11 @@ namespace PeachPDF.Adapters;
 /// </summary>
 internal static class BitmapGlyphImages
 {
-    private static readonly ConditionalWeakTable<OpenTypeDescriptor, Dictionary<(int GlyphId, int Ppem), XImage>> Cache = new();
+    private static readonly ConditionalWeakTable<Typeface, Dictionary<(int GlyphId, int Ppem), XImage>> Cache = new();
 
-    public static XImage Get(OpenTypeDescriptor descriptor, int glyphId, BitmapGlyph glyph)
+    public static XImage Get(Typeface typeface, int glyphId, EmbeddedBitmap glyph)
     {
-        var images = Cache.GetOrCreateValue(descriptor);
+        var images = Cache.GetOrCreateValue(typeface);
         lock (images)
         {
             if (!images.TryGetValue((glyphId, glyph.Ppem), out var image))

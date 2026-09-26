@@ -1,6 +1,7 @@
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.Text.Shaping.Arabic;
-using PeachPDF.Text.Shaping.Use;
+using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
+using PeachDrawing.Text.Internal.Text.Shaping.Use;
 
 namespace PeachPDF.Tests.Html.Core.Dom
 {

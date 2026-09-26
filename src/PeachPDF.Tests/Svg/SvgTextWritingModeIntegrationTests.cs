@@ -1,5 +1,6 @@
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Svg;
@@ -261,7 +262,7 @@ namespace PeachPDF.Tests.Svg
             // GlyphInfo.Py isn't exposed to this test the way CssRect.Top is to the HTML-side
             // equivalent.
             var plainBytes = File.ReadAllBytes(BundledFonts.Otf);
-            var numGlyphs = XFontSource.GetOrCreateFrom(plainBytes).Fontface.maxp.numGlyphs;
+            var numGlyphs = FontFileData.GetOrCreateFrom(plainBytes).Fontface.maxp.numGlyphs;
             var vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, TableTagNames.VHea, SyntheticFontTables.BuildVhea(ascent: 900, descent: -200, numOfLongVerMetrics: numGlyphs));
             vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(vorgBytes, TableTagNames.VMtx, SyntheticFontTables.BuildVmtxUniform(1000, numGlyphs));
             vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(vorgBytes, TableTagNames.VOrg, SyntheticFontTables.BuildVorg(700));

@@ -20,24 +20,16 @@ namespace PeachPDF.Adapters
     /// </summary>
     internal sealed class FontFamilyAdapter : RFontFamily
     {
-        /// <summary>
-        /// the underline win-forms font.
-        /// </summary>
-        private readonly XFontFamily _fontFamily;
+        private readonly string _name;
 
         /// <summary>
         /// Init.
         /// </summary>
-        public FontFamilyAdapter(XFontFamily fontFamily)
+        public FontFamilyAdapter(string name)
         {
-            _fontFamily = fontFamily;
+            _name = name;
         }
 
-        /// <summary>
-        /// the underline win-forms font family.
-        /// </summary>
-        public XFontFamily FontFamily => _fontFamily;
-
-        public override string Name => _fontFamily.Name;
+        public override string Name => _name;
     }
 }

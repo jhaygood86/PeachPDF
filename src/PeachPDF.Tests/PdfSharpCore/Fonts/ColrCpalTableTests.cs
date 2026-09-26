@@ -1,6 +1,8 @@
+using PeachDrawing.Text.Outlines;
+using PeachDrawing.Text.Internal.Fonts;
 using System.IO;
 using System.Text;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
@@ -15,12 +17,11 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     public class ColrCpalTableTests
     {
         private static OpenTypeFontface Face(string path)
-            => XFontSource.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
+            => FontFileData.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
 
         private static int Gid(OpenTypeFontface face, char ch)
         {
-            var descriptor = new OpenTypeDescriptor("colr-test", "colr-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var descriptor = new OpenTypeDescriptor("colr-test", "colr-test", face);
             return descriptor.CharCodeToGlyphIndex(new Rune(ch));
         }
 
@@ -58,10 +59,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int circ = Gid(face, 'Z');
 
             Assert.True(colr.TryGetV0Layers(Gid(face, 'A'), out var aLayers));
-            Assert.Equal(new[] { (box, 0), (tri, 1) }, aLayers.ToArray());
+            Assert.Equal(new[] { new ColorLayer(box, 0), new ColorLayer(tri, 1) }, aLayers);
 
             Assert.True(colr.TryGetV0Layers(Gid(face, 'B'), out var bLayers));
-            Assert.Equal(new[] { (circ, 2) }, bLayers.ToArray());
+            Assert.Equal(new[] { new ColorLayer(circ, 2) }, bLayers);
 
             // A layer/outline glyph is not itself a color base glyph.
             Assert.True(colr.HasColorGlyph(Gid(face, 'A')));
@@ -99,20 +100,20 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.NotNull(colr);
             Assert.Equal(1, colr.Version);
 
-            var root = Assert.IsType<ColrPaintColrLayers>(colr.GetV1BaseGlyphPaint(Gid(face, 'A')));
+            var root = Assert.IsType<PaintColrLayers>(colr.GetV1BaseGlyphPaint(Gid(face, 'A')));
             Assert.Equal(2, root.NumLayers);
 
             // Bottom layer: box glyph filled solid with palette 0.
-            var layer0 = Assert.IsType<ColrPaintGlyph>(colr.GetLayerPaint(root.FirstLayerIndex));
+            var layer0 = Assert.IsType<PaintGlyph>(colr.GetLayerPaint(root.FirstLayerIndex));
             Assert.Equal(Gid(face, 'X'), layer0.GlyphId);
-            var solid0 = Assert.IsType<ColrPaintSolid>(layer0.Paint);
+            var solid0 = Assert.IsType<PaintSolid>(layer0.Paint);
             Assert.Equal(0, solid0.PaletteIndex);
             Assert.Equal(1.0, solid0.Alpha, 3);
 
             // Top layer: triangle glyph filled solid with palette 1.
-            var layer1 = Assert.IsType<ColrPaintGlyph>(colr.GetLayerPaint(root.FirstLayerIndex + 1));
+            var layer1 = Assert.IsType<PaintGlyph>(colr.GetLayerPaint(root.FirstLayerIndex + 1));
             Assert.Equal(Gid(face, 'Y'), layer1.GlyphId);
-            Assert.Equal(1, Assert.IsType<ColrPaintSolid>(layer1.Paint).PaletteIndex);
+            Assert.Equal(1, Assert.IsType<PaintSolid>(layer1.Paint).PaletteIndex);
         }
 
         [Fact]
@@ -121,15 +122,15 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             OpenTypeFontface face = Face(BundledFonts.ColorV1);
             ColrTable colr = face.colr;
 
-            var glyphPaint = Assert.IsType<ColrPaintGlyph>(colr.GetV1BaseGlyphPaint(Gid(face, 'G')));
+            var glyphPaint = Assert.IsType<PaintGlyph>(colr.GetV1BaseGlyphPaint(Gid(face, 'G')));
             Assert.Equal(Gid(face, 'X'), glyphPaint.GlyphId);
 
-            var gradient = Assert.IsType<ColrPaintLinearGradient>(glyphPaint.Paint);
+            var gradient = Assert.IsType<PaintLinearGradient>(glyphPaint.Paint);
             Assert.Equal(100, gradient.X0, 3);
             Assert.Equal(0, gradient.Y0, 3);
             Assert.Equal(900, gradient.X1, 3);
             Assert.Equal(2, gradient.Line.Stops.Count);
-            Assert.Equal(ColrExtend.Pad, gradient.Line.Extend);
+            Assert.Equal(ColorExtend.Pad, gradient.Line.Extend);
             Assert.Equal(0.0, gradient.Line.Stops[0].Offset, 3);
             Assert.Equal(0, gradient.Line.Stops[0].PaletteIndex);
             Assert.Equal(1.0, gradient.Line.Stops[1].Offset, 3);
@@ -142,16 +143,16 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             OpenTypeFontface face = Face(BundledFonts.ColorV1);
             ColrTable colr = face.colr;
 
-            var transform = Assert.IsType<ColrPaintTransform>(colr.GetV1BaseGlyphPaint(Gid(face, 'T')));
+            var transform = Assert.IsType<PaintTransform>(colr.GetV1BaseGlyphPaint(Gid(face, 'T')));
             // Translate(100, 50): identity linear part, offset in DX/DY.
             Assert.Equal(1, transform.Affine.XX, 3);
             Assert.Equal(1, transform.Affine.YY, 3);
             Assert.Equal(100, transform.Affine.DX, 3);
             Assert.Equal(50, transform.Affine.DY, 3);
 
-            var glyphPaint = Assert.IsType<ColrPaintGlyph>(transform.Paint);
+            var glyphPaint = Assert.IsType<PaintGlyph>(transform.Paint);
             Assert.Equal(Gid(face, 'Y'), glyphPaint.GlyphId);
-            Assert.Equal(3, Assert.IsType<ColrPaintSolid>(glyphPaint.Paint).PaletteIndex);
+            Assert.Equal(3, Assert.IsType<PaintSolid>(glyphPaint.Paint).PaletteIndex);
         }
 
         [Fact]
@@ -160,14 +161,14 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             OpenTypeFontface face = Face(BundledFonts.ColorV1);
             ColrTable colr = face.colr;
 
-            var radial = Assert.IsType<ColrPaintRadialGradient>(
-                Assert.IsType<ColrPaintGlyph>(colr.GetV1BaseGlyphPaint(Gid(face, 'R'))).Paint);
+            var radial = Assert.IsType<PaintRadialGradient>(
+                Assert.IsType<PaintGlyph>(colr.GetV1BaseGlyphPaint(Gid(face, 'R'))).Paint);
             Assert.Equal(500, radial.X1, 3);
             Assert.Equal(400, radial.R1, 3);
             Assert.Equal(2, radial.Line.Stops.Count);
 
-            var sweep = Assert.IsType<ColrPaintSweepGradient>(
-                Assert.IsType<ColrPaintGlyph>(colr.GetV1BaseGlyphPaint(Gid(face, 'S'))).Paint);
+            var sweep = Assert.IsType<PaintSweepGradient>(
+                Assert.IsType<PaintGlyph>(colr.GetV1BaseGlyphPaint(Gid(face, 'S'))).Paint);
             Assert.Equal(500, sweep.CenterX, 3);
             Assert.Equal(3, sweep.Line.Stops.Count);
         }
@@ -178,30 +179,30 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             OpenTypeFontface face = Face(BundledFonts.ColorV1);
             ColrTable colr = face.colr;
 
-            // Every transform-family paint normalizes to a ColrPaintTransform wrapping its child:
+            // Every transform-family paint normalizes to a PaintTransform wrapping its child:
             // C=scale-around-center, O=rotate-around-center, K=skew, W=affine, D=scale, E=scale-uniform,
             // H=scale-uniform-around-center, I=rotate, J=skew-around-center.
             foreach (char ch in new[] { 'C', 'O', 'K', 'W', 'D', 'E', 'H', 'I', 'J' })
             {
-                var transform = Assert.IsType<ColrPaintTransform>(colr.GetV1BaseGlyphPaint(Gid(face, ch)));
+                var transform = Assert.IsType<PaintTransform>(colr.GetV1BaseGlyphPaint(Gid(face, ch)));
                 Assert.NotNull(transform.Paint);
             }
 
             // General affine transform ('W') carries the authored translation.
-            var affine = Assert.IsType<ColrPaintTransform>(colr.GetV1BaseGlyphPaint(Gid(face, 'W'))).Affine;
+            var affine = Assert.IsType<PaintTransform>(colr.GetV1BaseGlyphPaint(Gid(face, 'W'))).Affine;
             Assert.Equal(50, affine.DX, 3);
             Assert.Equal(50, affine.DY, 3);
 
             // Skew ('K', xSkewAngle=15, ySkewAngle=0): x' = x - tan(15°)·y, y' = y. So in
             // (XX, YX, XY, YY): XY = -tan(15°), YX = tan(0) = 0 (guards against the axis/sign slots).
-            var skew = Assert.IsType<ColrPaintTransform>(colr.GetV1BaseGlyphPaint(Gid(face, 'K'))).Affine;
+            var skew = Assert.IsType<PaintTransform>(colr.GetV1BaseGlyphPaint(Gid(face, 'K'))).Affine;
             Assert.Equal(1, skew.XX, 3);
             Assert.Equal(1, skew.YY, 3);
             Assert.Equal(-System.Math.Tan(15 * System.Math.PI / 180), skew.XY, 3);
             Assert.Equal(0, skew.YX, 3);
 
             // PaintColrGlyph references another base glyph.
-            var colrGlyph = Assert.IsType<ColrPaintColrGlyph>(colr.GetV1BaseGlyphPaint(Gid(face, 'L')));
+            var colrGlyph = Assert.IsType<PaintColrGlyph>(colr.GetV1BaseGlyphPaint(Gid(face, 'L')));
             Assert.Equal(Gid(face, 'A'), colrGlyph.GlyphId);
         }
 
@@ -282,7 +283,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         public void CompositeGlyphClosure_DoesNotMoveSharedFontCursor()
         {
             var bytes = File.ReadAllBytes(BundledFonts.Ttf);
-            var face = new OpenTypeFontface(XFontSource.CreateCompiledFont(bytes));
+            var face = new OpenTypeFontface(FontFileData.CreateCompiledFont(bytes));
             int compositeGlyph = -1;
             for (int glyph = 0; glyph < face.maxp.numGlyphs; glyph++)
             {

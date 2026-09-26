@@ -22,7 +22,7 @@ namespace PeachPDF.Tests.Adapters
         private static PdfSharpAdapter AdapterWithRegisteredFamily(string familyName)
         {
             var adapter = new PdfSharpAdapter();
-            adapter.AddFontFamily(new FontFamilyAdapter(new XFontFamily(familyName)));
+            adapter.AddFontFamily(new FontFamilyAdapter(familyName));
             return adapter;
         }
 

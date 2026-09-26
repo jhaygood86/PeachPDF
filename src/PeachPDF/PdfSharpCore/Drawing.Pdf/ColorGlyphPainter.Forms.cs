@@ -11,9 +11,10 @@
 //
 #endregion
 
+using PeachDrawing.Text;
+using PeachDrawing.Text.Outlines;
 using System;
 using System.Collections.Generic;
-using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 
@@ -40,15 +41,15 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// text, so it carries no <see cref="XFont"/>: the selectable text object belongs to the page,
         /// not to the artwork.
         /// </summary>
-        private ColorGlyphPainter(XGraphicsPdfRenderer formRenderer, OpenTypeDescriptor descriptor, XColor foreground,
+        private ColorGlyphPainter(XGraphicsPdfRenderer formRenderer, Typeface typeface, XColor foreground,
             int paletteIndex, IReadOnlyDictionary<int, XColor>? overrides, double originX, double originY)
         {
             _renderer = formRenderer;
             _gfx = formRenderer.Gfx;
-            _descriptor = descriptor;
+            _typeface = typeface;
             _font = null!;
             _textBrush = null!;
-            _scale = ColorGlyphFormCache.EmSize / descriptor.UnitsPerEm;
+            _scale = ColorGlyphFormCache.EmSize / typeface.Metrics.UnitsPerEm;
             _letterSpacing = 0;
             _pageDownwards = true;
             _foreground = foreground;
@@ -72,7 +73,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             PdfDocument document = _renderer.Owner;
             ColorGlyphFormCache cache = document.ColorGlyphTable;
-            var selector = new ColorGlyphFormCache.Selector(_descriptor, glyphId, _paletteIndex, _foreground, _overrides);
+            var selector = new ColorGlyphFormCache.Selector(_typeface, glyphId, _paletteIndex, _foreground, _overrides);
             if (!cache.TryGetForm(selector, out ColorGlyphForm cached))
             {
                 cached = RenderGlyphForm(document, glyphId);
@@ -83,7 +84,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 return true; // Measured as painting nothing at all - inlining it would emit nothing either.
 
             // One form serves every size: scale canonical world units up to this run's font size.
-            double scale = _scale * _descriptor.UnitsPerEm / ColorGlyphFormCache.EmSize;
+            double scale = _scale * _typeface.Metrics.UnitsPerEm / ColorGlyphFormCache.EmSize;
             double baselineY = _baselineY - originYOffset;
             var destRect = new XRect(
                 originX + cached.LeftX * scale,
@@ -119,7 +120,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             var formGraphics = XGraphics.FromForm(form);
             try
             {
-                var painter = new ColorGlyphPainter(form.PdfRenderer, _descriptor, _foreground, _paletteIndex,
+                var painter = new ColorGlyphPainter(form.PdfRenderer, _typeface, _foreground, _paletteIndex,
                     _overrides, -left, -top);
                 painter.PaintGlyph(glyphId, -left);
             }
@@ -141,7 +142,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// </summary>
         private bool MeasureGlyphBounds(int glyphId, out double left, out double top, out double right, out double bottom)
         {
-            var measurer = new ColorGlyphPainter(_renderer, _descriptor, _foreground, _paletteIndex, _overrides, 0, 0)
+            var measurer = new ColorGlyphPainter(_renderer, _typeface, _foreground, _paletteIndex, _overrides, 0, 0)
             {
                 _measuring = true,
             };

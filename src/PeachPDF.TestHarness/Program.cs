@@ -1,4 +1,5 @@
-﻿using PeachPDF;
+﻿using PeachDrawing.Text.Outlines;
+using PeachPDF;
 using PeachPDF.Layout;
 using PeachPDF.PdfSharpCore;
 using ScottPlot;

@@ -1,12 +1,14 @@
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Fonts;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using Xunit;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
@@ -83,7 +85,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, BuildSyntheticGdef());
-            return (XFontSource.GetOrCreateFrom(combined).Fontface, tableStart);
+            return (FontFileData.GetOrCreateFrom(combined).Fontface, tableStart);
         }
 
         [Fact]
@@ -139,7 +141,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, b.ToArray());
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, tableStart);
 
@@ -214,7 +216,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int gdefStart = fontBytes.Length;
             int gsubStart = gdefStart + gdefBytes.Length;
             byte[] combined = Concat(Concat(fontBytes, gdefBytes), gsubBytes);
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var gsub = new GsubTable(face, gsubStart);
@@ -225,7 +227,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // IGNORE_MARKS must skip it while matching the ligature's component (glyph 11), merging
             // the base (10) and component (11) into the ligature glyph (99) while leaving the mark
             // (20) in the stream, moved to immediately after the new ligature glyph.
-            var glyphs = new List<ShapedGlyph> { new(10, 0, 1), new(20, 1, 1), new(11, 2, 1) };
+            var glyphs = new List<PlacedGlyph> { new(10, 0, 1), new(20, 1, 1), new(11, 2, 1) };
             GsubShaper.ApplyLigatureLookup(lookup, glyphs, gdef);
 
             Assert.Equal([99, 20], glyphs.ConvertAll(g => g.GlyphIndex));
@@ -284,14 +286,14 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int gdefStart = fontBytes.Length;
             int gsubStart = gdefStart + gdefBytes.Length;
             byte[] combined = Concat(Concat(fontBytes, gdefBytes), gsubBytes);
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var gsub = new GsubTable(face, gsubStart);
             var lookup = gsub.GetLigatureLookup(0);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(10, 0, 1), new(20, 1, 1), new(11, 2, 1) };
+            var glyphs = new List<PlacedGlyph> { new(10, 0, 1), new(20, 1, 1), new(11, 2, 1) };
             GsubShaper.ApplyLigatureLookup(lookup, glyphs, gdef);
 
             Assert.Equal([10, 20, 11], glyphs.ConvertAll(g => g.GlyphIndex));
@@ -385,7 +387,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int gdefStart = fontBytes.Length;
             int gsubStart = gdefStart + gdefBytes.Length;
             byte[] combined = Concat(Concat(fontBytes, gdefBytes), gsubBytes);
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var gsub = new GsubTable(face, gsubStart);
@@ -396,7 +398,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // input positions (10, 11) - IGNORE_MARKS must skip it while matching, so the rule still
             // matches and the nested Type 1 lookup fires on input position 0 (glyph 10 -> 50). The
             // mark itself is left untouched in the stream - Lookup Type 5 never removes glyphs.
-            var glyphs = new List<ShapedGlyph> { new(10, 0, 1), new(20, 1, 1), new(11, 2, 1) };
+            var glyphs = new List<PlacedGlyph> { new(10, 0, 1), new(20, 1, 1), new(11, 2, 1) };
             GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef, lookup.LookupFlag, markFilteringSet: null);
 
             Assert.Equal([50, 20, 11], glyphs.ConvertAll(g => g.GlyphIndex));
@@ -416,14 +418,14 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int gdefStart = fontBytes.Length;
             int gsubStart = gdefStart + gdefBytes.Length;
             byte[] combined = Concat(Concat(fontBytes, gdefBytes), gsubBytes);
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var gsub = new GsubTable(face, gsubStart);
             var lookup = gsub.GetContextualLookup(1);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(10, 0, 1), new(20, 1, 1), new(11, 2, 1) };
+            var glyphs = new List<PlacedGlyph> { new(10, 0, 1), new(20, 1, 1), new(11, 2, 1) };
             GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef, lookup.LookupFlag, markFilteringSet: null);
 
             Assert.Equal([10, 20, 11], glyphs.ConvertAll(g => g.GlyphIndex));
@@ -445,7 +447,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int gdefStart = fontBytes.Length;
             int gsubStart = gdefStart + gdefBytes.Length;
             byte[] combined = Concat(Concat(fontBytes, gdefBytes), gsubBytes);
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var gsub = new GsubTable(face, gsubStart);
@@ -454,7 +456,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             // Two marks (20, 21 - both classified Mark by BuildSyntheticGdef) sit between the two
             // input positions, so the real index of input position 1 (glyph 11) is 3, not 1.
-            var glyphs = new List<ShapedGlyph> { new(10, 0, 1), new(20, 1, 1), new(21, 2, 1), new(11, 3, 1) };
+            var glyphs = new List<PlacedGlyph> { new(10, 0, 1), new(20, 1, 1), new(21, 2, 1), new(11, 3, 1) };
             GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef, lookup.LookupFlag, markFilteringSet: null);
 
             Assert.Equal([10, 20, 21, 51], glyphs.ConvertAll(g => g.GlyphIndex));

@@ -1,4 +1,5 @@
-using PeachPDF.Text;
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Text;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;
@@ -50,9 +51,9 @@ namespace PeachPDF.Tests.Integration
                 "<b id=\"w\" style=\"font-variant-east-asian:jis83-forms full-width ruby\">Hello</b>");
 
             var eastAsian = box.ActualTextShapingFeatures.EastAsian;
-            Assert.True(eastAsian.HasFlag(EastAsianFeatures.Jis83));
-            Assert.True(eastAsian.HasFlag(EastAsianFeatures.FullWidth));
-            Assert.True(eastAsian.HasFlag(EastAsianFeatures.Ruby));
+            Assert.True(eastAsian.HasFlag(EastAsianSet.Jis83));
+            Assert.True(eastAsian.HasFlag(EastAsianSet.FullWidth));
+            Assert.True(eastAsian.HasFlag(EastAsianSet.Ruby));
         }
 
         [Fact]

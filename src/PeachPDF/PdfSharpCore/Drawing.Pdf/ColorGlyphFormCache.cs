@@ -16,9 +16,9 @@
 //
 #endregion
 
+using PeachDrawing.Text;
 using System;
 using System.Collections.Generic;
-using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 
 namespace PeachPDF.PdfSharpCore.Drawing.Pdf
@@ -60,17 +60,17 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// </summary>
         internal readonly struct Selector : IEquatable<Selector>
         {
-            private readonly OpenTypeDescriptor _descriptor;
+            private readonly Typeface _typeface;
             private readonly int _glyphId;
             private readonly int _paletteIndex;
             private readonly uint _foreground;
             private readonly IReadOnlyDictionary<int, XColor>? _overrides;
             private readonly int _overridesHash;
 
-            public Selector(OpenTypeDescriptor descriptor, int glyphId, int paletteIndex, XColor foreground,
+            public Selector(Typeface typeface, int glyphId, int paletteIndex, XColor foreground,
                 IReadOnlyDictionary<int, XColor>? overrides)
             {
-                _descriptor = descriptor;
+                _typeface = typeface;
                 _glyphId = glyphId;
                 _paletteIndex = paletteIndex;
                 _foreground = ToArgb(foreground);
@@ -82,7 +82,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             // two keys whether they are equal once their hashes have already matched, so a hash compare
             // would only ever hide the value compare below from ever running.
             public bool Equals(Selector other)
-                => ReferenceEquals(_descriptor, other._descriptor)
+                => ReferenceEquals(_typeface, other._typeface)
                    && _glyphId == other._glyphId
                    && _paletteIndex == other._paletteIndex
                    && _foreground == other._foreground
@@ -91,7 +91,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             public override bool Equals(object? obj) => obj is Selector other && Equals(other);
 
             public override int GetHashCode()
-                => HashCode.Combine(_descriptor, _glyphId, _paletteIndex, _foreground, _overridesHash);
+                => HashCode.Combine(_typeface, _glyphId, _paletteIndex, _foreground, _overridesHash);
 
             /// <summary>
             /// A CSS font-palette's overrides reach the backend as a fresh dictionary per

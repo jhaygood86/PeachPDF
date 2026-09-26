@@ -1,12 +1,12 @@
 using System.IO;
 using System.Text;
-using PeachPDF.Fonts;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using Xunit;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
@@ -24,16 +24,15 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     {
         private static OpenTypeDescriptor Descriptor()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
-            return new OpenTypeDescriptor("tounicode-test", "tounicode-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            return new OpenTypeDescriptor("tounicode-test", "tounicode-test", face);
         }
 
         [Fact]
         public void PrepareForSave_MergesCharacterAndLigatureSources()
         {
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(descriptor);
+            var cmapInfo = new CMapInfo(TestFonts.TypefaceFromFile(BundledFonts.Ttf));
             cmapInfo.AddChars("A"); // populates the legacy codepoint-keyed CharacterToGlyphIndex
             int aGlyph = cmapInfo.CharacterToGlyphIndex['A'];
 

@@ -1,12 +1,14 @@
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Fonts;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using Xunit;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
@@ -136,7 +138,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, BuildSyntheticGsub());
-            return (XFontSource.GetOrCreateFrom(combined).Fontface, tableStart);
+            return (FontFileData.GetOrCreateFrom(combined).Fontface, tableStart);
         }
 
         [Fact]
@@ -147,7 +149,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gsub.GetReverseChainSingleSubstLookup(0);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(40, 0, 1), new(50, 1, 1), new(60, 2, 1) };
+            var glyphs = new List<PlacedGlyph> { new(40, 0, 1), new(50, 1, 1), new(60, 2, 1) };
             GsubShaper.ApplyReverseChainSingleSubstitutionLookup(lookup, glyphs, gdef: null, markFilteringSet: null);
 
             Assert.Equal([40, 55, 60], glyphs.ConvertAll(g => g.GlyphIndex));
@@ -161,7 +163,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gsub.GetReverseChainSingleSubstLookup(0);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(40, 0, 1), new(999, 1, 1), new(60, 2, 1) };
+            var glyphs = new List<PlacedGlyph> { new(40, 0, 1), new(999, 1, 1), new(60, 2, 1) };
             GsubShaper.ApplyReverseChainSingleSubstitutionLookup(lookup, glyphs, gdef: null, markFilteringSet: null);
 
             Assert.Equal([40, 999, 60], glyphs.ConvertAll(g => g.GlyphIndex));
@@ -175,7 +177,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gsub.GetReverseChainSingleSubstLookup(0);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(999, 0, 1), new(50, 1, 1), new(60, 2, 1) };
+            var glyphs = new List<PlacedGlyph> { new(999, 0, 1), new(50, 1, 1), new(60, 2, 1) };
             GsubShaper.ApplyReverseChainSingleSubstitutionLookup(lookup, glyphs, gdef: null, markFilteringSet: null);
 
             Assert.Equal([999, 50, 60], glyphs.ConvertAll(g => g.GlyphIndex));
@@ -189,7 +191,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gsub.GetReverseChainSingleSubstLookup(0);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(40, 0, 1), new(50, 1, 1), new(999, 2, 1) };
+            var glyphs = new List<PlacedGlyph> { new(40, 0, 1), new(50, 1, 1), new(999, 2, 1) };
             GsubShaper.ApplyReverseChainSingleSubstitutionLookup(lookup, glyphs, gdef: null, markFilteringSet: null);
 
             Assert.Equal([40, 50, 999], glyphs.ConvertAll(g => g.GlyphIndex));
@@ -209,7 +211,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gsub.GetReverseChainSingleSubstLookup(1);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(80, 0, 1), new(81, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(80, 0, 1), new(81, 1, 1) };
             GsubShaper.ApplyReverseChainSingleSubstitutionLookup(lookup, glyphs, gdef: null, markFilteringSet: null);
 
             Assert.Equal([85, 86], glyphs.ConvertAll(g => g.GlyphIndex));
@@ -244,7 +246,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, b.ToArray());
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
             var gsub = new GsubTable(face, tableStart);
 
             // The one subtable fails to parse, leaving the lookup with zero subtables - which the

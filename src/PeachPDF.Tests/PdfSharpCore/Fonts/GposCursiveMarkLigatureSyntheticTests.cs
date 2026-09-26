@@ -1,13 +1,15 @@
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Fonts;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using Xunit;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
@@ -180,14 +182,13 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, BuildSyntheticGpos());
-            return (XFontSource.GetOrCreateFrom(combined).Fontface, tableStart);
+            return (FontFileData.GetOrCreateFrom(combined).Fontface, tableStart);
         }
 
         private static OpenTypeDescriptor RealDescriptor()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
-            return new OpenTypeDescriptor("gpos-cursive-test", "gpos-cursive-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            return new OpenTypeDescriptor("gpos-cursive-test", "gpos-cursive-test", face);
         }
 
         [Fact]
@@ -199,7 +200,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetCursiveAttachmentLookup(0);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(300, 0, 1), new(301, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(300, 0, 1), new(301, 1, 1) };
             GposPositioner.ApplyCursiveAttachment(descriptor, lookup, glyphs, gdef: null);
 
             // Ported from real HarfBuzz's own CursivePosFormat1::apply (see GposPositioner.TryApplyCursivePair's
@@ -227,7 +228,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetCursiveAttachmentLookup(1);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(310, 0, 1), new(311, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(310, 0, 1), new(311, 1, 1) };
             GposPositioner.ApplyCursiveAttachment(descriptor, lookup, glyphs, gdef: null);
 
             // The main-direction (X) correction is hardcoded to HarfBuzz's own HB_DIRECTION_RTL branch
@@ -253,7 +254,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetCursiveAttachmentLookup(2);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(320, 0, 1), new(321, 1, 1), new(322, 2, 1) };
+            var glyphs = new List<PlacedGlyph> { new(320, 0, 1), new(321, 1, 1), new(322, 2, 1) };
             GposPositioner.ApplyCursiveAttachment(descriptor, lookup, glyphs, gdef: null);
 
             // Pair (0,1): glyph321.YOffset = exit320.Y(30) - entry321.Y(-5) + glyph320.YOffset(0) = 35.
@@ -275,7 +276,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetCursiveAttachmentLookup(3);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(330, 0, 1), new(331, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(330, 0, 1), new(331, 1, 1) };
             GposPositioner.ApplyCursiveAttachment(descriptor, lookup, glyphs, gdef: null);
 
             Assert.Equal(0, glyphs[0].XAdvanceDelta);
@@ -491,7 +492,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int gsubStart = gdefStart + gdefBytes.Length;
             int gposStart = gsubStart + gsubBytes.Length;
             byte[] combined = Concat(Concat3(fontBytes, gdefBytes, gsubBytes), gposBytes);
-            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var face = FontFileData.GetOrCreateFrom(combined).Fontface;
 
             var gdef = new GdefTable(face, gdefStart);
             var gsub = new GsubTable(face, gsubStart);
@@ -502,7 +503,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.NotNull(markLookup);
 
             // Logical order: comp0(400) mark0(460, belongs to comp0) comp1(401) mark1(461, belongs to comp1).
-            var glyphs = new List<ShapedGlyph>
+            var glyphs = new List<PlacedGlyph>
             {
                 new(400, 0, 1),
                 new(460, 1, 1),

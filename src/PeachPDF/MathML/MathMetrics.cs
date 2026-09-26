@@ -1,6 +1,6 @@
+using PeachDrawing.Text.OpenType;
 using System;
 using PeachPDF.CSS;
-using PeachPDF.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 
 namespace PeachPDF.MathML

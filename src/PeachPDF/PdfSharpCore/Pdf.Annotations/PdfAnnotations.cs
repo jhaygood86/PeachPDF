@@ -5,7 +5,7 @@
 //
 // Copyright (c) 2005-2016 empira Software GmbH, Cologne Area (Germany)
 //
-// http://www.PeachPDF.PdfSharpCore.com
+// https://www.pdfsharp.com/
 // http://sourceforge.net/projects/pdfsharp
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -171,7 +171,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
         {
             return (IEnumerator<PdfItem>)new AnnotationsIterator(this);
         }
-        // THHO4STLA: AnnotationsIterator: Implementation does not work http://forum.PeachPDF.PdfSharpCore.net/viewtopic.php?p=3285#p3285
+        // THHO4STLA: AnnotationsIterator: Implementation does not work http://forum.pdfsharp.net/viewtopic.php?p=3285#p3285
         // Code using the enumerator like this will crash:
         //foreach (var annotation in page.Annotations)
         //{

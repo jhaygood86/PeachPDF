@@ -1,5 +1,6 @@
+using PeachDrawing.Text.OpenType;
 using System.Linq;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.MathML;
 using Xunit;
 

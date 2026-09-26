@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -6,7 +7,6 @@ using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -223,7 +223,7 @@ namespace PeachPDF.Html.Core.Paint
         /// small-caps run is measured/outlined against the same font and baseline shift it is actually
         /// painted with, not the box's own <c>ActualFont</c>.
         /// </summary>
-        private readonly record struct WordFontContext(CssBox StyleSource, RFont Font, double BaselineAdjust, TextShapingFeatures Features);
+        private readonly record struct WordFontContext(CssBox StyleSource, RFont Font, double BaselineAdjust, ShapeSettings Features);
 
         /// <summary>See <see cref="WordFontContext"/>.</summary>
         /// <param name="word">the word to resolve</param>
@@ -256,7 +256,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <c>ResolveClip</c>'s cue to fall back to the box's ordinary <c>border-box</c> clip instead of
         /// a shape with glyphs missing from it. A word whose glyphs only *partially* decode (e.g. one
         /// character using an escape/seac operator
-        /// <see cref="PeachPDF.Fonts.OpenType.Type2CharstringInterpreter"/> doesn't implement, amid
+        /// <c>Type2CharstringInterpreter</c> doesn't implement, amid
         /// otherwise-decodable sibling glyphs) is accepted as-is rather than triggering
         /// this fallback - <c>GetTextOutline</c> itself has no per-glyph granularity to report that
         /// distinction, so the clip can end up missing just that one glyph's shape. Narrow in practice
@@ -340,7 +340,7 @@ namespace PeachPDF.Html.Core.Paint
             // RGraphicsPath.ClipToRect reproduces that same per-cell clip at the path level - the raw
             // outline is intersected with the identical cell before it is added to the union, so the two
             // can never disagree about which pixels are actually inked.
-            void CollectUprightWord(BoxFragment f, CssRect word, RRect rect, string text, CssBox styleSource, RFont font, double baselineAdjust, TextShapingFeatures features)
+            void CollectUprightWord(BoxFragment f, CssRect word, RRect rect, string text, CssBox styleSource, RFont font, double baselineAdjust, ShapeSettings features)
             {
                 var needsCellClip = font.HasVerticalMetrics || font.HasVerticalOrigin;
 
@@ -370,7 +370,7 @@ namespace PeachPDF.Html.Core.Paint
             // DrawWordGlyphs's own sideways branch) - so its outline is built once, in that same natural
             // (pre-rotation) frame, then carried into the word's actual physical footprint by the exact
             // rotation matrix paint uses, rather than rebuilt per character.
-            void CollectRotatedWord(RRect rect, string text, CssBox styleSource, RFont font, double baselineAdjust, TextShapingFeatures features)
+            void CollectRotatedWord(RRect rect, string text, CssBox styleSource, RFont font, double baselineAdjust, ShapeSettings features)
             {
                 var naturalBaselineOrigin = new RPoint(0, baselineAdjust + font.Ascent);
                 var outline = g.GetTextOutline(text, font, naturalBaselineOrigin, styleSource.ActualLetterSpacing, features);

@@ -1,7 +1,7 @@
 # A default-ignorable is flagged early and deleted last
 
 A codepoint with Unicode's `Default_Ignorable_Code_Point` property that the font has no glyph for is
-identified in `GsubShaper.MapToGlyphs` (flagged `ShapedGlyph.IsHiddenIgnorable`) and removed only at the
+identified in `GsubShaper.MapToGlyphs` (flagged `PlacedGlyph.IsHiddenIgnorable`) and removed only at the
 very end of `OpenTypeDescriptor.Shape`, after **both** GSUB and GPOS. Neither end of that span is
 arbitrary.
 
@@ -22,7 +22,7 @@ ignorable is honored as authored rather than second-guessed. This is also what k
 leaves it in the text) rendering as it always did. A future "simplification" that drops every
 default-ignorable regardless of glyph coverage will start swallowing visible soft hyphens.
 
-**Deletion must remap `ShapedGlyph.AttachedToIndex`** — it is a *glyph-list* index, so removing entries
+**Deletion must remap `PlacedGlyph.AttachedToIndex`** — it is a *glyph-list* index, so removing entries
 shifts it. A mark attached to a deleted glyph loses its anchor (`null`) rather than silently pointing at
 whatever slid into that slot. `LigatureComponentClusterStarts` holds *text* offsets, not glyph indices, and
 must not be "fixed up" to match.

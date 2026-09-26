@@ -4,7 +4,7 @@ using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Linq;
 
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {
@@ -43,10 +43,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             var desc = TtfFontDescription.LoadDescription(FirstSystemFont);
 
             Assert.True(
-                desc.Style == XFontStyle.Regular ||
-                desc.Style == XFontStyle.Bold ||
-                desc.Style == XFontStyle.Italic ||
-                desc.Style == XFontStyle.BoldItalic,
+                desc.Style == FaceStyle.Regular ||
+                desc.Style == FaceStyle.Bold ||
+                desc.Style == FaceStyle.Italic ||
+                desc.Style == FaceStyle.BoldItalic,
                 $"Unexpected style value: {desc.Style}");
         }
 

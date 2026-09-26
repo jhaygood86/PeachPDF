@@ -1,11 +1,13 @@
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
@@ -47,9 +49,8 @@ namespace PeachPDF.Tests.Svg
 
         private static OpenTypeDescriptor Descriptor()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Devanagari)).Fontface;
-            return new OpenTypeDescriptor("svg-devanagari-test", "svg-devanagari-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Devanagari)).Fontface;
+            return new OpenTypeDescriptor("svg-devanagari-test", "svg-devanagari-test", face);
         }
 
         [Fact]
@@ -60,9 +61,9 @@ namespace PeachPDF.Tests.Svg
 
             var descriptor = Descriptor();
             var shaped = descriptor.Shape(draw.Text, draw.Features.Value);
-            var unshaped = descriptor.Shape(draw.Text, TextShapingFeatures.Default);
+            var unshaped = descriptor.Shape(draw.Text, ShapeSettings.Default);
 
-            // TextShapingFeatures.Default never requests UseCategories, so GsubShaper.ApplyUseShaping
+            // ShapeSettings.Default never requests UseCategories, so GsubShaper.ApplyUseShaping
             // (nukt/ccmp/locl/akhn/rphf/half/rkrf/cjct/abvs/blws/pres/psts) never runs for it - it shapes
             // as 4 independent nominal glyphs (KA, VIRAMA, SSA, VOWEL_SIGN_I). The real conjunct
             // ligature (cjct) that SVG's own computed UseCategories requests fuses KA+VIRAMA+SSA into
@@ -102,7 +103,7 @@ namespace PeachPDF.Tests.Svg
 
             var descriptor = Descriptor();
             var viaSvg = descriptor.Shape(draw.Text, draw.Features.Value).Select(sg => sg.GlyphIndex);
-            var plain = descriptor.Shape(draw.Text, TextShapingFeatures.Default).Select(sg => sg.GlyphIndex);
+            var plain = descriptor.Shape(draw.Text, ShapeSettings.Default).Select(sg => sg.GlyphIndex);
 
             Assert.Equal(plain, viaSvg);
         }

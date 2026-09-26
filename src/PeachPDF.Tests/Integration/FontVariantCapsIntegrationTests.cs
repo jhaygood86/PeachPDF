@@ -1,4 +1,5 @@
-using PeachPDF.Text;
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Text;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -62,7 +63,7 @@ namespace PeachPDF.Tests.Integration
             var box = FindWordsBox(container.Root!, "w");
 
             Assert.Equal(keyword, box.FontVariantCaps.ToString());
-            Assert.Equal(FontVariantCapsFeature.None, box.ActualFontVariantCaps);
+            Assert.Equal(CapsMode.None, box.ActualFontVariantCaps);
             Assert.Single(box.Words);
             Assert.Equal("Hello", box.Words[0].Text);
             Assert.Equal(1.0, box.Words[0].FontSizeScale);
@@ -113,7 +114,7 @@ namespace PeachPDF.Tests.Integration
             // must come back as the PASS glyph.
             var box = await FindWordsBoxWithGsubFont($"<b id=\"w\" style=\"font-variant-caps:petite-caps\">{PcapAlt1}</b>");
 
-            Assert.Equal(FontVariantCapsFeature.PetiteCaps, box.ActualFontVariantCaps);
+            Assert.Equal(CapsMode.PetiteCaps, box.ActualFontVariantCaps);
             Assert.Equal(PcapPassGlyph, ShapeSingleGlyph(box, PcapAlt1));
         }
 
@@ -127,9 +128,9 @@ namespace PeachPDF.Tests.Integration
             var text = PcapAlt1 + C2pcAlt1;
             var box = await FindWordsBoxWithGsubFont($"<b id=\"w\" style=\"font-variant-caps:all-petite-caps\">{text}</b>");
 
-            Assert.Equal(FontVariantCapsFeature.AllPetiteCaps, box.ActualFontVariantCaps);
+            Assert.Equal(CapsMode.AllPetiteCaps, box.ActualFontVariantCaps);
 
-            var descriptor = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Descriptor;
+            var descriptor = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Typeface.Face.Descriptor;
             var shaped = descriptor.Shape(text, box.ActualTextShapingFeatures);
             Assert.Equal(PcapPassGlyph, shaped[0].GlyphIndex);
             Assert.Equal(C2pcPassGlyph, shaped[1].GlyphIndex);
@@ -165,7 +166,7 @@ namespace PeachPDF.Tests.Integration
             var box = await FindWordsBoxWithGsubFont(
                 $"<b id=\"w\" style='font-feature-settings:\"salt\" 0'>{SaltAlt1}</b>");
 
-            var descriptor = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Descriptor;
+            var descriptor = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Typeface.Face.Descriptor;
             var unshaped = descriptor.CharCodeToGlyphIndex(new System.Text.Rune(0xE301));
             Assert.Equal(unshaped, ShapeSingleGlyph(box, SaltAlt1));
             Assert.NotEqual(SaltPassGlyph, unshaped);
@@ -181,14 +182,14 @@ namespace PeachPDF.Tests.Integration
             var box = await FindWordsBoxWithGsubFont(
                 $"<b id=\"w\" style='font-feature-settings:\"pcap\" 1'>{PcapAlt1}</b>");
 
-            var descriptor = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Descriptor;
+            var descriptor = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Typeface.Face.Descriptor;
             var unshaped = descriptor.CharCodeToGlyphIndex(new System.Text.Rune(0xE2BD));
             Assert.Equal(unshaped, ShapeSingleGlyph(box, PcapAlt1));
         }
 
         private static int ShapeSingleGlyph(CssBox box, string text)
         {
-            var descriptor = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Descriptor;
+            var descriptor = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Typeface.Face.Descriptor;
             return descriptor.Shape(text, box.ActualTextShapingFeatures)[0].GlyphIndex;
         }
 

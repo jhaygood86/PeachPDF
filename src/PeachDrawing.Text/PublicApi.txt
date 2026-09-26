@@ -1,0 +1,616 @@
+PeachDrawing.Text.AddOptions : sealed class
+  ctor()
+  property IReadOnlyList<RuneInterval> UnicodeRanges { get; init; }
+  property Nullable<Boolean> IsItalic { get; init; }
+  property Nullable<Int32> Weight { get; init; }
+  property Nullable<Int32> Width { get; init; }
+  property String FamilyName { get; init; }
+PeachDrawing.Text.Export.ExportedFont : sealed class
+  property Boolean HasCffOutlines { get; }
+  property Boolean IsSubset { get; }
+  property ReadOnlyMemory<Byte> Data { get; }
+PeachDrawing.Text.Export.TypefaceExporter : static class
+  method static ExportedFont ExportSubset(Typeface typeface, IEnumerable<Int32> glyphs, Boolean keepCharacterMap)
+PeachDrawing.Text.FontSet : sealed class
+  ctor()
+  method Boolean HasExplicitRanges(String familyName)
+  method Boolean TryFindCoveringFamily(Rune rune, EmojiPresentation presentation, out TypefaceFamily family)
+  method Boolean TryFindFamily(String name, out TypefaceFamily family)
+  method Boolean TryGetFontData(String fontName, out ReadOnlyMemory<Byte> data)
+  method String ResolveGeneric(GenericFamily generic, Func<String, Boolean> isAvailable = null)
+  method TypefaceFamily AddData(ReadOnlyMemory<Byte> data, AddOptions options = null)
+  method TypefaceFamily AddFile(String path, AddOptions options = null)
+  method TypefaceFamily AddStream(Stream stream, AddOptions options = null)
+  method TypefaceMatch MatchOrFallback(String familyName, in TypefaceQuery query)
+  property static IReadOnlyList<String> InstalledFamilyNames { get; }
+PeachDrawing.Text.GenericFamily : enum Int32
+  Cursive = 3
+  Fantasy = 4
+  Math = 6
+  Monospace = 2
+  SansSerif = 1
+  Serif = 0
+  SystemUi = 5
+PeachDrawing.Text.OpenType.MathConstantsTable : sealed class
+  property Double AccentBaseHeight { get; }
+  property Double AxisHeight { get; }
+  property Double DelimitedSubFormulaMinHeight { get; }
+  property Double DisplayOperatorMinHeight { get; }
+  property Double FlattenedAccentBaseHeight { get; }
+  property Double FractionDenomDisplayStyleGapMin { get; }
+  property Double FractionDenominatorDisplayStyleShiftDown { get; }
+  property Double FractionDenominatorGapMin { get; }
+  property Double FractionDenominatorShiftDown { get; }
+  property Double FractionNumDisplayStyleGapMin { get; }
+  property Double FractionNumeratorDisplayStyleShiftUp { get; }
+  property Double FractionNumeratorGapMin { get; }
+  property Double FractionNumeratorShiftUp { get; }
+  property Double FractionRuleThickness { get; }
+  property Double LowerLimitBaselineDropMin { get; }
+  property Double LowerLimitGapMin { get; }
+  property Double MathLeading { get; }
+  property Double OverbarExtraAscender { get; }
+  property Double OverbarRuleThickness { get; }
+  property Double OverbarVerticalGap { get; }
+  property Double RadicalDegreeBottomRaisePercent { get; }
+  property Double RadicalDisplayStyleVerticalGap { get; }
+  property Double RadicalExtraAscender { get; }
+  property Double RadicalKernAfterDegree { get; }
+  property Double RadicalKernBeforeDegree { get; }
+  property Double RadicalRuleThickness { get; }
+  property Double RadicalVerticalGap { get; }
+  property Double ScriptPercentScaleDown { get; }
+  property Double ScriptScriptPercentScaleDown { get; }
+  property Double SkewedFractionHorizontalGap { get; }
+  property Double SkewedFractionVerticalGap { get; }
+  property Double SpaceAfterScript { get; }
+  property Double StackBottomDisplayStyleShiftDown { get; }
+  property Double StackBottomShiftDown { get; }
+  property Double StackDisplayStyleGapMin { get; }
+  property Double StackGapMin { get; }
+  property Double StackTopDisplayStyleShiftUp { get; }
+  property Double StackTopShiftUp { get; }
+  property Double StretchStackBottomShiftDown { get; }
+  property Double StretchStackGapAboveMin { get; }
+  property Double StretchStackGapBelowMin { get; }
+  property Double StretchStackTopShiftUp { get; }
+  property Double SubSuperscriptGapMin { get; }
+  property Double SubscriptBaselineDropMin { get; }
+  property Double SubscriptShiftDown { get; }
+  property Double SubscriptTopMax { get; }
+  property Double SuperscriptBaselineDropMax { get; }
+  property Double SuperscriptBottomMaxWithSubscript { get; }
+  property Double SuperscriptBottomMin { get; }
+  property Double SuperscriptShiftUp { get; }
+  property Double SuperscriptShiftUpCramped { get; }
+  property Double UnderbarExtraDescender { get; }
+  property Double UnderbarRuleThickness { get; }
+  property Double UnderbarVerticalGap { get; }
+  property Double UpperLimitBaselineRiseMin { get; }
+  property Double UpperLimitGapMin { get; }
+PeachDrawing.Text.OpenType.MathGlyphAssembly : sealed class
+  property Double ItalicsCorrection { get; }
+  property IReadOnlyList<MathGlyphPart> Parts { get; }
+PeachDrawing.Text.OpenType.MathGlyphConstruction : sealed class
+  property IReadOnlyList<MathGlyphVariant> Variants { get; }
+  property MathGlyphAssembly Assembly { get; }
+PeachDrawing.Text.OpenType.MathGlyphInfoTable : sealed class
+  method Boolean IsExtendedShape(UInt16 glyphId)
+  method Double GetItalicsCorrection(UInt16 glyphId)
+  method Nullable<Double> GetTopAccentAttachment(UInt16 glyphId)
+PeachDrawing.Text.OpenType.MathGlyphPart : struct
+  ctor(UInt16 GlyphId, Double StartConnectorLength, Double EndConnectorLength, Double FullAdvance, Boolean IsExtender)
+  method Boolean Equals(MathGlyphPart other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out UInt16 GlyphId, out Double StartConnectorLength, out Double EndConnectorLength, out Double FullAdvance, out Boolean IsExtender)
+  property Boolean IsExtender { get; init; }
+  property Double EndConnectorLength { get; init; }
+  property Double FullAdvance { get; init; }
+  property Double StartConnectorLength { get; init; }
+  property UInt16 GlyphId { get; init; }
+PeachDrawing.Text.OpenType.MathGlyphVariant : struct
+  ctor(UInt16 GlyphId, Double AdvanceMeasurement)
+  method Boolean Equals(MathGlyphVariant other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out UInt16 GlyphId, out Double AdvanceMeasurement)
+  property Double AdvanceMeasurement { get; init; }
+  property UInt16 GlyphId { get; init; }
+PeachDrawing.Text.OpenType.MathTable : sealed class
+  property MathConstantsTable Constants { get; }
+  property MathGlyphInfoTable GlyphInfo { get; }
+  property MathVariantsTable Variants { get; }
+PeachDrawing.Text.OpenType.MathVariantsTable : sealed class
+  method MathGlyphConstruction GetHorizontalConstruction(UInt16 glyphId)
+  method MathGlyphConstruction GetVerticalConstruction(UInt16 glyphId)
+  property Double MinConnectorOverlap { get; }
+PeachDrawing.Text.Outlines.Affine2x3 : struct
+  ctor(Double XX, Double YX, Double XY, Double YY, Double DX, Double DY)
+  field static Affine2x3 Identity
+  method Boolean Equals(Affine2x3 other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double XX, out Double YX, out Double XY, out Double YY, out Double DX, out Double DY)
+  method static Affine2x3 Multiply(Affine2x3 a, Affine2x3 b)
+  property Double DX { get; init; }
+  property Double DY { get; init; }
+  property Double XX { get; init; }
+  property Double XY { get; init; }
+  property Double YX { get; init; }
+  property Double YY { get; init; }
+PeachDrawing.Text.Outlines.ColorExtend : enum Int32
+  Pad = 0
+  Reflect = 2
+  Repeat = 1
+PeachDrawing.Text.Outlines.ColorLayer : struct
+  ctor(Int32 GlyphId, Int32 PaletteIndex)
+  method Boolean Equals(ColorLayer other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 GlyphId, out Int32 PaletteIndex)
+  property Int32 GlyphId { get; init; }
+  property Int32 PaletteIndex { get; init; }
+PeachDrawing.Text.Outlines.ColorLine : sealed class
+  property ColorExtend Extend { get; }
+  property IReadOnlyList<ColorStop> Stops { get; }
+PeachDrawing.Text.Outlines.ColorPaint : class
+PeachDrawing.Text.Outlines.ColorPalette : sealed class
+  method Boolean TryGetColor(Int32 paletteIndex, Int32 entryIndex, out Color color)
+  method Nullable<Int32> FirstDarkPalette()
+  method Nullable<Int32> FirstLightPalette()
+  property Int32 EntriesPerPalette { get; }
+  property Int32 PaletteCount { get; }
+PeachDrawing.Text.Outlines.ColorStop : struct
+  ctor(Double Offset, Int32 PaletteIndex, Double Alpha)
+  method Boolean Equals(ColorStop other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double Offset, out Int32 PaletteIndex, out Double Alpha)
+  property Double Alpha { get; init; }
+  property Double Offset { get; init; }
+  property Int32 PaletteIndex { get; init; }
+PeachDrawing.Text.Outlines.EmbeddedBitmap : struct
+  ctor(Byte[] Data, Int32 Ppem, Int32 Width, Int32 Height, Double BearingX, Double BearingTop)
+  method Boolean Equals(EmbeddedBitmap other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Byte[] Data, out Int32 Ppem, out Int32 Width, out Int32 Height, out Double BearingX, out Double BearingTop)
+  property Byte[] Data { get; init; }
+  property Double BearingTop { get; init; }
+  property Double BearingX { get; init; }
+  property Int32 Height { get; init; }
+  property Int32 Ppem { get; init; }
+  property Int32 Width { get; init; }
+PeachDrawing.Text.Outlines.GlyphOutline : sealed class
+  method IReadOnlyList<ValueTuple<Double, Double>> Crossings(Double bandLow, Double bandHigh)
+  property Boolean IsEmpty { get; }
+  property IReadOnlyList<OutlineContour> Contours { get; }
+PeachDrawing.Text.Outlines.OutlineContour : sealed class
+  property IReadOnlyList<OutlineSegment> Segments { get; }
+  property OutlinePoint Start { get; }
+PeachDrawing.Text.Outlines.OutlinePoint : struct
+  ctor(Double X, Double Y)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(OutlinePoint other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double X, out Double Y)
+  property Double X { get; init; }
+  property Double Y { get; init; }
+PeachDrawing.Text.Outlines.OutlineSegment : struct
+  method static OutlineSegment Cubic(OutlinePoint control1, OutlinePoint control2, OutlinePoint end)
+  method static OutlineSegment Line(OutlinePoint end)
+  property Boolean IsCubic { get; }
+  property OutlinePoint Control1 { get; }
+  property OutlinePoint Control2 { get; }
+  property OutlinePoint End { get; }
+PeachDrawing.Text.Outlines.PaintColrGlyph : sealed class
+  property Int32 GlyphId { get; }
+PeachDrawing.Text.Outlines.PaintColrLayers : sealed class
+  property Int32 FirstLayerIndex { get; }
+  property Int32 NumLayers { get; }
+PeachDrawing.Text.Outlines.PaintComposite : sealed class
+  property ColorPaint Backdrop { get; }
+  property ColorPaint Source { get; }
+  property Int32 Mode { get; }
+PeachDrawing.Text.Outlines.PaintGlyph : sealed class
+  property ColorPaint Paint { get; }
+  property Int32 GlyphId { get; }
+PeachDrawing.Text.Outlines.PaintLinearGradient : sealed class
+  property ColorLine Line { get; }
+  property Double X0 { get; }
+  property Double X1 { get; }
+  property Double X2 { get; }
+  property Double Y0 { get; }
+  property Double Y1 { get; }
+  property Double Y2 { get; }
+PeachDrawing.Text.Outlines.PaintRadialGradient : sealed class
+  property ColorLine Line { get; }
+  property Double R0 { get; }
+  property Double R1 { get; }
+  property Double X0 { get; }
+  property Double X1 { get; }
+  property Double Y0 { get; }
+  property Double Y1 { get; }
+PeachDrawing.Text.Outlines.PaintSolid : sealed class
+  property Double Alpha { get; }
+  property Int32 PaletteIndex { get; }
+PeachDrawing.Text.Outlines.PaintSweepGradient : sealed class
+  property ColorLine Line { get; }
+  property Double CenterX { get; }
+  property Double CenterY { get; }
+  property Double EndAngle { get; }
+  property Double StartAngle { get; }
+PeachDrawing.Text.Outlines.PaintTransform : sealed class
+  property Affine2x3 Affine { get; }
+  property ColorPaint Paint { get; }
+PeachDrawing.Text.RuneInterval : struct
+  ctor(Rune Start, Rune End)
+  method Boolean Contains(Rune rune)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(RuneInterval other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Rune Start, out Rune End)
+  property Rune End { get; init; }
+  property Rune Start { get; init; }
+PeachDrawing.Text.ScriptPlacement : enum Int32
+  Subscript = 0
+  Superscript = 1
+PeachDrawing.Text.ScriptPosition : struct
+  ctor(Double SizeScale, Double BaselineShift)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(ScriptPosition other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double SizeScale, out Double BaselineShift)
+  property Double BaselineShift { get; init; }
+  property Double SizeScale { get; init; }
+PeachDrawing.Text.Shaping.CapsMode : enum Int32
+  AllPetiteCaps = 4
+  AllSmallCaps = 2
+  None = 0
+  PetiteCaps = 3
+  SmallCaps = 1
+  TitlingCaps = 6
+  Unicase = 5
+PeachDrawing.Text.Shaping.EastAsianSet : enum Int32
+  FullWidth = 64
+  Jis04 = 8
+  Jis78 = 1
+  Jis83 = 2
+  Jis90 = 4
+  None = 0
+  ProportionalWidth = 128
+  Ruby = 256
+  Simplified = 16
+  Traditional = 32
+PeachDrawing.Text.Shaping.FeatureSetting : struct
+  ctor(String Tag, Int32 Value)
+  method Boolean Equals(FeatureSetting other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out String Tag, out Int32 Value)
+  property Int32 Value { get; init; }
+  property String Tag { get; init; }
+PeachDrawing.Text.Shaping.GlyphRun : sealed class
+  property Double Advance { get; }
+  property IReadOnlyList<PlacedGlyph> Glyphs { get; }
+  property Typeface Typeface { get; }
+PeachDrawing.Text.Shaping.LigatureSet : enum Int32
+  Common = 1
+  Contextual = 16
+  Default = 19
+  Discretionary = 4
+  Historical = 8
+  None = 0
+  Required = 2
+PeachDrawing.Text.Shaping.NumeralSet : enum Int32
+  DiagonalFractions = 16
+  LiningNums = 1
+  None = 0
+  OldstyleNums = 2
+  Ordinal = 64
+  ProportionalNums = 4
+  SlashedZero = 128
+  StackedFractions = 32
+  TabularNums = 8
+PeachDrawing.Text.Shaping.PlacedGlyph : struct
+  ctor(Int32 GlyphIndex, Int32 ClusterStart, Int32 ClusterLength, Double XAdvanceDelta = 0, Double YAdvanceDelta = 0, Double XOffset = 0, Double YOffset = 0, Int32[] LigatureComponentClusterStarts = null, Nullable<Int32> AttachedToIndex = null, Boolean IsHiddenIgnorable = False)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(PlacedGlyph other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 GlyphIndex, out Int32 ClusterStart, out Int32 ClusterLength, out Double XAdvanceDelta, out Double YAdvanceDelta, out Double XOffset, out Double YOffset, out Int32[] LigatureComponentClusterStarts, out Nullable<Int32> AttachedToIndex, out Boolean IsHiddenIgnorable)
+  property Boolean IsHiddenIgnorable { get; init; }
+  property Double XAdvanceDelta { get; init; }
+  property Double XOffset { get; init; }
+  property Double YAdvanceDelta { get; init; }
+  property Double YOffset { get; init; }
+  property Int32 ClusterLength { get; init; }
+  property Int32 ClusterStart { get; init; }
+  property Int32 GlyphIndex { get; init; }
+  property Int32[] LigatureComponentClusterStarts { get; init; }
+  property Nullable<Int32> AttachedToIndex { get; init; }
+PeachDrawing.Text.Shaping.ShapeSettings : struct
+  ctor()
+  ctor(LigatureSet Ligatures = Default, CapsMode Caps = None, NumeralSet Numeric = None, EastAsianSet EastAsian = None, IReadOnlyList<FeatureSetting> ExplicitFeatures = null, Boolean Kerning = True, String Language = null, String ScriptTag = null, IReadOnlyList<ArabicJoiningForm> JoiningForms = null, IReadOnlyList<UseCategory> UseCategories = null, Boolean ReverseForDisplay = False, SubSuperMode Position = None, EmojiMode EmojiMode = Normal)
+  field static ShapeSettings Default
+  method Boolean Equals(Object obj)
+  method Boolean Equals(ShapeSettings other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out LigatureSet Ligatures, out CapsMode Caps, out NumeralSet Numeric, out EastAsianSet EastAsian, out IReadOnlyList<FeatureSetting> ExplicitFeatures, out Boolean Kerning, out String Language, out String ScriptTag, out IReadOnlyList<ArabicJoiningForm> JoiningForms, out IReadOnlyList<UseCategory> UseCategories, out Boolean ReverseForDisplay, out SubSuperMode Position, out EmojiMode EmojiMode)
+  property Boolean Kerning { get; init; }
+  property Boolean ReverseForDisplay { get; init; }
+  property CapsMode Caps { get; init; }
+  property EastAsianSet EastAsian { get; init; }
+  property EmojiMode EmojiMode { get; init; }
+  property IReadOnlyList<ArabicJoiningForm> JoiningForms { get; init; }
+  property IReadOnlyList<FeatureSetting> ExplicitFeatures { get; init; }
+  property IReadOnlyList<UseCategory> UseCategories { get; init; }
+  property LigatureSet Ligatures { get; init; }
+  property NumeralSet Numeric { get; init; }
+  property String Language { get; init; }
+  property String ScriptTag { get; init; }
+  property SubSuperMode Position { get; init; }
+PeachDrawing.Text.Shaping.Shaper : static class
+  method static GlyphRun Shape(Typeface typeface, String text, in ShapeSettings settings)
+  method static IReadOnlySet<String> GetFeatureTags(CapsMode caps)
+  method static IReadOnlySet<String> GetFeatureTags(SubSuperMode position)
+PeachDrawing.Text.Shaping.SubSuperMode : enum Int32
+  None = 0
+  Sub = 1
+  Super = 2
+PeachDrawing.Text.SyntheticStyle : enum Int32
+  Bold = 1
+  BoldItalic = 3
+  Italic = 2
+  None = 0
+PeachDrawing.Text.Typeface : sealed class
+  method Boolean Equals(Object obj)
+  method Boolean Equals(Typeface other)
+  method Boolean HasGlyph(Rune rune)
+  method Boolean MatchesEmojiPresentation(Rune rune, EmojiPresentation presentation)
+  method Boolean SupportsFeatures(IReadOnlySet<String> tags)
+  method Boolean TryGetBitmap(UInt16 glyph, Double ppem, out EmbeddedBitmap bitmap)
+  method Boolean TryGetColorLayers(UInt16 glyph, out IReadOnlyList<ColorLayer> layers)
+  method Boolean TryGetOutline(UInt16 glyph, out GlyphOutline outline)
+  method Boolean TryGetScriptPosition(ScriptPlacement placement, out ScriptPosition position)
+  method Boolean TryMapRune(Rune rune, out UInt16 glyph)
+  method ColorPaint GetColorLayerPaint(Int32 index)
+  method ColorPaint GetColorPaint(UInt16 glyph)
+  method Int32 GetAdvance(UInt16 glyph)
+  method Int32 GetHashCode()
+  method Int32 GetVerticalAdvance(UInt16 glyph)
+  method Point GetVerticalOrigin(UInt16 glyph)
+  method String ToString()
+  property Boolean HasBitmapGlyphs { get; }
+  property Boolean HasColorGlyphs { get; }
+  property Boolean HasMathData { get; }
+  property Boolean HasVerticalMetrics { get; }
+  property Boolean HasVerticalOrigin { get; }
+  property Boolean IsBold { get; }
+  property Boolean IsItalic { get; }
+  property ColorPalette ColorPalette { get; }
+  property MathTable MathData { get; }
+  property String FamilyName { get; }
+  property String FullName { get; }
+  property String StyleName { get; }
+  property TypefaceMetrics Metrics { get; }
+  property UInt64 ContentHash { get; }
+PeachDrawing.Text.TypefaceFamily : sealed class
+  method Boolean TryMatch(in TypefaceQuery query, out TypefaceMatch match)
+  property String Name { get; }
+PeachDrawing.Text.TypefaceFormatException : sealed class
+  ctor()
+  ctor(String message)
+  ctor(String message, Exception innerException)
+PeachDrawing.Text.TypefaceMatch : struct
+  ctor(Typeface Typeface, SyntheticStyle Synthesis)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(TypefaceMatch other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Typeface Typeface, out SyntheticStyle Synthesis)
+  property SyntheticStyle Synthesis { get; init; }
+  property Typeface Typeface { get; init; }
+PeachDrawing.Text.TypefaceMetrics : sealed class
+  property Boolean HasMeasuredXHeight { get; }
+  property Boolean HasSerifs { get; }
+  property Boolean IsFixedPitch { get; }
+  property Boolean IsItalicStyle { get; }
+  property Boolean IsSymbolic { get; }
+  property Int32 CapHeight { get; }
+  property Int32 CellAscent { get; }
+  property Int32 CellDescent { get; }
+  property Int32 FirstCharIndex { get; }
+  property Int32 LineSpacing { get; }
+  property Int32 NormalLineAscent { get; }
+  property Int32 NormalLineDescent { get; }
+  property Int32 NormalLineGap { get; }
+  property Int32 StrikeoutPosition { get; }
+  property Int32 StrikeoutThickness { get; }
+  property Int32 UnderlinePosition { get; }
+  property Int32 UnderlineThickness { get; }
+  property Int32 UnitsPerEm { get; }
+  property Int32 XHeight { get; }
+  property Int32 XMax { get; }
+  property Int32 XMin { get; }
+  property Int32 YMax { get; }
+  property Int32 YMin { get; }
+  property Single ItalicAngle { get; }
+PeachDrawing.Text.TypefaceQuery : struct
+  ctor()
+  ctor(Int32 Weight = 400, Int32 Width = 5, Boolean IsItalic = False, Nullable<Rune> MustCover = null)
+  field const Int32 BoldWeight
+  field const Int32 NormalWeight
+  field const Int32 NormalWidth
+  method Boolean Equals(Object obj)
+  method Boolean Equals(TypefaceQuery other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 Weight, out Int32 Width, out Boolean IsItalic, out Nullable<Rune> MustCover)
+  property Boolean IsItalic { get; init; }
+  property Int32 Weight { get; init; }
+  property Int32 Width { get; init; }
+  property Nullable<Rune> MustCover { get; init; }
+PeachDrawing.Text.Unicode.ArabicJoining : static class
+  method static ArabicJoiningForm[] Resolve(IReadOnlyList<Int32> codepoints)
+  method static ArabicJoiningType TypeOf(Int32 codepoint)
+  method static ArabicJoiningType TypeOf(Rune rune)
+PeachDrawing.Text.Unicode.ArabicJoiningForm : enum Byte
+  Fin2 = 3
+  Fin3 = 4
+  Fina = 2
+  Init = 7
+  Isol = 1
+  Med2 = 6
+  Medi = 5
+  None = 0
+PeachDrawing.Text.Unicode.ArabicJoiningType : enum Byte
+  C = 3
+  D = 2
+  L = 4
+  R = 1
+  T = 5
+  U = 0
+PeachDrawing.Text.Unicode.BaseDirection : enum Byte
+  Auto = 2
+  Ltr = 0
+  Rtl = 1
+PeachDrawing.Text.Unicode.Bidi : static class
+  method static BidiAnalysis Analyze(String text, BaseDirection direction, IReadOnlyList<EmbeddingSpan> spans = null)
+  method static BidiClass ClassOf(Rune rune)
+  method static Boolean TryGetMirror(Rune rune, out Rune mirrored)
+  method static IReadOnlyList<BidiRun> ReorderLine(Byte[] levels, Int32 lineStart, Int32 lineLength)
+  method static String Mirror(String runText, Byte level)
+  method static String Reverse(String text)
+PeachDrawing.Text.Unicode.BidiAnalysis : sealed class
+  property Boolean IsParagraphRtl { get; }
+  property Byte ParagraphLevel { get; }
+  property Byte[] Levels { get; }
+PeachDrawing.Text.Unicode.BidiClass : enum Byte
+  AL = 2
+  AN = 6
+  B = 10
+  BN = 9
+  CS = 7
+  EN = 3
+  ES = 4
+  ET = 5
+  FSI = 22
+  L = 0
+  LRE = 14
+  LRI = 15
+  LRO = 16
+  NSM = 8
+  ON = 13
+  PDF = 20
+  PDI = 21
+  R = 1
+  RLE = 17
+  RLI = 18
+  RLO = 19
+  S = 11
+  WS = 12
+PeachDrawing.Text.Unicode.BidiRun : struct
+  ctor(Int32 Start, Int32 Length, Byte Level)
+  method Boolean Equals(BidiRun other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 Start, out Int32 Length, out Byte Level)
+  property Boolean IsRtl { get; }
+  property Byte Level { get; init; }
+  property Int32 Length { get; init; }
+  property Int32 Start { get; init; }
+PeachDrawing.Text.Unicode.DefaultIgnorables : static class
+  method static Boolean Contains(Int32 codepoint)
+  method static Boolean IsVariationSelector(Int32 codepoint)
+PeachDrawing.Text.Unicode.EmbeddingSpan : struct
+  ctor(Int32 Start, Int32 Length, ExplicitPush Push)
+  method Boolean Equals(EmbeddingSpan other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 Start, out Int32 Length, out ExplicitPush Push)
+  property ExplicitPush Push { get; init; }
+  property Int32 End { get; }
+  property Int32 Length { get; init; }
+  property Int32 Start { get; init; }
+PeachDrawing.Text.Unicode.Emoji : static class
+  field const Int32 EmojiSelector
+  field const Int32 TextSelector
+  method static Boolean IsPresentationParticipant(Rune rune)
+  method static Boolean IsPresentationSelector(Rune rune)
+  method static EmojiPresentation Resolve(EmojiMode mode, Int32 baseCodepoint, Int32 followingSelector)
+  method static EmojiPresentation ResolveAt(EmojiMode mode, String text, Int32 index)
+  method static Int32 SelectorFor(EmojiPresentation presentation)
+PeachDrawing.Text.Unicode.EmojiMode : enum Byte
+  Emoji = 2
+  Normal = 0
+  Text = 1
+  Unicode = 3
+PeachDrawing.Text.Unicode.EmojiPresentation : enum Byte
+  Emoji = 2
+  NoPreference = 0
+  Text = 1
+PeachDrawing.Text.Unicode.ExplicitPush : enum Byte
+  Fsi = 6
+  Lre = 0
+  Lri = 4
+  Lro = 2
+  Rle = 1
+  Rli = 5
+  Rlo = 3
+PeachDrawing.Text.Unicode.Hyphenator : static class
+  method static IReadOnlyList<Int32> FindBreakPoints(String word, String language)
+PeachDrawing.Text.Unicode.OpenTypeTags : static class
+  method static String ForLanguage(String language)
+  method static String ForScript(String script)
+PeachDrawing.Text.Unicode.Scripts : static class
+  field const String Common
+  field const String Inherited
+  field const String Unknown
+  method static IReadOnlyList<String> Resolve(IReadOnlyList<Int32> codepoints)
+  method static IReadOnlyList<String> ResolveLooked(IReadOnlyList<String> scripts)
+  method static String Of(Int32 codepoint)
+  method static String Of(Rune rune)
+PeachDrawing.Text.Unicode.UniversalShaping : static class
+  method static UseCategory Classify(Int32 codepoint)
+PeachDrawing.Text.Unicode.UseCategory : enum Byte
+  B = 1
+  CGJ = 2
+  CMAbv = 6
+  CMBlw = 7
+  FMAbv = 17
+  GB = 16
+  H = 3
+  O = 0
+  R = 5
+  VAbv = 9
+  VBlw = 10
+  VMAbv = 13
+  VMBlw = 14
+  VMPre = 12
+  VMPst = 15
+  VPre = 8
+  VPst = 11
+  ZWNJ = 4
+PeachDrawing.Text.Unicode.VerticalOrientation : static class
+  method static Boolean IsEffectivelyUpright(Rune rune)
+  method static VerticalOrientationClass Of(Rune rune)
+PeachDrawing.Text.Unicode.VerticalOrientationClass : enum Byte
+  R = 1
+  Tr = 3
+  Tu = 2
+  U = 0

@@ -9,7 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.Html.Core
 {

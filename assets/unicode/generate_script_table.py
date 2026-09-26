@@ -4,8 +4,8 @@ Unicode Character Database's Scripts.txt (Unicode 18.0.0, UAX #24 - see
 https://www.unicode.org/reports/tr24/), matching the version already checked in for
 DerivedBidiClass.txt/VerticalOrientation.txt.
 
-Output goes to src/PeachPDF/Text/Resources/Script/Scripts.txt.br, consumed by
-PeachPDF.Text.ScriptTable. Same "plain text, Brotli-compressed, run-length-encoded (start, end,
+Output goes to src/PeachDrawing.Text/Internal/Text/Resources/Script/Scripts.txt.br, consumed by
+PeachDrawing.Text.Internal.Text.ScriptTable. Same "plain text, Brotli-compressed, run-length-encoded (start, end,
 value) table" shape as generate_vertical_orientation_table.py - same generator idiom, sibling
 script rather than folding into that one, since this is a different UAX/property with its own
 single @missing default (Unknown) and a much larger value vocabulary (174 script names vs. 4).
@@ -20,7 +20,7 @@ import brotli
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.normpath(os.path.join(
-    SCRIPT_DIR, "..", "..", "src", "PeachPDF", "Text", "Resources", "Script"))
+    SCRIPT_DIR, "..", "..", "src", "PeachDrawing.Text", "Internal", "Text", "Resources", "Script"))
 
 MAX_CODEPOINT = 0x10FFFF
 

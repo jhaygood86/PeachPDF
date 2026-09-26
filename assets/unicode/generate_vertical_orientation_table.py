@@ -4,8 +4,8 @@ from the Unicode Character Database's VerticalOrientation.txt (Unicode 18.0.0, U
 https://www.unicode.org/reports/tr50/), matching the version already checked in for
 DerivedBidiClass.txt/BidiBrackets.txt/BidiMirroring.txt (see generate_bidi_tables.py).
 
-Output goes to src/PeachPDF/Text/Resources/VerticalOrientation/VerticalOrientation.txt.br,
-consumed by PeachPDF.Text.VerticalOrientationTable. Same "plain text, Brotli-compressed,
+Output goes to src/PeachDrawing.Text/Internal/Text/Resources/VerticalOrientation/VerticalOrientation.txt.br,
+consumed by PeachDrawing.Text.Internal.Text.VerticalOrientationTable. Same "plain text, Brotli-compressed,
 run-length-encoded (start, end, value) table" shape as generate_bidi_tables.py's own
 DerivedBidiClass.txt output - same generator idiom, sibling script rather than folding into that
 one, since this is a different UAX/property with its own single-range @missing default (R) rather
@@ -22,7 +22,7 @@ import brotli
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.normpath(os.path.join(
-    SCRIPT_DIR, "..", "..", "src", "PeachPDF", "Text", "Resources", "VerticalOrientation"))
+    SCRIPT_DIR, "..", "..", "src", "PeachDrawing.Text", "Internal", "Text", "Resources", "VerticalOrientation"))
 
 MAX_CODEPOINT = 0x10FFFF
 

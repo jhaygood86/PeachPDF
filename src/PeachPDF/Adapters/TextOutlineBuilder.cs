@@ -1,8 +1,8 @@
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Outlines;
+using PeachDrawing.Text.Shaping;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Text;
 
 namespace PeachPDF.Adapters
 {
@@ -24,10 +24,11 @@ namespace PeachPDF.Adapters
         /// <param name="letterSpacing">extra advance between glyphs (layout units)</param>
         /// <param name="features">which GSUB features to apply when shaping</param>
         public static RGraphicsPath? Build(RGraphicsPath path, XFont realFont, double pixelsPerPoint, string str,
-            RPoint baselineOrigin, double letterSpacing, TextShapingFeatures features)
+            RPoint baselineOrigin, double letterSpacing, ShapeSettings features)
         {
-            var descriptor = realFont.Descriptor;
-            if (descriptor is null || descriptor.UnitsPerEm == 0)
+            var typeface = realFont.Typeface;
+            var unitsPerEm = typeface.Metrics.UnitsPerEm;
+            if (unitsPerEm == 0)
             {
                 path.Dispose();
                 return null;
@@ -37,7 +38,7 @@ namespace PeachPDF.Adapters
             // while these path coordinates reach the backend un-scaled by PixelsPerPoint (see GraphicsPathAdapter.
             // Transform), the same space shape paths are built in - so multiply back by PixelsPerPoint. The em-square
             // is y-up; user space is y-down, so glyph Y is subtracted from the baseline.
-            double scale = realFont.Size * pixelsPerPoint / descriptor.UnitsPerEm;
+            double scale = realFont.Size * pixelsPerPoint / unitsPerEm;
 
             path.FillMode = RFillMode.Nonzero;
 
@@ -45,14 +46,14 @@ namespace PeachPDF.Adapters
             double baseY = baselineOrigin.Y;
             bool anyGeometry = false;
 
-            foreach (ShapedGlyph glyph in descriptor.Shape(str, features))
+            foreach (PlacedGlyph glyph in Shaper.Shape(typeface, str, features).Glyphs)
             {
                 int glyphId = glyph.GlyphIndex;
 
                 // TryGetGlyphOutline returns false for an empty glyph (e.g. space) or a font with no
                 // usable outline source at all (a CID-keyed CFF or bitmap font) - either way there's
                 // nothing to add for this glyph.
-                if (descriptor.TryGetGlyphOutline(glyphId, out GlyphOutline outline))
+                if (typeface.TryGetOutline((ushort)glyphId, out GlyphOutline outline))
                 {
                     // GPOS positioning (kerning's XOffset, mark attachment's XOffset/YOffset) shifts
                     // where this glyph paints without changing its own outline shape - see
@@ -61,12 +62,14 @@ namespace PeachPDF.Adapters
                     double glyphX = penX + glyph.XOffset * scale;
                     double glyphY = baseY - glyph.YOffset * scale;
 
-                    foreach (GlyphContour contour in outline.Contours)
+                    for (var ci1 = 0; ci1 < outline.Contours.Count; ci1++)
                     {
+                        OutlineContour contour = outline.Contours[ci1];
                         path.AddMove(glyphX + contour.Start.X * scale, glyphY - contour.Start.Y * scale);
 
-                        foreach (GlyphSegment segment in contour.Segments)
+                        for (var si2 = 0; si2 < contour.Segments.Count; si2++)
                         {
+                            OutlineSegment segment = contour.Segments[si2];
                             if (segment.IsCubic)
                             {
                                 path.AddBezierTo(
@@ -85,7 +88,7 @@ namespace PeachPDF.Adapters
                     }
                 }
 
-                penX += (descriptor.GlyphIndexToWidth(glyphId) + glyph.XAdvanceDelta) * scale + letterSpacing;
+                penX += (typeface.GetAdvance((ushort)glyphId) + glyph.XAdvanceDelta) * scale + letterSpacing;
             }
 
             // No geometry at all means the font produced no outlines (a CID-keyed CFF or bitmap font) -

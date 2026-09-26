@@ -1,10 +1,11 @@
+﻿using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Text;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -1128,32 +1129,32 @@ namespace PeachPDF.Html.Core.Dom
             _actualFontPalette = null;
         }
 
-        private LigatureFeatures? _actualFontVariantLigatures;
+        private LigatureSet? _actualFontVariantLigatures;
 
         /// <summary>
-        /// The resolved GSUB ligature features (see <see cref="LigatureFeatures"/>) for this box's
+        /// The resolved GSUB ligature features (see <see cref="LigatureSet"/>) for this box's
         /// text, from the CSS <c>font-variant-ligatures</c> value - the common-ligatures,
         /// discretionary, historical, and contextual (<c>calt</c>, via GSUB Lookup Types 5/6) axes
         /// all independently change shaping. Per the CSS Fonts spec, required ligatures (<c>rlig</c>)
         /// are never affected by this property - not even by <c>none</c> - so the
-        /// common-ligatures-off case still resolves to <see cref="LigatureFeatures.Required"/> rather
-        /// than <see cref="LigatureFeatures.None"/>; likewise <c>no-common-ligatures</c> alone (without
+        /// common-ligatures-off case still resolves to <see cref="LigatureSet.Required"/> rather
+        /// than <see cref="LigatureSet.None"/>; likewise <c>no-common-ligatures</c> alone (without
         /// a separate <c>no-contextual</c>) leaves contextual alternates on, and vice versa - each
         /// axis is resolved independently rather than as one all-or-nothing default.
         /// </summary>
-        public LigatureFeatures ActualFontVariantLigatures =>
+        public LigatureSet ActualFontVariantLigatures =>
             _actualFontVariantLigatures ??= TextShapingFeatureResolver.ResolveLigatures(Style.Font.FontVariantLigatures);
 
-        private FontVariantCapsFeature? _actualFontVariantCaps;
+        private CapsMode? _actualFontVariantCaps;
 
         /// <summary>
         /// The caps feature that should actually be requested from the shaping layer for this box's
-        /// text: <see cref="FontVariantCapsFeature.None"/> for <c>normal</c>, for a keyword the
+        /// text: <see cref="CapsMode.None"/> for <c>normal</c>, for a keyword the
         /// resolved font lacks full GSUB support for (see <see cref="RFont.SupportsFontVariantCaps"/>),
         /// or - for small-caps/all-small-caps specifically - whenever <c>CssBox.AddWord</c> is instead
         /// synthesizing the effect (real substitution must never also be requested in that case).
         /// </summary>
-        public FontVariantCapsFeature ActualFontVariantCaps
+        public CapsMode ActualFontVariantCaps
         {
             get
             {
@@ -1161,37 +1162,37 @@ namespace PeachPDF.Html.Core.Dom
 
                 var requested = TextShapingFeatureResolver.ResolveCapsRequested(Style.Font.FontVariantCaps.Value);
 
-                var resolved = requested != FontVariantCapsFeature.None && ActualFont.SupportsFontVariantCaps(requested)
+                var resolved = requested != CapsMode.None && ActualFont.SupportsFontVariantCaps(requested)
                     ? requested
-                    : FontVariantCapsFeature.None;
+                    : CapsMode.None;
 
                 _actualFontVariantCaps = resolved;
                 return resolved;
             }
         }
 
-        private FontVariantPositionFeature? _requestedFontVariantPosition;
-        private FontVariantPositionFeature? _actualFontVariantPosition;
+        private SubSuperMode? _requestedFontVariantPosition;
+        private SubSuperMode? _actualFontVariantPosition;
 
         /// <summary>
         /// The <c>font-variant-position</c> keyword this box's style asks for, before any capability
-        /// gating - <see cref="FontVariantPositionFeature.None"/> only for <c>normal</c>. This is the
+        /// gating - <see cref="SubSuperMode.None"/> only for <c>normal</c>. This is the
         /// question "should this text be a sub/superscript at all", which stays true whether the font
         /// has real <c>subs</c>/<c>sups</c> glyphs or the effect has to be synthesized.
         /// </summary>
-        public FontVariantPositionFeature RequestedFontVariantPosition =>
+        public SubSuperMode RequestedFontVariantPosition =>
             _requestedFontVariantPosition ??= TextShapingFeatureResolver.ResolvePositionRequested(Style.Font.FontVariantPosition.Value);
 
         /// <summary>
         /// The position feature that should actually be requested from the shaping layer:
         /// <see cref="RequestedFontVariantPosition"/> when the resolved font really has the matching
-        /// GSUB feature, and <see cref="FontVariantPositionFeature.None"/> otherwise - in which case
+        /// GSUB feature, and <see cref="SubSuperMode.None"/> otherwise - in which case
         /// <c>CssBox.AddWord</c> synthesizes the sub/superscript instead, and real substitution must
         /// never also be requested. CSS Fonts 4 makes this an all-or-nothing choice per run ("if one
         /// such glyph is not available for a character, all the characters in that run are rendered
         /// using synthesized glyphs"), which is exactly what a single per-box capability answer gives.
         /// </summary>
-        public FontVariantPositionFeature ActualFontVariantPosition
+        public SubSuperMode ActualFontVariantPosition
         {
             get
             {
@@ -1199,28 +1200,28 @@ namespace PeachPDF.Html.Core.Dom
 
                 var requested = RequestedFontVariantPosition;
 
-                var resolved = requested != FontVariantPositionFeature.None && ActualFont.SupportsFontVariantPosition(requested)
+                var resolved = requested != SubSuperMode.None && ActualFont.SupportsFontVariantPosition(requested)
                     ? requested
-                    : FontVariantPositionFeature.None;
+                    : SubSuperMode.None;
 
                 _actualFontVariantPosition = resolved;
                 return resolved;
             }
         }
 
-        private NumericFeatures? _actualFontVariantNumeric;
+        private NumeralSet? _actualFontVariantNumeric;
 
         /// <summary>The resolved GSUB numeric features (CSS <c>font-variant-numeric</c>) for this box's
         /// text - no capability gating (unlike caps): a tag the resolved font lacks simply activates no
         /// lookup and is silently inert.</summary>
-        public NumericFeatures ActualFontVariantNumeric =>
+        public NumeralSet ActualFontVariantNumeric =>
             _actualFontVariantNumeric ??= TextShapingFeatureResolver.ResolveNumeric(Style.Font.FontVariantNumeric);
 
-        private EastAsianFeatures? _actualFontVariantEastAsian;
+        private EastAsianSet? _actualFontVariantEastAsian;
 
         /// <summary>The resolved GSUB east-asian features (CSS <c>font-variant-east-asian</c>) for this
         /// box's text - no capability gating, same rationale as <see cref="ActualFontVariantNumeric"/>.</summary>
-        public EastAsianFeatures ActualFontVariantEastAsian =>
+        public EastAsianSet ActualFontVariantEastAsian =>
             _actualFontVariantEastAsian ??= TextShapingFeatureResolver.ResolveEastAsian(Style.Font.FontVariantEastAsian);
 
         private IReadOnlyList<(string Tag, int Value)>? _actualFontFeatureSettings;
@@ -1254,36 +1255,36 @@ namespace PeachPDF.Html.Core.Dom
         /// and script support it," matching real browser behavior for <c>auto</c>'s UA-discretion
         /// wording. Gates GPOS Lookup Types 1/2 (<c>kern</c>) only - mark-to-base/mark-to-mark
         /// positioning (<c>mark</c>/<c>mkmk</c>) is requested unconditionally by
-        /// <see cref="PeachPDF.Text.GposPositioner"/>, since combining-mark attachment isn't a
+        /// <c>GposPositioner</c>, since combining-mark attachment isn't a
         /// stylistic opt-out the way kerning is.
         /// </summary>
         public bool ActualFontKerning =>
             _actualFontKerning ??= TextShapingFeatureResolver.ResolveKerning(Style.Font.FontKerning.Value);
 
-        private TextShapingFeatures? _actualTextShapingFeatures;
+        private ShapeSettings? _actualTextShapingFeatures;
 
         /// <summary>
         /// The single combined GSUB feature request for this box's text - ligatures, caps, numeric,
         /// east-asian, position, and explicit <c>font-feature-settings</c>/<c>font-variant-alternates</c>
-        /// tags all folded into one <see cref="TextShapingFeatures"/> value, the one actually threaded
+        /// tags all folded into one <see cref="ShapeSettings"/> value, the one actually threaded
         /// into every measure/paint call site.
         /// </summary>
-        public TextShapingFeatures ActualTextShapingFeatures
+        public ShapeSettings ActualTextShapingFeatures
         {
             get
             {
                 if (_actualTextShapingFeatures is { } cached) return cached;
 
-                var resolved = new TextShapingFeatures(
+                var resolved = new ShapeSettings(
                     ActualFontVariantLigatures,
                     ActualFontVariantCaps,
                     ActualFontVariantNumeric,
                     ActualFontVariantEastAsian,
-                    MergeExplicitFeatures(ActualFontFeatureSettings, ActualFontVariantAlternates),
+                    TextShapingFeatureResolver.ToFeatureSettings(MergeExplicitFeatures(ActualFontFeatureSettings, ActualFontVariantAlternates)),
                     Kerning: ActualFontKerning,
                     Language: Owner.Language,
                     Position: ActualFontVariantPosition,
-                    EmojiMode: ActualFontVariantEmoji);
+                    EmojiMode: ActualFontVariantEmoji.ToEmojiMode());
 
                 _actualTextShapingFeatures = resolved;
                 return resolved;
@@ -1558,9 +1559,9 @@ namespace PeachPDF.Html.Core.Dom
 
                 // Never synthesize what real GSUB substitution is already doing - requesting both would
                 // shrink and shift glyphs that are already drawn as proper sub/superscripts.
-                if (requested != FontVariantPositionFeature.None && ActualFontVariantPosition == FontVariantPositionFeature.None)
+                if (requested != SubSuperMode.None && ActualFontVariantPosition == SubSuperMode.None)
                 {
-                    var isSuper = requested == FontVariantPositionFeature.Super;
+                    var isSuper = requested == SubSuperMode.Super;
                     var font = ActualFont;
 
                     // Representative fallbacks for a font that states nothing: the ratios browsers use
@@ -1617,7 +1618,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ActualSmallCapsFont"/> when <paramref name="sizeScale"/> marks a small-caps run) when
         /// no declared family covers it. Cached per (codepoint, scale, presentation); mirrors
         /// <see cref="ActualSmallCapsFont"/>'s size/style derivation. <paramref name="presentation"/> is the
-        /// emoji/text presentation the character is to be drawn in (<see cref="EmojiProperties.ResolveAt"/>),
+        /// emoji/text presentation the character is to be drawn in (<see cref="Emoji.ResolveAt"/>),
         /// which steers the choice between a colour and an outline font that both cover it.
         /// </summary>
         public RFont ActualFontForCodepoint(Rune codepoint, double sizeScale = 1.0, EmojiPresentation presentation = EmojiPresentation.NoPreference)

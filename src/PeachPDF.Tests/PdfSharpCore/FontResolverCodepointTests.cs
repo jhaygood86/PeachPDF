@@ -1,6 +1,8 @@
+using PeachDrawing.Text;
+using PeachDrawing.Text.Unicode;
 using PeachPDF;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -8,14 +10,14 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-using PeachPDF.Fonts;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Text;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {
     public class FontResolverCodepointTests
     {
-        private static List<RuneRange> R(int start, int end) => [new RuneRange(new Rune(start), new Rune(end))];
+        private static List<RuneInterval> R(int start, int end) => [new RuneInterval(new Rune(start), new Rune(end))];
 
         [Fact]
         public void ResolveTypeface_WithCodepoint_FiltersToTheCoveringFace()
@@ -54,14 +56,14 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void CMapCoverage_Extract_ReportsCoveredCodepoints_ForRangelessFont()
         {
-            var fontSource = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf));
+            var fontSource = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf));
             var coverage = CMapCoverage.Extract(fontSource.Fontface.cmap.cmap4);
 
             Assert.NotEmpty(coverage);
             Assert.True(CMapCoverage.Contains(coverage, new Rune('A')));
             Assert.True(CMapCoverage.Contains(coverage, new Rune('z')));
 
-            var otf = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Otf));
+            var otf = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Otf));
             var otfCoverage = CMapCoverage.Extract(otf.Fontface.cmap.cmap4);
             Assert.True(CMapCoverage.Contains(otfCoverage, new Rune('a')));
         }
@@ -86,7 +88,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         /// ships "Noto Sans Cuneiform"; Windows ships "Segoe UI Historic") - a fixed hex range that
         /// merely "looked broad" was not actually safe against them.
         /// </summary>
-        private static List<RuneRange> FullCuneiformRanges() => ScriptTable.RangesForScript("Cuneiform").ToList();
+        private static List<RuneInterval> FullCuneiformRanges() => ScriptTable.RangesForScript("Cuneiform").ToList();
 
         [Fact]
         public void FindFamilyCoveringCodepoint_FindsRegisteredFamily_NotJustTheDeclaredStack()

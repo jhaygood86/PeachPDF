@@ -10,9 +10,10 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.OpenType;
+using PeachDrawing.Text.Shaping;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Raster;
-using PeachPDF.Text;
 using System;
 using System.Collections.Generic;
 
@@ -448,12 +449,12 @@ namespace PeachPDF.Html.Adapters
         /// <param name="str">the string to measure</param>
         /// <param name="font">the font to measure string with</param>
         /// <param name="features">
-        /// which GSUB features (see <see cref="TextShapingFeatures"/>) to apply when shaping
-        /// <paramref name="str"/> - must match what <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>
+        /// which GSUB features (see <see cref="ShapeSettings"/>) to apply when shaping
+        /// <paramref name="str"/> - must match what <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>
         /// will use for the same text, so the measured width matches what's actually drawn.
         /// </param>
         /// <returns>the size of the string</returns>
-        public abstract RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null);
+        public abstract RSize MeasureString(string str, RFont font, ShapeSettings? features = null);
 
         /// <summary>
         /// The number of glyphs <paramref name="str"/> shapes into once GSUB substitution is applied -
@@ -461,10 +462,10 @@ namespace PeachPDF.Html.Adapters
         /// than one character into a single glyph (single substitution never changes the count). Used
         /// to size the per-glyph <c>letter-spacing</c> gap count a word's box must reserve (the PDF
         /// <c>Tc</c> operator adds one gap per glyph actually shown, not per source character), so it
-        /// stays in sync with what <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>
+        /// stays in sync with what <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>
         /// paints for the same text/font/<paramref name="features"/>.
         /// </summary>
-        public abstract int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null);
+        public abstract int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null);
 
         /// <summary>
         /// Measure the width of string under max width restriction calculating the number of characters that can fit and the width those characters take.<br/>
@@ -498,14 +499,14 @@ namespace PeachPDF.Html.Adapters
         /// overrides, identical to how color-glyph drawing always worked before this parameter existed.
         /// </param>
         /// <param name="features">
-        /// which GSUB features (see <see cref="TextShapingFeatures"/>) to apply when shaping
+        /// which GSUB features (see <see cref="ShapeSettings"/>) to apply when shaping
         /// <paramref name="str"/> - the resolved CSS <c>font-variant-*</c>/<c>font-feature-settings</c>
         /// values.
         /// </param>
-        public abstract void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null);
+        public abstract void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null);
 
         /// <summary>
-        /// Same as the other <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>
+        /// Same as the other <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>
         /// overload, plus <paramref name="logicalText"/>: the
         /// true logical-order (pre-bidi-mirroring) source text <paramref name="str"/> was derived from,
         /// when the two differ - <c>null</c> (the default) means they're the same (the overwhelming
@@ -525,19 +526,19 @@ namespace PeachPDF.Html.Adapters
         /// implementation (test mocks recording draw calls, measuring-only contexts) is unaffected by
         /// this overload's mere existence and needs no changes to keep compiling/behaving identically.
         /// </summary>
-        public virtual void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, TextShapingFeatures? features, string? logicalText) =>
+        public virtual void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, ShapeSettings? features, string? logicalText) =>
             DrawString(str, font, color, point, size, letterSpacing, fontPalette, features);
 
         /// <summary>
         /// Draws each of <paramref name="glyphs"/> at its own explicit position, addressed directly by
         /// font glyph index rather than by Unicode character - unlike
-        /// <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>,
+        /// <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>,
         /// this never re-shapes/re-maps through cmap/GSUB, so it can draw a glyph with no Unicode
         /// mapping at all (e.g. an OpenType MATH table's stretchy-operator assembly parts or
         /// pre-sized size variants, which are reached only via <c>MathVariantsTable</c> glyph ids, not
         /// through any character). Each <see cref="GlyphPlacement"/>'s X/Y is that glyph's own baseline
         /// origin (not a bounding-box corner), in the same working unit space as
-        /// <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>'s
+        /// <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>'s
         /// own <c>point</c> parameter - unlike that method, there is no separate ascent-relative
         /// adjustment, since every glyph here already carries its own exact target baseline position.
         /// </summary>
@@ -546,20 +547,20 @@ namespace PeachPDF.Html.Adapters
         /// <summary>
         /// Builds the vector outline of a glyph run as a fillable/strokeable <see cref="RGraphicsPath"/>,
         /// with the text baseline at <paramref name="baselineOrigin"/> (user-space units) and glyphs
-        /// advancing left-to-right. Unlike <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>
+        /// advancing left-to-right. Unlike <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>
         /// (a single-color PDF text show), the
         /// returned path can be filled with a gradient/pattern brush or stroked - used by the SVG
         /// renderer for gradient/pattern <c>fill</c>, <c>stroke</c>, and <c>&lt;textPath&gt;</c> on text.
         /// Returns <c>null</c> when the font produces no glyph outlines (a CID-keyed CFF font, or a
         /// bitmap font, neither of which this engine can decode outlines from) - the caller's cue to fall back to
-        /// <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>.
+        /// <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>.
         /// </summary>
         /// <param name="str">the run to outline</param>
         /// <param name="font">the font to outline with</param>
         /// <param name="baselineOrigin">the pen origin on the text baseline (user-space units)</param>
         /// <param name="letterSpacing">extra advance between glyphs (same units as <paramref name="baselineOrigin"/>)</param>
-        /// <param name="features">which GSUB features (see <see cref="TextShapingFeatures"/>) to apply when shaping <paramref name="str"/></param>
-        public abstract RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null);
+        /// <param name="features">which GSUB features (see <see cref="ShapeSettings"/>) to apply when shaping <paramref name="str"/></param>
+        public abstract RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null);
 
         /// <summary>
         /// The horizontal ranges in which <paramref name="str"/>'s glyph ink crosses the horizontal band
@@ -595,7 +596,7 @@ namespace PeachPDF.Html.Adapters
         /// <param name="font">the font the run is drawn with</param>
         /// <param name="origin">
         /// the run's origin, in user-space units — the <i>same</i> point
-        /// <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>
+        /// <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>
         /// paints the run from, not its baseline. The implementation places the baseline from the font's
         /// own metrics exactly as the text-drawing path does, so the ink is measured where it is drawn
         /// rather than where a rounded ascent would put it.
@@ -607,7 +608,7 @@ namespace PeachPDF.Html.Adapters
         /// <returns>the crossings, left to right and already merged, or null when the ink is unknown</returns>
         public virtual IReadOnlyList<RInkSpan>? GetInkCrossings(
             string str, RFont font, RPoint origin, double bandTop, double bandBottom,
-            double letterSpacing = 0, TextShapingFeatures? features = null) => null;
+            double letterSpacing = 0, ShapeSettings? features = null) => null;
 
         /// <summary>
         /// Draws a line connecting the two points specified by the coordinate pairs.

@@ -1,8 +1,11 @@
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -20,10 +23,10 @@ namespace PeachPDF.Tests.Fonts
         private const int Heart = 0x2764;
         private const int Smiley = 0x263A;
 
-        private static OpenTypeFontface Face(byte[] font) => XFontSource.GetOrCreateFrom(font).Fontface;
+        private static OpenTypeFontface Face(byte[] font) => FontFileData.GetOrCreateFrom(font).Fontface;
 
         private static OpenTypeDescriptor Descriptor(byte[] font) =>
-            new("uvs-test", "uvs-test", XFontStyle.Regular, Face(font), new XPdfFontOptions(PdfFontEncoding.Unicode));
+            new("uvs-test", "uvs-test", Face(font));
 
         [Fact]
         public void FontWithoutFormat14_HasNoVariationSequenceTable()
@@ -89,8 +92,8 @@ namespace PeachPDF.Tests.Fonts
             var bGlyph = plain.CharCodeToGlyphIndex(new Rune('B'));
             var derived = Descriptor(SyntheticUvsFont.Build(source, new SyntheticUvsFont.Sequence('A', 0xFE00, Glyph: bGlyph)));
 
-            Assert.Equal(bGlyph, Assert.Single(derived.Shape("A︀", TextShapingFeatures.Default)).GlyphIndex);
-            Assert.Equal(plain.CharCodeToGlyphIndex(new Rune('A')), Assert.Single(derived.Shape("A", TextShapingFeatures.Default)).GlyphIndex);
+            Assert.Equal(bGlyph, Assert.Single(derived.Shape("A︀", ShapeSettings.Default)).GlyphIndex);
+            Assert.Equal(plain.CharCodeToGlyphIndex(new Rune('A')), Assert.Single(derived.Shape("A", ShapeSettings.Default)).GlyphIndex);
         }
 
         [Fact]
@@ -146,16 +149,16 @@ namespace PeachPDF.Tests.Fonts
             var derived = Descriptor(SyntheticUvsFont.Build(source, new SyntheticUvsFont.Sequence(Heart, 0xFE0E, Glyph: aGlyph)));
 
             // With the text selector the heart takes the dedicated glyph; the selector adds no glyph of its own.
-            var withSelector = derived.Shape("❤︎", TextShapingFeatures.Default);
+            var withSelector = derived.Shape("❤︎", ShapeSettings.Default);
             Assert.Single(withSelector);
             Assert.Equal(aGlyph, withSelector[0].GlyphIndex);
 
             // Without it - or with the other selector, which the font does not list - the ordinary glyph is used.
-            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤", TextShapingFeatures.Default)).GlyphIndex);
-            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤️", TextShapingFeatures.Default)).GlyphIndex);
+            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤", ShapeSettings.Default)).GlyphIndex);
+            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤️", ShapeSettings.Default)).GlyphIndex);
 
             // A font with no such record is unaffected by the selector.
-            Assert.Equal(heartGlyph, Assert.Single(plain.Shape("❤︎", TextShapingFeatures.Default)).GlyphIndex);
+            Assert.Equal(heartGlyph, Assert.Single(plain.Shape("❤︎", ShapeSettings.Default)).GlyphIndex);
         }
 
         [Fact]
@@ -165,8 +168,8 @@ namespace PeachPDF.Tests.Fonts
             // its slashed zero, a glyph the plain U+0030 does not use.
             var descriptor = Descriptor(File.ReadAllBytes(BundledFonts.Math));
 
-            var plain = Assert.Single(descriptor.Shape("0", TextShapingFeatures.Default)).GlyphIndex;
-            var variant = Assert.Single(descriptor.Shape("0︀", TextShapingFeatures.Default)).GlyphIndex;
+            var plain = Assert.Single(descriptor.Shape("0", ShapeSettings.Default)).GlyphIndex;
+            var variant = Assert.Single(descriptor.Shape("0︀", ShapeSettings.Default)).GlyphIndex;
 
             Assert.NotEqual(0, variant);
             Assert.NotEqual(plain, variant);
@@ -181,17 +184,17 @@ namespace PeachPDF.Tests.Fonts
             var heartGlyph = plain.CharCodeToGlyphIndex(new Rune(Heart));
             var derived = Descriptor(SyntheticUvsFont.Build(source, new SyntheticUvsFont.Sequence(Heart, 0xFE0E, Glyph: aGlyph)));
 
-            TextShapingFeatures With(PeachPDF.CSS.FontVariantEmojiMode mode) => TextShapingFeatures.Default with { EmojiMode = mode };
+            ShapeSettings With(PeachDrawing.Text.Unicode.EmojiMode mode) => ShapeSettings.Default with { EmojiMode = mode };
 
             // No selector in the text: text presentation (and unicode, for a text-default character) asks
             // for the FE0E glyph; normal and emoji do not.
-            Assert.Equal(aGlyph, Assert.Single(derived.Shape("❤", With(PeachPDF.CSS.FontVariantEmojiMode.Text))).GlyphIndex);
-            Assert.Equal(aGlyph, Assert.Single(derived.Shape("❤", With(PeachPDF.CSS.FontVariantEmojiMode.Unicode))).GlyphIndex);
-            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤", With(PeachPDF.CSS.FontVariantEmojiMode.Normal))).GlyphIndex);
-            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤", With(PeachPDF.CSS.FontVariantEmojiMode.Emoji))).GlyphIndex);
+            Assert.Equal(aGlyph, Assert.Single(derived.Shape("❤", With(PeachDrawing.Text.Unicode.EmojiMode.Text))).GlyphIndex);
+            Assert.Equal(aGlyph, Assert.Single(derived.Shape("❤", With(PeachDrawing.Text.Unicode.EmojiMode.Unicode))).GlyphIndex);
+            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤", With(PeachDrawing.Text.Unicode.EmojiMode.Normal))).GlyphIndex);
+            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤", With(PeachDrawing.Text.Unicode.EmojiMode.Emoji))).GlyphIndex);
 
             // An explicit FE0F overrides text presentation, so the FE0E glyph is not used.
-            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤️", With(PeachPDF.CSS.FontVariantEmojiMode.Text))).GlyphIndex);
+            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤️", With(PeachDrawing.Text.Unicode.EmojiMode.Text))).GlyphIndex);
         }
 
         [Fact]
@@ -224,7 +227,7 @@ namespace PeachPDF.Tests.Fonts
             var heartGlyph = Descriptor(source).CharCodeToGlyphIndex(new Rune(Heart));
             var derived = Descriptor(SyntheticUvsFont.Build(source, new SyntheticUvsFont.Sequence(Heart, 0xFE0F)));
 
-            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤️", TextShapingFeatures.Default)).GlyphIndex);
+            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤️", ShapeSettings.Default)).GlyphIndex);
         }
     }
 }

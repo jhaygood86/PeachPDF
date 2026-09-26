@@ -1,3 +1,4 @@
+﻿using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -225,7 +226,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         public double Width(string text)
         {
             var real = ((PeachPDF.Adapters.FontAdapter)font).Font;
-            var size = FontHelper.MeasureString(text, real, XStringFormats.Default, PeachPDF.Text.TextShapingFeatures.Default);
+            var size = FontHelper.MeasureString(text, real, XStringFormats.Default, PeachDrawing.Text.Shaping.ShapeSettings.Default);
             return size.Width;
         }
     }

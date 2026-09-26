@@ -10,12 +10,15 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.OpenType;
+using PeachDrawing.Text.Outlines;
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text;
+using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
-using PeachPDF.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Text;
 using System;
 
 namespace PeachPDF.Adapters
@@ -68,7 +71,7 @@ namespace PeachPDF.Adapters
         /// eagerly, right here, rather than lazily on this font's first <c>RGraphics.MeasureString</c>
         /// call (as a previous version of this constructor did): <paramref name="font"/>'s own descriptor/
         /// metrics are already fully resolved by the time <c>XFont</c>'s constructor returns
-        /// (<c>XFont.Initialize</c> calls <c>CreateDescriptorAndInitializeFontMetrics</c> synchronously), so
+        /// (<c>XFont.Initialize</c> calls <c>InitializeFontMetrics</c> synchronously), so
         /// there was never a real data dependency on "a string having been measured first" - only an
         /// accident of where this arithmetic used to live. Reading <see cref="Height"/>/<see cref="Ascent"/>
         /// before this font's first <c>MeasureString</c> call used to read back a stale, pre-resolution
@@ -82,15 +85,15 @@ namespace PeachPDF.Adapters
             PixelsPerPoint = pixelsPerPoint;
 
             // Read ascent/descent/em-height directly off the font's OWN already-resolved descriptor
-            // instead of re-deriving them via XFontFamily.GetCellAscent/GetCellDescent/GetEmHeight, which
+            // instead of re-deriving them per size, which
             // re-resolve a font by its own internal name (e.g. "Source Code Pro" - not the CSS-facing
             // family alias that was actually registered) through IFontResolver - for a custom/@font-face-
             // registered family this can resolve to an entirely unrelated font, and even when it does find
             // something, it bypasses the per-instance cache routing that keeps two PdfGenerators' same-
-            // named custom fonts from colliding (see XFont.Descriptor and XGlyphTypeface.OwningInstanceResolver).
-            var descriptor = font.Descriptor;
-            var descent = font.Size * descriptor.Descender / descriptor.UnitsPerEm;
-            var ascent = font.Size * descriptor.Ascender / descriptor.UnitsPerEm;
+            // named custom fonts from colliding (see XFont.Descriptor and LoadedTypeface.OwningInstanceResolver).
+            var metrics = font.Typeface.Metrics;
+            var descent = font.Size * metrics.CellDescent / metrics.UnitsPerEm;
+            var ascent = font.Size * metrics.CellAscent / metrics.UnitsPerEm;
             // `font.Size` is a true (unscaled) point size - see the Ascent/Height property comments below
             // for why the PixelsPerPoint multiply has to happen separately, at the property/here, not baked
             // into font.Size itself. Each of ascent/descent/gap is rounded to a whole CSS pixel *in that
@@ -101,10 +104,10 @@ namespace PeachPDF.Adapters
             // rather than merely close (issue #956). The PixelsPerPoint multiply is applied once, after
             // rounding, to convert the whole sum into this container's internal layout-unit space -
             // mirroring Ascent's own single multiply, just applied to the rounded sum instead of a raw value.
-            double ScaleUnits(int designUnits) => font.Size * designUnits / descriptor.UnitsPerEm;
-            _normalLineHeight = (RoundToWholeCssPixel(ScaleUnits(descriptor.NormalLineHeightAscent)) +
-                                 RoundToWholeCssPixel(ScaleUnits(descriptor.NormalLineHeightDescent)) +
-                                 RoundToWholeCssPixel(ScaleUnits(descriptor.NormalLineHeightGap))) * pixelsPerPoint;
+            double ScaleUnits(int designUnits) => font.Size * designUnits / metrics.UnitsPerEm;
+            _normalLineHeight = (RoundToWholeCssPixel(ScaleUnits(metrics.NormalLineAscent)) +
+                                 RoundToWholeCssPixel(ScaleUnits(metrics.NormalLineDescent)) +
+                                 RoundToWholeCssPixel(ScaleUnits(metrics.NormalLineGap))) * pixelsPerPoint;
             // XFont.Height (int, System.Drawing.Font-style API) rounds up to a whole point via
             // Math.Ceiling - harmless at an ordinary font.Size, but collapses to exactly 1 for any
             // sub-1pt size, discarding all proportional information. This adapter's own Height then
@@ -126,11 +129,11 @@ namespace PeachPDF.Adapters
             // (no real stroke-width guidance), which would otherwise paint an invisible decoration line
             // under text-decoration-thickness: from-font; falling back to the engine's own pre-existing
             // fixed thickness (RFont.UnderlineThickness's own default) is safer than a literal 0.
-            _underlineThickness = descriptor.UnderlineThickness > 0 ? ScaleUnits(descriptor.UnderlineThickness) : 1d / pixelsPerPoint;
+            _underlineThickness = metrics.UnderlineThickness > 0 ? ScaleUnits(metrics.UnderlineThickness) : 1d / pixelsPerPoint;
             // Unlike UnderlineThickness, 0 is a plausible authored value here (an underline sitting
             // exactly on the baseline) rather than an obvious authoring mistake, so it is not special-
             // cased - scaled and used as-is, negative sign (below baseline) and all.
-            _underlinePosition = ScaleUnits(descriptor.UnderlinePosition);
+            _underlinePosition = ScaleUnits(metrics.UnderlinePosition);
         }
 
         /// <summary>
@@ -176,27 +179,31 @@ namespace PeachPDF.Adapters
             return _whitespaceWidth;
         }
 
-        public override bool HasGlyph(System.Text.Rune rune) => Font.Descriptor?.HasGlyph(rune) ?? false;
+        public override bool HasGlyph(System.Text.Rune rune) => Font.Typeface.HasGlyph(rune);
 
         public override bool MatchesEmojiPresentation(System.Text.Rune baseCodepoint, EmojiPresentation presentation) =>
-            Font.Descriptor is not { } descriptor || EmojiProperties.FaceMatches(descriptor.FontFace, baseCodepoint.Value, presentation);
+            Font.Typeface.MatchesEmojiPresentation(baseCodepoint, presentation);
 
-        public override bool SupportsFontVariantCaps(FontVariantCapsFeature feature) =>
-            Font.Descriptor?.SupportsFeatureTags(GsubShaper.GetFeatureTags(feature)) ?? false;
+        public override bool SupportsFontVariantCaps(CapsMode feature) =>
+            Font.Typeface.SupportsFeatures(Shaper.GetFeatureTags(feature));
 
-        public override bool SupportsFontVariantPosition(FontVariantPositionFeature feature) =>
-            Font.Descriptor?.SupportsFeatureTags(GsubShaper.GetFeatureTags(feature)) ?? false;
+        public override bool SupportsFontVariantPosition(SubSuperMode feature) =>
+            Font.Typeface.SupportsFeatures(Shaper.GetFeatureTags(feature));
 
         public override (double SizeScale, double BaselineShift)? GetSubSuperscriptMetrics(bool superscript) =>
-            Font.Descriptor?.GetSubSuperscriptMetrics(superscript);
+            Font.Typeface.TryGetScriptPosition(superscript ? ScriptPlacement.Superscript : ScriptPlacement.Subscript, out var position)
+                ? (position.SizeScale, position.BaselineShift)
+                : null;
 
-        public override string FaceKey => Font.GlyphTypeface.Key;
+        public override string FaceKey => _faceKey ??= Font.Typeface.ContentHash.ToString("x") + "/" + (int)Font.Synthesis;
+
+        private string? _faceKey;
 
         // ---- CPAL color-palette query surface --------------------------------------------------
         // Backed by the font's OpenTypeDescriptor.ColorPalette (the CPAL table). Null for a non-color font,
         // in which case each member falls back to the RFont "no palettes" default.
 
-        private CpalTable? ColorPalette => Font.Descriptor is { IsColorFont: true } d ? d.ColorPalette : null;
+        private ColorPalette? ColorPalette => Font.Typeface.ColorPalette;
 
         public override int PaletteCount => ColorPalette?.PaletteCount ?? 0;
 
@@ -222,52 +229,49 @@ namespace PeachPDF.Adapters
         // Backed by the font's OpenTypeDescriptor's real vhea/vmtx/VORG parsing, converted through the
         // same design-units-to-pixels formula the constructor above already uses for _ascent/_height.
 
-        public override bool HasVerticalMetrics => Font.Descriptor?.HasVerticalMetrics ?? false;
+        public override bool HasVerticalMetrics => Font.Typeface.HasVerticalMetrics;
 
         public override double GetVerticalAdvance(System.Text.Rune rune) =>
-            ScaleDesignUnits(rune, Height, static (descriptor, glyphIndex) => descriptor.GlyphIndexToVerticalAdvance(glyphIndex));
+            ScaleDesignUnits(rune, static (typeface, glyph) => typeface.GetVerticalAdvance(glyph));
 
-        public override bool HasVerticalOrigin => Font.Descriptor?.HasVerticalOrigin ?? false;
+        public override bool HasVerticalOrigin => Font.Typeface.HasVerticalOrigin;
 
         public override double GetVerticalOriginY(System.Text.Rune rune) =>
-            ScaleDesignUnits(rune, Ascent, static (descriptor, glyphIndex) => descriptor.GlyphIndexToVerticalOrigin(glyphIndex).Y);
+            ScaleDesignUnits(rune, static (typeface, glyph) => typeface.GetVerticalOrigin(glyph).Y);
 
         /// <summary>
         /// Shared by <see cref="GetVerticalAdvance"/>/<see cref="GetVerticalOriginY"/> - both resolve
-        /// <paramref name="rune"/> to a glyph index and scale a raw design-units value from
-        /// <see cref="OpenTypeDescriptor"/> by the exact same formula the constructor above already uses
-        /// for <c>_ascent</c>/<c>_height</c> (<c>Font.Size * designUnits / UnitsPerEm * PixelsPerPoint</c>);
-        /// only which descriptor accessor supplies the design-units value, and the no-descriptor
-        /// fallback, differ between the two callers.
+        /// <paramref name="rune"/> to a glyph and scale a raw design-units value from the typeface by the exact same
+        /// formula the constructor above already uses for <c>_ascent</c>/<c>_height</c>
+        /// (<c>Font.Size * designUnits / UnitsPerEm * PixelsPerPoint</c>); only which typeface accessor supplies the
+        /// design-units value differs between the two callers. A character the font does not map is measured as its
+        /// missing glyph.
         /// </summary>
-        private double ScaleDesignUnits(System.Text.Rune rune, double fallback, System.Func<OpenTypeDescriptor, int, int> designUnits)
+        private double ScaleDesignUnits(System.Text.Rune rune, System.Func<Typeface, ushort, int> designUnits)
         {
-            var descriptor = Font.Descriptor;
-            if (descriptor is null) return fallback;
-
-            var glyphIndex = descriptor.CharCodeToGlyphIndex(rune);
-            return Font.Size * designUnits(descriptor, glyphIndex) / descriptor.UnitsPerEm * PixelsPerPoint;
+            Font.Typeface.TryMapRune(rune, out var glyph);
+            return Font.Size * designUnits(Font.Typeface, glyph) / Font.Typeface.Metrics.UnitsPerEm * PixelsPerPoint;
         }
 
         // ---- MATH table query surface -----------------------------------------------------------
-        // Backed by the font's OpenTypeDescriptor's real MATH table parsing (see MathTable.cs).
+        // Backed by the typeface's MATH table (Typeface.MathData).
 
-        public override bool HasMathTable => Font.Descriptor?.HasMathTable ?? false;
+        public override bool HasMathTable => Font.Typeface.HasMathData;
 
-        public override MathTable? MathTable => Font.Descriptor?.MathTable;
+        public override MathTable? MathTable => Font.Typeface.MathData;
 
-        public override double FontUnitsPerEm => Font.Descriptor?.UnitsPerEm ?? 0;
+        public override double FontUnitsPerEm => Font.Typeface.Metrics.UnitsPerEm;
 
-        public override int GetGlyphIndex(System.Text.Rune rune) => Font.Descriptor?.CharCodeToGlyphIndex(rune) ?? 0;
+        public override int GetGlyphIndex(System.Text.Rune rune) => Font.Typeface.TryMapRune(rune, out var glyph) ? glyph : 0;
 
-        public override int GetGlyphAdvanceWidthDesignUnits(int glyphIndex) => Font.Descriptor?.GlyphIndexToWidth(glyphIndex) ?? 0;
+        public override int GetGlyphAdvanceWidthDesignUnits(int glyphIndex) => Font.Typeface.GetAdvance((ushort)glyphIndex);
 
         public override double? XHeightEm =>
-            Font.Descriptor is { HasAuthenticXHeight: true, UnitsPerEm: > 0 } d ? (double)d.XHeight / d.UnitsPerEm : null;
+            Font.Typeface.Metrics is { HasMeasuredXHeight: true, UnitsPerEm: > 0 } m ? (double)m.XHeight / m.UnitsPerEm : null;
 
-        // FontDescriptor.CapHeight already falls back to the ascender when OS/2 has no sCapHeight - the
+        // TypefaceMetrics.CapHeight already falls back to the ascender when OS/2 has no sCapHeight - the
         // fallback CSS Values 4 §6.1.1 prescribes for cap.
         public override double? CapHeightEm =>
-            Font.Descriptor is { UnitsPerEm: > 0, CapHeight: > 0 } d ? (double)d.CapHeight / d.UnitsPerEm : null;
+            Font.Typeface.Metrics is { UnitsPerEm: > 0, CapHeight: > 0 } m ? (double)m.CapHeight / m.UnitsPerEm : null;
     }
 }

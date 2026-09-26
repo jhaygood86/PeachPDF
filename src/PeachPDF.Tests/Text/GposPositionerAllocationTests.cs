@@ -1,5 +1,6 @@
-using PeachPDF.Fonts.OpenType;
-using PeachPDF.Text;
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Text;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
@@ -50,8 +51,8 @@ namespace PeachPDF.Tests.Text
 
             var lookup = new GposMarkToBaseLookup { Subtables = new List<GposMarkAttachmentSubtable> { subtable } };
 
-            var glyphs = new List<ShapedGlyph>();
-            for (var i = 0; i < 200; i++) glyphs.Add(new ShapedGlyph(i, i, 1));
+            var glyphs = new List<PlacedGlyph>();
+            for (var i = 0; i < 200; i++) glyphs.Add(new PlacedGlyph(i, i, 1));
 
             const int passes = 50;
             var allocated = AllocationProbe.Bytes(

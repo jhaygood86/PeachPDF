@@ -1,7 +1,8 @@
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Fonts;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -25,9 +26,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
 
         private static OpenTypeDescriptor Descriptor(byte[] font)
         {
-            var face = XFontSource.GetOrCreateFrom(font).Fontface;
-            return new OpenTypeDescriptor("emoji-test", "emoji-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var face = FontFileData.GetOrCreateFrom(font).Fontface;
+            return new OpenTypeDescriptor("emoji-test", "emoji-test", face);
         }
 
         [Fact]
@@ -46,7 +46,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void Format12_Coverage_IncludesAstralEmoji_AndBmp()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Emoji)).Fontface;
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Emoji)).Fontface;
 
             var coverage = CMapCoverage.Extract(face.cmap);
 
@@ -61,9 +61,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             // A font with no format-12 subtable (Source Sans 3) has no astral mapping: an astral codepoint
             // resolves to the missing glyph and is not reported as covered, while BMP still works. This also
             // exercises CMapCoverage.Extract's fast path (no format-12 → BMP ranges only).
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
-            var descriptor = new OpenTypeDescriptor("bmp-only", "bmp-only", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            var descriptor = new OpenTypeDescriptor("bmp-only", "bmp-only", face);
 
             Assert.Equal(0, descriptor.CharCodeToGlyphIndex(new Rune(Grin)));
             Assert.False(descriptor.HasGlyph(new Rune(Grin)));
@@ -81,7 +80,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
 
             // An astral emoji is a surrogate pair in UTF-16; the rune-based pipeline must record it as one
             // codepoint→glyph entry, not two surrogate entries.
-            var cmap = new CMapInfo(descriptor);
+            var cmap = new CMapInfo(TestFonts.TypefaceFromBytes(File.ReadAllBytes(BundledFonts.Emoji)));
             cmap.AddChars(char.ConvertFromUtf32(Grin));
 
             Assert.Single(cmap.CharacterToGlyphIndex);

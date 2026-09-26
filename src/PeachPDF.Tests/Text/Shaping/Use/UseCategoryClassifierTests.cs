@@ -1,4 +1,5 @@
-using PeachPDF.Text.Shaping.Use;
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Internal.Text.Shaping.Use;
 using Xunit;
 
 namespace PeachPDF.Tests.Text.Shaping.Use

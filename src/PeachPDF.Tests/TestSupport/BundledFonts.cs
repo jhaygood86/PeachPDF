@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.PdfSharpCore.Utils;
 using System;
@@ -5,7 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.TestSupport
 {

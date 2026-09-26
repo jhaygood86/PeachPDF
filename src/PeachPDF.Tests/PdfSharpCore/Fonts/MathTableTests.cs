@@ -1,5 +1,7 @@
+using PeachDrawing.Text.OpenType;
+using PeachDrawing.Text.Internal.Fonts;
 using System.IO;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
@@ -21,7 +23,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         const ushort ParenLeftGlyphId = 1064;
 
         static OpenTypeFontface Face(string path)
-            => XFontSource.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
+            => FontFileData.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
 
         [Fact]
         public void HasMathTable_TrueForMathFont_FalseForOrdinaryFont()
@@ -33,13 +35,11 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         [Fact]
         public void Descriptor_ExposesHasMathTableAndMathTable()
         {
-            var mathDescriptor = new OpenTypeDescriptor("math-test", "math-test", XFontStyle.Regular,
-                Face(BundledFonts.Math), new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var mathDescriptor = new OpenTypeDescriptor("math-test", "math-test", Face(BundledFonts.Math));
             Assert.True(mathDescriptor.HasMathTable);
             Assert.NotNull(mathDescriptor.MathTable);
 
-            var plainDescriptor = new OpenTypeDescriptor("plain-test", "plain-test", XFontStyle.Regular,
-                Face(BundledFonts.Ttf), new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var plainDescriptor = new OpenTypeDescriptor("plain-test", "plain-test", Face(BundledFonts.Ttf));
             Assert.False(plainDescriptor.HasMathTable);
             Assert.Null(plainDescriptor.MathTable);
         }

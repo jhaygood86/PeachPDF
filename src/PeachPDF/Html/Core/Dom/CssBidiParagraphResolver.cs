@@ -1,9 +1,6 @@
+using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Text;
-using PeachPDF.Text.Bidi;
-using PeachPDF.Text.Shaping.Arabic;
-using PeachPDF.Text.Shaping.Use;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -24,14 +21,14 @@ namespace PeachPDF.Html.Core.Dom
     /// into one logical-order string (recursing only through plain inline boxes - anything else is
     /// atomic from the surrounding paragraph's point of view and represented by one Object Replacement
     /// Character placeholder, matching UAX#9's own guidance for embedded objects), resolved once via
-    /// <see cref="BidiResolver.Resolve"/>, and the resulting per-character levels are sliced back onto
+    /// <see cref="Bidi.Analyze"/>, and the resulting per-character levels are sliced back onto
     /// each contributing text box.
     /// </para>
     /// <para>
     /// A plain inline box (e.g. a &lt;span&gt;/&lt;bdo&gt;/&lt;bdi&gt;) whose own <c>UnicodeBidi</c> is not
     /// <c>normal</c> contributes a synthetic explicit push over its own text range, exactly as if a real
     /// LRE/RLE/LRO/RLO/LRI/RLI/FSI control character opened there and a matching PDF/PDI closed it (see
-    /// <see cref="BidiIsolateOverride"/>) - the CSS integration UAX#9 itself expects (CSS Writing Modes
+    /// <see cref="EmbeddingSpan"/>) - the CSS integration UAX#9 itself expects (CSS Writing Modes
     /// Level 3 §5.2).
     /// </para>
     /// </summary>
@@ -111,7 +108,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             var text = new StringBuilder();
             var ranges = new List<(CssBox Box, int Start, int Length)>();
-            var overrides = new List<BidiIsolateOverride>();
+            var overrides = new List<EmbeddingSpan>();
 
             // A paragraph root can carry its own Text directly (a ::before/::after pseudo-element's
             // generated-content box, set by CssContentEngine.ApplyContent) rather than only through a
@@ -131,12 +128,12 @@ namespace PeachPDF.Html.Core.Dom
 
             var paragraphText = text.ToString();
             var direction = paragraphRoot.UnicodeBidi.Value == UnicodeMode.Plaintext
-                ? BidiParagraphDirection.Auto
+                ? BaseDirection.Auto
                 : paragraphRoot.Direction.Value == DirectionMode.Rtl
-                    ? BidiParagraphDirection.Rtl
-                    : BidiParagraphDirection.Ltr;
+                    ? BaseDirection.Rtl
+                    : BaseDirection.Ltr;
 
-            var result = BidiResolver.Resolve(paragraphText, direction, overrides);
+            var result = Bidi.Analyze(paragraphText, direction, overrides);
             var (charScripts, joiningForms, useCategories) = ResolveScriptsAndJoining(paragraphText);
 
             foreach (var (box, start, length) in ranges)
@@ -163,7 +160,7 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// The Unicode <c>Script</c> property values <see cref="UseCategoryClassifier"/> is scoped to
+        /// The Unicode <c>Script</c> property values <c>UseCategoryClassifier</c> is scoped to
         /// (see its own remarks) - a run resolving to one of these is the only case
         /// <see cref="ResolveScriptsAndJoining"/> ever classifies/allocates USE categories for.
         /// </summary>
@@ -171,22 +168,22 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Resolves <paramref name="paragraphText"/>'s per-character Unicode <c>Script</c> (already
-        /// run-resolved against surrounding text, see <see cref="ScriptRunResolver"/>), Arabic-family
+        /// run-resolved against surrounding text, see <see cref="Scripts"/>), Arabic-family
         /// <see cref="ArabicJoiningForm"/>, and (when the paragraph contains any text in one of
         /// <see cref="UseShapedScripts"/>) per-character <see cref="UseCategory"/>, all indexed by
-        /// UTF-16 offset (matching <see cref="BidiResolver.Resolve"/>'s own <c>Levels</c> array) rather
-        /// than by codepoint/Rune - <see cref="ScriptTable"/>/<see cref="ArabicShapingTable"/>/
-        /// <see cref="ArabicJoiningShaper"/>/<see cref="UseCategoryClassifier"/> all operate
+        /// UTF-16 offset (matching <see cref="Bidi.Analyze"/>'s own <c>Levels</c> array) rather
+        /// than by codepoint/Rune - <see cref="Scripts"/>/<c>ArabicShapingTable</c>/
+        /// <c>ArabicJoiningShaper</c>/<c>UseCategoryClassifier</c> all operate
         /// per-codepoint, so a codepoint's resolved value is duplicated across both UTF-16 units of a
         /// surrogate pair here, the same "one value per source character, computed once" convention
         /// <see cref="CssBox.CharScripts"/>/<see cref="CssBox.JoiningForms"/>/
         /// <see cref="CssBox.UseCategories"/> share with <see cref="CssBox.BidiLevels"/>.
-        /// <see cref="ArabicJoiningShaper.Resolve"/> runs unconditionally over the whole paragraph
+        /// <c>ArabicJoiningShaper.Resolve</c> runs unconditionally over the whole paragraph
         /// regardless of script - a codepoint outside every Arabic-family joining block already
         /// resolves to <see cref="ArabicJoiningType.U"/> (Non-Joining) in
-        /// <see cref="ArabicShapingTable"/>, so this is a correct no-op for ordinary text, not a wasted
+        /// <c>ArabicShapingTable</c>, so this is a correct no-op for ordinary text, not a wasted
         /// computation guarded by a check that would cost nearly as much itself.
-        /// <see cref="UseCategoryClassifier"/> is different: unlike <see cref="ArabicJoiningType.U"/>,
+        /// <c>UseCategoryClassifier</c> is different: unlike <see cref="ArabicJoiningType.U"/>,
         /// <see cref="UseCategory.O"/> is a real, meaningfully-processed category (not an inert "skip
         /// this codepoint" sentinel), so running it unconditionally over every document would activate
         /// syllable scanning/reordering for every word ever laid out, not just ones in
@@ -216,10 +213,10 @@ namespace PeachPDF.Html.Core.Dom
 
             var rawScripts = new string[codepoints.Count];
             for (var c = 0; c < codepoints.Count; c++)
-                rawScripts[c] = ScriptTable.Of(codepoints[c]);
-            var resolvedScripts = ScriptRunResolver.ResolveRaw(rawScripts);
+                rawScripts[c] = Scripts.Of(codepoints[c]);
+            var resolvedScripts = Scripts.ResolveLooked(rawScripts);
 
-            var joiningForms = ArabicJoiningShaper.Resolve(codepoints);
+            var joiningForms = ArabicJoining.Resolve(codepoints);
 
             // See this method's own remarks on why, unlike ArabicJoiningShaper, this only classifies
             // (and only allocates at all) when the paragraph actually contains text in one of
@@ -230,7 +227,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (!UseShapedScripts.Contains(resolvedScripts[c]))
                     continue;
                 useCategories ??= new UseCategory[codepoints.Count];
-                useCategories[c] = UseCategoryClassifier.Classify(codepoints[c]);
+                useCategories[c] = UniversalShaping.Classify(codepoints[c]);
             }
 
             var charScripts = new string[length];
@@ -249,7 +246,7 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         private static void Flatten(
-            CssBox box, StringBuilder text, List<(CssBox, int, int)> ranges, List<BidiIsolateOverride> overrides)
+            CssBox box, StringBuilder text, List<(CssBox, int, int)> ranges, List<EmbeddingSpan> overrides)
         {
             foreach (var child in box.Boxes)
             {
@@ -276,7 +273,7 @@ namespace PeachPDF.Html.Core.Dom
                     // "no effect on boxes that are not inline"); a display:contents element has none, so its
                     // own unicode-bidi contributes no push. Its direction still reaches its children through
                     // inheritance, which the cascade already resolved.
-                    IReadOnlyList<BidiExplicitPush> pushes = child.DerivedStyle.ActualDisplay == Keywords.Contents
+                    IReadOnlyList<ExplicitPush> pushes = child.DerivedStyle.ActualDisplay == Keywords.Contents
                         ? []
                         : CssUnicodeBidiMapping.MapToPushes(child.UnicodeBidi.Value, child.Direction.Value);
 
@@ -292,7 +289,7 @@ namespace PeachPDF.Html.Core.Dom
                         // ahead of any overrides a nested box contributes while sharing the same Start (a
                         // nested box with no preceding sibling text of its own) - rather than appended
                         // after recursion returns, which would put a child's override before its
-                        // parent's for any index the two happen to share. BidiResolver.Resolve pushes
+                        // parent's for any index the two happen to share. Bidi.Analyze pushes
                         // overrides sharing a start in list order and (deliberately) pops overrides
                         // sharing an end in the reverse order, so outer-to-inner list order is what makes
                         // both same-index nesting and a multi-push box's own two pushes resolve correctly.
@@ -303,7 +300,7 @@ namespace PeachPDF.Html.Core.Dom
                         if (length > 0)
                         {
                             for (var i = 0; i < pushes.Count; i++)
-                                overrides.Insert(insertAt + i, new BidiIsolateOverride(start, length, pushes[i]));
+                                overrides.Insert(insertAt + i, new EmbeddingSpan(start, length, pushes[i]));
                         }
                     }
                 }

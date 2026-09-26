@@ -1,10 +1,11 @@
+using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System;
 using System.IO;
 using System.Linq;
@@ -43,7 +44,7 @@ namespace PeachPDF.Tests.Integration
             var box = await FindWordsBox(SupsFontBase64, "<b id=\"w\" style=\"font-variant-position:super\">42</b>");
 
             Assert.Equal("super", box.FontVariantPosition.ToString());
-            Assert.Equal(FontVariantPositionFeature.Super, box.RequestedFontVariantPosition);
+            Assert.Equal(SubSuperMode.Super, box.RequestedFontVariantPosition);
         }
 
         [Theory]
@@ -73,11 +74,11 @@ namespace PeachPDF.Tests.Integration
             // Glyph indices, not measured width: a well-designed font's superscript figures aren't
             // guaranteed to differ in advance width from the default ones.
             var box = await FindWordsBox(SupsFontBase64, "<b id=\"w\" style=\"font-variant-position:super\">42</b>");
-            var descriptor = ((FontAdapter)box.ActualFont).Font.Descriptor;
+            var descriptor = ((FontAdapter)box.ActualFont).Font.Typeface.Face.Descriptor;
 
             Assert.NotNull(descriptor);
 
-            var plain = descriptor!.Shape("42", TextShapingFeatures.Default);
+            var plain = descriptor!.Shape("42", ShapeSettings.Default);
             var superscript = descriptor.Shape("42", box.ActualTextShapingFeatures);
 
             Assert.NotEqual(plain.Select(g => g.GlyphIndex), superscript.Select(g => g.GlyphIndex));
@@ -87,11 +88,11 @@ namespace PeachPDF.Tests.Integration
         public async Task Sub_OnAFontWithSubs_SubstitutesRealGlyphs()
         {
             var box = await FindWordsBox(SupsFontBase64, "<b id=\"w\" style=\"font-variant-position:sub\">42</b>");
-            var descriptor = ((FontAdapter)box.ActualFont).Font.Descriptor;
+            var descriptor = ((FontAdapter)box.ActualFont).Font.Typeface.Face.Descriptor;
 
             Assert.NotNull(descriptor);
 
-            var plain = descriptor!.Shape("42", TextShapingFeatures.Default);
+            var plain = descriptor!.Shape("42", ShapeSettings.Default);
             var subscript = descriptor.Shape("42", box.ActualTextShapingFeatures);
 
             Assert.NotEqual(plain.Select(g => g.GlyphIndex), subscript.Select(g => g.GlyphIndex));
@@ -104,7 +105,7 @@ namespace PeachPDF.Tests.Integration
 
             // Real substitution is doing the work, so the word is left whole at full size and no baseline
             // shift is applied - requesting both would shrink glyphs that are already superscripts.
-            Assert.Equal(FontVariantPositionFeature.Super, box.ActualFontVariantPosition);
+            Assert.Equal(SubSuperMode.Super, box.ActualFontVariantPosition);
             Assert.Null(box.SubSuperscriptSynthesis);
             Assert.Equal(1.0, Assert.Single(box.Words).FontSizeScale);
             Assert.Equal(ScaledFontKind.None, box.Words[0].ScaledFontKind);
@@ -116,8 +117,8 @@ namespace PeachPDF.Tests.Integration
             var box = await FindWordsBox(NoSupsFontBase64, "<b id=\"w\" style=\"font-variant-position:super\">42</b>");
 
             // No real feature to request, so the shaping layer is told nothing and the run is synthesized.
-            Assert.Equal(FontVariantPositionFeature.None, box.ActualFontVariantPosition);
-            Assert.Equal(FontVariantPositionFeature.Super, box.RequestedFontVariantPosition);
+            Assert.Equal(SubSuperMode.None, box.ActualFontVariantPosition);
+            Assert.Equal(SubSuperMode.Super, box.RequestedFontVariantPosition);
 
             var synthesis = box.SubSuperscriptSynthesis;
             Assert.NotNull(synthesis);
@@ -174,7 +175,7 @@ namespace PeachPDF.Tests.Integration
             {
                 var box = await FindWordsBox(font, "<b id=\"w\" style=\"font-variant-position:normal\">42</b>");
 
-                Assert.Equal(FontVariantPositionFeature.None, box.RequestedFontVariantPosition);
+                Assert.Equal(SubSuperMode.None, box.RequestedFontVariantPosition);
                 Assert.Null(box.SubSuperscriptSynthesis);
                 Assert.Equal(1.0, Assert.Single(box.Words).FontSizeScale);
             }

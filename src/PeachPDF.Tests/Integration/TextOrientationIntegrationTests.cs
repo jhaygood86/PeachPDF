@@ -1,12 +1,14 @@
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -383,7 +385,7 @@ body {{ font-family: 'VorgOnlyTest'; margin: 0 }}
 
             if (baseFontNeedsVheaVmtx)
             {
-                var numGlyphs = XFontSource.GetOrCreateFrom(fontBytes).Fontface.maxp.numGlyphs;
+                var numGlyphs = FontFileData.GetOrCreateFrom(fontBytes).Fontface.maxp.numGlyphs;
                 fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, TableTagNames.VHea, SyntheticFontTables.BuildVhea(ascent: 900, descent: -200, numOfLongVerMetrics: numGlyphs));
                 fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, TableTagNames.VMtx, SyntheticFontTables.BuildVmtxUniform(1000, numGlyphs));
             }
@@ -552,7 +554,7 @@ body {{ font-family: 'CJK'; margin: 0 }}
             public RecordingGraphics(RAdapter adapter)
                 : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null)
             {
                 var call = (str, font, point);
                 DrawStringCalls.Add(call);
@@ -573,7 +575,7 @@ body {{ font-family: 'CJK'; margin: 0 }}
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
             public override RGraphicsPath GetGraphicsPath() => null!;
 
-            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null) => null;
+            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) => null;
             public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
             public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
             public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal) { }
@@ -590,8 +592,8 @@ body {{ font-family: 'CJK'; margin: 0 }}
             // position/advance each character, so a constant-zero stub (fine for tests that only care
             // about call count/text/font) would silently collapse every stacked character onto the same
             // Y, making the "characters stack top-to-bottom" assertion vacuous.
-            public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) => new((str?.Length ?? 0) * 10, 12);
-            public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
+            public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null) => new((str?.Length ?? 0) * 10, 12);
+            public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null) => str?.Length ?? 0;
             public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
             {
                 charFit = str?.Length ?? 0;

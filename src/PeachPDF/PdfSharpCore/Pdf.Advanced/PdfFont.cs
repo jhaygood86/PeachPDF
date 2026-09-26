@@ -5,7 +5,7 @@
 //
 // Copyright (c) 2005-2016 empira Software GmbH, Cologne Area (Germany)
 //
-// http://www.PeachPDF.PdfSharpCore.com
+// https://www.pdfsharp.com/
 // http://sourceforge.net/projects/pdfsharp
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -27,8 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.Fonts;
-using PeachPDF.Text;
+using PeachDrawing.Text.Shaping;
+
 using System;
 using System.Diagnostics;
 using System.Text;
@@ -74,7 +74,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 _cmapInfo.AddChars(text);
         }
 
-        internal void AddShapedText(string text, TextShapingFeatures features, string? logicalText = null)
+        internal void AddShapedText(string text, ShapeSettings features, string? logicalText = null)
         {
             if (_cmapInfo != null)
                 _cmapInfo.AddShapedText(text, features, logicalText);

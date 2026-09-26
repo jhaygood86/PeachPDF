@@ -1,12 +1,14 @@
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachDrawing.Text.Shaping;
 using System.IO;
 using System.Text;
-using PeachPDF.Fonts;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
-using PeachPDF.Text.Bidi;
+using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.Internal.Text.Bidi;
 using Xunit;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
@@ -28,9 +30,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     {
         private static OpenTypeDescriptor Descriptor()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
-            return new OpenTypeDescriptor("logicaltext-test", "logicaltext-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            return new OpenTypeDescriptor("logicaltext-test", "logicaltext-test", face);
         }
 
         private static int GlyphFor(OpenTypeDescriptor descriptor, char c) =>
@@ -40,7 +41,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         public void AddShapedText_WithDifferingLogicalText_RemapsEachGlyphToItsTrueLogicalSource()
         {
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(descriptor);
+            var cmapInfo = new CMapInfo(TestFonts.TypefaceFromFile(BundledFonts.Ttf));
 
             // "(AB)" is what the source document actually contains, in true logical reading order.
             // BidiMirrorResolver.ApplyMirroring's whole-string reversal + per-character mirroring (what
@@ -52,7 +53,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             const string visual = "(BA)";
             var logicalText = BidiMirrorResolver.ReverseRunes(source);
 
-            cmapInfo.AddShapedText(visual, TextShapingFeatures.Default, logicalText);
+            cmapInfo.AddShapedText(visual, ShapeSettings.Default, logicalText);
 
             // The '(' glyph painted at the start of the visual string is standing in for the source
             // string's closing ')' - extracting it must recover ')', not the '(' it visually is.
@@ -79,10 +80,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var logicalText = BidiMirrorResolver.ReverseRunes(source);
 
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(descriptor);
-            cmapInfo.AddShapedText(visual, TextShapingFeatures.Default, logicalText);
+            var cmapInfo = new CMapInfo(TestFonts.TypefaceFromFile(BundledFonts.Ttf));
+            cmapInfo.AddShapedText(visual, ShapeSettings.Default, logicalText);
 
-            var shaped = descriptor.Shape(visual, TextShapingFeatures.Default);
+            var shaped = descriptor.Shape(visual, ShapeSettings.Default);
             var ligatureGlyph = Assert.Single(shaped, g => g.ClusterLength > 1);
             Assert.Equal(2, ligatureGlyph.ClusterLength);
 
@@ -105,9 +106,9 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // The overwhelming common case (LTR text, or any word never reversed/mirrored for display):
             // omitting logicalText must behave exactly as before this parameter existed.
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(descriptor);
+            var cmapInfo = new CMapInfo(TestFonts.TypefaceFromFile(BundledFonts.Ttf));
 
-            cmapInfo.AddShapedText("AB", TextShapingFeatures.Default);
+            cmapInfo.AddShapedText("AB", ShapeSettings.Default);
 
             Assert.Equal("A", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'A')]);
             Assert.Equal("B", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'B')]);
@@ -120,9 +121,9 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // AddShapedText must recognize this as "nothing to remap" rather than running the remap
             // formula needlessly.
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(descriptor);
+            var cmapInfo = new CMapInfo(TestFonts.TypefaceFromFile(BundledFonts.Ttf));
 
-            cmapInfo.AddShapedText("AB", TextShapingFeatures.Default, logicalText: "AB");
+            cmapInfo.AddShapedText("AB", ShapeSettings.Default, logicalText: "AB");
 
             Assert.Equal("A", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'A')]);
             Assert.Equal("B", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'B')]);

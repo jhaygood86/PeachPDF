@@ -1,11 +1,14 @@
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Fonts;
 using System.IO;
 using System.Linq;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
-using PeachPDF.Text.Shaping.Use;
+using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.Internal.Text.Shaping.Use;
 using Xunit;
 
 namespace PeachPDF.Tests.Text.Shaping.Use
@@ -35,16 +38,15 @@ namespace PeachPDF.Tests.Text.Shaping.Use
 
         private static OpenTypeDescriptor Descriptor()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Tamil)).Fontface;
-            return new OpenTypeDescriptor("tamil-test", "tamil-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Tamil)).Fontface;
+            return new OpenTypeDescriptor("tamil-test", "tamil-test", face);
         }
 
         private static int[] ShapeGlyphIds(OpenTypeDescriptor descriptor, params int[] codepoints)
         {
             var text = string.Concat(codepoints.Select(cp => new System.Text.Rune(cp).ToString()));
             var categories = codepoints.Select(cp => UseCategoryClassifier.Classify(cp)).ToList();
-            return descriptor.Shape(text, new TextShapingFeatures(ScriptTag: "taml", UseCategories: categories))
+            return descriptor.Shape(text, new ShapeSettings(ScriptTag: "taml", UseCategories: categories))
                 .Select(g => g.GlyphIndex).ToArray();
         }
 

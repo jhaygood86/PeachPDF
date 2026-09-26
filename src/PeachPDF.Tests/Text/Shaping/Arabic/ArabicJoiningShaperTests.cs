@@ -1,4 +1,5 @@
-using PeachPDF.Text.Shaping.Arabic;
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
 using Xunit;
 
 namespace PeachPDF.Tests.Text.Shaping.Arabic

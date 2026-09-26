@@ -29,8 +29,7 @@
 
 // #??? Clean up
 
-using PeachPDF.Fonts;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 using System;
@@ -47,209 +46,44 @@ namespace PeachPDF.PdfSharpCore.Drawing
     internal sealed class XFont
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="XFont"/> class.
+        /// Initializes a new instance of the <see cref="XFont"/> class: a matched typeface at an em size.
         /// </summary>
-        /// <param name="familyName">Name of the font family.</param>
         /// <param name="emSize">The em size.</param>
-        /// <param name="fontResolver">The font resolver used to look up the font's glyph data.</param>
-        public XFont(string familyName, double emSize, IFontResolver fontResolver)
-            : this(familyName, emSize, XFontStyle.Regular, new XPdfFontOptions(GlobalFontSettings.DefaultFontEncoding), fontResolver)
-        { }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="XFont"/> class.
-        /// </summary>
-        /// <param name="familyName">Name of the font family.</param>
-        /// <param name="emSize">The em size.</param>
-        /// <param name="style">The font style.</param>
-        /// <param name="fontResolver">The font resolver used to look up the font's glyph data.</param>
-        public XFont(string familyName, double emSize, XFontStyle style, IFontResolver fontResolver)
-            : this(familyName, emSize, style, new XPdfFontOptions(GlobalFontSettings.DefaultFontEncoding), fontResolver)
-        { }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="XFont"/> class.
-        /// </summary>
-        /// <param name="familyName">Name of the font family.</param>
-        /// <param name="emSize">The em size.</param>
-        /// <param name="style">The font style.</param>
+        /// <param name="style">The font style (the bold and italic bits say what the box asked for; the typeface's own bold and italic are in <paramref name="match"/>).</param>
         /// <param name="pdfOptions">Additional PDF options.</param>
-        /// <param name="fontResolver">The font resolver used to look up the font's glyph data.</param>
-        public XFont(string familyName, double emSize, XFontStyle style, XPdfFontOptions pdfOptions, IFontResolver fontResolver)
-        {
-            _familyName = familyName;
-            _emSize = emSize;
-            _style = style;
-            _pdfOptions = pdfOptions;
-            Initialize(fontResolver);
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="XFont"/> class using a real CSS Fonts Level 4
-        /// numeric weight (1-1000) instead of just <paramref name="style"/>'s Bold bit, so the resolver
-        /// can perform nearest-weight matching (see <see cref="Fonts.IFontResolver.ResolveTypeface(string, int, bool)"/>)
-        /// rather than only ever asking for an exact Regular/Bold pick.
-        /// </summary>
-        /// <param name="familyName">Name of the font family.</param>
-        /// <param name="emSize">The em size.</param>
-        /// <param name="style">The font style (italic/underline/strikeout bits; the Bold bit is superseded by <paramref name="weight"/>).</param>
-        /// <param name="pdfOptions">Additional PDF options.</param>
-        /// <param name="weight">The requested CSS Fonts numeric weight (1-1000).</param>
-        /// <param name="fontResolver">The font resolver used to look up the font's glyph data.</param>
-        public XFont(string familyName, double emSize, XFontStyle style, XPdfFontOptions pdfOptions, int weight, IFontResolver fontResolver)
-            : this(familyName, emSize, style, pdfOptions, weight, TtfFontDescription.DefaultStretch, fontResolver)
-        { }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="XFont"/> class using both a real CSS Fonts Level 4
-        /// numeric weight and a real CSS Fonts Level 3 numeric stretch (1-9, matching OS/2
-        /// <c>usWidthClass</c>), so the resolver can perform nearest-weight/-stretch matching.
-        /// </summary>
-        /// <param name="familyName">Name of the font family.</param>
-        /// <param name="emSize">The em size.</param>
-        /// <param name="style">The font style (italic/underline/strikeout bits; the Bold bit is superseded by <paramref name="weight"/>).</param>
-        /// <param name="pdfOptions">Additional PDF options.</param>
-        /// <param name="weight">The requested CSS Fonts numeric weight (1-1000).</param>
-        /// <param name="stretch">The requested CSS Fonts numeric stretch (1-9, 5 = normal).</param>
-        /// <param name="fontResolver">The font resolver used to look up the font's glyph data.</param>
-        public XFont(string familyName, double emSize, XFontStyle style, XPdfFontOptions pdfOptions, int weight, int stretch, IFontResolver fontResolver)
-            : this(familyName, emSize, style, pdfOptions, weight, stretch, null, fontResolver)
-        { }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="XFont"/> class, additionally carrying the sine of
-        /// a declared CSS Fonts Level 4 <c>oblique &lt;angle&gt;</c> (e.g. <c>oblique 10deg</c>) - a purely
+        /// <param name="match">The typeface the font set matched, and the synthesis the renderer has to apply to it.</param>
+        /// <param name="obliqueSkewSinus">
+        /// The sine of a declared CSS Fonts Level 4 <c>oblique &lt;angle&gt;</c> (e.g. <c>oblique 10deg</c>) - a purely
         /// rendering-side hint read by <c>XGraphicsPdfRenderer</c>'s faux-italic shear when synthesis is
-        /// needed, with no bearing on face selection (unlike <paramref name="weight"/>/<paramref name="stretch"/>).
-        /// Null (the common case: <c>italic</c>, bare <c>oblique</c>, or no synthesis needed) falls back
-        /// to the renderer's fixed default skew.
-        /// </summary>
-        /// <param name="familyName">Name of the font family.</param>
-        /// <param name="emSize">The em size.</param>
-        /// <param name="style">The font style (italic/underline/strikeout bits; the Bold bit is superseded by <paramref name="weight"/>).</param>
-        /// <param name="pdfOptions">Additional PDF options.</param>
-        /// <param name="weight">The requested CSS Fonts numeric weight (1-1000).</param>
-        /// <param name="stretch">The requested CSS Fonts numeric stretch (1-9, 5 = normal).</param>
-        /// <param name="obliqueSkewSinus">The sine of a declared <c>oblique &lt;angle&gt;</c>, or null.</param>
-        /// <param name="fontResolver">The font resolver used to look up the font's glyph data.</param>
-        public XFont(string familyName, double emSize, XFontStyle style, XPdfFontOptions pdfOptions, int weight, int stretch, double? obliqueSkewSinus, IFontResolver fontResolver)
+        /// needed, with no bearing on face selection. Null (the common case: <c>italic</c>, bare <c>oblique</c>, or no
+        /// synthesis needed) falls back to the renderer's fixed default skew.
+        /// </param>
+        public XFont(double emSize, XFontStyle style, XPdfFontOptions pdfOptions, TypefaceMatch match, double? obliqueSkewSinus = null)
         {
-            _familyName = familyName;
             _emSize = emSize;
             _style = style;
             _pdfOptions = pdfOptions;
-            _weight = weight;
-            _stretch = stretch;
             ObliqueSkewSinus = obliqueSkewSinus;
-            Initialize(fontResolver);
+
+            // In principle an XFont is a typeface plus an em-size.
+            Typeface = match.Typeface;
+            Synthesis = match.Synthesis;
+            InitializeFontMetrics();
         }
 
-        /// <summary>
-        /// Same as the numeric-weight/stretch constructor, but additionally scoped to a single Unicode
-        /// scalar value (<paramref name="codepoint"/>) so the resolver picks the face that actually covers
-        /// that codepoint - the basis of per-codepoint <c>unicode-range</c> selection and glyph-coverage
-        /// fallback. Used only by the per-codepoint resolution path; ordinary font creation stays
-        /// codepoint-less.
-        /// </summary>
-        internal XFont(string familyName, double emSize, XFontStyle style, XPdfFontOptions pdfOptions, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune? codepoint, IFontResolver fontResolver)
+        /// <summary>The typeface this font sets text in: what the font set matched, with no size.</summary>
+        public Typeface Typeface { get; }
+
+        /// <summary>What the renderer has to fake because the typeface lacks it (bold, italic).</summary>
+        internal SyntheticStyle Synthesis { get; }
+
+        void InitializeFontMetrics()
         {
-            _familyName = familyName;
-            _emSize = emSize;
-            _style = style;
-            _pdfOptions = pdfOptions;
-            _weight = weight;
-            _stretch = stretch;
-            ObliqueSkewSinus = obliqueSkewSinus;
-            _codepoint = codepoint;
-            Initialize(fontResolver);
-        }
-
-        internal XFont(string familyName, double emSize, XFontStyle style, XPdfFontOptions pdfOptions, XStyleSimulations styleSimulations, IFontResolver fontResolver)
-        {
-            _familyName = familyName;
-            _emSize = emSize;
-            _style = style;
-            _pdfOptions = pdfOptions;
-            OverrideStyleSimulations = true;
-            StyleSimulations = styleSimulations;
-            Initialize(fontResolver);
-        }
-
-        /// <summary>
-        /// Initializes this instance by computing the glyph typeface, font family, font source and TrueType fontface.
-        /// (PDFsharp currently only deals with TrueType fonts.)
-        /// </summary>
-        void Initialize(IFontResolver fontResolver)
-        {
-#if DEBUG
-            if (_familyName == "Segoe UI Semilight" && (_style & XFontStyle.BoldItalic) == XFontStyle.Italic)
-                GetType();
-#endif
-
-            FontResolvingOptions fontResolvingOptions = OverrideStyleSimulations
-                ? new FontResolvingOptions(_style, StyleSimulations)
-                : _weight is { } weight
-                    ? new FontResolvingOptions(_style, weight, _stretch ?? TtfFontDescription.DefaultStretch)
-                    : new FontResolvingOptions(_style);
-
-            fontResolvingOptions.Codepoint = _codepoint;
-
-            // HACK: 'PlatformDefault' is used in unit test code.
-            if (StringComparer.OrdinalIgnoreCase.Compare(_familyName, GlobalFontSettings.DefaultFontName) == 0)
-            {
-            }
-
-            // In principle an XFont is an XGlyphTypeface plus an em-size.
-            _glyphTypeface = XGlyphTypeface.GetOrCreateFrom(_familyName, fontResolvingOptions, fontResolver);
-            CreateDescriptorAndInitializeFontMetrics();
-        }
-
-        /// <summary>
-        /// Code separated from Metric getter to make code easier to debug.
-        /// (Setup properties in their getters caused side effects during debugging because Visual Studio calls a getter
-        /// to early to show its value in a debugger window.)
-        /// </summary>
-        void CreateDescriptorAndInitializeFontMetrics()  // TODO: refactor
-        {
-            Debug.Assert(_fontMetrics == null, "InitializeFontMetrics() was already called.");
-
-            // FontDescriptorCache is ALSO a global, static cache keyed purely by the typeface key string
-            // (family+style+weight) - with no notion of which FontResolver instance's font bytes actually
-            // produced _glyphTypeface. Left unrouted, it would silently reintroduce the exact cross-
-            // PdfGenerator-instance collision XGlyphTypeface.GetOrCreateFrom's own cache split fixes, one
-            // layer further down (font metrics/embedding data, not just glyph outlines). Route custom
-            // (OwningInstanceResolver != null) fonts through that same resolver's own instance cache.
-            var owningResolver = _glyphTypeface.OwningInstanceResolver;
-            if (owningResolver != null)
-            {
-                var key = FontDescriptor.ComputeKey(this);
-                if (!owningResolver.InstanceFontDescriptorsByKey.TryGetValue(key, out var instanceDescriptor))
-                {
-                    instanceDescriptor = new OpenTypeDescriptor(key, this);
-                    owningResolver.InstanceFontDescriptorsByKey[key] = instanceDescriptor;
-                }
-
-                _descriptor = (OpenTypeDescriptor)instanceDescriptor;
-            }
-            else
-            {
-                _descriptor = (OpenTypeDescriptor)FontDescriptorCache.GetOrCreateDescriptorFor(this);
-            }
-            _fontMetrics = new XFontMetrics(_descriptor.FontName, _descriptor.UnitsPerEm, _descriptor.Ascender, _descriptor.Descender,
-                _descriptor.Leading, _descriptor.LineSpacing, _descriptor.CapHeight, _descriptor.XHeight, _descriptor.StemV, 0, 0, 0,
-                _descriptor.UnderlinePosition, _descriptor.UnderlineThickness, _descriptor.StrikeoutPosition, _descriptor.StrikeoutSize);
-
-            XFontMetrics fm = Metrics;
-
-            // Already done in CreateDescriptorAndInitializeFontMetrics.
-            //if (_descriptor == null)
-            //    _descriptor = (OpenTypeDescriptor)FontDescriptorStock.Global.CreateDescriptor(this);  //(Name, (XGdiFontStyle)Font.Style);
-
-            UnitsPerEm = _descriptor.UnitsPerEm;
-            CellAscent = _descriptor.Ascender;
-            CellDescent = _descriptor.Descender;
-            CellSpace = _descriptor.LineSpacing;
-            Debug.Assert(fm.UnitsPerEm == _descriptor.UnitsPerEm);
+            var metrics = Typeface.Metrics;
+            UnitsPerEm = metrics.UnitsPerEm;
+            CellAscent = metrics.CellAscent;
+            CellDescent = metrics.CellDescent;
+            CellSpace = metrics.LineSpacing;
         }
 
 
@@ -260,25 +94,9 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Gets the XFontFamily object associated with this XFont object.
         /// </summary>
-        [Browsable(false)]
-        public XFontFamily FontFamily
-        {
-            get { return _glyphTypeface.FontFamily; }
-        }
-
-        /// <summary>
-        /// WRONG: Gets the face name of this Font object.
-        /// Indeed it returns the font family name.
-        /// </summary>
-        // [Obsolete("This function returns the font family name, not the face name. Use xxx.FontFamily.Name or xxx.FaceName")]
         public string Name
         {
-            get { return _glyphTypeface.FontFamily.Name; }
-        }
-
-        internal string FaceName
-        {
-            get { return _glyphTypeface.FaceName; }
+            get { return Typeface.FamilyName; }
         }
 
         /// <summary>
@@ -299,22 +117,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
             get { return _style; }
         }
         readonly XFontStyle _style;
-
-        /// <summary>
-        /// The real CSS Fonts Level 4 numeric weight (1-1000) requested via the weight-carrying
-        /// constructor overload, if any - null for callers that only specify <see cref="Style"/>'s Bold
-        /// bit, in which case <see cref="Initialize"/> derives 700/400 from it instead.
-        /// </summary>
-        readonly int? _weight;
-
-        /// <summary>
-        /// The real CSS Fonts Level 3 numeric stretch (1-9) requested via the weight+stretch-carrying
-        /// constructor overload, if any - null when unspecified, in which case <see cref="Initialize"/>
-        /// falls back to normal (5).
-        /// </summary>
-        readonly int? _stretch;
-
-        readonly System.Text.Rune? _codepoint;
 
         /// <summary>
         /// The sine of a declared CSS Fonts Level 4 <c>oblique &lt;angle&gt;</c>, when the requesting box's
@@ -414,26 +216,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
         }
         int _cellDescent;
 
-        /// <summary>
-        /// Gets the font metrics.
-        /// </summary>
-        /// <value>The metrics.</value>
-        public XFontMetrics Metrics
-        {
-            get
-            {
-                // Code moved to InitializeFontMetrics().
-                //if (_fontMetrics == null)
-                //{
-                //    FontDescriptor descriptor = FontDescriptorStock.Global.CreateDescriptor(this);
-                //    _fontMetrics = new XFontMetrics(descriptor.FontName, descriptor.UnitsPerEm, descriptor.Ascender, descriptor.Descender,
-                //        descriptor.Leading, descriptor.LineSpacing, descriptor.CapHeight, descriptor.XHeight, descriptor.StemV, 0, 0, 0);
-                //}
-                Debug.Assert(_fontMetrics != null, "InitializeFontMetrics() not yet called.");
-                return _fontMetrics;
-            }
-        }
-        XFontMetrics _fontMetrics = null!;
 
         /// <summary>
         /// Returns the line spacing, in pixels, of this font. The line spacing is the vertical distance
@@ -458,44 +240,12 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        internal XGlyphTypeface GlyphTypeface
-        {
-            get { return _glyphTypeface; }
-        }
-        XGlyphTypeface _glyphTypeface = null!;
-
-
-        internal OpenTypeDescriptor Descriptor
-        {
-            get { return _descriptor; }
-            private set { _descriptor = value; }
-        }
-        OpenTypeDescriptor _descriptor = null!;
-
-
-        internal string FamilyName
-        {
-            get { return _familyName; }
-        }
-        string _familyName;
-
-
         internal int UnitsPerEm
         {
             get { return _unitsPerEm; }
             private set { _unitsPerEm = value; }
         }
         internal int _unitsPerEm;
-
-        /// <summary>
-        /// Override style simulations by using the value of StyleSimulations.
-        /// </summary>
-        internal bool OverrideStyleSimulations;
-
-        /// <summary>
-        /// Used to enforce style simulations by renderer. For development purposes only.
-        /// </summary>
-        internal XStyleSimulations StyleSimulations;
 
         /// <summary>
         /// Cache PdfFontTable.FontSelector to speed up finding the right PdfFont

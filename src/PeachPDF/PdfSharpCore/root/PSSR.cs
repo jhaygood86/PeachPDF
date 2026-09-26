@@ -5,7 +5,7 @@
 //
 // Copyright (c) 2005-2016 empira Software GmbH, Cologne Area (Germany)
 //
-// http://www.PeachPDF.PdfSharpCore.com
+// https://www.pdfsharp.com/
 // http://sourceforge.net/projects/pdfsharp
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -163,11 +163,6 @@ namespace PeachPDF.PdfSharpCore
         public static string FontDataReadOnly
         {
             get { return "Font data is read-only."; }
-        }
-
-        public static string ErrorReadingFontData
-        {
-            get { return "Error while parsing an OpenType font."; }
         }
 
         #endregion
@@ -349,21 +344,20 @@ namespace PeachPDF.PdfSharpCore
             {
                 if (_resmngr == null)
                 {
-                    try
+                    lock (ResMngrLock)
                     {
-                        Lock.EnterFontFactory();
                         if (_resmngr == null)
                         {
                             _resmngr = new ResourceManager("PeachPDF.PdfSharpCore.Resources.Messages",
                                 Assembly.GetExecutingAssembly());
                         }
                     }
-                    finally { Lock.ExitFontFactory(); }
                 }
                 return _resmngr;
             }
         }
         static ResourceManager _resmngr = null!;
+        static readonly object ResMngrLock = new();
 
         /// <summary>
         /// Writes all messages defined by PSMsgID.

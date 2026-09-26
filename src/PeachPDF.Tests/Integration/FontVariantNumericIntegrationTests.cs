@@ -1,4 +1,5 @@
-using PeachPDF.Text;
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Text;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;
@@ -31,9 +32,9 @@ namespace PeachPDF.Tests.Integration
             // well-designed font's oldstyle figures aren't guaranteed to differ in advance width from
             // the default ones.
             var box = await FindWordsBox("<b id=\"w\" style=\"font-variant-numeric:oldstyle-nums\">0123456789</b>");
-            var descriptor = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Descriptor;
+            var descriptor = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Typeface.Face.Descriptor;
 
-            var defaultShaped = descriptor.Shape("0123456789", TextShapingFeatures.Default);
+            var defaultShaped = descriptor.Shape("0123456789", ShapeSettings.Default);
             var oldstyleShaped = descriptor.Shape("0123456789", box.ActualTextShapingFeatures);
 
             Assert.NotEqual(
@@ -64,8 +65,8 @@ namespace PeachPDF.Tests.Integration
                 "<b id=\"w\" style=\"font-variant-numeric:oldstyle-nums slashed-zero\">1234</b>");
 
             var numeric = box.ActualTextShapingFeatures.Numeric;
-            Assert.True(numeric.HasFlag(NumericFeatures.OldstyleNums));
-            Assert.True(numeric.HasFlag(NumericFeatures.SlashedZero));
+            Assert.True(numeric.HasFlag(NumeralSet.OldstyleNums));
+            Assert.True(numeric.HasFlag(NumeralSet.SlashedZero));
         }
 
         [Fact]

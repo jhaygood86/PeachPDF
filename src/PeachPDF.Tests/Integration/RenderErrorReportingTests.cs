@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -6,7 +7,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -48,7 +49,7 @@ namespace PeachPDF.Tests.Integration
             internal const string Marker = "paint blew up";
 
             public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size,
-                double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null) =>
+                double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null) =>
                 throw new InvalidOperationException(Marker);
         }
 

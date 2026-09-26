@@ -1,4 +1,4 @@
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System.Linq;
 using Xunit;
 

@@ -1,8 +1,10 @@
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System.IO;
 using System.Linq;
 using Xunit;
@@ -20,13 +22,12 @@ namespace PeachPDF.Tests.Html.Core
     {
         private static OpenTypeDescriptor Descriptor()
         {
-            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.ColorEmojiSequences)).Fontface;
-            return new OpenTypeDescriptor("emoji-seq-test", "emoji-seq-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.ColorEmojiSequences)).Fontface;
+            return new OpenTypeDescriptor("emoji-seq-test", "emoji-seq-test", face);
         }
 
         private static int[] Shape(string text) =>
-            Descriptor().Shape(text, TextShapingFeatures.Default).Select(g => g.GlyphIndex).ToArray();
+            Descriptor().Shape(text, ShapeSettings.Default).Select(g => g.GlyphIndex).ToArray();
 
         [Theory]
         [InlineData("\U0001F3F3️‍\U0001F308", "rainbow flag: ZWJ sequence carrying a VS16")]
