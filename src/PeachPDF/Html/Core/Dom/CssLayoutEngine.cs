@@ -6202,24 +6202,38 @@ namespace PeachPDF.Html.Core.Dom
                     precedingGraphemeContext);
             }
 
-            Rune.DecodeLastFromUtf16(previousWord.Text.AsSpan(), out var previousRune, out _);
-            Rune.DecodeFromUtf16(currentWord.Text.AsSpan(), out var currentRune, out _);
             if (!IsGraphemeBoundaryBefore(previousWord, currentWord, precedingRegionalIndicatorCount,
-                    precedingGraphemeContext)
-                || ProhibitsLineBreakAfter(previousRune) || ProhibitsLineBreakBefore(currentRune))
+                    precedingGraphemeContext))
                 return false;
 
-            if (hasWhitespaceBefore || HasInterElementWhitespaceBefore(currentWord) || previousWord.IsSpaces
-                || previousWord.HasSpaceAfter || currentWord.HasSpaceBefore
-                || previousWord.OwnerBox.WordBreak.Value == WordBreak.BreakAll
-                || currentWord.OwnerBox.WordBreak.Value == WordBreak.BreakAll)
-                return true;
+            // Two words of different inline boxes: the Unicode line breaking algorithm decides over the two words together, with the
+            // white space the markup collapsed between them put back, so an element boundary neither moves a wrap point nor lets a
+            // break through where the algorithm forbids one (`foo<b>bar</b>` stays whole, `<i>abc</i> <b>def</b>` breaks at the space).
+            var space = hasWhitespaceBefore || HasInterElementWhitespaceBefore(currentWord) || previousWord.IsSpaces
+                || previousWord.HasSpaceAfter || currentWord.HasSpaceBefore;
+            return AllowsBreakAcrossBoxes(previousWord, currentWord, space);
+        }
 
-            return previousRune.Value == '-'
-                || CommonUtils.IsAsianCharacter(previousRune)
-                || CommonUtils.IsAsianCharacter(currentRune)
-                || CommonUtils.IsEmojiLineBreakCharacter(previousRune)
-                || CommonUtils.IsEmojiLineBreakCharacter(currentRune);
+        /// <summary>
+        /// Whether UAX #14 lets a line end between two words of different inline boxes. The words are analysed as one text, joined by a
+        /// space when the markup collapsed white space between them, and the box tailorings (<c>word-break</c>, <c>line-break</c>) of
+        /// either box apply: <c>break-all</c>, <c>keep-all</c> and <c>anywhere</c> win over the ordinary rules.
+        /// </summary>
+        private static bool AllowsBreakAcrossBoxes(CssRectWord previous, CssRectWord current, bool space)
+        {
+            var previousBox = previous.OwnerBox;
+            var currentBox = current.OwnerBox;
+            var wordBreak = previousBox.WordBreak.Value == WordBreak.BreakAll || currentBox.WordBreak.Value == WordBreak.BreakAll
+                ? WordBreak.BreakAll
+                : previousBox.WordBreak.Value == WordBreak.KeepAll || currentBox.WordBreak.Value == WordBreak.KeepAll
+                    ? WordBreak.KeepAll
+                    : WordBreak.Normal;
+            var lineBreak = previousBox.LineBreak.Value == LineBreak.Anywhere ? LineBreak.Anywhere : currentBox.LineBreak.Value;
+
+            var joiner = space && !previous.IsSpaces ? " " : string.Empty;
+            var context = string.Concat(previous.Text, joiner, current.Text);
+            var seam = previous.Text.Length + joiner.Length;
+            return seam < context.Length && UnicodeLineBreaks.Find(context, wordBreak, 0, lineBreak)[seam] != LineBreakOpportunity.Prohibited;
         }
 
         internal static bool IsGraphemeBoundaryBefore(
