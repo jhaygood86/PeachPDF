@@ -3,6 +3,8 @@
 	<PropertyGroup>
 		<AssemblyName>PeachPDF</AssemblyName>
 		<PackageId>PeachPDF</PackageId>
+		<Description>Renders HTML and CSS to PDF in pure .NET, with no browser or external process: HTML parsing, the CSS cascade, layout, SVG, MathML and the PDF writer all run in-process.</Description>
+		<PackageTags>pdf;html;html-to-pdf;css;svg;mathml;rendering</PackageTags>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageIcon>peach.png</PackageIcon>
 		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
