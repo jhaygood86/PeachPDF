@@ -22,7 +22,8 @@ under `body { font: 10pt/12pt Arial }`: the card split, and its heading was draw
 **Fix.** `ClaimsLine` takes the nominal slot from the line box's top wherever the box's ink rises above it
 (`FragmentEmitter.InkRiseAboveLineTop`, which adds `max(0, FlowTop - lineRect.Top)` to the rectangle top
 after it has already been shifted/displaced).
-- It only ever moves the nominal top *down*, so lines with positive leading are unchanged.
+- It only ever moves the nominal top *down*, so it changes only lines whose ink starts above their line
+  box. Positive leading alone never does that, but the next section's inline-block words do.
 - It is skipped for snapshot geometry (a repeated header's captured copy), where the live line does not
   describe the copy.
 - The #1054 rescue's "does the line fall past its band" test is asked of the same top, so the page the line
@@ -58,6 +59,30 @@ lost a word on this branch while `main` and v0.9.20 drew it (seed 226, a grid it
     simplified copy no longer reached the stale line.
   - `AnInlineBlockMovedToTheBaseline_KeepsItsOwnLineTopWithItsWords` fails if `OffsetBoxWithinLine` shifts the
     moved box's lines a second time, which the suite did not catch before (the review's mutant M7).
+
+**Words above their own line top, and a line rejected by both pages.** jhaygood86's review of the first
+commit found a padded `vertical-align: top` inline-block across a page foot losing whole lines: 48 of 59
+words with `padding: 30pt`, 54 with `12pt`, where `main` and Chrome draw all 59.
+- **The older bug underneath.** `EffectiveVerticalAlignOf` walks from an anonymous text box up to the nearest
+  element to read its `vertical-align`. On the inline-block's own inner lines that element is the
+  inline-block itself, the line's owner, whose `top` says how it sits in its parent's line. Its text was
+  aligned to the top of its padded rectangle, over the padding and above the line top the flow recorded (by
+  exactly the padding).
+- **Why it lost lines here.** The ink was on page k and the line top on page k+1, so page k rejected the line
+  as nominally page k+1's, and page k+1 rejected it because none of its ink reached it.
+- **Fixing the older bug (the owner's `vertical-align` not read on its own lines) was tried and measured.** It
+  puts the words where Chrome does (y=50.3 against Chrome's 50.2), but it also moves the lines off the page
+  boundary they happened to sit on. Lines of a tall inline-block, which is laid out in one piece and sliced,
+  then straddled slice boundaries and were lost (#1328's shape): 53 and 54 of 59 through the CLI, a new
+  loss. So it is left to its own change, together with that slicing.
+- **The fix here** is the review's second option. `ClaimsLine` trusts the line top only while the ink reaches
+  the page it names, and otherwise falls back to the ink's page, so no line can be rejected by both pages.
+  - Through the CLI, `main`, the first commit and this one draw 59/59, 48/59 and 59/59 at 30pt padding.
+  - A 1728-document sweep (four `vertical-align` values × eight paddings × three top borders × 18 page
+    heights) draws every word exactly once.
+  - `APaddedTopAlignedInlineBlockAcrossAPageFoot_DrawsEveryWordOnce` fails without it.
+- **Retract.** `UndoingACellsAlignment_TakesItsOwnLineTopBack` covers `OffsetCellContent` with a negative
+  distance, which the suite missed (a mutant skipping the shift for distances of 0 or less survived).
 
 **Test fonts, and a mutant left untested.**
 - **Fonts.** The review's grid document triggers the stale line only with Arial's widths. Neither the bundled

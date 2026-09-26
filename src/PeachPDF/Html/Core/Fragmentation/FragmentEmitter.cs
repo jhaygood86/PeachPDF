@@ -2781,8 +2781,16 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             if (!region.Contains(rect)) return false;
 
-            // The line box's own top rather than the ink's: see InkRiseAboveLineTop.
-            var nominalSlot = container.SlotStartingAt(lineTop);
+            // The line box's own top rather than the ink's (see InkRiseAboveLineTop), unless the ink lies wholly
+            // above the page that top names. The line box's top is only trusted while the ink it holds reaches
+            // that page: a padded `vertical-align: top` inline-block has its words drawn over its padding, above
+            // the line top the flow recorded, and with that top on the next page each page rejected the line -
+            // one because the line was nominally the other's, the other because none of the ink reached it.
+            var claimTop = lineTop;
+            if (lineTop > rect.Top && rect.Bottom <= container.PageTopOf(container.SlotStartingAt(lineTop)) + BandOverlapEpsilon)
+                claimTop = rect.Top;
+
+            var nominalSlot = container.SlotStartingAt(claimTop);
 
             if (nominalSlot == slotIndex) return true;
 
@@ -2793,7 +2801,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // preserving the tie-break for a lone CatchUpStaleSlotsBehind/Finish-replay/
             // EmitReservedBlankSlots re-emission exactly as before.
             return (_currentPassFromSlot is not { } fromSlot || nominalSlot < fromSlot)
-                && HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(lineTop))
+                && HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(claimTop))
                 && !MonolithicContent.FitsNoFragmentainer(rect.Height, 0, 0, container);
         }
 

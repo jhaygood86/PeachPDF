@@ -11,6 +11,11 @@ there.
 
 **Now:** the heading is drawn at the top of the next page, where the break put it.
 
+What changes is any line whose ink starts above its line box, at a page boundary. That means glyphs taller
+than their `line-height`, and words an older placement bug draws over an inline-block's top padding. Such a
+line is now claimed by the page its line box is on, as long as some of its ink reaches that page. Other
+lines, ordinary text with positive leading included, are placed as before.
+
 **Why:** the line box is the unit that is placed on a page (CSS Fragmentation 3 §4.1). A glyph taller than
 its line has a negative half-leading, so its ink overflows the line box without moving it (CSS 2.1
 §10.8.1). The page a line belonged to was decided by the top of its ink. That top sat a point or two above
