@@ -22,12 +22,24 @@ namespace PeachDrawing.Text
     /// variable is matched at the location the weight, width and slant of the query give (its <c>wght</c>, <c>wdth</c> and <c>ital</c>
     /// axes), and these settings are applied after that, so they win. A face that is not variable ignores them.
     /// </param>
+    /// <param name="WidthPercent">
+    /// The width wanted as a percentage of the normal width (CSS <c>font-stretch: 87.5%</c>), or <see langword="null"/> to use the width
+    /// class in <paramref name="Width"/>. It is what a variable face's <c>wdth</c> axis is set to, and what faces that declare a range of widths
+    /// are matched against.
+    /// </param>
+    /// <param name="ObliqueAngle">
+    /// The angle of the slant wanted, in degrees leaning to the right (CSS <c>font-style: oblique 10deg</c>), or <see langword="null"/> for
+    /// the default angle of 14 degrees. It only matters when <paramref name="IsItalic"/> is set: a variable face's <c>slnt</c> axis is set to
+    /// it, kept inside the range the face declares.
+    /// </param>
     public readonly record struct TypefaceQuery(
         int Weight = TypefaceQuery.NormalWeight,
         int Width = TypefaceQuery.NormalWidth,
         bool IsItalic = false,
         Rune? MustCover = null,
-        IReadOnlyList<AxisSetting>? Axes = null)
+        IReadOnlyList<AxisSetting>? Axes = null,
+        double? WidthPercent = null,
+        double? ObliqueAngle = null)
     {
         /// <summary>
         /// Creates the query for regular, upright, normal-width text with no character to cover.
@@ -37,7 +49,7 @@ namespace PeachDrawing.Text
         /// zero and a width class of zero, so write <c>new TypefaceQuery()</c> for the normal query.
         /// </remarks>
         public TypefaceQuery()
-            : this(NormalWeight, NormalWidth, false, null, null)
+            : this(NormalWeight, NormalWidth, false, null, null, null, null)
         {
         }
 

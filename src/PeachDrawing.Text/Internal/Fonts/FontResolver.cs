@@ -249,6 +249,25 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// </summary>
         public void AddFont(Stream stream, string fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
+            AddFont(stream, fontFamilyName, new DeclaredFace(
+                weightOverride is { } weightValue ? new AxisRange(weightValue) : null,
+                isItalicOverride,
+                stretchOverride is { } stretchValue ? new AxisRange(WidthClasses.ToPercent(stretchValue)) : null,
+                null), unicodeRanges);
+        }
+
+        /// <summary>
+        /// What an <c>@font-face</c> rule declares about a face in place of what the file says about itself. A null member says nothing:
+        /// the file is asked, and a variable font that is asked for its range answers with the range of its own axes.
+        /// </summary>
+        /// <param name="Weight">The weights the face covers.</param>
+        /// <param name="IsItalic">Whether the face is italic or oblique.</param>
+        /// <param name="Width">The widths the face covers, as percentages of the normal width.</param>
+        /// <param name="Oblique">The oblique angles the face covers, in degrees leaning to the right.</param>
+        internal readonly record struct DeclaredFace(AxisRange? Weight, bool? IsItalic, AxisRange? Width, AxisRange? Oblique);
+
+        internal void AddFont(Stream stream, string fontFamilyName, DeclaredFace declared, IReadOnlyList<RuneInterval>? unicodeRanges)
+        {
             var memoryStream = new MemoryStream();
             stream.CopyTo(memoryStream);
 
@@ -265,9 +284,25 @@ namespace PeachDrawing.Text.Internal.Fonts
             var key = fontFamilyName.ToLowerInvariant();
             _customFamilyNames.Add(key);
 
-            var weight = weightOverride ?? fontFileInfo.FontDescription.Weight;
-            var isItalic = isItalicOverride ?? fontFileInfo.FontDescription.Style is FaceStyle.Italic or FaceStyle.BoldItalic;
-            var stretch = stretchOverride ?? fontFileInfo.FontDescription.Stretch;
+            // What a descriptor leaves out (CSS Fonts 4: "auto") a variable font answers with the range of its own axes, so a file
+            // registered with no descriptors covers every weight, width and slant it can draw.
+            var (axisWeight, axisWidth, axisOblique) = declared.Weight is null || declared.Width is null || declared.Oblique is null
+                ? ReadAxisRanges(fontBytes)
+                : default;
+            var weightRange = declared.Weight ?? axisWeight;
+            var widthRange = declared.Width ?? axisWidth;
+            var obliqueRange = declared.Oblique ?? (declared.IsItalic is null ? axisOblique : null);
+
+            // The nominal weight and width are the ones nearest to normal that the face covers: what the face is when a caller
+            // asks for no more than it, and what the rest of the pipeline reads off its description.
+            var weight = weightRange is { } coveredWeights
+                ? (int)Math.Round(coveredWeights.Clamp(TtfFontDescription.DefaultWeight))
+                : fontFileInfo.FontDescription.Weight;
+            var stretch = widthRange is { } coveredWidths
+                ? WidthClasses.FromPercent(coveredWidths.Clamp(WidthClasses.Normal))
+                : fontFileInfo.FontDescription.Stretch;
+            var isItalic = declared.IsItalic
+                           ?? (declared.Oblique is not null || fontFileInfo.FontDescription.Style is FaceStyle.Italic or FaceStyle.BoldItalic);
 
             // The face name is the identity under which the bytes are stored and later fetched
             // (GetFont) for embedding. It is normally the font's own internal name, which keeps every
@@ -296,12 +331,20 @@ namespace PeachDrawing.Text.Internal.Fonts
                 (false, true) => FaceStyle.Bold,
                 (false, false) => FaceStyle.Regular
             };
-            var baseDescription = weightOverride is null && isItalicOverride is null && stretchOverride is null
-                ? fontFileInfo.FontDescription
-                : fontFileInfo.FontDescription with { Weight = weight, Style = effectiveStyle, Stretch = stretch };
+            var overridden = declared.Weight is not null || declared.IsItalic is not null || declared.Width is not null || declared.Oblique is not null;
+            var baseDescription = overridden
+                ? fontFileInfo.FontDescription with { Weight = weight, Style = effectiveStyle, Stretch = stretch }
+                : fontFileInfo.FontDescription;
             var faceDescription = baseDescription with { FontNameInvariantCulture = faceName };
 
-            var entry = new FontFaceEntry(weight, isItalic, stretch, unicodeRanges, faceDescription);
+            var declaredRanges = weightRange is null && widthRange is null && obliqueRange is null
+                ? null
+                : new FaceRanges(
+                    weightRange ?? new AxisRange(weight),
+                    widthRange ?? new AxisRange(WidthClasses.ToPercent(stretch)),
+                    obliqueRange);
+
+            var entry = new FontFaceEntry(weight, isItalic, stretch, unicodeRanges, faceDescription) { Declared = declaredRanges };
 
             // family may be a shared static FontFamilyModel from _systemFamilies (or an already-private
             // clone from a prior AddFont call on this instance). Clone before mutating so we never write
@@ -314,7 +357,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             {
                 foreach (var face in family.Faces)
                 {
-                    if (!IsSameFaceSlot(face, weight, isItalic, stretch, unicodeRanges))
+                    if (!IsSameFaceSlot(face, entry))
                         clonedFamily.Faces.Add(face);
                 }
             }
@@ -324,10 +367,53 @@ namespace PeachDrawing.Text.Internal.Fonts
             _CustomFonts[faceName] = fontBytes;
         }
 
-        private static bool IsSameFaceSlot(FontFaceEntry entry, int weight, bool isItalic, int stretch, IReadOnlyList<RuneInterval>? ranges)
+        /// <summary>
+        /// The weights, widths and oblique angles of the axes of a variable font, in the CSS scales, or nothing for what the font has
+        /// no axis for. A font that cannot be read has none, so registering it still succeeds and the failure surfaces when it is matched.
+        /// </summary>
+        private static (AxisRange? Weight, AxisRange? Width, AxisRange? Oblique) ReadAxisRanges(byte[] fontBytes)
         {
-            return entry.Weight == weight && entry.Italic == isItalic && entry.Stretch == stretch
-                   && RangesEqual(entry.ExplicitRanges, ranges);
+            try
+            {
+                if (FontFileData.GetOrCreateFrom(fontBytes).Fontface.Variations is not { } variations)
+                    return default;
+
+                AxisRange? weight = null;
+                AxisRange? width = null;
+                AxisRange? oblique = null;
+                foreach (var axis in variations.Axes)
+                {
+                    switch (axis.Tag)
+                    {
+                        case AxisTags.Weight:
+                            weight = new AxisRange(axis.Minimum, axis.Maximum);
+                            break;
+                        case AxisTags.Width:
+                            width = new AxisRange(axis.Minimum, axis.Maximum);
+                            break;
+                        case AxisTags.Slant:
+                            // The slant axis counts degrees counter-clockwise from vertical, so a lean to the right is negative;
+                            // CSS oblique angles lean to the right.
+                            oblique = new AxisRange(-axis.Maximum, -axis.Minimum);
+                            break;
+                    }
+                }
+
+                return (weight, width, oblique);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                return default;
+            }
+        }
+
+        private static bool IsSameFaceSlot(FontFaceEntry existing, FontFaceEntry added)
+        {
+            return existing.Italic == added.Italic
+                   && existing.Ranges.Weight == added.Ranges.Weight
+                   && existing.Ranges.Width == added.Ranges.Width
+                   && existing.Ranges.Oblique == added.Ranges.Oblique
+                   && RangesEqual(existing.ExplicitRanges, added.ExplicitRanges);
         }
 
         private static bool RangesEqual(IReadOnlyList<RuneInterval>? a, IReadOnlyList<RuneInterval>? b)
@@ -472,23 +558,28 @@ namespace PeachDrawing.Text.Internal.Fonts
         public virtual FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic, int stretch) =>
             ResolveTypeface(familyName, weight, isItalic, stretch, codepoint: null);
 
+        public virtual FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic, int stretch, Rune? codepoint) =>
+            ResolveFace(familyName, new FaceRequest(weight, isItalic, WidthClasses.ToPercent(stretch), codepoint));
+
         /// <summary>
         /// Resolves a face for <paramref name="familyName"/> at the requested axes, optionally restricted
-        /// to faces that actually cover <paramref name="codepoint"/> (its <c>unicode-range</c> or, absent
+        /// to faces that actually cover the request's codepoint (its <c>unicode-range</c> or, absent
         /// that, its cmap coverage). A codepoint-scoped request that finds no covering face returns null,
         /// so per-codepoint font matching can move on to the next family in the stack instead of
         /// substituting a face that cannot render the character. A codepoint-less request keeps the
         /// previous behavior exactly (no coverage filter, plus the "give the caller something" last
         /// resort), so ordinary box/metrics resolution is unchanged.
+        /// <para>The width is a percentage of the normal width, and a face that declares a range of weights or widths (an
+        /// <c>@font-face</c> descriptor range, or the axes of a variable font) covers every value inside it.</para>
         /// </summary>
-        public virtual FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic, int stretch, Rune? codepoint)
+        public virtual FontResolverInfo ResolveFace(string familyName, FaceRequest request)
         {
             if (InstalledFonts.Count == 0)
                 throw new System.IO.FileNotFoundException("No Fonts installed on this device!");
 
             if (InstalledFonts.TryGetValue(familyName.ToLowerInvariant(), out var family))
             {
-                if (TryFindNearestFace(family, weight, isItalic, stretch, codepoint, out var face))
+                if (TryFindNearestFace(family, request, out var face))
                 {
                     // The chosen face may be a compromise (nearest-weight/slant match, not exact) -
                     // decide whether the gap is large enough that faux-bold/italic synthesis should
@@ -496,12 +587,15 @@ namespace PeachDrawing.Text.Internal.Fonts
                     // with zero visual distinction. Threshold mirrors the common UA convention that
                     // weights >=600 read as "bold" and <600 don't; a request in the bold range that
                     // only found a lighter-than-600 face needs synthesis, but a request that found ANY
-                    // face already at/above 600 (e.g. asked for 600, only 700 registered) does not.
-                    var resolvedIsItalic = face.Style is FaceStyle.Italic or FaceStyle.BoldItalic;
-                    var mustSimulateBold = weight >= 600 && face.Weight < 600;
-                    var mustSimulateItalic = isItalic && !resolvedIsItalic;
+                    // face already at/above 600 (e.g. asked for 600, only 700 registered) does not. A face
+                    // that covers a range of weights is as bold as the request, kept inside the range.
+                    var mustSimulateBold = request.Weight >= 600 && face.Ranges.Weight.Clamp(request.Weight) < 600;
+                    var mustSimulateItalic = request.IsItalic && !face.Italic && face.Ranges.Oblique is null;
 
-                    return new FontResolverInfo(face.FontNameInvariantCulture, mustSimulateBold, mustSimulateItalic);
+                    return new FontResolverInfo(face.Description.FontNameInvariantCulture, mustSimulateBold, mustSimulateItalic)
+                    {
+                        DeclaredRanges = face.Declared
+                    };
                 }
 
                 // Family is registered but has no face covering the request. For a codepoint-scoped
@@ -512,7 +606,7 @@ namespace PeachDrawing.Text.Internal.Fonts
 
             // A codepoint-scoped miss must not substitute an arbitrary non-covering face - report it so
             // the caller tries the next family (and ultimately the box default).
-            if (codepoint is not null)
+            if (request.Codepoint is not null)
                 return null;
 
             if (NullIfFontNotFound)
@@ -523,42 +617,61 @@ namespace PeachDrawing.Text.Internal.Fonts
         }
 
         /// <summary>
-        /// CSS Fonts Level 4 §5 face matching. When <paramref name="codepoint"/> is supplied, only faces
+        /// Of faces that all match the slant of a request, the ones that are of the requested slant themselves: a face that is oblique over a
+        /// range only serves upright text because the range includes 0, so an upright face beats it however the two were declared. The faces
+        /// unchanged when none is of the requested slant.
+        /// </summary>
+        private static List<FontFaceEntry> PreferStrictSlant(List<FontFaceEntry> matching, bool isItalic)
+        {
+            var strict = matching.Where(f => f.Italic == isItalic).ToList();
+            return strict.Count > 0 ? strict : matching;
+        }
+
+        /// <summary>Whether a face matches the slant of a request: an oblique face also serves upright text when its range includes 0.</summary>
+        private static bool SlantMatches(FontFaceEntry face, bool isItalic) =>
+            face.Ranges.Oblique is { } oblique ? isItalic || oblique.Contains(0) : face.Italic == isItalic;
+
+        /// <summary>
+        /// CSS Fonts Level 4 §5 face matching. When the request names a codepoint, only faces
         /// whose effective coverage (explicit <c>unicode-range</c>, else lazily-computed cmap coverage)
         /// includes it are candidates; among equally-good matches the last-declared wins (CSS cascade
         /// order for overlapping ranges). Otherwise every face is a candidate. Within the candidates it
-        /// narrows italic/slant first, then stretch, then weight; an exact axis match short-circuits.
-        /// Returns false when no candidate face qualifies.
+        /// narrows italic/slant first, then width, then weight; an exact axis match short-circuits. A face
+        /// that declares a range covers every value in it, and a value outside it is measured from the
+        /// nearest end of the range. Returns false when no candidate face qualifies.
         /// </summary>
-        private bool TryFindNearestFace(FontFamilyModel family, int weight, bool isItalic, int stretch, Rune? codepoint, out TtfFontDescription face)
+        private bool TryFindNearestFace(FontFamilyModel family, FaceRequest request, out FontFaceEntry face)
         {
-            face = default;
+            face = null;
 
-            List<FontFaceEntry> covering = codepoint is Rune rune
+            List<FontFaceEntry> covering = request.Codepoint is Rune rune
                 ? family.Faces.Where(f => FaceCovers(f, rune)).ToList()
                 : family.Faces;
 
             if (covering.Count == 0)
                 return false;
 
-            var exact = covering.Where(f => f.Weight == weight && f.Italic == isItalic && f.Stretch == stretch).ToList();
+            var exact = PreferStrictSlant(covering.Where(f => SlantMatches(f, request.IsItalic)
+                                                              && f.Ranges.Weight.Contains(request.Weight)
+                                                              && f.Ranges.Width.Contains(request.WidthPercent)).ToList(), request.IsItalic);
             if (exact.Count > 0)
             {
-                face = exact[^1].Description;
+                face = exact[^1];
                 return true;
             }
 
-            var sameSlant = covering.Where(f => f.Italic == isItalic).ToList();
+            var sameSlant = PreferStrictSlant(covering.Where(f => SlantMatches(f, request.IsItalic)).ToList(), request.IsItalic);
             var candidates = sameSlant.Count > 0 ? sameSlant : covering;
 
-            var availableStretches = candidates.Select(f => f.Stretch).Distinct().ToList();
-            var chosenStretch = PickNearestStretch(availableStretches, stretch);
-            var stretchCandidates = candidates.Where(f => f.Stretch == chosenStretch).ToList();
+            // A face is measured at the value of its range nearest to the request, which is the request itself when the range holds it.
+            var availableWidths = candidates.Select(f => f.Ranges.Width.Clamp(request.WidthPercent)).Distinct().ToList();
+            var chosenWidth = PickNearestStretch(availableWidths, request.WidthPercent);
+            var widthCandidates = candidates.Where(f => f.Ranges.Width.Clamp(request.WidthPercent) == chosenWidth).ToList();
 
-            var availableWeights = stretchCandidates.Select(f => f.Weight).Distinct().ToList();
-            var chosenWeight = PickNearestWeight(availableWeights, weight);
+            var availableWeights = widthCandidates.Select(f => f.Ranges.Weight.Clamp(request.Weight)).Distinct().ToList();
+            var chosenWeight = PickNearestWeight(availableWeights, request.Weight);
 
-            face = stretchCandidates.Last(f => f.Weight == chosenWeight).Description;
+            face = widthCandidates.Last(f => f.Ranges.Weight.Clamp(request.Weight) == chosenWeight);
             return true;
         }
 
@@ -745,25 +858,25 @@ namespace PeachDrawing.Text.Internal.Fonts
         }
 
         /// <summary>
-        /// CSS Fonts Level 4 §5.2's nearest-stretch search order: a target at or narrower than normal (5)
-        /// searches narrower first (down to 1), then wider; a target wider than normal searches wider
-        /// first (up to 9), then narrower. <paramref name="availableStretches"/> must be non-empty.
+        /// CSS Fonts Level 4 §5.2's nearest-width search order: a target at or narrower than normal (100%)
+        /// searches narrower first, then wider; a target wider than normal searches wider
+        /// first, then narrower. <paramref name="availableWidths"/> must be non-empty.
         /// </summary>
-        private static int PickNearestStretch(List<int> availableStretches, int target)
+        private static double PickNearestStretch(List<double> availableWidths, double target)
         {
-            if (availableStretches.Contains(target))
+            if (availableWidths.Contains(target))
                 return target;
 
-            IEnumerable<int> Search()
+            IEnumerable<double> Search()
             {
-                if (target <= TtfFontDescription.DefaultStretch)
+                if (target <= WidthClasses.Normal)
                 {
-                    return availableStretches.Where(s => s < target).OrderByDescending(s => s)
-                        .Concat(availableStretches.Where(s => s > target).OrderBy(s => s));
+                    return availableWidths.Where(s => s < target).OrderByDescending(s => s)
+                        .Concat(availableWidths.Where(s => s > target).OrderBy(s => s));
                 }
 
-                return availableStretches.Where(s => s > target).OrderBy(s => s)
-                    .Concat(availableStretches.Where(s => s < target).OrderByDescending(s => s));
+                return availableWidths.Where(s => s > target).OrderBy(s => s)
+                    .Concat(availableWidths.Where(s => s < target).OrderByDescending(s => s));
             }
 
             return Search().First();
@@ -774,13 +887,15 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// novel design here): a target in [400,500] searches upward to 500 first, then below the
         /// target, then above 500; a target below 400 searches downward first, then upward; a target
         /// above 500 searches upward first, then downward. <paramref name="availableWeights"/> must be
-        /// non-empty and is assumed to NOT already contain an exact match for <paramref name="target"/>
-        /// (the caller checks that separately, since an exact match also has to match the requested
-        /// italic-ness, which this purely-numeric helper doesn't know about).
+        /// non-empty. A weight equal to the target is the answer when there is one (with ranges, a face
+        /// can hold the target while another aspect of it did not match exactly).
         /// </summary>
-        private static int PickNearestWeight(List<int> availableWeights, int target)
+        private static double PickNearestWeight(List<double> availableWeights, double target)
         {
-            IEnumerable<int> Search()
+            if (availableWeights.Contains(target))
+                return target;
+
+            IEnumerable<double> Search()
             {
                 if (target is >= 400 and <= 500)
                 {

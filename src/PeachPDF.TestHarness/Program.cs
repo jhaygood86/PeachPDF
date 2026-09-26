@@ -10944,6 +10944,73 @@ await SaveShowcaseAsync("variable_fonts", "Typography & Text", "Variable fonts",
     "Rendered against a small synthetic variable font with weight and width axes.",
     variableFontHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// Variable-font ranges: an @font-face rule declares the weights, widths and oblique angles its face covers (font-weight: 100 900,
+// font-stretch: 75% 125%, font-style: oblique 0deg 14deg), and the weight, width and slant of the requesting box set the font's axes inside
+// that range. Uses a small synthetic variable font with weight (100-900), width (75-125) and slant (0 to 15 degrees) axes.
+var rangesFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableSlantTest.ttf")));
+string RangeFace(string family, string descriptors) =>
+    $"@font-face {{ font-family: '{family}'; src: url('data:font/truetype;base64,{rangesFontB64}') format('truetype'); {descriptors} }}";
+string RangeCell(string family, string style, string caption) =>
+    "<td>" +
+    $"<div class=\"rf\" style=\"font-family: '{family}'; {style}\">HIAH</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+var variableRangesHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    RangeFace("Free", "") +
+    RangeFace("Wt", "font-weight: 300 600;") +
+    RangeFace("Split", "font-weight: 100 300;") +
+    RangeFace("Split", "font-weight: 700 900;") +
+    RangeFace("Wd", "font-stretch: 90% 110%;") +
+    RangeFace("Ob", "font-style: oblique 0deg 10deg;") +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table.rt { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.rt td { padding: 6px; vertical-align: top; text-align: center }" +
+    ".rf { font-size: 38pt; line-height: 1.1 }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>@font-face ranges</h1>" +
+    "<p class=\"intro\">An <code>@font-face</code> rule can declare a range for <code>font-weight</code>, <code>font-stretch</code> and " +
+    "<code>font-style: oblique</code>. The face is used for every value inside its range, and the request sets the variable font's axes " +
+    "there, kept inside the range. A font with no descriptors covers the range of its own axes.</p>" +
+    "<h2>font-weight: 300 600 &mdash; the weight axis stays inside the range</h2>" +
+    "<table class=\"rt\"><tr>" +
+    RangeCell("Wt", "font-weight: 100", "requested 100, drawn at 300") +
+    RangeCell("Wt", "font-weight: 450", "requested 450, drawn at 450") +
+    RangeCell("Wt", "font-weight: 900", "requested 900, drawn at 600") +
+    RangeCell("Free", "font-weight: 900", "no descriptor: the axis reaches 900") +
+    "</tr></table>" +
+    "<h2>Two rules of one family: 100 300 and 700 900</h2>" +
+    "<table class=\"rt\"><tr>" +
+    RangeCell("Split", "font-weight: 200", "200 is in the first range") +
+    RangeCell("Split", "font-weight: 500", "500 is in neither: the nearer lighter range, at its upper end") +
+    RangeCell("Split", "font-weight: 800", "800 is in the second range") +
+    "</tr></table>" +
+    "<h2>font-stretch: 90% 110% &mdash; percentages and the range</h2>" +
+    "<table class=\"rt\"><tr>" +
+    RangeCell("Wd", "font-stretch: 75%", "75%, drawn at 90%") +
+    RangeCell("Wd", "font-stretch: 100%", "100%") +
+    RangeCell("Wd", "font-stretch: 105.5%", "105.5%") +
+    RangeCell("Wd", "font-stretch: 125%", "125%, drawn at 110%") +
+    "</tr></table>" +
+    "<h2>font-style: oblique 0deg 10deg &mdash; the slant axis stays inside the range</h2>" +
+    "<table class=\"rt\"><tr>" +
+    RangeCell("Ob", "font-style: normal", "normal: upright (0 is in the range)") +
+    RangeCell("Ob", "font-style: oblique 5deg", "oblique 5deg") +
+    RangeCell("Ob", "font-style: italic", "italic is 14deg, drawn at 10deg") +
+    RangeCell("Ob", "font-style: oblique 25deg", "oblique 25deg, drawn at 10deg") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("variable_font_ranges", "Typography & Text", "Variable font ranges",
+    "@font-face weight, width and oblique ranges for a variable font: the face covers its whole range in font matching, the weight, width " +
+    "and slant of the text set the font's axes inside the range, font-stretch takes percentages, and nothing is faked that an axis supplies. " +
+    "Rendered against a small synthetic variable font with weight, width and slant axes.",
+    variableRangesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // SVG-in-OpenType colour glyphs: a font's `SVG ` table gives a glyph an SVG document, drawn as vectors. Uses a small synthetic font whose
 // documents use the font's CPAL palette (var(--color0)) and the text colour (context-fill).
 var svgGlyphFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SvgTest.ttf")));

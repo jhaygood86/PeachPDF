@@ -43,6 +43,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             FontStyle = fontStyle;
             Weight = IsBold ? 700 : 400;
             Stretch = TtfFontDescription.DefaultStretch;
+            WidthPercent = WidthClasses.Normal;
         }
 
         public FontResolvingOptions(FaceStyle fontStyle, SyntheticStyle styleSimulations)
@@ -52,6 +53,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             StyleSimulations = styleSimulations;
             Weight = IsBold ? 700 : 400;
             Stretch = TtfFontDescription.DefaultStretch;
+            WidthPercent = WidthClasses.Normal;
         }
 
         public FontResolvingOptions(FaceStyle fontStyle, int weight, int stretch = 5)
@@ -59,6 +61,22 @@ namespace PeachDrawing.Text.Internal.Fonts
             FontStyle = fontStyle;
             Weight = weight;
             Stretch = stretch;
+            WidthPercent = WidthClasses.ToPercent(stretch);
+        }
+
+        /// <summary>
+        /// Creates options for a width that is not necessarily one of the nine classes, as a percentage of the normal width. A factory and
+        /// not an overload, since an integer literal (<c>100</c>) would otherwise bind to the constructor that takes a width class.
+        /// </summary>
+        public static FontResolvingOptions ForWidthPercent(FaceStyle fontStyle, int weight, double widthPercent) =>
+            new(fontStyle, weight, WidthClasses.FromPercent(widthPercent), widthPercent);
+
+        private FontResolvingOptions(FaceStyle fontStyle, int weight, int stretch, double widthPercent)
+        {
+            FontStyle = fontStyle;
+            Weight = weight;
+            Stretch = stretch;
+            WidthPercent = widthPercent;
         }
 
         /// <summary>
@@ -74,6 +92,13 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// request should be matched against - defaults to normal (5) for callers that don't specify one.
         /// </summary>
         public int Stretch { get; }
+
+        /// <summary>
+        /// The width this request should be matched against, as a percentage of the normal width (CSS <c>font-stretch: 87.5%</c>).
+        /// For a request made with a width class it is that class's percentage, and <see cref="Stretch"/> is the class nearest to it
+        /// otherwise.
+        /// </summary>
+        public double WidthPercent { get; }
 
         public bool IsBold
         {
@@ -135,7 +160,9 @@ namespace PeachDrawing.Text.Internal.Fonts
             return TypefaceKeyPrefix + familyName.ToLowerInvariant()
                 + (IsItalic ? "/i" : "/n") // normal / oblique / italic
                 + "/" + Weight
-                + "/" + Stretch
+                + "/" + (WidthPercent == WidthClasses.ToPercent(Stretch)
+                    ? Stretch.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    : "w" + WidthPercent.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
                 + simulationSuffix;
         }
     }

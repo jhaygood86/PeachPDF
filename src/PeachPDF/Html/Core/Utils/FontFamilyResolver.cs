@@ -12,7 +12,7 @@ namespace PeachPDF.Html.Core.Utils
     /// </summary>
     internal static class FontFamilyResolver
     {
-        internal static RFont? Resolve(RAdapter adapter, string fontFamilyList, double fsize, RFontStyle style, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
+        internal static RFont? Resolve(RAdapter adapter, string fontFamilyList, double fsize, RFontStyle style, int? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
             var families = fontFamilyList.Split(',');
 
@@ -51,7 +51,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <paramref name="presentation"/> is the emoji/text presentation the character was asked to be
         /// drawn in - see <see cref="Emoji.Resolve"/>.
         /// </summary>
-        internal static RFont? Resolve(RAdapter adapter, string fontFamilyList, double fsize, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, PeachDrawing.Text.Unicode.EmojiPresentation presentation = PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, string? variations = null)
+        internal static RFont? Resolve(RAdapter adapter, string fontFamilyList, double fsize, RFontStyle style, System.Text.Rune codepoint, int? weight = null, double? stretch = null, double? obliqueSkewSinus = null, PeachDrawing.Text.Unicode.EmojiPresentation presentation = PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, string? variations = null)
         {
             // With a presentation request (CSS font-variant-emoji, or an explicit U+FE0E/U+FE0F), CSS Fonts 4
             // §5.3's cluster matching order applies: a family whose font supports the requested sequence

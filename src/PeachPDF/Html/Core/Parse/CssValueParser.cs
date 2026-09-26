@@ -416,6 +416,24 @@ namespace PeachPDF.Html.Core.Parse
                 : ParseLength(value.LengthOrCalc!.Value, hundredPercent, box);
 
         /// <summary>
+        /// Parses a non-negative <c>&lt;percentage&gt;</c> such as <c>87.5%</c> to the number it states (87.5), for a keyword-or-value
+        /// property whose non-keyword side is a percentage of its own scale (<c>font-stretch</c>).
+        /// </summary>
+        public static bool TryParseNonNegativePercentage(string value, out double result)
+        {
+            var trimmed = value.Trim();
+            if (trimmed.Length > 1 && trimmed[^1] == '%'
+                && double.TryParse(trimmed.AsSpan(0, trimmed.Length - 1), NumberStyles.Float, CultureInfo.InvariantCulture, out result)
+                && double.IsFinite(result) && result >= 0)
+            {
+                return true;
+            }
+
+            result = 0;
+            return false;
+        }
+
+        /// <summary>
         /// Parses <c>line-height</c>'s non-keyword grammar - a <c>&lt;length-percentage&gt;</c> (itself
         /// possibly a deferred-calc, via <see cref="TryParseLengthOrCalc"/>) or a bare unitless multiplier
         /// number. A bare-number <c>calc()</c> (e.g. <c>calc(1 + 0.5)</c>) has already folded to a literal

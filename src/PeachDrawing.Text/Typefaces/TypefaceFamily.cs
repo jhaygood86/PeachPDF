@@ -36,7 +36,7 @@ namespace PeachDrawing.Text
         /// </exception>
         public bool TryMatch(in TypefaceQuery query, out TypefaceMatch match)
         {
-            if (query.MustCover is not null && _set.Resolver.ResolveTypeface(Name, query.Weight, query.IsItalic, query.Width, query.MustCover) is null)
+            if (query.MustCover is not null && _set.Resolver.ResolveFace(Name, new FaceRequest(query.Weight, query.IsItalic, query.WidthPercent ?? WidthClasses.ToPercent(query.Width), query.MustCover)) is null)
             {
                 match = default;
                 return false;

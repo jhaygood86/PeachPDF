@@ -1,10 +1,24 @@
 PeachDrawing.Text.AddOptions : sealed class
   ctor()
   property IReadOnlyList<RuneInterval> UnicodeRanges { get; init; }
+  property Nullable<AxisRange> ObliqueRange { get; init; }
+  property Nullable<AxisRange> WeightRange { get; init; }
+  property Nullable<AxisRange> WidthRange { get; init; }
   property Nullable<Boolean> IsItalic { get; init; }
   property Nullable<Int32> Weight { get; init; }
   property Nullable<Int32> Width { get; init; }
   property String FamilyName { get; init; }
+PeachDrawing.Text.AxisRange : struct
+  ctor(Double first, Double second)
+  ctor(Double value)
+  method Boolean Contains(Double value)
+  method Boolean Equals(AxisRange other)
+  method Boolean Equals(Object obj)
+  method Double Clamp(Double value)
+  method Int32 GetHashCode()
+  method String ToString()
+  property Double Maximum { get; }
+  property Double Minimum { get; }
 PeachDrawing.Text.AxisSetting : struct
   ctor(String Tag, Double Value)
   method Boolean Equals(AxisSetting other)
@@ -629,7 +643,7 @@ PeachDrawing.Text.TypefaceMetrics : sealed class
   property Single ItalicAngle { get; }
 PeachDrawing.Text.TypefaceQuery : struct
   ctor()
-  ctor(Int32 Weight = 400, Int32 Width = 5, Boolean IsItalic = False, Nullable<Rune> MustCover = null, IReadOnlyList<AxisSetting> Axes = null)
+  ctor(Int32 Weight = 400, Int32 Width = 5, Boolean IsItalic = False, Nullable<Rune> MustCover = null, IReadOnlyList<AxisSetting> Axes = null, Nullable<Double> WidthPercent = null, Nullable<Double> ObliqueAngle = null)
   field const Int32 BoldWeight
   field const Int32 NormalWeight
   field const Int32 NormalWidth
@@ -637,11 +651,13 @@ PeachDrawing.Text.TypefaceQuery : struct
   method Boolean Equals(TypefaceQuery other)
   method Int32 GetHashCode()
   method String ToString()
-  method Void Deconstruct(out Int32 Weight, out Int32 Width, out Boolean IsItalic, out Nullable<Rune> MustCover, out IReadOnlyList<AxisSetting> Axes)
+  method Void Deconstruct(out Int32 Weight, out Int32 Width, out Boolean IsItalic, out Nullable<Rune> MustCover, out IReadOnlyList<AxisSetting> Axes, out Nullable<Double> WidthPercent, out Nullable<Double> ObliqueAngle)
   property Boolean IsItalic { get; init; }
   property IReadOnlyList<AxisSetting> Axes { get; init; }
   property Int32 Weight { get; init; }
   property Int32 Width { get; init; }
+  property Nullable<Double> ObliqueAngle { get; init; }
+  property Nullable<Double> WidthPercent { get; init; }
   property Nullable<Rune> MustCover { get; init; }
 PeachDrawing.Text.Unicode.ArabicJoining : static class
   method static ArabicJoiningForm[] Resolve(IReadOnlyList<Int32> codepoints)

@@ -198,7 +198,7 @@ namespace PeachPDF.Svg
         /// <c>em</c> in an SVG that never mentions one keeps meaning the CSS initial 16px.
         /// </summary>
         private readonly record struct FontContext(
-            string Family, double Size, bool Bold, bool Italic, int Stretch,
+            string Family, double Size, bool Bold, bool Italic, double Stretch,
             double LetterSpacing, double WordSpacing, TextTransform TextTransform,
             LigatureSet Ligatures, CapsMode CapsRequested,
             NumeralSet Numeric, EastAsianSet EastAsian,

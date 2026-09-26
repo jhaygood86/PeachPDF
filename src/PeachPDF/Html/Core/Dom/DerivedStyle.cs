@@ -1477,15 +1477,15 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        private int? _actualStretch;
+        private double? _actualStretch;
 
         /// <summary>
-        /// This box's own <see cref="FontArea.FontStretch"/> keyword, resolved to a concrete CSS
-        /// Fonts numeric stretch (1-9, matching OS/2 <c>usWidthClass</c>) via <see cref="FontStretchResolver"/>.
+        /// This box's own <see cref="FontArea.FontStretch"/> keyword or percentage, resolved to the percentage of the
+        /// normal width it stands for (a keyword's own percentage, 50 to 200) via <see cref="FontStretchResolver"/>.
         /// Unlike <see cref="ActualNumericWeight"/>, <c>font-stretch</c> has no parent-relative keywords, so
         /// this doesn't need to walk up the box tree.
         /// </summary>
-        public int ActualStretch
+        public double ActualStretch
         {
             get
             {

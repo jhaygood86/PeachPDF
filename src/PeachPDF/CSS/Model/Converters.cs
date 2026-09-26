@@ -65,6 +65,10 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter PercentConverter =
             new StructValueConverter<Percent>(ValueExtensions.ToPercent);
 
+        /// <summary>A <c>&lt;percentage&gt;</c> that is not negative, such as the <c>font-stretch: 87.5%</c> form.</summary>
+        public static readonly IValueConverter NonNegativePercentConverter =
+            new StructValueConverter<Percent>(ValueExtensions.ToNonNegativePercent);
+
         public static readonly IValueConverter RgbComponentConverter =
             new StructValueConverter<byte>(ValueExtensions.ToRgbComponent);
 

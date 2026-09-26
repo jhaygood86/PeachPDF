@@ -80,7 +80,7 @@ namespace PeachDrawing.Text.Internal.Fonts
                 {
                     // Case: Use custom font resolver. The real numeric weight (not just a bold/not-bold
                     // flag) lets the resolver perform CSS Fonts Level 4 nearest-weight matching.
-                    fontResolverInfo = customFontResolver.ResolveTypeface(familyName, fontResolvingOptions.Weight, fontResolvingOptions.IsItalic, fontResolvingOptions.Stretch);
+                    fontResolverInfo = customFontResolver.ResolveFace(familyName, new FaceRequest(fontResolvingOptions.Weight, fontResolvingOptions.IsItalic, fontResolvingOptions.WidthPercent));
 
                     // If resolved by custom font resolver register info and font source.
                     if (fontResolverInfo != null)

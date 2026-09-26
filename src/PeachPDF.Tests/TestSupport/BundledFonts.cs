@@ -220,6 +220,13 @@ namespace PeachPDF.Tests.TestSupport
         internal static string VariableTest => Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf");
 
         /// <summary>
+        /// A synthetic variable font (see VariableSlantTest.LICENSE.txt, made by generate_variable_slant_fixture.py) with a weight axis
+        /// (100 to 900), a width axis (75 to 125) and a slant axis (-15 to 0), whose glyphs are I, H and A: the stems thicken with the
+        /// weight, the glyphs widen with the width and lean with the slant.
+        /// </summary>
+        internal static string VariableSlantTest => Path.Combine(AppContext.BaseDirectory, "VariableSlantTest.ttf");
+
+        /// <summary>
         /// A synthetic font with an <c>SVG </c> table (see SvgTest.LICENSE.txt, made by generate_svg_glyph_fixture.py): <c>A</c> an uncompressed
         /// document that uses palette variables, <c>B</c> and <c>C</c> one compressed document (<c>B</c> fills with <c>context-fill</c>),
         /// <c>D</c> a single-glyph document with no element for it and a byte order mark, <c>E</c> a gzip bomb.

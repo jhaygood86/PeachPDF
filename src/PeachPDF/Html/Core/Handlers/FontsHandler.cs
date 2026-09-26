@@ -60,7 +60,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// whatever was laid out next.
         /// </para>
         /// </summary>
-        private readonly Dictionary<string, Dictionary<(double Size, double Scale), Dictionary<(RFontStyle Style, int Weight, int Stretch, double? ObliqueSkewSinus, string? Variations), RFont?>>> _fontsCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Dictionary<(double Size, double Scale), Dictionary<(RFontStyle Style, int Weight, double Stretch, double? ObliqueSkewSinus, string? Variations), RFont?>>> _fontsCache = new(StringComparer.OrdinalIgnoreCase);
 
         #endregion
 
@@ -82,7 +82,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// codepoint-less path is completely unaffected. <c>Scale</c> is <see cref="RAdapter.LayoutUnitsPerPoint"/>;
         /// see <see cref="_fontsCache"/> for why a size alone is not a font's identity.
         /// </summary>
-        private readonly Dictionary<(string Family, double Size, double Scale, RFontStyle Style, int Weight, int Stretch, double? Oblique, int Codepoint, string? Variations), RFont?> _codepointFontsCache = new();
+        private readonly Dictionary<(string Family, double Size, double Scale, RFontStyle Style, int Weight, double Stretch, double? Oblique, int Codepoint, string? Variations), RFont?> _codepointFontsCache = new();
 
         /// <summary>
         /// Last-resort system-fallback font cache: (size, scale, style/weight/stretch/oblique, codepoint) →
@@ -91,7 +91,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// keyed by a declared family, it searches every one of them. <c>Scale</c> is
         /// <see cref="RAdapter.LayoutUnitsPerPoint"/>; see <see cref="_fontsCache"/>.
         /// </summary>
-        private readonly Dictionary<(double Size, double Scale, RFontStyle Style, int Weight, int Stretch, double? Oblique, int Codepoint, PeachDrawing.Text.Unicode.EmojiPresentation Presentation, string? Variations), RFont?> _systemFallbackFontsCache = new();
+        private readonly Dictionary<(double Size, double Scale, RFontStyle Style, int Weight, double Stretch, double? Oblique, int Codepoint, PeachDrawing.Text.Unicode.EmojiPresentation Presentation, string? Variations), RFont?> _systemFallbackFontsCache = new();
 
         public void ClearCache()
         {
@@ -154,12 +154,12 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="weight">The real CSS Fonts numeric weight (1-1000) - defaults to a value derived
         /// from <paramref name="style"/>'s Bold bit (700/400) for callers that don't have a numeric
         /// weight to hand.</param>
-        /// <param name="stretch">The real CSS Fonts numeric stretch (1-9, 5 = normal) - defaults to
+        /// <param name="stretch">The width as a percentage of the normal width (100 = normal) - defaults to
         /// normal for callers that don't have one to hand.</param>
         /// <param name="obliqueSkewSinus">The sine of a declared <c>oblique &lt;angle&gt;</c>, when any.</param>
         /// <param name="variations">the encoded <c>font-variation-settings</c> and <c>font-optical-sizing</c> of the box, or null for the initial values (see <c>FontVariationSettingsResolver</c>)</param>
         /// <returns>cached font instance</returns>
-        public RFont? GetCachedFont(string family, double size, RFontStyle style, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
+        public RFont? GetCachedFont(string family, double size, RFontStyle style, int? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
             var (resolvedWeight, resolvedStretch) = ResolveWeightAndStretch(style, weight, stretch);
             var font = TryGetFont(family, size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, variations);
@@ -198,7 +198,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <see cref="GetCachedFont"/> this does not apply font-family mapping: the caller
         /// (<c>FontFamilyResolver</c>) already walks the full <c>font-family</c> stack.
         /// </summary>
-        public RFont? GetCachedFontForCodepoint(string family, double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
+        public RFont? GetCachedFontForCodepoint(string family, double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
             var (resolvedWeight, resolvedStretch) = ResolveWeightAndStretch(style, weight, stretch);
 
@@ -226,7 +226,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// or null when nothing registered does. Unlike <see cref="GetCachedFontForCodepoint"/> there is
         /// no family parameter to resolve against - the search itself is family-agnostic.
         /// </summary>
-        public RFont? GetCachedSystemFallbackFontForCodepoint(double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, PeachDrawing.Text.Unicode.EmojiPresentation presentation = PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, string? variations = null)
+        public RFont? GetCachedSystemFallbackFontForCodepoint(double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, double? stretch = null, double? obliqueSkewSinus = null, PeachDrawing.Text.Unicode.EmojiPresentation presentation = PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, string? variations = null)
         {
             var (resolvedWeight, resolvedStretch) = ResolveWeightAndStretch(style, weight, stretch);
 
@@ -242,18 +242,18 @@ namespace PeachPDF.Html.Core.Handlers
 
         /// <summary>
         /// Resolves the real numeric weight/stretch a caller didn't supply directly: weight defaults from
-        /// <paramref name="style"/>'s Bold bit (700/400), stretch defaults to normal (5). Shared by every
+        /// <paramref name="style"/>'s Bold bit (700/400), stretch defaults to normal (100%). Shared by every
         /// font-resolution entry point above so the same defaulting rule can't drift between them.
         /// </summary>
-        private static (int Weight, int Stretch) ResolveWeightAndStretch(RFontStyle style, int? weight, int? stretch) =>
-            (weight ?? ((style & RFontStyle.Bold) != 0 ? 700 : 400), stretch ?? 5);
+        private static (int Weight, double Stretch) ResolveWeightAndStretch(RFontStyle style, int? weight, double? stretch) =>
+            (weight ?? ((style & RFontStyle.Bold) != 0 ? 700 : 400), stretch ?? 100);
 
         #region Private methods
 
         /// <summary>
         /// Get cached font if it exists in cache or null if it is not.
         /// </summary>
-        private RFont? TryGetFont(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, string? variations)
+        private RFont? TryGetFont(string family, double size, RFontStyle style, int weight, double stretch, double? obliqueSkewSinus, string? variations)
         {
             RFont? font = null;
             var sizeKey = (size, _adapter.LayoutUnitsPerPoint);
@@ -271,7 +271,7 @@ namespace PeachPDF.Html.Core.Handlers
             }
             else
             {
-                _fontsCache[family] = new Dictionary<(double Size, double Scale), Dictionary<(RFontStyle, int, int, double?, string?), RFont?>>
+                _fontsCache[family] = new Dictionary<(double Size, double Scale), Dictionary<(RFontStyle, int, double, double?, string?), RFont?>>
                 {
                     [sizeKey] = new()
                 };
@@ -282,7 +282,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// create font (try using existing font family to support custom fonts)
         /// </summary>
-        private RFont CreateFont(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, string? variations)
+        private RFont CreateFont(string family, double size, RFontStyle style, int weight, double stretch, double? obliqueSkewSinus, string? variations)
         {
             RFontFamily? fontFamily;
             try
