@@ -66,6 +66,9 @@ internal sealed class HintingEngine
     private CffFace? _cffFace;
     private bool _cffFaceRead;
 
+    private TtGasp? _gasp;
+    private bool _gaspRead;
+
     private readonly LruCache<SizeKey, TtSize?> _sizes = new(MaxSizes);
     private readonly LruCache<SizeKey, CffSize?> _cffSizes = new(MaxSizes);
     private readonly LruCache<GlyphKey, HintedGlyphResult> _glyphs = new(MaxGlyphs, WeightOf, MaxGlyphWeight);
@@ -140,13 +143,46 @@ internal sealed class HintingEngine
         }
     }
 
-    /// <summary>Hints a glyph at a size, from the cache when it has been asked for before.</summary>
+    private TtGasp? GetGasp()
+    {
+        if (Volatile.Read(ref _gaspRead))
+            return _gasp;
+
+        lock (_faceLock)
+        {
+            if (!_gaspRead)
+            {
+                try
+                {
+                    _gasp = TtGasp.TryRead(_font);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    NoteFailure(ex);
+                    _gasp = null;
+                }
+
+                Volatile.Write(ref _gaspRead, true);
+            }
+
+            return _gasp;
+        }
+    }
+
+    /// <summary>
+    /// Hints a glyph at a size, from the cache when it has been asked for before. A size at which the font's <c>gasp</c> table does not ask
+    /// for grid-fitting is not hinted: the answer is <see cref="HintedGlyphResult.Failed"/>, and the caller keeps the scaled design.
+    /// </summary>
     /// <param name="glyph">The glyph.</param>
     /// <param name="ppem26Dot6">The size in pixels per em, in 1/64.</param>
     /// <param name="mode">The kind of grid-fitting; not <see cref="GridFitting.None"/>.</param>
     public HintedGlyphResult Get(int glyph, int ppem26Dot6, GridFitting mode)
     {
         ppem26Dot6 = EffectivePpem(ppem26Dot6);
+
+        // the font's own word on which sizes want fitting (FT_GASP_DO_GRIDFIT: "if this bit is not set, no hinting gets applied")
+        if (GetGasp() is { } gasp && !gasp.AllowsGridFit((int)(((long)ppem26Dot6 + 32) >> 6)))
+            return HintedGlyphResult.Failed;
 
         // Adobe's CFF engine has no modes: a CFF font is fitted the same way whatever is asked for
         if (GetCffFace() is not null)
