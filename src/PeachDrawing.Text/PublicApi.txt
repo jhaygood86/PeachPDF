@@ -128,7 +128,9 @@ PeachDrawing.Text.Layout.ParagraphStyle : struct
   property Nullable<Double> LineHeight { get; init; }
   property Nullable<TextAlign> AlignLast { get; init; }
   property OverflowWrap OverflowWrap { get; init; }
+  property TabSize TabSize { get; init; }
   property TextAlign Align { get; init; }
+  property TextIndent TextIndent { get; init; }
 PeachDrawing.Text.Layout.PlacedRun : sealed class
   method Double GetCaretX(Int32 index)
   method Double GetGlyphAdvance(Int32 glyphIndex)
@@ -153,6 +155,15 @@ PeachDrawing.Text.Layout.RunStyle : struct
   property Func<Rune, Typeface> Fallback { get; init; }
   property Nullable<ShapeSettings> Shape { get; init; }
   property Typeface Typeface { get; init; }
+PeachDrawing.Text.Layout.TabSize : struct
+  method Boolean Equals(Object obj)
+  method Boolean Equals(TabSize other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method static TabSize FromLength(Double length)
+  method static TabSize FromSpaces(Double count)
+  property Boolean IsLength { get; }
+  property Double Value { get; }
 PeachDrawing.Text.Layout.TextAffinity : enum Int32
   Downstream = 1
   Upstream = 0
@@ -163,6 +174,16 @@ PeachDrawing.Text.Layout.TextAlign : enum Int32
   Left = 2
   Right = 3
   Start = 0
+PeachDrawing.Text.Layout.TextIndent : struct
+  ctor(Double Length, Boolean Hanging = False, Boolean EachLine = False)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(TextIndent other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double Length, out Boolean Hanging, out Boolean EachLine)
+  property Boolean EachLine { get; init; }
+  property Boolean Hanging { get; init; }
+  property Double Length { get; init; }
 PeachDrawing.Text.Layout.TextPosition : struct
   ctor(Int32 Index, TextAffinity Affinity = Downstream)
   method Boolean Equals(Object obj)

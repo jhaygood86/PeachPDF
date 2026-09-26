@@ -193,8 +193,12 @@ namespace PeachDrawing.Text.Layout
                 byte level = _bidi.Levels[i];
                 string script = _scripts[i];
                 var face = _fallbackFaces?[i];
+                bool tab = Text[i] == '\t';
                 i++;
-                while (i < length
+                // A tab is an atom of its own: its width comes from the tab stops, not from a glyph.
+                while (!tab
+                    && i < length
+                    && Text[i] != '\t'
                     && !IsLineTerminator(Text[i])
                     && _runs[run].End > i
                     && _bidi.Levels[i] == level
@@ -401,8 +405,43 @@ namespace PeachDrawing.Text.Layout
             return count;
         }
 
-        /// <summary>The width of the text <c>[start, end)</c> laid on one line, with the line-ending characters left out.</summary>
-        internal double Measure(int start, int end)
+        /// <summary>Whether the atom is one tab character.</summary>
+        internal bool IsTab(in Atom atom) => atom.End == atom.Start + 1 && Text[atom.Start] == '\t';
+
+        /// <summary>The width of a space in <paramref name="style"/>'s face, with the spacing that goes with it: the unit <c>tab-size</c> counts in.</summary>
+        private static double SpaceWidth(RunStyle style)
+        {
+            double width = style.LetterSpacing + style.WordSpacing;
+            if (style.Typeface.TryMapRune(new Rune(' '), out var glyph))
+            {
+                width += style.Typeface.GetAdvance(glyph) * style.Size / style.Typeface.Metrics.UnitsPerEm;
+            }
+
+            return width;
+        }
+
+        /// <summary>How far a tab moves the pen from <paramref name="pen"/>, the distance from the paragraph's start edge, to the next tab stop.</summary>
+        internal double TabAdvance(RunStyle style, double pen)
+        {
+            var size = Style.TabSize;
+            double stop = size.IsLength ? size.Value : size.Value * SpaceWidth(style);
+            if (!(stop > 0) || !double.IsFinite(stop) || !double.IsFinite(pen))
+            {
+                return 0;
+            }
+
+            // The pen is a sum of scaled advances and the stop a product of another, so a pen that is on a stop can come out a rounding error short of it;
+            // the small allowance keeps such a tab from covering nothing where it should cover a whole stop.
+            double advance = ((Math.Floor((pen / stop) + 1e-9) + 1) * stop) - pen;
+            // A stop far smaller than the pen can overflow the division, and rounding can put the next stop at or behind the pen.
+            return double.IsFinite(advance) && advance > 0 ? advance : 0;
+        }
+
+        /// <summary>
+        /// The width of the text <c>[start, end)</c> laid on one line, with the line-ending characters left out, where the pen is
+        /// <paramref name="pen"/> from the paragraph's start edge before the first of it (a tab reaches the next stop from there).
+        /// </summary>
+        internal double Measure(int start, int end, double pen = 0)
         {
             double width = 0;
             for (int a = FirstAtomAfter(start); a < _atoms.Length; a++)
@@ -417,11 +456,25 @@ namespace PeachDrawing.Text.Layout
                 int to = Math.Min(end, atom.End);
                 if (to > from)
                 {
-                    width += WidthOf(ShapePiece(atom, from, to), atom.Style, from);
+                    width += IsTab(atom) ? TabAdvance(atom.Style, pen + width) : WidthOf(ShapePiece(atom, from, to), atom.Style, from);
                 }
             }
 
             return width;
+        }
+
+        /// <summary>
+        /// How far the text of the line that starts at <paramref name="lineStart"/> is moved in from the start edge: the paragraph's <c>text-indent</c> for the
+        /// lines it applies to.
+        /// </summary>
+        internal double IndentAt(int lineStart) => IndentOf(lineStart == 0, lineStart > 0 && IsLineTerminator(Text[lineStart - 1]));
+
+        /// <summary>The indent of a line that is the first of the paragraph, or follows a forced break, or neither.</summary>
+        internal double IndentOf(bool isFirst, bool followsForcedBreak)
+        {
+            var indent = Style.TextIndent;
+            bool selected = isFirst || (indent.EachLine && followsForcedBreak);
+            return (indent.Hanging ? !selected : selected) ? indent.Length : 0;
         }
 
         /// <summary>
@@ -459,6 +512,10 @@ namespace PeachDrawing.Text.Layout
                 }
 
                 int contentEnd = ContentEnd(segmentStart, i);
+
+                // With every break taken, a segment is alone on its line: the first of a hard line gets the indent of the first (or a forced-break) line, and
+                // the others that of a line that is neither.
+                double segmentIndent = segmentStart == lineStart ? IndentAt(lineStart) : IndentOf(false, false);
                 if (Style.OverflowWrap == OverflowWrap.Anywhere)
                 {
                     for (int g = segmentStart; g < contentEnd;)
@@ -469,18 +526,20 @@ namespace PeachDrawing.Text.Layout
                             next++;
                         }
 
-                        min = Math.Max(min, Measure(g, next));
+                        double graphemeIndent = g == segmentStart ? segmentIndent : IndentOf(false, false);
+                        min = Math.Max(min, Measure(g, next, graphemeIndent) + graphemeIndent);
                         g = next;
                     }
                 }
                 else
                 {
-                    min = Math.Max(min, Measure(segmentStart, contentEnd));
+                    min = Math.Max(min, Measure(segmentStart, contentEnd, segmentIndent) + segmentIndent);
                 }
 
                 if (opportunities[i] == LineBreakOpportunity.Mandatory)
                 {
-                    max = Math.Max(max, Measure(lineStart, ContentEnd(lineStart, i)));
+                    double indent = IndentAt(lineStart);
+                    max = Math.Max(max, Measure(lineStart, ContentEnd(lineStart, i), indent) + indent);
                     lineStart = i;
                 }
 
@@ -527,8 +586,14 @@ namespace PeachDrawing.Text.Layout
         /// <summary>Sets how the paragraph as a whole is set.</summary>
         /// <param name="style">The paragraph style.</param>
         /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The text indent is not a finite number.</exception>
         public ParagraphBuilder SetStyle(ParagraphStyle style)
         {
+            if (!double.IsFinite(style.TextIndent.Length))
+            {
+                throw new ArgumentOutOfRangeException(nameof(style), style.TextIndent.Length, "The text indent must be a finite number.");
+            }
+
             _style = style;
             return this;
         }

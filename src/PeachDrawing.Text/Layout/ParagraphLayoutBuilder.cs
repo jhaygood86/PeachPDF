@@ -8,21 +8,29 @@ namespace PeachDrawing.Text.Layout
     /// <summary>Breaks a paragraph into lines at a width and places the runs of each line.</summary>
     internal static class ParagraphLayoutBuilder
     {
-        private readonly record struct LineSpec(int Start, int End, LineEnd Kind);
+        internal readonly record struct LineSpec(int Start, int End, LineEnd Kind);
 
-        private readonly record struct Piece(Paragraph.Atom Atom, int From, int To, GlyphRun Glyphs, double Width);
+        private readonly record struct Piece(Paragraph.Atom Atom, int From, int To, GlyphRun Glyphs, double Width, bool IsTab = false);
 
         internal static ParagraphLayout Build(Paragraph paragraph, double availableWidth)
         {
-            var specs = BreakLines(paragraph, availableWidth);
-            var built = new List<(LineSpec Spec, List<Piece> Pieces, double Width, double Ascent, double Descent, double Height)>();
+            var built = new List<(LineSpec Spec, double Indent, List<Piece> Pieces, double Width, double Ascent, double Descent, double Height)>();
             double contentWidth = 0;
-            foreach (var spec in specs)
+            int start = 0;
+            while (true)
             {
-                var (pieces, width) = Assemble(paragraph, spec);
+                double indent = paragraph.IndentAt(start);
+                var spec = FitLine(paragraph, start, RoomFor(availableWidth, indent), indent);
+                var (pieces, width) = Assemble(paragraph, spec, indent);
                 var (ascent, descent, height) = VerticalExtent(paragraph, spec, pieces);
-                built.Add((spec, pieces, width, ascent, descent, height));
-                contentWidth = Math.Max(contentWidth, width);
+                built.Add((spec, indent, pieces, width, ascent, descent, height));
+                contentWidth = Math.Max(contentWidth, width + indent);
+                if (spec.Kind == LineEnd.Last)
+                {
+                    break;
+                }
+
+                start = spec.End;
             }
 
             double extent = double.IsInfinity(availableWidth) ? contentWidth : availableWidth;
@@ -30,28 +38,35 @@ namespace PeachDrawing.Text.Layout
             double top = 0;
             for (int i = 0; i < built.Count; i++)
             {
-                var (spec, pieces, width, ascent, descent, height) = built[i];
+                var (spec, indent, pieces, width, ascent, descent, height) = built[i];
                 bool endsParagraphOrForced = spec.Kind is LineEnd.Last or LineEnd.Forced;
                 var align = ResolveAlign(paragraph, endsParagraphOrForced);
 
+                // The indent is taken from the start side; what is left is where the line is aligned.
+                double areaLeft = paragraph.IsRightToLeft ? 0 : indent;
+                double areaWidth = extent - indent;
+
                 // Justification widens the spaces of a line that is not the last, so that it fills the width.
                 double spaceExtra = 0;
-                if (align == TextAlign.Justify && !double.IsInfinity(extent) && extent > width)
+                if (align == TextAlign.Justify && !double.IsInfinity(areaWidth) && areaWidth > width)
                 {
                     int spaces = 0;
                     foreach (var piece in pieces)
                     {
-                        spaces += paragraph.CountSpaces(piece.Glyphs, piece.From);
+                        if (!piece.IsTab)
+                        {
+                            spaces += paragraph.CountSpaces(piece.Glyphs, piece.From);
+                        }
                     }
 
                     if (spaces > 0)
                     {
-                        spaceExtra = (extent - width) / spaces;
-                        width = extent;
+                        spaceExtra = (areaWidth - width) / spaces;
+                        width = areaWidth;
                     }
                 }
 
-                double left = AlignedLeft(paragraph, align, extent, width);
+                double left = areaLeft + AlignedLeft(paragraph, align, areaWidth, width);
                 double baseline = top + ascent;
                 var runs = new List<PlacedRun>(pieces.Count);
                 double x = left;
@@ -70,6 +85,9 @@ namespace PeachDrawing.Text.Layout
             return new ParagraphLayout(paragraph, lines, extent, contentWidth, top);
         }
 
+        /// <summary>The width a line of text can fill once its indent is taken from <paramref name="available"/>; it is never less than nothing.</summary>
+        private static double RoomFor(double available, double indent) => double.IsInfinity(available) ? available : Math.Max(0, available - indent);
+
         /// <summary>How a line is aligned: the paragraph's alignment, or for the last line and one that ends in a forced break, the last-line alignment.</summary>
         private static TextAlign ResolveAlign(Paragraph paragraph, bool lastOrForced)
         {
@@ -82,7 +100,8 @@ namespace PeachDrawing.Text.Layout
             return align;
         }
 
-        private static double AlignedLeft(Paragraph paragraph, TextAlign align, double extent, double lineWidth)
+        /// <summary>Where a line of <paramref name="lineWidth"/> starts within an area <paramref name="areaWidth"/> wide, measured from the area's left edge.</summary>
+        private static double AlignedLeft(Paragraph paragraph, TextAlign align, double areaWidth, double lineWidth)
         {
             bool rtl = paragraph.IsRightToLeft;
             if (align == TextAlign.Start)
@@ -96,91 +115,126 @@ namespace PeachDrawing.Text.Layout
 
             return align switch
             {
-                TextAlign.Right => extent - lineWidth,
-                TextAlign.Center => (extent - lineWidth) / 2,
-                TextAlign.Justify => rtl ? extent - lineWidth : 0,
+                TextAlign.Right => areaWidth - lineWidth,
+                TextAlign.Center => (areaWidth - lineWidth) / 2,
+                TextAlign.Justify => rtl ? areaWidth - lineWidth : 0,
                 _ => 0,
             };
         }
 
         // ---- breaking --------------------------------------------------------------------------------------------------------------
 
-        private static List<LineSpec> BreakLines(Paragraph p, double maxWidth)
+        /// <summary>
+        /// Finds where the line that starts at <paramref name="start"/> ends, given what it may fill. It looks at nothing but the paragraph and its arguments, so
+        /// the same arguments always give the same line, whatever was laid out before.
+        /// </summary>
+        /// <param name="p">The paragraph.</param>
+        /// <param name="start">The offset of the line's first character.</param>
+        /// <param name="room">The width the line's text may fill, or <see cref="double.PositiveInfinity"/> for a line that breaks only where it is forced to.</param>
+        /// <param name="pen">The distance from the paragraph's start edge to where the line's text starts, which tab stops are measured from.</param>
+        internal static LineSpec FitLine(Paragraph p, int start, double room, double pen)
         {
-            var lines = new List<LineSpec>();
             int length = p.Text.Length;
-            if (length == 0)
+            if (start >= length)
             {
-                lines.Add(new LineSpec(0, 0, LineEnd.Last));
-                return lines;
+                return new LineSpec(length, length, LineEnd.Last);
             }
 
-            bool wrap = !p.Style.NoWrap && !double.IsInfinity(maxWidth);
+            bool wrap = !p.Style.NoWrap && !double.IsInfinity(room);
+            bool mayCut = p.Style.OverflowWrap != OverflowWrap.Normal;
             var opportunities = p.Opportunities;
-            int lineStart = 0;
-            int segmentStart = 0;
+            int segmentStart = start;
             double lineWidth = 0;
-            for (int i = 1; i <= length; i++)
+            for (int i = start + 1; i <= length; i++)
             {
                 if (opportunities[i] == LineBreakOpportunity.Prohibited)
                 {
                     continue;
                 }
 
-                int contentEnd = p.ContentEnd(segmentStart, i);
-                double contentWidth = p.Measure(segmentStart, contentEnd);
-                if (wrap && lineStart < segmentStart && lineWidth + contentWidth > maxWidth)
+                if (wrap)
                 {
-                    lines.Add(new LineSpec(lineStart, segmentStart, LineEnd.Soft));
-                    lineStart = segmentStart;
-                    lineWidth = 0;
-                }
-
-                if (wrap && p.Style.OverflowWrap != OverflowWrap.Normal && contentWidth > maxWidth)
-                {
-                    // The line is empty and the word is still wider than it: cut the word between characters.
-                    int position = segmentStart;
-                    while (p.Measure(position, contentEnd) > maxWidth)
+                    int contentEnd = p.ContentEnd(segmentStart, i);
+                    double at = pen + lineWidth;
+                    if (mayCut && segmentStart == start)
                     {
-                        int cut = LargestFit(p, position, contentEnd, maxWidth);
-                        lines.Add(new LineSpec(lineStart, cut, LineEnd.Emergency));
-                        lineStart = cut;
-                        position = cut;
+                        // The line is empty: a word wider than it is cut between characters.
+                        int cut = LargestFit(p, start, contentEnd, room, pen);
+                        if (cut < contentEnd)
+                        {
+                            return new LineSpec(start, cut, LineEnd.Emergency);
+                        }
                     }
 
-                    lineWidth = p.Measure(position, i);
-                }
-                else
-                {
-                    lineWidth += p.Measure(segmentStart, i);
+                    double contentWidth = p.Measure(segmentStart, contentEnd, at);
+                    if (start < segmentStart && lineWidth + contentWidth > room)
+                    {
+                        return new LineSpec(start, segmentStart, LineEnd.Soft);
+                    }
+
+                    lineWidth += p.Measure(segmentStart, i, at);
                 }
 
                 if (opportunities[i] == LineBreakOpportunity.Mandatory)
                 {
-                    lines.Add(new LineSpec(lineStart, i, i == length ? LineEnd.Last : LineEnd.Forced));
-                    lineStart = i;
-                    lineWidth = 0;
+                    return new LineSpec(start, i, i == length && !Paragraph.IsLineTerminator(p.Text[length - 1]) ? LineEnd.Last : LineEnd.Forced);
                 }
 
                 segmentStart = i;
             }
 
-            // Text that ends in a line terminator leaves an empty line to put a caret on.
-            if (Paragraph.IsLineTerminator(p.Text[^1]))
-            {
-                var last = lines[^1];
-                lines[^1] = last with { Kind = LineEnd.Forced };
-                lines.Add(new LineSpec(length, length, LineEnd.Last));
-            }
-
-            return lines;
+            return new LineSpec(start, length, LineEnd.Last);
         }
 
-        /// <summary>The last grapheme boundary after <paramref name="start"/> that the text up to fits in <paramref name="width"/>, and at least the first one.</summary>
-        private static int LargestFit(Paragraph p, int start, int end, double width)
+        /// <summary>
+        /// The last grapheme boundary after <paramref name="start"/> that the text up to fits in <paramref name="width"/> when the pen starts at
+        /// <paramref name="pen"/>, and at least the first one; <paramref name="end"/> itself when all of the text fits or it has no boundary inside.
+        /// It probes further and further out, so what it costs follows the length of the line it finds and not of the word it looks into.
+        /// </summary>
+        private static int LargestFit(Paragraph p, int start, int end, double width, double pen)
         {
+            int first = NextBoundary(p, start + 1, end);
+            if (first < 0)
+            {
+                return end;
+            }
+
+            if (p.Measure(start, first, pen) > width)
+            {
+                return first;
+            }
+
+            int best = first;
+            int high;
+            int step = 16;
+            while (true)
+            {
+                int probe = NextBoundary(p, best + step, end);
+                if (probe < 0)
+                {
+                    if (p.Measure(start, end, pen) <= width)
+                    {
+                        return end;
+                    }
+
+                    high = end;
+                    break;
+                }
+
+                if (p.Measure(start, probe, pen) <= width)
+                {
+                    best = probe;
+                    step = Math.Min(step * 2, 1 << 20);
+                }
+                else
+                {
+                    high = probe;
+                    break;
+                }
+            }
+
             var boundaries = new List<int>();
-            for (int b = start + 1; b < end; b++)
+            for (int b = best + 1; b < high; b++)
             {
                 if (p.IsGraphemeBoundary(b))
                 {
@@ -188,34 +242,43 @@ namespace PeachDrawing.Text.Layout
                 }
             }
 
-            if (boundaries.Count == 0)
-            {
-                return end;
-            }
-
             int low = 0;
-            int high = boundaries.Count - 1;
-            int best = 0;
-            while (low <= high)
+            int top = boundaries.Count - 1;
+            int found = -1;
+            while (low <= top)
             {
-                int middle = (low + high) >>> 1;
-                if (p.Measure(start, boundaries[middle]) <= width)
+                int middle = (low + top) >>> 1;
+                if (p.Measure(start, boundaries[middle], pen) <= width)
                 {
-                    best = middle;
+                    found = middle;
                     low = middle + 1;
                 }
                 else
                 {
-                    high = middle - 1;
+                    top = middle - 1;
                 }
             }
 
-            return boundaries[best];
+            return found < 0 ? best : boundaries[found];
+        }
+
+        /// <summary>The first grapheme boundary at or after <paramref name="from"/> and before <paramref name="end"/>, or -1.</summary>
+        private static int NextBoundary(Paragraph p, int from, int end)
+        {
+            for (int b = from; b < end; b++)
+            {
+                if (p.IsGraphemeBoundary(b))
+                {
+                    return b;
+                }
+            }
+
+            return -1;
         }
 
         // ---- assembling a line -----------------------------------------------------------------------------------------------------
 
-        private static (List<Piece> Pieces, double Width) Assemble(Paragraph p, LineSpec spec)
+        private static (List<Piece> Pieces, double Width) Assemble(Paragraph p, LineSpec spec, double indent)
         {
             var pieces = new List<Piece>();
             int contentEnd = p.ContentEnd(spec.Start, spec.End);
@@ -224,6 +287,7 @@ namespace PeachDrawing.Text.Layout
                 return (pieces, 0);
             }
 
+            var tabWidths = TabWidths(p, spec.Start, contentEnd, indent);
             double width = 0;
             var atoms = p.Atoms;
             foreach (var run in Bidi.ReorderLine(p.Levels, spec.Start, contentEnd - spec.Start))
@@ -245,6 +309,13 @@ namespace PeachDrawing.Text.Layout
                         continue;
                     }
 
+                    if (tabWidths is not null && tabWidths.TryGetValue(from, out double tabWidth))
+                    {
+                        // A tab draws nothing: it is room, in a run of its own with no glyphs.
+                        inRun.Add(new Piece(atom, from, to, new GlyphRun(atom.Style.Typeface, []), tabWidth, IsTab: true));
+                        continue;
+                    }
+
                     var glyphs = p.ShapePiece(atom, from, to);
                     inRun.Add(new Piece(atom, from, to, glyphs, p.WidthOf(glyphs, atom.Style, from)));
                 }
@@ -262,6 +333,47 @@ namespace PeachDrawing.Text.Layout
             }
 
             return (pieces, width);
+        }
+
+        /// <summary>The width of each tab of the line, by its offset, worked out along the text in the order it is written; null when the line has none.</summary>
+        private static Dictionary<int, double>? TabWidths(Paragraph p, int start, int contentEnd, double indent)
+        {
+            if (p.Text.AsSpan(start, contentEnd - start).IndexOf('\t') < 0)
+            {
+                return null;
+            }
+
+            var widths = new Dictionary<int, double>();
+            var atoms = p.Atoms;
+            double pen = indent;
+            for (int a = p.FirstAtomAfter(start); a < atoms.Length; a++)
+            {
+                var atom = atoms[a];
+                if (atom.Start >= contentEnd)
+                {
+                    break;
+                }
+
+                int from = Math.Max(atom.Start, start);
+                int to = Math.Min(atom.End, contentEnd);
+                if (to <= from)
+                {
+                    continue;
+                }
+
+                if (p.IsTab(atom))
+                {
+                    double advance = p.TabAdvance(atom.Style, pen);
+                    widths[from] = advance;
+                    pen += advance;
+                }
+                else
+                {
+                    pen += p.WidthOf(p.ShapePiece(atom, from, to), atom.Style, from);
+                }
+            }
+
+            return widths;
         }
 
         private static (double Ascent, double Descent, double Height) VerticalExtent(Paragraph p, LineSpec spec, List<Piece> pieces)
@@ -309,6 +421,15 @@ namespace PeachDrawing.Text.Layout
         {
             int length = piece.To - piece.From;
             var x = new double[length + 1];
+            if (piece.IsTab)
+            {
+                // The caret before a tab is at the edge it is entered from, the one after it at the other.
+                bool tabRtl = (piece.Atom.Level & 1) == 1;
+                x[0] = tabRtl ? piece.Width : 0;
+                x[length] = tabRtl ? 0 : piece.Width;
+                return (x, [], piece.Width);
+            }
+
             var known = new bool[length + 1];
             bool rtl = (piece.Atom.Level & 1) == 1;
             double scale = style.Size / piece.Glyphs.Typeface.Metrics.UnitsPerEm;

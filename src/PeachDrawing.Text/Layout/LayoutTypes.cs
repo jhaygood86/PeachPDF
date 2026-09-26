@@ -116,6 +116,76 @@ namespace PeachDrawing.Text.Layout
     public readonly record struct RunStyle(Typeface Typeface, double Size, ShapeSettings? Shape = null, Func<System.Text.Rune, Typeface?>? Fallback = null,
         double LetterSpacing = 0, double WordSpacing = 0);
 
+    /// <summary>
+    /// How far the start of a line is moved in from the edge of the paragraph (CSS <c>text-indent</c>), and which lines it moves. The distance is a length
+    /// in layout units, so a caller that has a percentage works it out against its own width.
+    /// </summary>
+    /// <param name="Length">
+    /// The distance from the start edge (the left for a left-to-right paragraph, the right for a right-to-left one); it may be negative, which moves the
+    /// text out of the paragraph. It must be finite.
+    /// </param>
+    /// <param name="Hanging">
+    /// Whether the lines it applies to are swapped for the ones it does not apply to: the indent is on every line except the first (and, with
+    /// <paramref name="EachLine"/>, except the lines that follow a forced break).
+    /// </param>
+    /// <param name="EachLine">Whether the lines that follow a forced break get the indent too, and not only the first line of the paragraph.</param>
+    public readonly record struct TextIndent(double Length, bool Hanging = false, bool EachLine = false);
+
+    /// <summary>
+    /// The distance between tab stops (CSS <c>tab-size</c>): a multiple of the width of a space in the face the tab is set in, or a length. The default value,
+    /// what <c>default(TabSize)</c> is, is 8 spaces.
+    /// </summary>
+    public readonly record struct TabSize
+    {
+        private const byte SpacesKind = 1;
+        private const byte LengthKind = 2;
+        private readonly byte _kind;
+        private readonly double _value;
+
+        private TabSize(byte kind, double value)
+        {
+            _kind = kind;
+            _value = value;
+        }
+
+        /// <summary>
+        /// A tab stop for every <paramref name="count"/> spaces, each as wide as a space is in the face of the tab, including the letter and word spacing
+        /// that go with it.
+        /// </summary>
+        /// <param name="count">The number of spaces, zero or more; zero makes a tab take no room.</param>
+        /// <returns>The size.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="count"/> is negative or not finite.</exception>
+        public static TabSize FromSpaces(double count)
+        {
+            if (!double.IsFinite(count) || count < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(count), count, "The number of spaces must be zero or more, and finite.");
+            }
+
+            return count == 8 ? default : new TabSize(SpacesKind, count);
+        }
+
+        /// <summary>A tab stop for every <paramref name="length"/> layout units.</summary>
+        /// <param name="length">The distance, zero or more; zero makes a tab take no room.</param>
+        /// <returns>The size.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="length"/> is negative or not finite.</exception>
+        public static TabSize FromLength(double length)
+        {
+            if (!double.IsFinite(length) || length < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(length), length, "The length must be zero or more, and finite.");
+            }
+
+            return new TabSize(LengthKind, length);
+        }
+
+        /// <summary>Whether the distance is a length, and not a number of spaces.</summary>
+        public bool IsLength => _kind == LengthKind;
+
+        /// <summary>The number of spaces, or the length in layout units when <see cref="IsLength"/> is set.</summary>
+        public double Value => _kind == 0 ? 8 : _value;
+    }
+
     /// <summary>How a paragraph as a whole is set.</summary>
     public readonly record struct ParagraphStyle
     {
@@ -139,6 +209,20 @@ namespace PeachDrawing.Text.Layout
         /// the same as <see cref="Align"/>, except that justified text starts them at the start.
         /// </summary>
         public TextAlign? AlignLast { get; init; }
+
+        /// <summary>
+        /// How far lines start from the edge (CSS <c>text-indent</c>). The indent takes room from the line: it breaks earlier, and the line is aligned in what
+        /// is left.
+        /// </summary>
+        public TextIndent TextIndent { get; init; }
+
+        /// <summary>
+        /// The distance between the tab stops a tab character (U+0009) advances the pen to (CSS <c>tab-size</c>). Stops are measured along the line from the
+        /// start edge of the paragraph, in the order the text is written, so a tab after right-to-left text in a left-to-right line is placed as if that
+        /// text were where it is in memory. A tab at the end of a line hangs, like any space there. Justification widens spaces only, so text after a tab in a justified line
+        /// moves off its stop by what the spaces before it gained.
+        /// </summary>
+        public TabSize TabSize { get; init; }
 
         /// <summary>How CSS <c>word-break</c> and <c>line-break</c> tailor where lines may break.</summary>
         public LineBreakOptions LineBreak { get; init; }
