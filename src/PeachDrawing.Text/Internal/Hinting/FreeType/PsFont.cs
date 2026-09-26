@@ -97,10 +97,13 @@ internal sealed class Cf2Font
     public const int FlagsDarkened = 2;
 
     /// <summary>
-    /// The instruction limit of a charstring. FreeType's is 20,000,000 (which matches Avalon); a glyph of a real font runs a few thousand
+    /// The instruction limit of a charstring. FreeType's is 20,000,000 for each call (which matches Avalon; the port shares one budget by glyph, accents and re-runs included); a glyph of a real font runs a few thousand
     /// instructions at most, and a hostile font can make every glyph run to the limit, so the port's is a tenth of it.
     /// </summary>
     public const uint InstructionLimit = 2000000U;
+
+    /// <summary>The instructions the glyph being loaded may still run; one budget for the charstring, its accent and any run again.</summary>
+    public uint InstructionsLeft;
 
     /// <summary>The default darkening parameters of FreeType's CFF driver: (x1, y1, x2, y2, x3, y3, x4, y4) in 1000 unit character space.</summary>
     public static readonly int[] DefaultDarkenParams = [500, 400, 1000, 275, 1667, 275, 2333, 0];
@@ -419,6 +422,8 @@ internal sealed class Cf2Font
 
         // winding order only affects darkening
         needWinding = Darkened;
+
+        InstructionsLeft = InstructionLimit;
 
         while (true)
         {

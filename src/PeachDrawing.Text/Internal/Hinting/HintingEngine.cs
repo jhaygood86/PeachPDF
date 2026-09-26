@@ -38,8 +38,8 @@ internal sealed class HintedGlyphResult
 }
 
 /// <summary>
-/// Grid-fits the glyphs of one face: owns what it takes to run the font's TrueType instructions at a size (the tables read
-/// once, the state each size's programs leave behind, both cached) and hands out the hinted outlines, also cached.
+/// Grid-fits the glyphs of one face: owns what it takes to run the font's TrueType instructions, or apply the hints of its CFF charstrings, at a size (the tables
+/// read once, the state each size's programs leave behind, both cached) and hands out the hinted outlines, also cached.
 /// </summary>
 /// <remarks>
 /// Everything cached is immutable, so one engine serves any number of threads. Fonts are untrusted input: a font or a

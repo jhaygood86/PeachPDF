@@ -42,7 +42,7 @@ namespace PeachDrawing.Text.Tests.Hinting
         [Fact]
         public void ACallTreeOfThirtyToTheTwelfthCallsIsStoppedByTheInstructionLimit()
         {
-            // glyph 4 of the hostile font: 30^12 subroutine calls; the engine gives up after 20 million instructions, as FreeType does
+            // glyph 4 of the hostile font: 30^12 subroutine calls; the engine gives up after its instruction limit (FreeType's is ten times higher, and reaches the same failure)
             var face = HintingCffFixtures.Face("HintingCffHostile.otf");
             var size = new CffSize(face, 16 * 64);
 
@@ -124,6 +124,21 @@ namespace PeachDrawing.Text.Tests.Hinting
             }
 
             Assert.Equal(unexpectedBefore, HintingEngine.UnexpectedFailures);
+        }
+
+        [Theory]
+        [InlineData(int.MaxValue)]
+        [InlineData(int.MaxValue - 1)]
+        [InlineData(int.MaxValue - 3)]
+        [InlineData(-1)]
+        [InlineData(100)]
+        public void AnIndexAtAnOffsetBeyondTheTableIsRefusedNotIndexedOutOfRange(int offset)
+        {
+            // the offset of an INDEX is an operand of a DICT: it can be anything, and adding the width of a field to it must not wrap
+            var data = new byte[100];
+            int pos = offset;
+
+            Assert.Throws<HintingException>(() => CffIndex.Read(data, ref pos));
         }
 
         [Fact]

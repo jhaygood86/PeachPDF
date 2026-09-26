@@ -36,6 +36,7 @@
 // The changes are recorded in PORTING-NOTES.md, next to FTL.TXT.
 
 using System;
+using System.Collections.Generic;
 
 namespace PeachDrawing.Text.Internal.Hinting.FreeType;
 
@@ -245,7 +246,7 @@ internal sealed class CffIndex
 
     private static int ReadUShort(byte[] data, ref int pos)
     {
-        if (pos < 0 || pos + 2 > data.Length)
+        if (pos < 0 || (long)pos + 2 > data.Length)
             throw new HintingException("A CFF table ends too soon.");
 
         int v = (data[pos] << 8) | data[pos + 1];
@@ -255,7 +256,7 @@ internal sealed class CffIndex
 
     private static uint ReadOffset(byte[] data, ref int pos, int size)
     {
-        if (pos < 0 || pos + size > data.Length)
+        if (pos < 0 || (long)pos + size > data.Length)
             throw new HintingException("A CFF table ends too soon.");
 
         uint result = 0;
@@ -314,6 +315,7 @@ internal sealed class CffFont
     /// <summary>The string id (or, in a CID-keyed font, the CID) of every glyph, from the charset.</summary>
     public ushort[] Sids { get; private set; } = [];
 
+    private readonly Dictionary<int, int[]> _subrsByStart = [];
     private byte[] _fdSelect = [];
     private int _fdSelectFormat;
     private bool _hasFdSelect;
@@ -334,7 +336,7 @@ internal sealed class CffFont
         int baseOffset = tableOffset;
         int pos = baseOffset;
 
-        if (pos < 0 || pos + 4 > data.Length)
+        if (pos < 0 || (long)pos + 4 > data.Length)
             throw new HintingException("The CFF table is truncated.");
 
         int versionMajor = data[pos];
@@ -432,9 +434,7 @@ internal sealed class CffFont
         LoadPrivateDict(subfont, baseOffset);
 
         // The random number generator: the seed of the Private DICT (see the remarks of the class).
-        subfont.Random = 0;
-        if (subfont.Random == 0)
-            subfont.Random = (uint)subfont.Private.InitialRandomSeed;
+        subfont.Random = (uint)subfont.Private.InitialRandomSeed;
 
         // read the local subrs, if any
         CffPrivate priv = subfont.Private;
@@ -444,8 +444,16 @@ internal sealed class CffFont
             if (at > int.MaxValue)
                 throw new HintingException("The local subroutines are out of the font.");
 
-            int pos = (int)at;
-            subfont.LocalSubrs = CffIndex.Read(Data, ref pos).GetPointers();
+            // Font DICTs that point at the same INDEX share its table of pointers (a font with 256 of them, each with 65,535 subroutines,
+            // would otherwise hold them 256 times over)
+            if (!_subrsByStart.TryGetValue((int)at, out int[]? pointers))
+            {
+                int pos = (int)at;
+                pointers = CffIndex.Read(Data, ref pos).GetPointers();
+                _subrsByStart[(int)at] = pointers;
+            }
+
+            subfont.LocalSubrs = pointers;
         }
     }
 
@@ -504,7 +512,7 @@ internal sealed class CffFont
                 break;
 
             case 3: // format 3, a tad more complex
-                if (pos + 2 > Data.Length)
+                if ((long)pos + 2 > Data.Length)
                     throw new HintingException("The FDSelect is truncated.");
 
                 int numRanges = (Data[pos] << 8) | Data[pos + 1];
@@ -520,7 +528,7 @@ internal sealed class CffFont
                 throw new HintingException("The FDSelect has an unknown format.");
         }
 
-        if (pos + dataSize > Data.Length)
+        if ((long)pos + dataSize > Data.Length)
             throw new HintingException("The FDSelect is truncated.");
 
         _fdSelectFormat = format;
@@ -604,7 +612,7 @@ internal sealed class CffFont
                 case 0:
                     if (numGlyphs > 0)
                     {
-                        if (pos + (numGlyphs - 1) * 2 > Data.Length)
+                        if ((long)pos + (numGlyphs - 1) * 2 > Data.Length)
                             throw new HintingException("The charset is truncated.");
 
                         for (int j = 1; j < numGlyphs; j++)
@@ -624,7 +632,7 @@ internal sealed class CffFont
                     while (j < numGlyphs)
                     {
                         // Read the first glyph sid of the range.
-                        if (pos + 2 > Data.Length)
+                        if ((long)pos + 2 > Data.Length)
                             throw new HintingException("The charset is truncated.");
 
                         int glyphSid = (Data[pos] << 8) | Data[pos + 1];
@@ -634,7 +642,7 @@ internal sealed class CffFont
                         int nleft;
                         if (format == 2)
                         {
-                            if (pos + 2 > Data.Length)
+                            if ((long)pos + 2 > Data.Length)
                                 throw new HintingException("The charset is truncated.");
 
                             nleft = (Data[pos] << 8) | Data[pos + 1];
@@ -642,7 +650,7 @@ internal sealed class CffFont
                         }
                         else
                         {
-                            if (pos + 1 > Data.Length)
+                            if ((long)pos + 1 > Data.Length)
                                 throw new HintingException("The charset is truncated.");
 
                             nleft = Data[pos++];
@@ -759,9 +767,12 @@ internal sealed class CffFont
         }
     }
 
+    private static int WrappingAbs(int value) => value < 0 ? unchecked(-value) : value;
+
     private static void Normalize(CffFontDict d)
     {
-        int temp = d.MatrixYy != 0 ? Math.Abs(d.MatrixYy) : Math.Abs(d.MatrixYx);
+        // FT_ABS wraps for the smallest number, where Math.Abs throws
+        int temp = d.MatrixYy != 0 ? WrappingAbs(d.MatrixYy) : WrappingAbs(d.MatrixYx);
 
         if (temp != 0x10000)
         {

@@ -363,8 +363,8 @@ internal static class Cf2Interpreter
 
         var storage = new int[StorageSize]; // for `put' and `get'
 
-        // instruction limit; 20,000,000 matches Avalon
-        uint instructionLimit = Cf2Font.InstructionLimit;
+        // the instruction limit is the font's, shared by the charstring, its accent and the run again for the winding order (FreeType's
+        // is a local of each call)
 
         var subrStack = new Cf2ArrStack<Cf2Buffer>(error);
 
@@ -378,6 +378,8 @@ internal static class Cf2Interpreter
         var vStemHintArray = new Cf2ArrStack<Cf2StemHint>(error);
 
         var hintMask = new Cf2HintMask();
+        Cf2HintMap? counterHintMap = null; // for the counter masks, made when the first is met and used again
+        Cf2HintMask? counterMask = null;
         Cf2GlyphPath glyphPath;
 
         // initialize CF2_StemHint arrays
@@ -438,8 +440,7 @@ internal static class Cf2Interpreter
             if (error.Value != 0)
                 goto Exit;
 
-            instructionLimit--;
-            if (instructionLimit == 0)
+            if (--font.InstructionsLeft == 0)
             {
                 lastError = Cf2Error.InvalidGlyphFormat;
                 goto Exit;
@@ -977,8 +978,8 @@ internal static class Cf2Interpreter
                         // chances of conflicts between hstems that are initially placed in separate hint groups and then brought
                         // together.  The positions are copied back to `hStemHintArray', so we can discard `counterMask' and
                         // `counterHintMap'.
-                        var counterHintMap = new Cf2HintMap();
-                        var counterMask = new Cf2HintMask();
+                        counterHintMap ??= new Cf2HintMap();
+                        counterMask ??= new Cf2HintMask();
 
                         counterHintMap.Init(font, glyphPath.InitialHintMap, glyphPath.HintMoves, scaleY);
                         counterMask.Init(error);

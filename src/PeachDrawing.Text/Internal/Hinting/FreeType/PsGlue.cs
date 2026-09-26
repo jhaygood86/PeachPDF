@@ -146,7 +146,7 @@
  *
  */
 
-// Ported to C# for PeachDrawing.Text; modified. This file derives from FreeType 2.14.3 (VER-2-14-3): psglue.h, pserror.h, psread.h, psarrst.h.
+// Ported to C# for PeachDrawing.Text; modified. This file derives from FreeType 2.14.3 (VER-2-14-3): psglue.h, pserror.h, pserror.c, psread.h, psread.c, psarrst.h, psarrst.c.
 // The changes are recorded in PORTING-NOTES.md, next to FTL.TXT.
 
 using System;

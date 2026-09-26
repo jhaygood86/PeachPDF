@@ -26,7 +26,8 @@ namespace PeachDrawing.Text.Outlines
 
         /// <summary>
         /// The font's TrueType instructions are run in the original interpreter, which fits both directions, as for black and
-        /// white text without anti-aliasing. Advances come from the font's <c>hdmx</c> table where it has one for the size.
+        /// white text without anti-aliasing. Advances come from the font's <c>hdmx</c> table where it has one for the size. A font with CFF
+        /// outlines has one way of fitting, so it is fitted as it is for <see cref="Standard"/>.
         /// </summary>
         Monochrome = 2,
     }

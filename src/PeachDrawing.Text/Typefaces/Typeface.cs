@@ -90,9 +90,10 @@ namespace PeachDrawing.Text
         /// <remarks>
         /// With <see cref="GridFitting.None"/> the result is exactly the design-unit outline of <see cref="TryGetOutline(ushort, out GlyphOutline)"/>.
         /// Otherwise the coordinates are in pixels at <see cref="OutlineRequest.PixelsPerEm"/>, y up, with the glyph origin at (0, 0).
-        /// A TrueType font's own instructions are run, so points sit where the font's designer put them at that size; the result
+        /// A TrueType font's own instructions are run, and the stem hints and blue zones of a CFF font's charstrings are applied, so points
+        /// sit where the font's designer put them at that size; the result
         /// is <see cref="GlyphOutline.IsGridFitted"/> and carries <see cref="GlyphOutline.GridFittedAdvance"/>. A font that cannot be
-        /// grid-fitted (it has no TrueType outlines, it has no TrueType instructions to run, or its instructions fail) gets the scaled design outline and
+        /// grid-fitted (it has neither TrueType instructions nor CFF hints to apply, or they fail) gets the scaled design outline and
         /// <see cref="GlyphOutline.IsGridFitted"/> is <see langword="false"/>; nothing throws for a font that is merely unusable.
         /// Hinted outlines are cached, so asking again for the same glyph and size is cheap; the outline is then shared by every caller that
         /// asks, which is safe because an outline never changes. Only the outline is fitted: a caller that
