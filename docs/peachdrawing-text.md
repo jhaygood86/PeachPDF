@@ -10,9 +10,9 @@ dotnet add package PeachDrawing.Text
 
 > **Status: pre-1.0.** The library is being opened up area by area. Today the public surface is font loading and
 > matching (`FontSet` and the types around it), what a `Typeface` says about itself (metrics, glyph mapping and advances),
-> shaping and the `PeachDrawing.Text.Unicode` namespace, all described below. Outlines, colour glyphs, export and paragraph
-> layout are still internal to the package, so PeachPDF is the only consumer of them, and they will be published in later
-> releases. Until 1.0, the public API may change between releases.
+> shaping, glyph outlines and colour glyphs, and the `PeachDrawing.Text.Unicode` namespace, all described below. Font subsetting
+> for embedding, the MATH table and paragraph layout are still internal to the package, so PeachPDF is the only consumer of
+> them, and they will be published in later releases. Until 1.0, the public API may change between releases.
 
 ## What the engine does
 
@@ -143,6 +143,38 @@ foreach (PlacedGlyph glyph in run.Glyphs)
 - `GlyphRun.Advance` is the distance the pen travels along the run, in design units and without rounding.
 - `Shaper.GetFeatureTags` names the `GSUB` tags behind a caps or position mode. With `Typeface.SupportsFeatures` it says whether a
   face has a feature for real, or a caller has to fall back to something synthesized.
+
+## Outlines and colour glyphs: `PeachDrawing.Text.Outlines`
+
+`Typeface.TryGetOutline` reads the shape of a glyph as data: a `GlyphOutline` of closed contours, each a start point and a list
+of segments that are straight lines or cubic curves, in design units with the y axis up. A glyph is filled by the nonzero
+winding rule, which is how it gets its counters. TrueType quadratic curves are raised to cubic ones, so a consumer has two kinds
+of segment to draw. Nothing is grid-fitted.
+
+```csharp
+using PeachDrawing.Text.Outlines;
+
+if (face.TryMapRune(new Rune('g'), out ushort glyph) && face.TryGetOutline(glyph, out GlyphOutline outline))
+{
+    foreach (OutlineContour contour in outline.Contours)
+    {
+        // move to contour.Start, then for each OutlineSegment draw a line to End, or a cubic through Control1 and Control2
+    }
+
+    // Where the ink lies across a band between two heights: what text-decoration-skip-ink needs.
+    foreach (var (start, end) in outline.Crossings(bandLow: -200, bandHigh: -100)) { /* ... */ }
+}
+```
+
+- **Colour glyphs from outlines.** `HasColorGlyphs` says a face has them, and `ColorPalette` gives its palettes: `TryGetColor`
+  returns a `System.Drawing.Color`, and `FirstLightPalette` and `FirstDarkPalette` are what CSS `font-palette: light` and `dark`
+  ask for. A version 0 `COLR` glyph is a list of layers from `TryGetColorLayers`, each a glyph filled with one palette colour.
+  A version 1 glyph is a paint graph: `GetColorPaint` returns the root `ColorPaint`, and the sealed types that derive from it are
+  named as the `COLR` specification names its paint formats (`PaintSolid`, `PaintLinearGradient`, `PaintRadialGradient`,
+  `PaintSweepGradient`, `PaintGlyph`, `PaintTransform`, `PaintComposite`, `PaintColrGlyph`, and `PaintColrLayers`, whose layers
+  are read with `GetColorLayerPaint`). Variable paints are read at the font's default instance.
+- **Colour glyphs from pictures.** A font whose colour glyphs are bitmaps (`CBDT`/`CBLC` or `sbix`) reports
+  `HasBitmapGlyphs`, and `TryGetBitmap` gives the picture of a glyph from the strike best suited to a size, with its bearings.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 

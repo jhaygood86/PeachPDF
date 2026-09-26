@@ -25,6 +25,130 @@ PeachDrawing.Text.GenericFamily : enum Int32
   SansSerif = 1
   Serif = 0
   SystemUi = 5
+PeachDrawing.Text.Outlines.Affine2x3 : struct
+  ctor(Double XX, Double YX, Double XY, Double YY, Double DX, Double DY)
+  field static Affine2x3 Identity
+  method Boolean Equals(Affine2x3 other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double XX, out Double YX, out Double XY, out Double YY, out Double DX, out Double DY)
+  method static Affine2x3 Multiply(Affine2x3 a, Affine2x3 b)
+  property Double DX { get; init; }
+  property Double DY { get; init; }
+  property Double XX { get; init; }
+  property Double XY { get; init; }
+  property Double YX { get; init; }
+  property Double YY { get; init; }
+PeachDrawing.Text.Outlines.ColorExtend : enum Int32
+  Pad = 0
+  Reflect = 2
+  Repeat = 1
+PeachDrawing.Text.Outlines.ColorLayer : struct
+  ctor(Int32 GlyphId, Int32 PaletteIndex)
+  method Boolean Equals(ColorLayer other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 GlyphId, out Int32 PaletteIndex)
+  property Int32 GlyphId { get; init; }
+  property Int32 PaletteIndex { get; init; }
+PeachDrawing.Text.Outlines.ColorLine : sealed class
+  property ColorExtend Extend { get; }
+  property IReadOnlyList<ColorStop> Stops { get; }
+PeachDrawing.Text.Outlines.ColorPaint : class
+PeachDrawing.Text.Outlines.ColorPalette : sealed class
+  method Boolean TryGetColor(Int32 paletteIndex, Int32 entryIndex, out Color color)
+  method Nullable<Int32> FirstDarkPalette()
+  method Nullable<Int32> FirstLightPalette()
+  property Int32 EntriesPerPalette { get; }
+  property Int32 PaletteCount { get; }
+PeachDrawing.Text.Outlines.ColorStop : struct
+  ctor(Double Offset, Int32 PaletteIndex, Double Alpha)
+  method Boolean Equals(ColorStop other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double Offset, out Int32 PaletteIndex, out Double Alpha)
+  property Double Alpha { get; init; }
+  property Double Offset { get; init; }
+  property Int32 PaletteIndex { get; init; }
+PeachDrawing.Text.Outlines.EmbeddedBitmap : struct
+  ctor(Byte[] Data, Int32 Ppem, Int32 Width, Int32 Height, Double BearingX, Double BearingTop)
+  method Boolean Equals(EmbeddedBitmap other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Byte[] Data, out Int32 Ppem, out Int32 Width, out Int32 Height, out Double BearingX, out Double BearingTop)
+  property Byte[] Data { get; init; }
+  property Double BearingTop { get; init; }
+  property Double BearingX { get; init; }
+  property Int32 Height { get; init; }
+  property Int32 Ppem { get; init; }
+  property Int32 Width { get; init; }
+PeachDrawing.Text.Outlines.GlyphOutline : sealed class
+  method IReadOnlyList<ValueTuple<Double, Double>> Crossings(Double bandLow, Double bandHigh)
+  property Boolean IsEmpty { get; }
+  property IReadOnlyList<OutlineContour> Contours { get; }
+PeachDrawing.Text.Outlines.OutlineContour : sealed class
+  property IReadOnlyList<OutlineSegment> Segments { get; }
+  property OutlinePoint Start { get; }
+PeachDrawing.Text.Outlines.OutlinePoint : struct
+  ctor(Double X, Double Y)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(OutlinePoint other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double X, out Double Y)
+  property Double X { get; init; }
+  property Double Y { get; init; }
+PeachDrawing.Text.Outlines.OutlineSegment : struct
+  method static OutlineSegment Cubic(OutlinePoint control1, OutlinePoint control2, OutlinePoint end)
+  method static OutlineSegment Line(OutlinePoint end)
+  property Boolean IsCubic { get; }
+  property OutlinePoint Control1 { get; }
+  property OutlinePoint Control2 { get; }
+  property OutlinePoint End { get; }
+PeachDrawing.Text.Outlines.PaintColrGlyph : sealed class
+  property Int32 GlyphId { get; }
+PeachDrawing.Text.Outlines.PaintColrLayers : sealed class
+  property Int32 FirstLayerIndex { get; }
+  property Int32 NumLayers { get; }
+PeachDrawing.Text.Outlines.PaintComposite : sealed class
+  property ColorPaint Backdrop { get; }
+  property ColorPaint Source { get; }
+  property Int32 Mode { get; }
+PeachDrawing.Text.Outlines.PaintGlyph : sealed class
+  property ColorPaint Paint { get; }
+  property Int32 GlyphId { get; }
+PeachDrawing.Text.Outlines.PaintLinearGradient : sealed class
+  property ColorLine Line { get; }
+  property Double X0 { get; }
+  property Double X1 { get; }
+  property Double X2 { get; }
+  property Double Y0 { get; }
+  property Double Y1 { get; }
+  property Double Y2 { get; }
+PeachDrawing.Text.Outlines.PaintRadialGradient : sealed class
+  property ColorLine Line { get; }
+  property Double R0 { get; }
+  property Double R1 { get; }
+  property Double X0 { get; }
+  property Double X1 { get; }
+  property Double Y0 { get; }
+  property Double Y1 { get; }
+PeachDrawing.Text.Outlines.PaintSolid : sealed class
+  property Double Alpha { get; }
+  property Int32 PaletteIndex { get; }
+PeachDrawing.Text.Outlines.PaintSweepGradient : sealed class
+  property ColorLine Line { get; }
+  property Double CenterX { get; }
+  property Double CenterY { get; }
+  property Double EndAngle { get; }
+  property Double StartAngle { get; }
+PeachDrawing.Text.Outlines.PaintTransform : sealed class
+  property Affine2x3 Affine { get; }
+  property ColorPaint Paint { get; }
 PeachDrawing.Text.RuneInterval : struct
   ctor(Rune Start, Rune End)
   method Boolean Contains(Rune rune)
@@ -155,18 +279,25 @@ PeachDrawing.Text.Typeface : sealed class
   method Boolean HasGlyph(Rune rune)
   method Boolean MatchesEmojiPresentation(Rune rune, EmojiPresentation presentation)
   method Boolean SupportsFeatures(IReadOnlySet<String> tags)
+  method Boolean TryGetBitmap(UInt16 glyph, Double ppem, out EmbeddedBitmap bitmap)
+  method Boolean TryGetColorLayers(UInt16 glyph, out IReadOnlyList<ColorLayer> layers)
+  method Boolean TryGetOutline(UInt16 glyph, out GlyphOutline outline)
   method Boolean TryGetScriptPosition(ScriptPlacement placement, out ScriptPosition position)
   method Boolean TryMapRune(Rune rune, out UInt16 glyph)
+  method ColorPaint GetColorLayerPaint(Int32 index)
+  method ColorPaint GetColorPaint(UInt16 glyph)
   method Int32 GetAdvance(UInt16 glyph)
   method Int32 GetHashCode()
   method Int32 GetVerticalAdvance(UInt16 glyph)
   method Point GetVerticalOrigin(UInt16 glyph)
   method String ToString()
+  property Boolean HasBitmapGlyphs { get; }
   property Boolean HasColorGlyphs { get; }
   property Boolean HasVerticalMetrics { get; }
   property Boolean HasVerticalOrigin { get; }
   property Boolean IsBold { get; }
   property Boolean IsItalic { get; }
+  property ColorPalette ColorPalette { get; }
   property String FamilyName { get; }
   property String StyleName { get; }
   property TypefaceMetrics Metrics { get; }

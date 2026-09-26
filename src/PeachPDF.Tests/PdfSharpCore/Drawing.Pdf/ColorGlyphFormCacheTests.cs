@@ -1,3 +1,4 @@
+using PeachDrawing.Text;
 using PeachDrawing.Text.Internal.Fonts;
 using System.Collections.Generic;
 using System.IO;
@@ -21,8 +22,13 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing.Pdf
     /// </summary>
     public class ColorGlyphFormCacheTests
     {
-        private static OpenTypeDescriptor Descriptor(string path) =>
-            new("color-form-cache-test", "color-form-cache-test", FontFileData.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface);
+        private static Typeface Descriptor(string path)
+        {
+            var set = new FontSet();
+            var family = set.AddFile(path, new AddOptions { FamilyName = "color-form-cache-test-" + Guid.NewGuid().ToString("N") });
+            family.TryMatch(new TypefaceQuery(), out var match);
+            return match.Typeface;
+        }
 
         private static Dictionary<int, XColor> Overrides(params (int Entry, XColor Color)[] entries)
         {
@@ -32,7 +38,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing.Pdf
             return map;
         }
 
-        private static ColorGlyphFormCache.Selector Key(OpenTypeDescriptor descriptor, int glyphId = 7,
+        private static ColorGlyphFormCache.Selector Key(Typeface descriptor, int glyphId = 7,
             int paletteIndex = 0, XColor? foreground = null, IReadOnlyDictionary<int, XColor>? overrides = null)
             => new(descriptor, glyphId, paletteIndex, foreground ?? XColors.Black, overrides);
 

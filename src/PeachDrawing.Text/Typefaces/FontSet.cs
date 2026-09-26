@@ -1,4 +1,4 @@
-using PeachDrawing.Text.Internal.Fonts;
+﻿using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Unicode;
 using System;
 using System.Collections.Generic;
@@ -266,7 +266,7 @@ namespace PeachDrawing.Text
             };
 
             var face = LoadedTypeface.GetOrCreateFrom(familyName, options, Resolver);
-            return new TypefaceMatch(new Typeface(face), face.StyleSimulations);
+            return new TypefaceMatch(face.Public, face.StyleSimulations);
         }
     }
 }

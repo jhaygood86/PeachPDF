@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
@@ -272,8 +273,8 @@ namespace PeachPDF.Adapters
             double letterSpacing = 0, ShapeSettings? features = null)
         {
             var realFont = ((FontAdapter)font).Font;
-            var descriptor = realFont.Descriptor;
-            if (descriptor is null || descriptor.UnitsPerEm == 0 || bandBottom <= bandTop)
+            var typeface = realFont.Typeface;
+            if (typeface.Metrics.UnitsPerEm == 0 || bandBottom <= bandTop)
                 return null;
 
             // The baseline this run is actually painted at. Deliberately recomputed here from the font's
@@ -293,7 +294,7 @@ namespace PeachPDF.Adapters
 
             if (!_inkCrossings.TryGetValue(key, out var relative))
             {
-                relative = MeasureInkCrossings(descriptor, realFont, str, key, PixelsPerPoint);
+                relative = MeasureInkCrossings(typeface, realFont, str, key, PixelsPerPoint);
                 _inkCrossings[key] = relative;
             }
 
@@ -315,23 +316,23 @@ namespace PeachPDF.Adapters
         /// run had a decodable outline at all.
         /// </summary>
         private static List<RInkSpan>? MeasureInkCrossings(
-            OpenTypeDescriptor descriptor, XFont realFont, string str, in InkCrossingKey key,
+            Typeface typeface, XFont realFont, string str, in InkCrossingKey key,
             double pixelsPerPoint)
         {
             // Same design-units-to-user-space scale GetTextOutline resolves; see its own remarks. The
             // em-square is y-up and user space is y-down, so the band's top edge is the HIGH design y.
-            var scale = realFont.Size * pixelsPerPoint / descriptor.UnitsPerEm;
+            var scale = realFont.Size * pixelsPerPoint / typeface.Metrics.UnitsPerEm;
             if (scale <= 0) return null;
 
             List<RInkSpan> spans = [];
             var sawOutline = false;
             double penX = 0;
 
-            foreach (var glyph in Shaper.Shape(realFont.Typeface, str, key.Features).Glyphs)
+            foreach (var glyph in Shaper.Shape(typeface, str, key.Features).Glyphs)
             {
                 var glyphId = glyph.GlyphIndex;
 
-                if (descriptor.TryGetGlyphOutline(glyphId, out var outline))
+                if (typeface.TryGetOutline((ushort)glyphId, out var outline))
                 {
                     sawOutline = true;
 
@@ -342,7 +343,7 @@ namespace PeachPDF.Adapters
                     var glyphX = penX + glyph.XOffset * scale;
                     var glyphY = -glyph.YOffset * scale;
 
-                    var crossings = GlyphInkScanner.Crossings(outline,
+                    var crossings = outline.Crossings(
                         (glyphY - key.BandBottom) / scale, (glyphY - key.BandTop) / scale);
 
                     // One span per glyph, hulling everything the glyph puts in the band, rather than one
@@ -364,7 +365,7 @@ namespace PeachPDF.Adapters
                     }
                 }
 
-                penX += (descriptor.GlyphIndexToWidth(glyphId) + glyph.XAdvanceDelta) * scale + key.LetterSpacing;
+                penX += (typeface.GetAdvance((ushort)glyphId) + glyph.XAdvanceDelta) * scale + key.LetterSpacing;
             }
 
             // No glyph in the run had a decodable outline at all - a CFF/bitmap font, or a run of

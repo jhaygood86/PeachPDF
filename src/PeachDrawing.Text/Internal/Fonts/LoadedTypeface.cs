@@ -199,6 +199,14 @@ namespace PeachDrawing.Text.Internal.Fonts
         internal OpenTypeDescriptor Descriptor => _descriptor ??= new OpenTypeDescriptor(Key, FamilyName, Fontface);
         volatile OpenTypeDescriptor? _descriptor;
 
+        /// <summary>
+        /// The public <see cref="PeachDrawing.Text.Typeface"/> of this face: one object for as long as this typeface lives, so
+        /// a caller can key a cache by its identity and every match of this face hands back the same one.
+        /// </summary>
+        internal PeachDrawing.Text.Typeface Public
+            => _public ?? System.Threading.Interlocked.CompareExchange(ref _public, new PeachDrawing.Text.Typeface(this), null) ?? _public!;
+        PeachDrawing.Text.Typeface? _public;
+
         public FontFileData FontSource
         {
             get { return _fontSource; }

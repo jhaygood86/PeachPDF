@@ -5,7 +5,7 @@
 //   - v0 exposes, per base glyph, an ordered list of (layer glyph, palette
 //     entry) pairs painted bottom-to-top.
 //   - v1 exposes, per base glyph, a "paint graph" (gradients, transforms,
-//     glyph clips, compositing) parsed lazily into the ColrPaint model below.
+//     glyph clips, compositing) parsed lazily into the ColorPaint model below.
 //
 // Variable paints (PaintVar*) are read at their default instance (variation
 // deltas ignored - PeachPDF has no variable-font instancing).
@@ -14,106 +14,11 @@
 //
 #endregion
 
+using PeachDrawing.Text.Outlines;
 using System.Collections.Generic;
 
 namespace PeachDrawing.Text.Internal.Fonts.OpenType
 {
-    // ---- Paint graph model (COLR v1) -----------------------------------------------------------
-
-    internal enum ColrExtend { Pad = 0, Repeat = 1, Reflect = 2 }
-
-    internal readonly record struct ColrColorStop(double Offset, int PaletteIndex, double Alpha);
-
-    internal sealed class ColrColorLine
-    {
-        public ColrExtend Extend { get; init; }
-        public List<ColrColorStop> Stops { get; } = [];
-    }
-
-    /// <summary>An affine map: x' = XX*x + XY*y + DX, y' = YX*x + YY*y + DY.</summary>
-    internal readonly record struct ColrAffine(double XX, double YX, double XY, double YY, double DX, double DY)
-    {
-        public static readonly ColrAffine Identity = new(1, 0, 0, 1, 0, 0);
-
-        /// <summary>Returns a ∘ b (b applied first, then a).</summary>
-        public static ColrAffine Multiply(ColrAffine a, ColrAffine b) => new(
-            a.XX * b.XX + a.XY * b.YX,
-            a.YX * b.XX + a.YY * b.YX,
-            a.XX * b.XY + a.XY * b.YY,
-            a.YX * b.XY + a.YY * b.YY,
-            a.XX * b.DX + a.XY * b.DY + a.DX,
-            a.YX * b.DX + a.YY * b.DY + a.DY);
-    }
-
-    internal abstract class ColrPaint;
-
-    internal sealed class ColrPaintColrLayers : ColrPaint
-    {
-        public int FirstLayerIndex { get; init; }
-        public int NumLayers { get; init; }
-    }
-
-    internal sealed class ColrPaintSolid : ColrPaint
-    {
-        public int PaletteIndex { get; init; }
-        public double Alpha { get; init; }
-    }
-
-    internal sealed class ColrPaintLinearGradient : ColrPaint
-    {
-        public ColrColorLine Line { get; init; } = null!;
-        public double X0 { get; init; }
-        public double Y0 { get; init; }
-        public double X1 { get; init; }
-        public double Y1 { get; init; }
-        public double X2 { get; init; }
-        public double Y2 { get; init; }
-    }
-
-    internal sealed class ColrPaintRadialGradient : ColrPaint
-    {
-        public ColrColorLine Line { get; init; } = null!;
-        public double X0 { get; init; }
-        public double Y0 { get; init; }
-        public double R0 { get; init; }
-        public double X1 { get; init; }
-        public double Y1 { get; init; }
-        public double R1 { get; init; }
-    }
-
-    internal sealed class ColrPaintSweepGradient : ColrPaint
-    {
-        public ColrColorLine Line { get; init; } = null!;
-        public double CenterX { get; init; }
-        public double CenterY { get; init; }
-        public double StartAngle { get; init; } // radians
-        public double EndAngle { get; init; }   // radians
-    }
-
-    internal sealed class ColrPaintGlyph : ColrPaint
-    {
-        public int GlyphId { get; init; }
-        public ColrPaint? Paint { get; init; }
-    }
-
-    internal sealed class ColrPaintColrGlyph : ColrPaint
-    {
-        public int GlyphId { get; init; }
-    }
-
-    internal sealed class ColrPaintTransform : ColrPaint
-    {
-        public ColrAffine Affine { get; init; }
-        public ColrPaint? Paint { get; init; }
-    }
-
-    internal sealed class ColrPaintComposite : ColrPaint
-    {
-        public ColrPaint? Source { get; init; }
-        public int Mode { get; init; }
-        public ColrPaint? Backdrop { get; init; }
-    }
-
     // ---- Table reader --------------------------------------------------------------------------
 
     internal sealed class ColrTable
@@ -129,7 +34,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         // v1
         private readonly Dictionary<int, int>? _v1BaseGlyphPaintOffsets;
         private readonly int[]? _v1LayerPaintOffsets;
-        private readonly Dictionary<int, ColrPaint?> _paintCache = [];
+        private readonly Dictionary<int, ColorPaint?> _paintCache = [];
 
         public int Version { get; }
 
@@ -208,24 +113,26 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                || (_v1BaseGlyphPaintOffsets?.ContainsKey(glyphId) ?? false);
 
         /// <summary>Resolves a v0 base glyph's ordered (layer glyph, palette entry) layers.</summary>
-        public bool TryGetV0Layers(int glyphId, out List<(int LayerGlyphId, int PaletteIndex)> layers)
+        public bool TryGetV0Layers(int glyphId, out ColorLayer[] layers)
         {
             layers = null!;
             if (!_baseGlyphRecords.TryGetValue(glyphId, out var record) || record.Count <= 0)
                 return false;
 
-            layers = new List<(int, int)>(record.Count);
+            var found = new List<ColorLayer>(record.Count);
             for (int i = 0; i < record.Count; i++)
             {
                 int index = record.First + i;
                 if (index >= 0 && index < _layerRecords.Length)
-                    layers.Add(_layerRecords[index]);
+                    found.Add(new ColorLayer(_layerRecords[index].Gid, _layerRecords[index].PaletteIndex));
             }
+
+            layers = found.ToArray();
             return true;
         }
 
         /// <summary>The root paint of a v1 color glyph, or null if it has none.</summary>
-        public ColrPaint? GetV1BaseGlyphPaint(int glyphId)
+        public ColorPaint? GetV1BaseGlyphPaint(int glyphId)
         {
             if (_v1BaseGlyphPaintOffsets is null || !_v1BaseGlyphPaintOffsets.TryGetValue(glyphId, out int offset))
                 return null;
@@ -240,7 +147,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         }
 
         /// <summary>The paint at a LayerList index (used by PaintColrLayers).</summary>
-        public ColrPaint? GetLayerPaint(int index)
+        public ColorPaint? GetLayerPaint(int index)
         {
             if (_v1LayerPaintOffsets is null || index < 0 || index >= _v1LayerPaintOffsets.Length)
                 return null;
@@ -252,23 +159,23 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
         // ---- Paint parsing ---------------------------------------------------------------------
 
-        private ColrPaint? ParsePaint(int offset, HashSet<int> visiting, int depth)
+        private ColorPaint? ParsePaint(int offset, HashSet<int> visiting, int depth)
         {
             if (offset <= 0 || depth > MaxPaintDepth)
                 return null;
-            if (_paintCache.TryGetValue(offset, out ColrPaint? cached))
+            if (_paintCache.TryGetValue(offset, out ColorPaint? cached))
                 return cached;
             if (!visiting.Add(offset))
                 return null; // cycle
 
-            ColrPaint? result = ParsePaintCore(offset, visiting, depth);
+            ColorPaint? result = ParsePaintCore(offset, visiting, depth);
 
             visiting.Remove(offset);
             _paintCache[offset] = result;
             return result;
         }
 
-        private ColrPaint? ParsePaintCore(int offset, HashSet<int> visiting, int depth)
+        private ColorPaint? ParsePaintCore(int offset, HashSet<int> visiting, int depth)
         {
             _face.Position = offset;
             int format = _face.ReadByte();
@@ -279,14 +186,14 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 {
                     int numLayers = _face.ReadByte();
                     int firstLayerIndex = (int)_face.ReadULong();
-                    return new ColrPaintColrLayers { FirstLayerIndex = firstLayerIndex, NumLayers = numLayers };
+                    return new PaintColrLayers { FirstLayerIndex = firstLayerIndex, NumLayers = numLayers };
                 }
                 case 2: // PaintSolid
                 case 3: // PaintVarSolid
                 {
                     int paletteIndex = _face.ReadUShort();
                     double alpha = ReadF2Dot14();
-                    return new ColrPaintSolid { PaletteIndex = paletteIndex, Alpha = alpha };
+                    return new PaintSolid { PaletteIndex = paletteIndex, Alpha = alpha };
                 }
                 case 4: // PaintLinearGradient
                 case 5: // PaintVarLinearGradient
@@ -295,8 +202,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     double x0 = _face.ReadShort(), y0 = _face.ReadShort();
                     double x1 = _face.ReadShort(), y1 = _face.ReadShort();
                     double x2 = _face.ReadShort(), y2 = _face.ReadShort();
-                    ColrColorLine line = ReadColorLine(offset + lineOffset, format == 5);
-                    return new ColrPaintLinearGradient { Line = line, X0 = x0, Y0 = y0, X1 = x1, Y1 = y1, X2 = x2, Y2 = y2 };
+                    ColorLine line = ReadColorLine(offset + lineOffset, format == 5);
+                    return new PaintLinearGradient { Line = line, X0 = x0, Y0 = y0, X1 = x1, Y1 = y1, X2 = x2, Y2 = y2 };
                 }
                 case 6: // PaintRadialGradient
                 case 7: // PaintVarRadialGradient
@@ -306,8 +213,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     double r0 = _face.ReadUShort();
                     double x1 = _face.ReadShort(), y1 = _face.ReadShort();
                     double r1 = _face.ReadUShort();
-                    ColrColorLine line = ReadColorLine(offset + lineOffset, format == 7);
-                    return new ColrPaintRadialGradient { Line = line, X0 = x0, Y0 = y0, R0 = r0, X1 = x1, Y1 = y1, R1 = r1 };
+                    ColorLine line = ReadColorLine(offset + lineOffset, format == 7);
+                    return new PaintRadialGradient { Line = line, X0 = x0, Y0 = y0, R0 = r0, X1 = x1, Y1 = y1, R1 = r1 };
                 }
                 case 8: // PaintSweepGradient
                 case 9: // PaintVarSweepGradient
@@ -316,27 +223,27 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     double cx = _face.ReadShort(), cy = _face.ReadShort();
                     double startAngle = ReadAngle();
                     double endAngle = ReadAngle();
-                    ColrColorLine line = ReadColorLine(offset + lineOffset, format == 9);
-                    return new ColrPaintSweepGradient { Line = line, CenterX = cx, CenterY = cy, StartAngle = startAngle, EndAngle = endAngle };
+                    ColorLine line = ReadColorLine(offset + lineOffset, format == 9);
+                    return new PaintSweepGradient { Line = line, CenterX = cx, CenterY = cy, StartAngle = startAngle, EndAngle = endAngle };
                 }
                 case 10: // PaintGlyph
                 {
                     int paintOffset = ReadOffset24();
                     int glyphId = _face.ReadUShort();
-                    ColrPaint? child = ParsePaint(offset + paintOffset, visiting, depth + 1);
-                    return new ColrPaintGlyph { GlyphId = glyphId, Paint = child };
+                    ColorPaint? child = ParsePaint(offset + paintOffset, visiting, depth + 1);
+                    return new PaintGlyph { GlyphId = glyphId, Paint = child };
                 }
                 case 11: // PaintColrGlyph
                 {
                     int glyphId = _face.ReadUShort();
-                    return new ColrPaintColrGlyph { GlyphId = glyphId };
+                    return new PaintColrGlyph { GlyphId = glyphId };
                 }
                 case 12: // PaintTransform
                 case 13: // PaintVarTransform
                 {
                     int paintOffset = ReadOffset24();
                     int transformOffset = ReadOffset24();
-                    ColrAffine affine = ReadAffine(offset + transformOffset);
+                    Affine2x3 affine = ReadAffine(offset + transformOffset);
                     return WrapTransform(affine, offset + paintOffset, visiting, depth);
                 }
                 case 14: // PaintTranslate
@@ -344,14 +251,14 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 {
                     int paintOffset = ReadOffset24();
                     double dx = _face.ReadShort(), dy = _face.ReadShort();
-                    return WrapTransform(new ColrAffine(1, 0, 0, 1, dx, dy), offset + paintOffset, visiting, depth);
+                    return WrapTransform(new Affine2x3(1, 0, 0, 1, dx, dy), offset + paintOffset, visiting, depth);
                 }
                 case 16: // PaintScale
                 case 17: // PaintVarScale
                 {
                     int paintOffset = ReadOffset24();
                     double sx = ReadF2Dot14(), sy = ReadF2Dot14();
-                    return WrapTransform(new ColrAffine(sx, 0, 0, sy, 0, 0), offset + paintOffset, visiting, depth);
+                    return WrapTransform(new Affine2x3(sx, 0, 0, sy, 0, 0), offset + paintOffset, visiting, depth);
                 }
                 case 18: // PaintScaleAroundCenter
                 case 19: // PaintVarScaleAroundCenter
@@ -359,14 +266,14 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     int paintOffset = ReadOffset24();
                     double sx = ReadF2Dot14(), sy = ReadF2Dot14();
                     double cx = _face.ReadShort(), cy = _face.ReadShort();
-                    return WrapTransform(AroundCenter(new ColrAffine(sx, 0, 0, sy, 0, 0), cx, cy), offset + paintOffset, visiting, depth);
+                    return WrapTransform(AroundCenter(new Affine2x3(sx, 0, 0, sy, 0, 0), cx, cy), offset + paintOffset, visiting, depth);
                 }
                 case 20: // PaintScaleUniform
                 case 21: // PaintVarScaleUniform
                 {
                     int paintOffset = ReadOffset24();
                     double s = ReadF2Dot14();
-                    return WrapTransform(new ColrAffine(s, 0, 0, s, 0, 0), offset + paintOffset, visiting, depth);
+                    return WrapTransform(new Affine2x3(s, 0, 0, s, 0, 0), offset + paintOffset, visiting, depth);
                 }
                 case 22: // PaintScaleUniformAroundCenter
                 case 23: // PaintVarScaleUniformAroundCenter
@@ -374,20 +281,20 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     int paintOffset = ReadOffset24();
                     double s = ReadF2Dot14();
                     double cx = _face.ReadShort(), cy = _face.ReadShort();
-                    return WrapTransform(AroundCenter(new ColrAffine(s, 0, 0, s, 0, 0), cx, cy), offset + paintOffset, visiting, depth);
+                    return WrapTransform(AroundCenter(new Affine2x3(s, 0, 0, s, 0, 0), cx, cy), offset + paintOffset, visiting, depth);
                 }
                 case 24: // PaintRotate
                 case 25: // PaintVarRotate
                 {
                     int paintOffset = ReadOffset24();
-                    ColrAffine rotate = Rotation(ReadAngle());
+                    Affine2x3 rotate = Rotation(ReadAngle());
                     return WrapTransform(rotate, offset + paintOffset, visiting, depth);
                 }
                 case 26: // PaintRotateAroundCenter
                 case 27: // PaintVarRotateAroundCenter
                 {
                     int paintOffset = ReadOffset24();
-                    ColrAffine rotate = Rotation(ReadAngle());
+                    Affine2x3 rotate = Rotation(ReadAngle());
                     double cx = _face.ReadShort(), cy = _face.ReadShort();
                     return WrapTransform(AroundCenter(rotate, cx, cy), offset + paintOffset, visiting, depth);
                 }
@@ -395,14 +302,14 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 case 29: // PaintVarSkew
                 {
                     int paintOffset = ReadOffset24();
-                    ColrAffine skew = Skew(ReadAngle(), ReadAngle());
+                    Affine2x3 skew = Skew(ReadAngle(), ReadAngle());
                     return WrapTransform(skew, offset + paintOffset, visiting, depth);
                 }
                 case 30: // PaintSkewAroundCenter
                 case 31: // PaintVarSkewAroundCenter
                 {
                     int paintOffset = ReadOffset24();
-                    ColrAffine skew = Skew(ReadAngle(), ReadAngle());
+                    Affine2x3 skew = Skew(ReadAngle(), ReadAngle());
                     double cx = _face.ReadShort(), cy = _face.ReadShort();
                     return WrapTransform(AroundCenter(skew, cx, cy), offset + paintOffset, visiting, depth);
                 }
@@ -411,24 +318,24 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     int sourceOffset = ReadOffset24();
                     int mode = _face.ReadByte();
                     int backdropOffset = ReadOffset24();
-                    ColrPaint? source = ParsePaint(offset + sourceOffset, visiting, depth + 1);
-                    ColrPaint? backdrop = ParsePaint(offset + backdropOffset, visiting, depth + 1);
-                    return new ColrPaintComposite { Source = source, Mode = mode, Backdrop = backdrop };
+                    ColorPaint? source = ParsePaint(offset + sourceOffset, visiting, depth + 1);
+                    ColorPaint? backdrop = ParsePaint(offset + backdropOffset, visiting, depth + 1);
+                    return new PaintComposite { Source = source, Mode = mode, Backdrop = backdrop };
                 }
                 default:
                     return null; // unknown/unsupported paint format
             }
         }
 
-        private ColrPaint WrapTransform(ColrAffine affine, int childOffset, HashSet<int> visiting, int depth)
-            => new ColrPaintTransform { Affine = affine, Paint = ParsePaint(childOffset, visiting, depth + 1) };
+        private ColorPaint WrapTransform(Affine2x3 affine, int childOffset, HashSet<int> visiting, int depth)
+            => new PaintTransform { Affine = affine, Paint = ParsePaint(childOffset, visiting, depth + 1) };
 
-        private ColrColorLine ReadColorLine(int offset, bool isVariable)
+        private ColorLine ReadColorLine(int offset, bool isVariable)
         {
             _face.Position = offset;
-            var extend = (ColrExtend)_face.ReadByte();
+            var extend = (ColorExtend)_face.ReadByte();
             int numStops = _face.ReadUShort();
-            var line = new ColrColorLine { Extend = extend };
+            var line = new ColorLine { Extend = extend };
             for (int i = 0; i < numStops; i++)
             {
                 double stopOffset = ReadF2Dot14();
@@ -436,36 +343,36 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 double alpha = ReadF2Dot14();
                 if (isVariable)
                     _face.ReadULong(); // varIndexBase - ignored
-                line.Stops.Add(new ColrColorStop(stopOffset, paletteIndex, alpha));
+                line.StopList.Add(new ColorStop(stopOffset, paletteIndex, alpha));
             }
             return line;
         }
 
-        private ColrAffine ReadAffine(int offset)
+        private Affine2x3 ReadAffine(int offset)
         {
             _face.Position = offset;
             double xx = ReadFixed(), yx = ReadFixed(), xy = ReadFixed(), yy = ReadFixed(), dx = ReadFixed(), dy = ReadFixed();
-            return new ColrAffine(xx, yx, xy, yy, dx, dy);
+            return new Affine2x3(xx, yx, xy, yy, dx, dy);
         }
 
-        private static ColrAffine Rotation(double radians)
+        private static Affine2x3 Rotation(double radians)
         {
             double cos = System.Math.Cos(radians), sin = System.Math.Sin(radians);
-            return new ColrAffine(cos, sin, -sin, cos, 0, 0);
+            return new Affine2x3(cos, sin, -sin, cos, 0, 0);
         }
 
-        private static ColrAffine Skew(double xSkewRadians, double ySkewRadians)
+        private static Affine2x3 Skew(double xSkewRadians, double ySkewRadians)
         {
             // COLR PaintSkew: x' = x - tan(xSkew)·y, y' = y + tan(ySkew)·x.
-            // In ColrAffine (XX, YX, XY, YY, DX, DY): XY = -tan(xSkew), YX = +tan(ySkew).
-            return new ColrAffine(1, System.Math.Tan(ySkewRadians), -System.Math.Tan(xSkewRadians), 1, 0, 0);
+            // In Affine2x3 (XX, YX, XY, YY, DX, DY): XY = -tan(xSkew), YX = +tan(ySkew).
+            return new Affine2x3(1, System.Math.Tan(ySkewRadians), -System.Math.Tan(xSkewRadians), 1, 0, 0);
         }
 
-        private static ColrAffine AroundCenter(ColrAffine m, double cx, double cy)
+        private static Affine2x3 AroundCenter(Affine2x3 m, double cx, double cy)
         {
-            var toCenter = new ColrAffine(1, 0, 0, 1, cx, cy);
-            var fromCenter = new ColrAffine(1, 0, 0, 1, -cx, -cy);
-            return ColrAffine.Multiply(ColrAffine.Multiply(toCenter, m), fromCenter);
+            var toCenter = new Affine2x3(1, 0, 0, 1, cx, cy);
+            var fromCenter = new Affine2x3(1, 0, 0, 1, -cx, -cy);
+            return Affine2x3.Multiply(Affine2x3.Multiply(toCenter, m), fromCenter);
         }
 
         private int ReadOffset24()

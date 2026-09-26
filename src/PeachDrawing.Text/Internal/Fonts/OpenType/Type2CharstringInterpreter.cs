@@ -1,4 +1,4 @@
-#region PeachPDF - A .NET library for rendering HTML to PDF
+﻿#region PeachPDF - A .NET library for rendering HTML to PDF
 //
 // Decodes a CFF font's Type 2 charstrings (Adobe Technical Note #5177, "The
 // Type 2 Charstring Format") into the same GlyphOutline model
@@ -7,7 +7,7 @@
 // ("OTTO") fonts, which have no `glyf` table at all. Unlike glyf's quadratic
 // on/off-curve points, Type 2 curves are already cubic, so no elevation step
 // is needed - rrcurveto and its hh/vv/hv/vh variants map straight onto
-// GlyphSegment.Cubic.
+// OutlineSegment.Cubic.
 //
 // Deliberately NOT implemented - fails soft (the glyph reports no outline,
 // same contract as an absent glyf table) rather than being interpreted:
@@ -19,6 +19,7 @@
 //
 #endregion
 
+using PeachDrawing.Text.Outlines;
 using System;
 using System.Collections.Generic;
 
@@ -55,7 +56,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
                 if (interpreter.Failed) return false;
 
-                outline.Contours.AddRange(interpreter.Contours);
+                outline.ContourList.AddRange(interpreter.Contours);
                 return !outline.IsEmpty;
             }
             catch (Exception)
@@ -73,15 +74,15 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         private sealed class Interpreter(CffTable cff, CffIndex localSubrs)
         {
             private readonly List<double> _stack = [];
-            private readonly List<GlyphContour> _contours = [];
+            private readonly List<OutlineContour> _contours = [];
             private double _x, _y;
-            private GlyphContour? _current;
+            private OutlineContour? _current;
             private int _stemCount;
             private bool _widthTaken;
             private bool _ended;
 
             public bool Failed { get; private set; }
-            public IReadOnlyList<GlyphContour> Contours => _contours;
+            public IReadOnlyList<OutlineContour> Contours => _contours;
 
             /// <summary>Closes and records the in-progress contour, if any - a no-op once already closed.</summary>
             public void CloseCurrentContour()
@@ -320,7 +321,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 CloseCurrentContour();
                 _x = x;
                 _y = y;
-                _current = new GlyphContour(new GlyphOutlinePoint(_x, _y));
+                _current = new OutlineContour(new OutlinePoint(_x, _y));
             }
 
             private void LineTo(double x, double y)
@@ -328,21 +329,21 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 _x = x;
                 _y = y;
                 EnsureContour();
-                _current!.Segments.Add(GlyphSegment.Line(new GlyphOutlinePoint(_x, _y)));
+                _current!.SegmentList.Add(OutlineSegment.Line(new OutlinePoint(_x, _y)));
             }
 
             private void CurveTo(double dxa, double dya, double dxb, double dyb, double dxc, double dyc)
             {
-                var c1 = new GlyphOutlinePoint(_x + dxa, _y + dya);
-                var c2 = new GlyphOutlinePoint(c1.X + dxb, c1.Y + dyb);
+                var c1 = new OutlinePoint(_x + dxa, _y + dya);
+                var c2 = new OutlinePoint(c1.X + dxb, c1.Y + dyb);
                 _x = c2.X + dxc;
                 _y = c2.Y + dyc;
                 EnsureContour();
-                _current!.Segments.Add(GlyphSegment.Cubic(c1, c2, new GlyphOutlinePoint(_x, _y)));
+                _current!.SegmentList.Add(OutlineSegment.Cubic(c1, c2, new OutlinePoint(_x, _y)));
             }
 
             /// <summary>A line/curve reached before any moveto (malformed, but seen from buggy subsetters) opens an implicit contour at the current point instead of crashing.</summary>
-            private void EnsureContour() => _current ??= new GlyphContour(new GlyphOutlinePoint(_x, _y));
+            private void EnsureContour() => _current ??= new OutlineContour(new OutlinePoint(_x, _y));
 
             private void OpAlternatingLineto(bool startHorizontal)
             {

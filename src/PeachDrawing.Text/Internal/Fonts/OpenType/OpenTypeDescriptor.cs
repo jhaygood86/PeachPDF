@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Text;
 using PeachDrawing.Text.Internal.Text.Bidi;
@@ -539,7 +540,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// The bitmap picture of a glyph from the strike best suited to a font size of <paramref name="ppem"/> pixels per em, or false when
         /// the glyph has none (an outline glyph, or a font without bitmap colour tables).
         /// </summary>
-        public bool TryGetBitmapGlyph(int glyphId, double ppem, out BitmapGlyph glyph)
+        public bool TryGetBitmapGlyph(int glyphId, double ppem, out EmbeddedBitmap glyph)
         {
             glyph = default;
             return FontFace.bitmap?.TryGet(glyphId, ppem, out glyph) ?? false;
