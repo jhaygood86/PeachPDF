@@ -70,7 +70,25 @@ PeachDrawing.Text.Layout.ContentWidths : struct
   method Void Deconstruct(out Double MinContent, out Double MaxContent)
   property Double MaxContent { get; init; }
   property Double MinContent { get; init; }
+PeachDrawing.Text.Layout.HyphenateLimitChars : struct
+  ctor(Nullable<Int32> WordLength = null, Nullable<Int32> BeforeBreak = null, Nullable<Int32> AfterBreak = null)
+  method Boolean Equals(HyphenateLimitChars other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Nullable<Int32> WordLength, out Nullable<Int32> BeforeBreak, out Nullable<Int32> AfterBreak)
+  property Nullable<Int32> AfterBreak { get; init; }
+  property Nullable<Int32> BeforeBreak { get; init; }
+  property Nullable<Int32> WordLength { get; init; }
+PeachDrawing.Text.Layout.HyphenateLimitLast : enum Int32
+  Always = 1
+  None = 0
+PeachDrawing.Text.Layout.Hyphens : enum Int32
+  Auto = 2
+  Manual = 0
+  None = 1
 PeachDrawing.Text.Layout.LineBox : sealed class
+  property Boolean IsTruncated { get; }
   property Double Ascent { get; }
   property Double Baseline { get; }
   property Double Descent { get; }
@@ -86,6 +104,7 @@ PeachDrawing.Text.Layout.LineBox : sealed class
 PeachDrawing.Text.Layout.LineEnd : enum Int32
   Emergency = 2
   Forced = 1
+  Hyphenated = 4
   Last = 3
   Soft = 0
 PeachDrawing.Text.Layout.OverflowWrap : enum Int32
@@ -111,6 +130,7 @@ PeachDrawing.Text.Layout.ParagraphLayout : sealed class
   method TextPosition PositionAt(PointF point)
   method TextRange GraphemeRangeAt(Int32 index)
   method TextRange WordRangeAt(Int32 index)
+  property Boolean IsTruncated { get; }
   property Double ContentWidth { get; }
   property Double Height { get; }
   property Double Width { get; }
@@ -124,16 +144,27 @@ PeachDrawing.Text.Layout.ParagraphStyle : struct
   method String ToString()
   property BaseDirection Direction { get; init; }
   property Boolean NoWrap { get; init; }
+  property Double HyphenateLimitZone { get; init; }
+  property HyphenateLimitChars HyphenateLimitChars { get; init; }
+  property HyphenateLimitLast HyphenateLimitLast { get; init; }
+  property Hyphens Hyphens { get; init; }
   property LineBreakOptions LineBreak { get; init; }
   property Nullable<Double> LineHeight { get; init; }
+  property Nullable<Int32> HyphenateLimitLines { get; init; }
+  property Nullable<Int32> MaxLines { get; init; }
   property Nullable<TextAlign> AlignLast { get; init; }
   property OverflowWrap OverflowWrap { get; init; }
+  property String Ellipsis { get; init; }
+  property String HyphenateCharacter { get; init; }
   property TabSize TabSize { get; init; }
   property TextAlign Align { get; init; }
   property TextIndent TextIndent { get; init; }
+  property TextJustify TextJustify { get; init; }
+  property TextOverflow TextOverflow { get; init; }
 PeachDrawing.Text.Layout.PlacedRun : sealed class
   method Double GetCaretX(Int32 index)
   method Double GetGlyphAdvance(Int32 glyphIndex)
+  property Boolean IsGenerated { get; }
   property Boolean IsRightToLeft { get; }
   property Byte Level { get; }
   property Double Baseline { get; }
@@ -184,6 +215,14 @@ PeachDrawing.Text.Layout.TextIndent : struct
   property Boolean EachLine { get; init; }
   property Boolean Hanging { get; init; }
   property Double Length { get; init; }
+PeachDrawing.Text.Layout.TextJustify : enum Int32
+  Auto = 0
+  InterCharacter = 3
+  InterWord = 2
+  None = 1
+PeachDrawing.Text.Layout.TextOverflow : enum Int32
+  Clip = 0
+  Ellipsis = 1
 PeachDrawing.Text.Layout.TextPosition : struct
   ctor(Int32 Index, TextAffinity Affinity = Downstream)
   method Boolean Equals(Object obj)

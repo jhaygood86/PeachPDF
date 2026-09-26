@@ -422,11 +422,13 @@ foreach (LineBox line in layout.Lines)
   face at the run's size; without one, or where it answers `null`, the face's missing-glyph shape is drawn. `FontSet.CreateFallback(query)` makes one
   from the families of a set, choosing the family whose coverage best fits the character's script.
 - **Spacing and justification.** `RunStyle.LetterSpacing` and `WordSpacing` add distance after every glyph and every space; both count in where lines
-  break and in the caret positions. `TextAlign.Justify` widens the spaces of every line that is not the last (nor ends in a forced break) so that it
-  fills the width, equally; a line with no space in it is left as it is, and `ParagraphStyle.AlignLast` sets how the last line and forced-break lines
-  are aligned (the start, by default). `PlacedRun.GetGlyphAdvance` gives the pen movement after each glyph, spacing and justification included, which
-  is what a caller draws with.
-
+  break and in the caret positions, and letter spacing turns off the optional ligatures of the text it is on. `TextAlign.Justify` shares the room a line
+  has left between its opportunities so that it fills the width, equally, in every line that is not the last (nor ends in a forced break);
+  `ParagraphStyle.TextJustify` says where the opportunities are: `Auto` (the spaces and the boundaries next to a Han, Hiragana, Katakana, Bopomofo or Yi
+  letter), `InterWord` (the spaces only), `InterCharacter` (every pair of adjacent characters, except joined cursive letters) or `None` (no justification).
+  A line with no opportunity is left as it is, a tab is a wall that nothing is added next to, and `ParagraphStyle.AlignLast` sets how the last line and
+  forced-break lines are aligned (the start, by default). `PlacedRun.GetGlyphAdvance` gives the pen movement after each glyph, spacing and justification
+  included, which is what a caller draws with.
 - **Indent and tab stops.** `ParagraphStyle.TextIndent` moves the start of a line in from the start edge (the left of a left-to-right paragraph, the right
   of a right-to-left one): by default the first line only, with `EachLine` also the line after every forced break, and with `Hanging` every line
   except those. The indent takes room from the line, which breaks earlier, and alignment and justification work in what is left; a negative indent moves
@@ -436,8 +438,27 @@ foreach (LineBox line in layout.Lines)
   the text is written, indent included; a tab at the end of a line hangs; a tab is a run of its own with no glyphs, so it draws nothing, and it is
   not a justification opportunity. `ContentWidth` and `MeasureContent()` count the indent.
 
-Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Hyphenation, a line limit with an
-ellipsis, inline boxes and justification between characters (as opposed to between words) are not part of the layout yet.
+- **Hyphenation.** `ParagraphStyle.Hyphens` is `Manual` by default: a soft hyphen (U+00AD) is a place a line may break, the line then ends with a hyphen
+  (`LineBox.End` is `Hyphenated`), and a soft hyphen the line does not end at draws nothing and takes no room. `None` makes soft hyphens no place to break,
+  and `Auto` also breaks words where the patterns of their language allow (`Hyphenator`; the language is the `ShapeSettings.Language` of the run the word is in, or the
+  `Language` of `ParagraphStyle.LineBreak`; a word with neither is left whole). A word is hyphenated when it would not fit, as far along as it goes, before
+  the emergency cut of `OverflowWrap` is tried. The hyphen is a generated run (`PlacedRun.IsGenerated`, an empty `Range`, drawn like any run) at the end of the line in the
+  paragraph's direction, U+2010 if the face has it and a hyphen-minus otherwise, or `ParagraphStyle.HyphenateCharacter`; it counts in the line's width. If the hyphen
+  would not fit after a soft hyphen the line ends at the last earlier place that has room for it. `HyphenateLimitChars` (word, before and after; 5, 2 and 2
+  by default), `HyphenateLimitLines` (hyphenated lines in a row), `HyphenateLimitZone` (room a line may leave before its last word is hyphenated) and
+  `HyphenateLimitLast` (`Always` keeps the last full line, the one before a rest that fits a line of its own, from ending with a hyphenation) restrict it. A
+  caret at a hyphenated break can be on either line as at any soft break, and lies before the hyphen. `MeasureContent()` counts hyphens, and with `Auto` its minimum
+  is the widest piece between two places a word may be hyphenated.
+
+- **Line limit and ellipsis.** `ParagraphStyle.MaxLines` lays the paragraph out in at most that many lines. When text is left over, the last line keeps as much of its text as
+  fits with `ParagraphStyle.Ellipsis` after it (U+2026, or three full stops if the face has no such character; an empty string means only cut), cut at a boundary between
+  characters that a reader sees as one and never after a space; `ParagraphLayout.IsTruncated` is set, and the last line is `LineEnd.Last` with `LineBox.IsTruncated`, a
+  `Range` that runs to the end of the text (the part after `ContentEnd` is hidden, like hanging space) and the ellipsis as a generated run at its end in the paragraph's
+  direction, in the style of the last character drawn. `TextOverflow.Ellipsis` cuts the same way any line that is wider than the width (a `NoWrap` line, or a word wider than
+  the paragraph) without ending the paragraph. A line limit is about lines, so one line that overflows its width is cut only when `TextOverflow` asks for it, and text that
+  ends in a newline does not count as text left out. Only the lines that are laid out are worked out, so a limit on a very long text costs what its lines cost.
+
+Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Inline boxes are not part of the layout yet.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 
