@@ -187,6 +187,41 @@ namespace PeachPDF.Html.Core
         internal Dictionary<CssBox, double> PageFloatPlacements { get; private set; } = [];
 
         /// <summary>
+        /// Scroll containers that were allowed to break across pages but whose content ran past their own
+        /// end in an earlier attempt of the current layout. <see cref="Fragmentation.MonolithicContent"/>
+        /// keeps each of them in one piece for the rest of that layout; the next one starts empty.
+        /// </summary>
+        internal HashSet<CssBox> ScrollContainersThatClip { get; } = [];
+
+        /// <summary>
+        /// How many times <see cref="PerformLayout"/> lays the document out again for boxes newly added to
+        /// <see cref="ScrollContainersThatClip"/>. Each attempt can only add boxes, and one is almost always
+        /// enough; the bound covers a box that starts clipping only once another is kept whole.
+        /// </summary>
+        private const int MaxClippingRelayouts = 3;
+
+        private bool _aScrollContainerStartedClipping;
+
+        /// <summary>
+        /// Records that <paramref name="box"/>, an <c>overflow: hidden</c> box that broke like a plain block,
+        /// clips its content, so the document is laid out again with it kept in one piece. A break among its
+        /// clipped lines would end the pass past the box's end and lose the content after it.
+        /// </summary>
+        /// <param name="box">the box whose content runs past its padding edge</param>
+        internal void NoteScrollContainerClips(CssBox box)
+        {
+            if (_scrollContainerClipsFrozen) return;
+            if (ScrollContainersThatClip.Add(box)) _aScrollContainerStartedClipping = true;
+        }
+
+        /// <summary>
+        /// Set for the last attempt <see cref="LayoutDocument"/> allows: a box noted then would never be laid
+        /// out monolithic, yet every later reader of <see cref="ScrollContainersThatClip"/> (the emitter's
+        /// materialization, paint) would treat it as monolithic. So the set stays as that attempt laid it out.
+        /// </summary>
+        private bool _scrollContainerClipsFrozen;
+
+        /// <summary>
         /// The room a <c>float-reference: column</c> page float pinned to a column's block-start edge
         /// needs in that column, as resolved on the previous attempt - the column-scoped counterpart of
         /// <see cref="TopFloatAreaHeightsBySlot"/>, seeded into that column's own
@@ -1621,6 +1656,12 @@ namespace PeachPDF.Html.Core
         private async ValueTask PerformLayoutOnePass(RGraphics g)
         {
             ActualSize = RSize.Empty;
+
+            // Which boxes clip is a fact about one layout: a box widened since the last one may fit under
+            // its cap now, and must be allowed to break again.
+            ScrollContainersThatClip.Clear();
+            _aScrollContainerStartedClipping = false;
+
             FloatScanCalls = 0;
             FloatScanBoxVisits = 0;
             BuildDraftCalls = 0;
@@ -2367,6 +2408,45 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
+        /// Lays the document out once from the root size and location the caller set, and again for each
+        /// scroll container found clipping its content (<see cref="NoteScrollContainerClips"/>).
+        /// </summary>
+        /// <remarks>
+        /// A scroll container capped only by <c>max-height</c> breaks like a plain block (css-break-3 §2),
+        /// unless its content turns out to overflow the cap, which only a layout can tell. Such a box is kept in
+        /// one piece for the rest of the layout and the document laid out again; within a layout a box only
+        /// ever joins the set, so this settles. It is done here rather than once in <see cref="PerformLayout"/>
+        /// because every caller lays out at its own geometry: a per-page width reflow, the footnote and page
+        /// float loop or a <c>target-counter</c> reflow can make a box clip that the first layout did not.
+        /// </remarks>
+        /// <param name="g">the graphics to measure with</param>
+        private async ValueTask LayoutDocument(RGraphics g)
+        {
+            var rootSize = Root!.Size;
+            var rootLocation = Root.Location;
+
+            await LayoutDocumentOnce(g);
+
+            try
+            {
+                for (var attempt = 0; attempt < MaxClippingRelayouts && _aScrollContainerStartedClipping; attempt++)
+                {
+                    _aScrollContainerStartedClipping = false;
+                    _scrollContainerClipsFrozen = attempt == MaxClippingRelayouts - 1;
+                    Root.Size = rootSize;
+                    Root.Location = rootLocation;
+                    ActualSize = RSize.Empty;
+                    await LayoutDocumentOnce(g);
+                }
+            }
+            finally
+            {
+                _scrollContainerClipsFrozen = false;
+                _aScrollContainerStartedClipping = false;
+            }
+        }
+
+        /// <summary>
         /// Lays the document out once, filling one fragmentainer at a time: a pass targets a
         /// fragmentainer, and where content does not fit it records where it stopped so the next pass
         /// can resume from exactly that point
@@ -2374,13 +2454,14 @@ namespace PeachPDF.Html.Core
         /// §2/§4.4</see>).
         /// </summary>
         /// <remarks>
-        /// This is the atom the three re-layout loops in <see cref="PerformLayout"/> and
-        /// <c>PdfGenerator</c>'s <c>ShrinkToFit</c> pass all share. The named-page registry and page
+        /// One attempt of <see cref="LayoutDocument"/>, the atom the three re-layout loops in
+        /// <see cref="PerformLayout"/> and <c>PdfGenerator</c>'s <c>ShrinkToFit</c> pass all share. The named-page registry and page
         /// geometry table are reset here, once per invocation and never per fragmentainer — a
         /// document's registrations accumulate <i>across</i> its fragmentainers, and only a whole new
         /// layout invalidates them.
         /// </remarks>
-        private async ValueTask LayoutDocument(RGraphics g)
+        /// <param name="g">the graphics to measure with</param>
+        private async ValueTask LayoutDocumentOnce(RGraphics g)
         {
             LayoutGeneration++;
             FragmentainerPasses = 0;
