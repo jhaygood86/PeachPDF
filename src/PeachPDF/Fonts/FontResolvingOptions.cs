@@ -27,7 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Drawing;
 
 namespace PeachPDF.Fonts
 {
@@ -36,14 +35,17 @@ namespace PeachPDF.Fonts
     /// </summary>
     class FontResolvingOptions
     {
-        public FontResolvingOptions(XFontStyle fontStyle)
+        /// <summary>Prefix of every typeface cache key ("typeface key").</summary>
+        internal const string TypefaceKeyPrefix = "tk:";
+
+        public FontResolvingOptions(FaceStyle fontStyle)
         {
             FontStyle = fontStyle;
             Weight = IsBold ? 700 : 400;
             Stretch = TtfFontDescription.DefaultStretch;
         }
 
-        public FontResolvingOptions(XFontStyle fontStyle, XStyleSimulations styleSimulations)
+        public FontResolvingOptions(FaceStyle fontStyle, SyntheticStyle styleSimulations)
         {
             FontStyle = fontStyle;
             OverrideStyleSimulations = true;
@@ -52,7 +54,7 @@ namespace PeachPDF.Fonts
             Stretch = TtfFontDescription.DefaultStretch;
         }
 
-        public FontResolvingOptions(XFontStyle fontStyle, int weight, int stretch = 5)
+        public FontResolvingOptions(FaceStyle fontStyle, int weight, int stretch = 5)
         {
             FontStyle = fontStyle;
             Weight = weight;
@@ -62,7 +64,7 @@ namespace PeachPDF.Fonts
         /// <summary>
         /// The real CSS Fonts Level 4 numeric weight (1-1000) this request should be matched against -
         /// defaults to 700/400 (derived from <see cref="IsBold"/>) for callers that only ever specify a
-        /// bold/not-bold <see cref="XFontStyle"/>, so <see cref="Fonts.FontFactory"/>/<see cref="IFontResolver"/>
+        /// bold/not-bold <see cref="FaceStyle"/>, so <see cref="Fonts.FontFactory"/>/<see cref="IFontResolver"/>
         /// always have a real number to key/match on regardless of which constructor was used.
         /// </summary>
         public int Weight { get; }
@@ -75,34 +77,34 @@ namespace PeachPDF.Fonts
 
         public bool IsBold
         {
-            get { return (FontStyle & XFontStyle.Bold) == XFontStyle.Bold; }
+            get { return (FontStyle & FaceStyle.Bold) == FaceStyle.Bold; }
         }
 
         public bool IsItalic
         {
-            get { return (FontStyle & XFontStyle.Italic) == XFontStyle.Italic; }
+            get { return (FontStyle & FaceStyle.Italic) == FaceStyle.Italic; }
         }
 
         public bool IsBoldItalic
         {
-            get { return (FontStyle & XFontStyle.BoldItalic) == XFontStyle.BoldItalic; }
+            get { return (FontStyle & FaceStyle.BoldItalic) == FaceStyle.BoldItalic; }
         }
 
         public bool MustSimulateBold
         {
-            get { return (StyleSimulations & XStyleSimulations.BoldSimulation) == XStyleSimulations.BoldSimulation; }
+            get { return (StyleSimulations & SyntheticStyle.Bold) == SyntheticStyle.Bold; }
         }
 
         public bool MustSimulateItalic
         {
-            get { return (StyleSimulations & XStyleSimulations.ItalicSimulation) == XStyleSimulations.ItalicSimulation; }
+            get { return (StyleSimulations & SyntheticStyle.Italic) == SyntheticStyle.Italic; }
         }
 
-        public XFontStyle FontStyle;
+        public FaceStyle FontStyle;
 
         public bool OverrideStyleSimulations;
 
-        public XStyleSimulations StyleSimulations;
+        public SyntheticStyle StyleSimulations;
 
         /// <summary>
         /// The specific Unicode scalar value this request is resolving a font for, when doing
@@ -111,5 +113,30 @@ namespace PeachPDF.Fonts
         /// to faces that cover this codepoint (see <c>FontResolver.ResolveTypeface</c>).
         /// </summary>
         public System.Text.Rune? Codepoint;
+
+        /// <summary>
+        /// Computes the bijective, human readable key of the typeface this request resolves for
+        /// <paramref name="familyName"/>: family, italic, numeric weight and stretch, and any forced synthesis.
+        /// </summary>
+        internal string ComputeTypefaceKey(string familyName)
+        {
+            string simulationSuffix = "";
+            if (OverrideStyleSimulations)
+            {
+                switch (StyleSimulations)
+                {
+                    case SyntheticStyle.Bold: simulationSuffix = "|b+/i-"; break;
+                    case SyntheticStyle.Italic: simulationSuffix = "|b-/i+"; break;
+                    case SyntheticStyle.BoldItalic: simulationSuffix = "|b+/i+"; break;
+                    case SyntheticStyle.None: break;
+                    default: throw new System.ArgumentOutOfRangeException();
+                }
+            }
+            return TypefaceKeyPrefix + familyName.ToLowerInvariant()
+                + (IsItalic ? "/i" : "/n") // normal / oblique / italic
+                + "/" + Weight
+                + "/" + Stretch
+                + simulationSuffix;
+        }
     }
 }

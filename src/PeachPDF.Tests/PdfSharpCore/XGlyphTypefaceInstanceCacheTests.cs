@@ -22,7 +22,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             using (var ttf = File.OpenRead(BundledFonts.Ttf))
                 resolver.AddFont(ttf, family);
 
-            var options = new FontResolvingOptions(XFontStyle.Regular);
+            var options = new FontResolvingOptions(FaceStyle.Regular);
 
             var first = XGlyphTypeface.GetOrCreateFrom(family, options, resolver);
             var second = XGlyphTypeface.GetOrCreateFrom(family, options, resolver);

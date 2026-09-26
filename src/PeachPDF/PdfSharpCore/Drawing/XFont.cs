@@ -164,7 +164,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             Initialize(fontResolver);
         }
 
-        internal XFont(string familyName, double emSize, XFontStyle style, XPdfFontOptions pdfOptions, XStyleSimulations styleSimulations, IFontResolver fontResolver)
+        internal XFont(string familyName, double emSize, XFontStyle style, XPdfFontOptions pdfOptions, SyntheticStyle styleSimulations, IFontResolver fontResolver)
         {
             _familyName = familyName;
             _emSize = emSize;
@@ -187,10 +187,10 @@ namespace PeachPDF.PdfSharpCore.Drawing
 #endif
 
             FontResolvingOptions fontResolvingOptions = OverrideStyleSimulations
-                ? new FontResolvingOptions(_style, StyleSimulations)
+                ? new FontResolvingOptions(_style.ToFaceStyle(), StyleSimulations)
                 : _weight is { } weight
-                    ? new FontResolvingOptions(_style, weight, _stretch ?? TtfFontDescription.DefaultStretch)
-                    : new FontResolvingOptions(_style);
+                    ? new FontResolvingOptions(_style.ToFaceStyle(), weight, _stretch ?? TtfFontDescription.DefaultStretch)
+                    : new FontResolvingOptions(_style.ToFaceStyle());
 
             fontResolvingOptions.Codepoint = _codepoint;
 
@@ -222,10 +222,10 @@ namespace PeachPDF.PdfSharpCore.Drawing
             var owningResolver = _glyphTypeface.OwningInstanceResolver;
             if (owningResolver != null)
             {
-                var key = FontDescriptor.ComputeKey(this);
+                var key = GlyphTypeface.Key;
                 if (!owningResolver.InstanceFontDescriptorsByKey.TryGetValue(key, out var instanceDescriptor))
                 {
-                    instanceDescriptor = new OpenTypeDescriptor(key, this);
+                    instanceDescriptor = new OpenTypeDescriptor(key, Name, GlyphTypeface.Fontface);
                     owningResolver.InstanceFontDescriptorsByKey[key] = instanceDescriptor;
                 }
 
@@ -495,7 +495,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Used to enforce style simulations by renderer. For development purposes only.
         /// </summary>
-        internal XStyleSimulations StyleSimulations;
+        internal SyntheticStyle StyleSimulations;
 
         /// <summary>
         /// Cache PdfFontTable.FontSelector to speed up finding the right PdfFont

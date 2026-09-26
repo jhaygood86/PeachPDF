@@ -46,8 +46,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         }
 
         private static OpenTypeDescriptor Descriptor(OpenTypeFontface face) =>
-            new("normal-line-height-test", "normal-line-height-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            new("normal-line-height-test", "normal-line-height-test", face);
 
         [Fact]
         public void UseTypoMetricsNotSet_UsesRawHheaTriple()

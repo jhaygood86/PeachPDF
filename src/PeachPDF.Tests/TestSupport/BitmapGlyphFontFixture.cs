@@ -19,7 +19,7 @@ namespace PeachPDF.Tests.TestSupport
         internal static int GlyphId(byte[] fontBytes, char ch)
         {
             var face = FontFileData.GetOrCreateFrom(fontBytes).Fontface;
-            var descriptor = new OpenTypeDescriptor("bitmap-fixture", "bitmap-fixture", XFontStyle.Regular, face, new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var descriptor = new OpenTypeDescriptor("bitmap-fixture", "bitmap-fixture", face);
             return descriptor.CharCodeToGlyphIndex(new Rune(ch));
         }
 

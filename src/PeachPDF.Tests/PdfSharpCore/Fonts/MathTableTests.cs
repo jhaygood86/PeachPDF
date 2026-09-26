@@ -34,13 +34,11 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         [Fact]
         public void Descriptor_ExposesHasMathTableAndMathTable()
         {
-            var mathDescriptor = new OpenTypeDescriptor("math-test", "math-test", XFontStyle.Regular,
-                Face(BundledFonts.Math), new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var mathDescriptor = new OpenTypeDescriptor("math-test", "math-test", Face(BundledFonts.Math));
             Assert.True(mathDescriptor.HasMathTable);
             Assert.NotNull(mathDescriptor.MathTable);
 
-            var plainDescriptor = new OpenTypeDescriptor("plain-test", "plain-test", XFontStyle.Regular,
-                Face(BundledFonts.Ttf), new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var plainDescriptor = new OpenTypeDescriptor("plain-test", "plain-test", Face(BundledFonts.Ttf));
             Assert.False(plainDescriptor.HasMathTable);
             Assert.Null(plainDescriptor.MathTable);
         }

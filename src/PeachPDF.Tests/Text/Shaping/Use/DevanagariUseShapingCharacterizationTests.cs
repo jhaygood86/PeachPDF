@@ -38,8 +38,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
         private static OpenTypeDescriptor Descriptor()
         {
             var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Devanagari)).Fontface;
-            return new OpenTypeDescriptor("devanagari-test", "devanagari-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            return new OpenTypeDescriptor("devanagari-test", "devanagari-test", face);
         }
 
         private static int[] ShapeGlyphIds(OpenTypeDescriptor descriptor, params int[] codepoints)

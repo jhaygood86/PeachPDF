@@ -29,7 +29,6 @@
 
 #nullable disable warnings
 
-using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Fonts.OpenType;
 using System;
 using System.Collections.Generic;
@@ -63,7 +62,7 @@ namespace PeachPDF.Fonts
         public static FontResolverInfo ResolveTypeface(string familyName, FontResolvingOptions fontResolvingOptions, string typefaceKey, IFontResolver fontResolver)
         {
             if (string.IsNullOrEmpty(typefaceKey))
-                typefaceKey = XGlyphTypeface.ComputeKey(familyName, fontResolvingOptions);
+                typefaceKey = fontResolvingOptions.ComputeTypefaceKey(familyName);
 
             try
             {

@@ -27,8 +27,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
         private static int Gid(OpenTypeFontface face, char ch)
         {
-            var descriptor = new OpenTypeDescriptor("outline-test", "outline-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var descriptor = new OpenTypeDescriptor("outline-test", "outline-test", face);
             return descriptor.CharCodeToGlyphIndex(new System.Text.Rune(ch));
         }
 

@@ -43,8 +43,7 @@ namespace PeachPDF.Tests.Html.Core
         private static OpenTypeDescriptor Descriptor()
         {
             var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Arabic)).Fontface;
-            return new OpenTypeDescriptor("arabic-test", "arabic-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            return new OpenTypeDescriptor("arabic-test", "arabic-test", face);
         }
 
         private static int[] ShapeGlyphIds(OpenTypeDescriptor descriptor, string text, IReadOnlyList<ArabicJoiningForm> forms) =>

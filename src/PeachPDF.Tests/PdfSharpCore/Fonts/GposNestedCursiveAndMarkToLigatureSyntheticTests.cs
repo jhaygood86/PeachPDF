@@ -177,8 +177,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         private static OpenTypeDescriptor RealDescriptor()
         {
             var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
-            return new OpenTypeDescriptor("gpos-nested-cursive-markliga-test", "gpos-nested-cursive-markliga-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            return new OpenTypeDescriptor("gpos-nested-cursive-markliga-test", "gpos-nested-cursive-markliga-test", face);
         }
 
         [Fact]

@@ -643,8 +643,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         private static OpenTypeDescriptor RealDescriptor()
         {
             var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
-            return new OpenTypeDescriptor("gpos-test", "gpos-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            return new OpenTypeDescriptor("gpos-test", "gpos-test", face);
         }
 
         [Fact]

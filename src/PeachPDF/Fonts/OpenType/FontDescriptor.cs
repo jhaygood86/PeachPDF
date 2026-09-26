@@ -27,7 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Drawing;
 
 namespace PeachPDF.Fonts.OpenType
 {
@@ -395,21 +394,11 @@ namespace PeachPDF.Fonts.OpenType
         int _normalLineHeightGap;
 
 
-        internal static string ComputeKey(XFont font)
-        {
-            return font.GlyphTypeface.Key;
-            //return ComputeKey(font.GlyphTypeface.Fontface.FullFaceName, font.Style);
-            //XGlyphTypeface glyphTypeface = font.GlyphTypeface;
-            //string key = glyphTypeface.Fontface.FullFaceName.ToLowerInvariant() +
-            //    (glyphTypeface.IsBold ? "/b" : "") + (glyphTypeface.IsItalic ? "/i" : "");
-            //return key;
-        }
-
-        internal static string ComputeKey(string name, XFontStyle style)
+        internal static string ComputeKey(string name, FaceStyle style)
         {
             return ComputeKey(name,
-                (style & XFontStyle.Bold) == XFontStyle.Bold,
-                (style & XFontStyle.Italic) == XFontStyle.Italic);
+                (style & FaceStyle.Bold) == FaceStyle.Bold,
+                (style & FaceStyle.Italic) == FaceStyle.Italic);
         }
 
         internal static string ComputeKey(string name, bool isBold, bool isItalic)

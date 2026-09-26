@@ -1,3 +1,4 @@
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.Text.Bidi;
 using System.Collections.Generic;
 using Xunit;

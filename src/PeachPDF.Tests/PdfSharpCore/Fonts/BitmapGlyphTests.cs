@@ -149,8 +149,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var a = BitmapGlyphFontFixture.GlyphId(font, 'A');
             var withBitmaps = BitmapGlyphFontFixture.WithCbdt(font, new BitmapGlyphFontFixture.Picture(20, a, Png(8, 6, 255, 0, 0), 8, 6, 1, 5));
             var face = FontFileData.GetOrCreateFrom(withBitmaps).Fontface;
-            var descriptor = new OpenTypeDescriptor("bitmap", "bitmap", XFontStyle.Regular, face,
-                new XPdfFontOptions(PeachPDF.PdfSharpCore.Pdf.PdfFontEncoding.Unicode));
+            var descriptor = new OpenTypeDescriptor("bitmap", "bitmap", face);
 
             Assert.True(descriptor.HasBitmapGlyphs);
             Assert.True(descriptor.IsColorFont);
@@ -158,8 +157,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.False(descriptor.TryGetBitmapGlyph(a + 1000 > 60000 ? 1 : a + 1000, 20, out _));
 
             var plain = FontFileData.GetOrCreateFrom(font).Fontface;
-            Assert.False(new OpenTypeDescriptor("plain", "plain", XFontStyle.Regular, plain,
-                new XPdfFontOptions(PeachPDF.PdfSharpCore.Pdf.PdfFontEncoding.Unicode)).HasBitmapGlyphs);
+            Assert.False(new OpenTypeDescriptor("plain", "plain", plain).HasBitmapGlyphs);
         }
 
         // ---- drawing -------------------------------------------------------------------------------------

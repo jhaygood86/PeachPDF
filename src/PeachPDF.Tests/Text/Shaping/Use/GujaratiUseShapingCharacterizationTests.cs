@@ -39,8 +39,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
         private static OpenTypeDescriptor Descriptor()
         {
             var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Gujarati)).Fontface;
-            return new OpenTypeDescriptor("gujarati-test", "gujarati-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            return new OpenTypeDescriptor("gujarati-test", "gujarati-test", face);
         }
 
         private static int[] ShapeGlyphIds(OpenTypeDescriptor descriptor, params int[] codepoints)

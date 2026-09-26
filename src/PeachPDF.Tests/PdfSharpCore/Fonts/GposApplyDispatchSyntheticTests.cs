@@ -326,8 +326,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             byte[] withoutRealGpos = RemoveTableDirectoryEntry(fontBytes, "GPOS");
             byte[] combined = SyntheticFontTables.InsertTableDirectoryEntry(withoutRealGpos, "GPOS", BuildSyntheticGpos());
             var face = FontFileData.GetOrCreateFrom(combined).Fontface;
-            return new OpenTypeDescriptor("gpos-apply-dispatch-test", "gpos-apply-dispatch-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            return new OpenTypeDescriptor("gpos-apply-dispatch-test", "gpos-apply-dispatch-test", face);
         }
 
         [Fact]

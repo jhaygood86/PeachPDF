@@ -148,8 +148,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
 
             // The rebuilt font is read by the real OpenType table parser and maps characters to the same
             // glyphs as the font it came from.
-            OpenTypeDescriptor Descriptor(byte[] bytes) => new("t", "t", XFontStyle.Regular,
-                FontFileData.GetOrCreateFrom(bytes).Fontface, new XPdfFontOptions(PdfFontEncoding.Unicode));
+            OpenTypeDescriptor Descriptor(byte[] bytes) => new("t", "t", FontFileData.GetOrCreateFrom(bytes).Fontface);
 
             var extracted = Descriptor(face);
             var source = Descriptor(original);

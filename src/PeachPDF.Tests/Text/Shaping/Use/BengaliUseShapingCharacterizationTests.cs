@@ -39,8 +39,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
         private static OpenTypeDescriptor Descriptor()
         {
             var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Bengali)).Fontface;
-            return new OpenTypeDescriptor("bengali-test", "bengali-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            return new OpenTypeDescriptor("bengali-test", "bengali-test", face);
         }
 
         private static int[] ShapeGlyphIds(OpenTypeDescriptor descriptor, params int[] codepoints)

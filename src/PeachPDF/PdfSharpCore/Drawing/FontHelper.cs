@@ -136,7 +136,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 size.Height = height;
 
                 // Adjust bold simulation.
-                if ((font.GlyphTypeface.StyleSimulations & XStyleSimulations.BoldSimulation) == XStyleSimulations.BoldSimulation)
+                if ((font.GlyphTypeface.StyleSimulations & SyntheticStyle.Bold) == SyntheticStyle.Bold)
                 {
                     // Add 2% of the em-size for each character.
                     // Unsure how to deal with white space. Currently count as regular character.

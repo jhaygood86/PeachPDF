@@ -1,7 +1,6 @@
 #nullable disable warnings
 
 
-using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Fonts;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.Text;
@@ -42,9 +41,8 @@ namespace PeachPDF.Fonts
         /// Family names (lowercased, matching <see cref="InstalledFonts"/>'s own key convention)
         /// registered via <see cref="AddFont(Stream, string)"/> on THIS instance - i.e. not just
         /// inherited read-only from the shared static <see cref="_systemFamilies"/> snapshot. Used by
-        /// <see cref="XGlyphTypeface.GetOrCreateFrom"/> to decide whether a request for this family must
-        /// be routed through this instance's own <see cref="InstanceGlyphTypefacesByKey"/>/
-        /// <see cref="InstanceFontResolverInfosByTypefaceKey"/> caches instead of the global,
+        /// <c>XGlyphTypeface.GetOrCreateFrom</c> to decide whether a request for this family must
+        /// be routed through this instance's own <see cref="InstanceFontResolverInfosByTypefaceKey"/> cache (and the PDF layer's per-instance glyph typeface cache) instead of the global,
         /// process-wide ones - two different <see cref="FontResolver"/> instances (i.e. two different
         /// <c>PdfGenerator</c>s) can register DIFFERENT bytes under the SAME custom family name (e.g. two
         /// requests each with their own <c>@font-face</c> for the same CSS family), and must never share
@@ -69,18 +67,9 @@ namespace PeachPDF.Fonts
         private readonly Dictionary<(int Codepoint, EmojiPresentation Presentation), string?> _systemFallbackCache = new();
 
         /// <summary>
-        /// This instance's own typeface-key-keyed glyph-typeface cache, used only for custom
-        /// (<see cref="_customFamilyNames"/>) families - see <see cref="XGlyphTypeface.GetOrCreateFrom"/>.
-        /// A plain instance field, not a static/global root, so it's garbage-collected along with this
-        /// <see cref="FontResolver"/> (and the <c>PdfSharpAdapter</c>/<c>PdfGenerator</c> that owns it) -
-        /// it cannot outlive them, and needs no explicit disposal.
-        /// </summary>
-        internal Dictionary<string, XGlyphTypeface> InstanceGlyphTypefacesByKey { get; } = new();
-
-        /// <summary>
         /// This instance's own typeface-key-keyed resolver-info cache - the per-instance counterpart to
         /// <see cref="FontFactory"/>'s global <c>FontResolverInfosByName</c>, used only for custom
-        /// families. See <see cref="InstanceGlyphTypefacesByKey"/>.
+        /// families. See <see cref="InstanceFontResolverInfosByTypefaceKey"/>.
         /// </summary>
         internal Dictionary<string, FontResolverInfo> InstanceFontResolverInfosByTypefaceKey { get; } = new();
 
@@ -88,7 +77,7 @@ namespace PeachPDF.Fonts
         /// This instance's own typeface-key-keyed <see cref="FontDescriptor"/> cache - the per-instance
         /// counterpart to the global, static <c>FontDescriptorCache</c> (which is ALSO keyed purely by
         /// the typeface key string, with no notion of which resolver instance produced the underlying
-        /// glyph data - see <see cref="XGlyphTypeface.OwningInstanceResolver"/>). Used only for custom
+        /// glyph data - see <c>XGlyphTypeface.OwningInstanceResolver</c>). Used only for custom
         /// families; without this, a descriptor built from one instance's custom font bytes would leak
         /// into another instance's request for the same family+style, exactly like the collision the
         /// glyph-typeface/resolver-info split above fixes, just one layer further down (font metrics/
@@ -230,7 +219,6 @@ namespace PeachPDF.Fonts
 
             public string FamilyName => this.FontDescription.FontFamilyInvariantCulture;
 
-            public XFontStyle GuessFontStyle() => this.FontDescription.Style;
 
             public static FontFileInfo From(TtfFontDescription fontDescription) => new(fontDescription);
         }
@@ -270,7 +258,7 @@ namespace PeachPDF.Fonts
             _customFamilyNames.Add(key);
 
             var weight = weightOverride ?? fontFileInfo.FontDescription.Weight;
-            var isItalic = isItalicOverride ?? fontFileInfo.FontDescription.Style is XFontStyle.Italic or XFontStyle.BoldItalic;
+            var isItalic = isItalicOverride ?? fontFileInfo.FontDescription.Style is FaceStyle.Italic or FaceStyle.BoldItalic;
             var stretch = stretchOverride ?? fontFileInfo.FontDescription.Stretch;
 
             // The face name is the identity under which the bytes are stored and later fetched
@@ -295,10 +283,10 @@ namespace PeachPDF.Fonts
             // name GetFont expects.
             var effectiveStyle = (isItalic, weight >= 700) switch
             {
-                (true, true) => XFontStyle.BoldItalic,
-                (true, false) => XFontStyle.Italic,
-                (false, true) => XFontStyle.Bold,
-                (false, false) => XFontStyle.Regular
+                (true, true) => FaceStyle.BoldItalic,
+                (true, false) => FaceStyle.Italic,
+                (false, true) => FaceStyle.Bold,
+                (false, false) => FaceStyle.Regular
             };
             var baseDescription = weightOverride is null && isItalicOverride is null && stretchOverride is null
                 ? fontFileInfo.FontDescription
@@ -403,7 +391,7 @@ namespace PeachPDF.Fonts
 
             foreach (var info in fontList)
             {
-                var isItalic = info.FontDescription.Style is XFontStyle.Italic or XFontStyle.BoldItalic;
+                var isItalic = info.FontDescription.Style is FaceStyle.Italic or FaceStyle.BoldItalic;
                 // System fonts declare no explicit unicode-range; their effective coverage is whatever
                 // their cmap supports (resolved lazily). Keep the first face seen per (weight, italic,
                 // stretch) - the same de-dup the previous dictionary key provided.
@@ -501,7 +489,7 @@ namespace PeachPDF.Fonts
                     // weights >=600 read as "bold" and <600 don't; a request in the bold range that
                     // only found a lighter-than-600 face needs synthesis, but a request that found ANY
                     // face already at/above 600 (e.g. asked for 600, only 700 registered) does not.
-                    var resolvedIsItalic = face.Style is XFontStyle.Italic or XFontStyle.BoldItalic;
+                    var resolvedIsItalic = face.Style is FaceStyle.Italic or FaceStyle.BoldItalic;
                     var mustSimulateBold = weight >= 600 && face.Weight < 600;
                     var mustSimulateItalic = isItalic && !resolvedIsItalic;
 

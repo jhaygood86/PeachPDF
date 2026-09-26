@@ -483,7 +483,7 @@ namespace PeachPDF.Fonts.OpenType
                         break;
                 }
                 if (!cmap4Found)
-                    throw new InvalidOperationException("Font has no usable platform or encoding ID. It cannot be used with PeachPDF.PdfSharpCore.");
+                    throw new InvalidOperationException("Font has no usable platform or encoding ID. It cannot be used.");
             }
             catch (Exception ex)
             {

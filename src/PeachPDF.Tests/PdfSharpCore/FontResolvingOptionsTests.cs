@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void StyleOnlyConstructor_DefaultsStretchToNormal()
         {
-            var options = new FontResolvingOptions(XFontStyle.Regular);
+            var options = new FontResolvingOptions(FaceStyle.Regular);
 
             Assert.Equal(TtfFontDescription.DefaultStretch, options.Stretch);
         }
@@ -23,7 +23,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void StyleSimulationsConstructor_DefaultsStretchToNormal_AndSetsOverrideFlag()
         {
-            var options = new FontResolvingOptions(XFontStyle.Bold, XStyleSimulations.BoldSimulation);
+            var options = new FontResolvingOptions(FaceStyle.Bold, SyntheticStyle.Bold);
 
             Assert.Equal(TtfFontDescription.DefaultStretch, options.Stretch);
             Assert.True(options.OverrideStyleSimulations);
@@ -34,7 +34,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void WeightAndStretchConstructor_UsesSpecifiedStretch()
         {
-            var options = new FontResolvingOptions(XFontStyle.Regular, weight: 600, stretch: 3);
+            var options = new FontResolvingOptions(FaceStyle.Regular, weight: 600, stretch: 3);
 
             Assert.Equal(600, options.Weight);
             Assert.Equal(3, options.Stretch);

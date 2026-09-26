@@ -29,12 +29,13 @@
 
 #nullable disable warnings
 
+using PeachPDF.Fonts;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Fonts.OpenType;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Fonts
+namespace PeachPDF.PdfSharpCore.Drawing
 {
     /// <summary>
     /// Global table of OpenType font descriptor objects.
@@ -78,14 +79,14 @@ namespace PeachPDF.Fonts
                 throw new ArgumentNullException("font");
 
             //FontSelector1 selector = new FontSelector1(font);
-            string fontDescriptorKey = FontDescriptor.ComputeKey(font);
+            string fontDescriptorKey = font.GlyphTypeface.Key;
             try
             {
                 FontLock.Enter();
                 FontDescriptor descriptor;
                 if (!Singleton._cache.TryGetValue(fontDescriptorKey, out descriptor))
                 {
-                    descriptor = new OpenTypeDescriptor(fontDescriptorKey, font);
+                    descriptor = new OpenTypeDescriptor(fontDescriptorKey, font.Name, font.GlyphTypeface.Fontface);
                     Singleton._cache.Add(fontDescriptorKey, descriptor);
                 }
                 return descriptor;
@@ -103,7 +104,7 @@ namespace PeachPDF.Fonts
                 throw new ArgumentNullException("fontFamilyName");
 
             //FontSelector1 selector = new FontSelector1(fontFamilyName, style);
-            string fontDescriptorKey = FontDescriptor.ComputeKey(fontFamilyName, style);
+            string fontDescriptorKey = FontDescriptor.ComputeKey(fontFamilyName, style.ToFaceStyle());
             try
             {
                 FontLock.Enter();

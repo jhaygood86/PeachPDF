@@ -46,8 +46,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
         private static int GlyphId(OpenTypeFontface face, char character)
         {
-            var descriptor = new OpenTypeDescriptor("nested-composite-test", "nested-composite-test",
-                XFontStyle.Regular, face, new XPdfFontOptions(PdfFontEncoding.Unicode));
+            var descriptor = new OpenTypeDescriptor("nested-composite-test", "nested-composite-test", face);
             return descriptor.CharCodeToGlyphIndex(new Rune(character));
         }
 

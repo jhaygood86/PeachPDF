@@ -27,7 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Diagnostics;
 using System.Globalization;
@@ -69,7 +68,7 @@ namespace PeachPDF.Fonts
     // 
 
     /// <summary>
-    /// Describes the physical font that must be used to render a particular XFont.
+    /// Describes the physical font that must be used to render a particular request.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
     internal class FontResolverInfo
@@ -121,10 +120,10 @@ namespace PeachPDF.Fonts
         /// </summary>
         /// <param name="faceName">The name that uniquely identifies the fontface.</param>
         /// <param name="styleSimulations">The style simulation flags.</param>
-        public FontResolverInfo(string faceName, XStyleSimulations styleSimulations)
+        public FontResolverInfo(string faceName, SyntheticStyle styleSimulations)
             : this(faceName,
-                  (styleSimulations & XStyleSimulations.BoldSimulation) == XStyleSimulations.BoldSimulation,
-                  (styleSimulations & XStyleSimulations.ItalicSimulation) == XStyleSimulations.ItalicSimulation, 0)
+                  (styleSimulations & SyntheticStyle.Bold) == SyntheticStyle.Bold,
+                  (styleSimulations & SyntheticStyle.Italic) == SyntheticStyle.Italic, 0)
         { }
 
         /// <summary>
@@ -171,9 +170,9 @@ namespace PeachPDF.Fonts
         /// <summary>
         /// Gets the style simulation flags.
         /// </summary>
-        public XStyleSimulations StyleSimulations
+        public SyntheticStyle StyleSimulations
         {
-            get { return (_mustSimulateBold ? XStyleSimulations.BoldSimulation : 0) | (_mustSimulateItalic ? XStyleSimulations.ItalicSimulation : 0); }
+            get { return (_mustSimulateBold ? SyntheticStyle.Bold : 0) | (_mustSimulateItalic ? SyntheticStyle.Italic : 0); }
         }
 
         /// <summary>

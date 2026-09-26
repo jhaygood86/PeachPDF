@@ -193,8 +193,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         }
 
         private static OpenTypeDescriptor Descriptor(OpenTypeFontface face) =>
-            new("vertical-metrics-test", "vertical-metrics-test", XFontStyle.Regular, face,
-                new XPdfFontOptions(PdfFontEncoding.Unicode));
+            new("vertical-metrics-test", "vertical-metrics-test", face);
 
         [Fact]
         public void GlyphIndexToVerticalAdvance_FallsBackToUnitsPerEm_WhenFontHasNoVerticalTables()
