@@ -134,6 +134,7 @@ The `Unicode` namespace gains `ArabicJoining` (`TypeOf`, `Resolve`) with `Arabic
 | `ContentWidths`, `TextRuler` | The narrowest and widest a paragraph can be; measuring one piece of text | CSS Sizing 3 min-content and max-content; `TextRuler.WidthOf` is ours |
 | `RunStyle.Fallback`, `FontSet.CreateFallback` | A function that names a typeface for a character the run's face cannot draw, and one made from a set's families | CSS Fonts 4 font fallback (per-character, marks stay with their base); the names are the plain description |
 | `RunStyle.LetterSpacing`, `WordSpacing`, `TextAlign.Justify`, `ParagraphStyle.AlignLast`, `PlacedRun.GetGlyphAdvance` | Spacing, justification and the pen movement of a glyph | CSS Text 3 `letter-spacing`, `word-spacing`, `text-align: justify`, `text-align-last` |
+| `ParagraphStyle.TextIndent`, `TextIndent` (`Length`, `Hanging`, `EachLine`), `ParagraphStyle.TabSize`, `TabSize` (`FromSpaces`, `FromLength`, `IsLength`, `Value`) | The indent of the start of a line, and the distance between tab stops | CSS Text 3 `text-indent` (a length with the `hanging` and `each-line` keywords) and `tab-size` (a number of spaces or a length); the members are the keywords and the two forms of the value, the `From*` factories are ours, and `default(TabSize)` is the CSS initial value, 8 spaces |
 
 Every name above was taken from the specification it implements, and the member sets follow those specifications rather
 than any library's. The author did not consult SixLabors.Fonts while choosing them, and so could not vouch that no name

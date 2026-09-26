@@ -11,8 +11,8 @@ dotnet add package PeachDrawing.Text
 > **Status: pre-1.0.** The library is being opened up area by area. Today the public surface is font loading and
 > matching (`FontSet` and the types around it), what a `Typeface` says about itself (metrics, glyph mapping and advances),
 > shaping, glyph outlines and colour glyphs, the `MATH` table, and the `PeachDrawing.Text.Unicode` namespace, all described
-> below. Font subsetting for embedding, described below, is public too. Paragraph layout is still internal to the package, so
-> PeachPDF is the only consumer of it, and it will be published in a later release. Until 1.0, the public API may change between releases.
+> below. Font subsetting for embedding, and paragraph layout (`PeachDrawing.Text.Layout`), described below, are public too.
+> Until 1.0, the public API may change between releases.
 
 ## What the engine does
 
@@ -427,8 +427,17 @@ foreach (LineBox line in layout.Lines)
   are aligned (the start, by default). `PlacedRun.GetGlyphAdvance` gives the pen movement after each glyph, spacing and justification included, which
   is what a caller draws with.
 
-Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Tabs, `text-indent`, hyphenation, a
-line limit with an ellipsis, inline boxes and justification between characters (as opposed to between words) are not part of the layout yet.
+- **Indent and tab stops.** `ParagraphStyle.TextIndent` moves the start of a line in from the start edge (the left of a left-to-right paragraph, the right
+  of a right-to-left one): by default the first line only, with `EachLine` also the line after every forced break, and with `Hanging` every line
+  except those. The indent takes room from the line, which breaks earlier, and alignment and justification work in what is left; a negative indent moves
+  the text out of the paragraph. It is a length in layout units, so a caller with a percentage resolves it against its own width. A tab character
+  advances the pen to the next tab stop, at multiples of `ParagraphStyle.TabSize` from the start edge (`TabSize.FromSpaces`, counted in spaces of the
+  face the tab is in with their letter and word spacing, eight by default, or `TabSize.FromLength`). The stops are measured along the line in the order
+  the text is written, indent included; a tab at the end of a line hangs; a tab is a run of its own with no glyphs, so it draws nothing, and it is
+  not a justification opportunity. `ContentWidth` and `MeasureContent()` count the indent.
+
+Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Hyphenation, a line limit with an
+ellipsis, inline boxes and justification between characters (as opposed to between words) are not part of the layout yet.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 

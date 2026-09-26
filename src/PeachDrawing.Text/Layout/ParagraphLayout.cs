@@ -168,7 +168,7 @@ namespace PeachDrawing.Text.Layout
         /// <summary>The width the paragraph was laid out at, or the width of the widest line when it was laid out without a limit.</summary>
         public double Width { get; }
 
-        /// <summary>The width of the widest line.</summary>
+        /// <summary>The width of the widest line, with the distance its text is indented from the start edge.</summary>
         public double ContentWidth { get; }
 
         /// <summary>The height of all the lines together.</summary>
