@@ -248,6 +248,16 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         [Fact]
+        public void AnObliqueRange_OnAVariableFontWithNoSlantAxis_LeavesTheLeanToBeFaked()
+        {
+            var family = Add(new FontSet(), BundledFonts.VariableTest, NewName(), new AddOptions { ObliqueRange = new AxisRange(0, 14) });
+
+            Assert.True(family.TryMatch(new TypefaceQuery(IsItalic: true), out var match));
+
+            Assert.Equal(SyntheticStyle.Italic, match.Synthesis);
+        }
+
+        [Fact]
         public void FontVariationSettings_StillWinOverTheRange()
         {
             var family = Add(new FontSet(), BundledFonts.VariableTest, NewName(), new AddOptions { WeightRange = new AxisRange(300, 600) });

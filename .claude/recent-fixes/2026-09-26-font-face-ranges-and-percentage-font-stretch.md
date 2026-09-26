@@ -43,8 +43,16 @@ key of the font caches, and the engine's own typeface key carries the percentage
   leading space is never there. `VariableFontIntegrationTests.ABoldInstance_IsNotAlsoFakedBold` had exactly that; it and the new tests
   look for `2 Tr`, and the new one checks the positive case (a range that cannot reach bold does fake it) so the pattern is known to match.
 
+- **A range that includes 0 must not beat a face that is upright itself.** An oblique-range face serves upright text (`SlantMatches`), and
+  "last declared wins" would have chosen it over an upright face declared before it; `PreferStrictSlant` ranks faces of the requested
+  slant above range-only matches in both the exact and the nearest step. The synthesis decision for a variable face is finished in
+  `VariableMatching` from what the axes can draw (a declared range wider than the axis must still fake the bold the axis cannot reach,
+  and a variable face with neither `ital` nor `slnt` still fakes italic).
+
 ## Deliberately not done
 
+- The order the axes are narrowed in (style before width, the specification says width first) and choosing between several oblique
+  ranges by the requested angle: both are recorded in [the accepted gap](../accepted-gaps/font-face-matching-narrows-style-before-width.md).
 - Fractional `font-weight` values in a query (`ActualNumericWeight` is an integer): a range may hold fractions (`350.5 400`), the
   request cannot.
 - Per-face ranges for **installed** variable fonts: a system font registers at its own default like any installed face.

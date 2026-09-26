@@ -616,6 +616,17 @@ namespace PeachDrawing.Text.Internal.Fonts
             return new FontResolverInfo(description.FontNameInvariantCulture);
         }
 
+        /// <summary>
+        /// Of faces that all match the slant of a request, the ones that are of the requested slant themselves: a face that is oblique over a
+        /// range only serves upright text because the range includes 0, so an upright face beats it however the two were declared. The faces
+        /// unchanged when none is of the requested slant.
+        /// </summary>
+        private static List<FontFaceEntry> PreferStrictSlant(List<FontFaceEntry> matching, bool isItalic)
+        {
+            var strict = matching.Where(f => f.Italic == isItalic).ToList();
+            return strict.Count > 0 ? strict : matching;
+        }
+
         /// <summary>Whether a face matches the slant of a request: an oblique face also serves upright text when its range includes 0.</summary>
         private static bool SlantMatches(FontFaceEntry face, bool isItalic) =>
             face.Ranges.Oblique is { } oblique ? isItalic || oblique.Contains(0) : face.Italic == isItalic;
@@ -640,16 +651,16 @@ namespace PeachDrawing.Text.Internal.Fonts
             if (covering.Count == 0)
                 return false;
 
-            var exact = covering.Where(f => SlantMatches(f, request.IsItalic)
-                                            && f.Ranges.Weight.Contains(request.Weight)
-                                            && f.Ranges.Width.Contains(request.WidthPercent)).ToList();
+            var exact = PreferStrictSlant(covering.Where(f => SlantMatches(f, request.IsItalic)
+                                                              && f.Ranges.Weight.Contains(request.Weight)
+                                                              && f.Ranges.Width.Contains(request.WidthPercent)).ToList(), request.IsItalic);
             if (exact.Count > 0)
             {
                 face = exact[^1];
                 return true;
             }
 
-            var sameSlant = covering.Where(f => SlantMatches(f, request.IsItalic)).ToList();
+            var sameSlant = PreferStrictSlant(covering.Where(f => SlantMatches(f, request.IsItalic)).ToList(), request.IsItalic);
             var candidates = sameSlant.Count > 0 ? sameSlant : covering;
 
             // A face is measured at the value of its range nearest to the request, which is the request itself when the range holds it.

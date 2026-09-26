@@ -51,7 +51,7 @@ namespace PeachPDF.Html.Core.Utils
             if (string.IsNullOrWhiteSpace(styleDescriptor))
                 return (null, null);
 
-            var tokens = styleDescriptor.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var tokens = styleDescriptor.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             switch (tokens[0].ToLowerInvariant())
             {
                 case Keywords.Normal when tokens.Length == 1:
@@ -86,7 +86,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>Reads one value or two, separated by whitespace, as a range.</summary>
         private static AxisRange? ResolveRange(string descriptor, TryParseToken tryParse)
         {
-            var tokens = descriptor.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var tokens = descriptor.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             if (tokens.Length is < 1 or > 2 || !tryParse(tokens[0], out var first))
                 return null;
 

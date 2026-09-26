@@ -40,9 +40,12 @@ namespace PeachDrawing.Text
                 settings.Add(new AxisSetting(AxisTags.Weight, value));
 
                 // The face is as bold as its axis allows: faking more would embolden outlines that are already at the heaviest design.
-                // Faking is only still wanted when the request is bold and the axis (or the declared range) cannot reach it.
+                // Faking is only still wanted when the request is bold and the axis (or the declared range) cannot reach it. That is decided
+                // here from what the axis can draw, since a range that is declared wider than the axis would have told the matcher it could.
                 if (value >= 600 || query.Weight < 600)
                     synthesis &= ~SyntheticStyle.Bold;
+                else
+                    synthesis |= SyntheticStyle.Bold;
             }
 
             if (Axis(AxisTags.Width) is { } width)
@@ -72,6 +75,12 @@ namespace PeachDrawing.Text
                 settings.Add(new AxisSetting(AxisTags.Slant, Math.Clamp(-angle, slant.Minimum, slant.Maximum)));
                 if (query.IsItalic)
                     synthesis &= ~SyntheticStyle.Italic;
+            }
+
+            else if (query.IsItalic && !face.IsItalic)
+            {
+                // Neither axis can lean the face, whatever its rule declared, so the lean is still to be faked.
+                synthesis |= SyntheticStyle.Italic;
             }
 
             if (query.Axes is { } explicitSettings)

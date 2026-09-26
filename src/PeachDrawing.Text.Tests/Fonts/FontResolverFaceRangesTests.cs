@@ -101,7 +101,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         [Fact]
-        public void AnObliqueRange_ServesItalicRequests_AndUprightOnesWhenItIncludesZero()
+        public void AnObliqueRange_ServesItalicRequests_AndIsBeatenByAnUprightFaceForUprightOnes()
         {
             var resolver = new FontResolver();
             using (var ttf = File.OpenRead(BundledFonts.Ttf))
@@ -114,9 +114,25 @@ namespace PeachDrawing.Text.Tests.Fonts
 
             Assert.Equal(FaceNameOf(BundledFonts.Otf), italic.FaceName);
             Assert.False(italic.MustSimulateItalic);
-            // Both faces serve upright text and the one added last wins.
-            Assert.Equal(FaceNameOf(BundledFonts.Otf), upright.FaceName);
-            Assert.Equal(new AxisRange(0, 14), upright.DeclaredRanges!.Oblique);
+            // Both faces could serve upright text; the one that is upright itself wins.
+            Assert.Equal(FaceNameOf(BundledFonts.Ttf), upright.FaceName);
+            Assert.Equal(new AxisRange(0, 14), italic.DeclaredRanges!.Oblique);
+        }
+
+        [Fact]
+        public void AnUprightFace_BeatsAnObliqueRangeForUprightText_HoweverTheyWereDeclared()
+        {
+            // The oblique range includes 0, so it could serve upright text; the face that is upright itself is the better answer even
+            // though it was declared first.
+            var resolver = new FontResolver();
+            using (var ttf = File.OpenRead(BundledFonts.Ttf))
+                resolver.AddFont(ttf, Family, new FontResolver.DeclaredFace(null, false, null, null), null);
+            using (var otf = File.OpenRead(BundledFonts.Otf))
+                resolver.AddFont(otf, Family, new FontResolver.DeclaredFace(new AxisRange(100, 900), true, null, new AxisRange(0, 14)), null);
+
+            Assert.Equal(FaceNameOf(BundledFonts.Ttf), resolver.ResolveFace(Family, Request(400, italic: false)).FaceName);
+            // ... and the same when the exact step finds nothing and the nearest face is looked for.
+            Assert.Equal(FaceNameOf(BundledFonts.Ttf), resolver.ResolveFace(Family, Request(400, 150, italic: false)).FaceName);
         }
 
         [Fact]
@@ -191,8 +207,8 @@ namespace PeachDrawing.Text.Tests.Fonts
         public void ATypefaceKey_ForAWidthBetweenTheClasses_DiffersFromEveryClassKey()
         {
             var byClass = new FontResolvingOptions(FaceStyle.Regular, 400, 5).ComputeTypefaceKey("F");
-            var samePercent = new FontResolvingOptions(FaceStyle.Regular, 400, 100.0).ComputeTypefaceKey("F");
-            var between = new FontResolvingOptions(FaceStyle.Regular, 400, 93.5).ComputeTypefaceKey("F");
+            var samePercent = FontResolvingOptions.ForWidthPercent(FaceStyle.Regular, 400, 100.0).ComputeTypefaceKey("F");
+            var between = FontResolvingOptions.ForWidthPercent(FaceStyle.Regular, 400, 93.5).ComputeTypefaceKey("F");
 
             Assert.Equal("tk:f/n/400/5", byClass);
             Assert.Equal(byClass, samePercent);

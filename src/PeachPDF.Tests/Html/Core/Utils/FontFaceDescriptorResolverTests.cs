@@ -164,6 +164,14 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public void AnyWhitespace_SeparatesTheTwoValuesOfARange()
+        {
+            Assert.Equal(new AxisRange(100, 900), FontFaceDescriptorResolver.ResolveWeight("100\t900"));
+            Assert.Equal(new AxisRange(75, 125), FontFaceDescriptorResolver.ResolveStretch("75%\n125%"));
+            Assert.Equal((true, new AxisRange(0, 14)), FontFaceDescriptorResolver.ResolveStyle("oblique\t0deg\r\n14deg"));
+        }
+
+        [Fact]
         public void Resolve_OfNothing_IsTheDefault()
         {
             Assert.Equal(default, FontFaceDescriptorResolver.Resolve(null, null, null));

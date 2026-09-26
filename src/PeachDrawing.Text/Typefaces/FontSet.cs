@@ -300,7 +300,7 @@ namespace PeachDrawing.Text
         internal TypefaceMatch MatchCore(string familyName, in TypefaceQuery query)
         {
             var options = query.WidthPercent is { } percent
-                ? new FontResolvingOptions(query.IsItalic ? FaceStyle.Italic : FaceStyle.Regular, query.Weight, percent)
+                ? FontResolvingOptions.ForWidthPercent(query.IsItalic ? FaceStyle.Italic : FaceStyle.Regular, query.Weight, percent)
                 : new FontResolvingOptions(query.IsItalic ? FaceStyle.Italic : FaceStyle.Regular, query.Weight, query.Width);
             options.Codepoint = query.MustCover;
 

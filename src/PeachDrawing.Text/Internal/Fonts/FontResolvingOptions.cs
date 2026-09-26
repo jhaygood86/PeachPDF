@@ -64,12 +64,18 @@ namespace PeachDrawing.Text.Internal.Fonts
             WidthPercent = WidthClasses.ToPercent(stretch);
         }
 
-        /// <summary>Creates options for a width that is not necessarily one of the nine classes, as a percentage of the normal width.</summary>
-        public FontResolvingOptions(FaceStyle fontStyle, int weight, double widthPercent)
+        /// <summary>
+        /// Creates options for a width that is not necessarily one of the nine classes, as a percentage of the normal width. A factory and
+        /// not an overload, since an integer literal (<c>100</c>) would otherwise bind to the constructor that takes a width class.
+        /// </summary>
+        public static FontResolvingOptions ForWidthPercent(FaceStyle fontStyle, int weight, double widthPercent) =>
+            new(fontStyle, weight, WidthClasses.FromPercent(widthPercent), widthPercent);
+
+        private FontResolvingOptions(FaceStyle fontStyle, int weight, int stretch, double widthPercent)
         {
             FontStyle = fontStyle;
             Weight = weight;
-            Stretch = WidthClasses.FromPercent(widthPercent);
+            Stretch = stretch;
             WidthPercent = widthPercent;
         }
 

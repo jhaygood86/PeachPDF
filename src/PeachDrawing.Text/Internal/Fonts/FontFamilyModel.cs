@@ -24,9 +24,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         public FaceRanges? Declared { get; init; }
 
         /// <summary>What this face covers: <see cref="Declared"/>, or the single weight and width it is registered at.</summary>
-        public FaceRanges Ranges => Declared ?? (_point ??= FaceRanges.Point(Weight, Stretch));
-
-        private FaceRanges? _point;
+        public FaceRanges Ranges => Declared ?? FaceRanges.Point(Weight, Stretch);
     }
 
     internal class FontFamilyModel
