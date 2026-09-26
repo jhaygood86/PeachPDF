@@ -28,6 +28,7 @@
 #endregion
 
 using PeachDrawing.Text.Internal.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType.Variations;
 using System;
 using System.Diagnostics;
 using System.Globalization;
@@ -51,6 +52,37 @@ namespace PeachDrawing.Text.Internal.Fonts
         //
 
         const string KeyPrefix = FontResolvingOptions.TypefaceKeyPrefix;
+
+        /// <summary>
+        /// A variable font at a location other than its defaults: the same font data and face as <paramref name="source"/>, read
+        /// through its own descriptor, which applies the location's variation deltas.
+        /// </summary>
+        private LoadedTypeface(LoadedTypeface source, VariationCoordinates variation)
+            : this(source.Key + "/var:" + variation.Key, source.FontSource, source.StyleSimulations)
+        {
+            Variation = variation;
+            _variationBase = source;
+            OwningInstanceResolver = source.OwningInstanceResolver;
+        }
+
+        /// <summary>Where in the design space of a variable font this typeface reads, or <see langword="null"/> at its defaults.</summary>
+        internal VariationCoordinates? Variation { get; }
+
+        private readonly LoadedTypeface? _variationBase;
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, LoadedTypeface> _variationInstances = new();
+
+        /// <summary>
+        /// The typeface of this face at <paramref name="variation"/>: one object for one location, so a cache can key by identity. A
+        /// location at the defaults is the face itself.
+        /// </summary>
+        internal LoadedTypeface WithVariation(VariationCoordinates variation)
+        {
+            var root = _variationBase ?? this;
+            if (variation.IsDefault)
+                return root;
+
+            return root._variationInstances.GetOrAdd(variation.Key, _ => new LoadedTypeface(root, variation));
+        }
 
         public LoadedTypeface(string key, FontFileData fontSource, SyntheticStyle styleSimulations = SyntheticStyle.None)
         {
@@ -196,7 +228,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// custom families, globally for system families), so a custom family registered with different
         /// bytes by another <c>PdfGenerator</c> can never share a descriptor with this one.
         /// </summary>
-        internal OpenTypeDescriptor Descriptor => _descriptor ??= new OpenTypeDescriptor(Key, FamilyName, Fontface);
+        internal OpenTypeDescriptor Descriptor => _descriptor ??= new OpenTypeDescriptor(Key, FamilyName, Fontface, Variation);
         volatile OpenTypeDescriptor? _descriptor;
 
         /// <summary>

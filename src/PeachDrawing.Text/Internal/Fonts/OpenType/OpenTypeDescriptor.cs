@@ -55,15 +55,28 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// Describes <paramref name="fontface"/>: a font face's metrics, glyph mapping and shaping entry points, in
         /// design units (nothing here depends on a font size).
         /// </summary>
-        public OpenTypeDescriptor(string fontDescriptorKey, string name, OpenTypeFontface fontface)
+        public OpenTypeDescriptor(string fontDescriptorKey, string name, OpenTypeFontface fontface, Variations.VariationCoordinates? variation = null)
             : base(fontDescriptorKey)
         {
             FontFace = fontface;
             FontName = name;
+            Variation = variation is { IsDefault: false } ? variation : null;
             Initialize();
         }
 
         internal OpenTypeFontface FontFace;
+
+        /// <summary>Where in the design space of a variable font this descriptor reads, or <see langword="null"/> at the defaults (and for every font that is not variable).</summary>
+        internal Variations.VariationCoordinates? Variation { get; }
+
+        /// <summary>How much the font-wide metric with the MVAR value tag <paramref name="tag"/> differs from the default at this descriptor's location.</summary>
+        private int Adjust(string tag, int value)
+        {
+            if (Variation is null || FontFace.Variations?.Mvar is not { } mvar)
+                return value;
+
+            return value + (int)Math.Round(mvar.GetDelta(tag, Variation.Normalized));
+        }
 
         void Initialize()
         {
@@ -78,10 +91,10 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             XMax = FontFace.head.xMax;
             YMax = FontFace.head.yMax;
 
-            UnderlinePosition = FontFace.post.underlinePosition;
-            UnderlineThickness = FontFace.post.underlineThickness;
-            StrikeoutPosition = FontFace.os2.yStrikeoutPosition;
-            StrikeoutSize = FontFace.os2.yStrikeoutSize;
+            UnderlinePosition = Adjust("undo", FontFace.post.underlinePosition);
+            UnderlineThickness = Adjust("unds", FontFace.post.underlineThickness);
+            StrikeoutPosition = Adjust("stro", FontFace.os2.yStrikeoutPosition);
+            StrikeoutSize = Adjust("strs", FontFace.os2.yStrikeoutSize);
 
             // No documetation found how to get the set vertical stems width from the
             // TrueType tables.
@@ -107,9 +120,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             {
                 // Comment from WPF: The font specifies that the sTypoAscender, sTypoDescender, and sTypoLineGap fields are valid and
                 // should be used instead of winAscent and winDescent.
-                int typoAscender = FontFace.os2.sTypoAscender;
-                int typoDescender = FontFace.os2.sTypoDescender;
-                int typoLineGap = FontFace.os2.sTypoLineGap;
+                int typoAscender = Adjust("hasc", FontFace.os2.sTypoAscender);
+                int typoDescender = Adjust("hdsc", FontFace.os2.sTypoDescender);
+                int typoLineGap = Adjust("hlgp", FontFace.os2.sTypoLineGap);
 
                 // Comment from WPF: We include the line gap in the ascent so that white space is distributed above the line. (Note that
                 // the typo line gap is a different concept than "external leading".)
@@ -129,13 +142,13 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             else
             {
                 // Comment from WPF: get the ascender field
-                int ascender = FontFace.hhea.ascender;
+                int ascender = Adjust("hasc", FontFace.hhea.ascender);
                 // Comment from WPF: get the descender field; this is measured in the same direction as ascender and is therefore
                 // normally negative whereas we want a positive value; however some fonts get the sign wrong
                 // so instead of just negating we take the absolute value.
-                int descender = Math.Abs(FontFace.hhea.descender);
+                int descender = Math.Abs(Adjust("hdsc", FontFace.hhea.descender));
                 // Comment from WPF: get the lineGap field and make sure it's >= 0
-                int lineGap = Math.Max((short)0, FontFace.hhea.lineGap);
+                int lineGap = Math.Max(0, Adjust("hlgp", FontFace.hhea.lineGap));
 
                 // `line-height: normal`: browsers resolve this from the raw hhea triple - never the OS/2
                 // win-metrics substitution the block below applies to Ascender/Descender/LineSpacing (that
@@ -152,8 +165,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     // these fields wrong or get them right only for Latin text; therefore we use the more reliable
                     // platform-specific Windows values. We take the absolute value of the win32descent in case some
                     // fonts get the sign wrong.
-                    int winAscent = FontFace.os2.usWinAscent;
-                    int winDescent = Math.Abs(FontFace.os2.usWinDescent);
+                    int winAscent = Adjust("hcla", FontFace.os2.usWinAscent);
+                    int winDescent = Math.Abs(Adjust("hcld", FontFace.os2.usWinDescent));
 
                     Ascender = winAscent;
                     Descender = winDescent;
@@ -183,13 +196,13 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
             // sCapHeight and sxHeight are only valid if Version >= 2
             if (FontFace.os2.version >= 2 && FontFace.os2.sCapHeight != 0)
-                CapHeight = FontFace.os2.sCapHeight;
+                CapHeight = Adjust("cpht", FontFace.os2.sCapHeight);
             else
                 CapHeight = Ascender;
 
             if (FontFace.os2.version >= 2 && FontFace.os2.sxHeight != 0)
             {
-                XHeight = FontFace.os2.sxHeight;
+                XHeight = Adjust("xhgt", FontFace.os2.sxHeight);
                 HasAuthenticXHeight = true;
             }
             else
@@ -570,7 +583,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// </summary>
         public bool TryGetGlyphOutline(int glyphIndex, out GlyphOutline outline)
         {
-            if (GlyphOutlineDecoder.TryGetGlyphOutline(FontFace, glyphIndex, out outline))
+            if (GlyphOutlineDecoder.TryGetGlyphOutline(FontFace, glyphIndex, out outline, Variation))
                 return true;
 
             if (FontFace.glyf is null && FontFace.cff is { IsSupported: true })
@@ -674,10 +687,34 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         }
 
         /// <summary>
+        /// How much the advance width of a glyph differs from its <c>hmtx</c> entry at this descriptor's location: from <c>HVAR</c>
+        /// when the font has it, otherwise from the phantom points of <c>gvar</c>.
+        /// </summary>
+        private double AdvanceDelta(int glyphIndex)
+        {
+            var variations = FontFace.Variations;
+            if (Variation is null || variations is null)
+                return 0;
+
+            if (variations.Hvar is { } hvar)
+                return hvar.GetAdvanceDelta(glyphIndex, Variation.Normalized);
+
+            if (variations.Gvar is not { } gvar || !gvar.HasVariations(glyphIndex))
+                return 0;
+
+            int total = GlyphOutlineDecoder.GetVariationPointCount(FontFace, glyphIndex);
+            var dx = new double[total];
+            var dy = new double[total];
+            // The advance is the distance between the first two phantom points, which are the last four points.
+            return gvar.TryAddDeltas(glyphIndex, Variation.Normalized, total, null, null, null, dx, dy) ? dx[total - 3] - dx[total - 4] : 0;
+        }
+
+        /// <summary>
         ///   //Converts the width of a glyph identified by its index to PDF design units.
         /// </summary>
         public int GlyphIndexToWidth(int glyphIndex)
         {
+            int originalGlyphIndex = glyphIndex;
             try
             {
                 int numberOfHMetrics = FontFace.hhea.numberOfHMetrics;
@@ -687,7 +724,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     glyphIndex = numberOfHMetrics - 1;
 
                 int width = FontFace.hmtx.Metrics[glyphIndex].advanceWidth;
-                return width;
+                return Variation is null ? width : width + (int)Math.Round(AdvanceDelta(originalGlyphIndex));
             }
             catch (Exception)
             {

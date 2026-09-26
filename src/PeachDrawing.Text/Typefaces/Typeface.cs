@@ -1,4 +1,5 @@
 ﻿using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType.Variations;
 using PeachDrawing.Text.Internal.Text;
 using PeachDrawing.Text.OpenType;
 using PeachDrawing.Text.Outlines;
@@ -6,6 +7,7 @@ using PeachDrawing.Text.Unicode;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
@@ -265,15 +267,96 @@ namespace PeachDrawing.Text
             => EmojiProperties.FaceMatches(Face.Descriptor.FontFace, rune.Value, presentation);
 
         /// <inheritdoc />
-        public bool Equals(Typeface? other) => other is not null && ReferenceEquals(Face.FontSource, other.Face.FontSource);
+        public bool Equals(Typeface? other) =>
+            other is not null && ReferenceEquals(Face.FontSource, other.Face.FontSource) && Face.Variation?.Key == other.Face.Variation?.Key;
 
         /// <inheritdoc />
         public override bool Equals(object? obj) => Equals(obj as Typeface);
 
         /// <inheritdoc />
-        public override int GetHashCode() => RuntimeHelpers.GetHashCode(Face.FontSource);
+        public override int GetHashCode() => HashCode.Combine(RuntimeHelpers.GetHashCode(Face.FontSource), Face.Variation?.Key);
 
         /// <inheritdoc />
-        public override string ToString() => Face.DisplayName;
+        public override string ToString() => Face.Variation is { } variation ? Face.DisplayName + " (" + variation.Key + ")" : Face.DisplayName;
+
+        /// <summary>Whether the face is a variable font: one file that holds a whole design space, which <see cref="WithAxes"/> reads at a location.</summary>
+        public bool IsVariable => Face.Fontface.Variations is not null;
+
+        /// <summary>
+        /// The axes of a variable font, in the order the font lists them. Empty for a font that is not variable.
+        /// </summary>
+        public IReadOnlyList<VariationAxis> Axes => _axes ??= Face.Fontface.Variations is { } variations
+            ? Array.AsReadOnly(variations.Axes.Select(a => new VariationAxis(a.Tag, a.Name, a.Minimum, a.Default, a.Maximum, a.IsHidden)).ToArray())
+            : Array.Empty<VariationAxis>();
+
+        private IReadOnlyList<VariationAxis>? _axes;
+
+        /// <summary>
+        /// The named locations of a variable font (such as <c>Bold</c> or <c>Light Condensed</c>). Empty for a font that is not variable.
+        /// </summary>
+        public IReadOnlyList<NamedVariation> NamedVariations => _namedVariations ??= Face.Fontface.Variations is { } variations
+            ? Array.AsReadOnly(variations.Instances.Select(instance => new NamedVariation(instance.Name, SettingsOf(variations, instance.Coordinates))).ToArray())
+            : Array.Empty<NamedVariation>();
+
+        private IReadOnlyList<NamedVariation>? _namedVariations;
+
+        /// <summary>
+        /// Where this typeface reads its font's design space: the value on every axis, in the order of <see cref="Axes"/>. Empty for a font
+        /// that is not variable.
+        /// </summary>
+        public IReadOnlyList<AxisSetting> AxisSettings => Face.Fontface.Variations is { } variations
+            ? SettingsOf(variations, Face.Variation?.UserValues ?? variations.Axes.Select(a => a.Default).ToArray())
+            : Array.Empty<AxisSetting>();
+
+        private static IReadOnlyList<AxisSetting> SettingsOf(FontVariations variations, double[] values) =>
+            Array.AsReadOnly(variations.Axes.Select((axis, i) => new AxisSetting(axis.Tag, values[i])).ToArray());
+
+        /// <summary>
+        /// The typeface of a variable font at a location in its design space.
+        /// </summary>
+        /// <remarks>
+        /// An axis that is not in <paramref name="settings"/> stays where this typeface has it, a setting for a tag the font has no axis for
+        /// is ignored, and a value outside an axis's range is clamped to it. Asking for the same location again gives the same typeface,
+        /// and a location at every axis's default gives the font's default typeface. The outlines and advances of a glyph and the
+        /// font-wide metrics follow the location; the substitutions and positioning of the font's layout tables do not (their
+        /// variation data is not read yet).
+        /// </remarks>
+        /// <param name="settings">The values to set.</param>
+        /// <returns>The typeface at the location, or this typeface when the font is not variable.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="settings"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentException">A setting has a tag that is not four characters long.</exception>
+        public Typeface WithAxes(IEnumerable<AxisSetting> settings)
+        {
+            ArgumentNullException.ThrowIfNull(settings);
+
+            var variations = Face.Fontface.Variations;
+            var requested = new List<AxisSetting>();
+            foreach (var setting in settings)
+            {
+                if (setting.Tag is not { Length: 4 })
+                {
+                    throw new ArgumentException("An axis tag is four characters long.", nameof(settings));
+                }
+
+                requested.Add(setting);
+            }
+
+            if (variations is null)
+            {
+                return this;
+            }
+
+            // What this typeface already has is the starting point.
+            var values = new List<(string Tag, double Value)>();
+            var current = Face.Variation?.UserValues;
+            for (int i = 0; i < variations.Axes.Length; i++)
+            {
+                values.Add((variations.Axes[i].Tag, current?[i] ?? variations.Axes[i].Default));
+            }
+
+            values.AddRange(requested.Select(s => (s.Tag, s.Value)));
+            var coordinates = variations.CreateCoordinates(values);
+            return Face.WithVariation(coordinates).Public;
+        }
     }
 }

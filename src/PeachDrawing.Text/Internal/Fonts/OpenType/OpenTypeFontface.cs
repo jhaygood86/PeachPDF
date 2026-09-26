@@ -630,6 +630,27 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         internal readonly object SyncRoot = new();
 
         /// <summary>
+        /// The variation tables of a variable font, parsed once on first use, or <see langword="null"/> for a font that is not variable.
+        /// They are read from the font's bytes and not through the shared cursor, so this needs no lock.
+        /// </summary>
+        internal Variations.FontVariations? Variations
+        {
+            get
+            {
+                if (!_variationsRead)
+                {
+                    _variations = Fonts.OpenType.Variations.FontVariations.TryCreate(this);
+                    _variationsRead = true;
+                }
+
+                return _variations;
+            }
+        }
+
+        private Variations.FontVariations? _variations;
+        private volatile bool _variationsRead;
+
+        /// <summary>
         /// The lazy-lookup-cache idiom used throughout GSUB/GPOS (<c>_someCache.GetOrAdd(index, someDelegate)</c>)
         /// is safe for the <see cref="ConcurrentDictionary{TKey,TValue}"/> itself, but not for <paramref name="factory"/> -
         /// <c>GetOrAdd</c> may invoke its factory more than once under contention, and here the factory
