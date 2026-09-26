@@ -301,6 +301,17 @@ PeachDrawing.Text.Outlines.Affine2x3 : struct
   property Double XY { get; init; }
   property Double YX { get; init; }
   property Double YY { get; init; }
+PeachDrawing.Text.Outlines.ColorClipBox : struct
+  ctor(Double XMin, Double YMin, Double XMax, Double YMax)
+  method Boolean Equals(ColorClipBox other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double XMin, out Double YMin, out Double XMax, out Double YMax)
+  property Double XMax { get; init; }
+  property Double XMin { get; init; }
+  property Double YMax { get; init; }
+  property Double YMin { get; init; }
 PeachDrawing.Text.Outlines.ColorExtend : enum Int32
   Pad = 0
   Reflect = 2
@@ -566,6 +577,7 @@ PeachDrawing.Text.Typeface : sealed class
   method Boolean MatchesEmojiPresentation(Rune rune, EmojiPresentation presentation)
   method Boolean SupportsFeatures(IReadOnlySet<String> tags)
   method Boolean TryGetBitmap(UInt16 glyph, Double ppem, out EmbeddedBitmap bitmap)
+  method Boolean TryGetColorClipBox(UInt16 glyph, out ColorClipBox box)
   method Boolean TryGetColorLayers(UInt16 glyph, out IReadOnlyList<ColorLayer> layers)
   method Boolean TryGetGridFittedAdvance(UInt16 glyph, in OutlineRequest request, out Double advance)
   method Boolean TryGetOutline(UInt16 glyph, in OutlineRequest request, out GlyphOutline outline)

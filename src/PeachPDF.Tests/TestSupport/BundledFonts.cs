@@ -273,6 +273,14 @@ namespace PeachPDF.Tests.TestSupport
         internal static string VariableLayoutTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableLayoutTest.golden.json");
 
         /// <summary>
+        /// A synthetic variable colour font (see VariableColorTest.LICENSE.txt, made by generate_variable_color_fixture.py): one colour glyph for each of
+        /// the variable paint formats of COLR version 1 (glyphs A to N), with variable colour lines and clip boxes, on a weight and a width axis.
+        /// </summary>
+        internal static string VariableColorTest => Path.Combine(AppContext.BaseDirectory, "VariableColorTest.ttf");
+
+        /// <summary>The reference values for <see cref="VariableColorTest"/>: the numbers of every paint graph and the clip boxes at a grid of locations.</summary>
+        internal static string VariableColorTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableColorTest.golden.json");
+        /// <summary>
         /// An inline <c>@font-face</c> rule embedding <paramref name="fontPath"/> as a base64 data URL
         /// under <paramref name="familyName"/> - for an HTML-layer (<c>LayoutHarness</c>) test whose
         /// fixture geometry is calibrated against a specific font's real metrics and so must not depend on

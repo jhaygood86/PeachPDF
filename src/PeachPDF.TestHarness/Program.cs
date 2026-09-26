@@ -11108,6 +11108,38 @@ await SaveShowcaseAsync("variable_font_ranges", "Typography & Text", "Variable f
     "Rendered against a small synthetic variable font with weight, width and slant axes.",
     variableRangesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// Variable colour fonts: the paints of a COLR version 1 colour glyph (opacities, gradient geometry and colours, transforms) follow the
+// location of a variable font, and the PDF paints the numbers that apply there. Uses a small synthetic colour font with one glyph for each
+// variable paint format, on a weight and a width axis.
+var variableColorFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableColorTest.ttf")));
+string VariableColorRow(string style, string caption) =>
+    $"<div class=\"cap\">{caption}</div><div class=\"vc\" style=\"{style}\">ABCDEFGHIJKLMN</div>";
+var variableColorHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 12mm }" +
+    $"@font-face {{ font-family: 'VC'; src: url('data:font/truetype;base64,{variableColorFontB64}') format('truetype'); font-weight: 100 900; font-stretch: 75% 125%; }}" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    ".vc { font-family: 'VC'; font-size: 30pt; line-height: 1.3; white-space: nowrap }" +
+    ".cap { font-size: 7pt; color: #666; margin-top: 0.7em }" +
+    "</style></head><body>" +
+    "<h1>Variable colour fonts</h1>" +
+    "<p class=\"intro\">A colour font's paints can vary with the axes: a solid's opacity, the geometry and the colour stops of a gradient, and the " +
+    "translation, scale, rotation and skew that place a layer. Each row below is the same fourteen glyphs, one for each variable paint format of " +
+    "<code>COLR</code> version 1, at another location; the PDF paints the numbers that apply there as ordinary vector fills.</p>" +
+    VariableColorRow("font-weight: 100", "font-weight: 100") +
+    VariableColorRow("font-weight: 400", "font-weight: 400") +
+    VariableColorRow("font-weight: 600", "font-weight: 600") +
+    VariableColorRow("font-weight: 900", "font-weight: 900") +
+    VariableColorRow("font-weight: 400; font-stretch: 75%", "font-stretch: 75%") +
+    VariableColorRow("font-weight: 400; font-stretch: 125%", "font-stretch: 125%") +
+    "</body></html>";
+await SaveShowcaseAsync("variable_fonts_color", "Typography & Text", "Variable colour fonts",
+    "A COLR version 1 colour font whose paints vary with the font's axes: opacities, gradient geometry and colours, and transforms all " +
+    "follow the location, as font-weight and font-stretch move it. Rendered against a small synthetic colour font, one glyph per variable paint format.",
+    variableColorHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // Face matching order (CSS Fonts 4 section 5.2): a family's faces are narrowed by width first, then style, then weight; the requested oblique
 // angle chooses among faces that declare oblique ranges; and font-weight takes fractions. Uses Source Sans 3 (a condensed upright face) and
 // Source Code Pro (standing in for an italic face of normal width), plus the synthetic variable font with weight and slant axes.

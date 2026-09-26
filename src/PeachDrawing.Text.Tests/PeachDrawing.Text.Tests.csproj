@@ -105,6 +105,12 @@
     <None Include="..\..\assets\fonts\VariableSlantTest.ttf" Link="VariableSlantTest.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\VariableColorTest.ttf" Link="VariableColorTest.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\VariableColorTest.golden.json" Link="VariableColorTest.golden.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\..\assets\fonts\VariableTestNoHvar.ttf" Link="VariableTestNoHvar.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

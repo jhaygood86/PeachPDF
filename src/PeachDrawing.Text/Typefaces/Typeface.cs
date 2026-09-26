@@ -215,17 +215,41 @@ namespace PeachDrawing.Text
         /// no version 1 <c>COLR</c> table, or no paint for this glyph.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// The graph can share nodes and, in a malformed font, can lead back to itself through <see cref="PaintColrGlyph"/> and
         /// <see cref="PaintColrLayers"/>, so a caller that walks it has to bound the depth and the work.
+        /// </para>
+        /// <para>
+        /// At a location of a variable font (<see cref="WithAxes"/>) the numbers of the nodes are the ones that apply there: the
+        /// variable paints, colour lines, transforms and clip boxes of the font have had their deltas added, and where the change moves an
+        /// opacity it is kept between 0 and 1 and where it moves a colour stop past its neighbour the stops are put back in order of offset.
+        /// Nodes are made for each location.
+        /// </para>
         /// </remarks>
         /// <param name="glyph">The base glyph.</param>
         public ColorPaint? GetColorPaint(ushort glyph)
-            => Face.Descriptor.ColorTable is { Version: >= 1 } colr ? colr.GetV1BaseGlyphPaint(glyph) : null;
+            => Face.Descriptor.ColorTable is { Version: >= 1 } colr ? colr.GetV1BaseGlyphPaint(glyph, Face.Descriptor.Variation) : null;
 
-        /// <summary>The paint at an entry of the layer list, which a <see cref="PaintColrLayers"/> node refers to by index.</summary>
+        /// <summary>The paint at an entry of the layer list, which a <see cref="PaintColrLayers"/> node refers to by index, at this typeface's location.</summary>
         /// <param name="index">The index in the layer list.</param>
         /// <returns>The paint, or <see langword="null"/> when there is no such entry.</returns>
-        public ColorPaint? GetColorLayerPaint(int index) => Face.Descriptor.ColorTable?.GetLayerPaint(index);
+        public ColorPaint? GetColorLayerPaint(int index) => Face.Descriptor.ColorTable?.GetLayerPaint(index, Face.Descriptor.Variation);
+
+        /// <summary>
+        /// The clip box of a version 1 colour glyph: a rectangle that holds everything the glyph paints, at this typeface's location.
+        /// </summary>
+        /// <param name="glyph">The base glyph.</param>
+        /// <param name="box">The box, in design units.</param>
+        /// <returns><see langword="false"/> when the face has no version 1 <c>COLR</c> table or gives this glyph no clip box; the glyph is then
+        /// not known to be bounded, and a caller that needs bounds walks its paint graph.</returns>
+        public bool TryGetColorClipBox(ushort glyph, out ColorClipBox box)
+        {
+            if (Face.Descriptor.ColorTable is { Version: >= 1 } colr)
+                return colr.TryGetClipBox(glyph, Face.Descriptor.Variation, out box);
+
+            box = default;
+            return false;
+        }
 
         /// <summary>
         /// The layers of a version 0 colour glyph, painted in order from the bottom layer up, each a glyph in one palette colour.
