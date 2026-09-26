@@ -1,7 +1,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;

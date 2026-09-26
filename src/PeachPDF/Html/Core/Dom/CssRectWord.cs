@@ -10,8 +10,8 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Text.Shaping.Arabic;
-using PeachPDF.Text.Shaping.Use;
+using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
+using PeachDrawing.Text.Internal.Text.Shaping.Use;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -60,7 +60,7 @@ namespace PeachPDF.Html.Core.Dom
         /// this field - <c>GsubShaper</c>'s own USE stage still needs true logical order to resolve
         /// syllable/conjunct structure, but the resulting glyph list is never reversed afterward the way
         /// an Arabic-family joining word's is (only locally reordered within each syllable - see
-        /// <c>PeachPDF.Text.Shaping.Use.UseReorderer</c>).
+        /// <c>PeachDrawing.Text.Internal.Text.Shaping.Use.UseReorderer</c>).
         /// </summary>
         private readonly UseCategory[]? _logicalUseCategories;
 
@@ -174,7 +174,7 @@ namespace PeachPDF.Html.Core.Dom
         public override string Text => _text;
 
         /// <summary>
-        /// This word's stable, unmirrored text - what <c>PeachPDF.Text.Bidi.BidiMirrorResolver.ApplyMirroring</c>
+        /// This word's stable, unmirrored text - what <c>PeachDrawing.Text.Internal.Text.Bidi.BidiMirrorResolver.ApplyMirroring</c>
         /// should always mirror <i>from</i>, regardless of how many times layout has already mirrored
         /// this word via <see cref="ReplaceText"/> (see <see cref="_preMirrorText"/>).
         /// </summary>

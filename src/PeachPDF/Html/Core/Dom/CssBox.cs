@@ -18,9 +18,9 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Paint;
-using PeachPDF.Text;
-using PeachPDF.Text.Shaping.Arabic;
-using PeachPDF.Text.Shaping.Use;
+using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
+using PeachDrawing.Text.Internal.Text.Shaping.Use;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -1763,7 +1763,7 @@ namespace PeachPDF.Html.Core.Dom
                                     var language = Language;
                                     if (!string.IsNullOrEmpty(language))
                                     {
-                                        var autoPoints = PeachPDF.Text.HyphenationEngine.FindHyphenationPoints(cleanWord, language);
+                                        var autoPoints = PeachDrawing.Text.Internal.Text.HyphenationEngine.FindHyphenationPoints(cleanWord, language);
                                         if (autoPoints.Count > 0)
                                             hyphenationCandidates = new List<int>(autoPoints);
                                     }
@@ -7521,7 +7521,7 @@ namespace PeachPDF.Html.Core.Dom
                 // than reverting to unmirrored logical order (issue #553) - BidiLevel is assigned per-word
                 // at ParseToWords time, independent of whether the per-line mirroring pass has run yet.
                 boxWord.FirstLineText = firstLineStyle.TextTransform != TextTransform && boxWord.Text != "\n"
-                    ? PeachPDF.Text.Bidi.BidiMirrorResolver.ApplyMirroring(
+                    ? PeachDrawing.Text.Internal.Text.Bidi.BidiMirrorResolver.ApplyMirroring(
                         ApplyTextTransform(boxWord.OriginalText ?? boxWord.Text!, firstLineStyle.TextTransform), boxWord.BidiLevel)
                     : null;
                 // When FirstLineText is null (this box's own TextTransform already matches the

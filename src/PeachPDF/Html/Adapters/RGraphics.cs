@@ -12,7 +12,7 @@
 
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Raster;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 

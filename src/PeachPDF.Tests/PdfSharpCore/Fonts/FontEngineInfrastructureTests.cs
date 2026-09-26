@@ -1,5 +1,5 @@
-using PeachPDF.Fonts;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     /// <summary>
     /// The font engine's own infrastructure - the font-file bytes/identity type, the checksum, the descriptor
     /// cache and the simple-font <c>/Widths</c> table - which used to live inside the PDF writer's namespaces
-    /// and is now owned by <c>PeachPDF.Fonts</c> (or, for the PDF-specific table, sits beside the PDF font objects).
+    /// and is now owned by <c>PeachDrawing.Text.Internal.Fonts</c> (or, for the PDF-specific table, sits beside the PDF font objects).
     /// </summary>
     public class FontEngineInfrastructureTests
     {

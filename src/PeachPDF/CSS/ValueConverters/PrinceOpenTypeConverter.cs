@@ -37,7 +37,7 @@ namespace PeachPDF.CSS
 
         // The 6 real font-variant-caps keyword <-> exact-tag-set correspondences (see
         // GsubShaper.GetFeatureTags, which this deliberately doesn't reference - CSS-OM stays
-        // independent of the PeachPDF.Text shaping layer, so this small, spec-fixed table is
+        // independent of the PeachDrawing.Text.Internal.Text shaping layer, so this small, spec-fixed table is
         // duplicated rather than shared across that layering boundary).
         private static readonly (string Keyword, string[] Tags)[] CapsCombinations =
         [

@@ -14,10 +14,10 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Text;
-using PeachPDF.Text.Bidi;
-using PeachPDF.Text.Shaping.Arabic;
-using PeachPDF.Text.Shaping.Use;
+using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.Internal.Text.Bidi;
+using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
+using PeachDrawing.Text.Internal.Text.Shaping.Use;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -406,7 +406,7 @@ namespace PeachPDF.Svg
             /// common case: never mirrored) means <see cref="Glyph"/> itself is already the logical
             /// source. Read by <see cref="PaintGlyphs"/>/<see cref="PaintUprightGlyph"/>/
             /// <see cref="PaintRotatedGlyph"/> to build each painted string's positionally-aligned
-            /// ToUnicode logical source (see <c>PeachPDF.Fonts.CMapInfo.AddShapedText</c>'s own remarks
+            /// ToUnicode logical source (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks
             /// on that contract) - unlike HTML's whole-word reversal, SVG's bidi pass physically reorders
             /// individual <see cref="GlyphInfo"/> instances, so each glyph already carries its own
             /// correct logical value directly; nothing needs recomputing from a run-wide position formula.
@@ -1469,7 +1469,7 @@ namespace PeachPDF.Svg
         /// filled/stroked through the same brush/pen machinery shapes use - outlined text is vector art
         /// (not selectable). A CFF/bitmap font yields no outline, so it falls back to a solid fill.
         /// <paramref name="logicalText"/> is <paramref name="text"/>'s true logical-order source,
-        /// positionally aligned with it (see <c>PeachPDF.Fonts.CMapInfo.AddShapedText</c>'s own remarks) -
+        /// positionally aligned with it (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks) -
         /// null (the common case) when this run of characters was never bidi-mirrored.
         /// </summary>
         private static void PaintTextGlyphs(RGraphics g, SvgDocument document, SvgTextElement run, string text, RFont font, double drawX, double drawY, RSize size, double opacity,
@@ -1634,7 +1634,7 @@ namespace PeachPDF.Svg
             }
         }
 
-        /// <summary>Paints one glyph of a <c>&lt;textPath&gt;</c> at the current (already rotated/translated) frame, centered on the local origin. <paramref name="logicalGlyph"/> is <paramref name="glyph"/>'s true logical-order source when bidi-mirrored it (see <c>PeachPDF.Fonts.CMapInfo.AddShapedText</c>'s own remarks) - null (the common case) otherwise.</summary>
+        /// <summary>Paints one glyph of a <c>&lt;textPath&gt;</c> at the current (already rotated/translated) frame, centered on the local origin. <paramref name="logicalGlyph"/> is <paramref name="glyph"/>'s true logical-order source when bidi-mirrored it (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks) - null (the common case) otherwise.</summary>
         private static void PaintGlyphAlongPath(RGraphics g, SvgDocument document, SvgTextElement run, RFont font, string glyph, double advance, double opacity, bool needsOutline, bool hasStroke, string? logicalGlyph = null)
         {
             var leftX = -advance / 2;

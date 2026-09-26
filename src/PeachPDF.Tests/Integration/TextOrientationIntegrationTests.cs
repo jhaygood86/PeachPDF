@@ -1,13 +1,13 @@
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.IO;

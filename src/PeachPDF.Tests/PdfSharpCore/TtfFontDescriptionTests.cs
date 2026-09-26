@@ -4,7 +4,7 @@ using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Linq;
 
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {

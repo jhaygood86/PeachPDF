@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<Import Project="..\Version.props" />
+	<PropertyGroup>
+		<AssemblyName>PeachDrawing.Text</AssemblyName>
+		<RootNamespace>PeachDrawing.Text</RootNamespace>
+		<PackageId>PeachDrawing.Text</PackageId>
+		<Description>Font loading, OpenType shaping, bidirectional text and Unicode text primitives for .NET, with no dependencies. The text engine PeachPDF renders HTML with.</Description>
+		<PackageTags>fonts;opentype;truetype;woff;text;shaping;bidi;unicode;hyphenation;typography</PackageTags>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageIcon>peach.png</PackageIcon>
+		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/jhaygood86/PeachPDF.git</RepositoryUrl>
+		<PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+		<IncludeSymbols>true</IncludeSymbols>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+		<GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+		<GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+		<GenerateAssemblyTitleVersionAttribute>false</GenerateAssemblyTitleVersionAttribute>
+		<GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+		<RunCodeAnalysis>false</RunCodeAnalysis>
+		<IsTrimmable>true</IsTrimmable>
+		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+		<IsAotCompatible>true</IsAotCompatible>
+		<!-- The LibraryImport source generator emits unsafe marshalling code (SYSLIB1062) for the fontconfig binding. No hand-written unsafe blocks exist in this project. -->
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
+	<ItemGroup>
+		<!-- Unicode and hyphenation data, read back by name through this assembly's own manifest resources. -->
+		<None Remove="Internal\Text\Resources\Patterns\*.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\Patterns\*.br" />
+		<None Remove="Internal\Text\Resources\language-tags.txt" />
+		<EmbeddedResource Include="Internal\Text\Resources\language-tags.txt" />
+		<None Remove="Internal\Text\Resources\opentype-language-tags.txt" />
+		<EmbeddedResource Include="Internal\Text\Resources\opentype-language-tags.txt" />
+		<None Remove="Internal\Text\Resources\Bidi\*.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\Bidi\*.br" />
+		<None Remove="Internal\Text\Resources\VerticalOrientation\*.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\VerticalOrientation\*.br" />
+		<None Remove="Internal\Text\Resources\Script\*.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\Script\*.br" />
+		<None Remove="Internal\Text\Resources\ArabicJoining\*.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\ArabicJoining\*.br" />
+		<None Remove="Internal\Text\Resources\Use\*.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\Use\*.br" />
+	</ItemGroup>
+	<ItemGroup>
+		<!--
+			TEMPORARY BRIDGE. The public API of this library is still being designed; until it exists, PeachPDF
+			reads the engine's internals directly. Each step of the port removes uses of this bridge, and the
+			step that finishes it deletes the PeachPDF and PeachPDF.Tests entries: the day PeachPDF only uses
+			public API, the compiler enforces it.
+		-->
+		<InternalsVisibleTo Include="PeachPDF" />
+		<InternalsVisibleTo Include="PeachPDF.Tests" />
+	</ItemGroup>
+	<ItemGroup>
+		<!-- The notices the licences of the code and data in this package require it to carry. -->
+		<None Include="README.md" Pack="true" PackagePath="\" />
+		<None Include="THIRD-PARTY-LICENSES.md" Pack="true" PackagePath="\" />
+		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
+	</ItemGroup>
+</Project>

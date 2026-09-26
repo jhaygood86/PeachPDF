@@ -1,6 +1,6 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -8,8 +8,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-using PeachPDF.Fonts;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Text;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {

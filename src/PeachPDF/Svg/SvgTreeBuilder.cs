@@ -18,7 +18,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.Globalization;

@@ -1,4 +1,4 @@
-using PeachPDF.Text.Bidi;
+using PeachDrawing.Text.Internal.Text.Bidi;
 using System;
 using System.Collections.Generic;
 using System.Globalization;

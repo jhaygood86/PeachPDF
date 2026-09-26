@@ -29,8 +29,8 @@
 
 // #??? Clean up
 
-using PeachPDF.Fonts;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 using System;
@@ -87,7 +87,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Initializes a new instance of the <see cref="XFont"/> class using a real CSS Fonts Level 4
         /// numeric weight (1-1000) instead of just <paramref name="style"/>'s Bold bit, so the resolver
-        /// can perform nearest-weight matching (see <see cref="Fonts.IFontResolver.ResolveTypeface(string, int, bool)"/>)
+        /// can perform nearest-weight matching (see <see cref="PeachDrawing.Text.Internal.Fonts.IFontResolver.ResolveTypeface(string, int, bool)"/>)
         /// rather than only ever asking for an exact Regular/Bold pick.
         /// </summary>
         /// <param name="familyName">Name of the font family.</param>

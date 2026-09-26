@@ -6,11 +6,11 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using PeachPDF;
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using Xunit;
 
 namespace PeachPDF.Tests.Integration

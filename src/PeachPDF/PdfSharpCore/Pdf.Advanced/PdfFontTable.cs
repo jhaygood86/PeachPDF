@@ -29,7 +29,7 @@
 
 #nullable disable warnings
 
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.PdfSharpCore.Drawing;
 using System.Collections.Generic;
 using System.Diagnostics;

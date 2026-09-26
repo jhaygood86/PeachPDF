@@ -1,5 +1,5 @@
-using PeachPDF.Fonts;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Text;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Network;
@@ -73,13 +73,13 @@ namespace PeachPDF.Tests.TestSupport
 
         // No family this stub knows about ever "wins" the last-resort search - there is no real
         // InstalledFonts registry backing it, so the only faithful answer is "nothing found".
-        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachPDF.Text.EmojiPresentation presentation) => null;
+        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Internal.Text.EmojiPresentation presentation) => null;
 
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => false;
 
-        protected override Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachPDF.Fonts.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
+        protected override Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachDrawing.Text.Internal.Fonts.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
 
-        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachPDF.Fonts.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
+        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachDrawing.Text.Internal.Fonts.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
     }
 
     /// <summary>A solid-color brush that remembers the color it was created with, and (for a linear

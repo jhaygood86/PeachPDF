@@ -131,7 +131,7 @@ namespace PeachPDF.Html.Core.Parse
         /// every box - by the time a value reaches here it was already validated once, identically, by
         /// the cascade-time property setters in <see cref="Utils.CssUtils"/> that gate whether it's
         /// assigned to the box at all, so re-tokenizing the same string over and over is pure waste.
-        /// Unbounded like <see cref="Text.HyphenationEngine"/>'s language-pattern cache and
+        /// Unbounded like <see cref="PeachDrawing.Text.Internal.Text.HyphenationEngine"/>'s language-pattern cache and
         /// <see cref="Network.MimeTypeResolver"/>'s cache: the key space is a small, effectively-fixed
         /// set of distinct CSS value strings, not user-controlled arbitrary data.
         /// </summary>

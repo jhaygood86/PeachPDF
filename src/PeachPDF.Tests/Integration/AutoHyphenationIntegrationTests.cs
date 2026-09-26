@@ -3,7 +3,7 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;

@@ -2,11 +2,11 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Fonts;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,8 +18,8 @@ namespace PeachPDF.Tests.Html.Core
     /// PeachPDF applies GSUB substitution (ligature/single/multiple/alternate, plus contextual/
     /// chaining - Lookup Types 1-6, formats 1/2/3 - see <see cref="GsubShaper"/>), GPOS positioning
     /// (kerning and mark-to-base/mark-to-mark attachment - Lookup Types 1/2/4/6, see
-    /// <see cref="PeachPDF.Text.GposPositioner"/>), and a real UAX#9 Unicode Bidi Algorithm (see
-    /// <see cref="PeachPDF.Text.Bidi.BidiResolver"/>). Still no Arabic/Indic complex-script joining,
+    /// <see cref="PeachDrawing.Text.Internal.Text.GposPositioner"/>), and a real UAX#9 Unicode Bidi Algorithm (see
+    /// <see cref="PeachDrawing.Text.Internal.Text.Bidi.BidiResolver"/>). Still no Arabic/Indic complex-script joining,
     /// GSUB Lookup Type 8 (reverse chaining single substitution), or GPOS Types 3/5/7/8 (cursive
     /// attachment, mark-to-ligature, contextual positioning). See docs/html-css-support.md "Text
     /// shaping" for the reader-facing note and .claude/accepted-gaps/no-text-shaping.md for what's

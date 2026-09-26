@@ -1,4 +1,4 @@
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;

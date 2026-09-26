@@ -39,7 +39,7 @@ jobs:
     - name: Read package version
       id: version
       run: |
-        VERSION=$(grep -oP '(?<=<PackageVersion>)[^<]+' src/PeachPDF/PeachPDF.csproj)
+        VERSION=$(grep -oP '(?<=<PackageVersion>)[^<]+' src/Version.props)
         echo "value=$VERSION" >> $GITHUB_OUTPUT
         echo "Version: $VERSION"
         if [[ "$VERSION" == *"preview"* ]]; then
@@ -80,10 +80,14 @@ jobs:
       run: gh workflow run pages.yml --ref main
 
     - name: Build
-      run: dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release
+      run: |
+        dotnet build src/PeachDrawing.Text/PeachDrawing.Text.csproj --configuration Release
+        dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release
 
     - name: Pack
-      run: dotnet pack src/PeachPDF/PeachPDF.csproj --configuration Release --no-build --output ./packages
+      run: |
+        dotnet pack src/PeachDrawing.Text/PeachDrawing.Text.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/PeachPDF/PeachPDF.csproj --configuration Release --no-build --output ./packages
 
     - name: NuGet login
       uses: NuGet/login@v1
@@ -92,8 +96,14 @@ jobs:
         user: ${{ secrets.NUGET_USER }}
 
     - name: Push to NuGet.org
+      # PeachDrawing.Text first: PeachPDF depends on it at this same version, so it has to be on the feed
+      # before anyone can restore PeachPDF.
       run: |
-        dotnet nuget push "./packages/*.nupkg" \
+        dotnet nuget push "./packages/PeachDrawing.Text.*.nupkg" \
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+          --source https://api.nuget.org/v3/index.json \
+          --skip-duplicate
+        dotnet nuget push "./packages/PeachPDF.*.nupkg" \
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
           --source https://api.nuget.org/v3/index.json \
           --skip-duplicate

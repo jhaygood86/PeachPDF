@@ -13,7 +13,7 @@ The reported bug was surface-level: `CssDefaults.DefaultStyleSheet`
 of the current HTML Standard's `isolate`/`isolate-override` (`<bdi>`'s own rule was already correct).
 Changing the three keywords looked like the whole fix.
 
-It wasn't. `BidiResolver` (`src/PeachPDF/Text/Bidi/BidiResolver.cs`) implements every CSS
+It wasn't. `BidiResolver` (`src/PeachDrawing.Text/Internal/Text/Bidi/BidiResolver.cs`) implements every CSS
 `unicode-bidi` value as a synthetic push/pop onto an explicit-level stack
 (`BidiIsolateOverride`/`BidiExplicitPush`) rather than by inserting real Unicode LRI/RLI/FSI/PDI
 control characters into the paragraph text — deliberately, so string indices stay stable. But

@@ -6,12 +6,12 @@ version already checked in for DerivedBidiClass.txt/VerticalOrientation.txt/Scri
 DerivedJoiningType.txt.
 
 These two properties are HarfBuzz's own Universal Shaping Engine's raw inputs (see
-gen-use-table.py in the harfbuzz repo) - PeachPDF.Text.Shaping.Use.UseCategoryClassifier derives
+gen-use-table.py in the harfbuzz repo) - PeachDrawing.Text.Internal.Text.Shaping.Use.UseCategoryClassifier derives
 the final per-codepoint USE category from them (plus .NET's own built-in General_Category via
 System.Globalization.CharUnicodeInfo, so no separate General_Category table needs generating here).
 
-Output goes to src/PeachPDF/Text/Resources/Use/*.txt.br, consumed by
-PeachPDF.Text.IndicSyllabicCategoryTable/IndicPositionalCategoryTable. Same run-length-encoded
+Output goes to src/PeachDrawing.Text/Internal/Text/Resources/Use/*.txt.br, consumed by
+PeachDrawing.Text.Internal.Text.IndicSyllabicCategoryTable/IndicPositionalCategoryTable. Same run-length-encoded
 (start, end, value) table shape as generate_arabic_joining_table.py/generate_script_table.py - the
 one difference is each raw UCD value name (e.g. "Vowel_Dependent", "Consonant_Preceding_Repha") has
 its underscores stripped before being written, so the C# reader can Enum.Parse it directly against
@@ -28,7 +28,7 @@ import re
 import brotli
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUT_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "..", "src", "PeachPDF", "Text", "Resources", "Use"))
+OUT_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "..", "src", "PeachDrawing.Text", "Internal", "Text", "Resources", "Use"))
 
 MAX_CODEPOINT = 0x10FFFF
 

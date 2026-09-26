@@ -362,10 +362,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// This fragment's effective Unicode <c>Vertical_Orientation</c> under <c>text-orientation:
         /// mixed</c> - true when every codepoint in it classifies as
-        /// <see cref="PeachPDF.Text.VerticalOrientationClass.U"/> or
-        /// <see cref="PeachPDF.Text.VerticalOrientationClass.Tu"/> (upright, painted without rotation),
-        /// false for <see cref="PeachPDF.Text.VerticalOrientationClass.R"/>/
-        /// <see cref="PeachPDF.Text.VerticalOrientationClass.Tr"/> (rotated 90°, this repo's prior
+        /// <see cref="PeachDrawing.Text.Internal.Text.VerticalOrientationClass.U"/> or
+        /// <see cref="PeachDrawing.Text.Internal.Text.VerticalOrientationClass.Tu"/> (upright, painted without rotation),
+        /// false for <see cref="PeachDrawing.Text.Internal.Text.VerticalOrientationClass.R"/>/
+        /// <see cref="PeachDrawing.Text.Internal.Text.VerticalOrientationClass.Tr"/> (rotated 90°, this repo's prior
         /// "everything rotates" behavior). Set in <see cref="CssBox.ParseToWords"/> only for a box under
         /// a vertical writing mode whose <c>text-orientation</c> actually resolves to <c>mixed</c> and
         /// whose text mixes both orientations; every fragment in such a split shares one orientation by
@@ -387,7 +387,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Candidate hyphenation break indices into <see cref="Text"/> — index <c>i</c> means a hyphen
         /// may be inserted between <c>Text[i-1]</c> and <c>Text[i]</c>. Populated by
         /// <see cref="CssBox.ParseToWords"/> from either an explicit soft hyphen (<c>&amp;shy;</c>) or,
-        /// for <c>hyphens: auto</c> with a known document language, <c>PeachPDF.Text.HyphenationEngine</c>.
+        /// for <c>hyphens: auto</c> with a known document language, <c>PeachDrawing.Text.Internal.Text.HyphenationEngine</c>.
         /// Null/empty for every word that isn't a hyphenation candidate. Consulted only at layout time,
         /// in <see cref="CssLayoutEngine.FlowBox"/>, when a word would otherwise overflow the line.
         /// </summary>

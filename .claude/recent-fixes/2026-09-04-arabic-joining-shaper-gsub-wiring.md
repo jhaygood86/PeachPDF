@@ -76,7 +76,7 @@ one yet. That pipeline wiring (Phase 2's own scope - script-run detection into t
 
 ## Evidence
 
-- New files: `src/PeachPDF/Text/Shaping/Arabic/{ArabicJoiningForm,ArabicJoiningStateTable,ArabicJoiningShaper}.cs`,
+- New files: `src/PeachDrawing.Text/Internal/Text/Shaping/Arabic/{ArabicJoiningForm,ArabicJoiningStateTable,ArabicJoiningShaper}.cs`,
   `src/PeachPDF.Tests/Text/Shaping/Arabic/ArabicJoiningShaperTests.cs` (12 tests, values hand-traced
   against the ported table and cross-checked against real Arabic/Syriac typography),
   `src/PeachPDF.Tests/PdfSharpCore/Fonts/GsubArabicJoiningSyntheticTests.cs` (5 tests: per-position

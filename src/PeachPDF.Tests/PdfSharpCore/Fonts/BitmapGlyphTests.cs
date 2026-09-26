@@ -1,6 +1,6 @@
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -232,7 +232,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             File.WriteAllBytes(path, font);
             try
             {
-                return PeachPDF.Fonts.TtfFontDescription.LoadDescription(path).FontFamilyInvariantCulture;
+                return PeachDrawing.Text.Internal.Fonts.TtfFontDescription.LoadDescription(path).FontFamilyInvariantCulture;
             }
             finally
             {

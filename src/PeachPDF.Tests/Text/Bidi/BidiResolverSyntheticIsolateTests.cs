@@ -1,5 +1,5 @@
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Text.Bidi;
+using PeachDrawing.Text.Internal.Text.Bidi;
 using System.Collections.Generic;
 using Xunit;
 

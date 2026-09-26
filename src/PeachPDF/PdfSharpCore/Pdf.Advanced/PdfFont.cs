@@ -27,8 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.Fonts;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Diagnostics;
 using System.Text;

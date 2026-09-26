@@ -1,4 +1,4 @@
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.PdfSharpCore.Drawing
 {

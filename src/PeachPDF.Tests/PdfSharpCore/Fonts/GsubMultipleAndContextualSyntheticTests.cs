@@ -1,10 +1,10 @@
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 using System.Collections.Generic;
 using System.IO;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using Xunit;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts

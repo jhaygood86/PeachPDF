@@ -13,7 +13,7 @@ Crucially, none of the three engines substitute `OS/2.usWinAscent`/`usWinDescent
 non-typo case - that's a legacy Windows-GDI/old-IE convention.
 
 This codebase already had an `Ascender`/`Descender`/`LineSpacing` triple on `FontDescriptor`
-(`src/PeachPDF/Fonts/OpenType/OpenTypeDescriptor.cs`) - but its own comment says it's a direct port of
+(`src/PeachDrawing.Text/Internal/Fonts/OpenType/OpenTypeDescriptor.cs`) - but its own comment says it's a direct port of
 *WPF's* `FontDriver.ReadBasicMetrics`, which does exactly that legacy GDI substitution, and backs PDF
 `/FontDescriptor` metrics plus baseline positioning (`RFont.Ascent`/`Height`). Reusing it for
 `line-height: normal` would have been wrong twice over - wrong algorithm, and coupling an unrelated

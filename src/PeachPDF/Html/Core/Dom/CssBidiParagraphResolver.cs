@@ -1,9 +1,9 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Text;
-using PeachPDF.Text.Bidi;
-using PeachPDF.Text.Shaping.Arabic;
-using PeachPDF.Text.Shaping.Use;
+using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.Internal.Text.Bidi;
+using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
+using PeachDrawing.Text.Internal.Text.Shaping.Use;
 using System;
 using System.Collections.Generic;
 using System.Text;

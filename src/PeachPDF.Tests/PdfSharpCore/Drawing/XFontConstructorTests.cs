@@ -2,7 +2,7 @@ using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
 {

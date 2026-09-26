@@ -90,7 +90,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// keyed by a declared family, it searches every one of them. <c>Scale</c> is
         /// <see cref="RAdapter.LayoutUnitsPerPoint"/>; see <see cref="_fontsCache"/>.
         /// </summary>
-        private readonly Dictionary<(double Size, double Scale, RFontStyle Style, int Weight, int Stretch, double? Oblique, int Codepoint, PeachPDF.Text.EmojiPresentation Presentation), RFont?> _systemFallbackFontsCache = new();
+        private readonly Dictionary<(double Size, double Scale, RFontStyle Style, int Weight, int Stretch, double? Oblique, int Codepoint, PeachDrawing.Text.Internal.Text.EmojiPresentation Presentation), RFont?> _systemFallbackFontsCache = new();
 
         public void ClearCache()
         {
@@ -224,7 +224,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// or null when nothing registered does. Unlike <see cref="GetCachedFontForCodepoint"/> there is
         /// no family parameter to resolve against - the search itself is family-agnostic.
         /// </summary>
-        public RFont? GetCachedSystemFallbackFontForCodepoint(double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, PeachPDF.Text.EmojiPresentation presentation = PeachPDF.Text.EmojiPresentation.NoPreference)
+        public RFont? GetCachedSystemFallbackFontForCodepoint(double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, PeachDrawing.Text.Internal.Text.EmojiPresentation presentation = PeachDrawing.Text.Internal.Text.EmojiPresentation.NoPreference)
         {
             var (resolvedWeight, resolvedStretch) = ResolveWeightAndStretch(style, weight, stretch);
 

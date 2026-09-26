@@ -1,5 +1,5 @@
-using PeachPDF.Fonts.OpenType;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Text;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;

@@ -2,7 +2,7 @@
 
 ## What was wrong
 
-`FontFileData.GetOrCreateFrom(byte[] bytes)` (`src/PeachPDF/Fonts/FontFileData.cs`) called
+`FontFileData.GetOrCreateFrom(byte[] bytes)` (`src/PeachDrawing.Text/Internal/Fonts/FontFileData.cs`) called
 `FontHelper.CalcChecksum(bytes)` — an O(n) Adler32-style scan of the *entire* font byte buffer —
 **unconditionally, before checking whether the font source was already cached**. `FontFactory`'s
 `FontSourcesByKey` (a `static readonly Dictionary<ulong, FontFileData>`) is correctly process-wide, so a
@@ -10,7 +10,7 @@ repeat request for the same font should be a cheap cache hit — except computin
 *check* that cache required paying the full scan every single time, cache hit or not.
 
 Worse, for a system font reached via per-codepoint/glyph-coverage fallback (CJK, emoji, symbols — the
-content 97 of 661 test files touch), `FontResolver.GetFont` (`src/PeachPDF/Fonts/FontResolver.cs`) called
+content 97 of 661 test files touch), `FontResolver.GetFont` (`src/PeachDrawing.Text/Internal/Fonts/FontResolver.cs`) called
 `File.ReadAllBytes(fontPath)` fresh on every call — a brand-new `byte[]` instance, re-read from disk,
 every time, for files that can be several megabytes (e.g. Segoe UI Emoji on Windows).
 
@@ -55,7 +55,7 @@ correctness split for custom fonts (`InstanceGlyphTypefacesByKey`,
    path across every call, every resolver instance, for the process's lifetime — no more repeat disk reads.
 2. **`FontFileData.GetOrCreateFrom`** now memoizes the checksum by buffer *reference* in a
    `static readonly ConditionalWeakTable<byte[], object>` (the same established pattern already used for
-   process-wide, GC-safe caches in `src/PeachPDF/Text/GposPositioner.cs`/`GsubShaper.cs`) before calling
+   process-wide, GC-safe caches in `src/PeachDrawing.Text/Internal/Text/GposPositioner.cs`/`GsubShaper.cs`) before calling
    `FontHelper.CalcChecksum`. Combined with fix 1 (a stable `byte[]` reference for system fonts), the
    expensive scan now runs once per *distinct font file* for the whole test run, not once per test.
 
