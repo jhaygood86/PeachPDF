@@ -181,23 +181,6 @@ namespace PeachDrawing.Text.Tests.Hinting
             Assert.Same(first, second);
         }
 
-        [Fact]
-        public void ACffFontIsNotGridFittedYetAndGetsTheScaledDesign()
-        {
-            var cff = TypefaceFixtures.FromFile(Path.Combine(AppContext.BaseDirectory, "SourceCodePro-Regular.otf"));
-            var glyph = GlyphOf(cff, 'e');
-
-            Assert.True(cff.TryGetOutline(glyph, out var design));
-            Assert.True(cff.TryGetOutline(glyph, Request(20), out var outline));
-            Assert.False(outline.IsGridFitted);
-            Assert.Equal(20, outline.PixelsPerEm);
-            Assert.Null(outline.GridFittedAdvance);
-            Assert.False(cff.TryGetGridFittedAdvance(glyph, Request(20), out _));
-
-            double scale = 20.0 / cff.Metrics.UnitsPerEm;
-            Assert.Equal(PointsOf(design).Select(p => (X: p.X * scale, Y: p.Y * scale)), PointsOf(outline));
-        }
-
         /// <summary>The variable test font, which has no hinting programs, with a CVT program of one harmless instruction added.</summary>
         private static Typeface VariableFontWithAProgram() => TypefaceFixtures.FromBytes(HostileFonts.WithTable(
             File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf")), "prep", [0xB0, 0x00, 0x21])); // PUSHB[0] 0, POP

@@ -244,14 +244,6 @@ class Glyph:
             mask[-1] &= (0xFF << (8 - count % 8)) & 0xFF
         self.emit(op(r.choice([HINTMASK, HINTMASK, HINTMASK, CNTRMASK])), bytes(mask))
 
-    def build(self):
-        r = self.rng
-        self.emit(*self.width_arg_holder())
-        return bytes(self.out)
-
-    def width_arg_holder(self):
-        return []
-
     def make(self):
         r = self.rng
         # hints
@@ -260,8 +252,6 @@ class Glyph:
         if hcount:
             self.emit(*first, hargs, op(r.choice([HSTEM, HSTEMHM])))
             self.stems += hcount
-        elif first:
-            pending_width = first
         vargs, vcount = self.hints(True)
         if vcount:
             if r.random() < 0.5:
@@ -416,6 +406,164 @@ def build_font(kind, rng):
     return buf.getvalue(), n_glyphs
 
 
+def build_cid_font(rng):
+    """A CID-keyed fixture: three font dictionaries, each with its own private dictionary (blue zones, StdHW, LanguageGroup) and local
+    subroutines, and font matrices of their own (a different scale, a shear), chosen per glyph by an FDSelect of format 3."""
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.misc.psCharStrings import T2CharString
+    from fontTools.cffLib import CharStrings, PrivateDict, FDArrayIndex, FontDict, SubrsIndex, FDSelect
+
+    n_glyphs = 150
+    names = [".notdef"] + ["cid%05d" % i for i in range(1, n_glyphs)]
+    privs = [
+        {"BlueValues": [-15, 0, 486, 500, 700, 715], "OtherBlues": [-235, -220], "StdHW": 68, "StdVW": 84, "defaultWidthX": 500, "nominalWidthX": 560},
+        {"BlueValues": [-10, 0, 470, 480, 690, 700], "BlueScale": 0.05, "BlueShift": 5, "StdHW": 50, "StdVW": 90, "defaultWidthX": 600, "nominalWidthX": 500},
+        {"LanguageGroup": 1, "BlueValues": [], "StdHW": 40, "StdVW": 100, "defaultWidthX": 1000, "nominalWidthX": 800},
+    ]
+    matrices = [None, [0.0005, 0, 0, 0.0005, 0, 0], [0.001, 0, 0.0001, 0.001, 0, 0]]
+    select = [0 if i < 50 else 1 if i < 100 else 2 for i in range(n_glyphs)]
+
+    contexts = []
+    for k in range(3):
+        edges = privs[k].get("BlueValues", []) + privs[k].get("OtherBlues", [])
+        ctx = {"blue_edges": edges, "local_subrs": [], "global_subrs": []}
+        ctx["local_subrs"] = [random_subr(rng, ctx, "hints" if i % 5 == 0 else "path") for i in range(8)]
+        contexts.append(ctx)
+    global_subrs = [random_subr(rng, contexts[0], "hints" if i % 6 == 0 else "path") for i in range(8)]
+    for ctx in contexts:
+        ctx["global_subrs"] = global_subrs
+
+    data = {}
+    for i, name in enumerate(names):
+        if i == 0:
+            data[name] = T2CharString(bytecode=num(500) + op(HMOVETO) + op(ENDCHAR))
+        else:
+            data[name] = T2CharString(bytecode=Glyph(rng, contexts[select[i]]).make())
+
+    fb = FontBuilder(1000, isTTF=False)
+    fb.font.recalcBBoxes = False
+    fb.setupGlyphOrder(names)
+    fb.setupCharacterMap({0x20 + i: names[i] for i in range(1, 60)})
+    fb.setupCFF("HintingCff-cid", {"FullName": "HintingCff cid", "FamilyName": "HintingCff", "Weight": "Regular", "FontBBox": [-200, -300, 1200, 1000]},
+                data, {"BlueValues": []})
+    fb.setupHorizontalMetrics({n: (500, 0) for n in names})
+    fb.setupHorizontalHeader(ascent=800, descent=-200)
+    fb.setupNameTable({"familyName": "HintingCff", "styleName": "cid"})
+    fb.setupOS2(sTypoAscender=800, sTypoDescender=-200, usWinAscent=800, usWinDescent=200)
+    fb.setupPost()
+
+    font = fb.font
+    cff = font["CFF "].cff
+    top = cff.topDictIndex[0]
+    gs = cff.GlobalSubrs
+    for subr in global_subrs:
+        gs.append(T2CharString(bytecode=subr))
+
+    fd_array = FDArrayIndex()
+    fd_array.strings = None
+    fd_array.GlobalSubrs = gs
+    for k in range(3):
+        fd = FontDict()
+        private = PrivateDict()
+        for key, value in privs[k].items():
+            setattr(private, key, value)
+        subrs = SubrsIndex()
+        for subr in contexts[k]["local_subrs"]:
+            subrs.append(T2CharString(bytecode=subr))
+        private.Subrs = subrs
+        fd.Private = private
+        fd.FontName = "FD%d" % k
+        if matrices[k]:
+            fd.FontMatrix = matrices[k]
+        fd_array.append(fd)
+
+    fd_select = FDSelect()
+    fd_select.format = 3
+    fd_select.gidArray = select
+    top.ROS = ("Adobe", "Identity", 0)
+    top.CIDCount = n_glyphs
+    top.FDArray = fd_array
+    top.FDSelect = fd_select
+    del top.Private
+    top.charset = names
+    top.CharStrings = CharStrings(None, names, gs, None, fd_select, fd_array)
+    for i, name in enumerate(names):
+        top.CharStrings[name] = data[name]
+        data[name].private = fd_array[select[i]].Private
+        data[name].globalSubrs = gs
+
+    buf = io.BytesIO()
+    font.save(buf)
+    return buf.getvalue(), n_glyphs
+
+
+def build_hostile_font():
+    """A font of hostile glyphs: charstrings a well-behaved font never has, which the engine has to answer with an error or with what
+    FreeType makes of them, in bounded time (FreeType is compared with for what it does). Glyph 1 is `A` and glyph 2 `acute`."""
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.misc.psCharStrings import T2CharString
+    from fontTools.cffLib import SubrsIndex
+
+    def call(n):
+        return num(n - 107) + op(CALLSUBR)
+
+    line = num(10) + num(5) + op(RLINETO)
+    start = num(50) + num(50) + op(RMOVETO)
+
+    subrs = []
+    subrs.append(call(0) + op(RETURN))                                   # subr 0 calls itself
+    for k in range(1, 13):                                               # subrs 1..12: each calls the next 30 times; the last draws
+        subrs.append((call(k + 1) * 30 if k < 12 else line * 4) + op(RETURN))
+    subrs.append(line + op(RETURN))                                      # subr 13 draws
+
+    glyphs = {}
+    glyphs[".notdef"] = num(500) + op(HMOVETO) + op(ENDCHAR)
+    glyphs["A"] = num(0) + num(0) + num(65) + num(194) + op(ENDCHAR)     # an accent composition of itself with `acute`
+    glyphs["acute"] = start + line + line + line + op(ENDCHAR)
+    glyphs["g3"] = start + call(0) + op(ENDCHAR)                         # a subroutine that calls itself
+    glyphs["g4"] = start + call(1) + op(ENDCHAR)                         # 30^12 calls: the instruction limit ends it
+    glyphs["g5"] = b"".join(num(y) + num(10) + op(HSTEMHM) for y in range(0, 5)) * 0 + b"".join(
+        b"".join(num(10) + num(5) for _ in range(20)) + op(HSTEMHM) for _ in range(5)) + start + line + op(ENDCHAR)   # 100 hints
+    glyphs["g6"] = start + b"".join(num(i) for i in range(60)) + op(RLINETO) + op(ENDCHAR)                    # 60 operands: stack overflow
+    glyphs["g7"] = start + (b"".join(num(i % 50) for i in range(40)) + op(RLINETO)) * 900 + op(ENDCHAR)      # 18,000 points
+    glyphs["g8"] = start + (b"".join(num(i % 50) for i in range(40)) + op(RLINETO)) * 2000 + op(ENDCHAR)     # 40,000 points: too many
+    glyphs["g9"] = num(10) + num(20) + op(HSTEMHM) + op(HINTMASK) + bytes([0xFF, 0xFF, 0xFF]) + start + line + op(ENDCHAR)  # a mask too long
+    glyphs["g10"] = start + b"".join(num(i) for i in range(30)) + num(30) + num(1000000) + op(ROLL, True) + op(RLINETO) + op(ENDCHAR)
+    glyphs["g11"] = start + num(1) + num(0) + op(DIV, True) + num(0) + op(RLINETO) + op(ENDCHAR)             # a division by zero
+    glyphs["g12"] = start + num(7) + op(HFLEX, True) + op(ENDCHAR)                                            # too few operands
+    glyphs["g13"] = start + num(-5000) + op(CALLSUBR) + op(ENDCHAR)                                           # a subroutine that is not there
+    glyphs["g14"] = start + line + op(RETURN) + op(ENDCHAR)                                                   # return from the top level
+    glyphs["g15"] = start + num(3) + num(2) + op(SUB, True) + op(SQRT, True) + op(ABS, True) + num(-2000000) + op(NEG, True) + op(RLINETO) + op(ENDCHAR)
+    glyphs["g16"] = start + b"".join(num(70000 + i) for i in range(2)) + op(RLINETO) + op(ENDCHAR)            # numbers of 5 bytes
+    glyphs["g17"] = start + call(13) * 3000 + op(ENDCHAR)                                                     # 3,000 calls of a small subroutine
+    names = list(glyphs)
+
+    fb = FontBuilder(1000, isTTF=False)
+    fb.font.recalcBBoxes = False
+    fb.setupGlyphOrder(names)
+    fb.setupCharacterMap({0x41: "A"})
+    charstrings = {n: T2CharString(bytecode=glyphs[n]) for n in names}
+    fb.setupCFF("HintingCff-hostile", {"FullName": "HintingCff hostile", "FamilyName": "HintingCff", "Weight": "Regular", "FontBBox": [-200, -300, 1200, 1000]},
+                charstrings, {"BlueValues": [-15, 0, 486, 500, 700, 715], "StdHW": 68, "StdVW": 84, "defaultWidthX": 500, "nominalWidthX": 560})
+    fb.setupHorizontalMetrics({n: (500, 0) for n in names})
+    fb.setupHorizontalHeader(ascent=800, descent=-200)
+    fb.setupNameTable({"familyName": "HintingCff", "styleName": "hostile"})
+    fb.setupOS2(sTypoAscender=800, sTypoDescender=-200, usWinAscent=800, usWinDescent=200)
+    fb.setupPost()
+
+    font = fb.font
+    cff = font["CFF "].cff
+    top = cff.topDictIndex[0]
+    ls = SubrsIndex()
+    for data in subrs:
+        ls.append(T2CharString(bytecode=data))
+    top.Private.Subrs = ls
+
+    buf = io.BytesIO()
+    font.save(buf)
+    return buf.getvalue(), len(names)
+
+
 def load_freetype(path):
     """Makes freetype-py use a specific FreeType shared library instead of the one it bundles."""
     if path:
@@ -473,10 +621,11 @@ def record(freetype, raw, data, glyphs, modes):
                 else:
                     slot = face.contents.glyph.contents
                     outline = slot.outline
-                    n = outline.n_points
+                    # the counts are unsigned 16-bit numbers, which ctypes reads as signed
+                    n = outline.n_points & 0xFFFF
                     per_glyph[str(gid)] = {
                         "a": slot.advance.x,
-                        "e": [outline.contours[i] for i in range(outline.n_contours)],
+                        "e": [outline.contours[i] & 0xFFFF for i in range(outline.n_contours & 0xFFFF)],
                         "x": [outline.points[i].x for i in range(n)],
                         "y": [outline.points[i].y for i in range(n)],
                         "t": [outline.tags[i] & 3 for i in range(n)],
@@ -516,12 +665,19 @@ def main():
     }
 
     fixtures = [("latin", "HintingCff.otf"), ("ideo", "HintingCffIdeo.otf"), ("matrix", "HintingCffMatrix.otf")]
+    fixtures.append(("cid", "HintingCffCid.otf"))
     for kind, file_name in fixtures:
-        data, n_glyphs = build_font(kind, rng)
+        data, n_glyphs = build_cid_font(rng) if kind == "cid" else build_font(kind, rng)
         with open(os.path.join(HERE, file_name), "wb") as f:
             f.write(data)
         print("wrote", file_name, len(data), "bytes")
         result["fonts"].append({"file": file_name, "modes": record(freetype, raw, data, list(range(0, n_glyphs)), modes)})
+
+    data, n_glyphs = build_hostile_font()
+    with open(os.path.join(HERE, "HintingCffHostile.otf"), "wb") as f:
+        f.write(data)
+    print("wrote HintingCffHostile.otf", len(data), "bytes")
+    result["fonts"].append({"file": "HintingCffHostile.otf", "modes": record(freetype, raw, data, list(range(0, n_glyphs)), {"standard": (False, False, [16 * 64])})})
 
     for file_name, limit in BUNDLED:
         data = sfnt_bytes(os.path.join(HERE, file_name))

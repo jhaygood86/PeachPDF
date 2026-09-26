@@ -123,6 +123,12 @@ internal sealed class Cf2Decoder
     /// <summary>Whether the stem darkening of the engine is on (off in FreeType by default).</summary>
     public bool StemDarkening { get; init; }
 
+    /// <summary>
+    /// The state of the <c>random</c> operator. FreeType keeps it in the subfont, so that a glyph's numbers depend on the glyphs loaded
+    /// before it; here every glyph load starts from the seed the subfont was given, and a glyph is the same whatever came before.
+    /// </summary>
+    public uint RandomState { get; set; }
+
     /// <summary>The width of the glyph the charstring gave, in font units.</summary>
     public int GlyphWidth { get; private set; }
 
@@ -141,6 +147,7 @@ internal sealed class Cf2Decoder
         _localsBias = CffFont.ComputeBias(Cff.TopFont.FontDict.CharstringType, _numLocals);
 
         GlyphWidth = CurrentSubfont.Private.DefaultWidth;
+        RandomState = CurrentSubfont.Random;
     }
 
     /// <summary>Converts an unbiased global subroutine index to a buffer; returns true on error (<c>cf2_initGlobalRegionBuffer</c>).</summary>
@@ -267,8 +274,8 @@ internal sealed class Cf2Decoder
 /// </summary>
 internal sealed class Cf2Outline : Cf2OutlineCallbacks
 {
-    /// <summary>The most points or contours of an outline (<c>FT_OUTLINE_POINTS_MAX</c>).</summary>
-    private const int OutlinePointsMax = 0x7FFF;
+    /// <summary>The most points or contours of an outline (<c>FT_OUTLINE_POINTS_MAX</c>, <c>FT_OUTLINE_CONTOURS_MAX</c>).</summary>
+    private const int OutlinePointsMax = 0xFFFF;
 
     /// <summary>The point tag of an on-curve point.</summary>
     public const byte TagOn = 1;

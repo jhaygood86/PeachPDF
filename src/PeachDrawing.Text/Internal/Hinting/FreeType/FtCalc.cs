@@ -237,7 +237,7 @@ internal static class FtCalc
     }
 
     /// <summary>
-    /// <c>FT_Matrix_Multiply_Scaled</c>: multiplies matrix <paramref name="a"/> into matrix <paramref name="b"/> (in place), both in 16.16
+    /// <c>FT_Matrix_Multiply_Scaled</c>: multiplies the first matrix (<c>axx</c> to <c>ayy</c>) into the second (<c>bxx</c> to <c>byy</c>, changed in place), both in 16.16
     /// but the product divided by <c>0x10000 * scaling</c>. The matrices are (xx, xy, yx, yy).
     /// </summary>
     public static void MatrixMultiplyScaled(int axx, int axy, int ayx, int ayy, ref int bxx, ref int bxy, ref int byx, ref int byy, int scaling)

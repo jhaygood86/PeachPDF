@@ -280,7 +280,7 @@ internal sealed class CffSubFont
     public readonly CffFontDict FontDict = new();
     public readonly CffPrivate Private = new();
 
-    /// <summary>The state of the <c>random</c> operator; see <see cref="CffFont"/>.</summary>
+    /// <summary>The seed of the <c>random</c> operator; see <see cref="CffFont"/>.</summary>
     public uint Random;
 
     /// <summary>The position of every local subroutine and of the end of the last, or empty.</summary>

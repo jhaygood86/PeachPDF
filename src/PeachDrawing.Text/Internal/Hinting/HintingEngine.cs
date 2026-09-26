@@ -312,6 +312,13 @@ internal sealed class HintingEngine
                     contour.SegmentList.Add(OutlineSegment.Line(At(i)));
                     i++;
                 }
+                else if (i + 1 == end && (hinted.Tags[i + 1] & Cf2Outline.TagOn) == 0)
+                {
+                    // the last curve of a contour ends where it began: its end point was dropped, as FreeType drops a last point that lies
+                    // on the first, and it ends at the start of the contour
+                    contour.SegmentList.Add(OutlineSegment.Cubic(At(i), At(i + 1), At(start)));
+                    i += 2;
+                }
                 else
                 {
                     if (i + 2 > end || (hinted.Tags[i + 1] & Cf2Outline.TagOn) != 0 || (hinted.Tags[i + 2] & Cf2Outline.TagOn) == 0)

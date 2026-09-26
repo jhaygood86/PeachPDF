@@ -798,9 +798,9 @@ internal static class Cf2Interpreter
                                 case EscRandom: // in spec
                                 {
                                     // only use the lower 16 bits of `random' to generate a number in the range (0;1]
-                                    int r = (int)((decoder.CurrentSubfont.Random & 0xFFFF) + 1);
+                                    int r = (int)((decoder.RandomState & 0xFFFF) + 1);
 
-                                    decoder.CurrentSubfont.Random = Random(decoder.CurrentSubfont.Random);
+                                    decoder.RandomState = Random(decoder.RandomState);
 
                                     opStack.PushFixed(r);
                                     continue; // do not clear the stack

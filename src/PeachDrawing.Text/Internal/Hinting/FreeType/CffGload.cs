@@ -98,7 +98,7 @@ internal sealed class CffFace
         {
             return new CffFace(CffFont.Load(data, cff.Offset, unitsPerEm), unitsPerEm, advance);
         }
-        catch (Exception ex) when (ex is HintingException or IndexOutOfRangeException or ArgumentException or OverflowException)
+        catch (HintingException)
         {
             return null;
         }
