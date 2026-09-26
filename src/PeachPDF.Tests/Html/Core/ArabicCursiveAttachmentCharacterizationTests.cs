@@ -1,7 +1,5 @@
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -10,12 +8,13 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.Html.Core
 {
     /// <summary>
     /// Real-font characterization for GPOS Lookup Type 3 (Cursive Attachment,
-    /// <see cref="PeachDrawing.Text.Internal.Text.GposPositioner.ApplyCursiveAttachment"/>) against a font whose own Arabic
+    /// <c>GposPositioner.ApplyCursiveAttachment</c>) against a font whose own Arabic
     /// joining actually relies on it - <see cref="BundledFonts.ArabicCursive"/> ("Aref Ruqaa"), unlike
     /// <see cref="BundledFonts.Arabic"/> ("Noto Sans Arabic", used by <see cref="ArabicJoiningCharacterizationTests"/>),
     /// which defines no `curs` GPOS feature at all.
@@ -37,11 +36,7 @@ namespace PeachPDF.Tests.Html.Core
         private const string Beh = "ب";
         private const string Teh = "ت";
 
-        private static OpenTypeDescriptor Descriptor()
-        {
-            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.ArabicCursive)).Fontface;
-            return new OpenTypeDescriptor("aref-ruqaa-test", "aref-ruqaa-test", face);
-        }
+        private static Typeface Descriptor() => TypefaceFixtures.Shared(BundledFonts.ArabicCursive);
 
         [Theory]
         [InlineData("تب")]
@@ -64,7 +59,7 @@ p {{ width: 400px; }}
 </html>");
 
             var descriptor = Descriptor();
-            var unitsPerEm = descriptor.UnitsPerEm;
+            var unitsPerEm = descriptor.Metrics.UnitsPerEm;
             var minPlausibleWidthPt = 300.0 / unitsPerEm * 14.0;
 
             Assert.True(word.Width > minPlausibleWidthPt,
@@ -92,7 +87,7 @@ p {{ width: 400px; }}
 </html>");
 
             var descriptor = Descriptor();
-            var expectedWidthPt = 805.0 / descriptor.UnitsPerEm * 14.0;
+            var expectedWidthPt = 805.0 / descriptor.Metrics.UnitsPerEm * 14.0;
 
             Assert.Equal(expectedWidthPt, word.Width, precision: 2);
         }

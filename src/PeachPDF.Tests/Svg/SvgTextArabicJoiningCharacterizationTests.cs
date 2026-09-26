@@ -1,15 +1,12 @@
 using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text;
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
-using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
@@ -24,7 +21,7 @@ namespace PeachPDF.Tests.Svg
     /// renders through the real SVG pipeline with a <see cref="TestRecordingGraphics"/> mock to
     /// capture exactly the <c>(text, ShapeSettings)</c> pair <c>SvgRenderer.PaintGlyphs</c>
     /// actually hands to <see cref="RGraphics.DrawString"/>, then re-shapes that exact pair through a
-    /// real <see cref="OpenTypeDescriptor"/> (the same bundled Noto Sans Arabic/Aref Ruqaa subsets
+    /// real <see cref="PeachDrawing.Text.Typeface"/> (the same bundled Noto Sans Arabic/Aref Ruqaa subsets
     /// HTML's own characterization tests use) to confirm real GSUB/GPOS substitution/positioning
     /// actually happens - not just that a correctly-shaped <see cref="ShapeSettings"/> value got
     /// built and never used.
@@ -52,11 +49,7 @@ namespace PeachPDF.Tests.Svg
             return Assert.Single(g.DrawStringCalls);
         }
 
-        private static OpenTypeDescriptor Descriptor(string path)
-        {
-            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(path)).Fontface;
-            return new OpenTypeDescriptor("svg-arabic-test", "svg-arabic-test", face);
-        }
+        private static Typeface Descriptor(string path) => TypefaceFixtures.Shared(path);
 
         [Fact]
         public void ThreeLetterWord_RealFontJoinedFormsDifferFromIsolatedForms()
@@ -64,8 +57,8 @@ namespace PeachPDF.Tests.Svg
             var draw = RenderSingleCall($"""<text x="10" y="50" font-size="20">{Beh}{Yeh}{Teh}</text>""");
 
             var descriptor = Descriptor(BundledFonts.Arabic);
-            var joined = descriptor.Shape(draw.Text, draw.Features!.Value).Select(sg => sg.GlyphIndex).ToArray();
-            var isolated = descriptor.Shape(draw.Text, draw.Features.Value with
+            var joined = descriptor.ShapeGlyphs(draw.Text, draw.Features!.Value).Select(sg => sg.GlyphIndex).ToArray();
+            var isolated = descriptor.ShapeGlyphs(draw.Text, draw.Features.Value with
             {
                 JoiningForms = new[] { ArabicJoiningForm.Isol, ArabicJoiningForm.Isol, ArabicJoiningForm.Isol },
             }).Select(sg => sg.GlyphIndex).ToArray();
@@ -84,8 +77,8 @@ namespace PeachPDF.Tests.Svg
             var draw = RenderSingleCall($"""<text x="10" y="50" font-size="20">{Lam}{Alef}</text>""");
 
             var descriptor = Descriptor(BundledFonts.Arabic);
-            var withRlig = descriptor.Shape(draw.Text, draw.Features!.Value).Select(sg => sg.GlyphIndex).ToArray();
-            var positionalOnly = descriptor.Shape(draw.Text, draw.Features.Value with { Ligatures = LigatureSet.None })
+            var withRlig = descriptor.ShapeGlyphs(draw.Text, draw.Features!.Value).Select(sg => sg.GlyphIndex).ToArray();
+            var positionalOnly = descriptor.ShapeGlyphs(draw.Text, draw.Features.Value with { Ligatures = LigatureSet.None })
                 .Select(sg => sg.GlyphIndex).ToArray();
 
             Assert.Equal(2, withRlig.Length);
@@ -100,8 +93,8 @@ namespace PeachPDF.Tests.Svg
             Assert.True(draw.Features!.Value.ReverseForDisplay);
 
             var descriptor = Descriptor(BundledFonts.Arabic);
-            var displayed = descriptor.Shape(draw.Text, draw.Features.Value).Select(sg => sg.GlyphIndex).ToArray();
-            var logicalOnly = descriptor.Shape(draw.Text, draw.Features.Value with { ReverseForDisplay = false })
+            var displayed = descriptor.ShapeGlyphs(draw.Text, draw.Features.Value).Select(sg => sg.GlyphIndex).ToArray();
+            var logicalOnly = descriptor.ShapeGlyphs(draw.Text, draw.Features.Value with { ReverseForDisplay = false })
                 .Select(sg => sg.GlyphIndex).ToArray();
 
             // Same glyph set (reversal never changes which glyphs GSUB/GPOS produced), but a genuinely
@@ -122,11 +115,11 @@ namespace PeachPDF.Tests.Svg
             var draw = RenderSingleCall($"""<text x="10" y="50" font-size="20">{Teh}{Beh}</text>""");
 
             var descriptor = Descriptor(BundledFonts.ArabicCursive);
-            var shaped = descriptor.Shape(draw.Text, draw.Features!.Value);
+            var shaped = descriptor.ShapeGlyphs(draw.Text, draw.Features!.Value);
 
             double totalAdvance = 0;
             foreach (var sg in shaped)
-                totalAdvance += descriptor.GlyphIndexToWidth(sg.GlyphIndex) + sg.XAdvanceDelta;
+                totalAdvance += descriptor.AdvanceOf(sg.GlyphIndex) + sg.XAdvanceDelta;
 
             // 300 design units, the same generous floor
             // ArabicCursiveAttachmentCharacterizationTests uses (real single Arabic letters in this
@@ -147,8 +140,8 @@ namespace PeachPDF.Tests.Svg
             Assert.Null(draw.Features!.Value.JoiningForms);
 
             var descriptor = Descriptor(BundledFonts.Arabic);
-            var viaSvg = descriptor.Shape(draw.Text, draw.Features.Value).Select(sg => sg.GlyphIndex).ToArray();
-            var plain = descriptor.Shape(draw.Text, ShapeSettings.Default).Select(sg => sg.GlyphIndex).ToArray();
+            var viaSvg = descriptor.ShapeGlyphs(draw.Text, draw.Features.Value).Select(sg => sg.GlyphIndex).ToArray();
+            var plain = descriptor.ShapeGlyphs(draw.Text, ShapeSettings.Default).Select(sg => sg.GlyphIndex).ToArray();
 
             Assert.Equal(plain, viaSvg);
         }

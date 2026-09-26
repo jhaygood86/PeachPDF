@@ -2,9 +2,9 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using PeachPDF;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -19,8 +19,8 @@ namespace PeachPDF.Tests.Integration
     {
         private static async Task<string> Render(string style, string body)
         {
-            var colourFamily = TtfFontDescription.LoadDescription(BundledFonts.ColorEmoji).FontFamilyInvariantCulture;
-            var textFamily = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture;
+            var colourFamily = TypefaceFixtures.FamilyNameOf(BundledFonts.ColorEmoji);
+            var textFamily = TypefaceFixtures.FamilyNameOf(BundledFonts.Ttf);
 
             var generator = new PdfGenerator();
             foreach (var path in new[] { BundledFonts.ColorEmoji, BundledFonts.Ttf })

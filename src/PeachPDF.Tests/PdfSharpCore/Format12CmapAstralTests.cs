@@ -1,8 +1,7 @@
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
+using PeachDrawing.Text;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -24,11 +23,11 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         private const int Heart = 0x2764;      // ❤ HEAVY BLACK HEART (BMP), in Noto Emoji
         private const int AbsentAstral = 0x1F0A1; // 🂡 ACE OF SPADES (astral), NOT in the bundled subset
 
-        private static OpenTypeDescriptor Descriptor(byte[] font)
-        {
-            var face = FontFileData.GetOrCreateFrom(font).Fontface;
-            return new OpenTypeDescriptor("emoji-test", "emoji-test", face);
-        }
+        private static Typeface Descriptor(byte[] font) => TypefaceFixtures.FromBytes(font);
+
+        /// <summary>Whether a face of the family covers the codepoint - what per-character font matching asks of a family.</summary>
+        private static bool Covers(TypefaceFamily family, int codepoint) =>
+            family.TryMatch(new TypefaceQuery { MustCover = new Rune(codepoint) }, out _);
 
         [Fact]
         public void Format12_ResolvesAstralEmojiCodepoint_ToRealGlyph()
@@ -36,23 +35,21 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             var descriptor = Descriptor(File.ReadAllBytes(BundledFonts.Emoji));
 
             // The astral emoji resolves to a real (non-missing) glyph through the format-12 subtable...
-            Assert.NotEqual(0, descriptor.CharCodeToGlyphIndex(new Rune(Grin)));
+            Assert.NotEqual(0, descriptor.GlyphOf(new Rune(Grin)));
             // ...a BMP codepoint the font covers still resolves through format-4...
-            Assert.NotEqual(0, descriptor.CharCodeToGlyphIndex(new Rune(Heart)));
+            Assert.NotEqual(0, descriptor.GlyphOf(new Rune(Heart)));
             // ...and an astral codepoint the font does not cover resolves to the missing glyph.
-            Assert.Equal(0, descriptor.CharCodeToGlyphIndex(new Rune(AbsentAstral)));
+            Assert.Equal(0, descriptor.GlyphOf(new Rune(AbsentAstral)));
         }
 
         [Fact]
         public void Format12_Coverage_IncludesAstralEmoji_AndBmp()
         {
-            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Emoji)).Fontface;
+            var family = new FontSet().AddData(File.ReadAllBytes(BundledFonts.Emoji));
 
-            var coverage = CMapCoverage.Extract(face.cmap);
-
-            Assert.True(CMapCoverage.Contains(coverage, new Rune(Grin)), "astral emoji should be covered");
-            Assert.True(CMapCoverage.Contains(coverage, new Rune(Heart)), "BMP coverage should be included");
-            Assert.False(CMapCoverage.Contains(coverage, new Rune(AbsentAstral)));
+            Assert.True(Covers(family, Grin), "astral emoji should be covered");
+            Assert.True(Covers(family, Heart), "BMP coverage should be included");
+            Assert.False(Covers(family, AbsentAstral));
         }
 
         [Fact]
@@ -60,24 +57,22 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         {
             // A font with no format-12 subtable (Source Sans 3) has no astral mapping: an astral codepoint
             // resolves to the missing glyph and is not reported as covered, while BMP still works. This also
-            // exercises CMapCoverage.Extract's fast path (no format-12 → BMP ranges only).
-            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
-            var descriptor = new OpenTypeDescriptor("bmp-only", "bmp-only", face);
+            // exercises the coverage extraction's fast path (no format-12 → BMP ranges only).
+            var bytes = File.ReadAllBytes(BundledFonts.Ttf);
+            var descriptor = Descriptor(bytes);
 
-            Assert.Equal(0, descriptor.CharCodeToGlyphIndex(new Rune(Grin)));
+            Assert.Equal(0, descriptor.GlyphOf(new Rune(Grin)));
             Assert.False(descriptor.HasGlyph(new Rune(Grin)));
-            Assert.NotEqual(0, descriptor.CharCodeToGlyphIndex(new Rune('A')));
+            Assert.NotEqual(0, descriptor.GlyphOf(new Rune('A')));
 
-            var coverage = CMapCoverage.Extract(face.cmap);
-            Assert.True(CMapCoverage.Contains(coverage, new Rune('A')));
-            Assert.False(CMapCoverage.Contains(coverage, new Rune(Grin)));
+            var family = new FontSet().AddData(bytes);
+            Assert.True(Covers(family, 'A'));
+            Assert.False(Covers(family, Grin));
         }
 
         [Fact]
         public void CMapInfo_AddChars_AstralEmoji_IsSingleCodepointEntry()
         {
-            var descriptor = Descriptor(File.ReadAllBytes(BundledFonts.Emoji));
-
             // An astral emoji is a surrogate pair in UTF-16; the rune-based pipeline must record it as one
             // codepoint→glyph entry, not two surrogate entries.
             var cmap = new CMapInfo(TypefaceFixtures.FromBytes(File.ReadAllBytes(BundledFonts.Emoji)));

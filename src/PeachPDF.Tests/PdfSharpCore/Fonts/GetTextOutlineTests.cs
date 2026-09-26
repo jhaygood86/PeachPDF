@@ -3,13 +3,12 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using PeachPDF.Adapters;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 {
@@ -17,8 +16,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     /// Coverage for <see cref="GraphicsAdapter.GetTextOutline"/>: decoding a text run into a
     /// fillable/strokeable vector path (the enabling seam for gradient/pattern fill, stroke,
     /// <c>&lt;textPath&gt;</c> on SVG text, and <c>background-clip: text</c>). Uses the bundled Source
-    /// Sans 3 (TrueType/glyf, via <see cref="PeachDrawing.Text.Internal.Fonts.OpenType.GlyphOutlineDecoder"/>) and Source Code Pro
-    /// (CFF/OTTO, no glyf - via <see cref="PeachDrawing.Text.Internal.Fonts.OpenType.Type2CharstringInterpreter"/>) fonts.
+    /// Sans 3 (TrueType/glyf, via the engine's glyf outline decoder) and Source Code Pro
+    /// (CFF/OTTO, no glyf - via the engine's Type2 charstring interpreter) fonts.
     /// </summary>
     public class GetTextOutlineTests
     {
@@ -26,7 +25,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
         private static async Task<(GraphicsAdapter Graphics, RFont Font)> Setup(string fontPath, double size)
         {
-            var family = TtfFontDescription.LoadDescription(fontPath).FontFamilyInvariantCulture;
+            var family = TypefaceFixtures.FamilyNameOf(fontPath);
             // Keep the adapter's PixelsPerPoint equal to the GraphicsAdapter's (as the real pipeline
             // always does) so font size and outline scale stay in the same 1:1 unit space.
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };

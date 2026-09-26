@@ -6,10 +6,10 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using PeachPDF;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<string> Render(string body, string fontPaletteDecl = "", string extraCss = "")
         {
-            var family = TtfFontDescription.LoadDescription(BundledFonts.Nabla).FontFamilyInvariantCulture;
+            var family = TypefaceFixtures.FamilyNameOf(BundledFonts.Nabla);
             var generator = new PdfGenerator();
             await using (var stream = File.OpenRead(BundledFonts.Nabla))
                 await generator.AddFontFromStream(stream);
@@ -176,7 +176,7 @@ namespace PeachPDF.Tests.Integration
             var generator = new PdfGenerator();
             await using (var stream = File.OpenRead(BundledFonts.Ttf))
                 await generator.AddFontFromStream(stream);
-            var family = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture;
+            var family = TypefaceFixtures.FamilyNameOf(BundledFonts.Ttf);
             var html = $"<!DOCTYPE html><html><head><style>body {{ font-family: '{family}'; font-palette: light; }}</style>" +
                        "</head><body>Hi</body></html>";
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };

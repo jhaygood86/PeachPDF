@@ -6,10 +6,10 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using PeachPDF;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -34,7 +34,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<string> Render(string fontPath, string body, string extraCss = "")
         {
-            var family = TtfFontDescription.LoadDescription(fontPath).FontFamilyInvariantCulture;
+            var family = TypefaceFixtures.FamilyNameOf(fontPath);
             var generator = new PdfGenerator();
             await using (var stream = File.OpenRead(fontPath))
                 await generator.AddFontFromStream(stream);
@@ -247,7 +247,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<string> RenderNabla(string body, string paletteValues)
         {
-            var family = TtfFontDescription.LoadDescription(BundledFonts.Nabla).FontFamilyInvariantCulture;
+            var family = TypefaceFixtures.FamilyNameOf(BundledFonts.Nabla);
             var generator = new PdfGenerator();
             await using (var stream = File.OpenRead(BundledFonts.Nabla))
                 await generator.AddFontFromStream(stream);
