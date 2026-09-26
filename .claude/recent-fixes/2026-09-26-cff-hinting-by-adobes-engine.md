@@ -29,6 +29,6 @@ there lists every file and difference. The unhinted `Type2CharstringInterpreter`
 
 ## Deliberately not done
 
-CFF2 and Type 1 (the branches of the interpreter for them, tracked as an accepted gap, `text-hinting-cff2-outlines-are-not-hinted.md`), stem darkening
+CFF2 (since done: [CFF2 outlines are hinted](2026-09-26-cff2-outlines-are-hinted.md)) and Type 1 (the branches of the interpreter for them), stem darkening
 being reachable from the public API (`text-hinting-cff-stem-darkening-is-not-reachable.md`), the encoding and name tables of the CFF font, and hinting a
 glyph above 2000 ppem (FreeType retries those unhinted; here the caller gets the unhinted outline).

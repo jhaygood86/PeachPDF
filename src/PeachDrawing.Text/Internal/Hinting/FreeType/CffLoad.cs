@@ -69,11 +69,17 @@ internal sealed class CffIndex
     /// Reads an INDEX at <paramref name="pos"/> and moves <paramref name="pos"/> past it (<c>cff_index_init</c>).
     /// </summary>
     /// <exception cref="HintingException">The INDEX is malformed or reaches past the end of the font.</exception>
-    public static CffIndex Read(byte[] data, ref int pos)
-    {
-        var idx = new CffIndex(data) { _start = pos, _hdrSize = 3 };
+    public static CffIndex Read(byte[] data, ref int pos) => Read(data, ref pos, cff2: false);
 
-        int count = ReadUShort(data, ref pos);
+    /// <summary>
+    /// Reads an INDEX of a CFF font, or of a CFF2 font, whose count is a 32-bit number (<c>cff_index_init</c>).
+    /// </summary>
+    /// <exception cref="HintingException">The INDEX is malformed or reaches past the end of the font.</exception>
+    public static CffIndex Read(byte[] data, ref int pos, bool cff2)
+    {
+        var idx = new CffIndex(data) { _start = pos, _hdrSize = cff2 ? 5 : 3 };
+
+        uint count = cff2 ? ReadULong(data, ref pos) : (uint)ReadUShort(data, ref pos);
 
         if (count > 0)
         {
@@ -83,7 +89,13 @@ internal sealed class CffIndex
             if (offSize < 1 || offSize > 4)
                 throw new HintingException("A CFF INDEX has an invalid offset size.");
 
-            idx.Count = count;
+            // FreeType computes the size of the table of offsets in the 32-bit unsigned numbers of its Windows build, where a count of
+            // 2^30 or more wraps; those counts are refused here (the table would be far larger than the font, or FreeType reads a
+            // table of a few bytes for billions of elements)
+            if (count >= int.MaxValue)
+                throw new HintingException("A CFF INDEX has too many elements.");
+
+            idx.Count = (int)count;
             idx._offSize = offSize;
             long size = (long)(count + 1) * offSize;
 
@@ -107,7 +119,7 @@ internal sealed class CffIndex
 
     private uint OffsetAt(int element)
     {
-        int at = _start + _hdrSize + element * _offSize;
+        long at = (long)_start + _hdrSize + (long)element * _offSize;
         uint result = 0;
         for (int n = 0; n < _offSize; n++)
             result = (result << 8) | (at + n < _data.Length && at + n >= 0 ? _data[at + n] : (byte)0);
@@ -119,10 +131,11 @@ internal sealed class CffIndex
     {
         if (Count > 0 && _offsets is null)
         {
-            var offsets = new uint[Count + 1];
+            // the table of offsets lies in the font (Read checked it), so its size bounds the allocation
+            var offsets = new uint[(long)Count + 1];
             for (int i = 0; i <= Count; i++)
             {
-                int at = _start + _hdrSize + i * _offSize;
+                long at = (long)_start + _hdrSize + (long)i * _offSize;
                 if (at + _offSize > _data.Length)
                     throw new HintingException("The offsets of a CFF INDEX reach past the end of the font.");
 
@@ -190,7 +203,7 @@ internal sealed class CffIndex
 
         if (_offsets is null)
         {
-            int at = _start + _hdrSize + element * _offSize;
+            long at = (long)_start + _hdrSize + (long)element * _offSize;
             if (at + _offSize > _data.Length)
                 throw new HintingException("The offsets of a CFF INDEX reach past the end of the font.");
 
@@ -254,6 +267,16 @@ internal sealed class CffIndex
         return v;
     }
 
+    private static uint ReadULong(byte[] data, ref int pos)
+    {
+        if (pos < 0 || (long)pos + 4 > data.Length)
+            throw new HintingException("A CFF table ends too soon.");
+
+        uint v = ((uint)data[pos] << 24) | ((uint)data[pos + 1] << 16) | ((uint)data[pos + 2] << 8) | data[pos + 3];
+        pos += 4;
+        return v;
+    }
+
     private static uint ReadOffset(byte[] data, ref int pos, int size)
     {
         if (pos < 0 || (long)pos + size > data.Length)
@@ -275,11 +298,301 @@ internal sealed class CffIndex
     }
 }
 
+/// <summary>The extent of one axis of a region of a CFF2 variation store, in 16.16 (<c>CFF_AxisCoords</c>).</summary>
+internal readonly record struct CffAxisCoords(int StartCoord, int PeakCoord, int EndCoord);
+
+/// <summary>What a data set of a CFF2 variation store names: the regions its deltas belong to (<c>CFF_VarData</c>).</summary>
+internal sealed class CffVarData
+{
+    public required int[] RegionIndices { get; init; }
+}
+
+/// <summary>The variation store of a CFF2 font (<c>CFF_VStoreRec</c>): the regions and, for each data set, the regions it blends.</summary>
+internal sealed class CffVStore
+{
+    /// <summary>A font with no variation store.</summary>
+    public static readonly CffVStore Empty = new();
+
+    public int AxisCount { get; private init; }
+
+    public CffAxisCoords[][] Regions { get; private init; } = [];
+
+    public CffVarData[] Data { get; private init; } = [];
+
+    /// <summary>
+    /// The most region indexes all the data sets of a store may name together. FreeType reads every data set in full, however many share the
+    /// same bytes; a store of a real font names each region index in bytes of its own, so this is the number of bytes of the font.
+    /// </summary>
+    private static long RegionIndexBudget(byte[] data) => data.Length;
+
+    /// <summary>Reads the store the Top DICT points to (<c>cff_vstore_load</c>); a store at offset zero is no store.</summary>
+    /// <exception cref="HintingException">The store is malformed or reaches past the end of the font.</exception>
+    public static CffVStore Load(byte[] data, int baseOffset, uint offset)
+    {
+        // no offset means no vstore to parse
+        if (offset == 0)
+            return Empty;
+
+        // we need to parse the table to determine its size; skip table length (the sum is FreeType's 32-bit unsigned one)
+        uint at = unchecked((uint)baseOffset + offset);
+        if ((long)at + 2 > data.Length)
+            throw new HintingException("The variation store is out of the font.");
+
+        // actual variation store begins after the length
+        uint vsOffset = at + 2;
+        int pos = (int)vsOffset;
+
+        // check the header
+        int format = ReadUShort(data, ref pos);
+        if (format != 1)
+            throw new HintingException("The variation store has an unknown format.");
+
+        // read top level fields
+        uint regionListOffset = ReadULong(data, ref pos);
+        int dataCount = ReadUShort(data, ref pos);
+
+        // make temporary copy of item variation data offsets; we'll parse region list first, then come back
+        var dataOffsets = new uint[dataCount];
+        for (int i = 0; i < dataCount; i++)
+            dataOffsets[i] = ReadULong(data, ref pos);
+
+        // parse regionList and axisLists
+        pos = SeekTo(data, unchecked(vsOffset + regionListOffset));
+        int axisCount = ReadUShort(data, ref pos);
+        int regionCount = ReadUShort(data, ref pos);
+
+        var regions = new CffAxisCoords[regionCount][];
+        for (int i = 0; i < regionCount; i++)
+        {
+            var axisList = new CffAxisCoords[axisCount];
+
+            for (int j = 0; j < axisCount; j++)
+            {
+                int start = (short)ReadUShort(data, ref pos);
+                int peak = (short)ReadUShort(data, ref pos);
+                int end = (short)ReadUShort(data, ref pos);
+
+                // immediately tag invalid ranges with special peak = 0
+                if ((start < 0 && end > 0) || start > peak || peak > end)
+                    peak = 0;
+
+                axisList[j] = new CffAxisCoords(Fdot14ToFixed(start), Fdot14ToFixed(peak), Fdot14ToFixed(end));
+            }
+
+            regions[i] = axisList;
+        }
+
+        // use dataOffsetArray now to parse varData items; entries that name the same bytes share one data set
+        var sets = new CffVarData[dataCount];
+        var known = new Dictionary<uint, CffVarData>();
+        long budget = RegionIndexBudget(data);
+
+        for (int i = 0; i < dataCount; i++)
+        {
+            if (known.TryGetValue(dataOffsets[i], out CffVarData? seen))
+            {
+                sets[i] = seen;
+                continue;
+            }
+
+            pos = SeekTo(data, unchecked(vsOffset + dataOffsets[i]));
+
+            // ignore `itemCount' and `shortDeltaCount' because CFF2 has no delta sets
+            if ((long)pos + 4 > data.Length)
+                throw new HintingException("The variation store is truncated.");
+
+            pos += 4;
+
+            // Note: just record values; consistency is checked later by cff_blend_build_vector when it consumes `vstore'
+            int regionIdxCount = ReadUShort(data, ref pos);
+
+            budget -= regionIdxCount;
+            if (budget < 0)
+                throw new HintingException("The data sets of the variation store name more regions than the font has bytes.");
+
+            var indices = new int[regionIdxCount];
+            for (int j = 0; j < regionIdxCount; j++)
+                indices[j] = ReadUShort(data, ref pos);
+
+            sets[i] = new CffVarData { RegionIndices = indices };
+            known[dataOffsets[i]] = sets[i];
+        }
+
+        return new CffVStore { AxisCount = axisCount, Regions = regions, Data = sets };
+    }
+
+    // convert 2.14 to Fixed
+    private static int Fdot14ToFixed(int x) => unchecked(x << 2);
+
+    private static int SeekTo(byte[] data, uint position)
+    {
+        if (position > data.Length)
+            throw new HintingException("The variation store is out of the font.");
+
+        return (int)position;
+    }
+
+    private static int ReadUShort(byte[] data, ref int pos)
+    {
+        if ((long)pos + 2 > data.Length)
+            throw new HintingException("The variation store is truncated.");
+
+        int v = (data[pos] << 8) | data[pos + 1];
+        pos += 2;
+        return v;
+    }
+
+    private static uint ReadULong(byte[] data, ref int pos)
+    {
+        if ((long)pos + 4 > data.Length)
+            throw new HintingException("The variation store is truncated.");
+
+        uint v = ((uint)data[pos] << 24) | ((uint)data[pos + 1] << 16) | ((uint)data[pos + 2] << 8) | data[pos + 3];
+        pos += 4;
+        return v;
+    }
+}
+
+/// <summary>
+/// The blend vector of a subfont or of a charstring run, and what it was made from (<c>CFF_BlendRec</c>): for a data set of the variation
+/// store and a location, the factor each region's deltas are scaled by, the first being 1 for the default design.
+/// </summary>
+internal sealed class CffBlend
+{
+    /// <summary>The variation store the vector is made from; <see cref="CffVStore.Empty"/> until the font is known to have one.</summary>
+    public CffVStore VStore = CffVStore.Empty;
+
+    /// <summary>Whether a variation store is attached (<c>blend.font</c> is set): a <c>blend</c> operator is an error without.</summary>
+    public bool HasFont;
+
+    /// <summary>Whether a <c>blend</c> was used (a <c>vsindex</c> is not allowed after one).</summary>
+    public bool UsedBV;
+
+    public bool BuiltBV;
+    public uint LastVsindex;
+    public int LenNdv;
+    public int[]? LastNdv;
+
+    /// <summary>The number of factors, the default one included (<c>lenBV</c>).</summary>
+    public int LenBV;
+
+    /// <summary>The factors in 16.16 (<c>BV</c>); the first is always one.</summary>
+    public int[] BV = [];
+
+    /// <summary>Whether the blend vector has to be built again for these parameters (<c>cff_blend_check_vector</c>).</summary>
+    public bool CheckVector(uint vsindex, int lenNdv, int[]? ndv)
+    {
+        return !BuiltBV || LastVsindex != vsindex || LenNdv != lenNdv || (lenNdv != 0 && !ndv.AsSpan(0, lenNdv).SequenceEqual(LastNdv.AsSpan(0, lenNdv)));
+    }
+
+    /// <summary>
+    /// Computes a blend vector from a variation store index and a normalized vector (<c>cff_blend_build_vector</c>); a length of zero
+    /// produces the default blend vector, (1, 0, 0, ...). Every number is 16.16 and the products are FreeType's <c>FT_MulDiv</c>.
+    /// </summary>
+    /// <returns><see langword="true"/> when FreeType reports an error.</returns>
+    public bool BuildVector(uint vsindex, int lenNdv, int[]? ndv)
+    {
+        // protect against malformed fonts
+        if (!(lenNdv == 0 || ndv is not null))
+            return true;
+
+        BuiltBV = false;
+
+        CffVStore vs = VStore;
+
+        // VStore and fvar must be consistent
+        if (lenNdv != 0 && lenNdv != vs.AxisCount)
+            return true;
+
+        if (vsindex >= (uint)vs.Data.Length)
+            return true;
+
+        // select the item variation data structure
+        CffVarData varData = vs.Data[vsindex];
+
+        // prepare buffer for the blend vector; add 1 for default component
+        int len = varData.RegionIndices.Length + 1;
+        var bv = new int[len];
+        BV = bv;
+        LenBV = len;
+
+        // outer loop steps through master designs to be blended
+        for (int master = 0; master < len; master++)
+        {
+            // default factor is always one
+            if (master == 0)
+            {
+                bv[master] = 0x10000;
+                continue;
+            }
+
+            // VStore array does not include default master, so subtract one
+            int idx = varData.RegionIndices[master - 1];
+            if (idx >= vs.Regions.Length)
+                return true;
+
+            CffAxisCoords[] varRegion = vs.Regions[idx];
+
+            // Note: `lenNDV' could be zero.  In that case, build default blend vector (1,0,0...).
+            if (lenNdv == 0)
+            {
+                bv[master] = 0;
+                continue;
+            }
+
+            // In the normal case, initialize each component to 1 before inner loop.
+            bv[master] = 0x10000;
+
+            // inner loop steps through axes in this region
+            for (int j = 0; j < lenNdv; j++)
+            {
+                CffAxisCoords axis = varRegion[j];
+
+                // compute the scalar contribution of this axis with peak of 0 used for invalid axes
+                if (axis.PeakCoord == ndv![j] || axis.PeakCoord == 0)
+                    continue;
+
+                // ignore this region if coords are out of range
+                if (ndv[j] <= axis.StartCoord || ndv[j] >= axis.EndCoord)
+                {
+                    bv[master] = 0;
+                    break;
+                }
+
+                // adjust proportionally
+                if (ndv[j] < axis.PeakCoord)
+                    bv[master] = FtCalc.MulDiv(bv[master], unchecked(ndv[j] - axis.StartCoord), unchecked(axis.PeakCoord - axis.StartCoord));
+                else
+                    bv[master] = FtCalc.MulDiv(bv[master], unchecked(axis.EndCoord - ndv[j]), unchecked(axis.EndCoord - axis.PeakCoord));
+            }
+        }
+
+        // record the parameters used to build the blend vector
+        LastVsindex = vsindex;
+
+        if (lenNdv != 0)
+        {
+            // user has set a normalized vector
+            LastNdv = ndv!.AsSpan(0, lenNdv).ToArray();
+        }
+
+        LenNdv = lenNdv;
+        BuiltBV = true;
+
+        return false;
+    }
+}
+
 /// <summary>One font of a CFF font set: a Top DICT (or, in a CID-keyed font, a Font DICT) and its Private DICT and local subroutines (<c>CFF_SubFontRec</c>).</summary>
 internal sealed class CffSubFont
 {
     public readonly CffFontDict FontDict = new();
-    public readonly CffPrivate Private = new();
+
+    /// <summary>The Private DICT; in a CFF2 font it is read again for the location the font is used at (<see cref="CffFont.LoadPrivateDict"/>).</summary>
+    public CffPrivate Private { get; set; } = new();
+
+    /// <summary>The blend vector of the Private DICT's own <c>blend</c> operators, and what it was made from.</summary>
+    public readonly CffBlend Blend = new();
 
     /// <summary>The seed of the <c>random</c> operator; see <see cref="CffFont"/>.</summary>
     public uint Random;
@@ -327,61 +640,104 @@ internal sealed class CffFont
     /// Reads the CFF table at <paramref name="tableOffset"/> (<c>cff_font_load</c> and the font-matrix part of <c>cff_face_init</c>).
     /// </summary>
     /// <param name="data">The bytes of the font file.</param>
-    /// <param name="tableOffset">Where the <c>CFF </c> table begins.</param>
+    /// <param name="tableOffset">Where the <c>CFF </c> or <c>CFF2</c> table begins.</param>
     /// <param name="unitsPerEm">The units per em of the font's <c>head</c> table.</param>
+    /// <param name="cff2">Whether the table is a <c>CFF2</c> one (variable CFF), which FreeType gives priority over <c>CFF </c>.</param>
+    /// <param name="normalizedCoordinates">
+    /// The location a CFF2 font is used at: one normalized coordinate (16.16, from -1 to 1) for every axis of its <c>fvar</c> table, which
+    /// FreeType keeps for a font that has one even at the default location; <see langword="null"/> for a font with no axes.
+    /// </param>
     /// <exception cref="HintingException">FreeType would refuse the font.</exception>
-    public static CffFont Load(byte[] data, int tableOffset, int unitsPerEm)
+    public static CffFont Load(byte[] data, int tableOffset, int unitsPerEm, bool cff2 = false, int[]? normalizedCoordinates = null)
     {
-        var font = new CffFont(data);
+        var font = new CffFont(data) { IsCff2 = cff2, _baseOffset = tableOffset };
         int baseOffset = tableOffset;
         int pos = baseOffset;
 
-        if (pos < 0 || (long)pos + 4 > data.Length)
+        if (pos < 0 || (long)pos + (cff2 ? 5 : 4) > data.Length)
             throw new HintingException("The CFF table is truncated.");
 
         int versionMajor = data[pos];
         int headerSize = data[pos + 2];
-        int absoluteOffset = data[pos + 3];
 
-        if (versionMajor != 1 || headerSize < 4 || absoluteOffset > 4)
-            throw new HintingException("The CFF table has an unsupported header.");
+        CffIndex globalSubrsIndex;
+        int topDictPos = 0, topDictLength = 0;
 
-        // skip the rest of the header
-        pos = baseOffset + headerSize;
+        if (cff2)
+        {
+            topDictLength = (data[pos + 3] << 8) | data[pos + 4];
 
-        // for CFF, read the name, top dict, string and global subrs index
-        CffIndex nameIndex = CffIndex.Read(data, ref pos);
+            if (versionMajor != 2 || headerSize < 5)
+                throw new HintingException("The CFF2 table has an unsupported header.");
 
-        // if we have an empty font name, it must be the only font in the CFF
-        if (nameIndex.Count > 1 && nameIndex.DataSize < nameIndex.Count)
-            throw new HintingException("The CFF table names more fonts than it has.");
+            // skip the rest of the header
+            pos = baseOffset + headerSize;
+            if (pos > data.Length)
+                throw new HintingException("The CFF2 table has an unsupported header.");
 
-        CffIndex fontDictIndex = CffIndex.Read(data, ref pos);
-        _ = CffIndex.Read(data, ref pos); // the strings
-        CffIndex globalSubrsIndex = CffIndex.Read(data, ref pos);
+            // For CFF2, the top dict data immediately follow the header and the length is stored in the header; there is no index for it.
+            // Skip the top dict data for now, we will parse it later; next, read the global subrs index.
+            topDictPos = pos;
+            if ((long)pos + topDictLength > data.Length)
+                throw new HintingException("The CFF2 Top DICT reaches past the end of the font.");
 
-        // there must be a Top DICT index entry for each name index entry
-        if (nameIndex.Count > fontDictIndex.Count)
-            throw new HintingException("The CFF table has too few Top DICT entries.");
+            pos += topDictLength;
+            globalSubrsIndex = CffIndex.Read(data, ref pos, cff2: true);
+        }
+        else
+        {
+            int absoluteOffset = data[pos + 3];
 
-        // a font in an SFNT wrapper is only one font
-        if (nameIndex.Count > 1)
-            throw new HintingException("The CFF table has several fonts in an SFNT wrapper.");
+            if (versionMajor != 1 || headerSize < 4 || absoluteOffset > 4)
+                throw new HintingException("The CFF table has an unsupported header.");
+
+            // skip the rest of the header
+            pos = baseOffset + headerSize;
+
+            // for CFF, read the name, top dict, string and global subrs index
+            CffIndex nameIndex = CffIndex.Read(data, ref pos);
+
+            // if we have an empty font name, it must be the only font in the CFF
+            if (nameIndex.Count > 1 && nameIndex.DataSize < nameIndex.Count)
+                throw new HintingException("The CFF table names more fonts than it has.");
+
+            CffIndex fontDictIndex = CffIndex.Read(data, ref pos);
+            _ = CffIndex.Read(data, ref pos); // the strings
+            globalSubrsIndex = CffIndex.Read(data, ref pos);
+
+            // there must be a Top DICT index entry for each name index entry
+            if (nameIndex.Count > fontDictIndex.Count)
+                throw new HintingException("The CFF table has too few Top DICT entries.");
+
+            // a font in an SFNT wrapper is only one font
+            if (nameIndex.Count > 1)
+                throw new HintingException("The CFF table has several fonts in an SFNT wrapper.");
+
+            // now, parse the top-level font dictionary
+            if (!fontDictIndex.TryGetElement(0, out topDictPos, out topDictLength))
+                throw new HintingException("The CFF table has no such font dictionary.");
+        }
 
         // now, parse the top-level font dictionary
-        font.SubfontLoad(font.TopFont, fontDictIndex, 0, baseOffset);
+        if (cff2 && topDictPos >= data.Length)
+            throw new HintingException("The CFF2 Top DICT is out of the font.");
+
+        font.SubfontLoad(font.TopFont, topDictPos, topDictLength, baseOffset, cff2 ? CffParser.Kind.Cff2Top : CffParser.Kind.Top);
 
         CffFontDict dict = font.TopFont.FontDict;
 
-        pos = (int)Math.Min(int.MaxValue, (long)baseOffset + dict.CharstringsOffset);
-        font.CharStrings = CffIndex.Read(data, ref pos);
+        pos = SeekPosition(baseOffset, dict.CharstringsOffset);
+        font.CharStrings = CffIndex.Read(data, ref pos, cff2);
 
-        // now, check for a CID font
-        if (dict.CidRegistry != CffFontDict.NoSid)
+        // now, check for a CID or CFF2 font
+        if (dict.CidRegistry != CffFontDict.NoSid || cff2)
         {
+            // for CFF2, read the Variation Store if available; this must follow the Top DICT parse and precede any Private DICT
+            font.VStore = CffVStore.Load(data, baseOffset, dict.VStoreOffset);
+
             // this is a CID-keyed font, we must now allocate a table of sub-fonts, then load each of them separately
-            pos = (int)Math.Min(int.MaxValue, (long)baseOffset + dict.FdArrayOffset);
-            CffIndex fdIndex = CffIndex.Read(data, ref pos);
+            pos = SeekPosition(baseOffset, dict.FdArrayOffset);
+            CffIndex fdIndex = CffIndex.Read(data, ref pos, cff2);
 
             // a font with too many Font DICTs is used without them
             if (fdIndex.Count <= MaxCidFonts)
@@ -392,12 +748,18 @@ internal sealed class CffFont
 
                 // now load each subfont independently
                 for (int i = 0; i < subFonts.Length; i++)
-                    font.SubfontLoad(subFonts[i], fdIndex, i, baseOffset);
+                {
+                    if (!fdIndex.TryGetElement(i, out int fontDictPos, out int fontDictLength))
+                        throw new HintingException("The CFF table has no such font dictionary.");
+
+                    font.SubfontLoad(subFonts[i], fontDictPos, fontDictLength, baseOffset, cff2 ? CffParser.Kind.Cff2FontDict : CffParser.Kind.Top);
+                }
 
                 font.SubFonts = subFonts;
 
-                // now load the FD Select array
-                font.LoadFdSelect(font.CharStrings.Count, (int)Math.Min(int.MaxValue, (long)baseOffset + dict.FdSelectOffset));
+                // now load the FD Select array; CFF2 omits FDSelect if there is only one FD
+                if (!cff2 || fdIndex.Count > 1)
+                    font.LoadFdSelect(font.CharStrings.Count, SeekPosition(baseOffset, dict.FdSelectOffset));
             }
         }
 
@@ -408,75 +770,141 @@ internal sealed class CffFont
         font.NumGlyphs = font.CharStrings.Count;
         font.GlobalSubrs = globalSubrsIndex.GetPointers();
 
-        // read the Charset table if available
-        if (font.NumGlyphs > 0)
+        // read the Charset table if available (a CFF2 font has none)
+        if (!cff2 && font.NumGlyphs > 0)
             font.LoadCharset(font.NumGlyphs, baseOffset, dict.CharsetOffset);
 
         font.NormalizeMatrices(unitsPerEm);
+        font.ApplyVariation(normalizedCoordinates);
         return font;
     }
 
-    // cff_subfont_load (code CFF_CODE_TOPDICT, for a Top DICT and for a Font DICT)
-    private void SubfontLoad(CffSubFont subfont, CffIndex index, int fontIndex, int baseOffset)
+    // FT_STREAM_SEEK( base_offset + offset ): the sum is a 32-bit unsigned number, and a position beyond the font fails the read that follows
+    private static int SeekPosition(int baseOffset, uint offset) => (int)Math.Min(int.MaxValue, unchecked((uint)baseOffset + offset));
+
+    /// <summary>Whether the font is a CFF2 one (variable CFF).</summary>
+    public bool IsCff2 { get; private init; }
+
+    /// <summary>The variation store of a CFF2 font; empty for a CFF font and for a CFF2 font that has none.</summary>
+    public CffVStore VStore { get; private set; } = CffVStore.Empty;
+
+    /// <summary>
+    /// Whether the font has a variation store with data sets (<c>vstore->dataCount != 0</c>): the location then decides the Private DICTs and
+    /// the charstrings' <c>blend</c> operators.
+    /// </summary>
+    public bool HasVariations => VStore.Data.Length != 0;
+
+    /// <summary>The normalized coordinates (16.16) the font is used at: one for every axis of the font, or <see langword="null"/> for none.</summary>
+    public int[]? Ndv { get; private set; }
+
+    private int _baseOffset;
+
+    // The part of cf2_font_setup that decides whether the Private DICT of a subfont is read again for the location (which FreeType does when
+    // a glyph is loaded, and whose outcome is the same for every glyph of the subfont): the Private DICT is parsed with the normalized
+    // vector, its `blend' operators resolved. An error of the second parse is not an error of the glyph (FreeType does not look at it),
+    // and leaves the Private DICT as far as it was read.
+    private void ApplyVariation(int[]? normalizedCoordinates)
+    {
+        if (!HasVariations)
+            return;
+
+        int lenNdv = normalizedCoordinates?.Length ?? 0;
+        Ndv = normalizedCoordinates;
+
+        foreach (CffSubFont subfont in SubFonts.Length > 0 ? SubFonts : [TopFont])
+        {
+            // check whether the Private DICT of the subfont needs to be reparsed
+            if (!subfont.Blend.CheckVector(subfont.Private.VsIndex, lenNdv, normalizedCoordinates))
+                continue;
+
+            try
+            {
+                LoadPrivateDict(subfont, _baseOffset, lenNdv, normalizedCoordinates);
+            }
+            catch (HintingException)
+            {
+            }
+        }
+    }
+
+    // cff_subfont_load (code CFF_CODE_TOPDICT, for a Top DICT and for a Font DICT, and the codes of CFF2)
+    private void SubfontLoad(CffSubFont subfont, int dictPos, int dictLen, int baseOffset, CffParser.Kind kind)
     {
         CffFontDict top = subfont.FontDict;
 
-        if (!index.TryGetElement(fontIndex, out int dictPos, out int dictLen))
-            throw new HintingException("The CFF table has no such font dictionary.");
+        // set default stack size
+        top.MaxStack = IsCff2 ? (uint)CffParser.Cff2DefaultStack : 48;
 
-        CffParser.Run(Data, dictPos, dictPos + dictLen, CffParser.Kind.Top, top, null);
+        CffParser.Run(Data, dictPos, dictPos + dictLen, kind, top, null);
 
         // if it is a CID font, we stop there
         if (top.CidRegistry != CffFontDict.NoSid)
             return;
 
-        // Parse the private dictionary, if any.
-        LoadPrivateDict(subfont, baseOffset);
+        // Parse the private dictionary, if any.  CFF2 does not have a private dictionary in the Top DICT but may have one in a Font DICT.  We
+        // need to parse the latter here in order to load any local subrs.
+        LoadPrivateDict(subfont, baseOffset, 0, null);
 
-        // The random number generator: the seed of the Private DICT (see the remarks of the class).
-        subfont.Random = (uint)subfont.Private.InitialRandomSeed;
+        // The random number generator: the seed of the Private DICT (see the remarks of the class); CFF2 has none.
+        if (!IsCff2)
+            subfont.Random = (uint)subfont.Private.InitialRandomSeed;
 
         // read the local subrs, if any
         CffPrivate priv = subfont.Private;
         if (priv.LocalSubrsOffset != 0)
         {
-            long at = (long)baseOffset + top.PrivateOffset + priv.LocalSubrsOffset;
-            if (at > int.MaxValue)
-                throw new HintingException("The local subroutines are out of the font.");
+            // the sum is FreeType's 32-bit unsigned one: a negative `Subrs' operand points before the Private DICT
+            int at = SeekPosition(baseOffset, unchecked(top.PrivateOffset + priv.LocalSubrsOffset));
 
             // Font DICTs that point at the same INDEX share its table of pointers (a font with 256 of them, each with 65,535 subroutines,
             // would otherwise hold them 256 times over)
-            if (!_subrsByStart.TryGetValue((int)at, out int[]? pointers))
+            if (!_subrsByStart.TryGetValue(at, out int[]? pointers))
             {
-                int pos = (int)at;
-                pointers = CffIndex.Read(Data, ref pos).GetPointers();
-                _subrsByStart[(int)at] = pointers;
+                int pos = at;
+                pointers = CffIndex.Read(Data, ref pos, IsCff2).GetPointers();
+                _subrsByStart[at] = pointers;
             }
 
             subfont.LocalSubrs = pointers;
         }
     }
 
-    // cff_load_private_dict
-    private void LoadPrivateDict(CffSubFont subfont, int baseOffset)
+    /// <summary>
+    /// Parses the Private DICT of a subfont (<c>cff_load_private_dict</c>). A CFF2 Private DICT can hold <c>blend</c> operators, which take
+    /// their factors from the normalized vector <paramref name="ndv"/> (of <paramref name="lenNdv"/> coordinates, zero for none); the first
+    /// call, when the font is opened, is always without one.
+    /// </summary>
+    /// <exception cref="HintingException">The Private DICT is malformed; the subfont's Private DICT is what was read of it.</exception>
+    internal void LoadPrivateDict(CffSubFont subfont, int baseOffset, int lenNdv, int[]? ndv)
     {
         CffFontDict top = subfont.FontDict;
-        CffPrivate priv = subfont.Private;
+
+        // store handle needed to access memory, vstore for blend; we need this even if there is no private DICT
+        subfont.Blend.VStore = VStore;
+        subfont.Blend.HasFont = true;
+        subfont.Blend.UsedBV = false; // clear state
 
         if (top.PrivateOffset == 0 || top.PrivateSize == 0)
             return; // no private DICT, do nothing
 
         // set defaults
+        subfont.Private = new CffPrivate();
+        CffPrivate priv = subfont.Private;
+
         priv.BlueShift = 7;
         priv.BlueFuzz = 1;
         priv.BlueScale = (int)(0.039625 * 0x10000L * 1000);
 
-        long start = (long)baseOffset + top.PrivateOffset;
+        uint start32 = unchecked((uint)baseOffset + top.PrivateOffset);
+        long start = start32;
         long end = start + top.PrivateSize;
         if (end > Data.Length || start > Data.Length)
             throw new HintingException("The Private DICT reaches past the end of the font.");
 
-        CffParser.Run(Data, (int)start, (int)end, CffParser.Kind.Private, null, priv);
+        // provide inputs for blend calculations
+        var blend = new CffBlendContext(subfont.Blend, lenNdv, ndv);
+
+        CffParser.Run(Data, (int)start, (int)end, IsCff2 ? CffParser.Kind.Cff2Private : CffParser.Kind.Private, null, priv, blend, TopFont.FontDict.MaxStack);
 
         // ensure that `num_blue_values' is even
         priv.NumBlueValues &= ~1;

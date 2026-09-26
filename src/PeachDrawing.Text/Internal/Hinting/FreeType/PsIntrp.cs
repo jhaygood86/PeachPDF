@@ -142,8 +142,8 @@ internal sealed partial class Cf2HintMask
     }
 }
 
-/// <summary>Adobe's Type 2 charstring interpreter (<c>cf2_interpT2CharString</c>), for CFF fonts.</summary>
-/// <remarks>The parts for Type 1 and for CFF2 fonts are not ported: the engine is only used on CFF fonts here.</remarks>
+/// <summary>Adobe's Type 2 charstring interpreter (<c>cf2_interpT2CharString</c>), for CFF and CFF2 fonts.</summary>
+/// <remarks>The parts for Type 1 fonts are not ported: the engine is only used on CFF fonts here.</remarks>
 internal static class Cf2Interpreter
 {
     // Type2 charstring opcodes
@@ -329,6 +329,32 @@ internal static class Cf2Interpreter
         curY = vals[13];
     }
 
+    // Blends numOperands on the stack, stores results into the first numBlends values, then pops remaining arguments (cf2_doBlend).
+    private static void DoBlend(CffBlend blend, Cf2Stack opStack, uint numBlends)
+    {
+        uint numOperands = unchecked(numBlends * (uint)blend.LenBV);
+
+        uint baseIndex = unchecked((uint)opStack.Count - numOperands);
+        uint delta = unchecked(baseIndex + numBlends);
+
+        for (uint i = 0; i < numBlends; i++)
+        {
+            int weightIndex = 1;
+
+            // start with first term
+            int sum = opStack.GetReal(unchecked((int)(i + baseIndex)));
+
+            for (int j = 1; j < blend.LenBV; j++)
+                sum = unchecked(sum + FtCalc.MulFix(blend.BV[weightIndex++], opStack.GetReal(unchecked((int)delta++))));
+
+            // store blended result
+            opStack.SetReal(unchecked((int)(i + baseIndex)), sum);
+        }
+
+        // leave only `numBlends' results on stack
+        opStack.Pop(unchecked(numOperands - numBlends));
+    }
+
     // which of the twelve operands of each flex operator are on the stack
     private static readonly bool[] HflexOperands = [true, false, true, true, true, false, true, false, true, false, true, false];
     private static readonly bool[] FlexOperands = [true, true, true, true, true, true, true, true, true, true, true, true];
@@ -399,11 +425,14 @@ internal static class Cf2Interpreter
         // What we implement here uses the first validly specified width, but does not detect errors for specifying more than one width.
         //
         // If one of the above operators occurs without explicitly specifying a width, we assume the default width.
-        haveWidth = false;
+        //
+        // CFF2 charstrings always return the default width (0).
+        haveWidth = font.IsCff2;
         width = Cf2Fixed.FromInt(priv.DefaultWidth);
 
         // allocate an operand stack
-        var opStack = new Cf2Stack(error, OperandStackSize);
+        uint stackSize = font.IsCff2 ? font.MaxStack : OperandStackSize;
+        var opStack = new Cf2Stack(error, (int)stackSize);
 
         // initialize subroutine stack by placing top level charstring as first element (max depth plus one for the charstring)
         // Note: Caller owns and must finalize the first charstring.  Our copy of it does not change that requirement.
@@ -434,6 +463,10 @@ internal static class Cf2Interpreter
             else
             {
                 op1 = (byte)charstring.ReadByte();
+
+                // Explicit RETURN and ENDCHAR in CFF2 should be ignored.
+                if ((op1 == CmdReturn || op1 == CmdEndchar) && font.IsCff2)
+                    op1 = CmdReserved0;
             }
 
             // check for errors once per loop
@@ -455,9 +488,57 @@ internal static class Cf2Interpreter
                     break;
 
                 case CmdVsindex:
-                case CmdBlend:
-                    // CFF2 operators: not for a CFF font, so clear the stack and ignore
+                    if (!font.IsCff2)
+                        break; // clear stack & ignore
+
+                    if (font.Blend.UsedBV)
+                    {
+                        // vsindex not allowed after blend
+                        lastError = Cf2Error.InvalidGlyphFormat;
+                        goto Exit;
+                    }
+
+                    {
+                        int temp = opStack.PopInt();
+
+                        if (temp >= 0)
+                            font.Vsindex = (uint)temp;
+                    }
+
                     break;
+
+                case CmdBlend:
+                {
+                    if (!font.IsCff2)
+                        break; // clear stack & ignore
+
+                    // do we have a `blend' op in a non-variant font?
+                    if (!font.Blend.HasFont)
+                    {
+                        lastError = Cf2Error.InvalidGlyphFormat;
+                        goto Exit;
+                    }
+
+                    // check cached blend vector
+                    if (font.Blend.CheckVector(font.Vsindex, font.LenNdv, font.Ndv) && font.Blend.BuildVector(font.Vsindex, font.LenNdv, font.Ndv))
+                    {
+                        lastError = Cf2Error.InvalidGlyphFormat;
+                        goto Exit;
+                    }
+
+                    // do the blend
+                    uint numBlends = unchecked((uint)opStack.PopInt());
+                    if (numBlends > stackSize)
+                    {
+                        lastError = Cf2Error.InvalidGlyphFormat;
+                        goto Exit;
+                    }
+
+                    DoBlend(font.Blend, opStack, numBlends);
+
+                    font.Blend.UsedBV = true;
+                    continue; // do not clear the stack
+                }
 
                 case CmdHstemhm:
                 case CmdHstem:
@@ -655,7 +736,7 @@ internal static class Cf2Interpreter
                             break;
 
                         default:
-                            if (op2 >= EscReserved38)
+                            if (font.IsCff2 || op2 >= EscReserved38)
                                 break;
 
                             // second switch for 2-byte operators handles CFF (and Type 1, which is not ported)
@@ -916,8 +997,8 @@ internal static class Cf2Interpreter
                     // close path if still open
                     glyphPath.CloseOpenPath();
 
-                    // seac (charstring ending with args on stack)
-                    if (opStack.Count > 1)
+                    // disable seac for CFF2 (charstring ending with args on stack)
+                    if (!font.IsCff2 && opStack.Count > 1)
                     {
                         // must be either 4 or 5 -- this is a (deprecated) implied `seac' operator
                         Cf2Buffer component = new();

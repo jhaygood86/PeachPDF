@@ -195,6 +195,35 @@ internal sealed class Cf2Stack
         };
     }
 
+    /// <summary><c>cf2_stack_setReal</c>: provides random access to the stack.</summary>
+    public void SetReal(int idx, int val)
+    {
+        if ((uint)idx > (uint)_top)
+        {
+            _error.Set(Cf2Error.StackOverflow);
+            return;
+        }
+
+        // an index equal to the count is accepted, as FreeType accepts it, and is one past the values the stack holds
+        if (idx == _buffer.Length)
+            return;
+
+        _buffer[idx].Value = val;
+        _buffer[idx].Type = Cf2NumberType.Fixed;
+    }
+
+    /// <summary><c>cf2_stack_pop</c>: discards (pops) <paramref name="num"/> values from the stack.</summary>
+    public void Pop(uint num)
+    {
+        if (num > (uint)_top)
+        {
+            _error.Set(Cf2Error.StackUnderflow);
+            return;
+        }
+
+        _top -= (int)num;
+    }
+
     /// <summary><c>cf2_stack_roll</c>.</summary>
     public void Roll(int count, int shift)
     {

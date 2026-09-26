@@ -37,6 +37,12 @@ internal sealed class CffFontDict
     public uint FdArrayOffset;
     public uint FdSelectOffset;
 
+    /// <summary>The offset of the variation store of a CFF2 Top DICT (<c>vstore</c>).</summary>
+    public uint VStoreOffset;
+
+    /// <summary>The size of the operand stack of the charstrings of a CFF2 font (<c>maxstack</c>), which its Private DICTs' stack has too.</summary>
+    public uint MaxStack = 48;
+
     public bool HasFontMatrix;
 
     // the font matrix as 16.16 numbers, its offset in font units, and the units per em that go with the normalized matrix
@@ -75,6 +81,19 @@ internal sealed class CffPrivate
     public int NominalWidth;
     public uint LocalSubrsOffset;
     public int InitialRandomSeed;
+
+    /// <summary>The data set of the variation store a CFF2 charstring's <c>blend</c> operators start with (<c>vsindex</c>).</summary>
+    public uint VsIndex;
+}
+
+/// <summary>What the <c>blend</c> and <c>vsindex</c> operators of a CFF2 Private DICT reach (<c>priv-&gt;subfont</c>): the blend vector of the subfont and the location.</summary>
+internal sealed class CffBlendContext(CffBlend blend, int lenNdv, int[]? ndv)
+{
+    public CffBlend Blend { get; } = blend;
+
+    public int LenNdv { get; } = lenNdv;
+
+    public int[]? Ndv { get; } = ndv;
 }
 
 /// <summary>
@@ -88,12 +107,20 @@ internal static class CffParser
     private const int TopDictStackDepth = 96;
     private const int PrivateDictStackDepth = TopDictStackDepth + 1;
 
+    /// <summary>The stack of a CFF2 Top DICT and Font DICT, and the size of a CFF2 charstring's (<c>CFF2_DEFAULT_STACK</c>; the <c>maxstack</c> operator cannot lower it and <c>CFF2_MAX_STACK</c> is the same number).</summary>
+    public const int Cff2DefaultStack = 513;
+    private const uint Cff2MaxStack = 513;
+
     // operator codes: the second byte of a two-byte operator is added to 0x100
     private const int OpFontBBox = 5;
     private const int OpCharset = 15;
     private const int OpEncoding = 16;
     private const int OpCharStrings = 17;
     private const int OpPrivate = 18;
+    private const int OpVsIndex = 22;
+    private const int OpBlend = 23;
+    private const int OpVStore = 24;
+    private const int OpMaxStack = 25;
     private const int OpCharstringType = 0x106;
     private const int OpFontMatrix = 0x107;
     private const int OpMultipleMaster = 0x118;
@@ -137,6 +164,15 @@ internal static class CffParser
     {
         Top,
         Private,
+
+        /// <summary>The Top DICT of a CFF2 font (<c>CFF2_CODE_TOPDICT</c>).</summary>
+        Cff2Top,
+
+        /// <summary>A Font DICT of a CFF2 font (<c>CFF2_CODE_FONTDICT</c>).</summary>
+        Cff2FontDict,
+
+        /// <summary>The Private DICT of a CFF2 font (<c>CFF2_CODE_PRIVATE</c>), which has the <c>vsindex</c> and <c>blend</c> operators.</summary>
+        Cff2Private,
     }
 
     /// <summary>
@@ -144,11 +180,39 @@ internal static class CffParser
     /// they say. FreeType's errors here (a stack that over- or underflows, a truncated operator) fail the loading of the font.
     /// </summary>
     /// <exception cref="HintingException">The DICT is malformed in a way FreeType refuses.</exception>
-    public static void Run(byte[] data, int start, int limit, Kind kind, CffFontDict? top, CffPrivate? priv)
+    /// <param name="data">The bytes of the font.</param>
+    /// <param name="start">Where the DICT begins.</param>
+    /// <param name="limit">Where the DICT ends.</param>
+    /// <param name="kind">What the DICT is.</param>
+    /// <param name="top">Where the fields of a Top or Font DICT go.</param>
+    /// <param name="priv">Where the fields of a Private DICT go.</param>
+    /// <param name="blend">What the <c>blend</c> and <c>vsindex</c> operators of a CFF2 Private DICT need.</param>
+    /// <param name="maxStack">The <c>maxstack</c> of the CFF2 font, the size of a CFF2 Private DICT's stack less one.</param>
+    public static void Run(byte[] data, int start, int limit, Kind kind, CffFontDict? top, CffPrivate? priv, CffBlendContext? blend = null, uint maxStack = Cff2MaxStack)
     {
-        int stackDepth = kind == Kind.Private ? PrivateDictStackDepth : TopDictStackDepth;
+        int stackDepth = kind switch
+        {
+            Kind.Private => PrivateDictStackDepth,
+            Kind.Cff2Top or Kind.Cff2FontDict => Cff2DefaultStack,
+            Kind.Cff2Private => (int)maxStack + 1, // add 1 for the operator
+            _ => TopDictStackDepth,
+        };
+
         var stack = new int[stackDepth]; // the positions of the operands
         int stackTop = 0;
+        int blendTop = 0;
+
+        if (kind == Kind.Cff2Private)
+        {
+            // The results of the `blend' operators are numbers of another kind, kept apart from the DICT in FreeType (its `blend_stack'); here
+            // the operands are positions in a copy of the DICT, and the results are appended to the copy.
+            int length = limit - start;
+            data = data.AsSpan(start, length).ToArray();
+            start = 0;
+            limit = length;
+            blendTop = length;
+        }
+
         int p = start;
 
         while (p < limit)
@@ -219,7 +283,16 @@ internal static class CffParser
                     code = 0x100 | data[p];
                 }
 
-                Handle(data, limit, kind, top, priv, code, stack, numArgs);
+                if (kind == Kind.Cff2Private && code == OpBlend)
+                {
+                    DoBlend(ref data, ref blendTop, stack, ref stackTop, stackDepth, limit, priv!, blend);
+
+                    // the stack is not cleared: it holds the blended values
+                    p++;
+                    continue;
+                }
+
+                Handle(data, limit, kind, top, priv, code, stack, numArgs, blend);
 
                 // clear stack
                 stackTop = 0;
@@ -229,8 +302,126 @@ internal static class CffParser
         }
     }
 
-    private static void Handle(byte[] data, int limit, Kind kind, CffFontDict? top, CffPrivate? priv, int code, int[] stack, int numArgs)
+    // cff_parse_blend and cff_blend_doBlend: blends the operands on the stack and leaves the results (5-byte numbers of the kind FreeType
+    // uses internally, made of the byte 255 and a 16.16 number) in the place of the values
+    private static void DoBlend(ref byte[] data, ref int blendTop, int[] stack, ref int stackTop, int stackSize, int limit, CffPrivate priv, CffBlendContext? context)
     {
+        // blend operator can only be used in a Private DICT
+        if (context is null)
+            throw new HintingException("A blend operator is used outside a Private DICT.");
+
+        // check that we have enough arguments
+        if (stackTop < 1)
+            throw new HintingException("The blend operator of a CFF2 Private DICT has no operand.");
+
+        CffBlend blend = context.Blend;
+
+        if (blend.CheckVector(priv.VsIndex, context.LenNdv, context.Ndv) && blend.BuildVector(priv.VsIndex, context.LenNdv, context.Ndv))
+            throw new HintingException("The blend vector of a CFF2 Private DICT cannot be built.");
+
+        uint numBlends = unchecked((uint)Num(data, limit, stack[stackTop - 1]));
+        if (numBlends > (uint)stackSize)
+            throw new HintingException("The blend operator of a CFF2 Private DICT has an invalid number of blends.");
+
+        // compute expected number of operands for this blend
+        uint numOperands = unchecked(numBlends * (uint)blend.LenBV);
+        uint count = (uint)(stackTop - 1);
+
+        if (numOperands > count)
+            throw new HintingException("The blend operator of a CFF2 Private DICT lacks operands.");
+
+        // check whether we have room for `numBlends' values at `blend_top'
+        int room = 5 * (int)numBlends;
+        if (blendTop + room > data.Length)
+            Array.Resize(ref data, blendTop + room);
+
+        int baseIndex = (int)(count - numOperands); // index of first blend arg
+        int delta = baseIndex + (int)numBlends; // index of first delta arg
+
+        for (int i = 0; i < (int)numBlends; i++)
+        {
+            // convert inputs to 16.16 fixed point
+            int sum = DoFixed(data, limit, stack[i + baseIndex], 0);
+
+            for (int j = 1; j < blend.LenBV; j++)
+                sum = unchecked(sum + FtCalc.MulFix(DoFixed(data, limit, stack[delta++], 0), blend.BV[j]));
+
+            // point parser stack to new value on blend_stack
+            stack[i + baseIndex] = blendTop;
+
+            // Push blended result as Type 2 5-byte fixed-point number.
+            data[blendTop++] = 255;
+            data[blendTop++] = (byte)((uint)sum >> 24);
+            data[blendTop++] = (byte)((uint)sum >> 16);
+            data[blendTop++] = (byte)((uint)sum >> 8);
+            data[blendTop++] = (byte)(uint)sum;
+        }
+
+        // leave only numBlends results on parser stack
+        stackTop = baseIndex + (int)numBlends;
+
+        blend.UsedBV = true;
+    }
+
+    private static void Handle(byte[] data, int limit, Kind kind, CffFontDict? top, CffPrivate? priv, int code, int[] stack, int numArgs, CffBlendContext? blend)
+    {
+        if (kind == Kind.Cff2Top && top is not null)
+        {
+            switch (code)
+            {
+                case OpCharStrings:
+                    top.CharstringsOffset = (uint)Num(data, limit, RequireArgs(stack, numArgs));
+                    break;
+
+                case OpFdArray:
+                    top.FdArrayOffset = (uint)Num(data, limit, RequireArgs(stack, numArgs));
+                    break;
+
+                case OpFdSelect:
+                    top.FdSelectOffset = (uint)Num(data, limit, RequireArgs(stack, numArgs));
+                    break;
+
+                case OpVStore:
+                    top.VStoreOffset = (uint)Num(data, limit, RequireArgs(stack, numArgs));
+                    break;
+
+                case OpMaxStack:
+                {
+                    // maxstack operator increases parser and operand stacks for CFF2
+                    uint maxStack = (uint)Num(data, limit, RequireArgs(stack, numArgs));
+                    if (maxStack > Cff2MaxStack)
+                        maxStack = Cff2MaxStack;
+                    if (maxStack < Cff2DefaultStack)
+                        maxStack = Cff2DefaultStack;
+
+                    top.MaxStack = maxStack;
+                    break;
+                }
+
+                case OpFontMatrix:
+                    ParseFontMatrix(data, limit, top, stack, numArgs);
+                    break;
+            }
+
+            return;
+        }
+
+        if (kind == Kind.Cff2FontDict && top is not null)
+        {
+            switch (code)
+            {
+                case OpPrivate:
+                    ParsePrivateDictOperator(data, limit, top, stack, numArgs);
+                    break;
+
+                case OpFontMatrix:
+                    ParseFontMatrix(data, limit, top, stack, numArgs);
+                    break;
+            }
+
+            return;
+        }
+
         if (kind == Kind.Top && top is not null)
         {
             switch (code)
@@ -297,8 +488,10 @@ internal static class CffParser
             return;
         }
 
-        if (kind == Kind.Private && priv is not null)
+        if (kind is Kind.Private or Kind.Cff2Private && priv is not null)
         {
+            bool cff2 = kind == Kind.Cff2Private;
+
             switch (code)
             {
                 case OpBlueValues:
@@ -342,7 +535,8 @@ internal static class CffParser
                     break;
 
                 case OpInitialRandomSeed:
-                    priv.InitialRandomSeed = (int)Num(data, limit, RequireArgs(stack, numArgs));
+                    if (!cff2)
+                        priv.InitialRandomSeed = (int)Num(data, limit, RequireArgs(stack, numArgs));
                     break;
 
                 case OpSubrs:
@@ -350,19 +544,40 @@ internal static class CffParser
                     break;
 
                 case OpDefaultWidthX:
-                    priv.DefaultWidth = (int)Num(data, limit, RequireArgs(stack, numArgs));
+                    if (!cff2)
+                        priv.DefaultWidth = (int)Num(data, limit, RequireArgs(stack, numArgs));
                     break;
 
                 case OpNominalWidthX:
-                    priv.NominalWidth = (int)Num(data, limit, RequireArgs(stack, numArgs));
+                    if (!cff2)
+                        priv.NominalWidth = (int)Num(data, limit, RequireArgs(stack, numArgs));
                     break;
 
                 case OpForceBold:
                 case OpForceBoldThreshold:
                 case OpLenIv:
+                    // read by FreeType in a CFF font and not used here
+                    if (!cff2)
+                        RequireArgs(stack, numArgs);
+                    break;
+
                 case OpExpansionFactor:
                     // read by FreeType and not used here; StemSnapH and StemSnapV are delta arrays, which may be empty
                     RequireArgs(stack, numArgs);
+                    break;
+
+                case OpVsIndex:
+                    if (!cff2)
+                        break;
+
+                    // vsindex operator can only be used in a Private DICT
+                    if (blend is null)
+                        throw new HintingException("A vsindex operator is used outside a Private DICT.");
+
+                    if (blend.Blend.UsedBV)
+                        throw new HintingException("A vsindex operator follows a blend operator.");
+
+                    priv.VsIndex = unchecked((uint)Num(data, limit, RequireArgs(stack, numArgs)));
                     break;
             }
         }
