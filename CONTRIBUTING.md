@@ -33,6 +33,12 @@ The `peachpdf` command-line tool has its own test project, `PeachPDF.Cli.Tests` 
 dotnet test PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj
 ```
 
+The font and text engine has its own test project too, `PeachDrawing.Text.Tests` (the font parsers and tables, shaping, bidi, script itemization, hyphenation, and the public API of `PeachDrawing.Text`; it must not reference PeachPDF):
+
+```
+dotnet test PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --framework net8.0
+```
+
 To run a subset of tests:
 
 ```

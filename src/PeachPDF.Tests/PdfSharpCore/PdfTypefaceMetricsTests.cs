@@ -25,7 +25,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
                 "Math" => BundledFonts.Math,
                 _ => BundledFonts.Emoji,
             };
-            var face = TestFonts.TypefaceFromFile(path);
+            var face = TypefaceFixtures.FromFile(path);
             var descriptor = face.Face.Descriptor;
 
             foreach (double value in new double[] { 0, 1, 250, 511.5, 700, -200, 1024, 2048 })
@@ -44,7 +44,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void SimpleFontWidths_AgreeWithTheGlyphWidthOfEachCode()
         {
-            var face = TestFonts.TypefaceFromFile(BundledFonts.Ttf);
+            var face = TypefaceFixtures.FromFile(BundledFonts.Ttf);
             int[] widths = PdfSimpleFontWidths.Compute(face);
 
             face.TryMapRune(new Rune('A'), out var a);

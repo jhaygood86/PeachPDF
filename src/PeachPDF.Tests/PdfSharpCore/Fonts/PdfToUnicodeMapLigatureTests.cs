@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         public void PrepareForSave_MergesCharacterAndLigatureSources()
         {
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(TestFonts.TypefaceFromFile(BundledFonts.Ttf));
+            var cmapInfo = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
             cmapInfo.AddChars("A"); // populates the legacy codepoint-keyed CharacterToGlyphIndex
             int aGlyph = cmapInfo.CharacterToGlyphIndex['A'];
 

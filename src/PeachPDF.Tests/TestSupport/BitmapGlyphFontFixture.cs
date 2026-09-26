@@ -1,7 +1,5 @@
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf;
 using System.Text;
 
 namespace PeachPDF.Tests.TestSupport
