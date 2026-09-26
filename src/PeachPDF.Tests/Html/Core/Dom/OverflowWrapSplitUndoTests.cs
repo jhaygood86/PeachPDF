@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Html.Core.Dom;
 using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
 using PeachDrawing.Text.Internal.Text.Shaping.Use;

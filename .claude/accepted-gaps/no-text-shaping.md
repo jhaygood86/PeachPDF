@@ -155,7 +155,7 @@ per-word treatment HTML text gets).
   branch ported too, untested since nothing in this codebase can currently reach it.
 - **`OpenTypeDescriptor.SupportsFeatureTags`/`RFont.SupportsFontVariantCaps` are not script-tag-aware.**
   They always check tag support under the same no-script-tag fallback chain (`"latn"`/`"DFLT"`)
-  `GsubShaper.Shape` itself falls back to for a run with no `TextShapingFeatures.ScriptTag` - never a
+  `GsubShaper.Shape` itself falls back to for a run with no `ShapeSettings.ScriptTag` - never a
   specific script tag - because every caller resolves caps once per `CssBox`/SVG element
   (`DerivedStyle.ActualFontVariantCaps`/`SvgTreeBuilder.ComputeFontContext`), before per-word script-run
   splitting exists to know one. For a font that defines the requested tags only under a specific script's
@@ -185,9 +185,9 @@ glyph-for-glyph against real HarfBuzz's own output via `uharfbuzz` for that scri
 font), plus `MixedUseShapedScriptsCharacterizationTests` (a paragraph mixing two different USE-shaped
 scripts, and one mixing a USE-shaped script with plain Latin text); SVG's own wiring (Arabic-family
 joining and Devanagari USE only, per the remaining-gaps bullets above) is covered by
-`SvgTextArabicJoiningTests`/`SvgTextDevanagariUseTests` (mock-recorded `TextShapingFeatures` reaching
+`SvgTextArabicJoiningTests`/`SvgTextDevanagariUseTests` (mock-recorded `ShapeSettings` reaching
 `RGraphics.DrawString`) and
 `SvgTextArabicJoiningCharacterizationTests`/`SvgTextDevanagariUseCharacterizationTests` (the exact
-`(text, TextShapingFeatures)` pair SVG computes, re-shaped through a real font); the remaining gaps
+`(text, ShapeSettings)` pair SVG computes, re-shaped through a real font); the remaining gaps
 above are pinned by their own doc comments in those files rather than by a dedicated negative test per
 gap. See [Text shaping](docs/html-css-support.md#text-shaping).

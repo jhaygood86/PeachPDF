@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -223,7 +224,7 @@ namespace PeachPDF.Html.Core.Paint
         /// small-caps run is measured/outlined against the same font and baseline shift it is actually
         /// painted with, not the box's own <c>ActualFont</c>.
         /// </summary>
-        private readonly record struct WordFontContext(CssBox StyleSource, RFont Font, double BaselineAdjust, TextShapingFeatures Features);
+        private readonly record struct WordFontContext(CssBox StyleSource, RFont Font, double BaselineAdjust, ShapeSettings Features);
 
         /// <summary>See <see cref="WordFontContext"/>.</summary>
         /// <param name="word">the word to resolve</param>
@@ -340,7 +341,7 @@ namespace PeachPDF.Html.Core.Paint
             // RGraphicsPath.ClipToRect reproduces that same per-cell clip at the path level - the raw
             // outline is intersected with the identical cell before it is added to the union, so the two
             // can never disagree about which pixels are actually inked.
-            void CollectUprightWord(BoxFragment f, CssRect word, RRect rect, string text, CssBox styleSource, RFont font, double baselineAdjust, TextShapingFeatures features)
+            void CollectUprightWord(BoxFragment f, CssRect word, RRect rect, string text, CssBox styleSource, RFont font, double baselineAdjust, ShapeSettings features)
             {
                 var needsCellClip = font.HasVerticalMetrics || font.HasVerticalOrigin;
 
@@ -370,7 +371,7 @@ namespace PeachPDF.Html.Core.Paint
             // DrawWordGlyphs's own sideways branch) - so its outline is built once, in that same natural
             // (pre-rotation) frame, then carried into the word's actual physical footprint by the exact
             // rotation matrix paint uses, rather than rebuilt per character.
-            void CollectRotatedWord(RRect rect, string text, CssBox styleSource, RFont font, double baselineAdjust, TextShapingFeatures features)
+            void CollectRotatedWord(RRect rect, string text, CssBox styleSource, RFont font, double baselineAdjust, ShapeSettings features)
             {
                 var naturalBaselineOrigin = new RPoint(0, baselineAdjust + font.Ascent);
                 var outline = g.GetTextOutline(text, font, naturalBaselineOrigin, styleSource.ActualLetterSpacing, features);

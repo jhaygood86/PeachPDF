@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Text;
 using System;
@@ -74,7 +75,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 _cmapInfo.AddChars(text);
         }
 
-        internal void AddShapedText(string text, TextShapingFeatures features, string? logicalText = null)
+        internal void AddShapedText(string text, ShapeSettings features, string? logicalText = null)
         {
             if (_cmapInfo != null)
                 _cmapInfo.AddShapedText(text, features, logicalText);

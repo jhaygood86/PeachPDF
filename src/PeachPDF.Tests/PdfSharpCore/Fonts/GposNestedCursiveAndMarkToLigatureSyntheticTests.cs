@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts;
 using System.Collections.Generic;
 using System.IO;
@@ -189,7 +190,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var contextual = gpos.GetContextualLookup(0);
             Assert.NotNull(contextual);
 
-            var glyphs = new List<ShapedGlyph> { new(200, 0, 1), new(201, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(200, 0, 1), new(201, 1, 1) };
             GposPositioner.ApplySequenceContextLookup(descriptor, gpos, contextual.Subtables, glyphs, gdef: null, contextual.LookupFlag, markFilteringSet: null);
 
             // Nested Type 3 (cursive): glyph 200's exit(40,0) is pulled back to the run's end - same

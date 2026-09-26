@@ -1,3 +1,4 @@
+﻿using PeachDrawing.Text.Shaping;
 using System.Collections.Generic;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
@@ -9,7 +10,7 @@ namespace PeachPDF.Tests.Html.Core
     /// <summary>
     /// Unit tests for <see cref="FontVariantAlternatesResolver"/> — resolving a cascaded
     /// <c>font-variant-alternates</c> value against a <c>@font-feature-values</c> registry into the
-    /// OpenType GSUB <c>(tag, value)</c> pairs <see cref="PeachDrawing.Text.Internal.Text.TextShapingFeatures.ExplicitFeatures"/>
+    /// OpenType GSUB <c>(tag, value)</c> pairs <see cref="PeachDrawing.Text.Shaping.ShapeSettings.ExplicitFeatures"/>
     /// consumes.
     /// </summary>
     public class FontVariantAlternatesResolverTests

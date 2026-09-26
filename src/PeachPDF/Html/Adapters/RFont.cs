@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.Html.Adapters.Entities;
 using PeachDrawing.Text.Internal.Text;
@@ -91,22 +92,22 @@ namespace PeachPDF.Html.Adapters
         /// <summary>
         /// Whether this font's GSUB table defines an active lookup for every OpenType feature tag
         /// <paramref name="feature"/> needs (e.g. both <c>smcp</c> and <c>c2sc</c> for
-        /// <see cref="FontVariantCapsFeature.AllSmallCaps"/> - see <see cref="GsubShaper.GetFeatureTags(FontVariantCapsFeature)"/>).
+        /// <see cref="CapsMode.AllSmallCaps"/> - see <see cref="Shaper.GetFeatureTags(CapsMode)"/>).
         /// Called from <c>CssBox.AddWord</c>'s synthesis gate, which runs during DOM/box-tree
         /// parsing - before any <see cref="RGraphics"/> exists - so this lives on <see cref="RFont"/>
         /// itself rather than the graphics abstraction, mirroring <see cref="HasGlyph"/>.
         /// </summary>
-        public abstract bool SupportsFontVariantCaps(FontVariantCapsFeature feature);
+        public abstract bool SupportsFontVariantCaps(CapsMode feature);
 
         /// <summary>
         /// Whether this font's GSUB table defines an active lookup for the OpenType feature tag
         /// <paramref name="feature"/> needs (<c>subs</c> or <c>sups</c> - see
-        /// <see cref="GsubShaper.GetFeatureTags(FontVariantPositionFeature)"/>). Answering false is what
+        /// <see cref="Shaper.GetFeatureTags(SubSuperMode)"/>). Answering false is what
         /// makes a run take the synthesized sub/superscript path instead, which CSS Fonts 4 requires as
         /// the fallback; like <see cref="SupportsFontVariantCaps"/> this is asked during box-tree parsing,
         /// before any <see cref="RGraphics"/> exists.
         /// </summary>
-        public abstract bool SupportsFontVariantPosition(FontVariantPositionFeature feature);
+        public abstract bool SupportsFontVariantPosition(SubSuperMode feature);
 
         /// <summary>
         /// This font's own recommended geometry for a synthesized <paramref name="superscript"/> (or

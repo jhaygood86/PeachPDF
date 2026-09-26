@@ -1,3 +1,4 @@
+﻿using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
@@ -10,7 +11,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// End-to-end coverage that a real bidi-mirrored word actually reaches
-    /// <see cref="RGraphics.DrawString(string, PeachPDF.Html.Adapters.RFont, PeachPDF.Html.Adapters.Entities.RColor, PeachPDF.Html.Adapters.Entities.RPoint, PeachPDF.Html.Adapters.Entities.RSize, double, PeachPDF.Html.Adapters.Entities.RFontPalette?, PeachDrawing.Text.Internal.Text.TextShapingFeatures?, string?)"/>'s
+    /// <see cref="RGraphics.DrawString(string, PeachPDF.Html.Adapters.RFont, PeachPDF.Html.Adapters.Entities.RColor, PeachPDF.Html.Adapters.Entities.RPoint, PeachPDF.Html.Adapters.Entities.RSize, double, PeachPDF.Html.Adapters.Entities.RFontPalette?, PeachDrawing.Text.Shaping.ShapeSettings?, string?)"/>'s
     /// <c>logicalText</c> parameter with its true logical-order source - the plumbing half of the
     /// <see cref="PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText"/> ToUnicode fix (see
     /// <c>CMapInfoLogicalTextTests</c> for direct coverage of the remap math itself). Without this

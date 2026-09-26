@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -65,7 +66,7 @@ namespace PeachPDF.Tests.TestSupport
 
         public override IReadOnlyList<RInkSpan>? GetInkCrossings(
             string str, RFont font, RPoint baselineOrigin, double bandTop, double bandBottom,
-            double letterSpacing = 0, TextShapingFeatures? features = null)
+            double letterSpacing = 0, ShapeSettings? features = null)
         {
             var query = new InkQuery(str, baselineOrigin, bandTop, bandBottom);
             InkQueries.Add(query);

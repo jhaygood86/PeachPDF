@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -44,7 +45,7 @@ namespace PeachPDF.Tests.Html.Core
             var f = descriptor.CharCodeToGlyphIndex(new Rune('f'));
 
             var cmap = new CMapInfo(descriptor);
-            cmap.AddShapedText("ff", new TextShapingFeatures(LigatureFeatures.Default));
+            cmap.AddShapedText("ff", new ShapeSettings(LigatureSet.Default));
 
             // The merged ligature glyph is not the plain 'f' glyph, and its source text ("ff") is
             // recorded for ToUnicode - a codepoint-keyed CharacterToGlyphIndex entry can't carry it.
@@ -58,10 +59,10 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void GsubLigatureSubstitution_NoneDisablesIt()
         {
-            // font-variant-ligatures: none (LigatureFeatures.None) must fully restore the pre-GSUB,
+            // font-variant-ligatures: none (LigatureSet.None) must fully restore the pre-GSUB,
             // 1:1 codepoint-to-glyph behavior - this is what makes turning ligatures off actually work.
             var descriptor = Descriptor(BundledFonts.Ttf);
-            var shaped = descriptor.Shape("ff", new TextShapingFeatures(LigatureFeatures.None));
+            var shaped = descriptor.Shape("ff", new ShapeSettings(LigatureSet.None));
 
             Assert.Equal(2, shaped.Count);
         }
@@ -73,7 +74,7 @@ namespace PeachPDF.Tests.Html.Core
             // shaping must try ligatures in the font's own authored order (not merge greedily by
             // twos), so "fft" collects the single 3-glyph ligature, not "ff" + "t".
             var descriptor = Descriptor(BundledFonts.Ttf);
-            var shaped = descriptor.Shape("fft", new TextShapingFeatures(LigatureFeatures.Default));
+            var shaped = descriptor.Shape("fft", new ShapeSettings(LigatureSet.Default));
 
             Assert.Single(shaped);
             Assert.Equal(0, shaped[0].ClusterStart);
@@ -86,7 +87,7 @@ namespace PeachPDF.Tests.Html.Core
             var descriptor = Descriptor(BundledFonts.Ttf);
             var cmap = new CMapInfo(descriptor);
 
-            cmap.AddShapedText(null!, new TextShapingFeatures(LigatureFeatures.Default));
+            cmap.AddShapedText(null!, new ShapeSettings(LigatureSet.Default));
 
             Assert.Empty(cmap.GlyphIndices);
             Assert.Empty(cmap.LigatureGlyphToText);

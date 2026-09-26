@@ -1,6 +1,8 @@
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -12,199 +14,11 @@ using PeachDrawing.Text.Internal.Text.Shaping.Use;
 namespace PeachDrawing.Text.Internal.Text
 {
     /// <summary>
-    /// One shaped glyph: <see cref="ClusterStart"/>/<see cref="ClusterLength"/> are the UTF-16
-    /// offsets, into the text that was shaped, of the source character(s) this glyph represents -
-    /// a single character for an ordinary glyph, or the whole matched span for a ligature (and, for
-    /// a Multiple Substitution expansion's non-first output glyph, a zero-length span anchored at
-    /// the end of the source span - see <see cref="GsubMultipleSubstitutionSubtable"/>).
-    /// <see cref="XAdvanceDelta"/>/<see cref="YAdvanceDelta"/>/<see cref="XOffset"/>/<see cref="YOffset"/>
-    /// are GPOS positioning deltas (font design units, same space <c>OpenTypeDescriptor.GlyphIndexToWidth</c>
-    /// returns), applied by <see cref="GposPositioner"/> after GSUB substitution - all zero for a
-    /// glyph GPOS doesn't touch, so every pre-GPOS call site is unaffected by their mere existence.
-    /// <see cref="LigatureComponentClusterStarts"/> is null for every glyph except one produced by a
-    /// GSUB ligature merge (see <see cref="GsubShaper.TryMatchLigature"/>), where it records each
-    /// original component's own <see cref="ClusterStart"/> (component 0 = the coverage-matched first
-    /// glyph) - the bookkeeping <see cref="GposPositioner.ApplyMarkToLigature"/> (GPOS Lookup Type 5)
-    /// needs to identify which ligature component a later-attaching mark belongs to.
-    /// <see cref="AttachedToIndex"/> is null for every glyph except a mark <see cref="GposPositioner.ApplyMarkAnchor"/>
-    /// just positioned via mark-to-base/mark-to-ligature/mark-to-mark attachment (GPOS Types 4/5/6),
-    /// where it records the glyph-list index (stable for the lifetime of one
-    /// <see cref="OpenTypeDescriptor.Shape"/> call - GPOS never inserts/removes glyphs) of whatever it
-    /// anchored to. <see cref="XOffset"/> alone can't reconstruct that relationship once the list is
-    /// reordered (see <see cref="OpenTypeDescriptor.Shape"/>'s remarks on <c>ReverseForDisplay</c>): the
-    /// offset bakes in the pen-distance to the base under the walk order GPOS actually ran in, so
-    /// reordering without this back-reference would silently mis-position the mark. Cursive attachment
-    /// (GPOS Type 3, <see cref="GposPositioner.ApplyCursiveAttachment"/>) needs no equivalent
-    /// back-reference - its own correction is self-contained per glyph (depends only on that glyph's own
-    /// anchor, never on the other glyph's position), so it survives reversal via a plain interval-mirror
-    /// with no special-casing - see <see cref="GposPositioner.TryApplyCursivePair"/>'s own remarks.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="IsHiddenIgnorable"/> marks a glyph that came out of <see cref="GsubShaper.MapToGlyphs"/>
-    /// for a codepoint Unicode declares invisible: every variation selector, or the missing-glyph
-    /// placeholder (<c>.notdef</c>) for another <c>Default_Ignorable_Code_Point</c> such as ZWJ/ZWNJ or
-    /// a bidi control. It is decided once, at map time, where the source codepoint is already in hand;
-    /// every later stage reads the flag instead of re-decoding the text. The glyph is deleted at the very
-    /// end of <see cref="OpenTypeDescriptor.Shape"/>, but it still occupies a list slot throughout
-    /// GSUB/GPOS so a lookup that genuinely matches on it (a font that maps ZWJ and ligates through it)
-    /// still sees it - see <see cref="OpenTypeDescriptor.Shape"/>'s own remarks on the ordering.
-    /// </remarks>
-    internal readonly record struct ShapedGlyph(
-        int GlyphIndex, int ClusterStart, int ClusterLength,
-        double XAdvanceDelta = 0, double YAdvanceDelta = 0,
-        double XOffset = 0, double YOffset = 0,
-        int[]? LigatureComponentClusterStarts = null,
-        int? AttachedToIndex = null,
-        bool IsHiddenIgnorable = false);
-
-    /// <summary>Which GSUB ligature features <see cref="GsubShaper.Shape"/> should apply.</summary>
-    [Flags]
-    internal enum LigatureFeatures
-    {
-        None = 0,
-
-        /// <summary>The `liga`/`clig` ("common ligatures") features - what CSS
-        /// <c>font-variant-ligatures: common-ligatures</c> (and the initial <c>normal</c>) mean.</summary>
-        Common = 1,
-
-        /// <summary>The `rlig` ("required ligatures") feature - applied whenever the font defines
-        /// it, independent of <c>font-variant-ligatures</c> (mirrors browser behavior).</summary>
-        Required = 2,
-
-        /// <summary>The `dlig` ("discretionary ligatures") feature - CSS
-        /// <c>font-variant-ligatures: discretionary-ligatures</c>. Off by default (opt-in), unlike
-        /// common ligatures.</summary>
-        Discretionary = 4,
-
-        /// <summary>The `hlig` ("historical ligatures") feature - CSS
-        /// <c>font-variant-ligatures: historical-ligatures</c>. Off by default (opt-in).</summary>
-        Historical = 8,
-
-        /// <summary>The `calt` ("contextual alternates") feature, driven by GSUB Lookup Types 5/6 -
-        /// CSS <c>font-variant-ligatures: no-contextual</c> turns this off; it's on by default
-        /// (like common ligatures) per CSS Fonts Level 3.</summary>
-        Contextual = 16,
-
-        Default = Common | Required | Contextual,
-    }
-
-    /// <summary>Which CSS <c>font-variant-caps</c> keyword <see cref="GsubShaper.Shape"/> should apply -
-    /// a single-select property, so unlike <see cref="LigatureFeatures"/> this is not [Flags].</summary>
-    internal enum FontVariantCapsFeature
-    {
-        None,
-        SmallCaps,
-        AllSmallCaps,
-        PetiteCaps,
-        AllPetiteCaps,
-        Unicase,
-        TitlingCaps,
-    }
-
-    /// <summary>Which CSS <c>font-variant-position</c> keyword <see cref="GsubShaper.Shape"/> should
-    /// apply - like <see cref="FontVariantCapsFeature"/> a single-select property, so not [Flags].</summary>
-    internal enum FontVariantPositionFeature
-    {
-        None,
-        Sub,
-        Super,
-    }
-
-    /// <summary>Which GSUB numeric features (CSS <c>font-variant-numeric</c>) <see cref="GsubShaper.Shape"/>
-    /// should apply.</summary>
-    [Flags]
-    internal enum NumericFeatures
-    {
-        None = 0,
-        LiningNums = 1 << 0,
-        OldstyleNums = 1 << 1,
-        ProportionalNums = 1 << 2,
-        TabularNums = 1 << 3,
-        DiagonalFractions = 1 << 4,
-        StackedFractions = 1 << 5,
-        Ordinal = 1 << 6,
-        SlashedZero = 1 << 7,
-    }
-
-    /// <summary>Which GSUB east-asian features (CSS <c>font-variant-east-asian</c>) <see cref="GsubShaper.Shape"/>
-    /// should apply.</summary>
-    [Flags]
-    internal enum EastAsianFeatures
-    {
-        None = 0,
-        Jis78 = 1 << 0,
-        Jis83 = 1 << 1,
-        Jis90 = 1 << 2,
-        Jis04 = 1 << 3,
-        Simplified = 1 << 4,
-        Traditional = 1 << 5,
-        FullWidth = 1 << 6,
-        ProportionalWidth = 1 << 7,
-        Ruby = 1 << 8,
-    }
-
-    /// <summary>
-    /// The combined set of GSUB/GPOS feature requests for one shaped run - ligatures, caps, numeric,
-    /// east-asian, kerning, an explicit document language, an explicit OpenType script tag, per-character
-    /// Arabic-family joining forms, per-character Universal-Shaping-Engine categories (Devanagari/
-    /// Bengali/Gujarati/Tamil), and arbitrary explicit <c>font-feature-settings</c> tags all fold into
-    /// one request so
-    /// <see cref="GsubShaper.Shape"/> can activate every requested lookup in a single pass, ordered by
-    /// the font's own <c>LookupList</c> index, instead of several independently-ordered passes.
-    /// <see cref="JoiningForms"/> and <see cref="UseCategories"/> are the exceptions to "single pass" -
-    /// see <see cref="GsubShaper.Shape"/>'s own remarks on why each must run in its own dedicated
-    /// stage(s) before the ordered pass, not folded into it (never both at once for one run - a word
-    /// resolves to exactly one script, so only one of the two is ever non-null). <see cref="ExplicitFeatures"/>/
-    /// <see cref="JoiningForms"/>/<see cref="UseCategories"/> use default (reference) equality when this
-    /// struct is used as a cache key (see <see cref="GsubShaper"/>'s lookup-index cache) - two
-    /// logically-identical but distinct list instances cache separately, which only costs a redundant
-    /// lookup-index computation, never an incorrect one (for <see cref="JoiningForms"/>/<see cref="UseCategories"/>
-    /// specifically, this means the cache essentially never hits across two different complex-script
-    /// runs, since each has its own distinct per-character sequence - still correct, just without the
-    /// caching benefit ordinary Latin text gets).
-    /// <see cref="ReverseForDisplay"/> requests <see cref="OpenTypeDescriptor.Shape"/>'s own final step:
-    /// reverse the shaped <c>ShapedGlyph</c> list (never the source text GSUB/GPOS themselves ran
-    /// against) and remap any mirrorable glyph via <c>BidiMirroring</c> - see
-    /// <see cref="OpenTypeDescriptor.Shape"/>'s remarks for why Arabic-family joining words shape this
-    /// way instead of shaping already-visually-reversed text the way a plain RTL word (Hebrew, etc.)
-    /// still does.
-    /// </summary>
-    internal readonly record struct TextShapingFeatures(
-        LigatureFeatures Ligatures = LigatureFeatures.Default,
-        FontVariantCapsFeature Caps = FontVariantCapsFeature.None,
-        NumericFeatures Numeric = NumericFeatures.None,
-        EastAsianFeatures EastAsian = EastAsianFeatures.None,
-        IReadOnlyList<(string Tag, int Value)>? ExplicitFeatures = null,
-        bool Kerning = true,
-        string? Language = null,
-        string? ScriptTag = null,
-        IReadOnlyList<ArabicJoiningForm>? JoiningForms = null,
-        IReadOnlyList<UseCategory>? UseCategories = null,
-        bool ReverseForDisplay = false,
-        // Appended last, and passed by name at every call site: the existing constructions here and in
-        // SvgTreeBuilder are positional, so inserting this next to its font-variant-* siblings would
-        // silently re-bind their arguments rather than fail to compile.
-        FontVariantPositionFeature Position = FontVariantPositionFeature.None,
-        // font-variant-emoji acts "as if" U+FE0E/U+FE0F followed every participating character, so a font's
-        // own cmap format-14 glyph for that sequence has to be reachable without the selector in the text.
-        // It selects a glyph here, not a GSUB feature, so it never reaches GetActiveLookupIndices.
-        PeachDrawing.Text.Unicode.EmojiMode EmojiMode = PeachDrawing.Text.Unicode.EmojiMode.Normal)
-    {
-        // NOT `new()` - for a record struct, a bare `new()` invokes the struct's implicit,
-        // zero-initializing parameterless constructor, NOT this primary constructor's own declared
-        // defaults (a genuine C# gotcha: unlike a class, `new S()` never routes through a struct's
-        // primary constructor when every parameter is optional). Passing the ligatures argument
-        // explicitly forces the real primary-constructor overload, so the other arguments still apply
-        // their own declared defaults correctly.
-        public static readonly TextShapingFeatures Default = new(LigatureFeatures.Default);
-    }
-
-    /// <summary>
     /// Turns text into a shaped glyph run: a 1:1 codepoint-to-glyph <c>cmap</c> mapping (via
     /// <see cref="OpenTypeDescriptor.CharCodeToGlyphIndex"/>), followed by GSUB substitution -
     /// ligature (Lookup Type 4), single (Type 1), multiple (Type 2), alternate (Type 3), and
     /// contextual/chaining (Types 5/6, formats 1/2/3) substitution - when the font has a <c>GSUB</c>
-    /// table and the requested <see cref="TextShapingFeatures"/> call for it. `lookupFlag`-driven
+    /// table and the requested <see cref="ShapeSettings"/> call for it. `lookupFlag`-driven
     /// mark filtering (ligature component matching only - see <see cref="GlyphSequenceFilter"/>) and
     /// per-language (non-default `LangSys`) feature selection are both honored via
     /// <see cref="GdefTable"/>/<see cref="OpenTypeLanguageTags"/>.
@@ -223,7 +37,7 @@ namespace PeachDrawing.Text.Internal.Text
         // real fonts never chain nested contextual lookups anywhere near this deep.
         private const int MaxNestedContextDepth = 8;
 
-        // The fallback script preference used when a run carries no TextShapingFeatures.ScriptTag (or
+        // The fallback script preference used when a run carries no ShapeSettings.ScriptTag (or
         // that tag isn't in the font's own ScriptList) - "latn" covers the common case, "DFLT" the
         // fallback GsubTable itself falls back to the font's first script if neither is present.
         // Internal (not private) so OpenTypeDescriptor.SupportsFeatureTags can check general capability
@@ -233,7 +47,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// <summary>
         /// Builds the ordered script-tag preference <c>GsubTable.GetActiveLookupIndices</c> tries: the
         /// run's own resolved OpenType script tag first (when the caller supplied one - see
-        /// <see cref="TextShapingFeatures.ScriptTag"/>, typically <see cref="OpenTypeScriptTags.Resolve"/>
+        /// <see cref="ShapeSettings.ScriptTag"/>, typically <see cref="OpenTypeScriptTags.Resolve"/>
         /// applied to a run's <see cref="ScriptRunResolver"/>-resolved script), falling back to
         /// <see cref="ScriptPreference"/>'s existing <c>"latn"</c>/<c>"DFLT"</c> chain - never worse than
         /// before this parameter existed for a run that doesn't supply one, or whose script isn't in the
@@ -252,7 +66,7 @@ namespace PeachDrawing.Text.Internal.Text
         // or <value> - 1 for an explicit font-feature-settings tag with an integer greater than 1, per
         // CSS Fonts Level 3's "the value selects the Nth glyph alternate" rule. A lookup of any other
         // type at that index ignores the paired value entirely.
-        private static readonly ConditionalWeakTable<GsubTable, ConcurrentDictionary<TextShapingFeatures, SortedDictionary<int, int>>> LookupIndexCache = new();
+        private static readonly ConditionalWeakTable<GsubTable, ConcurrentDictionary<ShapeSettings, SortedDictionary<int, int>>> LookupIndexCache = new();
 
         // Every tag any font-variant-* longhand (ligatures/caps/numeric/east-asian) can itself
         // produce - an explicit font-feature-settings entry for one of these is always superseded by
@@ -269,14 +83,14 @@ namespace PeachDrawing.Text.Internal.Text
         };
 
         private static readonly IReadOnlySet<string> EmptyTags = new HashSet<string>();
-        private static readonly IReadOnlySet<string> SmallCapsTags = new HashSet<string> { "smcp" };
-        private static readonly IReadOnlySet<string> AllSmallCapsTags = new HashSet<string> { "smcp", "c2sc" };
-        private static readonly IReadOnlySet<string> PetiteCapsTags = new HashSet<string> { "pcap" };
-        private static readonly IReadOnlySet<string> AllPetiteCapsTags = new HashSet<string> { "pcap", "c2pc" };
-        private static readonly IReadOnlySet<string> UnicaseTags = new HashSet<string> { "unic" };
-        private static readonly IReadOnlySet<string> TitlingCapsTags = new HashSet<string> { "titl" };
-        private static readonly IReadOnlySet<string> SubscriptTags = new HashSet<string> { "subs" };
-        private static readonly IReadOnlySet<string> SuperscriptTags = new HashSet<string> { "sups" };
+        private static readonly IReadOnlySet<string> SmallCapsTags = new HashSet<string> { "smcp" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> AllSmallCapsTags = new HashSet<string> { "smcp", "c2sc" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> PetiteCapsTags = new HashSet<string> { "pcap" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> AllPetiteCapsTags = new HashSet<string> { "pcap", "c2pc" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> UnicaseTags = new HashSet<string> { "unic" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> TitlingCapsTags = new HashSet<string> { "titl" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> SubscriptTags = new HashSet<string> { "subs" }.ToFrozenSet();
+        private static readonly IReadOnlySet<string> SuperscriptTags = new HashSet<string> { "sups" }.ToFrozenSet();
 
         /// <summary>
         /// The GSUB feature tag(s) that implement <paramref name="capsFeature"/> - the single source
@@ -284,14 +98,14 @@ namespace PeachDrawing.Text.Internal.Text
         /// by <see cref="Shape"/>'s own tag computation and by <see cref="OpenTypeDescriptor.SupportsFeatureTags"/>
         /// callers building a capability-query tag set for a given keyword.
         /// </summary>
-        public static IReadOnlySet<string> GetFeatureTags(FontVariantCapsFeature capsFeature) => capsFeature switch
+        public static IReadOnlySet<string> GetFeatureTags(CapsMode capsFeature) => capsFeature switch
         {
-            FontVariantCapsFeature.SmallCaps => SmallCapsTags,
-            FontVariantCapsFeature.AllSmallCaps => AllSmallCapsTags,
-            FontVariantCapsFeature.PetiteCaps => PetiteCapsTags,
-            FontVariantCapsFeature.AllPetiteCaps => AllPetiteCapsTags,
-            FontVariantCapsFeature.Unicase => UnicaseTags,
-            FontVariantCapsFeature.TitlingCaps => TitlingCapsTags,
+            CapsMode.SmallCaps => SmallCapsTags,
+            CapsMode.AllSmallCaps => AllSmallCapsTags,
+            CapsMode.PetiteCaps => PetiteCapsTags,
+            CapsMode.AllPetiteCaps => AllPetiteCapsTags,
+            CapsMode.Unicase => UnicaseTags,
+            CapsMode.TitlingCaps => TitlingCapsTags,
             _ => EmptyTags,
         };
 
@@ -301,20 +115,20 @@ namespace PeachDrawing.Text.Internal.Text
         /// by <see cref="Shape"/>'s own tag computation and by the capability query that decides whether
         /// a run gets real substitution or a synthesized sub/superscript.
         /// </summary>
-        public static IReadOnlySet<string> GetFeatureTags(FontVariantPositionFeature positionFeature) => positionFeature switch
+        public static IReadOnlySet<string> GetFeatureTags(SubSuperMode positionFeature) => positionFeature switch
         {
-            FontVariantPositionFeature.Sub => SubscriptTags,
-            FontVariantPositionFeature.Super => SuperscriptTags,
+            SubSuperMode.Sub => SubscriptTags,
+            SubSuperMode.Super => SuperscriptTags,
             _ => EmptyTags,
         };
 
         /// <summary>Returns a mutable list so <see cref="GposPositioner.Apply"/> can add its own
         /// positioning deltas in place after GSUB substitution runs - see
         /// <see cref="OpenTypeDescriptor.Shape"/>, the only real caller (returned to its own callers
-        /// as <c>IReadOnlyList&lt;ShapedGlyph&gt;</c>).</summary>
-        public static List<ShapedGlyph> Shape(OpenTypeDescriptor descriptor, string text, TextShapingFeatures features)
+        /// as <c>IReadOnlyList&lt;PlacedGlyph&gt;</c>).</summary>
+        public static List<PlacedGlyph> Shape(OpenTypeDescriptor descriptor, string text, ShapeSettings features)
         {
-            List<ShapedGlyph> glyphs = MapToGlyphs(descriptor, text, features.EmojiMode);
+            List<PlacedGlyph> glyphs = MapToGlyphs(descriptor, text, features.EmojiMode);
             if (glyphs.Count == 0 || IsEmpty(features))
                 return glyphs;
 
@@ -406,10 +220,10 @@ namespace PeachDrawing.Text.Internal.Text
         /// <summary>
         /// Dispatches one lookup by its real (post-Extension-unwrapping) type - the single switch every
         /// stage of <see cref="Shape"/> shares (the main per-feature pass, and the <c>ccmp</c>/<c>locl</c>
-        /// pre-stage <see cref="TextShapingFeatures.JoiningForms"/> needs), so a lookup type gains
+        /// pre-stage <see cref="ShapeSettings.JoiningForms"/> needs), so a lookup type gains
         /// support in exactly one place regardless of which stage ends up needing it.
         /// </summary>
-        private static void ApplyLookup(GsubTable gsub, int lookupIndex, int alternateIndex, List<ShapedGlyph> glyphs, GdefTable? gdef)
+        private static void ApplyLookup(GsubTable gsub, int lookupIndex, int alternateIndex, List<PlacedGlyph> glyphs, GdefTable? gdef)
         {
             switch (gsub.GetResolvedLookupType(lookupIndex))
             {
@@ -458,19 +272,19 @@ namespace PeachDrawing.Text.Internal.Text
         // internal rather than private: lets a test prove JoiningForms alone (with every other field at
         // its "empty" value) does NOT trip this early-return - see ApplyArabicJoiningFeatures's own
         // synthetic tests.
-        internal static bool IsEmpty(TextShapingFeatures features) =>
-            features.Ligatures == LigatureFeatures.None
-            && features.Caps == FontVariantCapsFeature.None
-            && features.Numeric == NumericFeatures.None
-            && features.EastAsian == EastAsianFeatures.None
-            && features.Position == FontVariantPositionFeature.None
+        internal static bool IsEmpty(ShapeSettings features) =>
+            features.Ligatures == LigatureSet.None
+            && features.Caps == CapsMode.None
+            && features.Numeric == NumeralSet.None
+            && features.EastAsian == EastAsianSet.None
+            && features.Position == SubSuperMode.None
             && (features.ExplicitFeatures is null || features.ExplicitFeatures.Count == 0)
             && (features.JoiningForms is null || features.JoiningForms.Count == 0)
             && (features.UseCategories is null || features.UseCategories.Count == 0);
 
-        private static List<ShapedGlyph> MapToGlyphs(OpenTypeDescriptor descriptor, string text, EmojiMode emojiMode)
+        private static List<PlacedGlyph> MapToGlyphs(OpenTypeDescriptor descriptor, string text, EmojiMode emojiMode)
         {
-            var result = new List<ShapedGlyph>(text.Length);
+            var result = new List<PlacedGlyph>(text.Length);
             bool symbol = descriptor.FontFace.cmap.symbol;
             int clusterStart = 0;
             int previousCodepoint = -1;
@@ -513,7 +327,7 @@ namespace PeachDrawing.Text.Internal.Text
                     result[^1] = result[^1] with { GlyphIndex = sequenceGlyph };
                 }
 
-                result.Add(new ShapedGlyph(glyphIndex, clusterStart, utf16Length, IsHiddenIgnorable: hiddenIgnorable));
+                result.Add(new PlacedGlyph(glyphIndex, clusterStart, utf16Length, IsHiddenIgnorable: hiddenIgnorable));
                 previousCodepoint = rune.Value;
                 clusterStart += utf16Length;
             }
@@ -521,7 +335,7 @@ namespace PeachDrawing.Text.Internal.Text
             return result;
         }
 
-        private static SortedDictionary<int, int> GetActiveLookupIndices(GsubTable gsub, TextShapingFeatures features)
+        private static SortedDictionary<int, int> GetActiveLookupIndices(GsubTable gsub, ShapeSettings features)
         {
             var perTableCache = LookupIndexCache.GetOrCreateValue(gsub);
             return perTableCache.GetOrAdd(features, key =>
@@ -562,33 +376,33 @@ namespace PeachDrawing.Text.Internal.Text
                     defaultTags.Add("pres"); defaultTags.Add("psts");
                 }
 
-                if ((key.Ligatures & LigatureFeatures.Common) != 0) { defaultTags.Add("liga"); defaultTags.Add("clig"); }
-                if ((key.Ligatures & LigatureFeatures.Required) != 0) defaultTags.Add("rlig");
-                if ((key.Ligatures & LigatureFeatures.Discretionary) != 0) defaultTags.Add("dlig");
-                if ((key.Ligatures & LigatureFeatures.Historical) != 0) defaultTags.Add("hlig");
-                if ((key.Ligatures & LigatureFeatures.Contextual) != 0) defaultTags.Add("calt");
+                if ((key.Ligatures & LigatureSet.Common) != 0) { defaultTags.Add("liga"); defaultTags.Add("clig"); }
+                if ((key.Ligatures & LigatureSet.Required) != 0) defaultTags.Add("rlig");
+                if ((key.Ligatures & LigatureSet.Discretionary) != 0) defaultTags.Add("dlig");
+                if ((key.Ligatures & LigatureSet.Historical) != 0) defaultTags.Add("hlig");
+                if ((key.Ligatures & LigatureSet.Contextual) != 0) defaultTags.Add("calt");
 
                 foreach (string tag in GetFeatureTags(key.Caps)) defaultTags.Add(tag);
                 foreach (string tag in GetFeatureTags(key.Position)) defaultTags.Add(tag);
 
-                if ((key.Numeric & NumericFeatures.LiningNums) != 0) defaultTags.Add("lnum");
-                if ((key.Numeric & NumericFeatures.OldstyleNums) != 0) defaultTags.Add("onum");
-                if ((key.Numeric & NumericFeatures.ProportionalNums) != 0) defaultTags.Add("pnum");
-                if ((key.Numeric & NumericFeatures.TabularNums) != 0) defaultTags.Add("tnum");
-                if ((key.Numeric & NumericFeatures.DiagonalFractions) != 0) defaultTags.Add("frac");
-                if ((key.Numeric & NumericFeatures.StackedFractions) != 0) defaultTags.Add("afrc");
-                if ((key.Numeric & NumericFeatures.Ordinal) != 0) defaultTags.Add("ordn");
-                if ((key.Numeric & NumericFeatures.SlashedZero) != 0) defaultTags.Add("zero");
+                if ((key.Numeric & NumeralSet.LiningNums) != 0) defaultTags.Add("lnum");
+                if ((key.Numeric & NumeralSet.OldstyleNums) != 0) defaultTags.Add("onum");
+                if ((key.Numeric & NumeralSet.ProportionalNums) != 0) defaultTags.Add("pnum");
+                if ((key.Numeric & NumeralSet.TabularNums) != 0) defaultTags.Add("tnum");
+                if ((key.Numeric & NumeralSet.DiagonalFractions) != 0) defaultTags.Add("frac");
+                if ((key.Numeric & NumeralSet.StackedFractions) != 0) defaultTags.Add("afrc");
+                if ((key.Numeric & NumeralSet.Ordinal) != 0) defaultTags.Add("ordn");
+                if ((key.Numeric & NumeralSet.SlashedZero) != 0) defaultTags.Add("zero");
 
-                if ((key.EastAsian & EastAsianFeatures.Jis78) != 0) defaultTags.Add("jp78");
-                if ((key.EastAsian & EastAsianFeatures.Jis83) != 0) defaultTags.Add("jp83");
-                if ((key.EastAsian & EastAsianFeatures.Jis90) != 0) defaultTags.Add("jp90");
-                if ((key.EastAsian & EastAsianFeatures.Jis04) != 0) defaultTags.Add("jp04");
-                if ((key.EastAsian & EastAsianFeatures.Simplified) != 0) defaultTags.Add("smpl");
-                if ((key.EastAsian & EastAsianFeatures.Traditional) != 0) defaultTags.Add("trad");
-                if ((key.EastAsian & EastAsianFeatures.FullWidth) != 0) defaultTags.Add("fwid");
-                if ((key.EastAsian & EastAsianFeatures.ProportionalWidth) != 0) defaultTags.Add("pwid");
-                if ((key.EastAsian & EastAsianFeatures.Ruby) != 0) defaultTags.Add("ruby");
+                if ((key.EastAsian & EastAsianSet.Jis78) != 0) defaultTags.Add("jp78");
+                if ((key.EastAsian & EastAsianSet.Jis83) != 0) defaultTags.Add("jp83");
+                if ((key.EastAsian & EastAsianSet.Jis90) != 0) defaultTags.Add("jp90");
+                if ((key.EastAsian & EastAsianSet.Jis04) != 0) defaultTags.Add("jp04");
+                if ((key.EastAsian & EastAsianSet.Simplified) != 0) defaultTags.Add("smpl");
+                if ((key.EastAsian & EastAsianSet.Traditional) != 0) defaultTags.Add("trad");
+                if ((key.EastAsian & EastAsianSet.FullWidth) != 0) defaultTags.Add("fwid");
+                if ((key.EastAsian & EastAsianSet.ProportionalWidth) != 0) defaultTags.Add("pwid");
+                if ((key.EastAsian & EastAsianSet.Ruby) != 0) defaultTags.Add("ruby");
 
                 Dictionary<string, int>? customAltIndexByTag = null;
                 if (key.ExplicitFeatures is not null)
@@ -647,10 +461,10 @@ namespace PeachDrawing.Text.Internal.Text
         /// with a single-glyph output sequence - confirmed directly against Noto Sans Arabic, whose own
         /// <c>init</c>/<c>medi</c>/<c>fina</c> lookups are Type 2 despite being semantically 1:1 - so
         /// both are handled here. <paramref name="formsByClusterStart"/> is keyed by each source
-        /// codepoint's own UTF-16 offset (<see cref="ShapedGlyph.ClusterStart"/>) rather than by glyph
+        /// codepoint's own UTF-16 offset (<see cref="PlacedGlyph.ClusterStart"/>) rather than by glyph
         /// position, since <paramref name="glyphs"/> may already have been expanded by an earlier stage
         /// (the <c>ccmp</c>/<c>locl</c> pre-stage <see cref="Shape"/> runs immediately before this) - a
-        /// glyph with <see cref="ShapedGlyph.ClusterLength"/> 0 is one of that expansion's own trailing
+        /// glyph with <see cref="PlacedGlyph.ClusterLength"/> 0 is one of that expansion's own trailing
         /// output glyphs (e.g. a mark split off a decomposed base letter), never itself a joining
         /// position, so it's skipped rather than mis-keyed against the wrong source codepoint entirely.
         /// A font whose positional forms are (unusually) implemented as a contextual/chaining lookup
@@ -660,7 +474,7 @@ namespace PeachDrawing.Text.Internal.Text
         // internal rather than private: lets tests exercise this directly against a synthetic GsubTable
         // + hand-built glyph list, bypassing cmap/real-text shaping - same rationale as
         // ApplySequenceContextLookup's own internal visibility.
-        internal static void ApplyArabicJoiningFeatures(GsubTable gsub, List<ShapedGlyph> glyphs, IReadOnlyDictionary<int, ArabicJoiningForm> formsByClusterStart, string? languageTag, IReadOnlyList<string> scriptPreference)
+        internal static void ApplyArabicJoiningFeatures(GsubTable gsub, List<PlacedGlyph> glyphs, IReadOnlyDictionary<int, ArabicJoiningForm> formsByClusterStart, string? languageTag, IReadOnlyList<string> scriptPreference)
         {
             // Resolve each requested tag's active lookups once, not once per position.
             Dictionary<string, IReadOnlyList<int>>? lookupsByTag = null;
@@ -739,19 +553,19 @@ namespace PeachDrawing.Text.Internal.Text
         /// joining-form model, which none of these four use. The
         /// final "standard typographic presentation" group (<c>abvs</c>/<c>blws</c>/<c>haln</c>/
         /// <c>pres</c>/<c>psts</c>) runs afterward, folded into <see cref="Shape"/>'s own ordered
-        /// general feature pass (see <see cref="GetActiveLookupIndices(GsubTable, TextShapingFeatures)"/>'s
+        /// general feature pass (see <see cref="GetActiveLookupIndices(GsubTable, ShapeSettings)"/>'s
         /// own <c>UseCategories</c> check) rather than applied here directly - unlike <c>rphf</c>/the
         /// basic features, HarfBuzz runs this group after clearing per-syllable state entirely, so it
         /// has no per-syllable masking concern this method's own stages need to replicate.
         ///
-        /// Every stage here keys a glyph's own semantic content by <see cref="ShapedGlyph.ClusterStart"/>,
+        /// Every stage here keys a glyph's own semantic content by <see cref="PlacedGlyph.ClusterStart"/>,
         /// never by raw glyph-list position - the same technique <see cref="ApplyArabicJoiningFeatures"/>
         /// uses and for the identical reason: an earlier stage (nukt/ccmp composing or decomposing a
         /// glyph, rphf/the basic features merging a conjunct into one ligature glyph) can change
         /// <paramref name="glyphs"/>'s own count before a later stage runs, and ClusterStart is what
         /// keeps every later stage pointed at the right semantic content regardless.
         /// </summary>
-        private static void ApplyUseShaping(GsubTable gsub, List<ShapedGlyph> glyphs, IReadOnlyList<UseCategory> useCategories,
+        private static void ApplyUseShaping(GsubTable gsub, List<PlacedGlyph> glyphs, IReadOnlyList<UseCategory> useCategories,
             string? languageTag, IReadOnlyList<string> scriptPreference, GdefTable? gdef)
         {
             // Snapshot: ClusterStart -> initial category, computed before any substitution in this
@@ -853,7 +667,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// font whose `rphf` is (unusually) implemented as a contextual/chaining lookup instead
         /// silently produces no reph.
         /// </summary>
-        private static bool TryApplyRphf(GsubTable gsub, List<ShapedGlyph> glyphs, int start, GdefTable? gdef,
+        private static bool TryApplyRphf(GsubTable gsub, List<PlacedGlyph> glyphs, int start, GdefTable? gdef,
             string? languageTag, IReadOnlyList<string> scriptPreference)
         {
             foreach (int lookupIndex in gsub.GetActiveLookupIndices(scriptPreference, languageTag, RphfTags))
@@ -883,13 +697,13 @@ namespace PeachDrawing.Text.Internal.Text
 
         /// <summary>
         /// Finds the glyph that genuinely represents source position <paramref name="clusterStart"/> -
-        /// skipping any glyph with <see cref="ShapedGlyph.ClusterLength"/> 0, since a Multiple
+        /// skipping any glyph with <see cref="PlacedGlyph.ClusterLength"/> 0, since a Multiple
         /// Substitution's own trailing output glyph carries the *next* source character's own
         /// ClusterStart (see <c>ApplyMultipleSubstitutionAt</c>'s convention), not its own; without this
         /// skip, such a glyph could be returned instead of the real next-syllable-start glyph whenever
         /// the two happen to share that value, corrupting the caller's own syllable-boundary resolution.
         /// </summary>
-        private static int FindGlyphIndexByClusterStart(List<ShapedGlyph> glyphs, int clusterStart)
+        private static int FindGlyphIndexByClusterStart(List<PlacedGlyph> glyphs, int clusterStart)
         {
             for (var i = 0; i < glyphs.Count; i++)
                 if (glyphs[i].ClusterStart == clusterStart && glyphs[i].ClusterLength > 0)
@@ -906,7 +720,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// </summary>
         // internal rather than private - see ApplyMultipleSubstitutionLookup's identical rationale
         // (here, testing the lookupFlag/GDEF mark-skip retrofit directly).
-        internal static void ApplyLigatureLookup(GsubLigatureLookup lookup, List<ShapedGlyph> glyphs, GdefTable? gdef)
+        internal static void ApplyLigatureLookup(GsubLigatureLookup lookup, List<PlacedGlyph> glyphs, GdefTable? gdef)
         {
             // One pair of scratch lists for the whole lookup, not a fresh pair per candidate ligature
             // per glyph position. The match walk below runs once for every position and on all but a
@@ -945,10 +759,10 @@ namespace PeachDrawing.Text.Internal.Text
         /// between two ligature-forming base glyphs), which stays in the glyph stream rather than
         /// being consumed by the ligature, moved to immediately after it - or 0 if nothing matched.
         /// </summary>
-        private static int ApplyLigatureAt(GsubLigatureLookup lookup, List<ShapedGlyph> glyphs, int index, GdefTable? gdef,
+        private static int ApplyLigatureAt(GsubLigatureLookup lookup, List<PlacedGlyph> glyphs, int index, GdefTable? gdef,
             ref LigatureMatchScratch scratch)
         {
-            if (!TryMatchLigature(lookup, glyphs, index, gdef, ref scratch, out ShapedGlyph merged, out int spanLength, out var skippedOffsets))
+            if (!TryMatchLigature(lookup, glyphs, index, gdef, ref scratch, out PlacedGlyph merged, out int spanLength, out var skippedOffsets))
                 return 0;
 
             if (skippedOffsets.Count == 0)
@@ -958,7 +772,7 @@ namespace PeachDrawing.Text.Internal.Text
                 return 1;
             }
 
-            var skippedGlyphs = new List<ShapedGlyph>(skippedOffsets.Count);
+            var skippedGlyphs = new List<PlacedGlyph>(skippedOffsets.Count);
             foreach (int offset in skippedOffsets)
                 skippedGlyphs.Add(glyphs[index + offset]);
 
@@ -969,9 +783,9 @@ namespace PeachDrawing.Text.Internal.Text
             return 1 + skippedGlyphs.Count;
         }
 
-        private static bool TryMatchLigature(GsubLigatureLookup lookup, List<ShapedGlyph> glyphs, int index, GdefTable? gdef,
+        private static bool TryMatchLigature(GsubLigatureLookup lookup, List<PlacedGlyph> glyphs, int index, GdefTable? gdef,
             ref LigatureMatchScratch scratch,
-            out ShapedGlyph merged, out int spanLength, [NotNullWhen(true)] out List<int>? skippedOffsets)
+            out PlacedGlyph merged, out int spanLength, [NotNullWhen(true)] out List<int>? skippedOffsets)
         {
             merged = default;
             spanLength = 0;
@@ -1031,18 +845,18 @@ namespace PeachDrawing.Text.Internal.Text
                         continue;
 
                     spanLength = pos - index;
-                    ShapedGlyph first = glyphs[index];
-                    ShapedGlyph last = glyphs[matched.Count > 0 ? matched[^1] : index];
+                    PlacedGlyph first = glyphs[index];
+                    PlacedGlyph last = glyphs[matched.Count > 0 ? matched[^1] : index];
 
                     // Component 0 is the coverage-matched first glyph; components 1..N are each
                     // matched component's own real glyph-list position, in the same order
-                    // TryMatchLigature just matched them - see ShapedGlyph.LigatureComponentClusterStarts.
+                    // TryMatchLigature just matched them - see PlacedGlyph.LigatureComponentClusterStarts.
                     var componentClusterStarts = new int[matched.Count + 1];
                     componentClusterStarts[0] = first.ClusterStart;
                     for (int c = 0; c < matched.Count; c++)
                         componentClusterStarts[c + 1] = glyphs[matched[c]].ClusterStart;
 
-                    merged = new ShapedGlyph(ligature.LigatureGlyph, first.ClusterStart, last.ClusterStart + last.ClusterLength - first.ClusterStart,
+                    merged = new PlacedGlyph(ligature.LigatureGlyph, first.ClusterStart, last.ClusterStart + last.ClusterLength - first.ClusterStart,
                         LigatureComponentClusterStarts: componentClusterStarts);
                     skippedOffsets = skipped;
                     return true;
@@ -1066,7 +880,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// <paramref name="glyphs"/>'s count, so the end-to-start walk needs no index reconciliation
         /// as earlier (higher-index) positions are substituted.
         /// </summary>
-        internal static void ApplyReverseChainSingleSubstitutionLookup(GsubReverseChainSingleSubstLookup lookup, List<ShapedGlyph> glyphs, GdefTable? gdef, CoverageTable? markFilteringSet)
+        internal static void ApplyReverseChainSingleSubstitutionLookup(GsubReverseChainSingleSubstLookup lookup, List<PlacedGlyph> glyphs, GdefTable? gdef, CoverageTable? markFilteringSet)
         {
             for (int i = glyphs.Count - 1; i >= 0; i--)
             {
@@ -1109,13 +923,13 @@ namespace PeachDrawing.Text.Internal.Text
         /// or split, so unlike ligature substitution this never changes <paramref name="glyphs"/>'s
         /// count (and so never affects a shaped-glyph count taken before vs. after, e.g. letter-spacing).
         /// </summary>
-        private static void ApplySingleSubstitutionLookup(GsubSingleSubstitutionLookup lookup, List<ShapedGlyph> glyphs)
+        private static void ApplySingleSubstitutionLookup(GsubSingleSubstitutionLookup lookup, List<PlacedGlyph> glyphs)
         {
             for (int i = 0; i < glyphs.Count; i++)
                 ApplySingleSubstitutionAt(lookup, glyphs, i);
         }
 
-        private static void ApplySingleSubstitutionAt(GsubSingleSubstitutionLookup lookup, List<ShapedGlyph> glyphs, int i)
+        private static void ApplySingleSubstitutionAt(GsubSingleSubstitutionLookup lookup, List<PlacedGlyph> glyphs, int i)
         {
             ushort glyphId = (ushort)glyphs[i].GlyphIndex;
             for (var s = 0; s < lookup.Subtables.Count; s++)
@@ -1137,13 +951,13 @@ namespace PeachDrawing.Text.Internal.Text
         /// glyph's alternate set - like single substitution, this never changes <paramref name="glyphs"/>'s
         /// count.
         /// </summary>
-        private static void ApplyAlternateSubstitutionLookup(GsubAlternateSubstitutionLookup lookup, List<ShapedGlyph> glyphs, int alternateIndex)
+        private static void ApplyAlternateSubstitutionLookup(GsubAlternateSubstitutionLookup lookup, List<PlacedGlyph> glyphs, int alternateIndex)
         {
             for (int i = 0; i < glyphs.Count; i++)
                 ApplyAlternateSubstitutionAt(lookup, glyphs, i, alternateIndex);
         }
 
-        private static void ApplyAlternateSubstitutionAt(GsubAlternateSubstitutionLookup lookup, List<ShapedGlyph> glyphs, int i, int alternateIndex)
+        private static void ApplyAlternateSubstitutionAt(GsubAlternateSubstitutionLookup lookup, List<PlacedGlyph> glyphs, int i, int alternateIndex)
         {
             ushort glyphId = (ushort)glyphs[i].GlyphIndex;
             for (var s = 0; s < lookup.Subtables.Count; s++)
@@ -1167,7 +981,7 @@ namespace PeachDrawing.Text.Internal.Text
         // internal rather than private: lets tests exercise the matching/application algorithm
         // directly against a synthetic GsubTable + hand-built glyph list, without also needing to
         // control a real font's cmap (see GsubMultipleAndContextualSyntheticTests).
-        internal static void ApplyMultipleSubstitutionLookup(GsubMultipleSubstitutionLookup lookup, List<ShapedGlyph> glyphs)
+        internal static void ApplyMultipleSubstitutionLookup(GsubMultipleSubstitutionLookup lookup, List<PlacedGlyph> glyphs)
         {
             int i = 0;
             while (i < glyphs.Count)
@@ -1179,7 +993,7 @@ namespace PeachDrawing.Text.Internal.Text
 
         /// <summary>Expands the glyph at <paramref name="i"/> in place if a subtable covers it,
         /// returning how many glyphs now occupy its former position, or 0 if nothing matched.</summary>
-        private static int ApplyMultipleSubstitutionAt(GsubMultipleSubstitutionLookup lookup, List<ShapedGlyph> glyphs, int i)
+        private static int ApplyMultipleSubstitutionAt(GsubMultipleSubstitutionLookup lookup, List<PlacedGlyph> glyphs, int i)
         {
             ushort glyphId = (ushort)glyphs[i].GlyphIndex;
             for (var s = 0; s < lookup.Subtables.Count; s++)
@@ -1193,8 +1007,8 @@ namespace PeachDrawing.Text.Internal.Text
                 if (sequence.Length == 0)
                     continue;
 
-                ShapedGlyph original = glyphs[i];
-                var expanded = new ShapedGlyph[sequence.Length];
+                PlacedGlyph original = glyphs[i];
+                var expanded = new PlacedGlyph[sequence.Length];
 
                 // The first output glyph keeps the original source-text span; every subsequent one
                 // gets a zero-length span anchored at its end - so CMapInfo.AddShapedText's
@@ -1202,9 +1016,9 @@ namespace PeachDrawing.Text.Internal.Text
                 // independently claim the whole original span (which would make PDF text extraction
                 // over-copy the source character N times). Substring(x, 0) already resolves such a
                 // span to "" with no special-casing needed downstream.
-                expanded[0] = new ShapedGlyph(sequence[0], original.ClusterStart, original.ClusterLength);
+                expanded[0] = new PlacedGlyph(sequence[0], original.ClusterStart, original.ClusterLength);
                 for (int k = 1; k < sequence.Length; k++)
-                    expanded[k] = new ShapedGlyph(sequence[k], original.ClusterStart + original.ClusterLength, 0);
+                    expanded[k] = new PlacedGlyph(sequence[k], original.ClusterStart + original.ClusterLength, 0);
 
                 glyphs.RemoveAt(i);
                 glyphs.InsertRange(i, expanded);
@@ -1230,7 +1044,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// </summary>
         // internal rather than private - see ApplyMultipleSubstitutionLookup's identical rationale.
         internal static void ApplySequenceContextLookup(GsubTable gsub, IReadOnlyList<GsubSequenceContextSubtable> subtables,
-            List<ShapedGlyph> glyphs, GdefTable? gdef, ushort lookupFlag, CoverageTable? markFilteringSet)
+            List<PlacedGlyph> glyphs, GdefTable? gdef, ushort lookupFlag, CoverageTable? markFilteringSet)
         {
             int i = 0;
             while (i < glyphs.Count)
@@ -1255,7 +1069,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// <paramref name="depth"/> guard against runaway recursion already accounts for.
         /// </summary>
         private static int TryApplySequenceContextAt(GsubTable gsub, IReadOnlyList<GsubSequenceContextSubtable> subtables,
-            List<ShapedGlyph> glyphs, int pos, GdefTable? gdef, ushort lookupFlag, CoverageTable? markFilteringSet, int depth)
+            List<PlacedGlyph> glyphs, int pos, GdefTable? gdef, ushort lookupFlag, CoverageTable? markFilteringSet, int depth)
         {
             for (var s = 0; s < subtables.Count; s++)
             {
@@ -1276,7 +1090,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// <c>pos</c> itself - the outer walk's own anchor is never skip-adjusted), or null if no
         /// rule in <paramref name="subtable"/> matches at <paramref name="pos"/>.</summary>
         private static (int[] InputIndices, GsubSequenceLookupRecord[] Records)? TryMatchSequenceContext(
-            GsubSequenceContextSubtable subtable, List<ShapedGlyph> glyphs, int pos, ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet)
+            GsubSequenceContextSubtable subtable, List<PlacedGlyph> glyphs, int pos, ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet)
         {
             switch (subtable.Format)
             {
@@ -1342,7 +1156,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// the real glyph-list index of every input position (index 0 is <paramref name="pos"/>
         /// itself), or null if the rule doesn't match.
         /// </summary>
-        private static int[]? TryMatchRule(GsubSequenceRule rule, List<ShapedGlyph> glyphs, int pos, bool matchGlyph,
+        private static int[]? TryMatchRule(GsubSequenceRule rule, List<PlacedGlyph> glyphs, int pos, bool matchGlyph,
             ClassDefTable? inputClassDef, ClassDefTable? backtrackClassDef, ClassDefTable? lookaheadClassDef,
             ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet)
         {
@@ -1392,9 +1206,9 @@ namespace PeachDrawing.Text.Internal.Text
         /// <paramref name="glyphs"/> before finding all <paramref name="count"/> positions (or
         /// immediately, if <paramref name="count"/> is 0). Internal (not private) so
         /// <see cref="GposPositioner"/>'s own Type 7/8 contextual-positioning matcher can reuse this
-        /// same skip-aware walk - it operates purely on <see cref="ShapedGlyph"/>/`lookupFlag`/GDEF,
+        /// same skip-aware walk - it operates purely on <see cref="PlacedGlyph"/>/`lookupFlag`/GDEF,
         /// with nothing GSUB-specific about it.</summary>
-        internal static int[]? FindParticipatingIndices(List<ShapedGlyph> glyphs, int start, int direction, int count,
+        internal static int[]? FindParticipatingIndices(List<PlacedGlyph> glyphs, int start, int direction, int count,
             ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet)
         {
             if (count == 0)
@@ -1425,7 +1239,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// including the first, is its own <see cref="CoverageTable"/>). Returns the real glyph-list
         /// index of every input position, or null if the sequence doesn't match.</summary>
         private static int[]? TryMatchCoverageSequence(
-            CoverageTable[]? backtrack, CoverageTable[] input, CoverageTable[]? lookahead, List<ShapedGlyph> glyphs, int pos,
+            CoverageTable[]? backtrack, CoverageTable[] input, CoverageTable[]? lookahead, List<PlacedGlyph> glyphs, int pos,
             ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet)
         {
             backtrack ??= [];
@@ -1483,7 +1297,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// differently-classed context (see that method's own remarks) - guarded by
         /// <paramref name="depth"/> against a pathological/adversarial font nesting indefinitely.
         /// </summary>
-        private static int[] ApplyMatchedLookups(GsubTable gsub, List<ShapedGlyph> glyphs, int[] inputIndices,
+        private static int[] ApplyMatchedLookups(GsubTable gsub, List<PlacedGlyph> glyphs, int[] inputIndices,
             GsubSequenceLookupRecord[] records, int depth, GdefTable? gdef)
         {
             if (depth >= MaxNestedContextDepth || inputIndices.Length == 0)
@@ -1532,7 +1346,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// nested target - left unmodified, matching this file's existing "unsupported type is
         /// silently skipped" convention.
         /// </summary>
-        private static void ApplyNestedLookup(GsubTable gsub, List<ShapedGlyph> glyphs, int position, int lookupListIndex, int depth, GdefTable? gdef)
+        private static void ApplyNestedLookup(GsubTable gsub, List<PlacedGlyph> glyphs, int position, int lookupListIndex, int depth, GdefTable? gdef)
         {
             switch (gsub.GetResolvedLookupType(lookupListIndex))
             {

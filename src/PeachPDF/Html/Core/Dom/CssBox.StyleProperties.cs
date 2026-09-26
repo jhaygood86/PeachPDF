@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
@@ -417,26 +418,26 @@ namespace PeachPDF.Html.Core.Dom
         internal RFont GetActualFontAtSize(double fontSize) => DerivedStyle.GetActualFontAtSize(fontSize);
 
         /// <summary>Gets the resolved GSUB ligature features (CSS <c>font-variant-ligatures</c>) for this box's text.</summary>
-        public LigatureFeatures ActualFontVariantLigatures => DerivedStyle.ActualFontVariantLigatures;
+        public LigatureSet ActualFontVariantLigatures => DerivedStyle.ActualFontVariantLigatures;
 
         /// <summary>Gets the resolved CSS <c>font-kerning</c> value - false only for <c>none</c>.</summary>
         public bool ActualFontKerning => DerivedStyle.ActualFontKerning;
 
         /// <summary>
-        /// Gets the resolved CSS <c>font-variant-caps</c> feature - <see cref="FontVariantCapsFeature.None"/>
+        /// Gets the resolved CSS <c>font-variant-caps</c> feature - <see cref="CapsMode.None"/>
         /// when the value is <c>normal</c>, when it's a keyword the resolved font lacks full GSUB
         /// support for, or when <see cref="AddWord"/> is instead synthesizing the effect.
         /// </summary>
-        public FontVariantCapsFeature ActualFontVariantCaps => DerivedStyle.ActualFontVariantCaps;
+        public CapsMode ActualFontVariantCaps => DerivedStyle.ActualFontVariantCaps;
 
         /// <summary>The <c>font-variant-position</c> keyword this box asks for, before capability
         /// gating - see <see cref="DerivedStyle.RequestedFontVariantPosition"/>.</summary>
-        public FontVariantPositionFeature RequestedFontVariantPosition => DerivedStyle.RequestedFontVariantPosition;
+        public SubSuperMode RequestedFontVariantPosition => DerivedStyle.RequestedFontVariantPosition;
 
         /// <summary>The position feature real GSUB substitution will handle, or
-        /// <see cref="FontVariantPositionFeature.None"/> when it has to be synthesized instead - see
+        /// <see cref="SubSuperMode.None"/> when it has to be synthesized instead - see
         /// <see cref="DerivedStyle.ActualFontVariantPosition"/>.</summary>
-        public FontVariantPositionFeature ActualFontVariantPosition => DerivedStyle.ActualFontVariantPosition;
+        public SubSuperMode ActualFontVariantPosition => DerivedStyle.ActualFontVariantPosition;
 
         /// <summary>Gets the resolved explicit OpenType feature tags (CSS <c>font-feature-settings</c>) for this box's text.</summary>
         public IReadOnlyList<(string Tag, int Value)> ActualFontFeatureSettings => DerivedStyle.ActualFontFeatureSettings;
@@ -450,7 +451,7 @@ namespace PeachPDF.Html.Core.Dom
         /// explicit <c>font-feature-settings</c> tags) for this box's text - the one value actually
         /// threaded into every measure/paint call.
         /// </summary>
-        public TextShapingFeatures ActualTextShapingFeatures => DerivedStyle.ActualTextShapingFeatures;
+        public ShapeSettings ActualTextShapingFeatures => DerivedStyle.ActualTextShapingFeatures;
 
         /// <summary>
         /// <see cref="ActualTextShapingFeatures"/>, overridden with <paramref name="word"/>'s own
@@ -464,14 +465,14 @@ namespace PeachPDF.Html.Core.Dom
         /// of a word with none of the three - only evaluates <see cref="ActualTextShapingFeatures"/>
         /// once either way, so this costs nothing beyond the existing cached-property read. When the
         /// word also carries joining forms, this also copies
-        /// its own <see cref="CssRectWord.DisplayOrderReversed"/> into <see cref="TextShapingFeatures.ReverseForDisplay"/>
+        /// its own <see cref="CssRectWord.DisplayOrderReversed"/> into <see cref="ShapeSettings.ReverseForDisplay"/>
         /// - see that property's remarks for why an Arabic-family joining word needs shaping told to
         /// reverse its own output instead of being handed already-reversed text the way every other RTL
         /// word is. Always false at measurement time (bidi placement, which is what sets
         /// <see cref="CssRectWord.DisplayOrderReversed"/>, hasn't run yet), which is correct - a shaped
         /// run's total advance is order-independent, so measurement never needs the reversal.
         /// </summary>
-        internal TextShapingFeatures ResolveWordShapingFeatures(CssRect word)
+        internal ShapeSettings ResolveWordShapingFeatures(CssRect word)
         {
             var features = ActualTextShapingFeatures;
             if (word is not CssRectWord

@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -179,8 +180,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // what drawing two separate 'f' outlines would produce.
             var (g, font) = await Setup(BundledFonts.Ttf, 100);
 
-            var unligated = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, new TextShapingFeatures(LigatureFeatures.None))!;
-            var ligated = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, new TextShapingFeatures(LigatureFeatures.Default))!;
+            var unligated = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, new ShapeSettings(LigatureSet.None))!;
+            var ligated = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, new ShapeSettings(LigatureSet.Default))!;
 
             Assert.Equal(2, SubpathCount(unligated));
             Assert.Equal(1, SubpathCount(ligated));
@@ -196,16 +197,16 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // appears if the glyph run was actually merged rather than measured/drawn per codepoint.
             var (g, font) = await Setup(BundledFonts.Ttf, 100);
 
-            double RightEdge(LigatureFeatures features)
+            double RightEdge(LigatureSet features)
             {
-                var outline = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, new TextShapingFeatures(features))!;
+                var outline = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, new ShapeSettings(features))!;
                 var maxX = Points(outline).Max(p => p.X);
                 outline.Dispose();
                 return maxX;
             }
 
-            var unligated = RightEdge(LigatureFeatures.None);
-            var ligated = RightEdge(LigatureFeatures.Default);
+            var unligated = RightEdge(LigatureSet.None);
+            var ligated = RightEdge(LigatureSet.Default);
 
             Assert.True(ligated < unligated, $"expected the merged ligature glyph to advance less than two separate 'f's; ligated={ligated}, unligated={unligated}");
         }

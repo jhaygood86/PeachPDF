@@ -1,3 +1,4 @@
+﻿using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
@@ -16,25 +17,25 @@ namespace PeachPDF.Raster;
 internal sealed partial class RasterGraphics
 {
     // Measurement is the layout engine's own routine, so paint can never disagree with layout.
-    public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null)
+    public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null)
     {
         var realFont = ((FontAdapter)font).Font;
-        var size = FontHelper.MeasureString(str, realFont, XStringFormats.Default, features ?? TextShapingFeatures.Default);
+        var size = FontHelper.MeasureString(str, realFont, XStringFormats.Default, features ?? ShapeSettings.Default);
         return Utils.Convert(size, _pixelsPerPoint);
     }
 
-    public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) =>
-        ((FontAdapter)font).Font.Descriptor.Shape(str, features ?? TextShapingFeatures.Default).Count;
+    public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null) =>
+        Shaper.Shape(((FontAdapter)font).Font.Typeface, str, features ?? ShapeSettings.Default).Glyphs.Count;
 
     public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth) =>
         throw new NotSupportedException();
 
-    public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null) =>
+    public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) =>
         TextOutlineBuilder.Build(GetGraphicsPath(), ((FontAdapter)font).Font, _pixelsPerPoint, str, baselineOrigin, letterSpacing,
-            features ?? TextShapingFeatures.Default);
+            features ?? ShapeSettings.Default);
 
     public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0,
-        RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
+        RFontPalette? fontPalette = null, ShapeSettings? features = null)
     {
         var xFont = ((FontAdapter)font).Font;
         var descriptor = xFont.Descriptor;
@@ -46,9 +47,9 @@ internal sealed partial class RasterGraphics
         var baselineY = point.Y / _pixelsPerPoint + lineSpace * xFont.CellAscent / xFont.CellSpace;
         var originX = point.X / _pixelsPerPoint;
         var spacing = letterSpacing / _pixelsPerPoint;
-        var resolved = features ?? TextShapingFeatures.Default;
+        var resolved = features ?? ShapeSettings.Default;
 
-        var glyphs = descriptor.Shape(str, resolved);
+        var glyphs = Shaper.Shape(xFont.Typeface, str, resolved).Glyphs;
         var scale = xFont.Size / descriptor.UnitsPerEm;
         var skew = ItalicSkew(xFont);
         var contours = new FlatPath();

@@ -1,3 +1,5 @@
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Shaping;
 using System.Collections.Generic;
 using System.Linq;
 using PeachDrawing.Text.Internal.Text;
@@ -9,19 +11,19 @@ namespace PeachPDF.Tests.Text.Shaping.Use
     /// <summary>
     /// Coverage for <see cref="UseReorderer"/>, the ported <c>reorder_syllable_use</c> two-pass
     /// glyph-array reorder (issue #533, Phases 5b/5c). Glyph indices below are arbitrary but distinct, so
-    /// asserting the resulting <see cref="ShapedGlyph.GlyphIndex"/> order directly proves which glyph
+    /// asserting the resulting <see cref="PlacedGlyph.GlyphIndex"/> order directly proves which glyph
     /// physically moved where - not just that reordering "did something".
     /// </summary>
     public class UseReordererTests
     {
-        private static ShapedGlyph G(int glyphIndex) => new(glyphIndex, ClusterStart: glyphIndex, ClusterLength: 1);
+        private static PlacedGlyph G(int glyphIndex) => new(glyphIndex, ClusterStart: glyphIndex, ClusterLength: 1);
 
         [Fact]
         public void PreBaseVowel_MovesBeforeItsBase()
         {
             // KA + VOWEL SIGN I ("कि") - B VPre. No halant precedes the vowel, so it moves all the
             // way back to the syllable start.
-            var glyphs = new List<ShapedGlyph> { G(100), G(101) };
+            var glyphs = new List<PlacedGlyph> { G(100), G(101) };
             var categories = new[] { UseCategory.B, UseCategory.VPre };
 
             UseReorderer.ReorderSyllable(glyphs, categories, 0, 2);
@@ -32,7 +34,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
         [Fact]
         public void PostBaseVowel_IsNotMoved()
         {
-            var glyphs = new List<ShapedGlyph> { G(100), G(101) };
+            var glyphs = new List<PlacedGlyph> { G(100), G(101) };
             var categories = new[] { UseCategory.B, UseCategory.VPst };
 
             UseReorderer.ReorderSyllable(glyphs, categories, 0, 2);
@@ -51,7 +53,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
             // first, via 'half'/'cjct' before this pass ever runs, gets the more familiar
             // matra-before-the-whole-conjunct result instead - GsubShaper's USE stage runs those
             // features before this reorder pass for exactly that reason).
-            var glyphs = new List<ShapedGlyph> { G(100), G(101), G(102), G(103) };
+            var glyphs = new List<PlacedGlyph> { G(100), G(101), G(102), G(103) };
             var categories = new[] { UseCategory.B, UseCategory.H, UseCategory.B, UseCategory.VPre };
 
             UseReorderer.ReorderSyllable(glyphs, categories, 0, 4);
@@ -64,7 +66,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
         {
             // Repha + KA + VOWEL SIGN AA ("र्का", conceptually) - R B VPst. Repha moves past the base
             // consonant but stops right before the post-base vowel.
-            var glyphs = new List<ShapedGlyph> { G(100), G(101), G(102) };
+            var glyphs = new List<PlacedGlyph> { G(100), G(101), G(102) };
             var categories = new[] { UseCategory.R, UseCategory.B, UseCategory.VPst };
 
             UseReorderer.ReorderSyllable(glyphs, categories, 0, 3);
@@ -75,7 +77,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
         [Fact]
         public void RephaWithNoPostBaseGlyph_MovesToTheSyllablesEnd()
         {
-            var glyphs = new List<ShapedGlyph> { G(100), G(101) };
+            var glyphs = new List<PlacedGlyph> { G(100), G(101) };
             var categories = new[] { UseCategory.R, UseCategory.B };
 
             UseReorderer.ReorderSyllable(glyphs, categories, 0, 2);
@@ -93,7 +95,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
             // hand-derived against real HarfBuzz's own documented algorithm during this feature's own
             // research (see its recent-fixes entry), not merely reverse-engineered from this
             // implementation.
-            var glyphs = new List<ShapedGlyph> { G(100), G(101), G(102) };
+            var glyphs = new List<PlacedGlyph> { G(100), G(101), G(102) };
             var categories = new[] { UseCategory.R, UseCategory.B, UseCategory.VPre };
 
             UseReorderer.ReorderSyllable(glyphs, categories, 0, 3);
@@ -107,7 +109,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
             // Repha + KA + NUKTA + VOWEL SIGN AA - R B CMBlw VPst. CMBlw is deliberately excluded from
             // HarfBuzz's own POST_BASE_FLAGS64 (see UseReorderer's own remarks), so the forward walk
             // must skip past it and stop at the VPst glyph instead.
-            var glyphs = new List<ShapedGlyph> { G(100), G(101), G(102), G(103) };
+            var glyphs = new List<PlacedGlyph> { G(100), G(101), G(102), G(103) };
             var categories = new[] { UseCategory.R, UseCategory.B, UseCategory.CMBlw, UseCategory.VPst };
 
             UseReorderer.ReorderSyllable(glyphs, categories, 0, 4);
@@ -121,7 +123,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
             // Repha + KA + Bengali Sandhi Mark - R B FMAbv. FMAbv IS included in HarfBuzz's own
             // POST_BASE_FLAGS64 (unlike CMBlw/nukta), so pass 1's forward search must stop right before
             // it rather than sailing past it to the syllable's end.
-            var glyphs = new List<ShapedGlyph> { G(100), G(101), G(102) };
+            var glyphs = new List<PlacedGlyph> { G(100), G(101), G(102) };
             var categories = new[] { UseCategory.R, UseCategory.B, UseCategory.FMAbv };
 
             UseReorderer.ReorderSyllable(glyphs, categories, 0, 3);
@@ -132,7 +134,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
         [Fact]
         public void SyllableOfLengthOne_IsNeverTouched()
         {
-            var glyphs = new List<ShapedGlyph> { G(100) };
+            var glyphs = new List<PlacedGlyph> { G(100) };
             var categories = new[] { UseCategory.B };
 
             UseReorderer.ReorderSyllable(glyphs, categories, 0, 1);
@@ -145,7 +147,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
         {
             // A pre-base vowel classified (unusually) inside a NonCluster span must not be reordered -
             // ReorderAll gates on syllable type before ever calling ReorderSyllable.
-            var glyphs = new List<ShapedGlyph> { G(100), G(101) };
+            var glyphs = new List<PlacedGlyph> { G(100), G(101) };
             var categories = new[] { UseCategory.B, UseCategory.VPre };
             var syllables = new[] { new UseSyllable(0, 2, UseSyllableType.NonCluster) };
 
@@ -157,7 +159,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
         [Fact]
         public void ReorderAll_ReordersEachSyllableIndependently()
         {
-            var glyphs = new List<ShapedGlyph> { G(100), G(101), G(102), G(103) };
+            var glyphs = new List<PlacedGlyph> { G(100), G(101), G(102), G(103) };
             var categories = new[] { UseCategory.B, UseCategory.VPre, UseCategory.B, UseCategory.VPre };
             var syllables = new[]
             {

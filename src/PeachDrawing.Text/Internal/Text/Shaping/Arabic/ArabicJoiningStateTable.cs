@@ -1,3 +1,5 @@
+using PeachDrawing.Text.Unicode;
+
 // Ported from HarfBuzz's src/hb-ot-shaper-arabic.cc (arabic_state_table), retrieved 2026-09-04 from
 // https://github.com/harfbuzz/harfbuzz/blob/main/src/hb-ot-shaper-arabic.cc
 //

@@ -1,3 +1,5 @@
+using PeachDrawing.Text.Unicode;
+
 namespace PeachDrawing.Text.Internal.Text.Shaping.Use
 {
     /// <summary>

@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachDrawing.Text.Internal.Text;
 using System;
@@ -111,7 +112,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// (no real script in current use) reversed via <c>ReverseRunes</c> stays alignment-correct since
         /// that reversal is itself already Rune-based (surrogate pairs move as one unit).
         /// </summary>
-        public void AddShapedText(string text, TextShapingFeatures features, string? logicalText = null)
+        public void AddShapedText(string text, ShapeSettings features, string? logicalText = null)
         {
             if (text == null)
                 return;
@@ -120,7 +121,7 @@ namespace PeachDrawing.Text.Internal.Fonts
                 ? logicalText
                 : text;
 
-            foreach (ShapedGlyph glyph in _descriptor.Shape(text, features))
+            foreach (PlacedGlyph glyph in _descriptor.Shape(text, features))
             {
                 GlyphIndices[glyph.GlyphIndex] = null;
                 LigatureGlyphToText[glyph.GlyphIndex] = source.Substring(glyph.ClusterStart, glyph.ClusterLength);

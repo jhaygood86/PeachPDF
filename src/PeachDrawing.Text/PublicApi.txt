@@ -47,6 +47,103 @@ PeachDrawing.Text.ScriptPosition : struct
   method Void Deconstruct(out Double SizeScale, out Double BaselineShift)
   property Double BaselineShift { get; init; }
   property Double SizeScale { get; init; }
+PeachDrawing.Text.Shaping.CapsMode : enum Int32
+  AllPetiteCaps = 4
+  AllSmallCaps = 2
+  None = 0
+  PetiteCaps = 3
+  SmallCaps = 1
+  TitlingCaps = 6
+  Unicase = 5
+PeachDrawing.Text.Shaping.EastAsianSet : enum Int32
+  FullWidth = 64
+  Jis04 = 8
+  Jis78 = 1
+  Jis83 = 2
+  Jis90 = 4
+  None = 0
+  ProportionalWidth = 128
+  Ruby = 256
+  Simplified = 16
+  Traditional = 32
+PeachDrawing.Text.Shaping.FeatureSetting : struct
+  ctor(String Tag, Int32 Value)
+  method Boolean Equals(FeatureSetting other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out String Tag, out Int32 Value)
+  property Int32 Value { get; init; }
+  property String Tag { get; init; }
+PeachDrawing.Text.Shaping.GlyphRun : sealed class
+  property Double Advance { get; }
+  property IReadOnlyList<PlacedGlyph> Glyphs { get; }
+  property Typeface Typeface { get; }
+PeachDrawing.Text.Shaping.LigatureSet : enum Int32
+  Common = 1
+  Contextual = 16
+  Default = 19
+  Discretionary = 4
+  Historical = 8
+  None = 0
+  Required = 2
+PeachDrawing.Text.Shaping.NumeralSet : enum Int32
+  DiagonalFractions = 16
+  LiningNums = 1
+  None = 0
+  OldstyleNums = 2
+  Ordinal = 64
+  ProportionalNums = 4
+  SlashedZero = 128
+  StackedFractions = 32
+  TabularNums = 8
+PeachDrawing.Text.Shaping.PlacedGlyph : struct
+  ctor(Int32 GlyphIndex, Int32 ClusterStart, Int32 ClusterLength, Double XAdvanceDelta = 0, Double YAdvanceDelta = 0, Double XOffset = 0, Double YOffset = 0, Int32[] LigatureComponentClusterStarts = null, Nullable<Int32> AttachedToIndex = null, Boolean IsHiddenIgnorable = False)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(PlacedGlyph other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 GlyphIndex, out Int32 ClusterStart, out Int32 ClusterLength, out Double XAdvanceDelta, out Double YAdvanceDelta, out Double XOffset, out Double YOffset, out Int32[] LigatureComponentClusterStarts, out Nullable<Int32> AttachedToIndex, out Boolean IsHiddenIgnorable)
+  property Boolean IsHiddenIgnorable { get; init; }
+  property Double XAdvanceDelta { get; init; }
+  property Double XOffset { get; init; }
+  property Double YAdvanceDelta { get; init; }
+  property Double YOffset { get; init; }
+  property Int32 ClusterLength { get; init; }
+  property Int32 ClusterStart { get; init; }
+  property Int32 GlyphIndex { get; init; }
+  property Int32[] LigatureComponentClusterStarts { get; init; }
+  property Nullable<Int32> AttachedToIndex { get; init; }
+PeachDrawing.Text.Shaping.ShapeSettings : struct
+  ctor()
+  ctor(LigatureSet Ligatures = Default, CapsMode Caps = None, NumeralSet Numeric = None, EastAsianSet EastAsian = None, IReadOnlyList<FeatureSetting> ExplicitFeatures = null, Boolean Kerning = True, String Language = null, String ScriptTag = null, IReadOnlyList<ArabicJoiningForm> JoiningForms = null, IReadOnlyList<UseCategory> UseCategories = null, Boolean ReverseForDisplay = False, SubSuperMode Position = None, EmojiMode EmojiMode = Normal)
+  field static ShapeSettings Default
+  method Boolean Equals(Object obj)
+  method Boolean Equals(ShapeSettings other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out LigatureSet Ligatures, out CapsMode Caps, out NumeralSet Numeric, out EastAsianSet EastAsian, out IReadOnlyList<FeatureSetting> ExplicitFeatures, out Boolean Kerning, out String Language, out String ScriptTag, out IReadOnlyList<ArabicJoiningForm> JoiningForms, out IReadOnlyList<UseCategory> UseCategories, out Boolean ReverseForDisplay, out SubSuperMode Position, out EmojiMode EmojiMode)
+  property Boolean Kerning { get; init; }
+  property Boolean ReverseForDisplay { get; init; }
+  property CapsMode Caps { get; init; }
+  property EastAsianSet EastAsian { get; init; }
+  property EmojiMode EmojiMode { get; init; }
+  property IReadOnlyList<ArabicJoiningForm> JoiningForms { get; init; }
+  property IReadOnlyList<FeatureSetting> ExplicitFeatures { get; init; }
+  property IReadOnlyList<UseCategory> UseCategories { get; init; }
+  property LigatureSet Ligatures { get; init; }
+  property NumeralSet Numeric { get; init; }
+  property String Language { get; init; }
+  property String ScriptTag { get; init; }
+  property SubSuperMode Position { get; init; }
+PeachDrawing.Text.Shaping.Shaper : static class
+  method static GlyphRun Shape(Typeface typeface, String text, in ShapeSettings settings)
+  method static IReadOnlySet<String> GetFeatureTags(CapsMode caps)
+  method static IReadOnlySet<String> GetFeatureTags(SubSuperMode position)
+PeachDrawing.Text.Shaping.SubSuperMode : enum Int32
+  None = 0
+  Sub = 1
+  Super = 2
 PeachDrawing.Text.SyntheticStyle : enum Int32
   Bold = 1
   BoldItalic = 3
@@ -124,6 +221,26 @@ PeachDrawing.Text.TypefaceQuery : struct
   property Int32 Weight { get; init; }
   property Int32 Width { get; init; }
   property Nullable<Rune> MustCover { get; init; }
+PeachDrawing.Text.Unicode.ArabicJoining : static class
+  method static ArabicJoiningForm[] Resolve(IReadOnlyList<Int32> codepoints)
+  method static ArabicJoiningType TypeOf(Int32 codepoint)
+  method static ArabicJoiningType TypeOf(Rune rune)
+PeachDrawing.Text.Unicode.ArabicJoiningForm : enum Byte
+  Fin2 = 3
+  Fin3 = 4
+  Fina = 2
+  Init = 7
+  Isol = 1
+  Med2 = 6
+  Medi = 5
+  None = 0
+PeachDrawing.Text.Unicode.ArabicJoiningType : enum Byte
+  C = 3
+  D = 2
+  L = 4
+  R = 1
+  T = 5
+  U = 0
 PeachDrawing.Text.Unicode.BaseDirection : enum Byte
   Auto = 2
   Ltr = 0
@@ -226,6 +343,27 @@ PeachDrawing.Text.Unicode.Scripts : static class
   method static IReadOnlyList<String> ResolveLooked(IReadOnlyList<String> scripts)
   method static String Of(Int32 codepoint)
   method static String Of(Rune rune)
+PeachDrawing.Text.Unicode.UniversalShaping : static class
+  method static UseCategory Classify(Int32 codepoint)
+PeachDrawing.Text.Unicode.UseCategory : enum Byte
+  B = 1
+  CGJ = 2
+  CMAbv = 6
+  CMBlw = 7
+  FMAbv = 17
+  GB = 16
+  H = 3
+  O = 0
+  R = 5
+  VAbv = 9
+  VBlw = 10
+  VMAbv = 13
+  VMBlw = 14
+  VMPre = 12
+  VMPst = 15
+  VPre = 8
+  VPst = 11
+  ZWNJ = 4
 PeachDrawing.Text.Unicode.VerticalOrientation : static class
   method static Boolean IsEffectivelyUpright(Rune rune)
   method static VerticalOrientationClass Of(Rune rune)

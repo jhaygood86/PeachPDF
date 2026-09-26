@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Shaping;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -144,7 +145,7 @@ namespace PeachPDF.Svg
     /// in <see cref="XList"/>/<see cref="YList"/>/<see cref="DxList"/>/<see cref="DyList"/>/<see cref="RotateList"/>;
     /// they address this run's own characters (a value list on an ancestor also carries into a nested
     /// run's characters, innermost-wins). A solid <see cref="SvgElement.Fill"/> without positioning/rotation
-    /// paints via the fast selectable <see cref="Html.Adapters.RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/> path; positioned/
+    /// paints via the fast selectable <see cref="Html.Adapters.RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/> path; positioned/
     /// rotated glyphs, a gradient/pattern fill, or any <see cref="SvgElement.Stroke"/> outline each glyph.
     /// When <see cref="PathData"/> is set (a <c>&lt;textPath&gt;</c>), the run's glyphs lay along that path.
     /// </summary>
@@ -211,7 +212,7 @@ namespace PeachPDF.Svg
         /// <c>font-feature-settings</c>/kerning) this run's text should shape with - resolved the same
         /// way HTML text's <c>DerivedStyle.ActualTextShapingFeatures</c> is, via the shared
         /// <see cref="Html.Core.Utils.TextShapingFeatureResolver"/>.</summary>
-        public TextShapingFeatures ShapingFeatures { get; set; } = TextShapingFeatures.Default;
+        public ShapeSettings ShapingFeatures { get; set; } = ShapeSettings.Default;
 
         /// <summary>Resolved <c>text-decoration-line</c> (space-separated <c>underline</c>/<c>overline</c>/
         /// <c>line-through</c>, or <c>none</c>) - this run's own value only, never inherited (CSS Text

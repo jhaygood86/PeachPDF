@@ -29,6 +29,7 @@
 //
 // See THIRD-PARTY-LICENSES.md for how this fits into PeachPDF's own licensing.
 
+using PeachDrawing.Text.Unicode;
 using System.Collections.Generic;
 
 namespace PeachDrawing.Text.Internal.Text.Shaping.Use

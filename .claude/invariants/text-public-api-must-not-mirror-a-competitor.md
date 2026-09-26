@@ -46,6 +46,21 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 | `GenericFamily` | A generic font family | CSS Fonts 4 generic family keywords |
 | `TypefaceFormatException` | Data that is not a font | .NET exception convention |
 
+### `PeachDrawing.Text.Shaping`
+
+| Public name | Role | Origin of the name and shape |
+|---|---|---|
+| `Shaper` (`Shape`, `GetFeatureTags`) | Text to glyphs in one face | HarfBuzz's `hb_shape`; `GetFeatureTags` is ours |
+| `GlyphRun` (`Typeface`, `Glyphs`, `Advance`) | The glyphs of one shaped run and the pen distance along them | DirectWrite and CoreText "glyph run". The advance is unrounded design units, ours |
+| `PlacedGlyph` (`GlyphIndex`, `ClusterStart`, `ClusterLength`, `XAdvanceDelta`, `YAdvanceDelta`, `XOffset`, `YOffset`, `LigatureComponentClusterStarts`, `AttachedToIndex`, `IsHiddenIgnorable`) | One shaped glyph, where it came from and how it is nudged | HarfBuzz's glyph info and position (`x_advance`, `y_offset`, cluster); the OpenType `GPOS` vocabulary |
+| `ShapeSettings` (`Ligatures`, `Caps`, `Numeric`, `EastAsian`, `Position`, `ExplicitFeatures`, `Kerning`, `Language`, `ScriptTag`, `JoiningForms`, `UseCategories`, `ReverseForDisplay`, `EmojiMode`) | Everything asked of the shaper for one run | CSS Fonts 4 `font-variant-*`, `font-feature-settings`, `font-kerning` and `lang`. The typed groups exist because they carry precedence rules a tag list cannot |
+| `LigatureSet`, `CapsMode`, `NumeralSet`, `EastAsianSet`, `SubSuperMode` | The typed groups | The keyword sets of the CSS `font-variant-*` properties they mirror |
+| `FeatureSetting` (`Tag`, `Value`) | A feature asked for by tag | CSS `font-feature-settings` entries |
+
+The `Unicode` namespace gains `ArabicJoining` (`TypeOf`, `Resolve`) with `ArabicJoiningType` and `ArabicJoiningForm`, and
+`UniversalShaping` (`Classify`) with `UseCategory`: the `Joining_Type` property and its OpenType positional feature tags (`isol`,
+`fina`, `medi`, `init`), and the Universal Shaping Engine's category alphabet.
+
 ### `PeachDrawing.Text.Unicode`
 
 | Public name | Role | Origin of the name and shape |

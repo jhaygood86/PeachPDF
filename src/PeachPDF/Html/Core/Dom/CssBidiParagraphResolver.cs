@@ -219,7 +219,7 @@ namespace PeachPDF.Html.Core.Dom
                 rawScripts[c] = Scripts.Of(codepoints[c]);
             var resolvedScripts = Scripts.ResolveLooked(rawScripts);
 
-            var joiningForms = ArabicJoiningShaper.Resolve(codepoints);
+            var joiningForms = ArabicJoining.Resolve(codepoints);
 
             // See this method's own remarks on why, unlike ArabicJoiningShaper, this only classifies
             // (and only allocates at all) when the paragraph actually contains text in one of
@@ -230,7 +230,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (!UseShapedScripts.Contains(resolvedScripts[c]))
                     continue;
                 useCategories ??= new UseCategory[codepoints.Count];
-                useCategories[c] = UseCategoryClassifier.Classify(codepoints[c]);
+                useCategories[c] = UniversalShaping.Classify(codepoints[c]);
             }
 
             var charScripts = new string[length];

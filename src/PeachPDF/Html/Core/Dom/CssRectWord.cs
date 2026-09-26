@@ -10,6 +10,8 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
 using PeachDrawing.Text.Internal.Text.Shaping.Use;
 using System;
@@ -121,7 +123,7 @@ namespace PeachPDF.Html.Core.Dom
         /// silently stop matching once the text they'd apply to has been reversed. Instead, whoever
         /// shapes this word for display (paint, outline extraction, ToUnicode text extraction - all funnel
         /// through <c>CssBox.ResolveWordShapingFeatures</c>) requests
-        /// <c>TextShapingFeatures.ReverseForDisplay</c>, so GSUB/GPOS still run in the logical
+        /// <c>ShapeSettings.ReverseForDisplay</c>, so GSUB/GPOS still run in the logical
         /// order they need and only the resulting glyph list - never the source string - reverses, right
         /// before painting. A no-op read for every other word (plain RTL words keep the older
         /// text-level mirroring path unchanged).

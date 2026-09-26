@@ -1,4 +1,4 @@
-#region PeachPDF - A .NET library for rendering HTML to PDF
+﻿#region PeachPDF - A .NET library for rendering HTML to PDF
 //
 // Reader for the OpenType `GSUB` (Glyph Substitution) table: the ScriptList/FeatureList/LookupList
 // common tables, Lookup Type 1 (Single Substitution, formats 1/2), Lookup Type 2 (Multiple
@@ -26,6 +26,7 @@
 //
 #endregion
 
+using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -507,7 +508,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// <c>"DFLT"</c> script (a neutral, script-agnostic entry real fonts define exactly for this
         /// situation) rather than an arbitrary first-listed record - important now that
         /// <paramref name="scriptTagPreference"/> can start with a specific script tag (e.g. `"arab"`,
-        /// via <see cref="PeachDrawing.Text.Internal.Text.TextShapingFeatures.ScriptTag"/>) that a given font may simply not define: an
+        /// via <see cref="PeachDrawing.Text.Shaping.ShapeSettings.ScriptTag"/>) that a given font may simply not define: an
         /// arbitrary <c>ScriptList[0]</c> could be any other script the font happens to list first,
         /// whose feature set has no particular relationship to the requested one, whereas `"DFLT"` (when
         /// present) is specifically authored to behave reasonably for scripts the font doesn't otherwise

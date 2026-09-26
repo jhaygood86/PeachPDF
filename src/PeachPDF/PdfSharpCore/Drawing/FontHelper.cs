@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
@@ -47,7 +48,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Measure string directly from font data.
         /// </summary>
-        public static XSize MeasureString(string text, XFont font, XStringFormat stringFormat, TextShapingFeatures features)
+        public static XSize MeasureString(string text, XFont font, XStringFormat stringFormat, ShapeSettings features)
         {
             XSize size = new XSize();
 
@@ -85,7 +86,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
                     // just applied at paint time - line-breaking/text-align/justification all key off
                     // this value, and must agree with what XGraphicsPdfRenderer.DrawString actually
                     // paints (see GposPositioner).
-                    foreach (ShapedGlyph glyph in descriptor.Shape(lineText.ToString(), features))
+                    foreach (PlacedGlyph glyph in Shaper.Shape(font.Typeface, lineText.ToString(), features).Glyphs)
                         width += (int)Math.Round(descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta);
                     lineText.Clear();
                 }

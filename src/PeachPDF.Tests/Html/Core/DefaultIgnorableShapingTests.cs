@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -32,7 +33,7 @@ namespace PeachPDF.Tests.Html.Core
         }
 
         private static int[] Shape(string text) =>
-            Descriptor().Shape(text, TextShapingFeatures.Default).Select(g => g.GlyphIndex).ToArray();
+            Descriptor().Shape(text, ShapeSettings.Default).Select(g => g.GlyphIndex).ToArray();
 
         [Fact]
         public void CcmpLigature_AppliesWithoutAnyLigatureFeatureRequested()
@@ -148,9 +149,9 @@ namespace PeachPDF.Tests.Html.Core
             const string beh = "ب";
             var forms = ArabicJoiningShaper.Resolve([beh[0]]);
 
-            var plain = descriptor.Shape(beh, new TextShapingFeatures(ScriptTag: "arab", JoiningForms: forms));
+            var plain = descriptor.Shape(beh, new ShapeSettings(ScriptTag: "arab", JoiningForms: forms));
             var withSelector = descriptor.Shape(beh + "️",
-                new TextShapingFeatures(ScriptTag: "arab", JoiningForms: forms));
+                new ShapeSettings(ScriptTag: "arab", JoiningForms: forms));
 
             // The selector contributes no glyph of its own, and changes nothing about the rest.
             Assert.Equal(plain.Select(g => g.GlyphIndex), withSelector.Select(g => g.GlyphIndex));
