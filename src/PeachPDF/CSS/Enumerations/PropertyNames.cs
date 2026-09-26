@@ -326,6 +326,7 @@
         public static readonly string VerticalAlign = "vertical-align";
         public static readonly string Visibility = "visibility";
         public static readonly string WhiteSpace = "white-space";
+        public static readonly string LineBreak = "line-break";
         public static readonly string Widows = "widows";
         public static readonly string Width = "width";
         public static readonly string WordBreak = "word-break";

@@ -427,6 +427,27 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.Equal(expected, actual);
         }
 
+        [Theory]
+        [InlineData("auto")]
+        [InlineData("loose")]
+        [InlineData("normal")]
+        [InlineData("strict")]
+        [InlineData("anywhere")]
+        public void LineBreakLegal(string keyword)
+        {
+            var property = ParseDeclaration("line-break : " + keyword);
+            Assert.Equal("line-break", property.Name);
+            Assert.True(property.HasValue);
+            Assert.IsType<LineBreakProperty>(property);
+            Assert.Equal(keyword, ((LineBreakProperty)property).Value);
+        }
+
+        [Fact]
+        public void LineBreakIllegal()
+        {
+            Assert.False(ParseDeclaration("line-break : sometimes").HasValue);
+        }
+
         [Fact]
         public void WordBreakNormalLegal()
         {

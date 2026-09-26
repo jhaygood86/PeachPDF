@@ -56,6 +56,25 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task LineBreak_Anywhere_CutsAWordAtEveryCharacter_AndWrapsIt()
+        {
+            var box = await LayOut("width:40pt; line-break:anywhere", "abcdefghij");
+
+            Assert.Equal(10, WordTexts(box).Length);
+            Assert.True(Lines(box) > 1);
+            Assert.Equal(["abcdefghij"], WordTexts(await LayOut("width:40pt", "abcdefghij")));
+        }
+
+        [Fact]
+        public async Task LineBreak_IsInherited()
+        {
+            var html = LayoutHarness.Wrap("<div style='line-break:anywhere; width:40pt'><p id='p'>abcdefghij</p></div>");
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+
+            Assert.Equal(10, WordTexts(LayoutHarness.FindById(root, "p")!).Length);
+        }
+
+        [Fact]
         public async Task Hyphen_AllowsABreakAfterItBetweenLetters_ButNotBeforeADigit()
         {
             Assert.Equal(["well-", "known"], WordTexts(await LayOut("width:400px", "well-known")));

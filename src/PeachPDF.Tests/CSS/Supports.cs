@@ -256,6 +256,14 @@ namespace PeachPDF.Tests.CSS
             Assert.True(supports.Condition.Check());
         }
 
+        [Fact]
+        public void SupportsLineBreakAnywhereRule()
+        {
+            var sheet = ParseStyleSheet(@"@supports (line-break: anywhere) { }");
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.True(supports.Condition.Check());
+        }
+
         // CssBox.cs's ApplyTextTransform implements 'full-width' (converts characters to their Unicode
         // fullwidth compatibility form), so @supports must say yes.
         [Fact]

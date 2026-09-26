@@ -20,7 +20,8 @@ namespace PeachPDF.Html.Core.Utils
         /// (see <see cref="LineBreaker.FindOpportunities"/>). <paramref name="precedingRegionalIndicators"/> is how many regional
         /// indicators end the text before this box's, which decides whether the first one completes a flag.
         /// </summary>
-        internal static LineBreakOpportunity[] Find(string text, PeachPDF.CSS.WordBreak wordBreak, int precedingRegionalIndicators = 0)
+        internal static LineBreakOpportunity[] Find(string text, PeachPDF.CSS.WordBreak wordBreak, int precedingRegionalIndicators = 0,
+            PeachPDF.CSS.LineBreak lineBreak = PeachPDF.CSS.LineBreak.Auto)
         {
             if (text.Length == 0)
             {
@@ -34,6 +35,14 @@ namespace PeachPDF.Html.Core.Utils
                     PeachPDF.CSS.WordBreak.BreakAll => WordBreakMode.BreakAll,
                     PeachPDF.CSS.WordBreak.KeepAll => WordBreakMode.KeepAll,
                     _ => WordBreakMode.Normal,
+                },
+                Strictness = lineBreak switch
+                {
+                    PeachPDF.CSS.LineBreak.Loose => LineBreakStrictness.Loose,
+                    PeachPDF.CSS.LineBreak.Normal => LineBreakStrictness.Normal,
+                    PeachPDF.CSS.LineBreak.Strict => LineBreakStrictness.Strict,
+                    PeachPDF.CSS.LineBreak.Anywhere => LineBreakStrictness.Anywhere,
+                    _ => LineBreakStrictness.Auto,
                 },
             };
 
