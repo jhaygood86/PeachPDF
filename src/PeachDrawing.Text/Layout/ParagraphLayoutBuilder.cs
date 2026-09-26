@@ -23,7 +23,7 @@ namespace PeachDrawing.Text.Layout
             while (true)
             {
                 double indent = paragraph.IndentAt(start);
-                var spec = FitLine(paragraph, start, RoomFor(availableWidth, indent), indent, hyphenRun);
+                var spec = FitLine(paragraph, start, RoomFor(availableWidth, indent), indent, hyphenRun, RoomFor(availableWidth, paragraph.IndentOf(false, false)));
                 hyphenRun = spec.Kind == LineEnd.Hyphenated ? hyphenRun + 1 : 0;
                 var (pieces, width) = Assemble(paragraph, spec, indent);
                 var (ascent, descent, height) = VerticalExtent(paragraph, spec, pieces);
@@ -200,8 +200,9 @@ namespace PeachDrawing.Text.Layout
         /// <param name="start">The offset of the line's first character.</param>
         /// <param name="room">The width the line's text may fill, or <see cref="double.PositiveInfinity"/> for a line that breaks only where it is forced to.</param>
         /// <param name="pen">The distance from the paragraph's start edge to where the line's text starts, which tab stops are measured from.</param>
+        /// <param name="nextRoom">The width a line after this one may fill, which the limit on hyphenating the last full line tests the rest of the text against.</param>
         /// <param name="hyphenRun">How many lines in a row before this one ended with a hyphenation (<see cref="ParagraphStyle.HyphenateLimitLines"/> counts them).</param>
-        internal static LineSpec FitLine(Paragraph p, int start, double room, double pen, int hyphenRun)
+        internal static LineSpec FitLine(Paragraph p, int start, double room, double pen, int hyphenRun, double nextRoom)
         {
             int length = p.Text.Length;
             if (start >= length)
@@ -219,6 +220,7 @@ namespace PeachDrawing.Text.Layout
             int segmentStart = start;
             double lineWidth = 0;
             List<Break>? breaks = null;
+            bool trackBreaks = wrap && p.HasSoftHyphens;
             for (int i = start + 1; i <= length; i++)
             {
                 if (opportunities[i] == LineBreakOpportunity.Prohibited)
@@ -236,7 +238,7 @@ namespace PeachDrawing.Text.Layout
                         int fit = LargestFit(p, start, contentEnd, room, pen);
                         if (fit < contentEnd)
                         {
-                            if (automatic && HyphenationBreak(p, start, start, contentEnd, room, pen, 0) is > 0 and var hyphenated)
+                            if (automatic && HyphenationBreak(p, start, start, contentEnd, room, nextRoom, pen, 0) is > 0 and var hyphenated)
                             {
                                 return new LineSpec(start, hyphenated, LineEnd.Hyphenated);
                             }
@@ -251,7 +253,7 @@ namespace PeachDrawing.Text.Layout
                     double contentWidth = p.Measure(segmentStart, contentEnd, at);
                     if (start < segmentStart && lineWidth + contentWidth > room)
                     {
-                        if (automatic && HyphenationBreak(p, start, segmentStart, contentEnd, room, pen, lineWidth) is > 0 and var hyphenated)
+                        if (automatic && HyphenationBreak(p, start, segmentStart, contentEnd, room, nextRoom, pen, lineWidth) is > 0 and var hyphenated)
                         {
                             return new LineSpec(start, hyphenated, LineEnd.Hyphenated);
                         }
@@ -267,7 +269,7 @@ namespace PeachDrawing.Text.Layout
                     return new LineSpec(start, i, i == length && !Paragraph.IsLineTerminator(p.Text[length - 1]) ? LineEnd.Last : LineEnd.Forced);
                 }
 
-                if (wrap)
+                if (trackBreaks)
                 {
                     (breaks ??= []).Add(new Break(i, lineWidth, hyphens && p.Text[i - 1] == '\u00AD'));
                 }
@@ -311,7 +313,7 @@ namespace PeachDrawing.Text.Layout
                 }
             }
 
-            // Nowhere fits it: the hyphen overflows.
+            // Nowhere fits it (or the limit on hyphenated lines has been reached and no other break is left): the hyphen overflows.
             return new LineSpec(start, position, LineEnd.Hyphenated);
         }
 
@@ -320,7 +322,7 @@ namespace PeachDrawing.Text.Layout
         /// the patterns of its language allow that leaves room for the hyphen, or -1. The limits on how much room a line may leave, and on hyphenating the
         /// last full line, are applied here; the ones on the size of the pieces are in the points themselves.
         /// </summary>
-        private static int HyphenationBreak(Paragraph p, int start, int wordStart, int contentEnd, double room, double pen, double lineWidth)
+        private static int HyphenationBreak(Paragraph p, int start, int wordStart, int contentEnd, double room, double nextRoom, double pen, double lineWidth)
         {
             var points = p.HyphenationPoints(wordStart, contentEnd);
             if (points.Length == 0)
@@ -354,7 +356,7 @@ namespace PeachDrawing.Text.Layout
 
             for (; best >= 0; best--)
             {
-                if (p.Style.HyphenateLimitLast != HyphenateLimitLast.Always || !FitsOnALineOfItsOwn(p, points[best], room))
+                if (p.Style.HyphenateLimitLast != HyphenateLimitLast.Always || !FitsOnALineOfItsOwn(p, points[best], nextRoom))
                 {
                     return points[best];
                 }
@@ -363,22 +365,39 @@ namespace PeachDrawing.Text.Layout
             return -1;
         }
 
-        /// <summary>Whether the text from <paramref name="from"/> to the next forced break, or the end of the paragraph, fits a line of the paragraph without a break.</summary>
+        /// <summary>
+        /// Whether the text from <paramref name="from"/> to the next forced break, or the end of the paragraph, fits a line of the paragraph without a break. It gives up
+        /// as soon as the words are wider than the line, so it costs no more than one line's worth of text.
+        /// </summary>
         private static bool FitsOnALineOfItsOwn(Paragraph p, int from, double room)
         {
             var opportunities = p.Opportunities;
-            int end = p.Text.Length;
+            double pen = p.IndentOf(false, false);
+            double width = 0;
+            int segmentStart = from;
             for (int i = from + 1; i <= p.Text.Length; i++)
             {
+                if (opportunities[i] == LineBreakOpportunity.Prohibited)
+                {
+                    continue;
+                }
+
+                double at = pen + width;
+                if (width + p.Measure(segmentStart, p.ContentEnd(segmentStart, i), at) > room)
+                {
+                    return false;
+                }
+
                 if (opportunities[i] == LineBreakOpportunity.Mandatory)
                 {
-                    end = i;
-                    break;
+                    return true;
                 }
+
+                width += p.Measure(segmentStart, i, at);
+                segmentStart = i;
             }
 
-            double indent = p.IndentOf(false, false);
-            return indent + p.Measure(from, p.ContentEnd(from, end), indent) <= room + indent;
+            return true;
         }
 
         /// <summary>

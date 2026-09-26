@@ -21,3 +21,5 @@
 
 Not done: `hyphenate-limit-last` values other than `always` (a paragraph has no columns or pages); Auto in WebAssembly (the pattern resources are Brotli).
 Evidence: `ParagraphHyphenationTests` (27), all other layout tests unchanged.
+
+A review measured two quadratic paths that are fixed: `Hyphenator` was run on the whole remainder of a huge word for every line (a run of letters over 128 UTF-16 units is not a word and is not hyphenated; the rest of a word is hyphenated as part of the whole word, cached once, so the limits count from the word's start), and `HyphenateLimitLast` measured the whole rest of the hard line for every candidate (`FitsOnALineOfItsOwn` now stops as soon as the words are wider than the next line, whose room `FitLine` takes as `nextRoom` because a first-line indent made the old test stricter than reality). Break candidates are only tracked when the text has a soft hyphen. The pattern engine's own minimums (2 before, 3 after for English) are a floor under `HyphenateLimitChars`; the doc says so.

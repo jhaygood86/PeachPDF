@@ -2,6 +2,7 @@ using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace PeachDrawing.Text.Layout
@@ -50,6 +51,7 @@ namespace PeachDrawing.Text.Layout
 
             (_scripts, _joining, _use) = ResolveScripts(text);
             Opportunities = LineBreaker.FindOpportunities(text, style.LineBreak);
+            HasSoftHyphens = style.Hyphens != Hyphens.None && text.Contains(SoftHyphen);
             if (style.Hyphens == Hyphens.None)
             {
                 // Without hyphenation a soft hyphen is not a place to break.
@@ -82,6 +84,9 @@ namespace PeachDrawing.Text.Layout
 
         /// <summary>Whether the paragraph as a whole runs right to left.</summary>
         public bool IsRightToLeft => _bidi.IsParagraphRtl;
+
+        /// <summary>Whether the text holds a soft hyphen that is a place to break: a break after it needs the hyphen to fit.</summary>
+        internal bool HasSoftHyphens { get; }
 
         internal LineBreakOpportunity[] Opportunities { get; }
 
@@ -495,50 +500,65 @@ namespace PeachDrawing.Text.Layout
 
         /// <summary>
         /// The places automatic hyphenation may break the word in <c>[start, end)</c>, as offsets in the text, in increasing order: the patterns of the word's language,
-        /// with <see cref="ParagraphStyle.HyphenateLimitChars"/> applied. A stretch that is not one word of letters has none.
+        /// with <see cref="ParagraphStyle.HyphenateLimitChars"/> applied. A stretch that is not one word of letters, or a word of more than 128 UTF-16 units, has none.
         /// </summary>
         internal int[] HyphenationPoints(int start, int end)
         {
-            var key = (start, end);
-            lock (_hyphenPoints)
+            // The rest of a word after a hyphenated line is hyphenated as part of the whole word, so the limits count from the word's own start.
+            int first = start;
+            while (first < end && !char.IsLetter(Text[first]))
             {
-                if (_hyphenPoints.TryGetValue(key, out var cached))
+                first++;
+            }
+
+            if (first == start)
+            {
+                while (first > 0 && char.IsLetter(Text[first - 1]))
                 {
-                    return cached;
+                    first--;
                 }
             }
 
-            var found = FindHyphenationPoints(start, end);
-            lock (_hyphenPoints)
+            int last = end;
+            while (last > first && !char.IsLetter(Text[last - 1]))
             {
-                if (_hyphenPoints.Count >= MaxHyphenatedWords)
-                {
-                    _hyphenPoints.Clear();
-                }
-
-                _hyphenPoints[key] = found;
+                last--;
             }
 
-            return found;
+            var key = (first, last);
+            int[]? points;
+            lock (_hyphenPoints)
+            {
+                _hyphenPoints.TryGetValue(key, out points);
+            }
+
+            if (points is null)
+            {
+                points = FindHyphenationPoints(first, last);
+                lock (_hyphenPoints)
+                {
+                    if (_hyphenPoints.Count >= MaxHyphenatedWords)
+                    {
+                        _hyphenPoints.Clear();
+                    }
+
+                    _hyphenPoints[key] = points;
+                }
+            }
+
+            return first < start && points.Length > 0 ? points.Where(point => point > start).ToArray() : points;
         }
+
+        /// <summary>The longest word hyphenation is tried on, in UTF-16 units: the patterns work on words, and a longer run of letters is not one.</summary>
+        private const int MaxHyphenatedWordLength = 128;
 
         private int[] FindHyphenationPoints(int start, int end)
         {
-            while (start < end && !char.IsLetter(Text[start]))
-            {
-                start++;
-            }
-
-            while (end > start && !char.IsLetter(Text[end - 1]))
-            {
-                end--;
-            }
-
             var limits = Style.HyphenateLimitChars;
             int minWord = limits.WordLength ?? 5;
             int minBefore = limits.BeforeBreak ?? 2;
             int minAfter = limits.AfterBreak ?? 2;
-            if (end - start < Math.Max(minWord, 2) || LanguageAt(start) is not { Length: > 0 } language)
+            if (end - start < Math.Max(minWord, 2) || end - start > MaxHyphenatedWordLength || LanguageAt(start) is not { Length: > 0 } language)
             {
                 return [];
             }

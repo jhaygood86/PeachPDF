@@ -301,7 +301,10 @@ namespace PeachDrawing.Text.Layout
         /// </summary>
         public string? HyphenateCharacter { get; init; }
 
-        /// <summary>The smallest a hyphenated word and its pieces may be (CSS <c>hyphenate-limit-chars</c>). Counts are of UTF-16 units and must not be negative.</summary>
+        /// <summary>
+        /// The smallest a hyphenated word and its pieces may be (CSS <c>hyphenate-limit-chars</c>). Counts are of UTF-16 units and must not be negative. The patterns of a
+        /// language have minimums of their own, which these cannot go below, and a word of more than 128 UTF-16 units is not hyphenated.
+        /// </summary>
         public HyphenateLimitChars HyphenateLimitChars { get; init; }
 
         /// <summary>The most lines in a row that may end with a hyphenation (CSS <c>hyphenate-limit-lines</c>), or <see langword="null"/> for no limit; it must not be negative.</summary>

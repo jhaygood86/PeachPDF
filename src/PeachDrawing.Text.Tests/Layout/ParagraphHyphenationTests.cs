@@ -371,6 +371,40 @@ namespace PeachDrawing.Text.Tests.Layout
         }
 
         [Fact]
+        public void ARunOfLettersLongerThanAWord_IsNotHyphenated_AndIsQuick()
+        {
+            var text = string.Concat(Enumerable.Repeat("international", 4000));
+            var stopwatch = Stopwatch.StartNew();
+            var layout = Lay(text, 300, Auto());
+            stopwatch.Stop();
+
+            Assert.All(layout.Lines, l => Assert.NotEqual(LineEnd.Hyphenated, l.End));
+            Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"took {stopwatch.Elapsed}");
+        }
+
+        [Fact]
+        public void TheLimitOnTheLastFullLine_OverManyWords_StaysQuick()
+        {
+            var text = string.Join(' ', Enumerable.Repeat("internationalization", 1500));
+            var stopwatch = Stopwatch.StartNew();
+            var layout = Lay(text, 300, Auto(s => s with { HyphenateLimitLast = HyphenateLimitLast.Always }));
+            stopwatch.Stop();
+
+            Assert.True(layout.Lines.Count > 500);
+            Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"took {stopwatch.Elapsed}");
+        }
+
+        [Fact]
+        public void TheRestOfAWordHyphenatedOnAnEarlierLine_KeepsTheLimitsOfTheWholeWord()
+        {
+            // A word on three lines: every piece the patterns leave is at least the limit, since the count restarts at no line.
+            var style = Auto(s => s with { HyphenateLimitChars = new HyphenateLimitChars(BeforeBreak: 4) });
+            var layout = Lay("internationalization", Advance("interna") + HyphenWidth + 1, style);
+
+            Assert.All(layout.Lines, l => Assert.True(l.Range.Length >= 4 || l.End == LineEnd.Last));
+        }
+
+        [Fact]
         public void AHugeWordOfLetters_IsHyphenatedWithoutHanging()
         {
             var text = new string('a', 3000);
