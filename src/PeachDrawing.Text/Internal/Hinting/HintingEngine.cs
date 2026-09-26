@@ -38,8 +38,8 @@ internal sealed class HintedGlyphResult
 }
 
 /// <summary>
-/// Grid-fits the glyphs of one face: owns what it takes to run the font's TrueType instructions at a size (the tables read
-/// once, the state each size's programs leave behind, both cached) and hands out the hinted outlines, also cached.
+/// Grid-fits the glyphs of one face: owns what it takes to run the font's TrueType instructions, or apply the hints of its CFF charstrings, at a size (the tables
+/// read once, the state each size's programs leave behind, both cached) and hands out the hinted outlines, also cached.
 /// </summary>
 /// <remarks>
 /// Everything cached is immutable, so one engine serves any number of threads. Fonts are untrusted input: a font or a
@@ -63,7 +63,11 @@ internal sealed class HintingEngine
     private TtFace? _face;
     private bool _faceRead; // written last, with release semantics, so a reader that sees it true sees _face
 
+    private CffFace? _cffFace;
+    private bool _cffFaceRead;
+
     private readonly LruCache<SizeKey, TtSize?> _sizes = new(MaxSizes);
+    private readonly LruCache<SizeKey, CffSize?> _cffSizes = new(MaxSizes);
     private readonly LruCache<GlyphKey, HintedGlyphResult> _glyphs = new(MaxGlyphs, WeightOf, MaxGlyphWeight);
 
     public HintingEngine(OpenTypeFontface font, string? familyName, VariationCoordinates? variation, Func<int, int> instanceAdvance)
@@ -74,8 +78,11 @@ internal sealed class HintingEngine
         _instanceAdvance = instanceAdvance;
     }
 
-    /// <summary>Whether the face has TrueType outlines and TrueType instructions, which is what this engine can hint.</summary>
-    public bool CanHint => GetFace() is { HasInstructions: true };
+    /// <summary>
+    /// Whether the face has TrueType outlines and TrueType instructions, or CFF outlines (which carry their own hints), which is what
+    /// this engine can hint.
+    /// </summary>
+    public bool CanHint => GetFace() is { HasInstructions: true } || GetCffFace() is not null;
 
     private TtFace? GetFace()
     {
@@ -103,6 +110,36 @@ internal sealed class HintingEngine
         }
     }
 
+    private CffFace? GetCffFace()
+    {
+        // a font with TrueType outlines is not also a CFF font
+        if (GetFace() is not null)
+            return null;
+
+        if (Volatile.Read(ref _cffFaceRead))
+            return _cffFace;
+
+        lock (_faceLock)
+        {
+            if (!_cffFaceRead)
+            {
+                try
+                {
+                    _cffFace = CffFace.TryCreate(_font, _instanceAdvance);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    NoteFailure(ex);
+                    _cffFace = null;
+                }
+
+                Volatile.Write(ref _cffFaceRead, true);
+            }
+
+            return _cffFace;
+        }
+    }
+
     /// <summary>Hints a glyph at a size, from the cache when it has been asked for before.</summary>
     /// <param name="glyph">The glyph.</param>
     /// <param name="ppem26Dot6">The size in pixels per em, in 1/64.</param>
@@ -110,6 +147,10 @@ internal sealed class HintingEngine
     public HintedGlyphResult Get(int glyph, int ppem26Dot6, GridFitting mode)
     {
         ppem26Dot6 = EffectivePpem(ppem26Dot6);
+
+        // Adobe's CFF engine has no modes: a CFF font is fitted the same way whatever is asked for
+        if (GetCffFace() is not null)
+            mode = GridFitting.Standard;
 
         var sizeKey = new SizeKey(ppem26Dot6, mode);
         var key = new GlyphKey(sizeKey, glyph);
@@ -139,6 +180,9 @@ internal sealed class HintingEngine
 
     private HintedGlyphResult Compute(int glyph, SizeKey sizeKey)
     {
+        if (GetCffFace() is not null)
+            return ComputeCff(glyph, sizeKey);
+
         TtSize? size = GetSize(sizeKey);
         if (size is null)
             return HintedGlyphResult.Failed;
@@ -154,6 +198,49 @@ internal sealed class HintingEngine
             NoteFailure(ex);
             return HintedGlyphResult.Failed;
         }
+    }
+
+    private HintedGlyphResult ComputeCff(int glyph, SizeKey sizeKey)
+    {
+        CffSize? size = GetCffSize(sizeKey);
+        if (size is null)
+            return HintedGlyphResult.Failed;
+
+        try
+        {
+            CffHintedGlyph hinted = CffGlyphLoader.Load(size, glyph);
+            return new HintedGlyphResult(ToOutline(hinted, sizeKey.Ppem26Dot6), hinted.Advance / 64.0, true);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // HintingException for what is wrong with the glyph, and anything else the engine is unhappy about with hostile data
+            NoteFailure(ex);
+            return HintedGlyphResult.Failed;
+        }
+    }
+
+    private CffSize? GetCffSize(SizeKey key)
+    {
+        if (_cffSizes.TryGet(key, out CffSize? cached))
+            return cached;
+
+        CffSize? size = null;
+        CffFace? face = GetCffFace();
+        if (face is not null)
+        {
+            try
+            {
+                size = new CffSize(face, key.Ppem26Dot6);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                NoteFailure(ex);
+                size = null;
+            }
+        }
+
+        _cffSizes.Set(key, size);
+        return size;
     }
 
     private TtSize? GetSize(SizeKey key)
@@ -195,6 +282,58 @@ internal sealed class HintingEngine
         }
 
         return weight;
+    }
+
+    // The outline of a CFF glyph: each contour starts at an on-curve point and goes on by lines (an on-curve point) and cubic curves (two
+    // control points and an on-curve point).
+    private static GlyphOutline ToOutline(CffHintedGlyph hinted, int ppem26Dot6)
+    {
+        var outline = new GlyphOutline
+        {
+            IsGridFitted = true,
+            PixelsPerEm = ppem26Dot6 / 64.0,
+            GridFittedAdvance = hinted.Advance / 64.0,
+        };
+
+        int start = 0;
+        foreach (int end in hinted.ContourEnds)
+        {
+            OutlinePoint At(int i) => new(hinted.X[i] / 64.0, hinted.Y[i] / 64.0);
+
+            if ((hinted.Tags[start] & Cf2Outline.TagOn) == 0)
+                throw new HintingException("A contour does not start on the curve.");
+
+            var contour = new OutlineContour(At(start));
+            int i = start + 1;
+            while (i <= end)
+            {
+                if ((hinted.Tags[i] & Cf2Outline.TagOn) != 0)
+                {
+                    contour.SegmentList.Add(OutlineSegment.Line(At(i)));
+                    i++;
+                }
+                else if (i + 1 == end && (hinted.Tags[i + 1] & Cf2Outline.TagOn) == 0)
+                {
+                    // the last curve of a contour ends where it began: its end point was dropped, as FreeType drops a last point that lies
+                    // on the first, and it ends at the start of the contour
+                    contour.SegmentList.Add(OutlineSegment.Cubic(At(i), At(i + 1), At(start)));
+                    i += 2;
+                }
+                else
+                {
+                    if (i + 2 > end || (hinted.Tags[i + 1] & Cf2Outline.TagOn) != 0 || (hinted.Tags[i + 2] & Cf2Outline.TagOn) == 0)
+                        throw new HintingException("A cubic curve is not made of two control points and an end point.");
+
+                    contour.SegmentList.Add(OutlineSegment.Cubic(At(i), At(i + 1), At(i + 2)));
+                    i += 3;
+                }
+            }
+
+            outline.ContourList.Add(contour);
+            start = end + 1;
+        }
+
+        return outline;
     }
 
     private static GlyphOutline ToOutline(TtHintedGlyph hinted, int ppem26Dot6)

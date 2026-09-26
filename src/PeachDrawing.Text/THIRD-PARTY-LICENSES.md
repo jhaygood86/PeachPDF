@@ -37,7 +37,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-## FreeType (ported TrueType bytecode interpreter)
+## FreeType (ported TrueType bytecode interpreter and CFF loader)
 
 Portions of this software are copyright © 1996-2026 The FreeType Project (https://freetype.org). All rights reserved.
 
@@ -49,6 +49,13 @@ This software is based in part on the work of the FreeType Team.
 - **License:** the FreeType Project License (FTL), a permissive BSD-style license with a credit clause. FreeType is dual-licensed under the FTL or the GNU GPL version 2; PeachDrawing.Text uses it under the FTL only. The FTL does not restrict the license of the rest of this package, and does not permit using the names of the FreeType authors or contributors to promote a product without their written permission.
 
 An application that redistributes this package in binary form has to say, in its documentation, that its software is based in part on the work of the FreeType Team. The credit line above is the text FreeType suggests for it.
+
+### Adobe's CFF engine (part of FreeType)
+
+- **Location:** the `Ps*.cs` files of [`Internal/Hinting/FreeType/`](Internal/Hinting/FreeType/), the C# port of the `psaux` module of FreeType 2.14.3 (`psarrst`, `psblues`, `psfixed`, `psfont`, `psft`, `pshints`, `psintrp`, `psstack`, `psglue`, `pserror`, `psread`), which Adobe Systems Incorporated contributed to FreeType. It grid-fits CFF (PostScript) outlines. The files that load a CFF font around it (`Cff*.cs`) derive from FreeType's own `cff` module.
+- **Copyright:** Copyright 2006-2014 Adobe Systems Incorporated (the years differ by file; each ported file begins with the header of the C file it derives from, unchanged).
+- **License:** the FreeType Project License (`FTL.TXT`, above), with an additional patent licence grant. The header says that the work is made available under the FreeType Project License, and that each contributor grants everyone who exercises the permissions of that licence a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable patent licence to make, have made, use, offer to sell, sell, import and otherwise transfer the work, for the patent claims the contributor can license that its contribution necessarily infringes; and that the patent licences a licensee holds terminate as of the date on which the licensee starts patent litigation against any entity alleging that the work or a contribution in it infringes a patent. Using, modifying or distributing the work means accepting the FreeType Project License and that grant.
+- **Changes from the original:** recorded, per file, in [`Internal/Hinting/FreeType/PORTING-NOTES.md`](Internal/Hinting/FreeType/PORTING-NOTES.md). Only the parts for CFF fonts were ported; the parts for Type 1 and CFF2 fonts were not.
 
 ## Unicode Character Database (text-processing data tables)
 

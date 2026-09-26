@@ -49,6 +49,6 @@ of FreeType 2.14.3's (`Internal/Hinting/FreeType/`, FTL licensed, `PORTING-NOTES
 
 ## Deliberately not done
 
-CFF hinting, the auto-hinter, `cvar`, bit-exact variable fonts, `gasp`/`LTSH`/`VDMX` and non-square pixels are accepted gaps (see
+The auto-hinter, `cvar`, bit-exact variable fonts, `gasp`/`LTSH`/`VDMX` and non-square pixels are accepted gaps (see
 `.claude/accepted-gaps/text-hinting-*`). Layout, the PDF path and glyph advances used by layout stay unhinted, so nothing about a PDF's
 text changes with `TextHinting`; `TextHintingPdfTests` compares whole files with hinting unset, `None` and each mode.

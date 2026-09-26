@@ -1,0 +1,8 @@
+HintingCff.otf, HintingCffCid.otf, HintingCffHostile.otf, HintingCffIdeo.otf, HintingCffMatrix.otf and HintingCff.golden.json.gz
+are synthetic test data made by generate_hinting_cff_fixtures.py in this directory: fonts whose glyphs are random Type 2 charstrings.
+They contain no third-party design and are dedicated to the public domain under CC0 1.0 Universal
+(https://creativecommons.org/publicdomain/zero/1.0/).
+
+The golden data (HintingCff.golden.json.gz) also holds coordinates that FreeType computed from the outlines and hints of the bundled
+fonts named in that script (SourceCodePro-Regular.otf and gsubtest-lookup3.otf), and no font data. Each of those fonts keeps its own
+license notice beside it.

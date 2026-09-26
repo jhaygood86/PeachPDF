@@ -15,9 +15,10 @@
  *
  */
 
-// Ported to C# for PeachDrawing.Text; modified. This file derives from FreeType 2.14.3 (VER-2-14-3): ftcalc.c, ftobjs.h (the pixel-rounding macros).
+// Ported to C# for PeachDrawing.Text; modified. This file derives from FreeType 2.14.3 (VER-2-14-3): ftcalc.c, ftobjs.h (the pixel-rounding macros), ftoutln.c (FT_Vector_Transform).
 // The changes are recorded in PORTING-NOTES.md, next to FTL.TXT.
 
+using System;
 using System.Numerics;
 
 namespace PeachDrawing.Text.Internal.Hinting.FreeType;
@@ -210,4 +211,95 @@ internal static class FtCalc
 
     /// <summary>Rounds to the nearest multiple of a power of two (<c>FT_PAD_ROUND</c>).</summary>
     public static int PadRound(int x, int n) => unchecked(x + n / 2) & ~(n - 1);
+
+    /// <summary>Rounds a 16.16 number to the nearest whole number, still in 16.16 (<c>FT_RoundFix</c>).</summary>
+    public static int RoundFix(int a) => unchecked(a + (0x8000 - (a < 0 ? 1 : 0))) & ~0xFFFF;
+
+    /// <summary>The square root of a 16.16 number, in 16.16, rounded (<c>FT_SqrtFixed</c>; the 64-bit-integer code path).</summary>
+    public static uint SqrtFixed(uint v)
+    {
+        if (v == 0)
+            return 0;
+
+        ulong r = ((ulong)v << 16) - 1;
+        uint q = 1u << ((17 + Msb(v)) >> 1);
+        uint t;
+
+        // Babylonian method with rounded-up division
+        do
+        {
+            t = q;
+            q = unchecked(t + (uint)(r / t) + 1) >> 1;
+        }
+        while (q != t);
+
+        return q;
+    }
+
+    /// <summary>
+    /// <c>FT_Matrix_Multiply_Scaled</c>: multiplies the first matrix (<c>axx</c> to <c>ayy</c>) into the second (<c>bxx</c> to <c>byy</c>, changed in place), both in 16.16
+    /// but the product divided by <c>0x10000 * scaling</c>. The matrices are (xx, xy, yx, yy).
+    /// </summary>
+    public static void MatrixMultiplyScaled(int axx, int axy, int ayx, int ayy, ref int bxx, ref int bxy, ref int byx, ref int byy, int scaling)
+    {
+        int val = unchecked(0x10000 * scaling);
+
+        int xx = unchecked(MulDiv(axx, bxx, val) + MulDiv(axy, byx, val));
+        int xy = unchecked(MulDiv(axx, bxy, val) + MulDiv(axy, byy, val));
+        int yx = unchecked(MulDiv(ayx, bxx, val) + MulDiv(ayy, byx, val));
+        int yy = unchecked(MulDiv(ayx, bxy, val) + MulDiv(ayy, byy, val));
+
+        bxx = xx;
+        bxy = xy;
+        byx = yx;
+        byy = yy;
+    }
+
+    /// <summary><c>FT_Vector_Transform_Scaled</c>: transforms a vector by a matrix, the products divided by <c>0x10000 * scaling</c>.</summary>
+    public static void VectorTransformScaled(ref int x, ref int y, int xx, int xy, int yx, int yy, int scaling)
+    {
+        int val = unchecked(0x10000 * scaling);
+
+        int xz = unchecked(MulDiv(x, xx, val) + MulDiv(y, xy, val));
+        int yz = unchecked(MulDiv(x, yx, val) + MulDiv(y, yy, val));
+
+        x = xz;
+        y = yz;
+    }
+
+    /// <summary><c>FT_Matrix_Check</c>: whether a matrix is invertible without numerical trouble.</summary>
+    public static bool MatrixCheck(int xx, int xy, int yx, int yy)
+    {
+        long val = (long)Math.Abs((long)xx) | Math.Abs((long)xy) | Math.Abs((long)yx) | Math.Abs((long)yy);
+
+        // we only handle non-zero 32-bit values
+        if (val == 0 || val > 0x7FFFFFFFL)
+            return false;
+
+        // scale the matrix to avoid the temp1 overflow, which is more stringent than avoiding the temp2 overflow
+        int shift = Msb((uint)val) - 12;
+
+        if (shift > 0)
+        {
+            xx >>= shift;
+            xy >>= shift;
+            yx >>= shift;
+            yy >>= shift;
+        }
+
+        uint temp1 = unchecked(32U * (uint)Math.Abs(unchecked(xx * yy - xy * yx)));
+        uint temp2 = unchecked((uint)(xx * xx) + (uint)(xy * xy) + (uint)(yx * yx) + (uint)(yy * yy));
+
+        return temp1 > temp2;
+    }
+
+    /// <summary><c>FT_Vector_Transform</c> (of ftoutln.c): a vector times a 16.16 matrix.</summary>
+    public static void VectorTransform(ref int x, ref int y, int xx, int xy, int yx, int yy)
+    {
+        int xz = unchecked(MulFix(x, xx) + MulFix(y, xy));
+        int yz = unchecked(MulFix(x, yx) + MulFix(y, yy));
+
+        x = xz;
+        y = yz;
+    }
 }

@@ -8,7 +8,9 @@ namespace PeachDrawing.Text.Outlines
     /// Hinting moves the points of an outline at one size so that stems, heights and curves land on whole pixels, which makes
     /// small text drawn into a pixel raster sharper. It means nothing for vector output, where text has no size until it is
     /// drawn. Only the vertical direction is fitted in <see cref="Standard"/> mode, so glyphs keep the horizontal positions
-    /// and widths the font's design gives them; that is the mode to use for anti-aliased text.
+    /// and widths the font's design gives them; that is the mode to use for anti-aliased text. A font with TrueType outlines is
+    /// fitted by its instructions; a font with CFF outlines (PostScript outlines in an OpenType font) by the stem hints and blue
+    /// zones of its charstrings, which only fit vertically, so both modes give the same outline for it.
     /// </remarks>
     public enum GridFitting
     {
@@ -17,14 +19,15 @@ namespace PeachDrawing.Text.Outlines
 
         /// <summary>
         /// The font's TrueType instructions are run in FreeType's default interpreter, which honours the vertical direction
-        /// only ("minimal subpixel hinting"), with the compatibility adjustments modern fonts rely on. Fonts without TrueType
-        /// instructions are not hinted.
+        /// only ("minimal subpixel hinting"), with the compatibility adjustments modern fonts rely on. A font with CFF outlines is fitted
+        /// by its own hints. Fonts without hints of a supported kind are not hinted.
         /// </summary>
         Standard = 1,
 
         /// <summary>
         /// The font's TrueType instructions are run in the original interpreter, which fits both directions, as for black and
-        /// white text without anti-aliasing. Advances come from the font's <c>hdmx</c> table where it has one for the size.
+        /// white text without anti-aliasing. Advances come from the font's <c>hdmx</c> table where it has one for the size. A font with CFF
+        /// outlines has one way of fitting, so it is fitted as it is for <see cref="Standard"/>.
         /// </summary>
         Monochrome = 2,
     }

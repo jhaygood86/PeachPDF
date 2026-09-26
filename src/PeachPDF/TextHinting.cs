@@ -15,12 +15,12 @@ namespace PeachPDF
         None = 0,
 
         /// <summary>
-        /// TrueType hinting in FreeType's default mode, which fits glyphs vertically only and leaves their horizontal metrics alone. Suited to
+        /// Hinting in FreeType's default mode (TrueType instructions, or the hints of CFF outlines), which fits glyphs vertically only and leaves their horizontal metrics alone. Suited to
         /// anti-aliased text.
         /// </summary>
         Standard = 1,
 
-        /// <summary>TrueType hinting in the original mode, which fits both directions, as for text drawn without anti-aliasing.</summary>
+        /// <summary>TrueType hinting in the original mode, which fits both directions, as for text drawn without anti-aliasing. CFF fonts are fitted as in <see cref="Standard"/>.</summary>
         Monochrome = 2,
     }
 }

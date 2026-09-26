@@ -21,7 +21,7 @@ What is in it:
 ## Licence
 
 BSD 3-Clause (see `LICENSE`). Parts of the font readers derive from PDFsharp (MIT), the TrueType bytecode interpreter
-that grid-fits outlines is ported from FreeType (FreeType Project License, `FTL.TXT`), several shaping algorithms are
+and Adobe's CFF engine that grid-fit outlines are ported from FreeType (FreeType Project License, `FTL.TXT`, with Adobe's patent licence grant), several shaping algorithms are
 ports of HarfBuzz code (Old MIT), and the data tables come from the Unicode Character Database and the `hyph-utf8`
 pattern collection; each of those notices is reproduced in `THIRD-PARTY-LICENSES.md`, which ships in this package.
 

@@ -361,7 +361,7 @@ namespace PeachPDF
         /// <remarks>
         /// It helps text set small at a low <see cref="RasterizationDpi"/>, where pixels are big enough to see. It never affects the PDF's own
         /// text, which is the embedded font. It is used for a piece of text only when that text is drawn without rotation, skew or
-        /// perspective (hinting is meaningless under them), and only for fonts with TrueType instructions; anything else is drawn unhinted.
+        /// perspective (hinting is meaningless under them), and only for fonts with TrueType instructions or CFF outlines; anything else is drawn unhinted.
         /// Layout is never affected: measurements and line breaks use the unhinted metrics, so turning hinting on cannot move a line break.
         /// </remarks>
         public TextHinting TextHinting { get; set; } = TextHinting.None;

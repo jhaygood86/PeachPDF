@@ -68,7 +68,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         internal OpenTypeFontface FontFace;
 
         /// <summary>
-        /// Grid-fits this face's glyphs: what it takes to run the font's TrueType instructions at a size, with the tables read once
+        /// Grid-fits this face's glyphs: what it takes to run the font's TrueType instructions or apply its CFF hints at a size, with the tables read once
         /// and what each size's programs leave behind cached. One per descriptor, so one per typeface.
         /// </summary>
         internal HintingEngine Hinting =>
