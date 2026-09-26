@@ -758,7 +758,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <see cref="EmitSlot"/> call from <see cref="CatchUpStaleSlotsBehind"/>, <see cref="Finish"/>'s
         /// replay, or <see cref="EmitReservedBlankSlots"/>). Read by <see cref="ClaimsLine"/>'s own
         /// straddle tie-break (<see href="https://github.com/jhaygood86/PeachPDF/issues/1047">#1047</see>):
-        /// that tie-break exists to rescue a line whose nominal slot (<c>SlotStartingAt(rect.Top)</c>) is
+        /// that tie-break exists to rescue a line whose nominal slot (<c>SlotStartingAt(lineTop)</c>) is
         /// unreachable because it was already frozen by an earlier, separate emission (issue #1054's
         /// negative-leading escape past an already-closed page) — not to grant a bonus claim on top of one
         /// the current sweep's own ordinary test already gave the line, or will once its own turn comes.
@@ -2509,7 +2509,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                         {
                             var ownRect = Displaced(Shifted(lineRect), shift);
                             var aggregateRect = Displaced(Shifted(AggregateLineRect(line, snapshot, lineRect)), shift);
-                            claims = ClaimsLine(ownRect, aggregateRect, slot.Index, region, isFixed);
+                            var lineTop = ownRect.Top + InkRiseAboveLineTop(line, lineRect, snapshot);
+                            claims = ClaimsLine(ownRect, aggregateRect, slot.Index, region, isFixed, lineTop);
                             (lineClaims ??= [])[line] = claims;
                         }
                     }
@@ -2764,7 +2765,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// every slot, so the one slot its own Y falls in would name a single page instead of all of them.
         /// </para>
         /// </remarks>
-        private bool ClaimsLine(RRect rect, RRect aggregateRect, int slotIndex, FragmentRegion region, bool isFixed)
+        private bool ClaimsLine(RRect rect, RRect aggregateRect, int slotIndex, FragmentRegion region, bool isFixed, double lineTop)
         {
             // Fixed content repeats at unshifted document coordinates in every slot, so the one slot its
             // own Y falls in would name a single page instead of all of them - exempt from every test below,
@@ -2780,7 +2781,16 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             if (!region.Contains(rect)) return false;
 
-            var nominalSlot = container.SlotStartingAt(rect.Top);
+            // The line box's own top rather than the ink's (see InkRiseAboveLineTop), unless the ink lies wholly
+            // above the page that top names. The line box's top is only trusted while the ink it holds reaches
+            // that page: a padded `vertical-align: top` inline-block has its words drawn over its padding, above
+            // the line top the flow recorded, and with that top on the next page each page rejected the line -
+            // one because the line was nominally the other's, the other because none of the ink reached it.
+            var claimTop = lineTop;
+            if (lineTop > rect.Top && rect.Bottom <= container.PageTopOf(container.SlotStartingAt(lineTop)) + BandOverlapEpsilon)
+                claimTop = rect.Top;
+
+            var nominalSlot = container.SlotStartingAt(claimTop);
 
             if (nominalSlot == slotIndex) return true;
 
@@ -2791,9 +2801,30 @@ namespace PeachPDF.Html.Core.Fragmentation
             // preserving the tie-break for a lone CatchUpStaleSlotsBehind/Finish-replay/
             // EmitReservedBlankSlots re-emission exactly as before.
             return (_currentPassFromSlot is not { } fromSlot || nominalSlot < fromSlot)
-                && HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(rect.Top))
+                && HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(claimTop))
                 && !MonolithicContent.FitsNoFragmentainer(rect.Height, 0, 0, container);
         }
+
+        /// <summary>
+        /// How far <paramref name="lineRect"/> — one box's own rectangle on <paramref name="line"/> — starts
+        /// above the line box itself, or zero when it does not.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A glyph taller than its <c>line-height</c> has a negative half-leading, so its ink rises above
+        /// the line box the flow placed (CSS 2.1 §10.8.1). A line moved to a page's top by a break then has
+        /// ink a point or two above the boundary, and asked by that ink the line's nominal slot is the page
+        /// it left — which never reaches the box, since the block holding the line starts on the next one.
+        /// The line was drawn on no page: a heading in 13pt type on a 12pt line, at a card's first line.
+        /// </para>
+        /// <para>
+        /// Measured against the box's own live rectangle rather than read as a coordinate, so the shift
+        /// and displacement already applied to that rectangle carry over unchanged. Zero for a snapshot:
+        /// the live line box describes the last layout, not the captured copy.
+        /// </para>
+        /// </remarks>
+        private static double InkRiseAboveLineTop(CssLineBox line, RRect lineRect, BoxGeometrySnapshot? snapshot) =>
+            snapshot is null && line.FlowTop is { } flowTop ? Math.Max(0, flowTop - lineRect.Top) : 0;
 
         /// <summary>
         /// Whether the fragmentainer of pagination slot <paramref name="slotIndex"/> claims the word at
@@ -2806,7 +2837,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// stands in for both of <see cref="ClaimsLine"/>'s rectangle parameters.
         /// </summary>
         private bool ClaimsWord(RRect rect, int slotIndex, FragmentRegion region, bool isFixed) =>
-            ClaimsLine(rect, rect, slotIndex, region, isFixed);
+            ClaimsLine(rect, rect, slotIndex, region, isFixed, rect.Top);
 
         /// <summary>
         /// The union of every box's own portion of physical line <paramref name="line"/> -

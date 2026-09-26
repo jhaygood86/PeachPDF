@@ -9386,6 +9386,8 @@ namespace PeachPDF.Html.Core.Dom
                 word.Top += amount;
             }
 
+            OffsetOwnLineBoxesTop(amount);
+
             // Keep this box's own registered string-set/named-page tracking in sync with a reposition
             // that happens after this box's own PerformLayoutImp already returned (e.g. a later ancestor's
             // layout engine re-banding this box, like CssLayoutEngineColumns's Phase 2) - the one-time
@@ -9411,6 +9413,28 @@ namespace PeachPDF.Html.Core.Dom
 
             Location = Location with { Y = Location.Y + amount };
             OnTranslated(0, amount);
+        }
+
+        /// <summary>
+        /// Moves the recorded position of the line boxes this box owns by <paramref name="amount"/>, for a
+        /// mover that has moved their words.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="CssLineBox.FlowTop"/> and <see cref="CssLineBox.BaselineY"/> are numbers a closed line
+        /// records about where it ended up, not views onto its words, so they have to move with them. The
+        /// fragment emitter asks <c>FlowTop</c> which fragmentainer a line whose ink rises above it is in,
+        /// and <c>CssBoxMarker</c> sits an outside marker on <c>BaselineY</c>. <see cref="OffsetTop(double)"/>
+        /// calls this for every box it moves; a mover that moves a box's children but not the box itself (a
+        /// table cell's vertical alignment) calls it for the box.
+        /// </remarks>
+        /// <param name="amount">the distance, positive downwards</param>
+        internal void OffsetOwnLineBoxesTop(double amount)
+        {
+            foreach (var line in LineBoxes)
+            {
+                if (line.FlowTop is { } flowTop) line.FlowTop = flowTop + amount;
+                if (line.BaselineY is { } baselineY) line.BaselineY = baselineY + amount;
+            }
         }
 
         /// <summary>
