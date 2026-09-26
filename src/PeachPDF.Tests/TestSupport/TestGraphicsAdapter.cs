@@ -1,8 +1,6 @@
 ﻿using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Text;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Network;
