@@ -38,21 +38,21 @@ namespace PeachDrawing.Text.Internal.Fonts
     /// Specifies a physical font face that corresponds to a font file on the disk or in memory.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
-    internal sealed class Typeface
+    internal sealed class LoadedTypeface
     {
         // Implementation Notes
-        // Typeface is the centerpiece for font management. There is a one to one relationship
-        // between XFont an Typeface.
+        // LoadedTypeface is the centerpiece for font management. There is a one to one relationship
+        // between XFont an LoadedTypeface.
         //
-        // * Each Typeface can belong to one or more XFont objects.
-        // * An Typeface hold an XFontFamily.
-        // * Typeface hold a reference to an OpenTypeFontface. 
+        // * Each LoadedTypeface can belong to one or more XFont objects.
+        // * An LoadedTypeface hold an XFontFamily.
+        // * LoadedTypeface hold a reference to an OpenTypeFontface. 
         // * 
         //
 
         const string KeyPrefix = FontResolvingOptions.TypefaceKeyPrefix;
 
-        public Typeface(string key, FontFileData fontSource, SyntheticStyle styleSimulations = SyntheticStyle.None)
+        public LoadedTypeface(string key, FontFileData fontSource, SyntheticStyle styleSimulations = SyntheticStyle.None)
         {
             _fontface = fontSource.Fontface;
             _isBold = _fontface.os2.IsBold;
@@ -65,7 +65,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             Initialize();
         }
 
-        public static Typeface GetOrCreateFrom(string familyName, FontResolvingOptions fontResolvingOptions, IFontResolver fontResolver)
+        public static LoadedTypeface GetOrCreateFrom(string familyName, FontResolvingOptions fontResolvingOptions, IFontResolver fontResolver)
         {
             // Per-codepoint resolution (unicode-range / glyph-coverage fallback) takes a separate path
             // that keys caches by the RESOLVED face rather than by (family, style), so the many codepoints
@@ -136,7 +136,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             // bold/italic simulation flags the resolver decided this face needs (see
             // FontResolver.ResolveTypeface's nearest-weight/style matching) - previously computed here
             // and then dropped, since this constructor never used to accept them at all.
-            var glyphTypeface = new Typeface(typefaceKey, fontSource, fontResolverInfo.StyleSimulations);
+            var glyphTypeface = new LoadedTypeface(typefaceKey, fontSource, fontResolverInfo.StyleSimulations);
 
             if (useInstanceCache)
             {
@@ -150,7 +150,7 @@ namespace PeachDrawing.Text.Internal.Fonts
 
             return glyphTypeface;
         }
-        private static Typeface GetOrCreateForCodepoint(string familyName, FontResolvingOptions options, System.Text.Rune codepoint, FontResolver resolver)
+        private static LoadedTypeface GetOrCreateForCodepoint(string familyName, FontResolvingOptions options, System.Text.Rune codepoint, FontResolver resolver)
         {
             var info = resolver.ResolveTypeface(familyName, options.Weight, options.IsItalic, options.Stretch, codepoint);
             if (info == null)
@@ -167,7 +167,7 @@ namespace PeachDrawing.Text.Internal.Fonts
                 return cached;
 
             var fontSource = FontFileData.GetOrCreateFrom(resolver.GetFont(info.FaceName));
-            var glyphTypeface = new Typeface(key, fontSource, info.StyleSimulations)
+            var glyphTypeface = new LoadedTypeface(key, fontSource, info.StyleSimulations)
             {
                 OwningInstanceResolver = resolver
             };

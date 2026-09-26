@@ -1,4 +1,4 @@
-﻿// "Therefore those skilled at the unorthodox
+// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -12,6 +12,7 @@
 
 #nullable enable
 
+using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -19,7 +20,6 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Utilities;
 using System;
@@ -36,7 +36,8 @@ namespace PeachPDF.Adapters
     /// </summary>
     internal sealed class PdfSharpAdapter : RAdapter
     {
-        private readonly FontResolver _fontResolver;
+        /// <summary>The fonts this adapter renders with: the installed fonts plus everything registered on it.</summary>
+        private readonly FontSet _fontSet;
 
         /// <summary>
         /// Init color resolve.
@@ -45,15 +46,15 @@ namespace PeachPDF.Adapters
         {
             AddFontFamilyMapping("Helvetica", "Arial");
 
-            _fontResolver = new FontResolver();
+            _fontSet = new FontSet();
 
-            // FontResolver's static constructor already opened and parsed every system font file once,
-            // process-wide, into _systemFamilies (including filtering out any file that failed to parse) -
+            // The engine's static constructor already opened and parsed every system font file once,
+            // process-wide (including filtering out any file that failed to parse) -
             // registering family names here from that cache instead of re-reading every file avoids paying
             // that cost again on every single PdfSharpAdapter construction (see the fontconfig-caching fix
             // in .claude/recent-fixes/2026-09-10-fontconfig-is-asked-once-per-family.md for the same shape
             // of bug one loop earlier in this constructor).
-            foreach (var familyName in FontResolver.SystemFamilyDisplayNames)
+            foreach (var familyName in FontSet.InstalledFamilyNames)
             {
                 AddFontFamily(new FontFamilyAdapter(familyName));
             }
@@ -67,37 +68,22 @@ namespace PeachPDF.Adapters
                 AddFontFamilyMapping("Arial", DefaultFontResolver.DefaultFont);
             }
 
-            var isAndroid = OperatingSystem.IsAndroid();
-            var isWindows = OperatingSystem.IsWindows();
-            var isMacOS = OperatingSystem.IsMacOS();
-            // Android is Linux-kernel-based and OperatingSystem.IsLinux() may also report true there -
-            // Android must be checked first (it is, via GenericFontFamilyResolver.ResolvePlatformDefault's
-            // own Android-first order) and excluded from the fontconfig-delegation path below.
-            var isLinux = OperatingSystem.IsLinux() && !isAndroid;
-
             // Chromium resolves each generic family differently per OS: hardcoded specific names on
             // Windows/macOS/Android, but delegated to the OS's own fontconfig on Linux (matching what
             // `fc-match <generic>` would return) rather than one hardcoded name that would be wrong for
-            // whichever distro doesn't happen to have it.
-            foreach (var generic in GenericFontFamilyResolver.Generics)
+            // whichever distro doesn't happen to have it. The font set knows that; what counts as "installed"
+            // is this adapter's own registry (aliases included), so it is passed in.
+            //
+            // math is the one generic with no per-platform single name (nor a fontconfig answer worth
+            // trusting): it is the first installed family of a candidate chain.
+            //
+            // The "verify installed, else fall back to the platform default font" correction applies to every
+            // generic (previously only done for Arial above) - otherwise a hardcoded/fontconfig-returned name
+            // that isn't actually installed would substitute an arbitrary, unrelated font via the font set's own
+            // "give the caller SOMETHING" last resort.
+            foreach (var (keyword, generic) in GenericFontFamilyResolver.Generics)
             {
-                // math is the one generic with no per-platform single name (nor a fontconfig answer worth
-                // trusting): it is the first installed family of a candidate chain - see ResolveMathFamily.
-                var target = generic == PeachPDF.CSS.Keywords.Math
-                    ? GenericFontFamilyResolver.ResolveMathFamily(isWindows, isMacOS, isAndroid, IsFontExists)
-                    : isLinux ? LinuxSystemFontResolver.ResolveGenericFamily(generic) : null;
-                target ??= GenericFontFamilyResolver.ResolvePlatformDefault(generic, isWindows, isMacOS, isAndroid);
-
-                // Apply the same "verify installed, else fall back to the platform default font" correction
-                // to every generic (previously only done for Arial above) - otherwise a hardcoded/fontconfig
-                // -returned name that isn't actually installed would substitute an arbitrary, unrelated font
-                // via FontResolver.ResolveTypeface's own "give the caller SOMETHING" last resort.
-                if (!IsFontExists(target))
-                {
-                    target = DefaultFontResolver.DefaultFont;
-                }
-
-                AddFontFamilyMapping(generic, target);
+                AddFontFamilyMapping(keyword, _fontSet.ResolveGeneric(generic, IsFontExists) ?? DefaultFontResolver.DefaultFont);
             }
 
             // Chromium's system-ui resolves to Segoe UI on Windows - an exact match for
@@ -115,32 +101,8 @@ namespace PeachPDF.Adapters
             // every band was 11.7% taller than the same band under Chromium, and on a page
             // whose top margin the band already fills, that difference is what tipped body
             // text into overprinting it.
-            AddFontFamilyMapping("system-ui", ResolveSystemUiFamily(
-                isLinux ? LinuxSystemFontResolver.ResolveGenericFamily("system-ui") : null,
-                IsFontExists));
+            AddFontFamilyMapping("system-ui", _fontSet.ResolveGeneric(GenericFamily.SystemUi, IsFontExists) ?? DefaultFontResolver.DefaultFont);
         }
-
-        /// <summary>
-        /// The family <c>system-ui</c> maps to: whatever fontconfig resolved, when that is a family
-        /// actually installed on this host, and <see cref="DefaultFontResolver.DefaultFont"/> otherwise.
-        /// </summary>
-        /// <param name="fontconfigFamily">
-        /// fontconfig's own answer, or <c>null</c> off Linux and whenever
-        /// <see cref="LinuxSystemFontResolver.ResolveGenericFamily"/> could not answer (no
-        /// <c>libfontconfig.so.1</c>, or a resolution failure — it catches and returns null).
-        /// </param>
-        /// <param name="fontExists">the installed-family check — <c>IsFontExists</c> in production</param>
-        /// <returns>the family name to map <c>system-ui</c> to</returns>
-        /// <remarks>
-        /// Separated from the constructor so the fallback arm can be tested at all: on any real
-        /// machine fontconfig answers and the answer is installed, so the branch never runs in situ —
-        /// the same reason <c>DefaultFontFallbackTests</c> uses a synthetic family name rather than
-        /// the real default font.
-        /// </remarks>
-        internal static string ResolveSystemUiFamily(string? fontconfigFamily, Func<string, bool> fontExists) =>
-            fontconfigFamily is not null && fontExists(fontconfigFamily)
-                ? fontconfigFamily
-                : DefaultFontResolver.DefaultFont;
 
         public RNetworkLoader NetworkLoader { get; set; } = new DataUriNetworkLoader();
 
@@ -232,19 +194,25 @@ namespace PeachPDF.Adapters
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
 
-            byte[] fontBytes = FontFormatConverter.ToOpenType(memoryStream.ToArray());
-            using var convertedStream = new MemoryStream(fontBytes);
+            AddFont(memoryStream.ToArray(), fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+        }
 
-            var fontDesc = TtfFontDescription.LoadDescription(convertedStream);
-            fontFamilyName ??= fontDesc.FontFamilyInvariantCulture;
+        private void AddFont(ReadOnlyMemory<byte> data, string? fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride, IReadOnlyList<RuneInterval>? unicodeRanges)
+        {
+            // The font set recognises WOFF/WOFF2/TrueType/OpenType by content and reads the family name from the
+            // file when the caller gave none.
+            var family = _fontSet.AddData(data, new AddOptions
+            {
+                FamilyName = fontFamilyName,
+                Weight = weightOverride,
+                IsItalic = isItalicOverride,
+                Width = stretchOverride,
+                UnicodeRanges = unicodeRanges
+            });
 
-            AddFontFamily(new FontFamilyAdapter(fontFamilyName));
+            AddFontFamily(new FontFamilyAdapter(family.Name));
 
-            AdoptDefaultFontIfMissing(DefaultFontResolver.DefaultFont, fontFamilyName, IsFontExists(DefaultFontResolver.DefaultFont));
-
-            convertedStream.Seek(0, SeekOrigin.Begin);
-
-            _fontResolver.AddFont(convertedStream, fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+            AdoptDefaultFontIfMissing(DefaultFontResolver.DefaultFont, family.Name, IsFontExists(DefaultFontResolver.DefaultFont));
         }
 
         /// <summary>
@@ -392,15 +360,21 @@ namespace PeachPDF.Adapters
 
         protected override RFont CreateFontInt(string family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null)
         {
-            var fontStyle = (XFontStyle)((int)style);
-            var xFont = new XFont(family, size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), weight, stretch, obliqueSkewSinus, _fontResolver);
-            return new FontAdapter(xFont, PixelsPerPoint);
+            return MatchAndCreateFont(family, size, style, weight, stretch, obliqueSkewSinus);
         }
 
         protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null)
         {
+            return MatchAndCreateFont(((FontFamilyAdapter)family).Name, size, style, weight, stretch, obliqueSkewSinus);
+        }
+
+        private FontAdapter MatchAndCreateFont(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus)
+        {
             var fontStyle = (XFontStyle)((int)style);
-            var xFont = new XFont(((FontFamilyAdapter)family).Name, size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), weight, stretch, obliqueSkewSinus, _fontResolver);
+            var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
+
+            var match = _fontSet.MatchOrFallback(family, new TypefaceQuery(weight, stretch, isItalic));
+            var xFont = new XFont(size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), match, obliqueSkewSinus);
             return new FontAdapter(xFont, PixelsPerPoint);
         }
 
@@ -409,26 +383,32 @@ namespace PeachPDF.Adapters
             var fontStyle = (XFontStyle)((int)style);
             var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
 
-            // Pre-check coverage so we never build an XFont for a family that can't render this codepoint:
-            // a null here tells the caller to try the next family in the stack.
-            if (_fontResolver.ResolveTypeface(family, weight, isItalic, stretch, codepoint) is null)
+            // A null here tells the caller to try the next family in the stack: never build an XFont for a family
+            // that can't render this codepoint.
+            if (!_fontSet.TryFindFamily(family, out var typefaceFamily)
+                || !typefaceFamily.TryMatch(new TypefaceQuery(weight, stretch, isItalic, codepoint), out var match))
+            {
                 return null;
+            }
 
-            var xFont = new XFont(family, size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), weight, stretch, obliqueSkewSinus, codepoint, _fontResolver);
+            var xFont = new XFont(size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), match, obliqueSkewSinus);
             return new FontAdapter(xFont, PixelsPerPoint);
         }
 
         protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation)
         {
-            var fallbackFamily = _fontResolver.FindFamilyCoveringCodepoint(codepoint, presentation);
-            if (fallbackFamily is null)
+            if (!_fontSet.TryFindCoveringFamily(codepoint, presentation, out var fallbackFamily))
                 return null;
 
             var fontStyle = (XFontStyle)((int)style);
+            var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
 
             try
             {
-                var xFont = new XFont(fallbackFamily, size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), weight, stretch, obliqueSkewSinus, codepoint, _fontResolver);
+                if (!fallbackFamily.TryMatch(new TypefaceQuery(weight, stretch, isItalic, codepoint), out var match))
+                    return null;
+
+                var xFont = new XFont(size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), match, obliqueSkewSinus);
                 return new FontAdapter(xFont, PixelsPerPoint);
             }
             catch
@@ -443,7 +423,7 @@ namespace PeachPDF.Adapters
             }
         }
 
-        protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => _fontResolver.HasExplicitRanges(family);
+        protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => _fontSet.HasExplicitRanges(family);
 
         protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
@@ -463,17 +443,13 @@ namespace PeachPDF.Adapters
             return false;
         }
 
-        protected override async Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
-            var hasLocalFont = _fontResolver.HasFont(localFontFaceName);
+            if (!_fontSet.TryGetFontData(localFontFaceName, out var data)) return Task.FromResult(false);
 
-            if (!hasLocalFont) return false;
+            AddFont(data, fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
 
-            var bytes = _fontResolver.GetFont(localFontFaceName);
-            var stream = new MemoryStream(bytes);
-            await AddFont(stream, fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
-
-            return true;
+            return Task.FromResult(true);
         }
     }
 }

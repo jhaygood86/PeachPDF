@@ -1,3 +1,85 @@
+PeachDrawing.Text.AddOptions : sealed class
+  ctor()
+  property IReadOnlyList<RuneInterval> UnicodeRanges { get; init; }
+  property Nullable<Boolean> IsItalic { get; init; }
+  property Nullable<Int32> Weight { get; init; }
+  property Nullable<Int32> Width { get; init; }
+  property String FamilyName { get; init; }
+PeachDrawing.Text.FontSet : sealed class
+  ctor()
+  method Boolean HasExplicitRanges(String familyName)
+  method Boolean TryFindCoveringFamily(Rune rune, EmojiPresentation presentation, out TypefaceFamily family)
+  method Boolean TryFindFamily(String name, out TypefaceFamily family)
+  method Boolean TryGetFontData(String fontName, out ReadOnlyMemory<Byte> data)
+  method String ResolveGeneric(GenericFamily generic, Func<String, Boolean> isAvailable = null)
+  method TypefaceFamily AddData(ReadOnlyMemory<Byte> data, AddOptions options = null)
+  method TypefaceFamily AddFile(String path, AddOptions options = null)
+  method TypefaceFamily AddStream(Stream stream, AddOptions options = null)
+  method TypefaceMatch MatchOrFallback(String familyName, in TypefaceQuery query)
+  property static IReadOnlyList<String> InstalledFamilyNames { get; }
+PeachDrawing.Text.GenericFamily : enum Int32
+  Cursive = 3
+  Fantasy = 4
+  Math = 6
+  Monospace = 2
+  SansSerif = 1
+  Serif = 0
+  SystemUi = 5
+PeachDrawing.Text.RuneInterval : struct
+  ctor(Rune Start, Rune End)
+  method Boolean Contains(Rune rune)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(RuneInterval other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Rune Start, out Rune End)
+  property Rune End { get; init; }
+  property Rune Start { get; init; }
+PeachDrawing.Text.SyntheticStyle : enum Int32
+  Bold = 1
+  BoldItalic = 3
+  Italic = 2
+  None = 0
+PeachDrawing.Text.Typeface : sealed class
+  method Boolean Equals(Object obj)
+  method Boolean Equals(Typeface other)
+  method Int32 GetHashCode()
+  method String ToString()
+  property Boolean IsBold { get; }
+  property Boolean IsItalic { get; }
+  property String FamilyName { get; }
+  property String StyleName { get; }
+PeachDrawing.Text.TypefaceFamily : sealed class
+  method Boolean TryMatch(in TypefaceQuery query, out TypefaceMatch match)
+  property String Name { get; }
+PeachDrawing.Text.TypefaceFormatException : sealed class
+  ctor()
+  ctor(String message)
+  ctor(String message, Exception innerException)
+PeachDrawing.Text.TypefaceMatch : struct
+  ctor(Typeface Typeface, SyntheticStyle Synthesis)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(TypefaceMatch other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Typeface Typeface, out SyntheticStyle Synthesis)
+  property SyntheticStyle Synthesis { get; init; }
+  property Typeface Typeface { get; init; }
+PeachDrawing.Text.TypefaceQuery : struct
+  ctor()
+  ctor(Int32 Weight = 400, Int32 Width = 5, Boolean IsItalic = False, Nullable<Rune> MustCover = null)
+  field const Int32 BoldWeight
+  field const Int32 NormalWeight
+  field const Int32 NormalWidth
+  method Boolean Equals(Object obj)
+  method Boolean Equals(TypefaceQuery other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 Weight, out Int32 Width, out Boolean IsItalic, out Nullable<Rune> MustCover)
+  property Boolean IsItalic { get; init; }
+  property Int32 Weight { get; init; }
+  property Int32 Width { get; init; }
+  property Nullable<Rune> MustCover { get; init; }
 PeachDrawing.Text.Unicode.BaseDirection : enum Byte
   Auto = 2
   Ltr = 0

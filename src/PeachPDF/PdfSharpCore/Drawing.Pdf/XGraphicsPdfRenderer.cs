@@ -31,6 +31,7 @@
 
 #define ITALIC_SIMULATION
 
+using PeachDrawing.Text;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters.Entities;

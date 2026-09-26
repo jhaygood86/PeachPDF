@@ -8,10 +8,11 @@ and is versioned in lockstep with PeachPDF: the same version number for every re
 dotnet add package PeachDrawing.Text
 ```
 
-> **Status: pre-1.0.** The library is being opened up area by area. Today the public surface is the
-> `PeachDrawing.Text.Unicode` namespace described below. The font, shaping, outline and paragraph-layout APIs are
-> still internal to the package, so PeachPDF is the only consumer of them, and they will be published in later
-> releases. Until 1.0, the public API may change between releases.
+> **Status: pre-1.0.** The library is being opened up area by area. Today the public surface is font loading and
+> matching (`FontSet` and the types around it) and the `PeachDrawing.Text.Unicode` namespace, both described below.
+> Metrics, glyph mapping, shaping, outlines and paragraph layout are still internal to the package, so PeachPDF is the
+> only consumer of them, and they will be published in later releases. Until 1.0, the public API may change between
+> releases.
 
 ## What the engine does
 
@@ -24,6 +25,58 @@ dotnet add package PeachDrawing.Text
 - **Outlines and colour:** glyph outlines for `glyf` and CFF, COLR v0 and v1 with CPAL, and CBDT/CBLC and sbix bitmaps.
 - **Unicode:** the Unicode Bidirectional Algorithm, script itemization, vertical orientation, emoji presentation, and
   TeX/Liang hyphenation for 73 languages.
+
+## Fonts: `FontSet`, families and matching
+
+A `FontSet` is the fonts a piece of text can be set in: the fonts installed on the machine, plus the ones you add to it.
+A font you add under the name of an installed family joins that family for that set only, taking the place of the face
+with the same weight, slant, width and code point ranges. Two sets never see each other's fonts, so two callers can
+register different data under one family name. A set is not safe for concurrent use: give each thread its own. Add
+the fonts before you match: an answer a set has already given is remembered and does not change when a font is added
+afterwards, so that measuring and drawing one piece of text cannot end up in different faces.
+
+```csharp
+using PeachDrawing.Text;
+
+var fonts = new FontSet();
+
+// TrueType, OpenType (glyf and CFF), WOFF and WOFF2 are recognised by their content.
+TypefaceFamily brand = fonts.AddFile("Brand-Regular.otf", new AddOptions { FamilyName = "Brand" });
+fonts.AddFile("Brand-Bold.otf", new AddOptions { FamilyName = "Brand", Weight = 700 });
+
+// Ask a family for the face that fits a query. A query has a weight, a width class, a slant and, optionally, a
+// character the face has to be able to draw.
+if (brand.TryMatch(new TypefaceQuery(Weight: 600, IsItalic: true), out TypefaceMatch match))
+{
+    Typeface face = match.Typeface;              // the face that matched; it has no size
+    SyntheticStyle toFake = match.Synthesis;     // what is still missing: Bold, Italic, both, or None
+}
+```
+
+`TryMatch` follows CSS Fonts 4 face matching: the slant first, then the width, then the weight, taking the nearest face
+when none is exact. A face is taken to cover the characters of its `unicode-range` if it has one, and the ones its
+`cmap` maps otherwise. `Synthesis` says what the caller has to fake because the face falls short: bold when 600 or more
+was asked for and the face is lighter, italic when italic was asked for and the face is upright.
+
+A typeface has no size. Text size belongs to whoever draws the text, and the same `Typeface` serves every size.
+
+`AddOptions` is the counterpart of the descriptors of a CSS `@font-face` rule: the family name, weight, italic, width
+class and `unicode-range` to register a font under in place of what the file itself declares.
+
+Other things a `FontSet` does:
+
+- `TryFindFamily` looks a family up by name, ignoring case. `MatchOrFallback` never fails for a set that holds a font: a
+  family the set does not know is answered with a face of its first family.
+- `TryFindCoveringFamily` is the last-resort search of CSS font matching: which family draws a character that none of
+  the families asked for can, preferring the one whose coverage mostly lies in the character's own script, and, for a
+  character with a text and an emoji form, a face that supports the presentation asked for (see `Emoji` below).
+- `ResolveGeneric` names a family for a CSS generic such as `serif` or `monospace` on this platform: fixed names on
+  Windows, macOS and Android, fontconfig on Linux, and the first available of a list of math fonts for `math`.
+- `HasExplicitRanges` says whether any face of a family declares a `unicode-range`, which is when text has to be
+  resolved character by character.
+- `FontSet.InstalledFamilyNames` lists the installed families.
+- Data that is not a font is reported with a `TypefaceFormatException`. Of a TrueType or OpenType collection, only the
+  first face is added.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 

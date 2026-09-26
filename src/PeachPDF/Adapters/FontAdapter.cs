@@ -88,7 +88,7 @@ namespace PeachPDF.Adapters
             // family alias that was actually registered) through IFontResolver - for a custom/@font-face-
             // registered family this can resolve to an entirely unrelated font, and even when it does find
             // something, it bypasses the per-instance cache routing that keeps two PdfGenerators' same-
-            // named custom fonts from colliding (see XFont.Descriptor and Typeface.OwningInstanceResolver).
+            // named custom fonts from colliding (see XFont.Descriptor and LoadedTypeface.OwningInstanceResolver).
             var descriptor = font.Descriptor;
             var descent = font.Size * descriptor.Descender / descriptor.UnitsPerEm;
             var ascent = font.Size * descriptor.Ascender / descriptor.UnitsPerEm;

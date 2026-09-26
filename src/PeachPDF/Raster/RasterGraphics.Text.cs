@@ -1,3 +1,4 @@
+using PeachDrawing.Text;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
 using PeachDrawing.Text.Internal.Fonts.OpenType;

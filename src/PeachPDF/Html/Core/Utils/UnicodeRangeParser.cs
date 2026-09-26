@@ -1,4 +1,4 @@
-using PeachDrawing.Text.Internal.Fonts;
+using PeachDrawing.Text;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -6,7 +6,6 @@ using System.Linq;
 using System.Text;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Parse;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 
 namespace PeachPDF.Html.Core.Utils
 {
@@ -92,6 +91,15 @@ namespace PeachPDF.Html.Core.Utils
         /// place the inclusive-on-both-ends convention lives - a codepoint range <c>U+41-5A</c> covers
         /// both <c>U+41</c> and <c>U+5A</c>, unlike a <see cref="Range"/>'s half-open slicing semantics.
         /// </summary>
-        internal static bool Covers(IReadOnlyList<RuneInterval> ranges, Rune rune) => CMapCoverage.Contains(ranges, rune);
+        internal static bool Covers(IReadOnlyList<RuneInterval> ranges, Rune rune)
+        {
+            for (var i = 0; i < ranges.Count; i++)
+            {
+                if (ranges[i].Contains(rune))
+                    return true;
+            }
+
+            return false;
+        }
     }
 }

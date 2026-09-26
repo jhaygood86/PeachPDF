@@ -39,7 +39,7 @@ namespace PeachDrawing.Text.Internal.Fonts
     // Wikipedia EN -> DE
     //     Font -> Schriftschnitt
     //     Computer font -> Font (Informationstechnik)
-    //     Typeface (Font family) -> Schriftart / Schriftfamilie
+    //     LoadedTypeface (Font family) -> Schriftart / Schriftfamilie
     //     Glyph -> Glyphe 
     // 
     // It seems that typeface and font family are synonyms in english.
@@ -51,7 +51,7 @@ namespace PeachDrawing.Text.Internal.Fonts
     // plus the information whether bold and/or italic should be simulated.
     // 
     // Wikipedia DE -> EN
-    //     Schriftart -> Typeface
+    //     Schriftart -> LoadedTypeface
     //     Schriftschnitt -> Font
     //     Schriftfamilie -> ~   (means Font family)
     //     Schriftsippe -> Font superfamily
@@ -59,7 +59,7 @@ namespace PeachDrawing.Text.Internal.Fonts
     // 
     // http://en.wikipedia.org/wiki/Font
     // http://en.wikipedia.org/wiki/Computer_font
-    // http://en.wikipedia.org/wiki/Typeface
+    // http://en.wikipedia.org/wiki/LoadedTypeface
     // http://en.wikipedia.org/wiki/Glyph
     // http://en.wikipedia.org/wiki/Typographic_unit
     // 

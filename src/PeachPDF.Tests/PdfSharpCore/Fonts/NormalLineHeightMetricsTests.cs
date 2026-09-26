@@ -1,5 +1,6 @@
 using System.IO;
 using PeachPDF.Adapters;
+using PeachDrawing.Text;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -9,18 +10,6 @@ using Xunit;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 {
-    /// <summary>Resolves every request to the bundled TrueType fixture, for a test that needs a real,
-    /// deterministic <see cref="XFont"/> without depending on which fonts happen to be installed on the
-    /// machine running the test (unlike the system-font-dependent resolvers used elsewhere in this
-    /// directory, e.g. <c>SmokeTests.cs</c>'s "Times New Roman"/"Arial").</summary>
-    file sealed class BundledTtfResolver : IFontResolver
-    {
-        public FontResolverInfo ResolveTypeface(string familyName, bool isBold, bool isItalic) => new("bundled-ttf");
-        public FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic) => new("bundled-ttf");
-        public FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic, int stretch) => new("bundled-ttf");
-        public byte[] GetFont(string fontFaceName) => File.ReadAllBytes(BundledFonts.Ttf);
-    }
-
     /// <summary>
     /// <see cref="FontDescriptor.NormalLineHeightAscent"/>/<see cref="FontDescriptor.NormalLineHeightDescent"/>/
     /// <see cref="FontDescriptor.NormalLineHeightGap"/> selection logic (issue #956): the raw <c>hhea</c>
@@ -113,8 +102,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         [Fact]
         public void NormalLineHeight_ScalesExactlyLinearlyWithPixelsPerPoint()
         {
-            var font = new XFont("bundled", 20, XFontStyle.Regular, new XPdfFontOptions(PdfFontEncoding.Unicode),
-                400, 5, null, new BundledTtfResolver());
+            // A set holding only the bundled fixture, so the metrics do not depend on which fonts the machine has installed.
+            var fontSet = new FontSet();
+            fontSet.AddFile(BundledFonts.Ttf, new AddOptions { FamilyName = "bundled" });
+            var font = TestFonts.Create("bundled", 20, fontSet: fontSet);
 
             var unscaled = new FontAdapter(font, pixelsPerPoint: 1.0);
             var scaled = new FontAdapter(font, pixelsPerPoint: 2.0);
