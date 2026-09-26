@@ -70,6 +70,17 @@ namespace PeachDrawing.Text.Tests.PublicApi
         }
 
         [Fact]
+        public void ALoneSurrogate_IsTreatedAsACharacterOfItsOwn_AndNeverThrows()
+        {
+            const string text = "a\uD800b";
+
+            Assert.Equal([0, 1, 2, 3], Segmenter.FindGraphemeBoundaries(text));
+            Assert.Equal(text.Length + 1, LineBreaker.FindOpportunities(text).Length);
+            Assert.NotEmpty(Segmenter.FindWordBoundaries(text));
+            Assert.NotEmpty(Segmenter.FindSentenceBoundaries(text));
+        }
+
+        [Fact]
         public void LineBreaks_AreAllowedAfterSpaces_AndMandatoryAfterNewlines()
         {
             var text = LineBreaker.FindOpportunities("ab cd\nef");
