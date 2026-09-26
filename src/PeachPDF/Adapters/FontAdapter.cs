@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
@@ -201,7 +202,7 @@ namespace PeachPDF.Adapters
         // Backed by the font's OpenTypeDescriptor.ColorPalette (the CPAL table). Null for a non-color font,
         // in which case each member falls back to the RFont "no palettes" default.
 
-        private CpalTable? ColorPalette => Font.Typeface.HasColorGlyphs ? Font.Descriptor.ColorPalette : null;
+        private ColorPalette? ColorPalette => Font.Typeface.ColorPalette;
 
         public override int PaletteCount => ColorPalette?.PaletteCount ?? 0;
 

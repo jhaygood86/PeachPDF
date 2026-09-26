@@ -10,13 +10,15 @@
 //   - COLR v1: a recursive paint graph (ColorGlyphPainter.ColrV1.cs).
 //
 // Glyph outlines are decoded to design-unit contours and mapped to world space
-// (the same space DrawString's baseline is in) through a ColrAffine that starts
+// (the same space DrawString's baseline is in) through a Affine2x3 that starts
 // as the per-glyph placement and, for v1, composes the paint graph's own
 // transforms. Fills/clips go through the shared XGraphics, so page scaling and
 // the WorldToView mapping apply exactly as for ordinary vector content.
 //
 #endregion
 
+using PeachDrawing.Text;
+using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Generic;
@@ -32,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         private readonly XGraphicsPdfRenderer _renderer;
         private readonly XGraphics _gfx;
-        private readonly OpenTypeDescriptor _descriptor;
+        private readonly Typeface _typeface;
         private readonly XFont _font;
         private readonly XBrush _textBrush;
         private readonly double _scale;         // design units -> world units
@@ -45,16 +47,16 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         private readonly double _baselineX;
         private readonly double _baselineY;
 
-        public ColorGlyphPainter(XGraphicsPdfRenderer renderer, OpenTypeDescriptor descriptor, XFont font,
+        public ColorGlyphPainter(XGraphicsPdfRenderer renderer, XFont font,
             XBrush brush, double baselineX, double baselineY, double letterSpacing, XPageDirection pageDirection,
             int paletteIndex = 0, IReadOnlyDictionary<int, XColor>? overrides = null)
         {
             _renderer = renderer;
             _gfx = renderer.Gfx;
-            _descriptor = descriptor;
+            _typeface = font.Typeface;
             _font = font;
             _textBrush = brush;
-            _scale = font.Size / descriptor.UnitsPerEm;
+            _scale = font.Size / _typeface.Metrics.UnitsPerEm;
             _letterSpacing = letterSpacing;
             _pageDownwards = pageDirection == XPageDirection.Downwards;
             _foreground = brush is XSolidBrush solid ? solid.Color : XColors.Black;
@@ -89,7 +91,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                     PaintGlyph(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale);
                 }
 
-                penX += (_descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta) * _scale + _letterSpacing;
+                penX += (_typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta) * _scale + _letterSpacing;
             }
 
             bool hasSelectableGlyph = false;
@@ -129,7 +131,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                     // A GSUB Multiple Substitution's second and later output glyphs deliberately own no
                     // source characters: the first output carries the original cluster once, rather than
                     // every painted expansion glyph making extraction repeat it.
-                    penX += (_descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta) * _scale + _letterSpacing;
+                    penX += (_typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta) * _scale + _letterSpacing;
                 }
             }
             finally
@@ -279,7 +281,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// </summary>
         private bool PaintBitmapGlyph(int glyphId, double originX, double originYOffset)
         {
-            if (!_descriptor.HasBitmapGlyphs || !_descriptor.TryGetBitmapGlyph(glyphId, _font.Size, out BitmapGlyph bitmap))
+            if (!_typeface.HasBitmapGlyphs || !_typeface.TryGetBitmap((ushort)glyphId, _font.Size, out EmbeddedBitmap bitmap))
                 return false;
 
             double scale = _font.Size / bitmap.Ppem;
@@ -295,28 +297,27 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 return true;
             }
 
-            _gfx.DrawImage(PeachPDF.Adapters.BitmapGlyphImages.Get(_descriptor, glyphId, bitmap), new XRect(left, top, width, height));
+            _gfx.DrawImage(PeachPDF.Adapters.BitmapGlyphImages.Get(_typeface, glyphId, bitmap), new XRect(left, top, width, height));
             return true;
         }
 
         private void PaintGlyph(int glyphId, double originX, double originYOffset = 0)
         {
-            ColrAffine placement = Placement(originX, originYOffset);
+            Affine2x3 placement = Placement(originX, originYOffset);
             // A bitmap-only colour font (CBDT/sbix) has no COLR table: its glyphs with no picture are plain outlines.
-            ColrTable? colr = _descriptor.ColorTable;
 
             // Per the COLR processing model a v1-aware renderer resolves the v1 BaseGlyphList first,
             // falling back to the v0 layer records only when the glyph has no v1 paint.
-            if (colr is not null && colr.Version >= 1 && colr.GetV1BaseGlyphPaint(glyphId) is { } paint)
+            if (_typeface.GetColorPaint((ushort)glyphId) is { } paint)
             {
                 PaintV1(paint, placement, hasClip: false, clip: default, depth: 0);
                 return;
             }
 
-            if (colr is not null && colr.TryGetV0Layers(glyphId, out var layers))
+            if (_typeface.TryGetColorLayers((ushort)glyphId, out var layers))
             {
-                foreach ((int layerGlyphId, int paletteIndex) in layers)
-                    FillGlyphOutline(layerGlyphId, placement, ResolveColor(paletteIndex));
+                foreach (ColorLayer layer in layers)
+                    FillGlyphOutline(layer.GlyphId, placement, ResolveColor(layer.PaletteIndex));
                 return;
             }
 
@@ -326,9 +327,9 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         }
 
         /// <summary>Fills a single glyph's outline (mapped by <paramref name="transform"/>) with a solid color.</summary>
-        private void FillGlyphOutline(int glyphId, ColrAffine transform, XColor color)
+        private void FillGlyphOutline(int glyphId, Affine2x3 transform, XColor color)
         {
-            if (!_descriptor.TryGetGlyphOutline(glyphId, out GlyphOutline outline) || outline.IsEmpty)
+            if (!_typeface.TryGetOutline((ushort)glyphId, out GlyphOutline outline) || outline.IsEmpty)
                 return;
 
             if (_measuring)
@@ -340,21 +341,21 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             _gfx.DrawPath(new XSolidBrush(color), BuildPath(outline, transform));
         }
 
-        private static XGraphicsPath BuildPath(GlyphOutline outline, ColrAffine transform)
+        private static XGraphicsPath BuildPath(GlyphOutline outline, Affine2x3 transform)
         {
             int pointCount = outline.Contours.Count;
-            foreach (GlyphContour contour in outline.Contours)
+            foreach (OutlineContour contour in outline.Contours)
             {
-                foreach (GlyphSegment segment in contour.Segments)
+                foreach (OutlineSegment segment in contour.Segments)
                     pointCount += segment.IsCubic ? 3 : 1;
             }
 
             var path = new XGraphicsPath(pointCount) { FillMode = XFillMode.Winding };
 
-            foreach (GlyphContour contour in outline.Contours)
+            foreach (OutlineContour contour in outline.Contours)
             {
                 XPoint current = Map(transform, contour.Start.X, contour.Start.Y);
-                foreach (GlyphSegment segment in contour.Segments)
+                foreach (OutlineSegment segment in contour.Segments)
                 {
                     XPoint end = Map(transform, segment.End.X, segment.End.Y);
                     if (segment.IsCubic)
@@ -375,19 +376,19 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             return path;
         }
 
-        private static XPoint Map(ColrAffine t, double x, double y)
+        private static XPoint Map(Affine2x3 t, double x, double y)
             => new(t.XX * x + t.XY * y + t.DX, t.YX * x + t.YY * y + t.DY);
 
         /// <summary>The design-units-&gt;world placement affine for a glyph at the given pen origin -
         /// <paramref name="originYOffset"/> is a GPOS mark-positioning Y delta (world units, already
         /// scaled and sign-adjusted for page direction the same way X is by the caller).</summary>
-        private ColrAffine Placement(double originX, double originYOffset = 0)
+        private Affine2x3 Placement(double originX, double originYOffset = 0)
         {
             // Font em-square is y-up; the page (when downwards) is y-down, so flip Y - the offset
             // flips the same way, since it moves the glyph up in font space regardless of page direction.
             double yy = _pageDownwards ? -_scale : _scale;
             double baselineY = _pageDownwards ? _baselineY - originYOffset : _baselineY + originYOffset;
-            return new ColrAffine(_scale, 0, 0, yy, originX, baselineY);
+            return new Affine2x3(_scale, 0, 0, yy, originX, baselineY);
         }
 
         private XColor ResolveColor(int paletteIndex) => ResolveColor(paletteIndex, 1.0);
@@ -405,7 +406,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             {
                 color = over;
             }
-            else if (_descriptor.ColorPalette.TryGetColor(_paletteIndex, paletteIndex, out var c))
+            else if (_typeface.ColorPalette is { } palette && palette.TryGetColor(_paletteIndex, paletteIndex, out var c))
             {
                 color = XColor.FromArgb(c.A, c.R, c.G, c.B);
             }

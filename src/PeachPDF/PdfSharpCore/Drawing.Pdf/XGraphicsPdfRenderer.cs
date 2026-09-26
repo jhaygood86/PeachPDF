@@ -31,6 +31,7 @@
 
 #define ITALIC_SIMULATION
 
+using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Internal.Fonts;
@@ -510,7 +511,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 // geometry to viewers which cannot select marked vector content alone. The resolved
                 // font-palette (index + entry overrides), when present, selects the CPAL palette.
                 int paletteIndex = fontPalette?.BasePaletteIndex ?? 0;
-                var colorPainter = new ColorGlyphPainter(this, descriptor, font, brush, x, y,
+                var colorPainter = new ColorGlyphPainter(this, font, brush, x, y,
                     letterSpacing, Gfx.PageDirection, paletteIndex, fontPalette?.Overrides);
                 colorPainter.Paint(s, colorGlyphs!, logicalText);
             }

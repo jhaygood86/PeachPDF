@@ -10,6 +10,7 @@
 //
 #endregion
 
+using PeachDrawing.Text.Outlines;
 using System;
 using System.Collections.Generic;
 
@@ -104,9 +105,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// Every contour of <paramref name="outline"/> as closed polylines - each cubic subdivided, each
         /// contour's last point joined back to its first.
         /// </summary>
-        private static List<(GlyphOutlinePoint From, GlyphOutlinePoint To)> Flatten(GlyphOutline outline)
+        private static List<(OutlinePoint From, OutlinePoint To)> Flatten(GlyphOutline outline)
         {
-            List<(GlyphOutlinePoint, GlyphOutlinePoint)> edges = [];
+            List<(OutlinePoint, OutlinePoint)> edges = [];
 
             foreach (var contour in outline.Contours)
             {
@@ -142,8 +143,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             return edges;
         }
 
-        private static GlyphOutlinePoint CubicAt(
-            GlyphOutlinePoint p0, GlyphOutlinePoint p1, GlyphOutlinePoint p2, GlyphOutlinePoint p3, double t)
+        private static OutlinePoint CubicAt(
+            OutlinePoint p0, OutlinePoint p1, OutlinePoint p2, OutlinePoint p3, double t)
         {
             var u = 1 - t;
             var a = u * u * u;
@@ -151,7 +152,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             var c = 3 * u * t * t;
             var d = t * t * t;
 
-            return new GlyphOutlinePoint(
+            return new OutlinePoint(
                 a * p0.X + b * p1.X + c * p2.X + d * p3.X,
                 a * p0.Y + b * p1.Y + c * p2.Y + d * p3.Y);
         }
@@ -166,7 +167,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// a winding of zero and punch a hole in the middle of a stem.
         /// </remarks>
         private static void CollectCrossings(
-            List<(GlyphOutlinePoint From, GlyphOutlinePoint To)> edges, double y,
+            List<(OutlinePoint From, OutlinePoint To)> edges, double y,
             List<(double X, int Direction)> crossings)
         {
             foreach (var (from, to) in edges)

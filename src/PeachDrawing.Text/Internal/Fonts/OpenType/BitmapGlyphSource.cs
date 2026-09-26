@@ -11,20 +11,12 @@
 //
 #endregion
 
+using PeachDrawing.Text.Outlines;
 using System;
 using System.Collections.Generic;
 
 namespace PeachDrawing.Text.Internal.Fonts.OpenType
 {
-    /// <summary>One glyph picture of one strike.</summary>
-    /// <param name="Data">The encoded image (PNG, or for sbix also JPEG).</param>
-    /// <param name="Ppem">The pixels per em of the strike the picture belongs to: the picture is drawn at <c>fontSize / Ppem</c> per pixel.</param>
-    /// <param name="Width">Picture width in strike pixels.</param>
-    /// <param name="Height">Picture height in strike pixels.</param>
-    /// <param name="BearingX">Distance from the glyph origin to the picture's left edge, in strike pixels.</param>
-    /// <param name="BearingTop">Distance from the baseline UP to the picture's top edge, in strike pixels.</param>
-    internal readonly record struct BitmapGlyph(byte[] Data, int Ppem, int Width, int Height, double BearingX, double BearingTop);
-
     /// <summary>
     /// The bitmap colour glyphs of a font: <c>CBDT</c>/<c>CBLC</c> or <c>sbix</c>. Absent on almost every font
     /// (<see cref="TryCreate"/> returns null).
@@ -124,7 +116,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// The picture of <paramref name="glyphId"/> from the strike best suited to a font size of <paramref name="ppem"/> pixels per em: the
         /// smallest strike at least that large (so the picture is scaled down rather than up), else the largest there is.
         /// </summary>
-        public bool TryGet(int glyphId, double ppem, out BitmapGlyph glyph)
+        public bool TryGet(int glyphId, double ppem, out EmbeddedBitmap glyph)
         {
             glyph = default;
             lock (_face.SyncRoot)
@@ -335,7 +327,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             return (height, width, bearingX, bearingY);
         }
 
-        private bool TryReadCb(CbStrike strike, int glyphId, out BitmapGlyph glyph)
+        private bool TryReadCb(CbStrike strike, int glyphId, out EmbeddedBitmap glyph)
         {
             glyph = default;
             if (!TryLocateCb(strike, glyphId, out var location) || !TryGetCbData(location, glyphId, out var offset, out var length, out var shared))
@@ -371,7 +363,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             if (dataLength <= 0 || offset + length > _cbdtLength + 1 || dataLength > length)
                 return false;
 
-            glyph = new BitmapGlyph(_face.ReadBytes(dataLength), strike.Ppem, width, height, bearingX, bearingY);
+            glyph = new EmbeddedBitmap(_face.ReadBytes(dataLength), strike.Ppem, width, height, bearingX, bearingY);
             return true;
         }
 
@@ -401,7 +393,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             return strikes;
         }
 
-        private bool TryReadSbix(SbixStrike strike, int glyphId, int depth, out BitmapGlyph glyph)
+        private bool TryReadSbix(SbixStrike strike, int glyphId, int depth, out EmbeddedBitmap glyph)
         {
             glyph = default;
             if (glyphId < 0 || glyphId >= _numGlyphs || depth > 4)
@@ -434,7 +426,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                         return false;
 
                     // The origin offsets place the picture's lower-left corner relative to the glyph origin, y up.
-                    glyph = new BitmapGlyph(data, strike.Ppem, width, height, originX, originY + height);
+                    glyph = new EmbeddedBitmap(data, strike.Ppem, width, height, originX, originY + height);
                     return true;
                 }
 

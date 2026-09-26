@@ -1,5 +1,6 @@
-using PeachDrawing.Text.Internal.Fonts;
+﻿using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Unicode;
 using System;
 using System.Collections.Generic;
@@ -51,6 +52,83 @@ namespace PeachDrawing.Text
         /// outlines. A colour font with CFF outlines reports <see langword="false"/>.
         /// </summary>
         public bool HasColorGlyphs => Face.Descriptor.IsColorFont;
+
+        /// <summary>
+        /// Reads the shape of a glyph, in design units with the y axis up.
+        /// </summary>
+        /// <remarks>
+        /// TrueType (<c>glyf</c>) and CFF outlines are supported, with composite glyphs flattened into one outline. Nothing is
+        /// grid-fitted: hinting instructions are not run.
+        /// </remarks>
+        /// <param name="glyph">The glyph.</param>
+        /// <param name="outline">The outline; empty when the glyph has no ink.</param>
+        /// <returns><see langword="false"/> when the font has no outline data for the glyph, or the glyph is empty (a space).</returns>
+        public bool TryGetOutline(ushort glyph, out GlyphOutline outline) => Face.Descriptor.TryGetGlyphOutline(glyph, out outline);
+
+        /// <summary>
+        /// The colours that colour glyphs of this face are painted with, or <see langword="null"/> when the face has none. A face
+        /// only has them if <see cref="HasColorGlyphs"/> is <see langword="true"/>.
+        /// </summary>
+        public ColorPalette? ColorPalette
+        {
+            get
+            {
+                if (!HasColorGlyphs) return null;
+                return _colorPalette ??= Face.Descriptor.ColorPalette is { } table ? new ColorPalette(table) : null;
+            }
+        }
+
+        private ColorPalette? _colorPalette;
+
+        /// <summary>
+        /// The root of the paint graph of a version 1 colour glyph, or <see langword="null"/> when the glyph has none: the face has
+        /// no version 1 <c>COLR</c> table, or no paint for this glyph.
+        /// </summary>
+        /// <param name="glyph">The base glyph.</param>
+        public ColorPaint? GetColorPaint(ushort glyph)
+            => Face.Descriptor.ColorTable is { Version: >= 1 } colr ? colr.GetV1BaseGlyphPaint(glyph) : null;
+
+        /// <summary>The paint at an entry of the layer list, which a <see cref="PaintColrLayers"/> node refers to by index.</summary>
+        /// <param name="index">The index in the layer list.</param>
+        /// <returns>The paint, or <see langword="null"/> when there is no such entry.</returns>
+        public ColorPaint? GetColorLayerPaint(int index) => Face.Descriptor.ColorTable?.GetLayerPaint(index);
+
+        /// <summary>
+        /// The layers of a version 0 colour glyph, painted in order from the bottom layer up, each a glyph in one palette colour.
+        /// </summary>
+        /// <param name="glyph">The base glyph.</param>
+        /// <param name="layers">The layers.</param>
+        /// <returns><see langword="false"/> when the face has no version 0 layers for the glyph.</returns>
+        public bool TryGetColorLayers(ushort glyph, out IReadOnlyList<ColorLayer> layers)
+        {
+            if (Face.Descriptor.ColorTable is { } colr && colr.TryGetV0Layers(glyph, out var found))
+            {
+                var result = new ColorLayer[found.Count];
+                for (var i = 0; i < result.Length; i++)
+                    result[i] = new ColorLayer(found[i].LayerGlyphId, found[i].PaletteIndex);
+
+                layers = result;
+                return true;
+            }
+
+            layers = [];
+            return false;
+        }
+
+        /// <summary>
+        /// Whether the face draws colour glyphs as pictures, one per glyph and size (<c>CBDT</c>/<c>CBLC</c> or <c>sbix</c>),
+        /// and not from outlines. Almost every font has none.
+        /// </summary>
+        public bool HasBitmapGlyphs => Face.Descriptor.HasBitmapGlyphs;
+
+        /// <summary>
+        /// The picture of a glyph from the strike best suited to a font size.
+        /// </summary>
+        /// <param name="glyph">The glyph.</param>
+        /// <param name="ppem">The size the glyph will be drawn at, in pixels per em.</param>
+        /// <param name="bitmap">The picture.</param>
+        /// <returns><see langword="false"/> when the glyph has no picture: it is drawn from outlines, or the face has no bitmap tables.</returns>
+        public bool TryGetBitmap(ushort glyph, double ppem, out EmbeddedBitmap bitmap) => Face.Descriptor.TryGetBitmapGlyph(glyph, ppem, out bitmap);
 
         /// <summary>
         /// Finds the glyph a character is drawn with, through the font's <c>cmap</c>. Characters of the Basic Multilingual

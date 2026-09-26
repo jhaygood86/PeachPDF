@@ -1,4 +1,5 @@
-﻿using PeachDrawing.Text.Shaping;
+﻿using PeachDrawing.Text.Outlines;
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
@@ -38,8 +39,9 @@ internal sealed partial class RasterGraphics
         RFontPalette? fontPalette = null, ShapeSettings? features = null)
     {
         var xFont = ((FontAdapter)font).Font;
-        var descriptor = xFont.Descriptor;
-        if (InvisibleText || descriptor is null || descriptor.UnitsPerEm == 0 || str.Length == 0)
+        var typeface = xFont.Typeface;
+        var unitsPerEm = typeface.Metrics.UnitsPerEm;
+        if (InvisibleText || unitsPerEm == 0 || str.Length == 0)
             return;
 
         // Where the PDF renderer puts the baseline: the run's top-left plus the cell ascent, in points.
@@ -50,7 +52,7 @@ internal sealed partial class RasterGraphics
         var resolved = features ?? ShapeSettings.Default;
 
         var glyphs = Shaper.Shape(xFont.Typeface, str, resolved).Glyphs;
-        var scale = xFont.Size / descriptor.UnitsPerEm;
+        var scale = xFont.Size / unitsPerEm;
         var skew = ItalicSkew(xFont);
         var contours = new FlatPath();
         var toDevice = UserToDevice;
@@ -59,16 +61,16 @@ internal sealed partial class RasterGraphics
         var penX = originX;
         foreach (var glyph in glyphs)
         {
-            if (descriptor.HasBitmapGlyphs && descriptor.TryGetBitmapGlyph(glyph.GlyphIndex, xFont.Size, out var bitmap))
+            if (typeface.HasBitmapGlyphs && typeface.TryGetBitmap((ushort)glyph.GlyphIndex, xFont.Size, out var bitmap))
             {
-                DrawBitmapGlyph(descriptor, glyph.GlyphIndex, bitmap, xFont.Size, penX + glyph.XOffset * scale, baselineY - glyph.YOffset * scale);
+                DrawBitmapGlyph(typeface, glyph.GlyphIndex, bitmap, xFont.Size, penX + glyph.XOffset * scale, baselineY - glyph.YOffset * scale);
             }
-            else if (descriptor.TryGetGlyphOutline(glyph.GlyphIndex, out var outline))
+            else if (typeface.TryGetOutline((ushort)glyph.GlyphIndex, out var outline))
             {
                 AddGlyph(contours, outline, penX + glyph.XOffset * scale, baselineY - glyph.YOffset * scale, scale, skew, tolerance);
             }
 
-            penX += (descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta) * scale + spacing;
+            penX += (typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta) * scale + spacing;
         }
 
         var paint = PaintSource.FromColor(Utils.Convert(color));
@@ -76,7 +78,7 @@ internal sealed partial class RasterGraphics
     }
 
     /// <summary>Draws a bitmap colour glyph (CBDT/sbix) at a glyph origin given in points, the way the PDF backend places it.</summary>
-    private void DrawBitmapGlyph(OpenTypeDescriptor descriptor, int glyphId, BitmapGlyph bitmap, double fontSize, double originX, double baselineY)
+    private void DrawBitmapGlyph(Typeface typeface, int glyphId, EmbeddedBitmap bitmap, double fontSize, double originX, double baselineY)
     {
         var scale = fontSize / bitmap.Ppem;
         var width = bitmap.Width * scale;
@@ -85,25 +87,26 @@ internal sealed partial class RasterGraphics
         var top = baselineY - bitmap.BearingTop * scale;
 
         // The picture is a layout-unit rectangle to DrawImage, like every other image.
-        var image = new ImageAdapter(BitmapGlyphImages.Get(descriptor, glyphId, bitmap));
+        var image = new ImageAdapter(BitmapGlyphImages.Get(typeface, glyphId, bitmap));
         DrawImage(image, new RRect(left * _pixelsPerPoint, top * _pixelsPerPoint, width * _pixelsPerPoint, height * _pixelsPerPoint));
     }
 
     public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color)
     {
         var xFont = ((FontAdapter)font).Font;
-        var descriptor = xFont.Descriptor;
-        if (InvisibleText || descriptor is null || descriptor.UnitsPerEm == 0)
+        var typeface = xFont.Typeface;
+        var unitsPerEm = typeface.Metrics.UnitsPerEm;
+        if (InvisibleText || unitsPerEm == 0)
             return;
 
-        var scale = xFont.Size / descriptor.UnitsPerEm;
+        var scale = xFont.Size / unitsPerEm;
         var toDevice = UserToDevice;
         var tolerance = 0.1 / Math.Max(toDevice.MaxScale, 1e-9);
         var contours = new FlatPath();
 
         foreach (var placement in glyphs)
         {
-            if (descriptor.TryGetGlyphOutline(placement.GlyphIndex, out var outline))
+            if (typeface.TryGetOutline((ushort)placement.GlyphIndex, out var outline))
                 AddGlyph(contours, outline, placement.X / _pixelsPerPoint, placement.Y / _pixelsPerPoint, scale, 0, tolerance);
         }
 
@@ -123,8 +126,8 @@ internal sealed partial class RasterGraphics
     private static void AddGlyph(FlatPath target, GlyphOutline outline, double x, double y, double scale, double skew, double tolerance)
     {
         // Faux italic shears about the baseline: points above it move right.
-        double X(GlyphOutlinePoint p) => x + p.X * scale + skew * p.Y * scale;
-        double Y(GlyphOutlinePoint p) => y - p.Y * scale;
+        double X(OutlinePoint p) => x + p.X * scale + skew * p.Y * scale;
+        double Y(OutlinePoint p) => y - p.Y * scale;
 
         foreach (var contour in outline.Contours)
         {

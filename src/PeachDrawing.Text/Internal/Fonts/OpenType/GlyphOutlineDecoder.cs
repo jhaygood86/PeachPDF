@@ -13,49 +13,11 @@
 //
 #endregion
 
+using PeachDrawing.Text.Outlines;
 using System.Collections.Generic;
 
 namespace PeachDrawing.Text.Internal.Fonts.OpenType
 {
-    /// <summary>A point in font design units (y-up).</summary>
-    internal readonly record struct GlyphOutlinePoint(double X, double Y);
-
-    /// <summary>A single path segment: a straight line, or a cubic Bezier.</summary>
-    internal readonly struct GlyphSegment
-    {
-        public bool IsCubic { get; }
-        public GlyphOutlinePoint Control1 { get; }
-        public GlyphOutlinePoint Control2 { get; }
-        public GlyphOutlinePoint End { get; }
-
-        private GlyphSegment(bool isCubic, GlyphOutlinePoint c1, GlyphOutlinePoint c2, GlyphOutlinePoint end)
-        {
-            IsCubic = isCubic;
-            Control1 = c1;
-            Control2 = c2;
-            End = end;
-        }
-
-        public static GlyphSegment Line(GlyphOutlinePoint end) => new(false, default, default, end);
-
-        public static GlyphSegment Cubic(GlyphOutlinePoint control1, GlyphOutlinePoint control2, GlyphOutlinePoint end)
-            => new(true, control1, control2, end);
-    }
-
-    /// <summary>A closed contour: a start point plus the ordered segments that return to it.</summary>
-    internal sealed class GlyphContour(GlyphOutlinePoint start)
-    {
-        public GlyphOutlinePoint Start { get; } = start;
-        public List<GlyphSegment> Segments { get; } = [];
-    }
-
-    /// <summary>A decoded glyph outline: zero or more closed contours.</summary>
-    internal sealed class GlyphOutline
-    {
-        public List<GlyphContour> Contours { get; } = [];
-        public bool IsEmpty => Contours.Count == 0;
-    }
-
     /// <summary>
     /// Decodes a glyph index into a <see cref="GlyphOutline"/> from a font's `glyf`/`loca` tables.
     /// </summary>
@@ -208,9 +170,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 for (; pointIndex <= contourEnd && pointIndex < numPoints; pointIndex++)
                     contourPoints.Add(new RawPoint(xs[pointIndex], ys[pointIndex], (flags[pointIndex] & OnCurvePoint) != 0));
 
-                GlyphContour? contour = BuildContour(contourPoints);
+                OutlineContour? contour = BuildContour(contourPoints);
                 if (contour is not null)
-                    outline.Contours.Add(contour);
+                    outline.ContourList.Add(contour);
             }
         }
 
@@ -265,25 +227,25 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 DecodeInto(face, componentGlyph, child, depth + 1);
                 face.Position = resumePosition;
 
-                foreach (GlyphContour contour in child.Contours)
-                    outline.Contours.Add(TransformContour(contour, a, b, cc, d, dx, dy));
+                foreach (OutlineContour contour in child.Contours)
+                    outline.ContourList.Add(TransformContour(contour, a, b, cc, d, dx, dy));
 
                 if ((flags & MoreComponents) == 0)
                     break;
             }
         }
 
-        private static GlyphContour TransformContour(GlyphContour source, double a, double b, double c, double d, double dx, double dy)
+        private static OutlineContour TransformContour(OutlineContour source, double a, double b, double c, double d, double dx, double dy)
         {
-            GlyphOutlinePoint Map(GlyphOutlinePoint p)
+            OutlinePoint Map(OutlinePoint p)
                 => new(a * p.X + c * p.Y + dx, b * p.X + d * p.Y + dy);
 
-            var result = new GlyphContour(Map(source.Start));
-            foreach (GlyphSegment segment in source.Segments)
+            var result = new OutlineContour(Map(source.Start));
+            foreach (OutlineSegment segment in source.Segments)
             {
-                result.Segments.Add(segment.IsCubic
-                    ? GlyphSegment.Cubic(Map(segment.Control1), Map(segment.Control2), Map(segment.End))
-                    : GlyphSegment.Line(Map(segment.End)));
+                result.SegmentList.Add(segment.IsCubic
+                    ? OutlineSegment.Cubic(Map(segment.Control1), Map(segment.Control2), Map(segment.End))
+                    : OutlineSegment.Line(Map(segment.End)));
             }
             return result;
         }
@@ -293,7 +255,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// segments, inserting implied on-curve midpoints between consecutive off-curve points and
         /// elevating each quadratic to a cubic.
         /// </summary>
-        private static GlyphContour? BuildContour(List<RawPoint> points)
+        private static OutlineContour? BuildContour(List<RawPoint> points)
         {
             int n = points.Count;
             if (n == 0)
@@ -311,7 +273,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 }
             }
 
-            GlyphOutlinePoint startPoint;
+            OutlinePoint startPoint;
             var sequence = new List<RawPoint>(n + 1);
             if (firstOn < 0)
             {
@@ -322,36 +284,36 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             else
             {
-                startPoint = new GlyphOutlinePoint(points[firstOn].X, points[firstOn].Y);
+                startPoint = new OutlinePoint(points[firstOn].X, points[firstOn].Y);
                 for (int i = 1; i <= n; i++)
                     sequence.Add(points[(firstOn + i) % n]);
             }
 
-            var contour = new GlyphContour(startPoint);
-            GlyphOutlinePoint current = startPoint;
+            var contour = new OutlineContour(startPoint);
+            OutlinePoint current = startPoint;
             RawPoint? pendingControl = null;
 
             foreach (RawPoint p in sequence)
             {
                 if (p.OnCurve)
                 {
-                    var end = new GlyphOutlinePoint(p.X, p.Y);
+                    var end = new OutlinePoint(p.X, p.Y);
                     if (pendingControl is { } ctrl)
                     {
-                        contour.Segments.Add(QuadraticToCubic(current, ctrl, end));
+                        contour.SegmentList.Add(QuadraticToCubic(current, ctrl, end));
                         pendingControl = null;
                     }
                     else
                     {
-                        contour.Segments.Add(GlyphSegment.Line(end));
+                        contour.SegmentList.Add(OutlineSegment.Line(end));
                     }
                     current = end;
                 }
                 else if (pendingControl is { } ctrl)
                 {
                     // Two consecutive off-curve points: insert the implied on-curve midpoint.
-                    GlyphOutlinePoint mid = Midpoint(ctrl, p);
-                    contour.Segments.Add(QuadraticToCubic(current, ctrl, mid));
+                    OutlinePoint mid = Midpoint(ctrl, p);
+                    contour.SegmentList.Add(QuadraticToCubic(current, ctrl, mid));
                     current = mid;
                     pendingControl = p;
                 }
@@ -368,7 +330,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// Test seam: builds a single contour from raw on/off-curve points (font design units),
         /// exercising the implied-midpoint insertion and quadratic-to-cubic elevation directly.
         /// </summary>
-        internal static GlyphContour? BuildContourForTest(IReadOnlyList<(double X, double Y, bool OnCurve)> points)
+        internal static OutlineContour? BuildContourForTest(IReadOnlyList<(double X, double Y, bool OnCurve)> points)
         {
             var raw = new List<RawPoint>(points.Count);
             foreach ((double x, double y, bool onCurve) in points)
@@ -376,20 +338,20 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             return BuildContour(raw);
         }
 
-        private static GlyphSegment QuadraticToCubic(GlyphOutlinePoint start, RawPoint control, GlyphOutlinePoint end)
+        private static OutlineSegment QuadraticToCubic(OutlinePoint start, RawPoint control, OutlinePoint end)
         {
             // Elevate a quadratic (start, control, end) to a cubic:
             //   C1 = start + 2/3 (control - start),  C2 = end + 2/3 (control - end).
-            var c1 = new GlyphOutlinePoint(
+            var c1 = new OutlinePoint(
                 start.X + 2.0 / 3.0 * (control.X - start.X),
                 start.Y + 2.0 / 3.0 * (control.Y - start.Y));
-            var c2 = new GlyphOutlinePoint(
+            var c2 = new OutlinePoint(
                 end.X + 2.0 / 3.0 * (control.X - end.X),
                 end.Y + 2.0 / 3.0 * (control.Y - end.Y));
-            return GlyphSegment.Cubic(c1, c2, end);
+            return OutlineSegment.Cubic(c1, c2, end);
         }
 
-        private static GlyphOutlinePoint Midpoint(RawPoint a, RawPoint b)
+        private static OutlinePoint Midpoint(RawPoint a, RawPoint b)
             => new((a.X + b.X) / 2.0, (a.Y + b.Y) / 2.0);
 
         private static double ReadF2Dot14(OpenTypeFontface face) => face.ReadShort() / 16384.0;

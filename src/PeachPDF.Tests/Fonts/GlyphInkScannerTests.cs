@@ -1,3 +1,4 @@
+﻿using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using System.Collections.Generic;
 using System.Linq;
@@ -122,11 +123,11 @@ namespace PeachPDF.Tests.Fonts
         public void ACubicOutline_IsFlattenedAndScanned()
         {
             // A rounded shape reaches paint entirely as cubics, so the flattener has to be what finds it.
-            var contour = new GlyphContour(new GlyphOutlinePoint(0, 50));
-            contour.Segments.Add(GlyphSegment.Cubic(
-                new GlyphOutlinePoint(0, 90), new GlyphOutlinePoint(100, 90), new GlyphOutlinePoint(100, 50)));
-            contour.Segments.Add(GlyphSegment.Cubic(
-                new GlyphOutlinePoint(100, 10), new GlyphOutlinePoint(0, 10), new GlyphOutlinePoint(0, 50)));
+            var contour = new OutlineContour(new OutlinePoint(0, 50));
+            contour.SegmentList.Add(OutlineSegment.Cubic(
+                new OutlinePoint(0, 90), new OutlinePoint(100, 90), new OutlinePoint(100, 50)));
+            contour.SegmentList.Add(OutlineSegment.Cubic(
+                new OutlinePoint(100, 10), new OutlinePoint(0, 10), new OutlinePoint(0, 50)));
 
             var only = Assert.Single(GlyphInkScanner.Crossings(Outline(contour), 45, 55));
 
@@ -169,10 +170,10 @@ namespace PeachPDF.Tests.Fonts
 
         // ─── Fixture helpers ─────────────────────────────────────────────────────
 
-        private static GlyphOutline Outline(params GlyphContour[] contours)
+        private static GlyphOutline Outline(params OutlineContour[] contours)
         {
             var outline = new GlyphOutline();
-            outline.Contours.AddRange(contours);
+            outline.ContourList.AddRange(contours);
             return outline;
         }
 
@@ -181,23 +182,23 @@ namespace PeachPDF.Tests.Fonts
         /// off, exactly as <see cref="GlyphOutlineDecoder"/> leaves it off - a `glyf` contour is closed by
         /// definition, and closing it is the scanner's own job.
         /// </summary>
-        private static GlyphContour Contour(params (double X, double Y)[] points)
+        private static OutlineContour Contour(params (double X, double Y)[] points)
         {
-            var contour = new GlyphContour(new GlyphOutlinePoint(points[0].X, points[0].Y));
+            var contour = new OutlineContour(new OutlinePoint(points[0].X, points[0].Y));
 
             foreach (var (x, y) in points.Skip(1))
             {
-                contour.Segments.Add(GlyphSegment.Line(new GlyphOutlinePoint(x, y)));
+                contour.SegmentList.Add(OutlineSegment.Line(new OutlinePoint(x, y)));
             }
 
             return contour;
         }
 
-        private static GlyphContour Square(double left, double bottom, double right, double top) =>
+        private static OutlineContour Square(double left, double bottom, double right, double top) =>
             Contour((left, bottom), (right, bottom), (right, top), (left, top));
 
         /// <summary>The same square wound the other way - a counter, which nonzero winding subtracts.</summary>
-        private static GlyphContour ReversedSquare(double left, double bottom, double right, double top) =>
+        private static OutlineContour ReversedSquare(double left, double bottom, double right, double top) =>
             Contour((left, bottom), (left, top), (right, top), (right, bottom));
 
         private static (double, double) Rounded((double Start, double End) span) =>

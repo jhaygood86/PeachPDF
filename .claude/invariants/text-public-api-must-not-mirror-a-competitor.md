@@ -46,6 +46,17 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 | `GenericFamily` | A generic font family | CSS Fonts 4 generic family keywords |
 | `TypefaceFormatException` | Data that is not a font | .NET exception convention |
 
+### `PeachDrawing.Text.Outlines`
+
+| Public name | Role | Origin of the name and shape |
+|---|---|---|
+| `Typeface.TryGetOutline`, `GlyphOutline` (`Contours`, `IsEmpty`, `Crossings`) | A glyph's shape as data | FreeType's "outline". Returned as a data tree and never replayed through a callback, which is deliberately unlike a render-callback design. `Crossings` is ours, for CSS `text-decoration-skip-ink` |
+| `OutlineContour` (`Start`, `Segments`), `OutlineSegment` (`IsCubic`, `Control1`, `Control2`, `End`, `Line`, `Cubic`), `OutlinePoint` | The contour, segment and point of an outline | Generic path vocabulary (start point, segments, line and cubic). Two segment kinds only, because quadratics are raised to cubics |
+| `ColorPalette` (`PaletteCount`, `EntriesPerPalette`, `FirstLightPalette`, `FirstDarkPalette`, `TryGetColor`) | The colours of a colour font | OpenType `CPAL`; light and dark are CSS `font-palette` values. Colours are `System.Drawing.Color` |
+| `Typeface.ColorPalette`, `TryGetColorLayers`, `GetColorPaint`, `GetColorLayerPaint`, `ColorLayer` | Access to the COLR data | OpenType `COLR` (layer records, `BaseGlyphList`, `LayerList`) |
+| `ColorPaint`, `PaintColrLayers`, `PaintSolid`, `PaintLinearGradient`, `PaintRadialGradient`, `PaintSweepGradient`, `PaintGlyph`, `PaintColrGlyph`, `PaintTransform`, `PaintComposite`, `ColorLine`, `ColorStop`, `ColorExtend`, `Affine2x3` | The COLR version 1 paint graph | The names of the paint formats and records in the COLR specification |
+| `Typeface.HasBitmapGlyphs`, `TryGetBitmap`, `EmbeddedBitmap` | Pictures for bitmap colour fonts | OpenType `CBDT`/`CBLC` and `sbix` ("bitmap strike"); the record is named for what it holds |
+
 ### `PeachDrawing.Text.Shaping`
 
 | Public name | Role | Origin of the name and shape |
