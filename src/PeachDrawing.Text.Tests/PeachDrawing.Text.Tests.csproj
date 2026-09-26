@@ -99,6 +99,12 @@
     <None Include="..\..\assets\fonts\VariableTest.ttf" Link="VariableTest.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\VariableCff2Test.otf" Link="VariableCff2Test.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\VariableCff2Test.golden.json" Link="VariableCff2Test.golden.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\..\assets\fonts\VariableSlantTest.ttf" Link="VariableSlantTest.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

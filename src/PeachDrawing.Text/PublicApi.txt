@@ -371,6 +371,7 @@ PeachDrawing.Text.Outlines.OutlinePoint : struct
   property Double X { get; init; }
   property Double Y { get; init; }
 PeachDrawing.Text.Outlines.OutlineRequest : struct
+  property Boolean StemDarkening { get; init; }
   property Double PixelsPerEm { get; init; }
   property GridFitting GridFitting { get; init; }
 PeachDrawing.Text.Outlines.OutlineSegment : struct
@@ -643,7 +644,7 @@ PeachDrawing.Text.TypefaceMetrics : sealed class
   property Single ItalicAngle { get; }
 PeachDrawing.Text.TypefaceQuery : struct
   ctor()
-  ctor(Int32 Weight = 400, Int32 Width = 5, Boolean IsItalic = False, Nullable<Rune> MustCover = null, IReadOnlyList<AxisSetting> Axes = null, Nullable<Double> WidthPercent = null, Nullable<Double> ObliqueAngle = null)
+  ctor(Double Weight = 400, Int32 Width = 5, Boolean IsItalic = False, Nullable<Rune> MustCover = null, IReadOnlyList<AxisSetting> Axes = null, Nullable<Double> WidthPercent = null, Nullable<Double> ObliqueAngle = null)
   field const Int32 BoldWeight
   field const Int32 NormalWeight
   field const Int32 NormalWidth
@@ -651,10 +652,10 @@ PeachDrawing.Text.TypefaceQuery : struct
   method Boolean Equals(TypefaceQuery other)
   method Int32 GetHashCode()
   method String ToString()
-  method Void Deconstruct(out Int32 Weight, out Int32 Width, out Boolean IsItalic, out Nullable<Rune> MustCover, out IReadOnlyList<AxisSetting> Axes, out Nullable<Double> WidthPercent, out Nullable<Double> ObliqueAngle)
+  method Void Deconstruct(out Double Weight, out Int32 Width, out Boolean IsItalic, out Nullable<Rune> MustCover, out IReadOnlyList<AxisSetting> Axes, out Nullable<Double> WidthPercent, out Nullable<Double> ObliqueAngle)
   property Boolean IsItalic { get; init; }
+  property Double Weight { get; init; }
   property IReadOnlyList<AxisSetting> Axes { get; init; }
-  property Int32 Weight { get; init; }
   property Int32 Width { get; init; }
   property Nullable<Double> ObliqueAngle { get; init; }
   property Nullable<Double> WidthPercent { get; init; }

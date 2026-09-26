@@ -292,6 +292,71 @@ namespace PeachDrawing.Text.Tests.Fonts
             Assert.Equal(900, Value(heavy.Typeface, "wght"));
         }
 
+        [Theory]
+        [InlineData(350.5)]
+        [InlineData(399.75)]
+        [InlineData(612.25)]
+        public void AFractionalWeight_SetsTheWeightAxisToIt(double weight)
+        {
+            var family = Add(new FontSet(), BundledFonts.VariableTest, NewName(), new AddOptions());
+
+            Assert.True(family.TryMatch(new TypefaceQuery(weight), out var match));
+            Assert.True(family.TryMatch(new TypefaceQuery(Math.Round(weight)), out var rounded));
+
+            Assert.Equal(weight, Value(match.Typeface, "wght"));
+            Assert.NotSame(rounded.Typeface, match.Typeface);
+        }
+
+        [Fact]
+        public void AFractionalWeight_IsKeptInsideTheDeclaredRange_AndPicksTheRangeThatHoldsIt()
+        {
+            var set = new FontSet();
+            var name = NewName();
+            Add(set, BundledFonts.VariableTest, name, new AddOptions { WeightRange = new AxisRange(350.2, 350.8) });
+            var family = Add(set, BundledFonts.VariableTest, name, new AddOptions { WeightRange = new AxisRange(100, 300) });
+
+            Assert.True(family.TryMatch(new TypefaceQuery(350.5), out var inside));
+            Assert.True(family.TryMatch(new TypefaceQuery(350), out var whole));
+
+            Assert.Equal(350.5, Value(inside.Typeface, "wght"));
+            Assert.Equal(300, Value(whole.Typeface, "wght"));
+        }
+
+        [Fact]
+        public void TheRequestedAngle_PicksTheNearestObliqueRange_AndIsSetInsideIt()
+        {
+            var set = new FontSet();
+            var name = NewName();
+            Add(set, BundledFonts.VariableSlantTest, name, new AddOptions { ObliqueRange = new AxisRange(0, 5) });
+            var family = Add(set, BundledFonts.VariableSlantTest, name, new AddOptions { ObliqueRange = new AxisRange(10, 15) });
+
+            // The last declared range would win every one of these before the angle chose between them.
+            Assert.True(family.TryMatch(new TypefaceQuery(IsItalic: true, ObliqueAngle: 3), out var low));
+            Assert.True(family.TryMatch(new TypefaceQuery(IsItalic: true, ObliqueAngle: 8), out var belowEleven));
+            Assert.True(family.TryMatch(new TypefaceQuery(IsItalic: true, ObliqueAngle: 12), out var high));
+            Assert.True(family.TryMatch(new TypefaceQuery(IsItalic: true, ObliqueAngle: 20), out var beyond));
+
+            Assert.Equal(-3, Value(low.Typeface, "slnt"));
+            Assert.Equal(-5, Value(belowEleven.Typeface, "slnt"));   // 8 is below 11: the range below is searched first, and 5 is its end
+            Assert.Equal(-12, Value(high.Typeface, "slnt"));
+            Assert.Equal(-15, Value(beyond.Typeface, "slnt"));
+        }
+
+        [Theory]
+        [InlineData(double.NaN, null, null)]
+        [InlineData(double.PositiveInfinity, null, null)]
+        [InlineData(400.0, double.NaN, null)]
+        [InlineData(400.0, null, double.NegativeInfinity)]
+        public void ANumberThatIsNotFinite_IsRefused(double weight, double? widthPercent, double? angle)
+        {
+            var set = new FontSet();
+            var family = Add(set, BundledFonts.VariableTest, NewName(), new AddOptions());
+            var query = new TypefaceQuery(weight, WidthPercent: widthPercent, ObliqueAngle: angle, IsItalic: angle is not null);
+
+            Assert.Throws<ArgumentException>(() => family.TryMatch(query, out _));
+            Assert.Throws<ArgumentException>(() => set.MatchOrFallback(family.Name, query));
+        }
+
         [Fact]
         public void AFaceThatIsNotVariable_IgnoresTheRangesItIsGiven()
         {

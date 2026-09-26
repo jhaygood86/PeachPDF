@@ -52,9 +52,14 @@ namespace PeachDrawing.Text.Internal.Fonts
     }
 
     /// <summary>What a request for a face asks of a family.</summary>
-    /// <param name="Weight">The weight wanted.</param>
+    /// <param name="Weight">The weight wanted, which need not be a whole number (<c>font-weight: 350.5</c>).</param>
     /// <param name="IsItalic">Whether an italic or oblique face is wanted.</param>
     /// <param name="WidthPercent">The width wanted, as a percentage of the normal width.</param>
     /// <param name="Codepoint">A character the face has to cover, or <see langword="null"/>.</param>
-    internal readonly record struct FaceRequest(int Weight, bool IsItalic, double WidthPercent, Rune? Codepoint = null);
+    /// <param name="ObliqueAngle">
+    /// The angle wanted, in degrees leaning to the right (<c>font-style: oblique 20deg</c>), or <see langword="null"/> for the request
+    /// of plain <c>italic</c>. It only matters when <paramref name="IsItalic"/> is set: it is what the faces that declare an oblique
+    /// range are compared by.
+    /// </param>
+    internal readonly record struct FaceRequest(double Weight, bool IsItalic, double WidthPercent, Rune? Codepoint = null, double? ObliqueAngle = null);
 }

@@ -144,15 +144,23 @@ internal sealed class HintingEngine
     /// <param name="glyph">The glyph.</param>
     /// <param name="ppem26Dot6">The size in pixels per em, in 1/64.</param>
     /// <param name="mode">The kind of grid-fitting; not <see cref="GridFitting.None"/>.</param>
-    public HintedGlyphResult Get(int glyph, int ppem26Dot6, GridFitting mode)
+    /// <param name="stemDarkening">Whether the stem darkening of Adobe's CFF engine is on; it means nothing for a TrueType font.</param>
+    public HintedGlyphResult Get(int glyph, int ppem26Dot6, GridFitting mode, bool stemDarkening = false)
     {
         ppem26Dot6 = EffectivePpem(ppem26Dot6);
 
-        // Adobe's CFF engine has no modes: a CFF font is fitted the same way whatever is asked for
         if (GetCffFace() is not null)
+        {
+            // Adobe's CFF engine has no modes: a CFF font is fitted the same way whatever is asked for
             mode = GridFitting.Standard;
+        }
+        else
+        {
+            // and only it darkens: a TrueType font's entries are shared between the two answers
+            stemDarkening = false;
+        }
 
-        var sizeKey = new SizeKey(ppem26Dot6, mode);
+        var sizeKey = new SizeKey(ppem26Dot6, mode, stemDarkening);
         var key = new GlyphKey(sizeKey, glyph);
 
         if (_glyphs.TryGet(key, out HintedGlyphResult? cached))
@@ -230,7 +238,7 @@ internal sealed class HintingEngine
         {
             try
             {
-                size = new CffSize(face, key.Ppem26Dot6);
+                size = new CffSize(face, key.Ppem26Dot6, key.StemDarkening);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -379,7 +387,7 @@ internal sealed class HintingEngine
             Interlocked.Increment(ref s_unexpectedFailures);
     }
 
-    private readonly record struct SizeKey(int Ppem26Dot6, GridFitting Mode);
+    private readonly record struct SizeKey(int Ppem26Dot6, GridFitting Mode, bool StemDarkening);
 
     private readonly record struct GlyphKey(SizeKey Size, int Glyph);
 }

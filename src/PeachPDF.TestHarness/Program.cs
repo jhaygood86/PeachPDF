@@ -94,6 +94,7 @@ static PdfGenerateConfig ClonePdfAConfig(PdfGenerateConfig source, DateTimeOffse
     MaximumDownscaleMultiplier = source.MaximumDownscaleMultiplier,
     RasterizationDpi = source.RasterizationDpi,
     TextHinting = source.TextHinting,
+    TextStemDarkening = source.TextStemDarkening,
     MaxRasterPixels = source.MaxRasterPixels,
     MarginTop = source.MarginTop,
     MarginBottom = source.MarginBottom,
@@ -11038,6 +11039,57 @@ await SaveShowcaseAsync("variable_fonts", "Typography & Text", "Variable fonts",
     "Rendered against a small synthetic variable font with weight and width axes.",
     variableFontHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// Variable fonts with CFF2 outlines (variable CFF): the charstrings blend their operands at the location, and the PDF embeds each distinct
+// location as a static CFF font. Uses a small synthetic CFF2 font (weight 100-900, width 75-125) whose glyphs A to F exercise blends,
+// local and global subroutines and a second Font DICT.
+var cff2FontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableCff2Test.otf")));
+string Cff2Cell(string style, string caption) =>
+    "<td>" +
+    $"<div class=\"vf\" style=\"{style}\">ABCDEF</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+var variableCff2Html =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'VC'; src: url('data:font/otf;base64,{cff2FontB64}') format('opentype'); }}" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table.vt { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.vt td { padding: 6px; vertical-align: top; text-align: center }" +
+    ".vf { font-family: 'VC'; font-size: 30pt; line-height: 1.2; white-space: nowrap }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>Variable fonts with CFF2 outlines</h1>" +
+    "<p class=\"intro\">A variable OpenType font can draw its glyphs with CFF2 charstrings, whose operands carry deltas (<code>blend</code>) " +
+    "that are scaled by how far the requested location lies inside each region of the design space. The glyphs below are drawn from one " +
+    "such font at different weights and widths. In the PDF each location is embedded as a static CFF font, because PDF cannot embed a " +
+    "variable one.</p>" +
+    "<h2>font-weight</h2>" +
+    "<table class=\"vt\"><tr>" +
+    Cff2Cell("font-weight: 100", "font-weight: 100") +
+    Cff2Cell("font-weight: 400", "font-weight: 400") +
+    "</tr><tr>" +
+    Cff2Cell("font-weight: 700", "font-weight: 700") +
+    Cff2Cell("font-weight: 900", "font-weight: 900") +
+    "</tr></table>" +
+    "<h2>font-stretch</h2>" +
+    "<table class=\"vt\"><tr>" +
+    Cff2Cell("font-stretch: semi-condensed", "font-stretch: semi-condensed (75%)") +
+    Cff2Cell("font-stretch: semi-expanded", "font-stretch: semi-expanded (125%)") +
+    "</tr></table>" +
+    "<h2>font-variation-settings</h2>" +
+    "<table class=\"vt\"><tr>" +
+    Cff2Cell("font-variation-settings: 'wght' 250", "'wght' 250") +
+    Cff2Cell("font-variation-settings: 'wght' 650, 'wdth' 110", "'wght' 650, 'wdth' 110") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("variable_fonts_cff2", "Typography & Text", "Variable fonts with CFF2 outlines",
+    "A variable font with CFF2 (variable CFF) outlines at different weights, widths and font-variation-settings locations: the charstrings " +
+    "blend at the location, and each location is embedded in the PDF as a static CFF font. Rendered against a small synthetic font.",
+    variableCff2Html, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // Variable-font ranges: an @font-face rule declares the weights, widths and oblique angles its face covers (font-weight: 100 900,
 // font-stretch: 75% 125%, font-style: oblique 0deg 14deg), and the weight, width and slant of the requesting box set the font's axes inside
 // that range. Uses a small synthetic variable font with weight (100-900), width (75-125) and slant (0 to 15 degrees) axes.
@@ -11104,6 +11156,65 @@ await SaveShowcaseAsync("variable_font_ranges", "Typography & Text", "Variable f
     "and slant of the text set the font's axes inside the range, font-stretch takes percentages, and nothing is faked that an axis supplies. " +
     "Rendered against a small synthetic variable font with weight, width and slant axes.",
     variableRangesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// Face matching order (CSS Fonts 4 section 5.2): a family's faces are narrowed by width first, then style, then weight; the requested oblique
+// angle chooses among faces that declare oblique ranges; and font-weight takes fractions. Uses Source Sans 3 (a condensed upright face) and
+// Source Code Pro (standing in for an italic face of normal width), plus the synthetic variable font with weight and slant axes.
+var orderSansB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.ttf")));
+var orderMonoB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceCodePro-Regular.otf")));
+string OrderFace(string family, string base64, string format, string descriptors) =>
+    $"@font-face {{ font-family: '{family}'; src: url('data:font/{format};base64,{base64}') format('{format}'); {descriptors} }}";
+string OrderCell(string family, string style, string caption) =>
+    "<td>" +
+    $"<div class=\"rf\" style=\"font-family: '{family}'; {style}\">Hig</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+var faceOrderHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    OrderFace("Order", orderSansB64, "truetype", "font-stretch: 75%; font-style: normal;") +
+    OrderFace("Order", orderMonoB64, "opentype", "font-stretch: 100%; font-style: italic;") +
+    RangeFace("Angle", "font-style: oblique 0deg 5deg;") +
+    RangeFace("Angle", "font-style: oblique 10deg 15deg;") +
+    RangeFace("Frac", "font-weight: 350.2 350.8;") +
+    RangeFace("Frac", "font-weight: 100 300;") +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table.rt { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.rt td { padding: 6px; vertical-align: top; text-align: center }" +
+    ".rf { font-size: 38pt; line-height: 1.1 }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>Face matching order</h1>" +
+    "<p class=\"intro\">A family's faces are narrowed by <code>font-stretch</code> first, then <code>font-style</code>, then " +
+    "<code>font-weight</code>. Among faces that declare oblique ranges, the requested angle chooses; <code>font-weight</code> takes fractions.</p>" +
+    "<h2>A condensed upright face and an italic face of normal width</h2>" +
+    "<table class=\"rt\"><tr>" +
+    OrderCell("Order", "font-stretch: condensed; font-style: italic", "condensed italic: the condensed face, lean faked") +
+    OrderCell("Order", "font-stretch: normal; font-style: italic", "normal italic: the italic face") +
+    OrderCell("Order", "font-stretch: condensed", "condensed: the condensed face") +
+    OrderCell("Order", "font-stretch: normal", "normal: only the italic face has the width") +
+    "</tr></table>" +
+    "<h2>Two oblique ranges: 0deg 5deg and 10deg 15deg</h2>" +
+    "<table class=\"rt\"><tr>" +
+    OrderCell("Angle", "font-style: oblique 3deg", "oblique 3deg: the first range, 3deg") +
+    OrderCell("Angle", "font-style: oblique 8deg", "oblique 8deg: below 11deg the range below is searched first, 5deg") +
+    OrderCell("Angle", "font-style: oblique 12deg", "oblique 12deg: the second range, 12deg") +
+    OrderCell("Angle", "font-style: oblique 25deg", "oblique 25deg: the second range, 15deg") +
+    "</tr></table>" +
+    "<h2>Fractional weights: 350.2 350.8 and 100 300</h2>" +
+    "<table class=\"rt\"><tr>" +
+    OrderCell("Frac", "font-weight: 350.5", "350.5 is in the first range, drawn at 350.5") +
+    OrderCell("Frac", "font-weight: 350", "350 is in neither: the nearest below, drawn at 300") +
+    OrderCell("Frac", "font-weight: 350.9", "350.9 is just above the first range: drawn at its upper end, 350.8") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("face_matching_order", "Typography & Text", "Face matching order",
+    "CSS Fonts 4 face matching: a family's faces are narrowed by width, then style, then weight, so a condensed italic request gets the condensed " +
+    "face; the requested oblique angle chooses among faces that declare oblique ranges; and font-weight takes fractions such as 350.5.",
+    faceOrderHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // SVG-in-OpenType colour glyphs: a font's `SVG ` table gives a glyph an SVG document, drawn as vectors. Uses a small synthetic font whose
 // documents use the font's CPAL palette (var(--color0)) and the text colour (context-fill).
@@ -12297,6 +12408,19 @@ await SaveShowcaseAsync("text_hinting_cff_none", "Graphics & Effects", "Raster T
         PageOrientation = PageOrientation.Portrait,
         ShrinkToFit = true,
         RasterizationDpi = 72
+    });
+
+await SaveShowcaseAsync("text_hinting_cff_stem_darkening", "Graphics & Effects", "Stem-Darkened Raster Text (CFF Outlines)",
+    "PdfGenerateConfig.TextStemDarkening = true on top of TextHinting = Standard, with a font whose outlines are CFF: Adobe's stem darkening makes the thinnest stems a little heavier, which offsets the way anti-aliasing thins small text; stems of more than about two and a third pixels are left alone. Compare with the hinted CFF page without it.",
+    TextHintingHtml("The lines below are rasterized at 72 dpi, in a font with CFF outlines, hinted and with stem darkening on: the small sizes are visibly heavier than in the hinted page without it.", textHintingCffCss),
+    new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PageOrientation = PageOrientation.Portrait,
+        ShrinkToFit = true,
+        RasterizationDpi = 72,
+        TextHinting = TextHinting.Standard,
+        TextStemDarkening = true
     });
 
 // --- Raster shadows showcase (text-shadow, Gaussian box-shadow, silhouette drop-shadow) ---

@@ -640,7 +640,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// has them, else a CFF font's own Type 2 charstring (see <see cref="Type2CharstringInterpreter"/>)
         /// when it has one <see cref="CffTable.IsSupported">this reader supports</see> - an ordinary or
         /// CID-keyed CFF font alike, resolving each glyph's local Subrs via
-        /// <see cref="CffTable.LocalSubrsFor"/>. False for a font with neither (one this reader could
+        /// <see cref="CffTable.LocalSubrsFor"/> - else the charstring of a variable font's
+        /// <see cref="Cff2Table"/> at this descriptor's location. False for a font with none of them (one this reader could
         /// not parse at all, or a CID-keyed CFF font missing/malformed <c>FDArray</c>/<c>FDSelect</c>).
         /// </summary>
         public bool TryGetGlyphOutline(int glyphIndex, out GlyphOutline outline)
@@ -648,8 +649,14 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             if (GlyphOutlineDecoder.TryGetGlyphOutline(FontFace, glyphIndex, out outline, Variation))
                 return true;
 
-            if (FontFace.glyf is null && FontFace.cff is { IsSupported: true })
-                return Type2CharstringInterpreter.TryGetGlyphOutline(FontFace.cff, glyphIndex, out outline);
+            if (FontFace.glyf is null)
+            {
+                if (FontFace.cff is { IsSupported: true })
+                    return Type2CharstringInterpreter.TryGetGlyphOutline(FontFace.cff, glyphIndex, out outline);
+
+                if (FontFace.cff2 is { IsSupported: true })
+                    return Type2CharstringInterpreter.TryGetGlyphOutline(FontFace.cff2, glyphIndex, Variation, out outline);
+            }
 
             return false;
         }
