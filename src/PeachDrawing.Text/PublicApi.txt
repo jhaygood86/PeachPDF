@@ -87,6 +87,19 @@ PeachDrawing.Text.Layout.Hyphens : enum Int32
   Auto = 2
   Manual = 0
   None = 1
+PeachDrawing.Text.Layout.InlineBox : struct
+  ctor(Double Width, Double Height, Nullable<Double> Baseline = null, VerticalAlign VerticalAlign = Baseline, Double BaselineShift = 0, Object Tag = null)
+  method Boolean Equals(InlineBox other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double Width, out Double Height, out Nullable<Double> Baseline, out VerticalAlign VerticalAlign, out Double BaselineShift, out Object Tag)
+  property Double BaselineShift { get; init; }
+  property Double Height { get; init; }
+  property Double Width { get; init; }
+  property Nullable<Double> Baseline { get; init; }
+  property Object Tag { get; init; }
+  property VerticalAlign VerticalAlign { get; init; }
 PeachDrawing.Text.Layout.LineBox : sealed class
   property Boolean IsTruncated { get; }
   property Double Ascent { get; }
@@ -120,6 +133,7 @@ PeachDrawing.Text.Layout.Paragraph : sealed class
 PeachDrawing.Text.Layout.ParagraphBuilder : sealed class
   ctor(RunStyle baseStyle)
   method Paragraph Build()
+  method ParagraphBuilder AddInlineBox(InlineBox box)
   method ParagraphBuilder AddText(String text)
   method ParagraphBuilder PopRun()
   method ParagraphBuilder PushRun(RunStyle style)
@@ -171,6 +185,8 @@ PeachDrawing.Text.Layout.PlacedRun : sealed class
   property Double Width { get; }
   property Double X { get; }
   property GlyphRun Glyphs { get; }
+  property Nullable<InlineBox> InlineBox { get; }
+  property RectangleF InlineBoxBounds { get; }
   property RunStyle Style { get; }
   property TextRange Range { get; }
 PeachDrawing.Text.Layout.RunStyle : struct
@@ -246,6 +262,13 @@ PeachDrawing.Text.Layout.TextRange : struct
   property Int32 Start { get; init; }
 PeachDrawing.Text.Layout.TextRuler : static class
   method static Double WidthOf(Typeface typeface, Double size, String text, Nullable<ShapeSettings> settings = null)
+PeachDrawing.Text.Layout.VerticalAlign : enum Int32
+  Baseline = 0
+  Bottom = 5
+  Middle = 1
+  TextBottom = 3
+  TextTop = 2
+  Top = 4
 PeachDrawing.Text.NamedVariation : sealed class
   property IReadOnlyList<AxisSetting> Settings { get; }
   property String Name { get; }

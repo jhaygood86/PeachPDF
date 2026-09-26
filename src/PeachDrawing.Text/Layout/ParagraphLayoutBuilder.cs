@@ -2,6 +2,7 @@ using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 
 namespace PeachDrawing.Text.Layout
 {
@@ -10,7 +11,7 @@ namespace PeachDrawing.Text.Layout
     {
         internal readonly record struct LineSpec(int Start, int End, LineEnd Kind, int CutAt = -1);
 
-        private readonly record struct Piece(Paragraph.Atom Atom, int From, int To, GlyphRun Glyphs, double Width, bool IsTab = false, bool IsGenerated = false);
+        private readonly record struct Piece(Paragraph.Atom Atom, int From, int To, GlyphRun Glyphs, double Width, bool IsTab = false, bool IsGenerated = false, bool IsBox = false);
 
         private readonly record struct Break(int Position, double Width, bool Hyphen);
 
@@ -87,7 +88,22 @@ namespace PeachDrawing.Text.Layout
                     var piece = pieces[n];
                     var style = piece.Atom.Style;
                     var (boundaries, advances, pieceWidth) = PlaceRun(paragraph, piece, style, extra, expandAfter?[n]);
-                    runs.Add(new PlacedRun(new TextRange(piece.From, piece.To), style, piece.Glyphs, piece.Atom.Level, x, baseline, pieceWidth, boundaries, advances, piece.IsGenerated));
+                    InlineBox? box = null;
+                    var boxBounds = default(RectangleF);
+                    if (piece.IsBox)
+                    {
+                        var placed = paragraph.BoxAt(piece.From);
+                        double boxTop = placed.VerticalAlign switch
+                        {
+                            VerticalAlign.Top => top,
+                            VerticalAlign.Bottom => top + height - placed.Height,
+                            _ => baseline - BoxExtent(placed, style).Above,
+                        };
+                        box = placed;
+                        boxBounds = new RectangleF((float)x, (float)boxTop, (float)placed.Width, (float)placed.Height);
+                    }
+
+                    runs.Add(new PlacedRun(new TextRange(piece.From, piece.To), style, piece.Glyphs, piece.Atom.Level, x, baseline, pieceWidth, boundaries, advances, piece.IsGenerated, box, boxBounds));
                     x += pieceWidth;
                 }
 
@@ -224,7 +240,7 @@ namespace PeachDrawing.Text.Layout
             {
                 var piece = pieces[n];
                 expand[n] = new bool[piece.Glyphs.Glyphs.Count];
-                if (piece.IsTab || piece.IsGenerated)
+                if (piece.IsTab || piece.IsGenerated || piece.IsBox)
                 {
                     clusters.Add((n, -1, -1));
                     continue;
@@ -597,6 +613,13 @@ namespace PeachDrawing.Text.Layout
                         continue;
                     }
 
+                    if (p.IsBox(atom))
+                    {
+                        // A box draws nothing here: it is room, in a run of its own with no glyphs, for the caller to draw the box in.
+                        inRun.Add(new Piece(atom, from, to, new GlyphRun(atom.Style.Typeface, []), p.BoxAt(atom.Start).Width, IsBox: true));
+                        continue;
+                    }
+
                     if (tabWidths is not null && tabWidths.TryGetValue(from, out double tabWidth))
                     {
                         // A tab draws nothing: it is room, in a run of its own with no glyphs.
@@ -678,6 +701,10 @@ namespace PeachDrawing.Text.Layout
                     widths[from] = advance;
                     pen += advance;
                 }
+                else if (p.IsBox(atom))
+                {
+                    pen += p.BoxAt(atom.Start).Width;
+                }
                 else
                 {
                     pen += p.WidthOf(p.ShapePiece(atom, from, to), atom.Style, from);
@@ -706,20 +733,82 @@ namespace PeachDrawing.Text.Layout
             }
             else
             {
+                // The text around a box counts too, as the strut of the box it sits in: a line of one box is as tall as its text would be.
                 foreach (var piece in pieces)
                 {
                     Include(piece.Atom.Style);
                 }
             }
 
+            double above, below;
             if (p.Style.LineHeight is { } multiple)
             {
                 double height = multiple * size;
                 double leading = (height - (ascent + descent)) / 2;
-                return (ascent + leading, descent + leading, height);
+                (above, below) = (ascent + leading, descent + leading);
+            }
+            else
+            {
+                (above, below) = (ascent + gap / 2, descent + gap / 2);
             }
 
-            return (ascent + gap / 2, descent + gap / 2, ascent + descent + gap);
+            // Boxes aligned to the text make the line taller where they stick out of it; those aligned to the line only make it as tall as they are.
+            double tallestTop = 0, tallestBottom = 0;
+            foreach (var piece in pieces)
+            {
+                if (!piece.IsBox)
+                {
+                    continue;
+                }
+
+                var box = p.BoxAt(piece.From);
+                switch (box.VerticalAlign)
+                {
+                    case VerticalAlign.Top:
+                        tallestTop = Math.Max(tallestTop, box.Height);
+                        break;
+                    case VerticalAlign.Bottom:
+                        tallestBottom = Math.Max(tallestBottom, box.Height);
+                        break;
+                    default:
+                        var extent = BoxExtent(box, piece.Atom.Style);
+                        above = Math.Max(above, extent.Above);
+                        below = Math.Max(below, extent.Below);
+                        break;
+                }
+            }
+
+            if (tallestTop > above + below)
+            {
+                below = tallestTop - above;
+            }
+
+            if (tallestBottom > above + below)
+            {
+                above = tallestBottom - below;
+            }
+
+            return (above, below, above + below);
+        }
+
+        /// <summary>How far a box aligned to the text around it (<paramref name="style"/>) reaches above the baseline of the line, and below it.</summary>
+        private static (double Above, double Below) BoxExtent(InlineBox box, RunStyle style)
+        {
+            var metrics = style.Typeface.Metrics;
+            double scale = style.Size / metrics.UnitsPerEm;
+            double textAscent = metrics.NormalLineAscent * scale;
+            double textDescent = metrics.NormalLineDescent * scale;
+            double xHeight = metrics.XHeight > 0 ? metrics.XHeight * scale : style.Size / 2;
+            double baseline = box.Baseline ?? box.Height;
+            var (above, below) = box.VerticalAlign switch
+            {
+                VerticalAlign.Middle => ((box.Height / 2) + (xHeight / 2), (box.Height / 2) - (xHeight / 2)),
+                VerticalAlign.TextTop => (textAscent, box.Height - textAscent),
+                VerticalAlign.TextBottom => (box.Height - textDescent, textDescent),
+                _ => (baseline, box.Height - baseline),
+            };
+
+            return (above + box.BaselineShift, below - box.BaselineShift);
         }
 
         // ---- caret positions inside a run ------------------------------------------------------------------------------------------
@@ -732,9 +821,9 @@ namespace PeachDrawing.Text.Layout
         {
             int length = piece.To - piece.From;
             var x = new double[length + 1];
-            if (piece.IsTab)
+            if (piece.IsTab || piece.IsBox)
             {
-                // The caret before a tab is at the edge it is entered from, the one after it at the other.
+                // The caret before a tab or a box is at the edge it is entered from, the one after it at the other.
                 bool tabRtl = (piece.Atom.Level & 1) == 1;
                 x[0] = tabRtl ? piece.Width : 0;
                 x[length] = tabRtl ? 0 : piece.Width;

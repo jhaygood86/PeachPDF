@@ -458,7 +458,16 @@ foreach (LineBox line in layout.Lines)
   the paragraph) without ending the paragraph. A line limit is about lines, so one line that overflows its width is cut only when `TextOverflow` asks for it, and text that
   ends in a newline does not count as text left out. Only the lines that are laid out are worked out, so a limit on a very long text costs what its lines cost.
 
-Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Inline boxes are not part of the layout yet.
+- **Inline boxes.** `ParagraphBuilder.AddInlineBox(new InlineBox(width, height, ...))` puts a box of a known size in the text like one character (an image, an inline block, a
+  formula the caller lays out itself). The paragraph's text holds a U+FFFC for it; a line may break before and after it and never inside it; and a box wider than the line
+  overflows on a line of its own. It is placed as a `PlacedRun` with no glyphs, one character in `Range`, the box's width, `PlacedRun.InlineBox` (with the `Tag` the caller gave) and
+  `PlacedRun.InlineBoxBounds`, the rectangle to draw it in. `Baseline` is the distance from the top of the box to the point that sits on the line's baseline (the bottom edge by
+  default, as for an image), `BaselineShift` raises or lowers it, and `VerticalAlign` chooses `Baseline`, `Middle`, `TextTop`, `TextBottom`, or `Top`/`Bottom` (which align to the line, and
+  make it as tall as the box, growing it away from the text). The line is as tall as the text around the box and the box together need, and text around a box counts as its strut, so a
+  line of one box is as tall as its text would be. Letter spacing does not apply to a box, a tab measures from the end of it, and it is a wall for justification: no room is added next to it.
+  Carets, selection and hit testing treat it as one character.
+
+Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 

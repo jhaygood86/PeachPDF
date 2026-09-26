@@ -2,11 +2,10 @@
 
 The paragraph layout API (`ParagraphBuilder`, `Paragraph`, `ParagraphLayout`) does line breaking (UAX #14 with the CSS tailorings), bidi
 reordering, alignment, carets, hit testing and selection boxes, font fallback, letter and word spacing, justification
-(`text-justify`) with `text-align-last`, `text-indent`, tab stops, hyphenation (`hyphens`, `hyphenate-character`, the four `hyphenate-limit-*`) and a line limit with an ellipsis
-(`line-clamp`, `text-overflow: ellipsis`). Tracked in [#1417](https://github.com/jhaygood86/PeachPDF/issues/1417), it does not yet have:
+(`text-justify`) with `text-align-last`, `text-indent`, tab stops, hyphenation (`hyphens`, `hyphenate-character`, the four `hyphenate-limit-*`) a line limit with an ellipsis
+(`line-clamp`, `text-overflow: ellipsis`) and inline atomic boxes. Tracked in [#1417](https://github.com/jhaygood86/PeachPDF/issues/1417), it does not yet have:
 
 - the host-driven tier (`LineFlow`, `FlowCursor`, `LineSpace`);
-- inline atomic boxes.
 
 PeachPDF does not consume the API, and that is deliberate rather than pending: `FlowBox` interleaves the wrap decision with float intersection,
 speculative line-height growth, fragmentainer break tokens and `::first-line`, so a wholesale replacement is not planned. The library owns "break
@@ -37,3 +36,8 @@ Ellipsis: the cut is at a boundary between grapheme clusters, not at a word (the
 cut becomes `LineEnd.Last` only when `MaxLines` ends the paragraph there. `text-overflow: ellipsis` takes a single ellipsis at the end of the line, not the two-value form (which
 puts one at each end), and there is no `text-overflow` string value distinct from `ParagraphStyle.Ellipsis`; a caret in the hidden text is drawn after what is drawn.
 An ellipsis wider than the room is drawn anyway, as the only content of a line that overflows; CSS UI 4 says it is clipped, which is the caller's to do.
+
+Inline boxes: alignment is the baseline family (`baseline`, `middle`, `text-top`, `text-bottom`, `top`, `bottom`, with a shift for `sub`, `super` and lengths); the percentage form of
+`vertical-align` and `vertical-align` relative to an enclosing inline box other than the run the box is in are the caller's to resolve, since a run's own metrics are all the layout has. A box
+is a wall for justification (CSS Text 3 6.4.5 leaves atomic inlines to the agent) and a break is allowed on both sides of it (U+FFFC is line break class CB), where a caller that wants a box
+glued to the word before it must put a no-break character next to it. A line that holds a box does not shrink to fit the text alone: it is at least as tall as the strut of the text it sits in.

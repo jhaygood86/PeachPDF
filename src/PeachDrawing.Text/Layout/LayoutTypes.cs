@@ -64,6 +64,40 @@ namespace PeachDrawing.Text.Layout
         Justify = 5,
     }
 
+    /// <summary>How an inline box sits on the line vertically (CSS <c>vertical-align</c>).</summary>
+    public enum VerticalAlign
+    {
+        /// <summary>The box's baseline (see <see cref="InlineBox.Baseline"/>) is on the baseline of the text around it.</summary>
+        Baseline = 0,
+
+        /// <summary>The middle of the box is at the height of half the x-height of the text around it above its baseline.</summary>
+        Middle = 1,
+
+        /// <summary>The top of the box is level with the top of the text around it (its ascent).</summary>
+        TextTop = 2,
+
+        /// <summary>The bottom of the box is level with the bottom of the text around it (its descent).</summary>
+        TextBottom = 3,
+
+        /// <summary>The top of the box is at the top of the line, which grows downward if the box is taller than it.</summary>
+        Top = 4,
+
+        /// <summary>The bottom of the box is at the bottom of the line, which grows upward if the box is taller than it.</summary>
+        Bottom = 5,
+    }
+
+    /// <summary>
+    /// A box of a known size set in a paragraph like a single character (CSS: an atomic inline, such as an image or an inline block): it is never broken, takes part in line
+    /// breaking with a break allowed before and after it, and makes its line as tall as it needs. The paragraph's text holds a U+FFFC (object replacement character) for it.
+    /// </summary>
+    /// <param name="Width">The width of the box, in layout units; zero or more, and finite.</param>
+    /// <param name="Height">The height of the box, in layout units; zero or more, and finite.</param>
+    /// <param name="Baseline">The distance from the top of the box to its baseline, or <see langword="null"/> for its bottom edge (what CSS uses for an image); finite.</param>
+    /// <param name="VerticalAlign">How the box sits on the line.</param>
+    /// <param name="BaselineShift">How far the box is raised above where <paramref name="VerticalAlign"/> puts it (lowered when negative), as a length; finite. It has no effect on <see cref="VerticalAlign.Top"/> and <see cref="VerticalAlign.Bottom"/>.</param>
+    /// <param name="Tag">Anything the caller wants back with the placed box: <see cref="PlacedRun.InlineBox"/> carries this value.</param>
+    public readonly record struct InlineBox(double Width, double Height, double? Baseline = null, VerticalAlign VerticalAlign = VerticalAlign.Baseline, double BaselineShift = 0, object? Tag = null);
+
     /// <summary>What happens to a line whose text is wider than the width (CSS <c>text-overflow</c>).</summary>
     public enum TextOverflow
     {

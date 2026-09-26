@@ -31,6 +31,7 @@ namespace PeachDrawing.Text.Layout
         private readonly bool[] _isGraphemeBoundary;
         private readonly int[] _nextOpportunity;
         private readonly Atom[] _atoms;
+        private readonly IReadOnlyDictionary<int, InlineBox>? _boxes;
         private readonly Typeface?[]? _fallbackFaces;
         private const int MaxShapedPieces = 8192;
 
@@ -43,9 +44,10 @@ namespace PeachDrawing.Text.Layout
         /// <summary>A piece of the text that is shaped as one: one style, one direction level and one script.</summary>
         internal readonly record struct Atom(int Start, int End, int Run, byte Level, string Script, RunStyle Style);
 
-        internal Paragraph(string text, (int, int, RunStyle)[] runs, ParagraphStyle style)
+        internal Paragraph(string text, (int, int, RunStyle)[] runs, ParagraphStyle style, IReadOnlyDictionary<int, InlineBox>? boxes = null)
         {
             Text = text;
+            _boxes = boxes is { Count: > 0 } ? boxes : null;
             Style = style;
             _runs = runs;
             _bidi = Bidi.Analyze(text, style.Direction);
@@ -187,7 +189,7 @@ namespace PeachDrawing.Text.Layout
                     Rune.DecodeFromUtf16(Text.AsSpan(i), out var first, out _);
                     // Spaces, controls and format characters (zero width space, joiners, bidi marks, the soft hyphen) draw nothing, so no
                     // face is asked for them: a stand-in would only change the line's height and cut the shaping around it.
-                    if (!IsLineTerminator(Text[i]) && !Rune.IsWhiteSpace(first) && !Rune.IsControl(first)
+                    if (!IsLineTerminator(Text[i]) && !IsBoxAt(i) && !Rune.IsWhiteSpace(first) && !Rune.IsControl(first)
                         && Rune.GetUnicodeCategory(first) != System.Globalization.UnicodeCategory.Format
                         && !style.Typeface.TryMapRune(first, out _)
                         && fallback(first) is { } face)
@@ -224,12 +226,13 @@ namespace PeachDrawing.Text.Layout
                 byte level = _bidi.Levels[i];
                 string script = _scripts[i];
                 var face = _fallbackFaces?[i];
-                bool tab = Text[i] == '\t';
+                bool tab = Text[i] == '\t' || IsBoxAt(i);
                 i++;
-                // A tab is an atom of its own: its width comes from the tab stops, not from a glyph.
+                // A tab is an atom of its own: its width comes from the tab stops, not from a glyph. So is an inline box.
                 while (!tab
                     && i < length
                     && Text[i] != '\t'
+                    && !IsBoxAt(i)
                     && !IsLineTerminator(Text[i])
                     && _runs[run].End > i
                     && _bidi.Levels[i] == level
@@ -660,6 +663,15 @@ namespace PeachDrawing.Text.Layout
             return made;
         }
 
+        /// <summary>Whether the character at <paramref name="index"/> stands for an inline box.</summary>
+        internal bool IsBoxAt(int index) => _boxes is not null && _boxes.ContainsKey(index);
+
+        /// <summary>Whether the atom is an inline box.</summary>
+        internal bool IsBox(in Atom atom) => _boxes is not null && _boxes.ContainsKey(atom.Start);
+
+        /// <summary>The inline box the character at <paramref name="index"/> stands for.</summary>
+        internal InlineBox BoxAt(int index) => _boxes![index];
+
         /// <summary>Whether the atom is one tab character.</summary>
         internal bool IsTab(in Atom atom) => atom.End == atom.Start + 1 && Text[atom.Start] == '\t';
 
@@ -711,7 +723,7 @@ namespace PeachDrawing.Text.Layout
                 int to = Math.Min(end, atom.End);
                 if (to > from)
                 {
-                    width += IsTab(atom) ? TabAdvance(atom.Style, pen + width) : WidthOf(ShapePiece(atom, from, to), atom.Style, from);
+                    width += IsBox(atom) ? BoxAt(atom.Start).Width : IsTab(atom) ? TabAdvance(atom.Style, pen + width) : WidthOf(ShapePiece(atom, from, to), atom.Style, from);
                 }
             }
 
@@ -853,6 +865,7 @@ namespace PeachDrawing.Text.Layout
         private readonly StringBuilder _text = new();
         private readonly List<(int Start, RunStyle Style)> _runs = [];
         private readonly Stack<RunStyle> _stack = new();
+        private readonly Dictionary<int, InlineBox> _boxes = [];
         private ParagraphStyle _style = new();
 
         /// <summary>
@@ -974,6 +987,31 @@ namespace PeachDrawing.Text.Layout
             return this;
         }
 
+        /// <summary>Adds an inline box in the current run: it is one character of the paragraph's text (U+FFFC), sized as given.</summary>
+        /// <param name="box">The box.</param>
+        /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">A size is negative or a number is not finite.</exception>
+        public ParagraphBuilder AddInlineBox(InlineBox box)
+        {
+            if (!double.IsFinite(box.Width) || box.Width < 0 || !double.IsFinite(box.Height) || box.Height < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(box), box, "The size of a box must be zero or more, and finite.");
+            }
+
+            if (box.Baseline is { } baseline && !double.IsFinite(baseline) || !double.IsFinite(box.BaselineShift))
+            {
+                throw new ArgumentOutOfRangeException(nameof(box), box, "The baseline and its shift must be finite.");
+            }
+
+            if (!Enum.IsDefined(box.VerticalAlign))
+            {
+                throw new ArgumentOutOfRangeException(nameof(box), box.VerticalAlign, "The alignment is not one of the values.");
+            }
+
+            _boxes[_text.Length] = box;
+            return AddText("\uFFFC");
+        }
+
         /// <summary>Builds the paragraph from what has been added.</summary>
         /// <returns>The paragraph.</returns>
         public Paragraph Build()
@@ -991,7 +1029,7 @@ namespace PeachDrawing.Text.Layout
                 runs[i] = (_runs[i].Start, end, _runs[i].Style);
             }
 
-            return new Paragraph(text, runs, _style);
+            return new Paragraph(text, runs, _style, new Dictionary<int, InlineBox>(_boxes));
         }
     }
 }
