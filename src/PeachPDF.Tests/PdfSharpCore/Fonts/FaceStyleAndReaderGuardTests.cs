@@ -63,8 +63,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.Equal("tk:f/n/400/5", normal);
             Assert.Equal("tk:f/i/400/5", italic);
             Assert.Equal("tk:f/n/600/3", semiBold);
-            Assert.Equal(normal, XGlyphTypeface.ComputeKey("F", false, false));
-            Assert.Equal(new FontResolvingOptions(FaceStyle.BoldItalic).ComputeTypefaceKey("F"), XGlyphTypeface.ComputeKey("F", true, true));
+            Assert.Equal(normal, Typeface.ComputeKey("F", false, false));
+            Assert.Equal(new FontResolvingOptions(FaceStyle.BoldItalic).ComputeTypefaceKey("F"), Typeface.ComputeKey("F", true, true));
         }
 
         [Theory]

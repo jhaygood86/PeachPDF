@@ -392,26 +392,5 @@ namespace PeachPDF.Fonts.OpenType
             protected set { _normalLineHeightGap = value; }
         }
         int _normalLineHeightGap;
-
-
-        internal static string ComputeKey(string name, FaceStyle style)
-        {
-            return ComputeKey(name,
-                (style & FaceStyle.Bold) == FaceStyle.Bold,
-                (style & FaceStyle.Italic) == FaceStyle.Italic);
-        }
-
-        internal static string ComputeKey(string name, bool isBold, bool isItalic)
-        {
-            string key = name.ToLowerInvariant() + '/'
-                + (isBold ? "b" : "") + (isItalic ? "i" : "");
-            return key;
-        }
-
-        internal static string ComputeKey(string name)
-        {
-            string key = name.ToLowerInvariant();
-            return key;
-        }
     }
 }
