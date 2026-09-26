@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Text;
 using PeachPDF.Html.Adapters;
@@ -73,7 +74,7 @@ namespace PeachPDF.Tests.TestSupport
 
         // No family this stub knows about ever "wins" the last-resort search - there is no real
         // InstalledFonts registry backing it, so the only faithful answer is "nothing found".
-        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Internal.Text.EmojiPresentation presentation) => null;
+        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation) => null;
 
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => false;
 

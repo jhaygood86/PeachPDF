@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text.Internal.Text.Bidi;
 using System;
 using System.Collections.Generic;
@@ -70,9 +71,9 @@ namespace PeachPDF.Tests.Text.Bidi
 
                 var direction = testCase.ParagraphDirectionField switch
                 {
-                    0 => BidiParagraphDirection.Ltr,
-                    1 => BidiParagraphDirection.Rtl,
-                    _ => BidiParagraphDirection.Auto
+                    0 => BaseDirection.Ltr,
+                    1 => BaseDirection.Rtl,
+                    _ => BaseDirection.Auto
                 };
 
                 var result = BidiResolver.Resolve(text, direction);

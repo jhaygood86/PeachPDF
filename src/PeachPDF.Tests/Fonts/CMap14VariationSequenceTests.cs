@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -182,17 +183,17 @@ namespace PeachPDF.Tests.Fonts
             var heartGlyph = plain.CharCodeToGlyphIndex(new Rune(Heart));
             var derived = Descriptor(SyntheticUvsFont.Build(source, new SyntheticUvsFont.Sequence(Heart, 0xFE0E, Glyph: aGlyph)));
 
-            TextShapingFeatures With(PeachDrawing.Text.Internal.Text.EmojiMode mode) => TextShapingFeatures.Default with { EmojiMode = mode };
+            TextShapingFeatures With(PeachDrawing.Text.Unicode.EmojiMode mode) => TextShapingFeatures.Default with { EmojiMode = mode };
 
             // No selector in the text: text presentation (and unicode, for a text-default character) asks
             // for the FE0E glyph; normal and emoji do not.
-            Assert.Equal(aGlyph, Assert.Single(derived.Shape("❤", With(PeachDrawing.Text.Internal.Text.EmojiMode.Text))).GlyphIndex);
-            Assert.Equal(aGlyph, Assert.Single(derived.Shape("❤", With(PeachDrawing.Text.Internal.Text.EmojiMode.Unicode))).GlyphIndex);
-            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤", With(PeachDrawing.Text.Internal.Text.EmojiMode.Normal))).GlyphIndex);
-            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤", With(PeachDrawing.Text.Internal.Text.EmojiMode.Emoji))).GlyphIndex);
+            Assert.Equal(aGlyph, Assert.Single(derived.Shape("❤", With(PeachDrawing.Text.Unicode.EmojiMode.Text))).GlyphIndex);
+            Assert.Equal(aGlyph, Assert.Single(derived.Shape("❤", With(PeachDrawing.Text.Unicode.EmojiMode.Unicode))).GlyphIndex);
+            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤", With(PeachDrawing.Text.Unicode.EmojiMode.Normal))).GlyphIndex);
+            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤", With(PeachDrawing.Text.Unicode.EmojiMode.Emoji))).GlyphIndex);
 
             // An explicit FE0F overrides text presentation, so the FE0E glyph is not used.
-            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤️", With(PeachDrawing.Text.Internal.Text.EmojiMode.Text))).GlyphIndex);
+            Assert.Equal(heartGlyph, Assert.Single(derived.Shape("❤️", With(PeachDrawing.Text.Unicode.EmojiMode.Text))).GlyphIndex);
         }
 
         [Fact]

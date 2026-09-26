@@ -1,12 +1,12 @@
-namespace PeachDrawing.Text.Internal.Text
+namespace PeachDrawing.Text.Unicode
 {
     /// <summary>
     /// The four values of Unicode's <c>Vertical_Orientation</c> property
     /// (<see href="https://www.unicode.org/reports/tr50/">UAX #50</see>), which classifies how a
     /// codepoint's glyph is oriented when set in vertical text. Every assigned codepoint resolves to
-    /// exactly one of these - see <see cref="VerticalOrientationTable"/>.
+    /// exactly one of these - see <see cref="VerticalOrientation"/>.
     /// </summary>
-    internal enum VerticalOrientationClass : byte
+    public enum VerticalOrientationClass : byte
     {
         /// <summary>Upright, the same orientation as in the code charts.</summary>
         U,

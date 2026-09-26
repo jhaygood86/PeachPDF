@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Html.Core.Utils;
 using PeachDrawing.Text.Internal.Text.Bidi;
 using System.Collections.Generic;
@@ -8,7 +9,7 @@ namespace PeachPDF.Tests.Text.Bidi
     /// <summary>
     /// Regression tests for the X10/BD13 "isolating run sequence" chaining <see cref="BidiResolver"/> does
     /// for a CSS <c>unicode-bidi: isolate</c>/<c>isolate-override</c> box's synthetic push (see
-    /// <see cref="BidiIsolateOverride"/>), as distinct from a real Unicode LRI/RLI/FSI/PDI control
+    /// <see cref="EmbeddingSpan"/>), as distinct from a real Unicode LRI/RLI/FSI/PDI control
     /// character. A synthetic push never occupies an index of its own, so the chain has to be located by
     /// index-adjacency (an override's own Start/End) rather than by an actual PDI character type - two
     /// failure modes that surfaced only once two overrides interact are covered here directly, since
@@ -30,10 +31,10 @@ namespace PeachPDF.Tests.Text.Bidi
             // the correct outer/paragraph-level context, silently overwriting the first, correct result.
             const string text = "A שלום ש"; // "A " + "שלום" + " " + "ש"
 
-            var outer = new BidiIsolateOverride(Start: 2, Length: 4, Push: BidiExplicitPush.Rli); // "שלום"
-            var inner = new BidiIsolateOverride(Start: 4, Length: 2, Push: BidiExplicitPush.Rli); // "ום" (flush against outer's End)
+            var outer = new EmbeddingSpan(Start: 2, Length: 4, Push: ExplicitPush.Rli); // "שלום"
+            var inner = new EmbeddingSpan(Start: 4, Length: 2, Push: ExplicitPush.Rli); // "ום" (flush against outer's End)
 
-            var result = BidiResolver.Resolve(text, BidiParagraphDirection.Ltr, [outer, inner]);
+            var result = BidiResolver.Resolve(text, BaseDirection.Ltr, [outer, inner]);
 
             // The space right after both isolates close belongs only to the outer isolate's own (correct)
             // sequence, resolved against "A"(L) before and the trailing "ש"(R) after - a mismatch, so N2's
@@ -61,10 +62,10 @@ namespace PeachPDF.Tests.Text.Bidi
             // implicit resolution actually requires for a strong-R character at the paragraph's base level.
             const string text = "Aשתבגש"; // "A" + "שת" + "בג" + "ש"
 
-            var span1 = new BidiIsolateOverride(Start: 1, Length: 2, Push: BidiExplicitPush.Rli); // "שת"
-            var span2 = new BidiIsolateOverride(Start: 3, Length: 2, Push: BidiExplicitPush.Rli); // "בג"
+            var span1 = new EmbeddingSpan(Start: 1, Length: 2, Push: ExplicitPush.Rli); // "שת"
+            var span2 = new EmbeddingSpan(Start: 3, Length: 2, Push: ExplicitPush.Rli); // "בג"
 
-            var result = BidiResolver.Resolve(text, BidiParagraphDirection.Ltr, [span1, span2]);
+            var result = BidiResolver.Resolve(text, BaseDirection.Ltr, [span1, span2]);
 
             // The trailing "ש" is a strong-R character sitting at the paragraph's base (even) level once
             // both isolates close - I1/I2 must still bump it to level 1. A dropped-positions regression
@@ -81,9 +82,9 @@ namespace PeachPDF.Tests.Text.Bidi
             // "matching PDI" range - not fall back to always behaving like Lri (issue #552).
             const string text = "A שלום B"; // "A " + "שלום" (leading strong-R) + " B"
 
-            var fsi = new BidiIsolateOverride(Start: 2, Length: 4, Push: BidiExplicitPush.Fsi); // "שלום"
+            var fsi = new EmbeddingSpan(Start: 2, Length: 4, Push: ExplicitPush.Fsi); // "שלום"
 
-            var result = BidiResolver.Resolve(text, BidiParagraphDirection.Ltr, [fsi]);
+            var result = BidiResolver.Resolve(text, BaseDirection.Ltr, [fsi]);
 
             // The isolate's own content is detected RTL, so I1/I2 keeps its strong-R characters at an odd
             // (level 1) embedding level - a wrongly-Lri-treated isolate would instead resolve this at the
@@ -109,10 +110,10 @@ namespace PeachPDF.Tests.Text.Bidi
             // isolate, not plaintext) over just "שלום" - added outer-before-inner, matching how
             // CssBidiParagraphResolver.Flatten always appends a box's own override before recursing into
             // any nested box's.
-            var outerFsi = new BidiIsolateOverride(Start: 0, Length: 10, Push: BidiExplicitPush.Fsi);
-            var innerRli = new BidiIsolateOverride(Start: 0, Length: 4, Push: BidiExplicitPush.Rli); // "שלום"
+            var outerFsi = new EmbeddingSpan(Start: 0, Length: 10, Push: ExplicitPush.Fsi);
+            var innerRli = new EmbeddingSpan(Start: 0, Length: 4, Push: ExplicitPush.Rli); // "שלום"
 
-            var result = BidiResolver.Resolve(text, BidiParagraphDirection.Ltr, [outerFsi, innerRli]);
+            var result = BidiResolver.Resolve(text, BaseDirection.Ltr, [outerFsi, innerRli]);
 
             // A strong character's own final level self-corrects to match its own type via I1/I2
             // regardless of which (right or wrong) explicit level the enclosing isolate picked, so 'H'..'o'
@@ -145,7 +146,7 @@ namespace PeachPDF.Tests.Text.Bidi
             // CSS-override-skip feature (added alongside this test) had to compose with, not replace.
             const string text = "⁧שלום⁩ Hello"; // RLI "שלום" PDI + " Hello"
 
-            var result = BidiResolver.Resolve(text, BidiParagraphDirection.Auto);
+            var result = BidiResolver.Resolve(text, BaseDirection.Auto);
 
             // First strong character outside any isolate is 'H' (L) - paragraph resolves LTR (level 0) -
             // reading the isolated 'ש' directly instead would have resolved RTL (level 1).

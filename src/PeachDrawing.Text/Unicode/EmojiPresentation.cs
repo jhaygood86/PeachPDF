@@ -1,11 +1,11 @@
-namespace PeachDrawing.Text.Internal.Text
+namespace PeachDrawing.Text.Unicode
 {
     /// <summary>
-    /// Which presentation of an <see cref="EmojiProperties.IsPresentationParticipant">emoji presentation
+    /// Which presentation of an <see cref="Emoji.IsPresentationParticipant">emoji presentation
     /// participating code point</see> a character is asked to be drawn in (CSS Fonts 4
     /// <c>font-variant-emoji</c>, UTS #51 emoji presentation sequences).
     /// </summary>
-    internal enum EmojiPresentation : byte
+    public enum EmojiPresentation : byte
     {
         /// <summary>No request: the character is not a participant, or the author left the choice to the user agent.</summary>
         NoPreference = 0,

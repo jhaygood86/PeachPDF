@@ -1,6 +1,7 @@
 #nullable disable warnings
 
 
+using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachDrawing.Text.Internal.Text;

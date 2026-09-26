@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
@@ -1617,7 +1618,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ActualSmallCapsFont"/> when <paramref name="sizeScale"/> marks a small-caps run) when
         /// no declared family covers it. Cached per (codepoint, scale, presentation); mirrors
         /// <see cref="ActualSmallCapsFont"/>'s size/style derivation. <paramref name="presentation"/> is the
-        /// emoji/text presentation the character is to be drawn in (<see cref="EmojiProperties.ResolveAt"/>),
+        /// emoji/text presentation the character is to be drawn in (<see cref="Emoji.ResolveAt"/>),
         /// which steers the choice between a colour and an outline font that both cover it.
         /// </summary>
         public RFont ActualFontForCodepoint(Rune codepoint, double sizeScale = 1.0, EmojiPresentation presentation = EmojiPresentation.NoPreference)
