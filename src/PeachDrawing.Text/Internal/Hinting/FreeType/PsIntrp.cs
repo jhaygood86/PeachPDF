@@ -227,6 +227,12 @@ internal static class Cf2Interpreter
 
     private const int StorageSize = 32;
 
+    /// <summary>
+    /// The most stem hints a charstring may declare. FreeType keeps every one (a glyph of more than 96 fails at its first hint mask or move,
+    /// and a charstring of a megabyte of <c>hstem</c> operators would make hundreds of megabytes of them first); more than this is an error.
+    /// </summary>
+    private const int MaxStemHints = 4096;
+
     // `stemHintArray' does not change once we start drawing the outline.
     private static void DoStems(Cf2Font font, Cf2Stack opStack, Cf2ArrStack<Cf2StemHint> stemHintArray, ref int width, ref bool haveWidth, int hintOffset)
     {
@@ -239,7 +245,10 @@ internal static class Cf2Interpreter
         if (hasWidthArg && !haveWidth)
             width = unchecked(opStack.GetReal(0) + Cf2Fixed.FromInt(font.Decoder.CurrentSubfont.Private.NominalWidth));
 
-        for (int i = hasWidthArg ? 1 : 0; i < count; i += 2)
+        if (stemHintArray.Count > MaxStemHints)
+            font.Error.Set(Cf2Error.InvalidGlyphFormat);
+
+        for (int i = hasWidthArg ? 1 : 0; i < count && stemHintArray.Count <= MaxStemHints; i += 2)
         {
             // construct a CF2_StemHint and push it onto the list
             Cf2StemHint stemhint = default;

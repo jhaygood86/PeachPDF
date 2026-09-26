@@ -12077,9 +12077,9 @@ var textHintingCss = $$"""
     </style>
     """;
 
-string TextHintingHtml(string intro)
+string TextHintingHtml(string intro, string? css = null)
 {
-    var html = new System.Text.StringBuilder("<!DOCTYPE html><html><head>" + textHintingCss + "</head><body><h1>Text drawn into bitmaps</h1><p class=\"intro\">" + intro + "</p>");
+    var html = new System.Text.StringBuilder("<!DOCTYPE html><html><head>" + (css ?? textHintingCss) + "</head><body><h1>Text drawn into bitmaps</h1><p class=\"intro\">" + intro + "</p>");
     foreach (var px in new[] { 8, 9, 10, 11, 12, 13, 14, 16, 20 })
     {
         html.Append($"<div class=\"cap\">{px}px</div>");
@@ -12106,6 +12106,30 @@ await SaveShowcaseAsync("text_hinting_standard", "Graphics & Effects", "Hinted R
 await SaveShowcaseAsync("text_hinting_none", "Graphics & Effects", "Raster Text Without Hinting",
     "The same page as the hinted raster text showcase with TextHinting left at its default, None: outlines are only scaled, so edges cut through pixels and small text is softer.",
     TextHintingHtml("The lines below are rasterized at 72 dpi, so the pixel grid is visible. Compare with the same page with hinting."),
+    new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PageOrientation = PageOrientation.Portrait,
+        ShrinkToFit = true,
+        RasterizationDpi = 72
+    });
+
+// The same with a font that has CFF (PostScript) outlines: its stem hints and blue zones are what fit the text, not TrueType instructions.
+var cffHintingFontUri = "data:font/otf;base64," +
+    Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceCodePro-Regular.otf")));
+var textHintingCffCss = textHintingCss
+    .Replace("'HintedSans'", "'HintedCode'")
+    .Replace(hintingFontUri, cffHintingFontUri)
+    .Replace("format('woff')", "format('opentype')");
+
+await SaveShowcaseAsync("text_hinting_cff_standard", "Graphics & Effects", "Hinted Raster Text (CFF Outlines)",
+    "PdfGenerateConfig.TextHinting = Standard with a font whose outlines are CFF (Source Code Pro, an OpenType font): the stem hints and blue zones of its charstrings, run by a port of Adobe's CFF engine, put stems, x-heights and baselines on pixel edges in the bitmaps this page rasterizes at 72 dpi.",
+    TextHintingHtml("The lines below are rasterized at 72 dpi, in a font with CFF outlines, so the pixel grid is visible. Compare with the same page without hinting.", textHintingCffCss),
+    textHintingRasterConfig);
+
+await SaveShowcaseAsync("text_hinting_cff_none", "Graphics & Effects", "Raster Text Without Hinting (CFF Outlines)",
+    "The same page as the hinted CFF raster text showcase with TextHinting left at its default, None: the outlines are only scaled, so edges cut through pixels.",
+    TextHintingHtml("The lines below are rasterized at 72 dpi, in a font with CFF outlines, so the pixel grid is visible. Compare with the same page with hinting.", textHintingCffCss),
     new PdfGenerateConfig
     {
         PageSize = PageSize.A4,

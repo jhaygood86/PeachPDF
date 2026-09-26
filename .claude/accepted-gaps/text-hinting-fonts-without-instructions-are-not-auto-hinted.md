@@ -1,6 +1,6 @@
-# Text hinting: fonts without instructions are not auto-hinted
+# Text hinting: fonts without hints are not auto-hinted
 
-A TrueType font with no instructions, and (until the CFF gap is closed) every CFF font, is answered with the scaled design outline. FreeType's
-auto-hinter (`src/autofit`), which hints from the outline itself, was deliberately not ported: it is a much larger body of code than the
-bytecode interpreter, and the licence work of PR 1 covers only the files it lists. Tracked in
-[#1434](https://github.com/jhaygood86/PeachPDF/issues/1434).
+A TrueType font with no instructions, and a CFF font whose charstrings carry no hints, is answered with the scaled design outline (a CFF glyph without
+hints is only rounded to 1/64 pixel). FreeType's auto-hinter (`src/autofit`), which hints from the outline itself, was deliberately not ported: it is a
+much larger body of code than the bytecode interpreter and the CFF engine, and the licence work of the hinting changes covers only the files it lists.
+Tracked in [#1434](https://github.com/jhaygood86/PeachPDF/issues/1434).

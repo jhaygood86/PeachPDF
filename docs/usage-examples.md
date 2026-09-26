@@ -823,7 +823,7 @@ Text inside a rasterized HTML element is drawn into the bitmap and also kept as 
 
 ### Sharper small text in bitmaps: `TextHinting`
 
-Text drawn into one of these bitmaps is, by default, the font's design scaled to the bitmap's pixels. At a low `RasterizationDpi` and a small size, that puts edges through the middle of pixels and softens the text. `TextHinting` asks for the font's own TrueType hinting instructions to be run, so stems, x-heights and baselines land on whole pixels:
+Text drawn into one of these bitmaps is, by default, the font's design scaled to the bitmap's pixels. At a low `RasterizationDpi` and a small size, that puts edges through the middle of pixels and softens the text. `TextHinting` asks for the font's own hinting to be run (the instructions of a TrueType font, the stem hints and blue zones of a font with CFF outlines), so stems, x-heights and baselines land on whole pixels:
 
 ```csharp
 var config = new PdfGenerateConfig
@@ -834,9 +834,9 @@ var config = new PdfGenerateConfig
 };
 ```
 
-- `Standard` fits glyphs vertically and keeps their horizontal design, which suits anti-aliased text. `Monochrome` fits both directions, as for text drawn without anti-aliasing. `None` changes nothing.
+- `Standard` fits glyphs vertically and keeps their horizontal design, which suits anti-aliased text. `Monochrome` fits both directions of a TrueType font, as for text drawn without anti-aliasing (a CFF font is fitted the same way in both modes: its hints are vertical). `None` changes nothing.
 - It affects **only the raster backend**. The PDF's own text is the embedded font, drawn by the viewer at whatever size it likes, and is never hinted; a document that has no rasterized regions is byte-for-byte the same with any value. Layout is never affected either: measurements and line breaks use the unhinted metrics, so turning hinting on cannot move a line.
-- A piece of text is hinted only when it is drawn without rotation, skew or perspective (its size on the bitmap is then a single number of pixels per em, which is what hinting works on) and the font is a TrueType font with instructions; any other text in the bitmap is drawn unhinted. A font whose instructions fail is treated the same way, so a broken font never breaks a page.
+- A piece of text is hinted only when it is drawn without rotation, skew or perspective (its size on the bitmap is then a single number of pixels per em, which is what hinting works on) and the font is a TrueType font with instructions or a font with CFF outlines; any other text in the bitmap is drawn unhinted. A font whose hinting fails is treated the same way, so a broken font never breaks a page.
 - It matters most at 72 to 150 dpi. At 300 dpi and above, glyphs are large enough in pixels that the difference is hard to see.
 
 A value that is not one of the three throws an `ArgumentOutOfRangeException` when generation starts.

@@ -96,8 +96,11 @@ internal sealed class Cf2Font
     /// <summary>Stem darkening (<c>CF2_FlagsDarkened</c>).</summary>
     public const int FlagsDarkened = 2;
 
-    /// <summary>The instruction limit of a charstring; 20,000,000 matches Avalon.</summary>
-    public const uint InstructionLimit = 20000000U;
+    /// <summary>
+    /// The instruction limit of a charstring. FreeType's is 20,000,000 (which matches Avalon); a glyph of a real font runs a few thousand
+    /// instructions at most, and a hostile font can make every glyph run to the limit, so the port's is a tenth of it.
+    /// </summary>
+    public const uint InstructionLimit = 2000000U;
 
     /// <summary>The default darkening parameters of FreeType's CFF driver: (x1, y1, x2, y2, x3, y3, x4, y4) in 1000 unit character space.</summary>
     public static readonly int[] DefaultDarkenParams = [500, 400, 1000, 275, 1667, 275, 2333, 0];

@@ -187,16 +187,17 @@ if (face.TryMapRune(new Rune('g'), out ushort glyph) && face.TryGetOutline(glyph
 
 ### Grid fitting (hinting)
 
-A TrueType font can carry small programs that move the points of a glyph, at one size, so that stems, x-heights and baselines land on
-whole pixels. That makes small text drawn into a pixel raster sharper, and means nothing for vector output. An `OutlineRequest` asks
-for it: a size in pixels per em and a `GridFitting`.
+A font can carry hints that move the points of a glyph, at one size, so that stems, x-heights and baselines land on whole pixels: a
+TrueType font as small programs, a font with CFF (PostScript) outlines as stem hints and blue zones in its charstrings. That makes small
+text drawn into a pixel raster sharper, and means nothing for vector output. An `OutlineRequest` asks for it: a size in pixels per em and
+a `GridFitting`.
 
 ```csharp
 var request = new OutlineRequest { PixelsPerEm = 11, GridFitting = GridFitting.Standard };
 
 if (face.TryGetOutline(glyph, request, out GlyphOutline fitted))
 {
-    // fitted.IsGridFitted: the font's instructions ran. Coordinates are in pixels at 11 ppem, y up, origin at (0, 0).
+    // fitted.IsGridFitted: the font's hints were applied. Coordinates are in pixels at 11 ppem, y up, origin at (0, 0).
     // fitted.GridFittedAdvance: the advance after fitting, rounded to a whole number of pixels as the font's hinting leaves it
     // (in Monochrome mode from the font's hdmx table where it has one for the size).
 }
@@ -204,32 +205,42 @@ if (face.TryGetOutline(glyph, request, out GlyphOutline fitted))
 
 - **The size is the size the font is fitted at.** It may be fractional, but a TrueType font whose `head` table asks for whole pixels per
   em (nearly all do) is fitted at the nearest whole size, as in FreeType: asking for 11.4 gives an outline fitted at 11, which
-  `GlyphOutline.PixelsPerEm` reports. Every fractional size of such a font shares one cached fitting.
+  `GlyphOutline.PixelsPerEm` reports. Every fractional size of such a font shares one cached fitting. A font with CFF outlines is fitted
+  at the size asked for.
 - **`GridFitting.None`** is the default and gives exactly the design-unit outline of the overload without a request.
 - **`GridFitting.Standard`** runs the font's instructions in the interpreter FreeType uses by default (its "v40" behaviour). It fits the
   vertical direction only, so glyphs keep the horizontal positions and widths of the design, which is what anti-aliased text wants. It
   applies the compatibility adjustments that modern fonts, built for that interpreter, rely on.
 - **`GridFitting.Monochrome`** runs them in the original interpreter (FreeType's "v35"), which fits both directions, as for text drawn
   without anti-aliasing.
-- **When a font cannot be fitted**, nothing throws: a font with no TrueType instructions (a CFF font, or a TrueType font without
-  `fpgm`/`prep`/glyph programs), a size the font's own programs refuse, or a glyph whose program is broken, gives the scaled design outline
-  with `IsGridFitted` false. A font may also switch its own glyph instructions off at a size, and is then treated the same way.
-  `TryGetGridFittedAdvance` gives the fitted advance directly, including for glyphs that have no ink.
+- **Fonts with CFF outlines** are fitted by Adobe's CFF engine, the one FreeType uses: the horizontal and vertical stem hints of a glyph
+  and the blue zones of its font (the heights of the baseline, the x-height, the caps and the ascenders, with their overshoots) place
+  stems and flat edges on whole pixels, overshoots are suppressed at small sizes, and hints are substituted where the charstring says so.
+  It fits vertically only, so the two modes give one outline; a font whose `LanguageGroup` says it is ideographic gets the em box
+  alignment of ideographic fonts. The advance is the design advance rounded to a whole pixel. Stem darkening, which the engine has, is off,
+  as it is in FreeType by default. CFF2 (variable CFF) fonts are not fitted.
+- **When a font cannot be fitted**, nothing throws: a TrueType font without `fpgm`/`prep`/glyph programs, a font that has neither
+  TrueType nor CFF outlines, a size the font's own programs (or, for CFF, the engine: 2000 ppem at most) refuse, or a glyph whose program
+  or charstring is broken, gives the scaled design outline with `IsGridFitted` false. A TrueType font may also switch its own glyph
+  instructions off at a size, and is then treated the same way. `TryGetGridFittedAdvance` gives the fitted advance directly, including
+  for glyphs that have no ink.
 - **Untrusted fonts are safe to hint.** The instruction interpreter bounds every table access, the number of instructions run, the loop
-  work of a program and the depth of composite glyphs, and a font that goes past a limit is answered with the unhinted outline. Hinted
-  outlines are cached per face, size and mode.
+  work of a program and the depth of composite glyphs; the CFF engine bounds the instructions of a charstring, the depth of subroutines,
+  the operand stack and the number of points; and a font that goes past a limit is answered with the unhinted outline. Hinted outlines
+  are cached per face, size and mode.
 - **Layout is not hinted.** `GetAdvance` and the metrics stay unhinted; fitting is a property of an outline drawn at one size, and a
   caller that lays text out keeps the design advances so that layout does not change with the size of the device.
 - **Variable fonts** are hinted at the instance's location by moving the points with the `gvar` deltas first and then running the
   instructions. The result is a good approximation, not what FreeType produces bit for bit, and `cvar` (which changes control values by
-  location) is not applied. **CFF fonts** have their own hinting, which is not run.
+  location) is not applied.
 - **What the font says about when to hint is not consulted.** The `gasp` table (which sizes want grid-fitting or smoothing), `LTSH` and
   `VDMX` are not read: a caller that asks for fitting gets it at every size, and decides for itself whether a size is one where hinting
   is worth having. Pixels are square: one size serves both directions.
 
-The instruction interpreter is a port of FreeType's, which is why the package carries the FreeType Project License notices (see
-[Licences](#licences)). It gives the same fitted points as FreeType 2.14.3, in 26.6 fixed point, for every TrueType font the test
-suite checks it with.
+The instruction interpreter and the CFF engine are ports of FreeType's (the CFF engine is the one Adobe contributed to FreeType), which
+is why the package carries the FreeType Project License notices and Adobe's (see [Licences](#licences)). They give the same fitted
+points as FreeType 2.14.3, in 26.6 fixed point, for every font the test suite checks them with, including fonts made of random
+programs and charstrings that FreeType is compared with point for point.
 
 ## Variable fonts
 
@@ -474,8 +485,8 @@ Both answer `null` for a script or language the built-in table does not cover.
 ## Licences
 
 The package is BSD 3-Clause. It carries its third-party notices with it, in `THIRD-PARTY-LICENSES.md`: the font readers
-derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz code, the TrueType instruction interpreter that
-does the [grid fitting](#grid-fitting-hinting) is a port of FreeType's (under the FreeType Project License, whose text ships in
-the package as `FTL.TXT`; an application that redistributes the package has to credit the FreeType Team in its documentation),
-and the data tables come from the
+derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz code, the TrueType instruction interpreter and
+Adobe's CFF engine that do the [grid fitting](#grid-fitting-hinting) are ports of FreeType's (under the FreeType Project License,
+whose text ships in the package as `FTL.TXT`, with Adobe's patent licence grant for the CFF engine; an application that redistributes
+the package has to credit the FreeType Team in its documentation), and the data tables come from the
 Unicode Character Database and the `hyph-utf8` pattern collection. See [License](license.md) for the whole list.

@@ -30,6 +30,15 @@ public class LicenseInfoTests
     }
 
     [Fact]
+    public void Credits_CarriesTheAdobeNoticeOfTheCffEngine()
+    {
+        var text = LicenseInfo.Credits;
+        Assert.Contains("Adobe's CFF engine", text);
+        Assert.Contains("Adobe Systems Incorporated", text);
+        Assert.Contains("patent licence grant", text);
+    }
+
+    [Fact]
     public async Task ShowLicense_PrintsLicenseAndExitsZero()
     {
         var (exit, output) = await RunCapturingStdout(["--show-license"]);
