@@ -65,6 +65,56 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(word.Top - line.FlowTop!.Value, -2, 2);
         }
 
+        // An inline-block whose text the surrounding line has taken keeps a line box of its own from an earlier
+        // sizing layout, still listing that text. Once a translation moved that stale line along with the box,
+        // its baseline no longer matched anything, and aligning the inline-block to it threw its text 214pt
+        // below its line: drawn on no page. The stale line is not the box's baseline.
+        [Theory]
+        [InlineData("display:grid;grid-template-columns:repeat(2,1fr);gap:2pt")]
+        [InlineData("display:flex")]
+        public async Task AnInlineBlockInAnEngineItem_IsDrawnOnceAtItsLine(string containerCss)
+        {
+            // The review's minimized fuzz document (seed 226), verbatim: the word lengths and the grey image
+            // decide where the page break falls, and a simplified copy no longer reached the stale line.
+            const string image = "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
+            var html = "<!DOCTYPE html><html><head><style>body{margin:0;font:10pt/1.2 Arial}</style></head><body>" +
+                       $"<div style='{containerCss}'>z226_26 <div style='width:60%;border:1px dotted #333'>" +
+                       "<h3 style='line-height:0.6;margin:2pt 0 8pt;padding:3pt;border:1px solid #666;'>" +
+                       $"<img style='width:39pt;height:47pt;background:#ccc;vertical-align:middle' src='{image}'></h3>" +
+                       "<span style='vertical-align:super;font-size:26pt;'>z226_36 </span> " +
+                       "<span id='ib' style='display:inline-block;font-size:26pt;line-height:0;border:1px solid #888'>z226_38</span>" +
+                       "</div></div></body></html>";
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, 240, 150);
+            var painted = PaintedStrings(container).Where(t => t is "z226_38");
+            var box = LayoutHarness.FindById(root, "ib")!;
+            var word = LayoutHarness.Descendants(box).SelectMany(b => b.Words).Single(w => w.Text == "z226_38");
+
+            Assert.Equal(["z226_38"], painted);
+            Assert.InRange(word.Top - word.Line!.LineTop, -30, 30);
+        }
+
+        // An inline-block with block content, moved down to meet a larger neighbour's baseline: the move
+        // translates its subtree, and its own line boxes' recorded tops go with it exactly once. Shifted a
+        // second time on top of the translation, its line top ended up the move's distance below its words.
+        [Fact]
+        public async Task AnInlineBlockMovedToTheBaseline_KeepsItsOwnLineTopWithItsWords()
+        {
+            var html = $"<!DOCTYPE html><html><head>{Style}</head><body><p id='p'>" +
+                       "<span style='font-size:30pt'>Big</span> " +
+                       "<span id='ib' style='display:inline-block;border:1px solid'><div>small</div></span></p></body></html>";
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html, 300, 200);
+            var box = LayoutHarness.FindById(root, "ib")!;
+            var line = LayoutHarness.Descendants(box).SelectMany(b => b.LineBoxes).First(l => l.Words.Any(w => w.Text == "small"));
+            var word = line.Words.First(w => w.Text == "small");
+
+            var paragraph = LayoutHarness.FindById(root, "p")!;
+            Assert.True(box.Location.Y > paragraph.Location.Y + 5, "the fixture must move the inline-block down");
+            Assert.NotNull(line.FlowTop);
+            Assert.InRange(word.Top - line.FlowTop!.Value, -2, 2);
+        }
+
         // Every string drawn, on every page, with some part of it inside all the rectangle clips in force
         // when it was drawn. A path clip is popped like a rectangle one, so it holds a place on the stack
         // but tests nothing.
