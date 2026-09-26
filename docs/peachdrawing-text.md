@@ -26,6 +26,7 @@ dotnet add package PeachDrawing.Text
 - **Variable fonts:** the axes of a font and reading it at a location (`Typeface.WithAxes`): TrueType outlines, advance widths and font-wide metrics follow the axes.
 - **Mathematics:** the `MATH` table: layout constants, per-glyph italics corrections and accent attachment, and the
   variants and assemblies of stretchy glyphs.
+- **Text layout:** a paragraph of styled text, laid out at any width into lines of placed glyph runs, with hit testing, carets and selection boxes.
 - **Unicode:** the Unicode Line Breaking Algorithm (UAX #14) and the grapheme cluster, word and sentence boundaries
   of UAX #29, all checked against the Unicode Consortium's conformance files; the Unicode Bidirectional Algorithm, script itemization, vertical orientation, emoji presentation, and
   TeX/Liang hyphenation for 73 languages.
@@ -274,6 +275,49 @@ byte[] fontFile = subset.Data.ToArray();
 What a font descriptor records about a face comes from the members you already have: `Typeface.Metrics` (with `IsSymbolic`,
 `IsFixedPitch`, `HasSerifs`, `IsItalicStyle` and `FirstCharIndex` for the descriptor flags), `Typeface.GetAdvance` for widths,
 `Typeface.FullName` for a base font name, and `Typeface.ContentHash` to key a cache of what you made from a face.
+
+## Laying out text: `PeachDrawing.Text.Layout`
+
+`ParagraphBuilder` collects text and styles, and `Build()` prepares a `Paragraph`: the text's direction (UAX #9), scripts, joining and line break
+opportunities (UAX #14) are worked out once, and the paragraph can then be laid out at any width. A `Paragraph` is immutable and can be
+laid out from several threads.
+
+```csharp
+var builder = new ParagraphBuilder(new RunStyle(typeface, 16))
+    .SetStyle(new ParagraphStyle { Align = TextAlign.Start, OverflowWrap = OverflowWrap.BreakWord });
+builder.AddText("Some ").PushRun(new RunStyle(bold, 24)).AddText("large").PopRun().AddText(" text.");
+Paragraph paragraph = builder.Build();
+
+ParagraphLayout layout = paragraph.Layout(availableWidth: 300);
+foreach (LineBox line in layout.Lines)
+{
+    foreach (PlacedRun run in line.Runs)          // left to right, in the order they are drawn
+    {
+        // run.Glyphs.Glyphs are in drawing order; run.X is the left edge and run.Baseline the baseline, in layout units.
+    }
+}
+```
+
+- **Lines.** A line breaks where UAX #14 allows and the next word does not fit. The space at a soft break hangs at the end of the line: it is in
+  `LineBox.Range` but not in `LineBox.Width`, and it has no run. A newline forces a break (`LineBox.End` says why every line ended), and text that
+  ends in one gets an empty last line to put a caret on. A word wider than a line overflows unless `ParagraphStyle.OverflowWrap` is
+  `BreakWord` or `Anywhere`, which move it to a line of its own first and then cut it between grapheme clusters. `ParagraphStyle.NoWrap`
+  breaks only at forced breaks, and a width of `double.PositiveInfinity` does the same.
+- **Direction.** Each line is reordered visually (rule L2), so `LineBox.Runs` is in the order to draw. A right-to-left run's glyphs are already in
+  drawing order and its mirrorable characters already mirrored.
+- **Alignment and height.** `TextAlign` is start, end, left, right or center. A line is as tall as its faces ask for (their ascent, descent and
+  line gap), or `LineHeight` times its largest size, with the leading shared above and below.
+- **Editing.** `PositionAt(point)` gives the boundary nearest a point, always between grapheme clusters; `CaretRect(position)` gives the caret,
+  where `TextAffinity` chooses the line at a soft break; `SelectionBoxes(range)` gives the rectangles to fill, one per visually contiguous stretch of
+  a line; `WordRangeAt` and `GraphemeRangeAt` give the UAX #29 units. `PlacedRun.GetCaretX` gives the caret's place inside one run, sharing a ligature's
+  width out equally between its characters.
+- **Content widths.** `MeasureContent()` gives the width of the widest unbreakable piece (with `OverflowWrap.Anywhere`, of the widest character) and of the
+  widest line when only forced breaks end one.
+- **`TextRuler.WidthOf`** measures one piece of text in one face without building a paragraph.
+
+Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Text is set in the typeface of its run: a
+character the face does not have draws that face's missing-glyph shape, and there is no font fallback yet. Justification, letter and word spacing, tabs,
+hyphenation and a line limit with an ellipsis are not part of the layout yet.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 

@@ -46,6 +46,125 @@ PeachDrawing.Text.GenericFamily : enum Int32
   SansSerif = 1
   Serif = 0
   SystemUi = 5
+PeachDrawing.Text.Layout.ContentWidths : struct
+  ctor(Double MinContent, Double MaxContent)
+  method Boolean Equals(ContentWidths other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Double MinContent, out Double MaxContent)
+  property Double MaxContent { get; init; }
+  property Double MinContent { get; init; }
+PeachDrawing.Text.Layout.LineBox : sealed class
+  property Double Ascent { get; }
+  property Double Baseline { get; }
+  property Double Descent { get; }
+  property Double Height { get; }
+  property Double Left { get; }
+  property Double Top { get; }
+  property Double Width { get; }
+  property IReadOnlyList<PlacedRun> Runs { get; }
+  property Int32 ContentEnd { get; }
+  property LineEnd End { get; }
+  property RectangleF Bounds { get; }
+  property TextRange Range { get; }
+PeachDrawing.Text.Layout.LineEnd : enum Int32
+  Emergency = 2
+  Forced = 1
+  Last = 3
+  Soft = 0
+PeachDrawing.Text.Layout.OverflowWrap : enum Int32
+  Anywhere = 2
+  BreakWord = 1
+  Normal = 0
+PeachDrawing.Text.Layout.Paragraph : sealed class
+  method ContentWidths MeasureContent()
+  method ParagraphLayout Layout(Double availableWidth)
+  property Boolean IsRightToLeft { get; }
+  property ParagraphStyle Style { get; }
+  property String Text { get; }
+PeachDrawing.Text.Layout.ParagraphBuilder : sealed class
+  ctor(RunStyle baseStyle)
+  method Paragraph Build()
+  method ParagraphBuilder AddText(String text)
+  method ParagraphBuilder PopRun()
+  method ParagraphBuilder PushRun(RunStyle style)
+  method ParagraphBuilder SetStyle(ParagraphStyle style)
+PeachDrawing.Text.Layout.ParagraphLayout : sealed class
+  method IReadOnlyList<RectangleF> SelectionBoxes(TextRange range)
+  method RectangleF CaretRect(TextPosition position)
+  method TextPosition PositionAt(PointF point)
+  method TextRange GraphemeRangeAt(Int32 index)
+  method TextRange WordRangeAt(Int32 index)
+  property Double ContentWidth { get; }
+  property Double Height { get; }
+  property Double Width { get; }
+  property IReadOnlyList<LineBox> Lines { get; }
+  property Paragraph Paragraph { get; }
+PeachDrawing.Text.Layout.ParagraphStyle : struct
+  ctor()
+  method Boolean Equals(Object obj)
+  method Boolean Equals(ParagraphStyle other)
+  method Int32 GetHashCode()
+  method String ToString()
+  property BaseDirection Direction { get; init; }
+  property Boolean NoWrap { get; init; }
+  property LineBreakOptions LineBreak { get; init; }
+  property Nullable<Double> LineHeight { get; init; }
+  property OverflowWrap OverflowWrap { get; init; }
+  property TextAlign Align { get; init; }
+PeachDrawing.Text.Layout.PlacedRun : sealed class
+  method Double GetCaretX(Int32 index)
+  property Boolean IsRightToLeft { get; }
+  property Byte Level { get; }
+  property Double Baseline { get; }
+  property Double Width { get; }
+  property Double X { get; }
+  property GlyphRun Glyphs { get; }
+  property RunStyle Style { get; }
+  property TextRange Range { get; }
+PeachDrawing.Text.Layout.RunStyle : struct
+  ctor(Typeface Typeface, Double Size, Nullable<ShapeSettings> Shape = null)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(RunStyle other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Typeface Typeface, out Double Size, out Nullable<ShapeSettings> Shape)
+  property Double Size { get; init; }
+  property Nullable<ShapeSettings> Shape { get; init; }
+  property Typeface Typeface { get; init; }
+PeachDrawing.Text.Layout.TextAffinity : enum Int32
+  Downstream = 1
+  Upstream = 0
+PeachDrawing.Text.Layout.TextAlign : enum Int32
+  Center = 4
+  End = 1
+  Left = 2
+  Right = 3
+  Start = 0
+PeachDrawing.Text.Layout.TextPosition : struct
+  ctor(Int32 Index, TextAffinity Affinity = Downstream)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(TextPosition other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 Index, out TextAffinity Affinity)
+  property Int32 Index { get; init; }
+  property TextAffinity Affinity { get; init; }
+PeachDrawing.Text.Layout.TextRange : struct
+  ctor(Int32 Start, Int32 End)
+  method Boolean Contains(Int32 index)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(TextRange other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out Int32 Start, out Int32 End)
+  property Boolean IsEmpty { get; }
+  property Int32 End { get; init; }
+  property Int32 Length { get; }
+  property Int32 Start { get; init; }
+PeachDrawing.Text.Layout.TextRuler : static class
+  method static Double WidthOf(Typeface typeface, Double size, String text, Nullable<ShapeSettings> settings = null)
 PeachDrawing.Text.NamedVariation : sealed class
   property IReadOnlyList<AxisSetting> Settings { get; }
   property String Name { get; }
