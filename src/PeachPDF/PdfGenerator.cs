@@ -232,6 +232,7 @@ namespace PeachPDF
             _pdfSharpAdapter.RasterizationDpi = config.RasterizationDpi;
             _pdfSharpAdapter.MaxRasterPixels = config.MaxRasterPixels;
             _pdfSharpAdapter.TextHinting = config.TextHinting;
+            _pdfSharpAdapter.TextStemDarkening = config.TextStemDarkening;
         }
 
         /// <summary>

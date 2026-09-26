@@ -222,8 +222,16 @@ if (face.TryGetOutline(glyph, request, out GlyphOutline fitted))
   and the blue zones of its font (the heights of the baseline, the x-height, the caps and the ascenders, with their overshoots) place
   stems and flat edges on whole pixels, overshoots are suppressed at small sizes, and hints are substituted where the charstring says so.
   It fits vertically only, so the two modes give one outline; a font whose `LanguageGroup` says it is ideographic gets the em box
-  alignment of ideographic fonts. The advance is the design advance rounded to a whole pixel. Stem darkening, which the engine has, is off,
-  as it is in FreeType by default. CFF2 (variable CFF) fonts are not fitted.
+  alignment of ideographic fonts. The advance is the design advance rounded to a whole pixel. CFF2 (variable CFF) fonts are not fitted.
+- **Stem darkening** (`OutlineRequest.StemDarkening`, off by default, as it is in FreeType) makes the stems of a CFF font's glyphs a little heavier
+  when it is grid-fitted, which offsets the way anti-aliasing thins the thinnest stems of small text. Adobe's engine decides the amount from how thick a
+  stem is on the pixel grid: the thinnest stems gain the most, and a stem of more than about two and a third pixels (that is, text at a large size) gains
+  nothing. It changes the points of the outline and not the advance, applies to fonts with CFF outlines only (a TrueType font gives the same outline
+  whatever the flag says), and is ignored for `GridFitting.None`. The fitted outlines of the two settings are cached apart.
+
+```csharp
+var request = new OutlineRequest { PixelsPerEm = 9, GridFitting = GridFitting.Standard, StemDarkening = true };
+```
 - **When a font cannot be fitted**, nothing throws: a TrueType font without `fpgm`/`prep`/glyph programs, a font that has neither
   TrueType nor CFF outlines, a size the font's own programs (or, for CFF, the engine: 2000 ppem at most) refuse, or a glyph whose program
   or charstring is broken, gives the scaled design outline with `IsGridFitted` false. A TrueType font may also switch its own glyph
