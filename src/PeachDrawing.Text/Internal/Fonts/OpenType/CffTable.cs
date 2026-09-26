@@ -87,6 +87,54 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             return new CffIndex(data, absoluteOffsets);
         }
 
+        /// <summary>
+        /// Reads one CFF2 INDEX (a 32-bit count, where CFF's is 16 bits) from <paramref name="data"/> at <paramref name="pos"/>, advancing
+        /// <paramref name="pos"/> past it. Nothing is read at or past <paramref name="limit"/> (the end of the table), and every count and
+        /// offset is checked against it before anything is allocated, since this table is read from an untrusted font.
+        /// </summary>
+        /// <exception cref="FormatException">The INDEX does not fit in the table, or its offsets are not in order.</exception>
+        internal static CffIndex ReadCff2(byte[] data, ref int pos, int limit)
+        {
+            if (pos < 0 || limit > data.Length || pos > limit - 4)
+                throw new FormatException("A CFF2 INDEX is cut off.");
+
+            uint count = (uint)((data[pos] << 24) | (data[pos + 1] << 16) | (data[pos + 2] << 8) | data[pos + 3]);
+            pos += 4;
+            if (count == 0)
+                return Empty;
+
+            if (pos >= limit)
+                throw new FormatException("A CFF2 INDEX is cut off.");
+
+            int offSize = data[pos++];
+            if (offSize is < 1 or > 4)
+                throw new FormatException("Invalid CFF2 INDEX offSize.");
+
+            // count + 1 offsets have to be in the table, which also bounds what is allocated below by the size of the table.
+            long offsetsSize = (count + 1L) * offSize;
+            if (offsetsSize > limit - pos)
+                throw new FormatException("A CFF2 INDEX has more entries than the table has room for.");
+
+            var absoluteOffsets = new int[count + 1];
+            int dataStart = pos + (int)offsetsSize - 1; // the offsets are 1-based, from the byte before the object data
+            long previous = 1;
+            for (var i = 0; i <= count; i++)
+            {
+                long raw = 0;
+                for (var b = 0; b < offSize; b++)
+                    raw = (raw << 8) | data[pos++];
+
+                if (raw < previous || dataStart + raw > limit)
+                    throw new FormatException("A CFF2 INDEX has offsets that are out of order or past the table.");
+
+                previous = raw;
+                absoluteOffsets[i] = (int)(dataStart + raw);
+            }
+
+            pos = absoluteOffsets[count];
+            return new CffIndex(data, absoluteOffsets);
+        }
+
         /// <summary>A big-endian 16-bit read, advancing <paramref name="pos"/> past it - shared with <see cref="CffTable.ReadFdSelect"/>, which needs the same read for FDSelect's own 16-bit fields.</summary>
         internal static int ReadU16(byte[] data, ref int pos)
         {
@@ -117,8 +165,11 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
         public bool Has(int op) => _entries.ContainsKey(op);
 
-        /// <summary>Parses the DICT occupying <c>data[start..end)</c>.</summary>
-        public static CffDict Parse(byte[] data, int start, int end)
+        /// <summary>
+        /// Parses the DICT occupying <c>data[start..end)</c>. A CFF2 DICT (<paramref name="isCff2"/>) has three more operators, 22
+        /// (<c>vsindex</c>), 23 (<c>blend</c>) and 24 (<c>vstore</c>), which CFF leaves reserved.
+        /// </summary>
+        public static CffDict Parse(byte[] data, int start, int end, bool isCff2 = false)
         {
             var dict = new CffDict();
             var operands = new List<double>();
@@ -131,6 +182,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 switch (b0)
                 {
                     case <= 21:
+                    case >= 22 and <= 24 when isCff2:
                         p++;
                         int op = b0;
                         if (b0 == 12)
@@ -161,7 +213,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
                     case 30:
                         p++;
-                        operands.Add(ReadReal(data, ref p));
+                        operands.Add(ReadReal(data, ref p, end));
                         break;
 
                     case >= 32 and <= 246:
@@ -193,12 +245,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// 'E-', a reserved nibble (ignored), '-', and a terminating nibble - two nibbles per byte
         /// until the terminator.
         /// </summary>
-        private static double ReadReal(byte[] data, ref int p)
+        private static double ReadReal(byte[] data, ref int p, int end)
         {
             var text = new System.Text.StringBuilder();
             var done = false;
 
-            while (!done)
+            while (!done && p < end) // a real that is not terminated inside its DICT ends there, not wherever the next 0xF nibble is
             {
                 byte b = data[p++];
                 done = AppendNibble(text, b >> 4) || AppendNibble(text, b & 0xF);

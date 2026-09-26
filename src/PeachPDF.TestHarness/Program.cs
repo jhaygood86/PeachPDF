@@ -10989,6 +10989,57 @@ await SaveShowcaseAsync("variable_fonts", "Typography & Text", "Variable fonts",
     "Rendered against a small synthetic variable font with weight and width axes.",
     variableFontHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// Variable fonts with CFF2 outlines (variable CFF): the charstrings blend their operands at the location, and the PDF embeds each distinct
+// location as a static CFF font. Uses a small synthetic CFF2 font (weight 100-900, width 75-125) whose glyphs A to F exercise blends,
+// local and global subroutines and a second Font DICT.
+var cff2FontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableCff2Test.otf")));
+string Cff2Cell(string style, string caption) =>
+    "<td>" +
+    $"<div class=\"vf\" style=\"{style}\">ABCDEF</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+var variableCff2Html =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'VC'; src: url('data:font/otf;base64,{cff2FontB64}') format('opentype'); }}" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table.vt { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.vt td { padding: 6px; vertical-align: top; text-align: center }" +
+    ".vf { font-family: 'VC'; font-size: 30pt; line-height: 1.2; white-space: nowrap }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>Variable fonts with CFF2 outlines</h1>" +
+    "<p class=\"intro\">A variable OpenType font can draw its glyphs with CFF2 charstrings, whose operands carry deltas (<code>blend</code>) " +
+    "that are scaled by how far the requested location lies inside each region of the design space. The glyphs below are drawn from one " +
+    "such font at different weights and widths. In the PDF each location is embedded as a static CFF font, because PDF cannot embed a " +
+    "variable one.</p>" +
+    "<h2>font-weight</h2>" +
+    "<table class=\"vt\"><tr>" +
+    Cff2Cell("font-weight: 100", "font-weight: 100") +
+    Cff2Cell("font-weight: 400", "font-weight: 400") +
+    "</tr><tr>" +
+    Cff2Cell("font-weight: 700", "font-weight: 700") +
+    Cff2Cell("font-weight: 900", "font-weight: 900") +
+    "</tr></table>" +
+    "<h2>font-stretch</h2>" +
+    "<table class=\"vt\"><tr>" +
+    Cff2Cell("font-stretch: semi-condensed", "font-stretch: semi-condensed (75%)") +
+    Cff2Cell("font-stretch: semi-expanded", "font-stretch: semi-expanded (125%)") +
+    "</tr></table>" +
+    "<h2>font-variation-settings</h2>" +
+    "<table class=\"vt\"><tr>" +
+    Cff2Cell("font-variation-settings: 'wght' 250", "'wght' 250") +
+    Cff2Cell("font-variation-settings: 'wght' 650, 'wdth' 110", "'wght' 650, 'wdth' 110") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("variable_fonts_cff2", "Typography & Text", "Variable fonts with CFF2 outlines",
+    "A variable font with CFF2 (variable CFF) outlines at different weights, widths and font-variation-settings locations: the charstrings " +
+    "blend at the location, and each location is embedded in the PDF as a static CFF font. Rendered against a small synthetic font.",
+    variableCff2Html, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // Variable-font ranges: an @font-face rule declares the weights, widths and oblique angles its face covers (font-weight: 100 900,
 // font-stretch: 75% 125%, font-style: oblique 0deg 14deg), and the weight, width and slant of the requesting box set the font's axes inside
 // that range. Uses a small synthetic variable font with weight (100-900), width (75-125) and slant (0 to 15 degrees) axes.
