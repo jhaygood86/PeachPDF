@@ -14,4 +14,15 @@ Traps found by running it:
   anchors were right.
 - Reading a device table moves the shared font cursor, so `ReadValueRecord` saves and restores it around the reads.
 - The GDEF 1.3 `itemVarStoreOffset` is an Offset32 after `markGlyphSetsDefOffset` (byte 14 of the header).
-- Not done: `FeatureVariations` (see the accepted gap).
+
+## FeatureVariations
+
+A `GsubTable`/`GposTable` is shared by every instance of a font, and the shapers cache lookup selection per table object, so the
+location is carried by *the table object*: `AtLocation(location)` returns a view that shares the parsed lookups and caches but whose
+`GetActiveLookupIndices` substitutes the lookups of the first `FeatureVariations` record whose conditions hold (`FeatureVariationsTable`),
+one view per location key (32 at most, then dropped), so no cache key had to change. The tag of a substituted feature is still the
+original's. `rvrn` is now a default feature (HarfBuzz applies it first for every script); a font that is not variable has none.
+
+Found by the byte-flip fuzz over the GSUB of the fixture: a damaged script or feature list made shaping throw
+`IndexOutOfRangeException`, so lookup selection returns no lookups on such a table and a lookup that cannot be read is skipped
+(`GsubShaper.Shape`, `GposPositioner.Apply`) rather than failing the text.

@@ -218,8 +218,8 @@ if (face.IsVariable)
   location. Reading `TypefaceMetrics.XMin` to `YMax` (the font bounding box) and the vertical advances gives the default design's
   values, and a variable font with CFF2 outlines has no outlines: what a location changes is what the `gvar`, `HVAR`, `MVAR` and
   `avar` tables of a font with TrueType outlines say, plus the deltas of the `GPOS` value records and anchors (kerning, single
-  adjustments, mark and cursive attachment) that name the `GDEF` item variation store. The `FeatureVariations` of `GSUB` and `GPOS`
-  (features that switch on at a region of the design space) are not applied.
+  adjustments, mark and cursive attachment) that name the `GDEF` item variation store, and the `FeatureVariations` of `GSUB` and `GPOS`
+  (a feature that uses other lookups at a region of the design space, such as `rvrn` glyph swaps at a weight).
 - `TypefaceExporter.ExportSubset` (see Embedding below) writes an instance as a static font, with the location's variations applied
   to the outlines and metrics of the glyphs you ask for and no hinting instructions, because a PDF cannot embed a variable font.
 
