@@ -14,16 +14,14 @@ namespace PeachPDF.Tests.MathML
     /// </summary>
     public class MathGlyphAssemblyShaperTests
     {
-        static MathGlyphAssembly ParenLeftAssembly() => new()
-        {
-            ItalicsCorrection = 0,
-            Parts =
+        static MathGlyphAssembly ParenLeftAssembly() => new(
+            italicsCorrection: 0,
+            parts:
             [
                 new MathGlyphPart(4862, StartConnectorLength: 0, EndConnectorLength: 250, FullAdvance: 1273, IsExtender: false),
                 new MathGlyphPart(4861, StartConnectorLength: 1000, EndConnectorLength: 1000, FullAdvance: 1252, IsExtender: true),
                 new MathGlyphPart(4860, StartConnectorLength: 250, EndConnectorLength: 0, FullAdvance: 1273, IsExtender: false),
-            ],
-        };
+            ]);
 
         [Fact]
         public void Shape_TargetBeyondLargestVariant_ProducesMultiplePartsCoveringTarget()
@@ -54,11 +52,7 @@ namespace PeachPDF.Tests.MathML
         [Fact]
         public void Shape_NoExtenderPart_ReturnsNull()
         {
-            var assembly = new MathGlyphAssembly
-            {
-                ItalicsCorrection = 0,
-                Parts = [new MathGlyphPart(1, 0, 0, 1000, IsExtender: false)],
-            };
+            var assembly = new MathGlyphAssembly(0, [new MathGlyphPart(1, 0, 0, 1000, IsExtender: false)]);
             Assert.Null(MathGlyphAssemblyShaper.Shape(assembly, minConnectorOverlap: 100, targetDesignUnits: 5000));
         }
 
@@ -75,7 +69,7 @@ namespace PeachPDF.Tests.MathML
         [Fact]
         public void Shape_EmptyPartsList_ReturnsNull()
         {
-            var assembly = new MathGlyphAssembly { ItalicsCorrection = 0, Parts = [] };
+            var assembly = new MathGlyphAssembly(0, []);
             Assert.Null(MathGlyphAssemblyShaper.Shape(assembly, minConnectorOverlap: 100, targetDesignUnits: 5000));
         }
 
@@ -84,15 +78,11 @@ namespace PeachPDF.Tests.MathML
         {
             // An extender whose own FullAdvance doesn't exceed MinConnectorOverlap can never actually
             // add any net size once its required overlap is subtracted (S_Ext,NonOverlapping <= 0).
-            var assembly = new MathGlyphAssembly
-            {
-                ItalicsCorrection = 0,
-                Parts =
-                [
-                    new MathGlyphPart(1, 0, 50, 500, IsExtender: false),
-                    new MathGlyphPart(2, 50, 50, 50, IsExtender: true),
-                ],
-            };
+            var assembly = new MathGlyphAssembly(0,
+            [
+                new MathGlyphPart(1, 0, 50, 500, IsExtender: false),
+                new MathGlyphPart(2, 50, 50, 50, IsExtender: true),
+            ]);
             Assert.Null(MathGlyphAssemblyShaper.Shape(assembly, minConnectorOverlap: 100, targetDesignUnits: 5000));
         }
 
@@ -102,15 +92,11 @@ namespace PeachPDF.Tests.MathML
             // A single non-extender part (plus one extender that never needs to repeat, since the
             // target is already covered) exercises the AssemblyGlyphCount(rMin) <= 1 branch, where the
             // actual overlap value is irrelevant per spec and this implementation uses 0.
-            var assembly = new MathGlyphAssembly
-            {
-                ItalicsCorrection = 0,
-                Parts =
-                [
-                    new MathGlyphPart(1, 0, 100, 1000, IsExtender: false),
-                    new MathGlyphPart(2, 100, 100, 500, IsExtender: true),
-                ],
-            };
+            var assembly = new MathGlyphAssembly(0,
+            [
+                new MathGlyphPart(1, 0, 100, 1000, IsExtender: false),
+                new MathGlyphPart(2, 100, 100, 500, IsExtender: true),
+            ]);
             var result = MathGlyphAssemblyShaper.Shape(assembly, minConnectorOverlap: 50, targetDesignUnits: 100);
             Assert.NotNull(result);
             Assert.Single(result!.Value.Parts);
