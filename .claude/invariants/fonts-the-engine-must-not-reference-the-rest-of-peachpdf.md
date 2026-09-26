@@ -18,10 +18,12 @@ reference:
   em size, PDF options and a skew), and `CssUnicodeBidiMapping` (the CSS half of the bidi integration; the engine only exposes
   the explicit-push types it maps onto).
 
-The engine grants `InternalsVisibleTo` to no PeachPDF assembly except the test project, and that entry is a temporary bridge for
-the engine's own tests (see the comment in `PeachDrawing.Text.csproj`), not a licence for PeachPDF to reach for internals:
-PeachPDF reads the public API only, the compiler enforces it, and `PublicSurfaceTests` fails if an entry for `PeachPDF` itself
-comes back. The bridge goes when the engine tests move to a test project of the library.
+The engine grants `InternalsVisibleTo` to one assembly only, its own test project `PeachDrawing.Text.Tests` (see the comment in
+`PeachDrawing.Text.csproj`). PeachPDF and `PeachPDF.Tests` read the public API only, the compiler enforces it, and
+`PublicSurfaceTests` fails if an entry for any other assembly comes back. A test that needs an engine internal goes to the
+engine's test project; one that needs PeachPDF as well is written against the public API, and if the API lacks what it needs
+the API gains a small documented member (and a row in the register of
+`text-public-api-must-not-mirror-a-competitor.md`) instead of the bridge coming back.
 
 The measured cost of not holding this line before the move: the first pass over the engine found ~15 files with PDF-writer
 dependencies, including a two-way one (`XGlyphTypeface` called back into `FontResolver`, which held a dictionary of

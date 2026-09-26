@@ -41,7 +41,8 @@ namespace PeachDrawing.Text.Tests.PublicApi
 
             Assert.DoesNotContain("PeachPDF", granted);
             Assert.DoesNotContain("PeachPDF.Cli", granted);
-            Assert.All(granted, name => Assert.Contains(name, new[] { "PeachDrawing.Text.Tests", "PeachPDF.Tests" }));
+            Assert.DoesNotContain("PeachPDF.Tests", granted);
+            Assert.All(granted, name => Assert.Equal("PeachDrawing.Text.Tests", name));
         }
 
         private static string Describe(Assembly assembly)

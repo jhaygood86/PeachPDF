@@ -233,6 +233,7 @@ PeachDrawing.Text.OpenType.MathConstantsTable : sealed class
   property Double UpperLimitBaselineRiseMin { get; }
   property Double UpperLimitGapMin { get; }
 PeachDrawing.Text.OpenType.MathGlyphAssembly : sealed class
+  ctor(Double italicsCorrection, IReadOnlyList<MathGlyphPart> parts)
   property Double ItalicsCorrection { get; }
   property IReadOnlyList<MathGlyphPart> Parts { get; }
 PeachDrawing.Text.OpenType.MathGlyphConstruction : sealed class

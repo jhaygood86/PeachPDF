@@ -31,14 +31,14 @@ namespace PeachPDF.Tests.Integration
             // well-designed font's oldstyle figures aren't guaranteed to differ in advance width from
             // the default ones.
             var box = await FindWordsBox("<b id=\"w\" style=\"font-variant-numeric:oldstyle-nums\">0123456789</b>");
-            var descriptor = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Typeface.Face.Descriptor;
+            var typeface = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Typeface;
 
-            var defaultShaped = descriptor.Shape("0123456789", ShapeSettings.Default);
-            var oldstyleShaped = descriptor.Shape("0123456789", box.ActualTextShapingFeatures);
+            var defaultShaped = Shaper.Shape(typeface, "0123456789", ShapeSettings.Default);
+            var oldstyleShaped = Shaper.Shape(typeface, "0123456789", box.ActualTextShapingFeatures);
 
             Assert.NotEqual(
-                defaultShaped.Select(g => g.GlyphIndex),
-                oldstyleShaped.Select(g => g.GlyphIndex));
+                defaultShaped.Glyphs.Select(g => g.GlyphIndex),
+                oldstyleShaped.Glyphs.Select(g => g.GlyphIndex));
         }
 
         [Theory]
