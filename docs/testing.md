@@ -47,7 +47,14 @@ This matters because automated assertions alone have real blind spots. Several g
 
 ## Benchmarks
 
-`src/PeachPDF.Benchmarks` is a [BenchmarkDotNet](https://benchmarkdotnet.org/) project for measuring rendering throughput and catching performance regressions. It isn't part of the per-PR gate; it's run deliberately when a change is expected to affect performance.
+`src/PeachDrawing.Text.Benchmarks` is a [BenchmarkDotNet](https://benchmarkdotnet.org/) project for measuring the font and text engine's hot paths and catching performance regressions. Today it covers TrueType and CFF hinting: a cold benchmark that loads every glyph of a bundled font at several sizes into an empty cache (with allocations reported), and a hot benchmark that looks glyphs up in a warm cache from one, four and eight threads at once. It reads the engine only through the public API, like the engine's tests, and isn't part of the per-PR gate or any CI job; it's run deliberately when a change is expected to affect performance. Run it from `src/`, in Release, with nothing else building or testing on the machine:
+
+```
+dotnet run -c Release --project PeachDrawing.Text.Benchmarks -- --filter "*HintingCold*"
+dotnet run -c Release --project PeachDrawing.Text.Benchmarks -- --filter "*HintingHot*"
+```
+
+For timing whole-document rendering, the [showcase harness](#the-showcase-harness) has a `--benchmark` mode that times and measures the allocations of each showcase's render.
 
 ## See also
 
