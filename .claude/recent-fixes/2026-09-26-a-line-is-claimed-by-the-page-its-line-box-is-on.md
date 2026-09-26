@@ -41,6 +41,24 @@ was not:
 
 See [the invariant](../invariants/fragmentation-a-translation-moves-a-lines-flowtop-with-its-words.md).
 
+**A stale line box, exposed by keeping `FlowTop` true.** An adversarial review's fuzz found one document that
+lost a word on this branch while `main` and v0.9.20 drew it (seed 226, a grid item).
+- **What was stale.** An inline-block whose text the surrounding line has taken still holds a line box from an
+  earlier sizing layout. That line box still lists the text, but every word's `Line` now points at the outer
+  line.
+- **Why `main` survived it.** `LastOwnLineBaselineOf` read that stale line's `BaselineY` as the inline-block's
+  baseline. On `main` the value was never translated, and by chance it sat where the next vertical-alignment
+  pass expected, so that pass moved nothing.
+- **What broke here.** With translations now moving line boxes, the grid's −109.2pt item translation moved the
+  stale line too. The commit pass's alignment then read a baseline 214.5pt off and moved the inline-block by
+  +107.25pt instead of 0, onto no page.
+- **The fix.** `LastOwnLineBaselineOf` skips a line whose words all live on another line.
+- **Tests.**
+  - `AnInlineBlockInAnEngineItem_IsDrawnOnceAtItsLine` uses the review's minimized document verbatim; a
+    simplified copy no longer reached the stale line.
+  - `AnInlineBlockMovedToTheBaseline_KeepsItsOwnLineTopWithItsWords` fails if `OffsetBoxWithinLine` shifts the
+    moved box's lines a second time, which the suite did not catch before (the review's mutant M7).
+
 **Still true, not changed here:** the verdict is made per box on a line, not per line. On a line that mixes
 a box whose ink rises above the line with a smaller one that does not, the two can resolve different
 nominal slots. That only matters where a line straddles a boundary (a sliced float or monolithic run), and

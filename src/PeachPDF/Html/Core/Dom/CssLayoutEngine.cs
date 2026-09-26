@@ -8065,10 +8065,29 @@ namespace PeachPDF.Html.Core.Dom
 
             for (var i = box.LineBoxes.Count - 1; i >= 0; i--)
             {
-                if (box.LineBoxes[i].BaselineY is { } baselineY) return baselineY;
+                var line = box.LineBoxes[i];
+                if (line.BaselineY is { } baselineY && !HasLostItsWords(line)) return baselineY;
             }
 
             return null;
+
+            // A line box left over from an earlier layout of this box whose words have since been flowed onto
+            // another line (an inline-block's intrinsic-size layouts leave one behind before the surrounding
+            // line takes its words). Its baseline describes where the words were then, not where they are,
+            // and a translation of the box moves it along with everything else, so read as this box's
+            // baseline it threw the box's content off by the translation: a grid item's inline-block was
+            // aligned 214pt below its line and drawn on no page.
+            static bool HasLostItsWords(CssLineBox line)
+            {
+                if (line.Words.Count == 0) return false;
+
+                foreach (var word in line.Words)
+                {
+                    if (ReferenceEquals(word.Line, line)) return false;
+                }
+
+                return true;
+            }
         }
 
         /// <summary>
