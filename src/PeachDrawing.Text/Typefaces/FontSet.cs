@@ -258,6 +258,32 @@ namespace PeachDrawing.Text
             return GenericFamilyTable.Resolve(generic, operatingSystemAnswer, OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), isAndroid, isAvailable);
         }
 
+        /// <summary>
+        /// Makes the fallback a paragraph asks for when the typeface of a run has no glyph for a character: the face, in the family of this set
+        /// that covers the character, that best matches <paramref name="query"/>.
+        /// </summary>
+        /// <remarks>
+        /// The family is chosen the way <see cref="TryFindCoveringFamily"/> does (among the added and the installed families, the one whose
+        /// coverage best fits the character's script), and the answer for a character does not change once it has been given. A caller that
+        /// wants a particular face for a script writes its own function instead.
+        /// </remarks>
+        /// <param name="query">What the fallback face should be like: its weight, width and slant (a variable face is set to them), usually the run's own.</param>
+        /// <returns>A function from a character to a typeface, <see langword="null"/> where no family covers it.</returns>
+        public Func<Rune, Typeface?> CreateFallback(in TypefaceQuery query)
+        {
+            var wanted = query;
+            return rune =>
+            {
+                if (TryFindCoveringFamily(rune, EmojiPresentation.NoPreference, out var family)
+                    && family.TryMatch(wanted with { MustCover = rune }, out var match))
+                {
+                    return match.Typeface;
+                }
+
+                return null;
+            };
+        }
+
         internal TypefaceMatch MatchCore(string familyName, in TypefaceQuery query)
         {
             var options = new FontResolvingOptions(query.IsItalic ? FaceStyle.Italic : FaceStyle.Regular, query.Weight, query.Width)

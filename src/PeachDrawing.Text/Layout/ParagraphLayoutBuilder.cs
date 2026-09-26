@@ -31,16 +31,36 @@ namespace PeachDrawing.Text.Layout
             for (int i = 0; i < built.Count; i++)
             {
                 var (spec, pieces, width, ascent, descent, height) = built[i];
-                double left = AlignedLeft(paragraph, extent, width);
+                bool endsParagraphOrForced = spec.Kind is LineEnd.Last or LineEnd.Forced;
+                var align = ResolveAlign(paragraph, endsParagraphOrForced);
+
+                // Justification widens the spaces of a line that is not the last, so that it fills the width.
+                double spaceExtra = 0;
+                if (align == TextAlign.Justify && !double.IsInfinity(extent) && extent > width)
+                {
+                    int spaces = 0;
+                    foreach (var piece in pieces)
+                    {
+                        spaces += paragraph.CountSpaces(piece.Glyphs, piece.From);
+                    }
+
+                    if (spaces > 0)
+                    {
+                        spaceExtra = (extent - width) / spaces;
+                        width = extent;
+                    }
+                }
+
+                double left = AlignedLeft(paragraph, align, extent, width);
                 double baseline = top + ascent;
                 var runs = new List<PlacedRun>(pieces.Count);
                 double x = left;
                 foreach (var piece in pieces)
                 {
-                    var style = paragraph.StyleOfRun(piece.Atom.Run);
-                    var boundaries = Boundaries(paragraph, piece, style);
-                    runs.Add(new PlacedRun(new TextRange(piece.From, piece.To), style, piece.Glyphs, piece.Atom.Level, x, baseline, piece.Width, boundaries));
-                    x += piece.Width;
+                    var style = piece.Atom.Style;
+                    var (boundaries, advances, pieceWidth) = PlaceRun(paragraph, piece, style, spaceExtra);
+                    runs.Add(new PlacedRun(new TextRange(piece.From, piece.To), style, piece.Glyphs, piece.Atom.Level, x, baseline, pieceWidth, boundaries, advances));
+                    x += pieceWidth;
                 }
 
                 lines[i] = new LineBox(new TextRange(spec.Start, spec.End), paragraph.ContentEnd(spec.Start, spec.End), runs, left, top, width, ascent, descent, height, spec.Kind);
@@ -50,9 +70,20 @@ namespace PeachDrawing.Text.Layout
             return new ParagraphLayout(paragraph, lines, extent, contentWidth, top);
         }
 
-        private static double AlignedLeft(Paragraph paragraph, double extent, double lineWidth)
+        /// <summary>How a line is aligned: the paragraph's alignment, or for the last line and one that ends in a forced break, the last-line alignment.</summary>
+        private static TextAlign ResolveAlign(Paragraph paragraph, bool lastOrForced)
         {
             var align = paragraph.Style.Align;
+            if (lastOrForced)
+            {
+                align = paragraph.Style.AlignLast ?? (align == TextAlign.Justify ? TextAlign.Start : align);
+            }
+
+            return align;
+        }
+
+        private static double AlignedLeft(Paragraph paragraph, TextAlign align, double extent, double lineWidth)
+        {
             bool rtl = paragraph.IsRightToLeft;
             if (align == TextAlign.Start)
             {
@@ -67,6 +98,7 @@ namespace PeachDrawing.Text.Layout
             {
                 TextAlign.Right => extent - lineWidth,
                 TextAlign.Center => (extent - lineWidth) / 2,
+                TextAlign.Justify => rtl ? extent - lineWidth : 0,
                 _ => 0,
             };
         }
@@ -214,7 +246,7 @@ namespace PeachDrawing.Text.Layout
                     }
 
                     var glyphs = p.ShapePiece(atom, from, to);
-                    inRun.Add(new Piece(atom, from, to, glyphs, Paragraph.WidthOf(glyphs, p.StyleOfRun(atom.Run))));
+                    inRun.Add(new Piece(atom, from, to, glyphs, p.WidthOf(glyphs, atom.Style, from)));
                 }
 
                 if (run.IsRtl)
@@ -253,7 +285,7 @@ namespace PeachDrawing.Text.Layout
             {
                 foreach (var piece in pieces)
                 {
-                    Include(p.StyleOfRun(piece.Atom.Run));
+                    Include(piece.Atom.Style);
                 }
             }
 
@@ -273,7 +305,7 @@ namespace PeachDrawing.Text.Layout
         /// The distance from the left edge of a run to the caret at each boundary of its text, for every offset from the run's start to
         /// its end. A cluster that stands for several characters (a ligature) is shared out equally between its grapheme clusters.
         /// </summary>
-        private static double[] Boundaries(Paragraph p, Piece piece, RunStyle style)
+        private static (double[] Boundaries, double[] Advances, double Width) PlaceRun(Paragraph p, Piece piece, RunStyle style, double spaceExtra)
         {
             int length = piece.To - piece.From;
             var x = new double[length + 1];
@@ -283,9 +315,21 @@ namespace PeachDrawing.Text.Layout
             // A cluster can be several glyphs (a base and its marks), so its extent is what they cover together.
             var clusters = new Dictionary<(int Start, int End), (double Left, double Right)>();
             double pen = 0;
+            var advances = new double[piece.Glyphs.Glyphs.Count];
+            int glyphNumber = 0;
             foreach (var glyph in piece.Glyphs.Glyphs)
             {
                 double advance = (piece.Glyphs.Typeface.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta) * scale;
+                if (p.EndsCluster(piece.Glyphs, piece.From, glyphNumber))
+                {
+                    advance += style.LetterSpacing;
+                    if (p.IsWordSeparatorAt(piece.From + glyph.ClusterStart))
+                    {
+                        advance += style.WordSpacing + spaceExtra;
+                    }
+                }
+
+                advances[glyphNumber++] = advance;
                 double glyphLeft = pen;
                 double glyphRight = pen + advance;
                 pen = glyphRight;
@@ -355,17 +399,15 @@ namespace PeachDrawing.Text.Layout
                 }
             }
 
-            if (!seen)
+            if (seen)
             {
-                return x;
+                for (int i = 0; i <= length && !known[i]; i++)
+                {
+                    x[i] = x[Array.FindIndex(known, k => k)];
+                }
             }
 
-            for (int i = 0; i <= length && !known[i]; i++)
-            {
-                x[i] = x[Array.FindIndex(known, k => k)];
-            }
-
-            return x;
+            return (x, advances, pen);
         }
     }
 }

@@ -129,6 +129,8 @@ The `Unicode` namespace gains `ArabicJoining` (`TypeOf`, `Resolve`) with `Arabic
 | `LineBox`, `PlacedRun`, `LineEnd` | A placed line, a drawn stretch of one line, and why a line ended | typography terms (line box, run); data only, nothing draws; the run carries a shaped `GlyphRun` |
 | `TextPosition`, `TextAffinity`, `TextRange`; `PositionAt`, `CaretRect`, `SelectionBoxes`, `WordRangeAt`, `GraphemeRangeAt` | Editing queries on a layout | Skia/Flutter `TextPosition` and affinity, UAX #29 units; the names are the plain description of what each returns |
 | `ContentWidths`, `TextRuler` | The narrowest and widest a paragraph can be; measuring one piece of text | CSS Sizing 3 min-content and max-content; `TextRuler.WidthOf` is ours |
+| `RunStyle.Fallback`, `FontSet.CreateFallback` | A function that names a typeface for a character the run's face cannot draw, and one made from a set's families | CSS Fonts 4 font fallback (per-character, marks stay with their base); the names are the plain description |
+| `RunStyle.LetterSpacing`, `WordSpacing`, `TextAlign.Justify`, `ParagraphStyle.AlignLast`, `PlacedRun.GetGlyphAdvance` | Spacing, justification and the pen movement of a glyph | CSS Text 3 `letter-spacing`, `word-spacing`, `text-align: justify`, `text-align-last` |
 
 Every name above was taken from the specification it implements, and the member sets follow those specifications rather
 than any library's. The author did not consult SixLabors.Fonts while choosing them, and so could not vouch that no name

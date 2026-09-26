@@ -18,8 +18,11 @@ namespace PeachDrawing.Text.Layout
     {
         private readonly double[] _boundaryX;
 
-        internal PlacedRun(TextRange range, RunStyle style, GlyphRun glyphs, byte level, double x, double baseline, double width, double[] boundaryX)
+        private readonly double[] _advances;
+
+        internal PlacedRun(TextRange range, RunStyle style, GlyphRun glyphs, byte level, double x, double baseline, double width, double[] boundaryX, double[] advances)
         {
+            _advances = advances;
             Range = range;
             Style = style;
             Glyphs = glyphs;
@@ -53,6 +56,23 @@ namespace PeachDrawing.Text.Layout
 
         /// <summary>How wide the run is, in layout units.</summary>
         public double Width { get; }
+
+        /// <summary>
+        /// How far the pen moves after a glyph of the run, in layout units: its advance and positioning adjustment, plus the letter spacing, and the
+        /// word spacing and justification for a space. A glyph is drawn at the sum of the advances of the glyphs before it, from <see cref="X"/>,
+        /// plus its own <see cref="PlacedGlyph.XOffset"/> and <see cref="PlacedGlyph.YOffset"/> scaled by the size over the units per em.
+        /// </summary>
+        /// <param name="glyphIndex">The index in <see cref="Glyphs"/>.</param>
+        /// <exception cref="ArgumentOutOfRangeException">The index is outside the run's glyphs.</exception>
+        public double GetGlyphAdvance(int glyphIndex)
+        {
+            if ((uint)glyphIndex >= (uint)_advances.Length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(glyphIndex), glyphIndex, "The index is outside the glyphs of the run.");
+            }
+
+            return _advances[glyphIndex];
+        }
 
         /// <summary>
         /// Where a caret at a boundary of the run's text is, measured from the left edge of the layout.
