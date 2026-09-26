@@ -77,9 +77,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 _fontData.Position = DirectoryEntry.Offset;
                 if (ShortIndex)
                 {
+                    // A table that has more or fewer entries than maxp says is a font in the wild, not a bug: the readers of glyph
+                    // locations repair it (the hinter does as FreeType does), so nothing asserts on it.
                     int entries = DirectoryEntry.Length / 2;
-                    Debug.Assert(_fontData.maxp.numGlyphs + 1 == entries,
-                        "For your information only: Number of glyphs mismatch in font. You can ignore this assertion.");
                     LocaTable = new int[entries];
                     for (int idx = 0; idx < entries; idx++)
                         LocaTable[idx] = 2 * _fontData.ReadUFWord();
@@ -87,8 +87,6 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 else
                 {
                     int entries = DirectoryEntry.Length / 4;
-                    Debug.Assert(_fontData.maxp.numGlyphs + 1 == entries,
-                        "For your information only: Number of glyphs mismatch in font. You can ignore this assertion.");
                     LocaTable = new int[entries];
                     for (int idx = 0; idx < entries; idx++)
                         LocaTable[idx] = _fontData.ReadLong();

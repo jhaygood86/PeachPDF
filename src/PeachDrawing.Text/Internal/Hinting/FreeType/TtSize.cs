@@ -250,6 +250,7 @@ internal sealed class TtSize
 
                 exec.Pts = new TtGlyphZone();
 
+                exec.ResetBudget();
                 int error = exec.RunContext(GraphicsState);
                 if (error != TtError.Ok)
                     throw new HintingException("The font program failed with error " + error + ".");
@@ -342,6 +343,7 @@ internal sealed class TtSize
 
             exec.Pts = new TtGlyphZone();
 
+            exec.ResetBudget();
             int error = exec.RunContext(GraphicsState);
             if (error != TtError.Ok)
                 throw new HintingException("The CVT program failed with error " + error + ".");

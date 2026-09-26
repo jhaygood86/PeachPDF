@@ -145,6 +145,29 @@ namespace PeachDrawing.Text.Tests.Hinting
         }
 
         [Fact]
+        public void HeavyEntriesAreEvictedByWeightEvenWhenTheCacheIsNotFull()
+        {
+            var cache = new LruCache<int, int>(100, weight => weight, 10);
+            cache.Set(1, 4);
+            cache.Set(2, 4);
+            cache.Set(3, 4); // 12 > 10: the oldest goes
+
+            Assert.False(cache.TryGet(1, out _));
+            Assert.True(cache.TryGet(2, out _));
+            Assert.True(cache.TryGet(3, out _));
+
+            cache.Set(4, 50); // heavier than the limit on its own: it is kept, alone
+            Assert.True(cache.TryGet(4, out _));
+            Assert.False(cache.TryGet(2, out _));
+            Assert.False(cache.TryGet(3, out _));
+
+            cache.Set(4, 1); // replacing an entry replaces its weight
+            cache.Set(5, 9);
+            Assert.True(cache.TryGet(4, out _));
+            Assert.True(cache.TryGet(5, out _));
+        }
+
+        [Fact]
         public void ManyMoreGlyphsAndSizesThanTheCachesHoldStillGiveTheRightOutlines()
         {
             var typeface = TypefaceFixtures.FromFile(Path.Combine(AppContext.BaseDirectory, "LiberationSans-Regular.woff"));
@@ -152,7 +175,7 @@ namespace PeachDrawing.Text.Tests.Hinting
 
             Assert.True(typeface.TryGetOutline(glyph, new OutlineRequest { PixelsPerEm = 10, GridFitting = GridFitting.Standard }, out var before));
 
-            // 40 sizes evict the first size (the limit is 32 per face), thousands of glyph loads evict its glyphs
+            // 40 sizes evict the first size (the limit is 16 per face), thousands of glyph loads evict its glyphs
             for (int size = 11; size < 51; size++)
                 for (ushort g = 1; g < 120; g++)
                     typeface.TryGetOutline(g, new OutlineRequest { PixelsPerEm = size, GridFitting = GridFitting.Standard }, out _);

@@ -172,6 +172,9 @@ internal sealed partial class TtExecContext
         {
             int k = Stack[a - l];
 
+            if (ChargeWork(l))
+                return;
+
             // FT_ARRAY_MOVE( args - L, args - L + 1, L - 1 )
             Array.Copy(Stack, a - l + 1, Stack, a - l, l - 1);
 
@@ -217,6 +220,10 @@ internal sealed partial class TtExecContext
     // Returns true on failure (SUCCESS is 0 and FAILURE is 1 in FreeType).
     private bool SkipCode()
     {
+        // skipping is work too: a program can skip a long stretch of code over and over
+        if (ChargeWork(1))
+            return true;
+
         _ip += _length;
 
         if (_ip < _codeSize)
@@ -1258,6 +1265,9 @@ internal sealed partial class TtExecContext
             return;
         }
 
+        if (ChargeWork(Math.Max(0, k - l + 1)))
+            return;
+
         for (int i = l; i <= k; i++)
             Pts.Tags[i] |= FtTag.On;
     }
@@ -1278,6 +1288,9 @@ internal sealed partial class TtExecContext
                 Error = TtError.InvalidReference;
             return;
         }
+
+        if (ChargeWork(Math.Max(0, k - l + 1)))
+            return;
 
         for (int i = l; i <= k; i++)
             Pts.Tags[i] = (byte)(Pts.Tags[i] & ~FtTag.On);

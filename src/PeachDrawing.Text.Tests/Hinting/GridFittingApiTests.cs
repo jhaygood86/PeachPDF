@@ -192,11 +192,34 @@ namespace PeachDrawing.Text.Tests.Hinting
             Assert.Equal(PointsOf(design).Select(p => (X: p.X * scale, Y: p.Y * scale)), PointsOf(outline));
         }
 
+        /// <summary>The variable test font, which has no hinting programs, with a CVT program of one harmless instruction added.</summary>
+        private static Typeface VariableFontWithAProgram() => TypefaceFixtures.FromBytes(HostileFonts.WithTable(
+            File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf")), "prep", [0xB0, 0x00, 0x21])); // PUSHB[0] 0, POP
+
         [Fact]
-        public void ATrueTypeFontWithoutInstructionsIsStillFittedAndOnlyScaled()
+        public void ATrueTypeFontWithoutInstructionsIsNotFittedAndIsOnlyScaled()
         {
-            // The variable test font has no hinting programs: the outline is the scaled design rounded to 1/64 pixel.
+            // The variable test font has no font program, CVT program or glyph programs: there is nothing to run, so the outline is the
+            // design scaled exactly, is not reported as grid-fitted, and has no fitted advance.
             var font = TypefaceFixtures.FromFile(Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf"));
+            var glyph = GlyphOf(font, 'A');
+            Assert.True(font.TryGetOutline(glyph, out var design));
+            Assert.True(font.TryGetOutline(glyph, Request(30), out var outline));
+
+            Assert.False(outline.IsGridFitted);
+            Assert.Null(outline.GridFittedAdvance);
+            Assert.False(font.TryGetGridFittedAdvance(glyph, Request(30), out _));
+
+            double scale = 30.0 / font.Metrics.UnitsPerEm;
+            var expected = PointsOf(design).Select(p => (X: p.X * scale, Y: p.Y * scale)).ToList();
+            Assert.Equal(expected, PointsOf(outline));
+        }
+
+        [Fact]
+        public void ATrueTypeFontWithAProgramButNoHintingEffectIsFittedAndKeepsItsScaledOutline()
+        {
+            // a program that does nothing to any glyph: the outline is the scaled design, rounded to 1/64 pixel, and is reported as fitted
+            var font = VariableFontWithAProgram();
             var glyph = GlyphOf(font, 'A');
             Assert.True(font.TryGetOutline(glyph, out var design));
             Assert.True(font.TryGetOutline(glyph, Request(30), out var outline));
@@ -216,7 +239,7 @@ namespace PeachDrawing.Text.Tests.Hinting
         [Fact]
         public void AVariableFontInstanceIsFittedAtItsLocation()
         {
-            var font = TypefaceFixtures.FromFile(Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf"));
+            var font = VariableFontWithAProgram();
             var bold = font.WithAxes([new AxisSetting(AxisTags.Weight, 800)]);
             var glyph = GlyphOf(bold, 'A');
 

@@ -92,7 +92,7 @@ namespace PeachDrawing.Text
         /// Otherwise the coordinates are in pixels at <see cref="OutlineRequest.PixelsPerEm"/>, y up, with the glyph origin at (0, 0).
         /// A TrueType font's own instructions are run, so points sit where the font's designer put them at that size; the result
         /// is <see cref="GlyphOutline.IsGridFitted"/> and carries <see cref="GlyphOutline.GridFittedAdvance"/>. A font that cannot be
-        /// grid-fitted (it has no TrueType outlines, or its instructions fail) gets the scaled design outline and
+        /// grid-fitted (it has no TrueType outlines, it has no TrueType instructions to run, or its instructions fail) gets the scaled design outline and
         /// <see cref="GlyphOutline.IsGridFitted"/> is <see langword="false"/>; nothing throws for a font that is merely unusable.
         /// Hinted outlines are cached, so asking again for the same glyph and size is cheap. Only the outline is fitted: a caller that
         /// lays text out keeps using the design advances of <see cref="GetAdvance"/>.

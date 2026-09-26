@@ -46,9 +46,12 @@ internal sealed class HintedGlyphResult
 /// </remarks>
 internal sealed class HintingEngine
 {
-    // The number of sizes (each holds the state of a CVT program run) and of hinted glyphs kept per face.
-    private const int MaxSizes = 32;
+    // The number of sizes (each holds the state of a CVT program run, which a font may declare to be megabytes) and of hinted glyphs kept
+    // per face; the glyphs are also limited by their total weight (a glyph weighs what its outline has of contours and segments), so a
+    // face of a few huge glyphs cannot fill the memory with them.
+    private const int MaxSizes = 16;
     private const int MaxGlyphs = 4096;
+    private const long MaxGlyphWeight = 1_000_000;
 
     private readonly OpenTypeFontface _font;
     private readonly string? _familyName;
@@ -60,7 +63,7 @@ internal sealed class HintingEngine
     private bool _faceRead;
 
     private readonly LruCache<SizeKey, TtSize?> _sizes = new(MaxSizes);
-    private readonly LruCache<GlyphKey, HintedGlyphResult> _glyphs = new(MaxGlyphs);
+    private readonly LruCache<GlyphKey, HintedGlyphResult> _glyphs = new(MaxGlyphs, WeightOf, MaxGlyphWeight);
 
     public HintingEngine(OpenTypeFontface font, string? familyName, VariationCoordinates? variation, Func<int, int> instanceAdvance)
     {
@@ -70,8 +73,8 @@ internal sealed class HintingEngine
         _instanceAdvance = instanceAdvance;
     }
 
-    /// <summary>Whether the face has TrueType outlines this engine can hint at all.</summary>
-    public bool CanHint => GetFace() is not null;
+    /// <summary>Whether the face has TrueType outlines and TrueType instructions, which is what this engine can hint.</summary>
+    public bool CanHint => GetFace() is { HasInstructions: true };
 
     private TtFace? GetFace()
     {
@@ -161,6 +164,18 @@ internal sealed class HintingEngine
         return size;
     }
 
+    private static int WeightOf(HintedGlyphResult result)
+    {
+        int weight = 1;
+        if (result.Outline is { } outline)
+        {
+            foreach (OutlineContour contour in outline.ContourList)
+                weight += 2 + contour.SegmentList.Count;
+        }
+
+        return weight;
+    }
+
     private static GlyphOutline ToOutline(TtHintedGlyph hinted, int ppem26Dot6)
     {
         var outline = new GlyphOutline
@@ -209,18 +224,26 @@ internal sealed class HintingEngine
     private readonly record struct GlyphKey(SizeKey Size, int Glyph);
 }
 
-/// <summary>A thread-safe cache that keeps the most recently used entries, up to a limit.</summary>
+/// <summary>A thread-safe cache that keeps the most recently used entries, up to a number of them and, if asked, a total weight.</summary>
 internal sealed class LruCache<TKey, TValue>
     where TKey : notnull
 {
     private readonly int _capacity;
+    private readonly Func<TValue, int>? _weigher;
+    private readonly long _maxWeight;
+    private long _weight;
     private readonly Dictionary<TKey, LinkedListNode<KeyValuePair<TKey, TValue>>> _map = [];
     private readonly LinkedList<KeyValuePair<TKey, TValue>> _order = new();
     private readonly object _lock = new();
 
-    public LruCache(int capacity)
+    /// <param name="capacity">The most entries kept.</param>
+    /// <param name="weigher">What an entry weighs, or null when entries are not weighed.</param>
+    /// <param name="maxWeight">The most weight kept: the newest entry is always kept, however heavy, and the older ones go first.</param>
+    public LruCache(int capacity, Func<TValue, int>? weigher = null, long maxWeight = long.MaxValue)
     {
         _capacity = capacity;
+        _weigher = weigher;
+        _maxWeight = maxWeight;
     }
 
     public bool TryGet(TKey key, out TValue? value)
@@ -248,17 +271,20 @@ internal sealed class LruCache<TKey, TValue>
             {
                 _order.Remove(existing);
                 _map.Remove(key);
+                _weight -= _weigher?.Invoke(existing.Value.Value) ?? 0;
             }
 
             var node = new LinkedListNode<KeyValuePair<TKey, TValue>>(new KeyValuePair<TKey, TValue>(key, value));
             _order.AddFirst(node);
             _map[key] = node;
+            _weight += _weigher?.Invoke(value) ?? 0;
 
-            while (_map.Count > _capacity)
+            while (_map.Count > _capacity || (_weight > _maxWeight && _map.Count > 1))
             {
                 LinkedListNode<KeyValuePair<TKey, TValue>> last = _order.Last!;
                 _order.RemoveLast();
                 _map.Remove(last.Value.Key);
+                _weight -= _weigher?.Invoke(last.Value.Value) ?? 0;
             }
         }
     }

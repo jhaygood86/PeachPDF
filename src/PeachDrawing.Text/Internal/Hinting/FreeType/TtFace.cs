@@ -104,6 +104,15 @@ internal sealed class TtFace
     public int MaxInstructionDefs { get; }
     public int MaxStackElements { get; }
 
+    /// <summary>The size of the largest glyph program the font declares (<c>maxSizeOfInstructions</c>).</summary>
+    public int MaxSizeOfInstructions { get; }
+
+    /// <summary>
+    /// Whether the font has any TrueType instructions to run: a font program, a CVT program, or glyph programs (which a font must
+    /// declare the size of). A font without them is only scaled by the loader, and is not hinted at all.
+    /// </summary>
+    public bool HasInstructions => FontProgram.Length > 0 || CvtProgram.Length > 0 || MaxSizeOfInstructions > 0;
+
     /// <summary>The control values in 26.6 (the values of the <c>cvt</c> table, times 64).</summary>
     public int[] Cvt { get; }
 
@@ -186,6 +195,7 @@ internal sealed class TtFace
             MaxFunctionDefs = BinaryPrimitives.ReadUInt16BigEndian(maxp[20..]);
             MaxInstructionDefs = BinaryPrimitives.ReadUInt16BigEndian(maxp[22..]);
             MaxStackElements = BinaryPrimitives.ReadUInt16BigEndian(maxp[24..]);
+            MaxSizeOfInstructions = BinaryPrimitives.ReadUInt16BigEndian(maxp[26..]);
 
             // XXX: an adjustment that is necessary to load certain broken fonts like `Keystrokes MT' :-(
             //

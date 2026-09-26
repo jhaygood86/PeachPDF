@@ -51,12 +51,15 @@ namespace PeachDrawing.Text.Internal.Hinting.FreeType;
 /// </remarks>
 internal sealed partial class TtExecContext
 {
-    /// <summary>The instruction budget of one run (<c>TT_CONFIG_OPTION_MAX_RUNNABLE_OPCODES</c>).</summary>
+    /// <summary>
+    /// The instruction budget (<c>TT_CONFIG_OPTION_MAX_RUNNABLE_OPCODES</c>). FreeType applies it to each run of a program; here it
+    /// is shared by every program run while one glyph is loaded (see <see cref="ResetBudget"/>), so a composite glyph cannot multiply it.
+    /// </summary>
     private const int MaxRunnableOpcodes = 1000000;
 
     /// <summary>
-    /// The budget of loop iterations (<c>SLOOP</c>, <c>LOOPCALL</c>, <c>IUP</c>, deltas) of one run. FreeType has no such
-    /// limit; see PORTING-NOTES.md.
+    /// The budget of loop iterations (<c>SLOOP</c>, <c>LOOPCALL</c>, <c>IUP</c>, deltas, flips, skipped instructions) shared by
+    /// every program run while one glyph is loaded. FreeType has no such limit; see PORTING-NOTES.md.
     /// </summary>
     private const long MaxLoopWork = 16L * 1024 * 1024;
 
@@ -165,6 +168,17 @@ internal sealed partial class TtExecContext
     private ulong _negJumpCounterMax;
 
     private long _loopWork;
+    private int _opsRun;
+
+    /// <summary>
+    /// Starts a new budget of instructions and loop work. The caller does it once for a font program, once for a CVT program and once
+    /// for each glyph loaded (with all of its components), not for each program run.
+    /// </summary>
+    public void ResetBudget()
+    {
+        _loopWork = 0;
+        _opsRun = 0;
+    }
 
     // The number of arguments popped and pushed by each opcode, high nibble popped and low nibble pushed. Opcodes with a
     // varying number of parameters in the data stream (NPUSHB, NPUSHW) have zero here and a negative value in the length
@@ -885,12 +899,10 @@ internal sealed partial class TtExecContext
     /// <remarks>The documented DEBUG opcode pops a value from the stack; that behaviour is unsupported: here a DEBUG opcode is always an error.</remarks>
     public int RunIns()
     {
-        int insCounter = 0;
-
         do
         {
             // increment instruction counter and check if we didn't run this program for too long (e.g. infinite loops)
-            if (++insCounter > MaxRunnableOpcodes)
+            if (++_opsRun > MaxRunnableOpcodes)
             {
                 Error = TtError.ExecutionTooLong;
                 return Error;
@@ -1305,7 +1317,6 @@ internal sealed partial class TtExecContext
         // all points (or contours, in the `glyf' table) of a glyph, and such iterations don't happen very often.
         _loopcallCounter = 0;
         _negJumpCounter = 0;
-        _loopWork = 0;
 
         // The maximum values are heuristic.
         if (Pts.NPoints != 0)

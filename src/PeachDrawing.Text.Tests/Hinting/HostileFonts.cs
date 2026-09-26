@@ -31,6 +31,15 @@ namespace PeachDrawing.Text.Tests.Hinting
             if (parts.All(p => p.Tag != tag))
                 parts.Add((tag, data));
 
+            return Assemble(font, parts);
+        }
+
+        /// <summary>The font without one of its tables.</summary>
+        public static byte[] WithoutTable(byte[] font, string tag) =>
+            Assemble(font, Tables(font).Where(t => t.Tag != tag).Select(t => (t.Tag, font.AsSpan(t.Offset, t.Length).ToArray())).ToList());
+
+        private static byte[] Assemble(byte[] font, List<(string Tag, byte[] Data)> parts)
+        {
             parts.Sort((a, b) => string.CompareOrdinal(a.Tag, b.Tag));
 
             var output = new List<byte>();

@@ -28,6 +28,13 @@ of FreeType 2.14.3's (`Internal/Hinting/FreeType/`, FTL licensed, `PORTING-NOTES
   `GlyphOutlineDecoder.TryGetGlyphOutline` now catches it.
 - A hostile font must degrade, not throw: instruction, loop-work and recursion limits, bounds-checked tables, and any `HintingException`
   becomes "the scaled design outline, `IsGridFitted` false". A randomized fuzz test with a fixed seed runs in under a second.
+- **A budget per glyph, not per program run.** FreeType counts instructions per run, so a composite glyph (each component runs its own
+  program) multiplies the limit, and a composite of composites that each name the next glyph many times is exponential (a font of a few
+  kilobytes, 30 components over 6 levels, is 30^6 loads). The instruction and loop-work budgets are shared by everything one glyph load
+  runs, one load may read 1,024 glyphs, and the plain-outline decoder (`GlyphOutlineDecoder`) has the same component budget. Loop work
+  also counts flips, `ROLL` and skipped code. Caches are bounded by count and, for glyphs, by weight (16 sizes, 4,096 glyphs, 1M weight).
+- **No instructions, no grid fitting.** A TrueType font with no `fpgm`, `prep` or glyph programs is not "fitted": scaling it is all the
+  loader would do, so `IsGridFitted` stays false and callers can tell (`TtFace.HasInstructions`).
 - **Hinted edges are on pixel edges only if the baseline is.** The raster backend snaps the baseline to a whole device pixel for a
   grid-fitted glyph and maps the device-space outline back through the inverted transform; without that, crisp glyphs land half a pixel
   off and look no better than unhinted ones. Only a pure scale/translate transform is hinted.

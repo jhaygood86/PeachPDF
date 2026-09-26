@@ -169,6 +169,78 @@ namespace PeachDrawing.Text.Tests.Hinting
             AssertBounded(TimeSpan.FromSeconds(5), () => Assert.Throws<HintingException>(() => TtGlyphLoader.Load(size, composite)));
         }
 
+        /// <summary>
+        /// A font whose glyph 1 is a composite of <paramref name="width"/> copies of glyph 2, which is a composite of as many copies of
+        /// glyph 3, and so on down <paramref name="depth"/> levels to an empty glyph: <c>width ^ depth</c> loads if none is skipped.
+        /// </summary>
+        private static byte[] FontOfANestedCompositeExplosion(int width, int depth)
+        {
+            var original = HostileFonts.Original();
+            var head = HostileFonts.TableBytes(original, "head");
+            head[51] = 1; // long loca offsets
+
+            var glyf = new List<byte>();
+            var starts = new List<uint>();
+            int numGlyphs = BinaryPrimitives.ReadUInt16BigEndian(HostileFonts.TableBytes(original, "maxp").AsSpan(4));
+
+            for (int g = 0; g < numGlyphs; g++)
+            {
+                starts.Add((uint)glyf.Count);
+                if (g < 1 || g > depth)
+                    continue; // empty
+
+                glyf.AddRange(Be16(-1));                   // a composite
+                glyf.AddRange([0, 0, 0, 0, 0, 0, 0, 0]);   // bounding box (not checked)
+                for (int c = 0; c < width; c++)
+                {
+                    glyf.AddRange(Be16(c < width - 1 ? 0x0023 : 0x0003)); // words, x and y offsets, and more components but for the last
+                    glyf.AddRange(Be16(g + 1));            // the next glyph down
+                    glyf.AddRange(Be16(0));
+                    glyf.AddRange(Be16(0));
+                }
+
+                while (glyf.Count % 4 != 0)
+                    glyf.Add(0);
+            }
+
+            starts.Add((uint)glyf.Count);
+            var loca = new byte[starts.Count * 4];
+            for (int i = 0; i < starts.Count; i++)
+                BinaryPrimitives.WriteUInt32BigEndian(loca.AsSpan(i * 4), starts[i]);
+
+            return HostileFonts.WithTable(HostileFonts.WithTable(HostileFonts.WithTable(original, "head", head), "loca", loca), "glyf", glyf.ToArray());
+        }
+
+        [Fact]
+        public void ACompositeOfCompositesThatMultipliesItselfIsStoppedByTheComponentBudget()
+        {
+            // 30 ^ 6 loads if nothing stops it: a font of a few kilobytes that would keep a thread busy for hours
+            var font = FontOfANestedCompositeExplosion(30, 6);
+            var face = FaceOf(font);
+            var size = TtSize.Create(face, Size, TtInterpreterVersion.V40, TtRenderMode.Normal);
+
+            AssertBounded(TimeSpan.FromSeconds(5), () => Assert.Throws<HintingException>(() => TtGlyphLoader.Load(size, 1)));
+
+            // the same font asked for its plain outline, and through the public API at a size
+            var typeface = PeachPDF.Tests.TestSupport.TypefaceFixtures.FromBytes(font);
+            AssertBounded(TimeSpan.FromSeconds(5), () =>
+            {
+                typeface.TryGetOutline(1, out _);
+                Assert.False(typeface.TryGetOutline(1, new OutlineRequest { PixelsPerEm = 12, GridFitting = GridFitting.Standard }, out var outline) && outline.IsGridFitted);
+            });
+        }
+
+        [Fact]
+        public void TheCompositeBudgetDoesNotGetInTheWayOfAnOrdinaryComposite()
+        {
+            // 8 components a level over 3 levels is 584 loads, under the budget
+            var face = FaceOf(FontOfANestedCompositeExplosion(8, 3));
+            var size = TtSize.Create(face, Size, TtInterpreterVersion.V40, TtRenderMode.Normal);
+
+            var loaded = TtGlyphLoader.Load(size, 1);
+            Assert.Equal(0, loaded.NPoints);
+        }
+
         [Fact]
         public void ScrambledFontsNeverThrowAnythingButAreHintedOrFallBack()
         {

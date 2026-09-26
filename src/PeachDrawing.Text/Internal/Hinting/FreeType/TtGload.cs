@@ -167,6 +167,15 @@ internal sealed class TtGlyphLoader
 
     private readonly int[] _compositePath = new int[102];
 
+    /// <summary>
+    /// How many glyphs one load may read, components included. FreeType only refuses a glyph that contains itself, so a font of a few
+    /// kilobytes can make a composite whose components each name the same composite, and a load takes exponential time; real fonts
+    /// use a handful of components.
+    /// </summary>
+    private const int MaxGlyphsPerLoad = 1024;
+
+    private int _glyphsLeft = MaxGlyphsPerLoad;
+
     // zone scratch arrays, reused by every hinting call of the loader
     private int[] _orgX = [], _orgY = [], _orusX = [], _orusY = [];
     private readonly TtGlyphZone _zone = new();
@@ -245,6 +254,9 @@ internal sealed class TtGlyphLoader
         exec.Metrics = size.Metrics;
         exec.BackwardCompatibility = size.BackwardCompatibility;
         exec.IsComposite = false;
+
+        // one budget of instructions and loop work for the glyph and all of its components
+        exec.ResetBudget();
     }
 
     private TtHintedGlyph LoadGlyph(int glyphIndex)
@@ -424,6 +436,9 @@ internal sealed class TtGlyphLoader
         // arbitrary recursion limit
         if (recurseCount > 100)
             throw new HintingException("Composite glyphs are nested too deeply.");
+
+        if (--_glyphsLeft < 0)
+            throw new HintingException("A glyph is made of too many components.");
 
         // check glyph index
         if ((uint)glyphIndex >= (uint)_face.NumGlyphs)
