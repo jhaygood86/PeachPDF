@@ -95,8 +95,8 @@ internal static class CffParser
     private const int OpCharStrings = 17;
     private const int OpPrivate = 18;
     private const int OpCharstringType = 0x106;
-    private const int OpMultipleMaster = 0x118;
     private const int OpFontMatrix = 0x107;
+    private const int OpMultipleMaster = 0x118;
     private const int OpCidRos = 0x11E;
     private const int OpFdArray = 0x124;
     private const int OpFdSelect = 0x125;
@@ -288,7 +288,7 @@ internal static class CffParser
                     break;
 
                 default:
-                    // the other fields FreeType reads are numbers, strings (SIDs) or booleans, each of which needs an operand; none is used here
+                    // the other fields FreeType reads are numbers (fixed-point ones too), strings (SIDs) or booleans, each of which needs an operand; none is used here
                     if (IsOneOperandTopField(code))
                         RequireArgs(stack, numArgs);
                     break;
