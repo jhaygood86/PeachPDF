@@ -26,6 +26,16 @@ reading them takes no lock. A malformed table makes the reader return "no variat
   points); a clamp beyond the axis range; and a copy without `HVAR` for the phantom-point advance path.
 - `SOURCE_DATE_EPOCH` pins the timestamps fontTools writes, so running the generator again writes the same bytes.
 
+## Embedding an instance
+
+`TypefaceExporter.ExportSubset` on an instance goes through `OpenTypeFontface.CreateFontSubSet(..., variation)`, which writes each
+glyph afresh (`InstanceGlyphEncoder`: the points or component offsets with the deltas applied, no instructions, compact flags) and
+replaces `hmtx` with a `RawFontTable` whose advances follow `HVAR`/`gvar` and whose left side bearings are the new leftmost points. **The left
+side bearing matters:** FreeType places a glyph by `lsb - xMin`, so keeping the source's `hmtx` would shift every glyph whose left edge
+moved. `cvt`, `fpgm` and `prep` are left out because nothing they hint survives. A one-off comparison of the exported glyphs with the
+instancer's at `wght=700, wdth=90` (points, contour ends, on-curve flags, advances) agreed to within 0.25 of a unit for every glyph; the
+composite's left bearing differs by one unit because its header bounds come from the outline's control points.
+
 ## Traps
 
 - **Normalized coordinates are rounded to 2.14 fixed point** (`FontVariations.Normalize`), as the tables are written; comparing with

@@ -17,6 +17,8 @@ namespace PeachDrawing.Text.Export
         /// The glyphs keep their indices, so text already encoded as glyph indices stays valid against the subset. The
         /// glyphs a composite glyph is built from come along, and so does the notdef glyph. A colour glyph with no outline of
         /// its own, whose visible shapes are its layers, is given a small outline so that a reader can still select it.
+        /// The typeface of a variable font at a location (<see cref="Typeface.WithAxes"/>) is written as a static font: its glyphs have
+        /// the location's variations applied and carry no hinting instructions, since a PDF cannot embed a variable font.
         /// A TrueType font is cut down, and a font with CFF outlines is returned whole, which
         /// <see cref="ExportedFont.IsSubset"/> reports; the glyphs asked for are not looked at then.
         /// </remarks>
@@ -52,7 +54,7 @@ namespace PeachDrawing.Text.Export
                 wanted[glyph] = null!;
             }
 
-            OpenTypeFontface subset = face.CreateFontSubSet(wanted, cidFont: !keepCharacterMap);
+            OpenTypeFontface subset = face.CreateFontSubSet(wanted, cidFont: !keepCharacterMap, typeface.Face.Variation);
             return new ExportedFont(subset.FontSource.Bytes, hasCffOutlines: false, isSubset: true);
         }
     }

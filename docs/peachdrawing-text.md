@@ -205,7 +205,8 @@ if (face.IsVariable)
   location. Reading `TypefaceMetrics.XMin` to `YMax` (the font bounding box) and the vertical advances gives the default design's
   values, `GPOS` kerning and mark positions and `GSUB` feature variations are not applied, and a variable font with CFF2 outlines
   has no outlines: what a location changes is what the `gvar`, `HVAR`, `MVAR` and `avar` tables of a font with TrueType outlines say.
-- Embedding an instance in a PDF, and the CSS properties that would ask for one, come later.
+- `TypefaceExporter.ExportSubset` (see Embedding below) writes an instance as a static font, with the location's variations applied
+  to the outlines and metrics of the glyphs you ask for and no hinting instructions, because a PDF cannot embed a variable font.
 
 ## Mathematics: `PeachDrawing.Text.OpenType`
 
@@ -257,6 +258,8 @@ byte[] fontFile = subset.Data.ToArray();
 - A colour glyph that has no outline of its own (its shapes are its layers) is given a small outline, so a reader can still
   select the text it stands for.
 - A subset carries no name table, so it is meant to be embedded, not loaded back into a `FontSet`.
+- For a typeface from `WithAxes` the subset is a static font at that location: each glyph's points and component offsets have the
+  variations applied, the side bearings and advances of the glyphs are set to match, and the hinting tables are left out.
 - A font with CFF outlines is not cut down: it is returned whole, and `IsSubset` is `false`.
 - `keepCharacterMap` says whether the character map stays. A font whose text is encoded as glyph indices is smaller without it.
 

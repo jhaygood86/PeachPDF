@@ -687,29 +687,6 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         }
 
         /// <summary>
-        /// How much the advance width of a glyph differs from its <c>hmtx</c> entry at this descriptor's location: from <c>HVAR</c>
-        /// when the font has it, otherwise from the phantom points of <c>gvar</c>.
-        /// </summary>
-        private double AdvanceDelta(int glyphIndex)
-        {
-            var variations = FontFace.Variations;
-            if (Variation is null || variations is null)
-                return 0;
-
-            if (variations.Hvar is { } hvar)
-                return hvar.GetAdvanceDelta(glyphIndex, Variation.Normalized);
-
-            if (variations.Gvar is not { } gvar || !gvar.HasVariations(glyphIndex))
-                return 0;
-
-            int total = GlyphOutlineDecoder.GetVariationPointCount(FontFace, glyphIndex);
-            var dx = new double[total];
-            var dy = new double[total];
-            // The advance is the distance between the first two phantom points, which are the last four points.
-            return gvar.TryAddDeltas(glyphIndex, Variation.Normalized, total, null, null, null, dx, dy) ? dx[total - 3] - dx[total - 4] : 0;
-        }
-
-        /// <summary>
         ///   //Converts the width of a glyph identified by its index to PDF design units.
         /// </summary>
         public int GlyphIndexToWidth(int glyphIndex)
@@ -724,7 +701,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     glyphIndex = numberOfHMetrics - 1;
 
                 int width = FontFace.hmtx.Metrics[glyphIndex].advanceWidth;
-                return Variation is null ? width : width + (int)Math.Round(AdvanceDelta(originalGlyphIndex));
+                return Variation is null ? width : width + (int)Math.Round(FontFace.Variations?.GetAdvanceDelta(FontFace, originalGlyphIndex, Variation) ?? 0);
             }
             catch (Exception)
             {

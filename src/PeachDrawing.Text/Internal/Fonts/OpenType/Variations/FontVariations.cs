@@ -181,6 +181,25 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
         }
 
         /// <summary>
+        /// How much the advance width of <paramref name="glyph"/> differs from its <c>hmtx</c> entry at <paramref name="coordinates"/>, in design
+        /// units: from <c>HVAR</c> when the font has it, otherwise from the phantom points of <c>gvar</c>.
+        /// </summary>
+        internal double GetAdvanceDelta(OpenTypeFontface face, int glyph, VariationCoordinates coordinates)
+        {
+            if (Hvar is { } hvar)
+                return hvar.GetAdvanceDelta(glyph, coordinates.Normalized);
+
+            if (Gvar is not { } gvar || !gvar.HasVariations(glyph))
+                return 0;
+
+            int total = GlyphOutlineDecoder.GetVariationPointCount(face, glyph);
+            var dx = new double[total];
+            var dy = new double[total];
+            // The advance is the distance between the first two phantom points, which are the last four points.
+            return gvar.TryAddDeltas(glyph, coordinates.Normalized, total, null, null, null, dx, dy) ? dx[total - 3] - dx[total - 4] : 0;
+        }
+
+        /// <summary>
         /// Puts the axes at <paramref name="settings"/> (an axis not mentioned stays at its default, an unknown tag is ignored, a value
         /// outside the axis's range is clamped) and normalizes the result.
         /// </summary>
