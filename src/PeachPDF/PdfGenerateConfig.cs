@@ -150,7 +150,8 @@ namespace PeachPDF
 
         /// <summary>
         /// A fallback language (e.g. <c>"en-US"</c>) used for language-dependent rendering — currently
-        /// <c>hyphens: auto</c> automatic hyphenation — only when the document itself declares none via
+        /// <c>hyphens: auto</c> automatic hyphenation and the Chinese and Japanese tailorings of
+        /// <c>line-break</c> — only when the document itself declares none via
         /// <c>&lt;html lang="..."&gt;</c>. A document's own <c>lang</c> attribute always takes priority
         /// over this setting when present. Per the CSS Text spec, automatic hyphenation requires knowing
         /// the text's language; PeachPDF never guesses one on its own, so a document with no <c>lang</c>
