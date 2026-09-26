@@ -320,7 +320,7 @@ namespace PeachPDF.Html.Adapters
         /// <param name="obliqueSkewSinus">the sine of a declared <c>oblique &lt;angle&gt;</c>, when the caller has one - drives the faux-italic shear amount instead of the renderer's fixed default</param>
         /// <param name="variations">the encoded <c>font-variation-settings</c> and <c>font-optical-sizing</c> of the box, or null for the initial values (see <c>FontVariationSettingsResolver</c>)</param>
         /// <returns>font instance</returns>
-        public RFont? GetFont(string family, double size, RFontStyle style, int? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
+        public RFont? GetFont(string family, double size, RFontStyle style, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
             return _fontsHandler.GetCachedFont(family, size, style, weight, stretch, obliqueSkewSinus, variations);
         }
@@ -331,7 +331,7 @@ namespace PeachPDF.Html.Adapters
         /// Returns null when the family has no face covering the codepoint, so per-codepoint matching can
         /// move on to the next family in the <c>font-family</c> stack.
         /// </summary>
-        public RFont? GetFontForCodepoint(string family, double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
+        public RFont? GetFontForCodepoint(string family, double size, RFontStyle style, System.Text.Rune codepoint, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
             return _fontsHandler.GetCachedFontForCodepoint(family, size, style, codepoint, weight, stretch, obliqueSkewSinus, variations);
         }
@@ -343,7 +343,7 @@ namespace PeachPDF.Html.Adapters
         /// </summary>
         public bool FamilyHasExplicitUnicodeRanges(string family) => FamilyHasExplicitUnicodeRangesInt(family);
 
-        internal RFont? CreateFontForCodepoint(string family, double size, RFontStyle style, int weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations)
+        internal RFont? CreateFontForCodepoint(string family, double size, RFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations)
         {
             return CreateFontForCodepointInt(family, size, style, weight, stretch, obliqueSkewSinus, codepoint, variations);
         }
@@ -355,12 +355,12 @@ namespace PeachPDF.Html.Adapters
         /// does. Returns null when nothing registered covers it either, so the caller keeps today's
         /// <c>.notdef</c>/tofu-box behavior.
         /// </summary>
-        public RFont? GetSystemFallbackFontForCodepoint(double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, double? stretch = null, double? obliqueSkewSinus = null, PeachDrawing.Text.Unicode.EmojiPresentation presentation = PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, string? variations = null)
+        public RFont? GetSystemFallbackFontForCodepoint(double size, RFontStyle style, System.Text.Rune codepoint, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, PeachDrawing.Text.Unicode.EmojiPresentation presentation = PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, string? variations = null)
         {
             return _fontsHandler.GetCachedSystemFallbackFontForCodepoint(size, style, codepoint, weight, stretch, obliqueSkewSinus, presentation, variations);
         }
 
-        internal RFont? CreateSystemFallbackFontForCodepoint(double size, RFontStyle style, int weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations)
+        internal RFont? CreateSystemFallbackFontForCodepoint(double size, RFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations)
         {
             return CreateSystemFallbackFontForCodepointInt(size, style, weight, stretch, obliqueSkewSinus, codepoint, presentation, variations);
         }
@@ -376,7 +376,7 @@ namespace PeachPDF.Html.Adapters
         /// <param name="obliqueSkewSinus">the sine of a declared <c>oblique &lt;angle&gt;</c>, when any</param>
         /// <param name="variations">the encoded <c>font-variation-settings</c> and <c>font-optical-sizing</c> of the box, or null for the initial values (see <c>FontVariationSettingsResolver</c>)</param>
         /// <returns>font instance</returns>
-        internal RFont CreateFont(string family, double size, RFontStyle style, int weight, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
+        internal RFont CreateFont(string family, double size, RFontStyle style, double weight, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
         {
             return CreateFontInt(family, size, style, weight, stretch, obliqueSkewSinus, variations);
         }
@@ -393,7 +393,7 @@ namespace PeachPDF.Html.Adapters
         /// <param name="obliqueSkewSinus">the sine of a declared <c>oblique &lt;angle&gt;</c>, when any</param>
         /// <param name="variations">the encoded <c>font-variation-settings</c> and <c>font-optical-sizing</c> of the box, or null for the initial values (see <c>FontVariationSettingsResolver</c>)</param>
         /// <returns>font instance</returns>
-        internal RFont CreateFont(RFontFamily family, double size, RFontStyle style, int weight, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
+        internal RFont CreateFont(RFontFamily family, double size, RFontStyle style, double weight, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
         {
             return CreateFontInt(family, size, style, weight, stretch, obliqueSkewSinus, variations);
         }
@@ -479,7 +479,7 @@ namespace PeachPDF.Html.Adapters
         /// <param name="obliqueSkewSinus">the sine of a declared <c>oblique &lt;angle&gt;</c>, when any</param>
         /// <param name="variations">the encoded <c>font-variation-settings</c> and <c>font-optical-sizing</c> of the box, or null for the initial values (see <c>FontVariationSettingsResolver</c>)</param>
         /// <returns>font instance</returns>
-        protected abstract RFont CreateFontInt(string family, double size, RFontStyle style, int weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null);
+        protected abstract RFont CreateFontInt(string family, double size, RFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null);
 
         /// <summary>
         /// Get font instance by given font family instance, size and style.<br/>
@@ -493,20 +493,20 @@ namespace PeachPDF.Html.Adapters
         /// <param name="obliqueSkewSinus">the sine of a declared <c>oblique &lt;angle&gt;</c>, when any</param>
         /// <param name="variations">the encoded <c>font-variation-settings</c> and <c>font-optical-sizing</c> of the box, or null for the initial values (see <c>FontVariationSettingsResolver</c>)</param>
         /// <returns>font instance</returns>
-        protected abstract RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null);
+        protected abstract RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null);
 
         /// <summary>
         /// Builds a font for <paramref name="family"/> that covers <paramref name="codepoint"/>, or returns
         /// null when the family has no covering face (so the caller can try the next family).
         /// </summary>
-        protected abstract RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations);
+        protected abstract RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations);
 
         /// <summary>
         /// Builds a font for whichever OTHER registered family (if any) covers <paramref name="codepoint"/>
         /// - the CSS Fonts 4 §5 system-fallback step, tried only after every family in the box's own
         /// <c>font-family</c> stack has already missed. Returns null when nothing registered covers it.
         /// </summary>
-        protected abstract RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations);
+        protected abstract RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations);
 
         /// <summary>Whether any face of <paramref name="family"/> declares an explicit <c>unicode-range</c>.</summary>
         protected abstract bool FamilyHasExplicitUnicodeRangesInt(string family);

@@ -7,10 +7,12 @@ namespace PeachDrawing.Text
     /// What a caller wants from a family: the inputs to CSS Fonts 4 face matching.
     /// </summary>
     /// <remarks>
-    /// Matching looks for the slant first, then the width, then the weight, and takes the nearest face when there
-    /// is no exact one. The size of the text is not part of a query: a <see cref="Typeface"/> has no size.
+    /// Matching narrows the faces of a family by width first, then by slant (upright, italic or oblique), then by weight, and
+    /// takes the nearest face when there is no exact one, so a request for a condensed italic face gets the condensed face of a family whose
+    /// condensed face is upright and whose italic face is of normal width. The size of the text is not part of a query: a
+    /// <see cref="Typeface"/> has no size.
     /// </remarks>
-    /// <param name="Weight">The weight wanted, from 1 to 1000; 400 is normal and 700 is bold.</param>
+    /// <param name="Weight">The weight wanted, from 1 to 1000 and not necessarily a whole number; 400 is normal and 700 is bold.</param>
     /// <param name="Width">The width wanted, as an OpenType width class from 1 (ultra-condensed) to 9 (ultra-expanded) with 5 being normal.</param>
     /// <param name="IsItalic">Whether an italic face is wanted.</param>
     /// <param name="MustCover">
@@ -29,11 +31,13 @@ namespace PeachDrawing.Text
     /// </param>
     /// <param name="ObliqueAngle">
     /// The angle of the slant wanted, in degrees leaning to the right (CSS <c>font-style: oblique 10deg</c>), or <see langword="null"/> for
-    /// the default angle of 14 degrees. It only matters when <paramref name="IsItalic"/> is set: a variable face's <c>slnt</c> axis is set to
-    /// it, kept inside the range the face declares.
+    /// the default angle of 14 degrees. It only matters when <paramref name="IsItalic"/> is set: it chooses among faces that declare
+    /// an oblique range (the one that holds the angle, or else the nearest), which are preferred to faces declared italic when an angle
+    /// is given and the other way round when it is not, and a variable face's <c>slnt</c> axis is set to it, kept inside the range the
+    /// face declares.
     /// </param>
     public readonly record struct TypefaceQuery(
-        int Weight = TypefaceQuery.NormalWeight,
+        double Weight = TypefaceQuery.NormalWeight,
         int Width = TypefaceQuery.NormalWidth,
         bool IsItalic = false,
         Rune? MustCover = null,

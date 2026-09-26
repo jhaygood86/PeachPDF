@@ -497,7 +497,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// This box's own <see cref="FontWeight"/>, resolved to a concrete CSS Fonts numeric weight (1-1000).
         /// </summary>
-        internal int ActualNumericWeight => DerivedStyle.ActualNumericWeight;
+        internal double ActualNumericWeight => DerivedStyle.ActualNumericWeight;
 
         /// <summary>
         /// This box's own <see cref="TextAlignAll"/>, with <c>match-parent</c> fully resolved (css-text-3

@@ -2970,7 +2970,7 @@
     },
     {
       "name": "font-weight",
-      "comment": "CssKeywordOrValue<FontWeightKeyword, int>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. CSS Fonts 4's <number> form is validated as a plain integer in [1,1000] (min/max below), not a fractional number — matches ValueExtensions.IsWeight's own range on the Layer A CSS-OM side (issue #655).",
+      "comment": "CssKeywordOrValue<FontWeightKeyword, double>-backed (typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. CSS Fonts 4 section 3.2's <number [1,1000]> form is validated as a plain number in [1,1000] (min/max below), fractions included (350.5), matching ValueExtensions.IsWeight on the Layer A CSS-OM side.",
       "inherited": true,
       "initialValue": "normal",
       "cssDataType": {
@@ -2978,13 +2978,13 @@
         "enumType": "FontWeightKeyword",
         "keywordMap": "Map.FontWeightKeywords",
         "fallback": "FontWeightKeyword.Normal",
-        "valueType": "integer",
+        "valueType": "number",
         "min": 1,
         "max": 1000
       },
       "html": {
         "propertyPath": "FontWeight",
-        "csharpDataType": "CssProperty<CssKeywordOrValue<FontWeightKeyword, int>>",
+        "csharpDataType": "CssProperty<CssKeywordOrValue<FontWeightKeyword, double>>",
         "area": "FontArea",
         "getterExpression": "{box}.FontWeight.ToString()"
       }

@@ -5,7 +5,7 @@ namespace PeachPDF.SourceGenerators.Emit
 {
     /// <summary>
     /// The single place a <c>DataTypeKind.KeywordOrValue</c> entry's <c>valueType</c>
-    /// ("integer"/"length"/"length-or-unitless"/"percentage") maps to real C# — the value-side validation clause, the
+    /// ("integer"/"number"/"length"/"length-or-unitless"/"percentage") maps to real C# — the value-side validation clause, the
     /// storage type, and the <c>TryParse</c>-shaped parser to hand to
     /// <see cref="global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText{TEnum,TValue}"/>.
     /// <see cref="ValidatorExpressionBuilder"/> and <see cref="RegistryEmitter"/> both consult this rather
@@ -59,10 +59,26 @@ namespace PeachPDF.SourceGenerators.Emit
             "percentage" => new Resolved(
                 "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNonNegativePercentage(value, out _)",
                 "double", "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNonNegativePercentage"),
+            // A plain <number> stored as a double, e.g. font-weight's 350.5; the optional min/max narrow it as they do "integer".
+            "number" => new Resolved(
+                BuildNumberValueClause(dt), "double", "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNumber"),
             _ => throw new NotSupportedException(
                 $"\"{entry.Name}\" declares a keyword-or-value cssDataType with valueType \"{dt.ValueType}\", " +
                 "which KeywordOrValueGrammar does not yet implement."),
         };
+
+        // The number counterpart of BuildIntegerValueClause: the same min/max fields, compared as doubles (and written with the invariant
+        // culture, since the generated C# must not depend on the culture the compiler runs in).
+        private static string BuildNumberValueClause(DataTypeSpec dt)
+        {
+            const string parse = "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNumber(value, out ";
+            if (dt.Min is null && dt.Max is null) return parse + "_)";
+
+            var clause = parse + "var parsedNumber)";
+            if (dt.Min.HasValue) clause += $" && parsedNumber >= {dt.Min.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}";
+            if (dt.Max.HasValue) clause += $" && parsedNumber <= {dt.Max.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}";
+            return clause;
+        }
 
         // Mirrors ValidatorExpressionBuilder.BuildIntegerClause (the plain "integer" DataTypeKind's own
         // min/max clause) exactly, so a keyword-or-value entry's min/max behaves identically to a plain

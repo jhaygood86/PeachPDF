@@ -181,7 +181,9 @@ namespace PeachDrawing.Text
         /// </remarks>
         /// <param name="familyName">The family name.</param>
         /// <param name="query">What is wanted; its <see cref="TypefaceQuery.MustCover"/> has to be <see langword="null"/>.</param>
-        /// <exception cref="ArgumentException">The query names a character to cover.</exception>
+        /// <exception cref="ArgumentException">
+        /// The query names a character to cover, or its weight, width percentage or oblique angle is not a finite number.
+        /// </exception>
         /// <exception cref="InvalidOperationException">
         /// The set holds no font at all, installed or added, or the face that matched is not a font this library can parse: a
         /// font is read in full when it is first matched and not when it is added.
@@ -189,6 +191,7 @@ namespace PeachDrawing.Text
         public TypefaceMatch MatchOrFallback(string familyName, in TypefaceQuery query)
         {
             ArgumentNullException.ThrowIfNull(familyName);
+            ValidateQuery(query);
 
             if (query.MustCover is not null)
             {
@@ -297,12 +300,26 @@ namespace PeachDrawing.Text
                 options.ObliqueRange);
         }
 
+        /// <summary>Refuses the numbers of a query that no face can be matched against: a weight, width or angle that is NaN or infinite.</summary>
+        internal static void ValidateQuery(in TypefaceQuery query)
+        {
+            if (!double.IsFinite(query.Weight))
+                throw new ArgumentException("The weight of a query has to be a finite number.", nameof(query));
+
+            if (query.WidthPercent is { } width && !double.IsFinite(width))
+                throw new ArgumentException("The width percentage of a query has to be a finite number.", nameof(query));
+
+            if (query.ObliqueAngle is { } angle && !double.IsFinite(angle))
+                throw new ArgumentException("The oblique angle of a query has to be a finite number.", nameof(query));
+        }
+
         internal TypefaceMatch MatchCore(string familyName, in TypefaceQuery query)
         {
             var options = query.WidthPercent is { } percent
                 ? FontResolvingOptions.ForWidthPercent(query.IsItalic ? FaceStyle.Italic : FaceStyle.Regular, query.Weight, percent)
                 : new FontResolvingOptions(query.IsItalic ? FaceStyle.Italic : FaceStyle.Regular, query.Weight, query.Width);
             options.Codepoint = query.MustCover;
+            options.ObliqueAngle = query.ObliqueAngle;
 
             var face = LoadedTypeface.GetOrCreateFrom(familyName, options, Resolver);
             var typeface = face.Public;

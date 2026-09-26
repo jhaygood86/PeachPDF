@@ -1454,7 +1454,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public double ActualFontSize => ActualFont.Size;
 
-        private int? _actualNumericWeight;
+        private double? _actualNumericWeight;
 
         /// <summary>
         /// This box's own <see cref="FontArea.FontWeight"/>, resolved to a concrete CSS Fonts numeric
@@ -1464,7 +1464,7 @@ namespace PeachPDF.Html.Core.Dom
         /// finished assigning every box's own properties, so there's no need to invalidate this when
         /// <see cref="FontArea.FontWeight"/> is set.
         /// </summary>
-        public int ActualNumericWeight
+        public double ActualNumericWeight
         {
             get
             {
