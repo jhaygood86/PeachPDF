@@ -68,9 +68,13 @@ namespace PeachPDF.PdfSharpCore.Drawing
             ObliqueSkewSinus = obliqueSkewSinus;
 
             // In principle an XFont is a typeface plus an em-size.
+            Typeface = match.Typeface;
             _glyphTypeface = match.Typeface.Face;
             InitializeFontMetrics();
         }
+
+        /// <summary>The typeface this font sets text in: what the font set matched, with no size.</summary>
+        public Typeface Typeface { get; }
 
         void InitializeFontMetrics()
         {
@@ -78,10 +82,11 @@ namespace PeachPDF.PdfSharpCore.Drawing
             // instance for custom families), so it needs no cache of its own here.
             _descriptor = _glyphTypeface.Descriptor;
 
-            UnitsPerEm = _descriptor.UnitsPerEm;
-            CellAscent = _descriptor.Ascender;
-            CellDescent = _descriptor.Descender;
-            CellSpace = _descriptor.LineSpacing;
+            var metrics = Typeface.Metrics;
+            UnitsPerEm = metrics.UnitsPerEm;
+            CellAscent = metrics.CellAscent;
+            CellDescent = metrics.CellDescent;
+            CellSpace = metrics.LineSpacing;
         }
 
 

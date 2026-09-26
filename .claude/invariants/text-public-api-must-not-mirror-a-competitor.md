@@ -19,8 +19,10 @@ the public surface is designed from PeachPDF's requirements and from the specifi
 4. **Clean-room process.** Implementers do not read SixLabors.Fonts source and do not use its docs as a structural template.
    The published docs carry a factual feature-coverage comparison only, like the one on `why-peachpdf.html`, and no
    migration guide from their calls to ours.
-5. **Every PR that adds public API updates the register below** and is reviewed against it with the maintainer before it
-   merges. A collision found is renamed, not defended. `src/PeachDrawing.Text/PublicApi.txt` is the reviewed snapshot of the
+5. **Every PR that adds public API updates the register below.** The maintainer reviewed the first slice's register and found
+   the naming fine, and then waived the per-PR review for the rest of the stack (2026-09-26): the author picks the
+   spec-derived name and records its origin, and a PR is not held for a naming review. A collision found later is renamed,
+   not defended. `src/PeachDrawing.Text/PublicApi.txt` is the reviewed snapshot of the
    whole surface; `PublicSurfaceTests` fails when the surface and the file disagree, so nothing becomes public by accident.
 
 ## Register
@@ -33,7 +35,9 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 |---|---|---|
 | `FontSet` (`AddData`, `AddStream`, `AddFile`, `TryFindFamily`, `TryFindCoveringFamily`, `HasExplicitRanges`, `MatchOrFallback`, `TryGetFontData`, `ResolveGeneric`, `InstalledFamilyNames`) | The fonts text can be set in: installed plus added, per instance | CSS Fonts 4 section 5, whose matching runs over "the set of available fonts". `Add*` and `Try*` follow .NET's own naming. `MatchOrFallback` and `TryGetFontData` are ours. `TryFindCoveringFamily` is the "system fallback" step of the CSS algorithm |
 | `TypefaceFamily` (`Name`, `TryMatch`) | The faces sharing one family name | The family-versus-face split every platform text API has (DirectWrite, CoreText, fontconfig) |
-| `Typeface` (`FamilyName`, `StyleName`, `IsBold`, `IsItalic`) | One face, with no size | Typography's own term. Deliberately size-free, unlike a face-plus-size "font" object; the metrics and glyph members arrive in a later slice |
+| `Typeface` (`FamilyName`, `StyleName`, `IsBold`, `IsItalic`, `Metrics`, `HasColorGlyphs`, `TryMapRune`, `HasGlyph`, `GetAdvance`, `HasVerticalMetrics`, `GetVerticalAdvance`, `HasVerticalOrigin`, `GetVerticalOrigin`, `TryGetScriptPosition`, `SupportsFeatures`, `MatchesEmojiPresentation`) | One face, with no size | Typography's own term. Deliberately size-free, unlike a face-plus-size "font" object. Member names follow the OpenType tables they read (`cmap` to `TryMapRune`, `hmtx` to `GetAdvance`, `vmtx` and `VORG` to the vertical members) and .NET's `Try` pattern |
+| `TypefaceMetrics` | The face's vertical dimensions in design units | Named for what it holds. The cell (`CellAscent`, `CellDescent`, `LineSpacing`) is the GDI/WPF text-cell vocabulary, kept apart from the `NormalLine*` triple that CSS `line-height: normal` uses (CSS Inline Layout). `UnderlinePosition`/`UnderlineThickness` and `StrikeoutPosition`/`StrikeoutThickness` are the `post` and `OS/2` fields, `CapHeight` and `XHeight` the `OS/2` ones, `XMin`..`YMax` the `head` ones. The split into two line-dimension sets is ours |
+| `ScriptPlacement`, `ScriptPosition` | Recommended sub/superscript size and offset | OpenType `OS/2` `ySubscript*`/`ySuperscript*` fields; CSS `vertical-align: sub`/`super` |
 | `TypefaceQuery` (`Weight`, `Width`, `IsItalic`, `MustCover`) | What a caller wants: the inputs to CSS face matching | CSS Fonts 4 section 5.2 matching inputs; `Width` is the OpenType `usWidthClass` 1 to 9 that the CSS `font-stretch` keywords map to |
 | `TypefaceMatch` (`Typeface`, `Synthesis`) | A match and what is still missing from it | Ours |
 | `SyntheticStyle` (`None`, `Bold`, `Italic`, `BoldItalic`) | What has to be faked | CSS `font-synthesis` |
@@ -62,5 +66,6 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 Every name above was taken from the specification it implements, and the member sets follow those specifications rather
 than any library's. The author did not consult SixLabors.Fonts while choosing them, and so could not vouch that no name
 coincides with one of theirs; that check is the maintainer's review under rule 5. The maintainer reviewed this slice's
-register on 2026-09-26 and found the naming fine. That review covered the `Unicode` table; the `PeachDrawing.Text`
-(fonts and matching) table was added afterwards and is still awaiting the same review.
+register on 2026-09-26 and found the naming fine. That review covered the `Unicode` table; the tables added afterwards
+(`PeachDrawing.Text` fonts, matching and metrics) were not reviewed name by name, because the maintainer waived the per-PR
+review (rule 5).

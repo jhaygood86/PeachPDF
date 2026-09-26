@@ -9,10 +9,10 @@ dotnet add package PeachDrawing.Text
 ```
 
 > **Status: pre-1.0.** The library is being opened up area by area. Today the public surface is font loading and
-> matching (`FontSet` and the types around it) and the `PeachDrawing.Text.Unicode` namespace, both described below.
-> Metrics, glyph mapping, shaping, outlines and paragraph layout are still internal to the package, so PeachPDF is the
-> only consumer of them, and they will be published in later releases. Until 1.0, the public API may change between
-> releases.
+> matching (`FontSet` and the types around it), what a `Typeface` says about itself (metrics, glyph mapping and advances)
+> and the `PeachDrawing.Text.Unicode` namespace, all described below. Shaping, outlines, colour glyphs, export and paragraph
+> layout are still internal to the package, so PeachPDF is the only consumer of them, and they will be published in later
+> releases. Until 1.0, the public API may change between releases.
 
 ## What the engine does
 
@@ -59,6 +59,36 @@ when none is exact. A face is taken to cover the characters of its `unicode-rang
 was asked for and the face is lighter, italic when italic was asked for and the face is upright.
 
 A typeface has no size. Text size belongs to whoever draws the text, and the same `Typeface` serves every size.
+
+### What a typeface says about itself
+
+Everything a `Typeface` reports is in design units: whole numbers on the grid the font was drawn on, `UnitsPerEm` of them
+to the em. To get a length at a size, multiply by the size and divide by `UnitsPerEm`.
+
+```csharp
+TypefaceMetrics metrics = face.Metrics;
+double size = 16;
+double ascent = size * metrics.CellAscent / metrics.UnitsPerEm;
+
+if (face.TryMapRune(new Rune('A'), out ushort glyph))
+{
+    double advance = size * face.GetAdvance(glyph) / metrics.UnitsPerEm;
+}
+```
+
+- `Metrics` (`TypefaceMetrics`) has two sets of line dimensions, because platforms disagree about which one text is set
+  with. `CellAscent`, `CellDescent` and `LineSpacing` are the rectangle Windows draws a line in. `NormalLineAscent`,
+  `NormalLineDescent` and `NormalLineGap` are what browsers use for CSS `line-height: normal`. It also has the underline and
+  strikeout stroke positions and thicknesses, `CapHeight`, `XHeight` (with `HasMeasuredXHeight` saying whether the font
+  recorded it or it is an estimate), `ItalicAngle`, and the font's bounding box (`XMin`, `YMin`, `XMax`, `YMax`).
+- `TryMapRune` finds the glyph a character is drawn with through the font's `cmap`, and `HasGlyph` asks only whether there
+  is one. `GetAdvance` is the horizontal advance of a glyph.
+- `HasVerticalMetrics`, `GetVerticalAdvance`, `HasVerticalOrigin` and `GetVerticalOrigin` are what vertical text needs. A font
+  with no vertical metrics answers one em for every advance, which the OpenType specification allows.
+- `TryGetScriptPosition` gives the size and offset the font's designer recommends for subscripts and superscripts.
+- `HasColorGlyphs` says whether the face draws colour glyphs as vector fills, `SupportsFeatures` whether its `GSUB` table has
+  an active lookup for every one of a set of OpenType feature tags, and `MatchesEmojiPresentation` whether it is a face to
+  prefer for a character drawn as text or as emoji.
 
 `AddOptions` is the counterpart of the descriptors of a CSS `@font-face` rule: the family name, weight, italic, width
 class and `unicode-range` to register a font under in place of what the file itself declares.

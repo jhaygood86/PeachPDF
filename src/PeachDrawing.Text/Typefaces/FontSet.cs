@@ -182,7 +182,10 @@ namespace PeachDrawing.Text
         /// <param name="familyName">The family name.</param>
         /// <param name="query">What is wanted; its <see cref="TypefaceQuery.MustCover"/> has to be <see langword="null"/>.</param>
         /// <exception cref="ArgumentException">The query names a character to cover.</exception>
-        /// <exception cref="InvalidOperationException">The set holds no font at all, installed or added.</exception>
+        /// <exception cref="InvalidOperationException">
+        /// The set holds no font at all, installed or added, or the face that matched is not a font this library can parse: a
+        /// font is read in full when it is first matched and not when it is added.
+        /// </exception>
         public TypefaceMatch MatchOrFallback(string familyName, in TypefaceQuery query)
         {
             ArgumentNullException.ThrowIfNull(familyName);

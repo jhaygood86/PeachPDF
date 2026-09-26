@@ -1,3 +1,4 @@
+using System;
 using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachDrawing.Text
@@ -29,6 +30,10 @@ namespace PeachDrawing.Text
         /// <param name="query">What is wanted.</param>
         /// <param name="match">The best face, and what has to be faked because it falls short of the query.</param>
         /// <returns><see langword="false"/> when the query asks for a character that no face of the family covers.</returns>
+        /// <exception cref="InvalidOperationException">
+        /// The face that matched is not a font this library can parse. A font is read in full when it is first matched and not
+        /// when it is added, so a set does not pay for the fonts a caller never uses.
+        /// </exception>
         public bool TryMatch(in TypefaceQuery query, out TypefaceMatch match)
         {
             if (query.MustCover is not null && _set.Resolver.ResolveTypeface(Name, query.Weight, query.IsItalic, query.Width, query.MustCover) is null)
