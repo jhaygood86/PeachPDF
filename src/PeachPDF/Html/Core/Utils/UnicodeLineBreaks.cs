@@ -18,10 +18,12 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Finds the line break opportunities of <paramref name="text"/>: one entry for each UTF-16 index and one for its end
         /// (see <see cref="LineBreaker.FindOpportunities"/>). <paramref name="precedingRegionalIndicators"/> is how many regional
-        /// indicators end the text before this box's, which decides whether the first one completes a flag.
+        /// indicators end the text before this box's, which decides whether the first one completes a flag. <paramref name="language"/>
+        /// is the BCP 47 language of the text, or <see langword="null"/> when it has none: the breaks CSS Text 3 allows for
+        /// <c>line-break</c> only in Chinese and Japanese text apply to those languages alone.
         /// </summary>
         internal static LineBreakOpportunity[] Find(string text, PeachPDF.CSS.WordBreak wordBreak, int precedingRegionalIndicators = 0,
-            PeachPDF.CSS.LineBreak lineBreak = PeachPDF.CSS.LineBreak.Auto)
+            PeachPDF.CSS.LineBreak lineBreak = PeachPDF.CSS.LineBreak.Auto, string? language = null)
         {
             if (text.Length == 0)
             {
@@ -44,6 +46,7 @@ namespace PeachPDF.Html.Core.Utils
                     PeachPDF.CSS.LineBreak.Anywhere => LineBreakStrictness.Anywhere,
                     _ => LineBreakStrictness.Auto,
                 },
+                Language = language,
             };
 
             // A soft hyphen is a hyphenation candidate the flow decides on when it has to break a word, not a break opportunity of

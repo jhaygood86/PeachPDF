@@ -8,6 +8,7 @@ it only together with the `.txt` files and the four conformance files beside the
 - **`SegmentationConformanceTests` runs every line of those files** through `LineBreaker` (with `Strictness = Strict`, the
   algorithm's own default, because `CJ` is `NS` there) and `Segmenter`, and is the reason to trust the rules. A change to a rule
   that makes one line fail is wrong; do not "fix" it by editing the test.
+- **The CSS tailorings are outside what those files can check.** The conformance run has no language and `Strict`, so a tailoring that only applies for `loose` or for Chinese and Japanese text (`LineBreakOptions.Language`) never runs in it; `LineBreakLanguageTests` pins those, against what Chrome does with the same text, language and strictness. The line break table carries a flag for the `PR` and `PO` characters whose East Asian Width is Ambiguous, Fullwidth or Wide (`LineBreakWideOrAmbiguous`, only on those two classes, to keep the table small), which the loose breaks before a suffix and after a prefix read.
 - **The tables are source, not a Brotli resource**, so they work in WebAssembly, where there is no Brotli decoder. A lookup is a
   binary search over a sorted array of range starts with a parallel array of values.
 - **Everything the line breaking rules need beyond `Line_Break` comes from the comment of `LineBreak.txt`** (the General_Category

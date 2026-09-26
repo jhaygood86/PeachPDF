@@ -776,6 +776,7 @@ PeachDrawing.Text.Unicode.LineBreakOpportunity : enum Byte
   Prohibited = 0
 PeachDrawing.Text.Unicode.LineBreakOptions : struct
   property LineBreakStrictness Strictness { get; init; }
+  property String Language { get; init; }
   property WordBreakMode WordBreak { get; init; }
 PeachDrawing.Text.Unicode.LineBreakStrictness : enum Int32
   Anywhere = 4

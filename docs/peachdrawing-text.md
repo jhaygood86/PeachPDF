@@ -426,8 +426,12 @@ for (int i = 1; i < text.Length; i++)
 `LineBreakOptions` applies the tailorings of CSS Text: `WordBreak` (a `WordBreakMode`: `Normal`, `BreakAll`, `KeepAll`) is `word-break`, and
 `Strictness` (`Auto`, `Loose`, `Normal`, `Strict`, `Anywhere`) is `line-break`. `Strict` is the algorithm's own default,
 in which a small kana or a wave dash may not start a line; `Auto` (which is `Normal`) also lets a wave dash and the katakana
-double hyphen start one, and `Loose` lets a line start with a small kana, an iteration mark, a middle dot, a question or
-exclamation mark of Japanese text or an ellipsis, and with a hyphen after an ideograph. `Anywhere` allows a break after every grapheme cluster, whatever the
+double hyphen start one, and `Loose` lets a line start with a small kana, an iteration mark, and with a hyphen after an ideograph;
+between two ellipses it may break, but not before one. `Language` (a BCP 47 tag, or `null`) is what the rest depends on: the wave dash
+and the katakana double hyphen may start a line in `Normal` and `Loose` only where the language is Chinese or Japanese, and
+there `Loose` also lets a line start with a middle dot, the colon and semicolon of CJK text and a fullwidth or double exclamation or
+question mark, end before a suffix and after a prefix of East Asian width (`％`, `℃`, `￥`), which the number rules would otherwise
+keep with their digits. `Anywhere` allows a break after every grapheme cluster, whatever the
 character rules say, and keeps only hard line breaks. Thai, Lao, Khmer and Burmese are broken as their letters, without a
 dictionary, so their lines have no opportunities where the script writes no spaces.
 
