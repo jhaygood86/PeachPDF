@@ -17,12 +17,14 @@ namespace PeachDrawing.Text.Unicode
     /// <para>
     /// The result is the algorithm's own view of the text. A host that lays text out still decides what to do with it:
     /// whether the space at a break stays on the line, how a word too long for a line is split, and where hyphenation adds
-    /// breaks. Complex-context scripts (Thai, Lao, Khmer, Burmese) are broken as their letters, without a dictionary, so a
-    /// line of them has no opportunities where the script writes no spaces.
+    /// breaks. Thai and Khmer, which write no spaces between words, are broken at the words a word list finds (see
+    /// <see cref="LineBreakOptions.ComplexContext"/>); the other Complex_Context scripts are broken as their letters, so a line
+    /// of them has no opportunities where the script writes no spaces.
     /// </para>
     /// <para>
     /// The rules are checked against Unicode's own <c>LineBreakTest.txt</c> conformance file, with <see cref="LineBreakStrictness.Strict"/>,
-    /// which is the algorithm's own default.
+    /// which is the algorithm's own default, and <see cref="ComplexContextBreaking.GeneralCategory"/>, which resolves the
+    /// Complex_Context class as rule LB1 does.
     /// </para>
     /// </remarks>
     public static class LineBreaker

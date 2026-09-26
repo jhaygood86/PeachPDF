@@ -44,7 +44,7 @@ EXTRA = (
 )
 
 
-# The scripts a dictionary breaks lines in: every assigned character of their blocks, marks and vowel signs included.
+# The scripts written without spaces between words, which a dictionary breaks lines in: every assigned character of their blocks, marks and vowel signs included.
 DICTIONARY_BLOCKS = ((0x0E01, 0x0E5B), (0x0E81, 0x0EDF), (0x1780, 0x17FF), (0x1000, 0x109F))
 
 

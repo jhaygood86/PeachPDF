@@ -434,18 +434,18 @@ question mark, end before a suffix and after a prefix of East Asian width (`％`
 keep with their digits. `Anywhere` allows a break after every grapheme cluster, whatever the
 character rules say, and keeps only hard line breaks.
 
-Thai, Lao, Khmer and Burmese write no spaces between words, so no rule of the algorithm can find where a line may end (UAX #14 leaves
-those characters, its `SA` or Complex_Context class, to a dictionary). The library carries a word list for each of the four, taken from
-ICU's break-iterator dictionaries, and by default `LineBreaker` allows a break between the words it finds, as browsers do. It chooses
-the words by looking a few words ahead for the choice that covers the text best, preferring the longer word when two choices cover it
+Thai and Khmer write no spaces between words, so no rule of the algorithm can find where a line may end (UAX #14 leaves those
+characters, its `SA` or Complex_Context class, to a dictionary). The library carries a word list for each, taken from ICU's
+break-iterator dictionaries, and by default `LineBreaker` allows a break between the words it finds, as browsers do. It chooses the
+words by looking a few words ahead for the choice that covers the text best, preferring the longer word when two choices cover it
 alike; a stretch that no word matches stays whole, cut off from the words around it; and it never breaks inside a syllable (no
-break before a dependent vowel, tone mark or other sign, after a leading vowel, or inside a Khmer subscript or a Burmese stack). The
-script decides, not `Language`, and `WordBreak`, `Strictness` and overflow wrapping apply on top of it. A word list is read the first
-time text of its script is analysed (about 0.5 MB of embedded data in all, stored with DEFLATE so that it also loads in
-WebAssembly, where there is no Brotli decoder), and is kept for the life of the process. A compound that the list has as one word
-stays whole even where a browser splits it. Set `LineBreakOptions.ComplexContext` to `ComplexContextBreaking.GeneralCategory` to have
-no opportunity inside a run of these scripts, which is what rule LB1 itself falls back to (a caller with its own dictionary wants
-that); other Complex_Context scripts, such as Tai Tham and Cham, have no word list and always get it.
+break before a dependent vowel, tone mark or other sign, after a leading vowel, or inside a Khmer subscript). The script decides, not
+`Language`, and `WordBreak`, `Strictness` and overflow wrapping apply on top of it. A word list is read the first time text of its
+script is analysed (about 0.3 MB of embedded data in all, stored with DEFLATE so that it also loads in WebAssembly, where there is no
+Brotli decoder), and is kept for the life of the process. A compound that the list has as one word stays whole even where a browser
+splits it. Set `LineBreakOptions.ComplexContext` to `ComplexContextBreaking.GeneralCategory` to have no opportunity inside a run of
+these scripts, which is what rule LB1 itself falls back to (a caller with its own dictionary wants that); the other Complex_Context
+scripts (Lao, Burmese, Tai Tham, Cham and the rest) have no word list yet and always get it.
 
 `Segmenter` finds the boundaries of [UAX #29](https://www.unicode.org/reports/tr29/): `FindGraphemeBoundaries` (extended
 grapheme clusters: a letter with its accents, a Hangul syllable, an emoji sequence, a flag), `FindWordBoundaries` and
@@ -512,5 +512,4 @@ derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz cod
 Adobe's CFF engine that do the [grid fitting](#grid-fitting-hinting) are ports of FreeType's (under the FreeType Project License,
 whose text ships in the package as `FTL.TXT`, with Adobe's patent licence grant for the CFF engine; an application that redistributes
 the package has to credit the FreeType Team in its documentation), and the data tables come from the
-Unicode Character Database, the `hyph-utf8` pattern collection and ICU's Thai, Lao, Khmer and Burmese word lists (whose Lao and Burmese
-licences are BSD-style notices of their own). See [License](license.md) for the whole list.
+Unicode Character Database, the `hyph-utf8` pattern collection and ICU's Thai and Khmer word lists. See [License](license.md) for the whole list.

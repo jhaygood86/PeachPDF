@@ -6,7 +6,7 @@ using System.Text;
 namespace PeachDrawing.Text.Tests.Text.Segmentation
 {
     /// <summary>
-    /// Thai, Lao, Khmer and Burmese line breaking through a word list. A fixture writes the text with a <c>|</c> wherever a line may
+    /// Thai and Khmer line breaking through a word list. A fixture writes the text with a <c>|</c> wherever a line may
     /// end. The sentences are ordinary prose, and where a test says "Chrome" its breaks are the ones Chrome's line breaker gives for
     /// the same text (measured by laying the text out in a container of no width, which breaks at every opportunity).
     /// </summary>
@@ -44,37 +44,19 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
         [InlineData("ខ្ញុំ|ស្រលាញ់|ភាសាខ្មែរ")]
         [InlineData("កម្ពុជា|ជា|ប្រទេស|មួយ|នៅ|អាស៊ី|អាគ្នេយ៍")]
         [InlineData("អាហារ|ខ្មែរ|មាន|រសជាតិ|ឆ្ងាញ់|ណាស់")]
-        // Lao
-        [InlineData("ຂ້ອຍ|ຮັກ|ພາສາ|ລາວ")]
-        [InlineData("ປະເທດ|ລາວ|ມີ|ປະຊາຊົນ|ຫຼາຍ")]
-        [InlineData("ຂ້ອຍ|ໄປ|ໂຮງຮຽນ|ທຸກມື້")]
-        [InlineData("ອາຫານ|ລາວ|ມີ|ລົດຊາດ|ແຊບ|ຫຼາຍ")]
-        [InlineData("ພວກ|ເຮົາ|ຮັກ|ປະເທດ|ຂອງ|ພວກ|ເຮົາ")]
-        // Burmese
-        [InlineData("ကျွန်တော်|မြန်မာ|စာ|ကို|ချစ်|တယ်")]
-        [InlineData("မြန်မာနိုင်ငံ|သည်|အာ|ရှ|တိုက်|တွင်|ရှိ|သည်")]
-        [InlineData("ရန်|ကုန်|မြို့|သည်|မြန်မာနိုင်ငံ၏အကြီး|ဆုံး|မြို့|ဖြစ်သည်")]
-        [InlineData("ကျွန်ုပ်|တို့သည်|မိတ်ဆွေ|များ|ဖြစ်|ကြ|သည်")]
-        [InlineData("ဒီ|နေ့|ရာသီဥတု|ကောင်း|ပါ|တယ်")]
-        [InlineData("အင်္ဂလိပ်|ဘာသာစကား")]
-        [InlineData("ကျောင်းသား|များ")]
         public void Sentences_BreakWhereChromeBreaksThem(string expected)
         {
             Assert.Equal(expected, Render(expected.Replace("|", "")));
         }
 
         [Theory]
-        // Where the list decides and Chrome does not agree: Chrome splits a compound the list has as one word (school, each, in, the east,
-        // capital city, everyone) and, for Khmer, keeps "Cambodia" whole though the list has it as two words.
+        // Where the list decides and Chrome does not agree: Chrome splits a compound the list has as one word (school, each, in) and keeps
+        // "Cambodia" whole though the list has it as two words.
         [InlineData("ប្រទេស|កម្ពុជា|មាន|ប្រជាជន|ច្រើន")]
         [InlineData("ខ្ញុំ|ទៅ|សាលារៀន|រៀងរាល់ថ្ងៃ")]
         [InlineData("រាជធានី|ភ្នំពេញ|ជាទី|ក្រុង|ធំ|បំផុត|នៅក្នុង|ប្រទេស")]
-        [InlineData("ປະເທດ|ລາວ|ຕັ້ງ|ຢູ່ໃນ|ເອເຊຍ|ຕາເວັນອອກ|ສຽງ|ໃຕ້")]
-        [InlineData("ສະບາຍດີ|ທຸກຄົນ")]
         [InlineData("ធ្វើការ")]
         [InlineData("ក្រុមហ៊ុន")]
-        [InlineData("ນະຄອນຫຼວງວຽງຈັນ|ເປັນ|ເມືອງຫຼວງ|ຂອງ|ປະເທດ|ລາວ")]
-        [InlineData("ຂ້ອຍ|ຮັກ|ພາສາ|ລາວ|ນະຄອນຫຼວງ")]
         public void WhereChromeDiffers_TheListDecides(string expected)
         {
             Assert.Equal(expected, Render(expected.Replace("|", "")));
@@ -118,14 +100,13 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
         [InlineData("ไทย123ไทย", "ไทย123ไทย")]
         [InlineData("ภาษา.ไทย", "ภาษา.ไทย")]
         [InlineData("(ภาษาไทย)", "(ภาษา|ไทย)")]
-        [InlineData("ภาษา​ภาษาไทย", "ภาษา​|ภาษา|ไทย")]
+        [InlineData("ภาษา\u200Bภาษาไทย", "ภาษา\u200B|ภาษา|ไทย")]
         [InlineData("ภาษา ไทยภาษาไทย", "ภาษา |ไทย|ภาษา|ไทย")]
         [InlineData("ภาษา-ไทยภาษาไทย", "ภาษา-|ไทย|ภาษา|ไทย")]
         [InlineData("ไทย๑๒๓ภาษา", "ไทย๑๒๓ภาษา")]
         [InlineData("ๆภาษา", "ๆ|ภาษา")]
         [InlineData("ก็ตาม", "ก็ตาม")]
-        [InlineData("ខ្ញុំ​ស្រលាញ់ភាសាខ្មែរ", "ខ្ញុំ​|ស្រលាញ់|ភាសាខ្មែរ")]
-        [InlineData("ສະບາຍດີ ທຸກຄົນ", "ສະບາຍດີ |ທຸກຄົນ")]
+        [InlineData("ខ្ញុំ\u200Bស្រលាញ់ភាសាខ្មែរ", "ខ្ញុំ\u200B|ស្រលាញ់|ភាសាខ្មែរ")]
         public void TextAroundARun_IsBrokenAsTheAlgorithmBreaksIt(string text, string expected)
         {
             Assert.Equal(expected, Render(text));
@@ -135,23 +116,23 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
         public void AJoiner_DoesNotTakePartInMatching_AndNoWordStartsRightAfterOne()
         {
             // Chrome keeps these whole.
-            Assert.Equal("ภาษา‌ไทย", Render("ภาษา‌ไทย"));
-            Assert.Equal("ภาษา‍ไทย", Render("ภาษา‍ไทย"));
+            Assert.Equal("ภาษา\u200Cไทย", Render("ภาษา\u200Cไทย"));
+            Assert.Equal("ภาษา\u200Dไทย", Render("ภาษา\u200Dไทย"));
 
             // A word the list has is found through a joiner inside it, and the words after it are still found.
-            Assert.Equal("ភា‌សា|ខ្ញុំ", Render("ភា‌សាខ្ញុំ"));
-            Assert.Equal("ខ្ញុំ‌ស្រលាញ់|ភាសា", Render("ខ្ញុំ‌ស្រលាញ់ភាសា"));
+            Assert.Equal("ភា\u200Cសា|ខ្ញុំ", Render("ភា\u200Cសាខ្ញុំ"));
+            Assert.Equal("ខ្ញុំ\u200Cស្រលាញ់|ភាសា", Render("ខ្ញុំ\u200Cស្រលាញ់ភាសា"));
         }
 
         [Fact]
         public void UnassignedAndLoneCharactersOfTheBlock_BreakNothing()
         {
             // U+0E3B is unassigned: it ends a run, and the letters next to it keep their LB1 class (a letter).
-            Assert.Equal("ภาษา฻ไทย", Render("ภาษา฻ไทย"));
+            Assert.Equal("ภาษา\u0E3Bไทย", Render("ภาษา\u0E3Bไทย"));
 
             // A lone mark, or a mark after a space, is a letter in rule LB10 and starts no word.
-            Assert.Equal("ั", Render("ั"));
-            Assert.Equal("ก |ัก", Render("ก ัก"));
+            Assert.Equal("\u0E31", Render("\u0E31"));
+            Assert.Equal("\u0E01 |\u0E31\u0E01", Render("\u0E01 \u0E31\u0E01"));
         }
 
         [Fact]
@@ -173,8 +154,6 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
         [Theory]
         [InlineData("ฉันรักภาษาไทย")]
         [InlineData("ខ្ញុំស្រលាញ់ភាសាខ្មែរ")]
-        [InlineData("ຂ້ອຍຮັກພາສາລາວ")]
-        [InlineData("ကျွန်တော်မြန်မာစာကိုချစ်တယ်")]
         public void GeneralCategory_GivesNoOpportunityInsideARun(string text)
         {
             Assert.Equal(text, Render(text, new LineBreakOptions { ComplexContext = ComplexContextBreaking.GeneralCategory }));
@@ -232,21 +211,21 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
             Assert.Equal(LineBreakOpportunity.Allowed, opportunities[11]);
         }
 
-        [Fact]
-        public void OtherComplexContextScripts_KeepTheFallbackOfLb1()
+        [Theory]
+        [InlineData("ᨠᨡᨢᨣᨤ")]                                                 // Tai Tham
+        [InlineData("ຂ້ອຍຮັກພາສາລາວ")]                                      // Lao
+        [InlineData("ကျွန်တော်မြန်မာစာကိုချစ်တယ်")]                            // Burmese
+        public void OtherComplexContextScripts_KeepTheFallbackOfLb1(string text)
         {
-            // Tai Tham (U+1A20..) has no word list: a run of it has no opportunity inside.
-            var taiTham = "ᨠᨡᨢᨣᨤ";
-            Assert.Equal(taiTham, Render(taiTham));
+            // These have no word list: a run of one has no opportunity inside.
+            Assert.Equal(text, Render(text));
         }
 
         // ---- the parts ---------------------------------------------------------------------------------------------------------------
 
         [Theory]
         [InlineData("Thai", 26383, 20)]
-        [InlineData("Lao", 30550, 32)]
         [InlineData("Khmer", 81025, 19)]
-        [InlineData("Burmese", 41120, 33)]
         public void EachListLoads_SortedAndComplete(string scriptName, int count, int longest)
         {
             var dictionary = WordDictionary.For(Enum.Parse<ComplexScript>(scriptName));
@@ -307,9 +286,9 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
             Assert.Null(WordDictionary.For(ComplexScript.None));
             Assert.Equal(ComplexScript.None, DictionarySegmenter.ScriptOf('a'));
             Assert.Equal(ComplexScript.Thai, DictionarySegmenter.ScriptOf(0x0E01));
-            Assert.Equal(ComplexScript.Lao, DictionarySegmenter.ScriptOf(0x0E81));
+            Assert.Equal(ComplexScript.None, DictionarySegmenter.ScriptOf(0x0E81));      // Lao and Burmese have no list yet
             Assert.Equal(ComplexScript.Khmer, DictionarySegmenter.ScriptOf(0x1780));
-            Assert.Equal(ComplexScript.Burmese, DictionarySegmenter.ScriptOf(0x1000));
+            Assert.Equal(ComplexScript.None, DictionarySegmenter.ScriptOf(0x1000));
         }
 
         [Fact]
@@ -340,7 +319,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
                 total += stream.Length;
             }
 
-            Assert.InRange(total, 400_000, 600_000);
+            Assert.InRange(total, 250_000, 320_000);
         }
 
         [Fact]
@@ -379,7 +358,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
 
         // ---- hostile input -----------------------------------------------------------------------------------------------------------
 
-        private static readonly (int First, int Last)[] Blocks = [(0x0E00, 0x0E7F), (0x0E80, 0x0EFF), (0x1780, 0x17FF), (0x1000, 0x109F)];
+        private static readonly (int First, int Last)[] Blocks = [(0x0E00, 0x0E7F), (0x1780, 0x17FF)];
 
         private static string RandomText(Random random, int length, (int First, int Last) block)
         {
@@ -431,30 +410,15 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
 
         private static string Escape(string text) => string.Concat(text.Select(c => "\\u" + ((int)c).ToString("X4")));
 
-        /// <summary>Thai and Lao leading vowels, the Khmer coeng and the Burmese virama: what a break must never follow.</summary>
-        private static bool IsLeading(char c) => c is >= 'เ' and <= 'ไ' or >= 'ເ' and <= 'ໄ' or '្' or '္';
+        /// <summary>The Thai leading vowels and the Khmer coeng: what a break must never follow.</summary>
+        private static bool IsLeading(char c) => c is >= '\u0E40' and <= '\u0E44' or '\u17D2';
 
-        /// <summary>The marks and dependent vowels of the four scripts (the categories Mn and Mc), and the letters that only follow one.</summary>
+        /// <summary>The marks and dependent vowels of the two scripts (the categories Mn and Mc), and the letters that only follow one.</summary>
         private static bool IsDependent(char c)
         {
             var category = char.GetUnicodeCategory(c);
             return category is System.Globalization.UnicodeCategory.NonSpacingMark or System.Globalization.UnicodeCategory.SpacingCombiningMark
-                || c is 'ะ' or 'า' or 'ำ' or 'ๅ' or 'ະ' or 'າ' or 'ຳ';
-        }
-
-        [Fact]
-        public void ABurmeseConsonantWithAnAsat_ClosesTheSyllableBeforeIt()
-        {
-            // "ကျွန်" is a consonant, a medial, a vowel sign, a consonant with an asat: the final consonant is never a syllable's start.
-            var text = "ကျွန်တော်";
-            var opportunities = LineBreaker.FindOpportunities(text);
-            for (int i = 1; i < text.Length; i++)
-            {
-                if (text[i] is 'န' or 'တ' && i + 1 < text.Length && text[i + 1] == '်')
-                {
-                    Assert.Equal(LineBreakOpportunity.Prohibited, opportunities[i]);
-                }
-            }
+                || c is '\u0E30' or '\u0E32' or '\u0E33' or '\u0E45';
         }
 
         [Fact]
@@ -487,7 +451,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
         public void AHugeRunOfMarksWithNoBoundary_IsBrokenNowhere()
         {
             // One consonant and a hundred thousand vowel signs and tone marks: a single cluster far longer than a chunk.
-            var text = "ก" + new string('่', 100_000) + "ก";
+            var text = "ก" + new string('\u0E48', 100_000) + "ก";
             var stopwatch = Stopwatch.StartNew();
             var opportunities = LineBreaker.FindOpportunities(text);
 
@@ -510,7 +474,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
         [Fact]
         public void ManyThreads_GetTheSameBreaks()
         {
-            var texts = new[] { "ฉันรักภาษาไทย", "ខ្ញុំស្រលាញ់ភាសាខ្មែរ", "ຂ້ອຍຮັກພາສາລາວ", "ကျွန်တော်မြန်မာစာကိုချစ်တယ်" };
+            var texts = new[] { "ฉันรักภาษาไทย", "ខ្ញុំស្រលាញ់ភាសាខ្មែរ" };
             var expected = texts.Select(t => Render(t)).ToArray();
 
             var failures = new System.Collections.Concurrent.ConcurrentBag<string>();

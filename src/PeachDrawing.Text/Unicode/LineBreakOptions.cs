@@ -65,10 +65,10 @@ namespace PeachDrawing.Text.Unicode
     public enum ComplexContextBreaking
     {
         /// <summary>
-        /// A line may end between the words of Thai, Lao, Khmer and Burmese text, found in a word list the library carries and never
+        /// A line may end between the words of Thai and Khmer text, found in a word list the library carries and never
         /// inside a syllable, as browsers do. The lists load the first time text of the script is analysed. Text in other
-        /// Complex_Context scripts, such as Tai Tham, is resolved by <see cref="GeneralCategory"/>, as is text in one of these four when
-        /// its word list cannot be read.
+        /// Complex_Context scripts, such as Lao, Burmese and Tai Tham, is resolved by <see cref="GeneralCategory"/>, as is text in Thai or
+        /// Khmer when its word list cannot be read.
         /// </summary>
         Dictionary = 0,
 
@@ -103,7 +103,7 @@ namespace PeachDrawing.Text.Unicode
         public string? Language { get; init; }
 
         /// <summary>
-        /// How text in the Complex_Context class (Thai, Lao, Khmer and Burmese, which write no spaces between words) is broken. The
+        /// How text in the Complex_Context class (Thai and Khmer, which write no spaces between words, have a word list) is broken. The
         /// default finds the words in a dictionary and allows a line to end between them; the language of the text is not read, the
         /// script is. <see cref="ComplexContextBreaking.GeneralCategory"/> gives no opportunity inside a run of one script.
         /// <see cref="WordBreak"/> and <see cref="Strictness"/> apply on top of either choice.

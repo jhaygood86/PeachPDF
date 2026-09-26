@@ -101,9 +101,6 @@
     <None Include="..\..\assets\fonts\NotoSansThaiSubset.ttf" Link="NotoSansThaiSubset.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="..\..\assets\fonts\NotoSansLaoSubset.ttf" Link="NotoSansLaoSubset.ttf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
 
   <!--

@@ -9,9 +9,7 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
     {
         None = 0,
         Thai,
-        Lao,
         Khmer,
-        Burmese,
     }
 
     /// <summary>
@@ -31,9 +29,7 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
         private const int MaxWordLength = 255;
 
         private static readonly Lazy<WordDictionary?> Thai = new(() => Load("thai"));
-        private static readonly Lazy<WordDictionary?> Lao = new(() => Load("lao"));
         private static readonly Lazy<WordDictionary?> Khmer = new(() => Load("khmer"));
-        private static readonly Lazy<WordDictionary?> Burmese = new(() => Load("burmese"));
 
         private readonly char[] _characters;
         private readonly int[] _starts;
@@ -55,9 +51,7 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
         internal static WordDictionary? For(ComplexScript script) => script switch
         {
             ComplexScript.Thai => Thai.Value,
-            ComplexScript.Lao => Lao.Value,
             ComplexScript.Khmer => Khmer.Value,
-            ComplexScript.Burmese => Burmese.Value,
             _ => null,
         };
 
