@@ -536,6 +536,12 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private int _lastEmittedSlot = -1;
 
+        /// <summary>
+        /// The last slot emitted so far, or -1 before the first: a box placed after it lands where nothing is
+        /// frozen yet, so there is nothing to re-open for it.
+        /// </summary>
+        internal int LastEmittedSlot => _lastEmittedSlot;
+
 #if DEBUG
         /// <summary>
         /// Diagnostic-only invariant check for issue
@@ -1535,8 +1541,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal bool HoldsFragmentsFor(CssBox box) => _frozen.Contains(box);
 
         /// <summary>
-        /// Drops every frozen slot from <paramref name="fromSlot"/> on, so it is emitted again once layout
-        /// has settled.
+        /// Drops every frozen slot from <paramref name="fromSlot"/> on (through <paramref name="throughSlot"/>
+        /// when one is given), so it is emitted again once layout has settled.
         /// </summary>
         /// <remarks>
         /// The one thing per-pass emission cannot assume away: §4.3's retroactive movers are bounded within
@@ -1549,7 +1555,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// itself filling or anything after it, since those are not frozen yet, so ordinary forward layout
         /// never re-emits anything.
         /// </remarks>
-        internal void InvalidateFrom(int fromSlot, CssBox relocatedBox)
+        /// <param name="fromSlot">the first slot to re-open</param>
+        /// <param name="relocatedBox">the box whose geometry changed there</param>
+        /// <param name="throughSlot">
+        /// the last slot to re-open, when the change is confined to known slots rather than moving
+        /// everything after it. <c>null</c> re-opens every emitted slot from <paramref name="fromSlot"/> on.
+        /// </param>
+        internal void InvalidateFrom(int fromSlot, CssBox relocatedBox, int? throughSlot = null)
         {
             // Deliberately after the early return, not before it: this method is reached on every
             // block-axis reposition of a box that holds fragments, which during a pass is constant, and
@@ -1569,7 +1581,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             // suffix-minimum over one scope's own reopenings answers this without enumerating boxes.
             HistoryFor(ScopeOwnerOf(relocatedBox)).Record(fromSlot);
 
-            for (var slot = fromSlot; slot <= _lastEmittedSlot; slot++)
+            var lastSlot = Math.Min(_lastEmittedSlot, throughSlot ?? _lastEmittedSlot);
+            for (var slot = fromSlot; slot <= lastSlot; slot++)
             {
 #if DEBUG
                 // Release this slot's claims the moment it is un-frozen, not only when (and if) something

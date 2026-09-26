@@ -772,6 +772,37 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("2", LayoutHarness.FindById(root, "ref")!.Boxes.First(b => b.IsAfterPseudoElement).Text);
         }
 
+        // Counters follow the document tree whatever the positioning (CSS Lists 3 §4), so an out-of-flow item
+        // just before the element still counts, including one that is its parent's first child.
+        [Theory]
+        [InlineData("position:absolute")]
+        [InlineData("float:left")]
+        [InlineData("position:fixed")]
+        public async Task TargetCounter_OfAContentsElement_CountsAnOutOfFlowItemBeforeIt(string css)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>body{counter-reset:n} div.item{counter-increment:n} a::after{content:target-counter(attr(href), n)}</style>" +
+                $"<div><div class='item' style='{css}'>1</div>" +
+                "<div id='w' style='display:contents'><div class='item'>2</div></div></div>" +
+                "<p><a id='ref' href='#w'></a></p>"));
+
+            Assert.Equal("1", LayoutHarness.FindById(root, "ref")!.Boxes.First(b => b.IsAfterPseudoElement).Text);
+        }
+
+        // A sibling that generates no box is no anchor: with nothing else before it, the element's counters are
+        // its parent's, as they stand after the item before that parent.
+        [Fact]
+        public async Task TargetCounter_OfAContentsElement_AfterOnlyAnUndisplayedSibling_ReadsItsParentsCounters()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>body{counter-reset:n} div.item{counter-increment:n} a::after{content:target-counter(attr(href), n)}</style>" +
+                "<div class='item'>1</div><div><div class='item' style='display:none'>x</div>" +
+                "<div id='w' style='display:contents'><div class='item'>2</div></div></div>" +
+                "<p><a id='ref' href='#w'></a></p>"));
+
+            Assert.Equal("1", LayoutHarness.FindById(root, "ref")!.Boxes.First(b => b.IsAfterPseudoElement).Text);
+        }
+
         [Fact]
         public async Task BookmarkLabel_OnAContentsHeading_UsesItsBeforeAndItsOwnText()
         {

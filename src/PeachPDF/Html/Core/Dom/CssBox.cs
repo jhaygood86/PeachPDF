@@ -2386,6 +2386,12 @@ namespace PeachPDF.Html.Core.Dom
         private int _placedByPassGeneration = -1;
 
         /// <summary>
+        /// Whether this box holds a multi-column container, with the <see cref="HtmlContainerInt.LayoutGeneration"/>
+        /// it was computed in (<see cref="HoldsAMultiColumnContainer"/>).
+        /// </summary>
+        private (int Generation, bool Value)? _holdsAMultiColumnContainer;
+
+        /// <summary>
         /// <see cref="HtmlContainerInt.PassInvalidationCount"/> as it stood when <see cref="_placedByPass"/>
         /// was stamped — what <see cref="PlacedByPassIfStillValid"/> checks the container's
         /// <see cref="Fragmentation.InvalidationHistory"/> against, scoped by this box's own recorded pass
@@ -3347,7 +3353,31 @@ namespace PeachPDF.Html.Core.Dom
 
             if (child.IsPageFloated && child.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: true } } columnContainer)
             {
-                await LayoutPageFloatInColumn(g, child, columnContainer, framePlacesChild);
+                columnContainer.NotePageFloatColumn(child);
+                await LayoutBlockChildUnbroken(g, child, columnContainer, framePlacesChild);
+                return;
+            }
+
+            if (child.Position.Value is PositionMode.Absolute
+                && child.HtmlContainer is { CurrentFragmentainer: not null } absoluteContainer
+                && !IsOrHoldsAMultiColumnContainer(child))
+            {
+                await LayoutBlockChildUnbroken(g, child, absoluteContainer, framePlacesChild);
+                return;
+            }
+
+            // A fixed or running box keeps its float value but is not a float (CSS 2.1 §9.7); an absolute
+            // one never reaches here.
+            if (child.IsFloated && !child.IsAbsolutelyPositioned && !child.IsRunningPositioned
+                && child.HtmlContainer is { CurrentFragmentainer.HasOwnBand: false } floatContainer
+                && !IsOrHoldsAMultiColumnContainer(child)
+                && !FillsTheInlineSize(child))
+            {
+                await LayoutBlockChildUnbroken(g, child, floatContainer, framePlacesChild);
+
+                // Only a float this frame placed: one an engine placed (the inline flow, a flex or grid commit)
+                // keeps the position that engine gave it, and the inline flow moves its own floats.
+                if (framePlacesChild) MoveWholeOntoTheNextPageIfItFits(child, floatContainer);
                 return;
             }
 
@@ -3363,15 +3393,184 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Lays a page float inside a column out unbroken. It sits in the strip its own reservation holds back
-        /// from the column's flow, so measured against the column's band its words would all straddle it and
-        /// break into the next column, taking the flow with them. Which column it is in is recorded first: a
-        /// detached fragmentainer no longer says.
+        /// Moves a float laid out unbroken to the top of the next page when it straddles a page boundary
+        /// but fits on one page, as <c>break-inside: avoid</c> moves a box, instead of leaving it sliced
+        /// with the line on the boundary cut in two. A float taller than a page is left sliced.
         /// </summary>
-        private async ValueTask LayoutPageFloatInColumn(RGraphics g, CssBox child, HtmlContainerInt container, bool framePlacesChild)
+        /// <remarks>
+        /// <para>
+        /// Safe at this point because a float is laid out before the in-flow content after it, which flows
+        /// around its final position, and before any later float, which CSS 2.1 §9.5.1 rule 5 keeps from
+        /// rising above it (<c>CssLayoutEngine.FloatBox</c>). The move is always forward, onto a page not yet
+        /// emitted, and the float's content is unbroken, so a translation keeps it consistent.
+        /// </para>
+        /// <para>
+        /// The decision is made on the float's static position, because a relative offset does not take part
+        /// in layout (CSS 2.1 §9.4.3), and the offset is kept. At the new page top the float is placed again,
+        /// against that page's floats and, for <c>inside</c>/<c>outside</c>, that page's side of the spread.
+        /// </para>
+        /// </remarks>
+        internal static void MoveWholeOntoTheNextPageIfItFits(CssBox box, HtmlContainerInt container)
         {
-            container.NotePageFloatColumn(child);
+            if (!container.HasRealPageGrid) return;
 
+            // Laid out again (a rewound pass), it is recorded again only if it moves again.
+            container.MovedFloats.Remove(box);
+
+            // A flex or grid item's size was fixed by its engine before its content was committed, so a float
+            // moved inside it hung out of the item and over the content after the container.
+            if (IsInsideAFlexOrGridItem(box)) return;
+
+            var top = box.StaticTop;
+            var bottom = box.StaticBottom;
+            var page = container.SlotStartingAt(top);
+            if (page < 0) return;
+
+            // The usable band, not the bare page: a footnote area or a bottom page float holds back the foot,
+            // and a top page float the head, so a float must neither end in the one nor land on the other. The
+            // float's own notes go wherever it goes, so their room is added to it on every page rather than read
+            // off whichever page they were reserved on last time (HtmlContainerInt.FootnoteRoomCalledFrom).
+            var next = page + 1;
+            var (ownOnPage, ownNotes) = container.FootnoteRoomCalledFrom(box, page);
+            var (ownOnNext, _) = container.FootnoteRoomCalledFrom(box, next);
+
+            var pageEnd = container.PageBottomOf(page) - (container.TotalBandEndReservationFor(page) - ownOnPage) - ownNotes;
+            if (bottom - HtmlContainerInt.PageBoundaryEpsilon <= pageEnd) return;
+
+            var nextTop = container.PageTopOf(next) + container.TopFloatAreaHeightsBySlot.GetValueOrDefault(next);
+            var nextEnd = container.PageBottomOf(next) - (container.TotalBandEndReservationFor(next) - ownOnNext) - ownNotes;
+            if (bottom - top > nextEnd - nextTop) return;
+
+            box.OffsetTop(nextTop - top);
+
+            var staticTop = box.StaticTop;
+            var placed = CssLayoutEngine.FloatPositionBesideTheFloatsAt(box, staticTop);
+            var shiftX = placed.X + box.RelativeOffsetX - box.Location.X;
+            if (shiftX != 0) box.OffsetLeft(shiftX);
+            if (placed.Y != staticTop) box.OffsetTop(placed.Y - staticTop);
+
+            container.MovedFloats[box] = FormattingContextRootOf(box);
+        }
+
+        /// <summary>
+        /// Whether float <paramref name="child"/> declares a width that, with its margins, fills this frame's
+        /// content box, so that no line box can sit beside it.
+        /// </summary>
+        /// <remarks>
+        /// Such a float keeps the breaking path. Laying a float out in one piece exists for the in-flow content
+        /// beside it, which a break inside the float would put back on a page already emitted; with nothing
+        /// beside it there is nothing to lose, and the breaking path breaks it cleanly between its lines, moves
+        /// an image or a <c>break-inside: avoid</c> block to the next page, repeats a table's header and honours
+        /// a forced break. The <c>width: 100%</c> float wrapper and float-based page layouts rely on that. Asked
+        /// of the declared width, since the float has not been laid out yet: a shrink-to-fit float that happens
+        /// to fill the line is still laid out in one piece.
+        /// </remarks>
+        /// <param name="child">a float among this frame's children</param>
+        private bool FillsTheInlineSize(CssBox child)
+        {
+            if (!CssValueParser.IsValidLength(child.Width)) return false;
+
+            var available = ClientRight - ClientLeft;
+            var outer = CssValueParser.ParseLength(child.Width, available, child) + child.ActualBoxSizeIncludedWidth
+                        + child.ActualMarginLeft + child.ActualMarginRight;
+
+            return outer >= available - HtmlContainerInt.PageBoundaryEpsilon;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is inside a flex or grid item: some ancestor's parent is a flex or grid
+        /// container.
+        /// </summary>
+        private static bool IsInsideAFlexOrGridItem(CssBox box)
+        {
+            for (var item = box.ParentBox; item?.ParentBox is { } parent; item = parent)
+            {
+                if (parent.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
+                    or Keywords.Grid or Keywords.InlineGrid)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The root of the block formatting context <paramref name="box"/> is placed in: its nearest ancestor
+        /// that contains its floats (<see cref="DomUtils.ContainsItsFloats"/>), a multi-column container
+        /// included (css-multicol-1 §2). The root always does, so there is one.
+        /// </summary>
+        /// <remarks>
+        /// A multi-column container counts: without it, a float inside one shared a root with a float moved to
+        /// the next page before the container, and while the columns were measured (with the fragmentainer
+        /// detached, so outside the column guard in <c>CssLayoutEngine.FloatBox</c>) it was held down to that
+        /// float's top, which inflated the measured height the columns were balanced against.
+        /// </remarks>
+        internal static CssBox FormattingContextRootOf(CssBox box)
+        {
+            var ancestor = box.ParentBox ?? box;
+            while (!DomUtils.ContainsItsFloats(ancestor)) ancestor = ancestor.ParentBox!;
+            return ancestor;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is or contains a multi-column container, whose columns engine needs
+        /// the fragmentainer that <see cref="LayoutBlockChildUnbroken"/> detaches. Laid out unbroken, its
+        /// columns lost their last lines. Such a float or absolutely positioned box keeps the breaking path.
+        /// </summary>
+        internal static bool IsOrHoldsAMultiColumnContainer(CssBox box) =>
+            box.EstablishesMultiColumnContext || HoldsAMultiColumnContainer(box);
+
+        /// <summary>
+        /// Whether <paramref name="box"/> contains a multi-column container. Kept for the layout generation
+        /// it was answered in, since every pass asks it of every float and absolutely positioned box.
+        /// </summary>
+        private static bool HoldsAMultiColumnContainer(CssBox box)
+        {
+            var generation = box.HtmlContainer?.LayoutGeneration ?? -1;
+            if (box._holdsAMultiColumnContainer is { } cached && cached.Generation == generation) return cached.Value;
+
+            var value = false;
+            foreach (var child in box.Boxes)
+            {
+                if (child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (child.EstablishesMultiColumnContext || HoldsAMultiColumnContainer(child))
+                {
+                    value = true;
+                    break;
+                }
+            }
+
+            box._holdsAMultiColumnContainer = (generation, value);
+            return value;
+        }
+
+        /// <summary>
+        /// Lays <paramref name="child"/> out as one unbroken run, with the fragmentainer detached and per-word
+        /// page breaks suppressed, for a box whose break the flow after it cannot resume from.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A page float inside a column sits in the strip its own reservation holds back from the column's
+        /// flow, so measured against the column's band its words would all straddle it and break into the
+        /// next column, taking the flow with them. Which column it is in is recorded before this is called:
+        /// a detached fragmentainer no longer says.
+        /// </para>
+        /// <para>
+        /// An absolutely positioned box is placed by its offsets, usually against a containing block on an
+        /// earlier fragmentainer than the pass that reaches it, and takes no part in placing the in-flow
+        /// boxes after it (CSS 2.1 §9.3.1). A break taken inside it would end the pass, and the next pass
+        /// resumes inside it on the following page while its in-flow siblings are placed back on the page
+        /// the break left, which is already emitted, so they were drawn on no page. Laid out whole, its
+        /// geometry runs on past the page's foot and each page shows the slice that falls in it, as a float
+        /// laid out by the inline flow does (<c>CssLayoutEngine.LayoutContentUnbroken</c>).
+        /// </para>
+        /// <para>
+        /// A block-level float is laid out here for the same reason: its break would end the pass, and the
+        /// in-flow content beside it would be placed back on the page the break left. The caller then moves
+        /// one that fits on a page whole (<see cref="MoveWholeOntoTheNextPageIfItFits"/>).
+        /// </para>
+        /// </remarks>
+        private async ValueTask LayoutBlockChildUnbroken(RGraphics g, CssBox child, HtmlContainerInt container, bool framePlacesChild)
+        {
             var detached = container.DetachFragmentainer();
             var previousSuppress = container.SuppressWordPageBreaks;
             container.SuppressWordPageBreaks = true;
@@ -7087,6 +7286,13 @@ namespace PeachPDF.Html.Core.Dom
             // The answer can be provisional here - see ResolvePositionedAutoBlockMargins.
             ResolvePositionedAutoBlockMargins();
 
+            // Its position and height are final now. Placed by its offsets, it can land on a fragmentainer
+            // this pass has already emitted, which has to be re-opened to draw it (#1349).
+            if (Position.Value is PositionMode.Absolute)
+            {
+                HtmlContainer?.InvalidateEmittedFragmentainersReceiving(this);
+            }
+
             // Named-page registration tail: block containers already registered before child layout
             // (see the early registration above the layout-engine dispatch); everything else (e.g. a
             // box that never entered the block branch) registers here, after every branch above that
@@ -7158,6 +7364,10 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         child.ResolvePositionedAutoBlockMargins(ActualHeight);
                         child.ResolveAbsolutelyPositionedDescendantAutoBlockMargins();
+
+                        // This is the box's final position, and it can be on a fragmentainer already emitted
+                        // that its provisional one, from its own epilogue, did not reach (#1349).
+                        HtmlContainer?.InvalidateEmittedFragmentainersReceiving(child);
                     }
 
                     // A positioned descendant establishes the containing block for anything below it and

@@ -173,18 +173,85 @@ namespace PeachPDF.Html.Core.Utils
 
             var index = b.ParentBox.Boxes.IndexOf(b);
             if (index <= 0) return null;
-            var diff = 1;
-            var sib = b.ParentBox.Boxes[index - diff];
-
-            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || sib.IsPageFloated || CssBox.IsOutsideMarker(sib) || sib.IsTableGridDecorationBox) && index - diff - 1 >= 0)
+            for (var i = index - 1; i >= 0; i--)
             {
-                sib = b.ParentBox.Boxes[index - ++diff];
+                var sib = b.ParentBox.Boxes[i];
+                if (!IsSteppedOverAsPreviousSibling(sib, includeFloats)) return sib;
             }
 
-            sib = sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || sib.IsPageFloated || CssBox.IsOutsideMarker(sib) || sib.IsTableGridDecorationBox ? null : sib;
+            // Everything before b was stepped over. When one of those boxes is an absolutely positioned box
+            // that is or holds a multi-column container, an absolutely positioned first child is still
+            // returned, as it always was before #1349: see IsAPrecedingBreakingAbsoluteBox.
+            var first = b.ParentBox.Boxes[0];
+            if (first.Position.Value is not PositionMode.Absolute || !WasReturnedAtTheWalksEnd(first, includeFloats)) return null;
 
-            return sib;
+            for (var i = 0; i < index; i++)
+            {
+                if (IsAPrecedingBreakingAbsoluteBox(b.ParentBox.Boxes[i])) return first;
+            }
+
+            return null;
         }
+
+        /// <summary>
+        /// Whether the walk's end check before #1349 returned <paramref name="first"/>, an absolutely positioned
+        /// first child: everything it stepped over except <c>position: absolute</c> still left the first child
+        /// out, so an undisplayed, floated (unless floats were asked for), page-floated, marker or table-grid
+        /// decoration box was not returned. Kept exactly, so the multi-column case keeps that placement.
+        /// </summary>
+        private static bool WasReturnedAtTheWalksEnd(CssBox first, bool includeFloats) =>
+            first.DerivedStyle.ActualDisplay != Keywords.None
+            && (includeFloats || !first.IsFloated)
+            && !first.IsPageFloated
+            && !CssBox.IsOutsideMarker(first)
+            && !first.IsTableGridDecorationBox;
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is an absolutely positioned box that is or holds a multi-column
+        /// container. When one precedes a box with nothing but stepped-over boxes before it,
+        /// <see cref="GetPreviousSibling"/> still returns an absolutely positioned first child, whether or not
+        /// that first child is this box.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Such a box keeps the breaking path (<see cref="CssBox.IsOrHoldsAMultiColumnContainer"/>), so a
+        /// break inside it ends the layout pass, and the next pass resumes inside it on the following page.
+        /// The content after it, placed at its parent's top where CSS 2.1 §9.3.1 puts it, then landed on the
+        /// page that pass had already emitted and was drawn on no page. Re-opening that page drew a short
+        /// following block but no pass paginates content there: a following multi-column block lost its
+        /// first page, and a following paragraph was sliced across the page margin. Placing the content
+        /// below the box for every such box moved it backwards when the box sat on an earlier page.
+        /// </para>
+        /// <para>
+        /// So wherever such a box is involved the placement stays exactly what it was on <c>main</c>, where the
+        /// walk's end returned any absolutely positioned first child: the content after it is laid out below
+        /// that first child, on the page the pass continues on. Checking only whether the first child itself
+        /// held columns missed a plain absolute box followed by a multi-column one, and the content after
+        /// both was lost again. The position still differs from §9.3.1 (#1377).
+        /// </para>
+        /// </remarks>
+        private static bool IsAPrecedingBreakingAbsoluteBox(CssBox box) =>
+            box.Position.Value is PositionMode.Absolute
+            && box.DerivedStyle.ActualDisplay != Keywords.None
+            && CssBox.IsOrHoldsAMultiColumnContainer(box);
+
+        /// <summary>
+        /// Whether <see cref="GetPreviousSibling"/> steps over <paramref name="sib"/>: a box that takes no
+        /// part in placing its following sibling.
+        /// </summary>
+        /// <remarks>
+        /// One predicate for both the walk and its end. The two used to be separate conditions, and the
+        /// end's omitted <c>position: absolute</c>: an absolutely positioned first child was returned as
+        /// the previous sibling of the box after it, which was then placed below the absolutely
+        /// positioned box rather than at the top of its parent (#1349).
+        /// </remarks>
+        private static bool IsSteppedOverAsPreviousSibling(CssBox sib, bool includeFloats) =>
+            sib.DerivedStyle.ActualDisplay == Keywords.None
+            || sib.Position.Value is PositionMode.Absolute or PositionMode.Fixed or PositionMode.Running
+            || (!includeFloats && sib.IsFloated)
+            || sib.IsPageFloated
+            || CssBox.IsOutsideMarker(sib)
+            || sib.IsTableGridDecorationBox;
 
         /// <summary>
         /// Collects the maximal run of preceding in-flow siblings chained to <paramref name="box"/> by
@@ -614,12 +681,36 @@ namespace PeachPDF.Html.Core.Utils
             {
                 if (child.ParentBox is null || child.DerivedStyle.ActualDisplay == Keywords.None) continue;
 
-                return GetPreviousSibling(child) ?? child.ParentBox;
+                return PreviousSiblingInDocumentOrder(child) ?? child.ParentBox;
             }
 
             var parent = box.ParentBox;
             while (parent is { IsDisplayContentsShell: true }) parent = parent.ParentBox;
             return parent ?? box;
+        }
+
+        /// <summary>
+        /// The sibling just before <paramref name="box"/> in document order that generates a box, whatever its
+        /// positioning: counters follow the document tree (CSS Lists 3 §4), so an absolutely positioned, fixed
+        /// or floated sibling's <c>counter-increment</c> is in effect after it all the same.
+        /// </summary>
+        /// <remarks>
+        /// Not <see cref="GetPreviousSibling"/>, which answers a layout question (which box places this one)
+        /// and so steps over every out-of-flow box.
+        /// </remarks>
+        private static CssBox? PreviousSiblingInDocumentOrder(CssBox box)
+        {
+            var siblings = box.ParentBox!.Boxes;
+            for (var i = siblings.IndexOf(box) - 1; i >= 0; i--)
+            {
+                var sibling = siblings[i];
+                if (sibling.DerivedStyle.ActualDisplay == Keywords.None || CssBox.IsOutsideMarker(sibling)
+                    || sibling.IsTableGridDecorationBox) continue;
+
+                return sibling;
+            }
+
+            return null;
         }
 
         private static CssBox? FirstLaidOut(IReadOnlyList<CssBox> children)

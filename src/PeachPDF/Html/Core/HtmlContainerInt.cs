@@ -187,6 +187,16 @@ namespace PeachPDF.Html.Core
         internal Dictionary<CssBox, double> PageFloatPlacements { get; private set; } = [];
 
         /// <summary>
+        /// The floats moved whole to the next page in this layout attempt, with the root of the block
+        /// formatting context each is placed in. A later float in the same context may not rise above one
+        /// (CSS 2.1 §9.5.1 rule 5), even when it is not the moved float's sibling: a float inside an earlier
+        /// block moved to page 2 while a later float beside that block stayed on page 1. The position is read
+        /// from the float when it is compared, not stored, so a mover that shifts it afterwards cannot leave a
+        /// stale one behind.
+        /// </summary>
+        internal Dictionary<CssBox, CssBox> MovedFloats { get; } = [];
+
+        /// <summary>
         /// The room a <c>float-reference: column</c> page float pinned to a column's block-start edge
         /// needs in that column, as resolved on the previous attempt - the column-scoped counterpart of
         /// <see cref="TopFloatAreaHeightsBySlot"/>, seeded into that column's own
@@ -254,6 +264,57 @@ namespace PeachPDF.Html.Core
         /// </summary>
         internal double TotalBandEndReservationFor(int slot) =>
             FootnoteAreaHeightsBySlot.GetValueOrDefault(slot) + BottomFloatAreaHeightsBySlot.GetValueOrDefault(slot);
+
+        /// <summary>
+        /// The page-area room that footnotes called from inside <paramref name="box"/> took on
+        /// <paramref name="slot"/> in the previous layout attempt, and on every slot together.
+        /// </summary>
+        /// <remarks>
+        /// For a box laid out in one piece and then moved whole (a float,
+        /// <c>CssBox.MoveWholeOntoTheNextPageIfItFits</c>): its notes go wherever it goes, so whether it fits on a
+        /// page is asked with its own notes' room added to it and taken out of what that page already reserves.
+        /// Read off the page's reservation as it stands, the answer flipped between attempts: the notes reserved
+        /// room on page k, the box no longer fit there and moved, its notes followed, page k was free again and
+        /// the box moved back. The loop stopped at its cap in whichever state it had reached, with in-flow
+        /// content pushed off page k by a reservation nothing used.
+        /// A note area holding only this box's notes counts whole, divider included; one shared with other
+        /// calls counts only these bodies. Column note areas never reserve page room and are not counted.
+        /// </remarks>
+        /// <param name="box">the box whose own footnote calls are counted</param>
+        /// <param name="slot">the slot to report separately</param>
+        /// <returns>the room on <paramref name="slot"/>, and the room on every slot</returns>
+        internal (double OnSlot, double Total) FootnoteRoomCalledFrom(CssBox box, int slot)
+        {
+            if (_footnoteAreasBySlot.Count == 0) return (0, 0);
+
+            double onSlot = 0, total = 0;
+            foreach (var (areaSlot, areas) in _footnoteAreasBySlot)
+            {
+                foreach (var area in areas)
+                {
+                    if (area.Column is not null) continue;
+
+                    double own = 0;
+                    var ownCalls = 0;
+                    foreach (var call in area.Calls)
+                    {
+                        if (!DomUtils.IsSelfOrDescendantOf(call, box)) continue;
+
+                        var body = call.Body;
+                        own += body.ActualBottom + body.ActualMarginBottom - (body.Location.Y - body.ActualMarginTop);
+                        ownCalls++;
+                    }
+
+                    if (ownCalls == 0) continue;
+
+                    var room = ownCalls == area.Calls.Count ? area.TotalHeight : own;
+                    total += room;
+                    if (areaSlot == slot) onSlot += room;
+                }
+            }
+
+            return (onSlot, total);
+        }
 
         /// <summary>
         /// Lazily-built id -&gt; box index backing <see cref="GetBoxById(CssBox, string)"/>
@@ -2383,6 +2444,7 @@ namespace PeachPDF.Html.Core
         private async ValueTask LayoutDocument(RGraphics g)
         {
             LayoutGeneration++;
+            MovedFloats.Clear();
             FragmentainerPasses = 0;
             LastResortRelayouts = 0;
             PassRewinds = 0;
@@ -3054,6 +3116,52 @@ namespace PeachPDF.Html.Core
             if (box.IsInDetachedRepeatingGroup) return;
 
             _emitter.InvalidateFrom(PageIndexOf(documentY), box);
+        }
+
+        /// <summary>
+        /// Un-freezes the already-emitted fragmentainers an absolutely positioned <paramref name="box"/>
+        /// has just been laid out into, so they are emitted again with the box in them. Called once the box
+        /// has its final position and height; a no-op for every box that lands where layout has not yet
+        /// emitted anything, which is every placement in forward layout.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="InvalidateEmittedFragmentsFor"/> covers a box that already holds fragments and moves.
+        /// An absolutely positioned box can instead land behind the pass that places it without ever having
+        /// been emitted: its containing block is laid out on an earlier fragmentainer than the box itself,
+        /// most often the initial containing block on the first page (CSS 2.1 §10.1), while the box is
+        /// reached in the tree on a later pass. Nothing re-opened that fragmentainer, so the box was drawn
+        /// on no page (#1349).
+        /// </para>
+        /// <para>
+        /// Only the fragmentainers the box's border box reaches are re-opened, not everything after them:
+        /// the box is out of flow, so nothing else moved. A box a frozen fragmentainer already holds is
+        /// left to <see cref="InvalidateEmittedFragmentsFor"/>, and one entirely above the first page (a
+        /// skip link at <c>top: -9999px</c>) has nowhere to be drawn. Without those limits a document with
+        /// one badge per paragraph re-emitted every page for each badge on every pass, more than doubling
+        /// its layout time.
+        /// </para>
+        /// </remarks>
+        internal void InvalidateEmittedFragmentainersReceiving(CssBox box)
+        {
+            if (_emitter is null || !HasRealPageGrid) return;
+            if (box.IsInDetachedRepeatingGroup || _emitter.HoldsFragmentsFor(box)) return;
+            if (box.ActualBottom <= 0) return;
+
+            var first = Math.Max(SlotStartingAt(Math.Max(box.Location.Y, 0)), 0);
+
+            // Forward layout, which is every ordinary placement: nothing from the box's top on is frozen yet.
+            // Asked before the subtree walk below, since content that overflows the box cannot start above it.
+            if (first > _emitter.LastEmittedSlot) return;
+
+            // Content that overflows the box (overflow: visible) is drawn past its border box, on pages the
+            // border box does not reach; those have to be re-opened too, or the overflowing lines are lost.
+            var bottom = box.Overflow.Value == PeachPDF.CSS.Overflow.Visible
+                ? CssBox.GetMaximumBottom(box, box.ActualBottom)
+                : box.ActualBottom;
+            var last = SlotEndingAt(Math.Max(bottom, PageBoundaryEpsilon));
+
+            _emitter.InvalidateFrom(first, box, throughSlot: Math.Max(last, first));
         }
 
         /// <summary>
