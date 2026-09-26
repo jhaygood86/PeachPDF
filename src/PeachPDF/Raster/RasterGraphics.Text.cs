@@ -129,14 +129,16 @@ internal sealed partial class RasterGraphics
         double X(OutlinePoint p) => x + p.X * scale + skew * p.Y * scale;
         double Y(OutlinePoint p) => y - p.Y * scale;
 
-        foreach (var contour in outline.Contours)
+        for (var ci1 = 0; ci1 < outline.Contours.Count; ci1++)
         {
+            OutlineContour contour = outline.Contours[ci1];
             var cx = X(contour.Start);
             var cy = Y(contour.Start);
             target.MoveTo(cx, cy);
 
-            foreach (var segment in contour.Segments)
+            for (var si2 = 0; si2 < contour.Segments.Count; si2++)
             {
+                OutlineSegment segment = contour.Segments[si2];
                 var ex = X(segment.End);
                 var ey = Y(segment.End);
                 if (segment.IsCubic)

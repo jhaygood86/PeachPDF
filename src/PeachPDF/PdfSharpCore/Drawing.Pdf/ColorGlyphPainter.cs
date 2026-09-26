@@ -316,8 +316,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             if (_typeface.TryGetColorLayers((ushort)glyphId, out var layers))
             {
-                foreach (ColorLayer layer in layers)
-                    FillGlyphOutline(layer.GlyphId, placement, ResolveColor(layer.PaletteIndex));
+                for (int i = 0; i < layers.Count; i++)
+                    FillGlyphOutline(layers[i].GlyphId, placement, ResolveColor(layers[i].PaletteIndex));
                 return;
             }
 
@@ -344,19 +344,25 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         private static XGraphicsPath BuildPath(GlyphOutline outline, Affine2x3 transform)
         {
             int pointCount = outline.Contours.Count;
-            foreach (OutlineContour contour in outline.Contours)
+            for (var ci1 = 0; ci1 < outline.Contours.Count; ci1++)
             {
-                foreach (OutlineSegment segment in contour.Segments)
+                OutlineContour contour = outline.Contours[ci1];
+                for (var si2 = 0; si2 < contour.Segments.Count; si2++)
+                {
+                    OutlineSegment segment = contour.Segments[si2];
                     pointCount += segment.IsCubic ? 3 : 1;
+                }
             }
 
             var path = new XGraphicsPath(pointCount) { FillMode = XFillMode.Winding };
 
-            foreach (OutlineContour contour in outline.Contours)
+            for (var ci3 = 0; ci3 < outline.Contours.Count; ci3++)
             {
+                OutlineContour contour = outline.Contours[ci3];
                 XPoint current = Map(transform, contour.Start.X, contour.Start.Y);
-                foreach (OutlineSegment segment in contour.Segments)
+                for (var si4 = 0; si4 < contour.Segments.Count; si4++)
                 {
+                    OutlineSegment segment = contour.Segments[si4];
                     XPoint end = Map(transform, segment.End.X, segment.End.Y);
                     if (segment.IsCubic)
                     {

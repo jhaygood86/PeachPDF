@@ -113,19 +113,21 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                || (_v1BaseGlyphPaintOffsets?.ContainsKey(glyphId) ?? false);
 
         /// <summary>Resolves a v0 base glyph's ordered (layer glyph, palette entry) layers.</summary>
-        public bool TryGetV0Layers(int glyphId, out List<(int LayerGlyphId, int PaletteIndex)> layers)
+        public bool TryGetV0Layers(int glyphId, out ColorLayer[] layers)
         {
             layers = null!;
             if (!_baseGlyphRecords.TryGetValue(glyphId, out var record) || record.Count <= 0)
                 return false;
 
-            layers = new List<(int, int)>(record.Count);
+            var found = new List<ColorLayer>(record.Count);
             for (int i = 0; i < record.Count; i++)
             {
                 int index = record.First + i;
                 if (index >= 0 && index < _layerRecords.Length)
-                    layers.Add(_layerRecords[index]);
+                    found.Add(new ColorLayer(_layerRecords[index].Gid, _layerRecords[index].PaletteIndex));
             }
+
+            layers = found.ToArray();
             return true;
         }
 

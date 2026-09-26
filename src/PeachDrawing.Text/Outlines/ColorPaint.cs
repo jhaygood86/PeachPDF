@@ -32,7 +32,9 @@ namespace PeachDrawing.Text.Outlines
         public ColorExtend Extend { get; internal init; }
 
         /// <summary>The colour stops, in order of offset.</summary>
-        public IReadOnlyList<ColorStop> Stops => StopList;
+        public IReadOnlyList<ColorStop> Stops => _readOnlyStops ??= StopList.AsReadOnly();
+
+        private IReadOnlyList<ColorStop>? _readOnlyStops;
 
         internal List<ColorStop> StopList { get; } = [];
     }
@@ -67,7 +69,16 @@ namespace PeachDrawing.Text.Outlines
     /// names its paint formats.
     /// </summary>
     /// <remarks>
-    /// Variable paints are read at the default instance of the font, since variation deltas are not applied.
+    /// <para>
+    /// The translate, scale, rotate and skew formats, variable ones included, all arrive as a <see cref="PaintTransform"/> with
+    /// the matrix worked out, and a format this library does not know arrives as no node at all. Variable paints are read at the
+    /// default instance of the font, since variation deltas are not applied.
+    /// </para>
+    /// <para>
+    /// The nodes are shared with every other reader of the font and must be treated as read-only. Nodes can be shared within a
+    /// graph and, in a malformed font, can refer back to themselves through <see cref="PaintColrGlyph"/> and
+    /// <see cref="PaintColrLayers"/>, so a walk has to bound its depth and its work.
+    /// </para>
     /// </remarks>
     public abstract class ColorPaint
     {
@@ -126,7 +137,7 @@ namespace PeachDrawing.Text.Outlines
         /// <summary>The y coordinate of the end point.</summary>
         public double Y1 { get; internal init; }
 
-        /// <summary>The x coordinate of the rotation point, which fixes the direction the gradient's lines run in.</summary>
+        /// <summary>The x coordinate of the rotation point: lines of equal colour run parallel to the line from the start point to this one.</summary>
         public double X2 { get; internal init; }
 
         /// <summary>The y coordinate of the rotation point.</summary>

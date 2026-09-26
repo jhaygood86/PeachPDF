@@ -304,11 +304,13 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 if (p.Y > maxY) maxY = p.Y;
             }
 
-            foreach (OutlineContour contour in outline.Contours)
+            for (var ci1 = 0; ci1 < outline.Contours.Count; ci1++)
             {
+                OutlineContour contour = outline.Contours[ci1];
                 Include(contour.Start.X, contour.Start.Y);
-                foreach (OutlineSegment s in contour.Segments)
+                for (var si2 = 0; si2 < contour.Segments.Count; si2++)
                 {
+                    OutlineSegment s = contour.Segments[si2];
                     Include(s.End.X, s.End.Y);
                     if (s.IsCubic)
                     {

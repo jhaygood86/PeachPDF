@@ -64,12 +64,14 @@ namespace PeachPDF.Adapters
                     double glyphX = penX + glyph.XOffset * scale;
                     double glyphY = baseY - glyph.YOffset * scale;
 
-                    foreach (OutlineContour contour in outline.Contours)
+                    for (var ci1 = 0; ci1 < outline.Contours.Count; ci1++)
                     {
+                        OutlineContour contour = outline.Contours[ci1];
                         path.AddMove(glyphX + contour.Start.X * scale, glyphY - contour.Start.Y * scale);
 
-                        foreach (OutlineSegment segment in contour.Segments)
+                        for (var si2 = 0; si2 < contour.Segments.Count; si2++)
                         {
+                            OutlineSegment segment = contour.Segments[si2];
                             if (segment.IsCubic)
                             {
                                 path.AddBezierTo(

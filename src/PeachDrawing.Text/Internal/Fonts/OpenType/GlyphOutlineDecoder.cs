@@ -227,7 +227,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 DecodeInto(face, componentGlyph, child, depth + 1);
                 face.Position = resumePosition;
 
-                foreach (OutlineContour contour in child.Contours)
+                foreach (OutlineContour contour in child.ContourList)
                     outline.ContourList.Add(TransformContour(contour, a, b, cc, d, dx, dy));
 
                 if ((flags & MoreComponents) == 0)
@@ -241,7 +241,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 => new(a * p.X + c * p.Y + dx, b * p.X + d * p.Y + dy);
 
             var result = new OutlineContour(Map(source.Start));
-            foreach (OutlineSegment segment in source.Segments)
+            foreach (OutlineSegment segment in source.SegmentList)
             {
                 result.SegmentList.Add(segment.IsCubic
                     ? OutlineSegment.Cubic(Map(segment.Control1), Map(segment.Control2), Map(segment.End))

@@ -109,12 +109,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             List<(OutlinePoint, OutlinePoint)> edges = [];
 
-            foreach (var contour in outline.Contours)
+            foreach (OutlineContour contour in outline.ContourList)
             {
                 var start = contour.Start;
                 var current = start;
 
-                foreach (var segment in contour.Segments)
+                foreach (OutlineSegment segment in contour.SegmentList)
                 {
                     if (segment.IsCubic)
                     {

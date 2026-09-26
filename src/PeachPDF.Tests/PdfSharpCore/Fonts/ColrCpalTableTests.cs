@@ -59,10 +59,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int circ = Gid(face, 'Z');
 
             Assert.True(colr.TryGetV0Layers(Gid(face, 'A'), out var aLayers));
-            Assert.Equal(new[] { (box, 0), (tri, 1) }, aLayers.ToArray());
+            Assert.Equal(new[] { new ColorLayer(box, 0), new ColorLayer(tri, 1) }, aLayers);
 
             Assert.True(colr.TryGetV0Layers(Gid(face, 'B'), out var bLayers));
-            Assert.Equal(new[] { (circ, 2) }, bLayers.ToArray());
+            Assert.Equal(new[] { new ColorLayer(circ, 2) }, bLayers);
 
             // A layer/outline glyph is not itself a color base glyph.
             Assert.True(colr.HasColorGlyph(Gid(face, 'A')));

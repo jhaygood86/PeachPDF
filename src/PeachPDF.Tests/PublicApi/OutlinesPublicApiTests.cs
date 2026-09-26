@@ -163,7 +163,7 @@ namespace PeachPDF.Tests.PublicApi
             Assert.True(face.TryGetColorLayers(glyph!.Value, out var layers));
             Assert.NotEmpty(layers);
             Assert.True(face.Face.Descriptor.ColorTable!.TryGetV0Layers(glyph.Value, out var expected));
-            Assert.Equal(expected.Select(l => new ColorLayer(l.LayerGlyphId, l.PaletteIndex)), layers);
+            Assert.Equal(expected, layers);
 
             // A version 0 table has no paint graph.
             Assert.Null(face.GetColorPaint(glyph.Value));
@@ -215,6 +215,8 @@ namespace PeachPDF.Tests.PublicApi
                     break;
                 case PaintLinearGradient linear:
                     Assert.NotEmpty(linear.Line.Stops);
+                    // A caller cannot reach the shared, cached list by casting the view back.
+                    Assert.False(linear.Line.Stops is List<ColorStop>);
                     break;
                 case PaintRadialGradient radial:
                     Assert.NotEmpty(radial.Line.Stops);
