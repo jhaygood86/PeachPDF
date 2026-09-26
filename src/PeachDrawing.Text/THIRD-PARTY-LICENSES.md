@@ -37,6 +37,19 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
+## FreeType (ported TrueType bytecode interpreter)
+
+Portions of this software are copyright © 1996-2026 The FreeType Project (https://freetype.org). All rights reserved.
+
+This software is based in part on the work of the FreeType Team.
+
+- **Location:** [`Internal/Hinting/FreeType/`](Internal/Hinting/FreeType/): the TrueType bytecode interpreter and glyph loader used for grid-fitting (hinting) outlines, ported to C# from FreeType 2.14.3 (`ttinterp`, `ttobjs`, `ttgload`, `ttpload`, `ftcalc` and the part of `fttrigon` those need). Nothing derived from FreeType lives anywhere else in the package. Each ported file begins with the header of the FreeType file it derives from, unchanged, followed by a line saying it was ported to C# and modified.
+- **License file:** [`Internal/Hinting/FreeType/FTL.TXT`](Internal/Hinting/FreeType/FTL.TXT), the FreeType Project License exactly as distributed by FreeType (it ships in this package unaltered)
+- **Changes from the original:** recorded, per file, in [`Internal/Hinting/FreeType/PORTING-NOTES.md`](Internal/Hinting/FreeType/PORTING-NOTES.md), which also names the FreeType release ported (VER-2-14-3)
+- **License:** the FreeType Project License (FTL), a permissive BSD-style license with a credit clause. FreeType is dual-licensed under the FTL or the GNU GPL version 2; PeachDrawing.Text uses it under the FTL only. The FTL does not restrict the license of the rest of this package, and does not permit using the names of the FreeType authors or contributors to promote a product without their written permission.
+
+An application that redistributes this package in binary form has to say, in its documentation, that its software is based in part on the work of the FreeType Team. The credit line above is the text FreeType suggests for it.
+
 ## Unicode Character Database (text-processing data tables)
 
 - **Location:** [`src/PeachDrawing.Text/Internal/Text/Resources/Bidi/`](Internal/Text/Resources/Bidi/) — `DerivedBidiClass.txt.br`, `BidiBrackets.txt.br`, `BidiMirroring.txt.br` (consumed by `PeachDrawing.Text.Internal.Text.Bidi.BidiClassTable`/`BidiBrackets`/`BidiMirroring`); [`src/PeachDrawing.Text/Internal/Text/Resources/VerticalOrientation/`](Internal/Text/Resources/VerticalOrientation/) — `VerticalOrientation.txt.br` (`PeachDrawing.Text.Internal.Text.VerticalOrientationTable`); [`src/PeachDrawing.Text/Internal/Text/Resources/Script/`](Internal/Text/Resources/Script/) — `Scripts.txt.br` (`PeachDrawing.Text.Internal.Text.ScriptTable`); [`src/PeachDrawing.Text/Internal/Text/Resources/ArabicJoining/`](Internal/Text/Resources/ArabicJoining/) — `DerivedJoiningType.txt.br` (`PeachDrawing.Text.Internal.Text.ArabicShapingTable`). All Brotli-compressed. The line and text segmentation tables (UAX #14 and #29) are generated C# source instead, [`src/PeachDrawing.Text/Internal/Text/Segmentation/SegmentationData.g.cs`](Internal/Text/Segmentation/SegmentationData.g.cs), consumed by `PeachDrawing.Text.Internal.Text.Segmentation`.

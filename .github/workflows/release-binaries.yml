@@ -74,6 +74,7 @@ jobs:
           chmod +x "$STAGE/peachpdf"
           cp LICENSE THIRD-PARTY-LICENSES.md "$STAGE/"
           cp src/PeachDrawing.Text/THIRD-PARTY-LICENSES.md "$STAGE/PeachDrawing.Text.THIRD-PARTY-LICENSES.md"
+          cp src/PeachDrawing.Text/Internal/Hinting/FreeType/FTL.TXT "$STAGE/FTL.TXT"
           ASSET="peachpdf-${{ steps.meta.outputs.version }}-${{ matrix.rid }}.tar.gz"
           tar -czf "$ASSET" -C "$STAGE" .
           echo "ASSET=$ASSET" >> "$GITHUB_ENV"
@@ -89,6 +90,7 @@ jobs:
           Copy-Item LICENSE "$stage/LICENSE"
           Copy-Item THIRD-PARTY-LICENSES.md "$stage/THIRD-PARTY-LICENSES.md"
           Copy-Item src/PeachDrawing.Text/THIRD-PARTY-LICENSES.md "$stage/PeachDrawing.Text.THIRD-PARTY-LICENSES.md"
+          Copy-Item src/PeachDrawing.Text/Internal/Hinting/FreeType/FTL.TXT "$stage/FTL.TXT"
           $asset = "peachpdf-${{ steps.meta.outputs.version }}-${{ matrix.rid }}.zip"
           Compress-Archive -Path "$stage/*" -DestinationPath $asset -Force
           "ASSET=$asset" | Out-File -FilePath $env:GITHUB_ENV -Append

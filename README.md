@@ -32,6 +32,8 @@ See [HTML & CSS Support](https://peachpdf.net/html-css-support.html) for the ful
 
 _Note: This package embeds a fork of PdfSharpCore directly in its source tree; that fork carries its own license (see `src/PeachPDF/PdfSharpCore/LICENSE.md`), but the end result is still open source_
 
+Portions of this software are copyright © 1996-2026 The FreeType Project (https://freetype.org). All rights reserved. This software is based in part on the work of the FreeType Team (see [License](https://peachpdf.net/license.html)).
+
 ## Installing PeachPDF
 
 Install the PeachPDF package from nuget.org

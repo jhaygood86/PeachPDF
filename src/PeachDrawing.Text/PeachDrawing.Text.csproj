@@ -62,6 +62,9 @@
 		<!-- The notices the licences of the code and data in this package require it to carry. -->
 		<None Include="README.md" Pack="true" PackagePath="\" />
 		<None Include="THIRD-PARTY-LICENSES.md" Pack="true" PackagePath="\" />
+		<!-- The FreeType Project License, unaltered, and the record of what was changed from FreeType's files (FTL section 2). -->
+		<None Include="Internal\Hinting\FreeType\FTL.TXT" Pack="true" PackagePath="\" />
+		<None Include="Internal\Hinting\FreeType\PORTING-NOTES.md" Pack="true" PackagePath="\FreeType-PORTING-NOTES.md" />
 		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
 		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
 	</ItemGroup>
