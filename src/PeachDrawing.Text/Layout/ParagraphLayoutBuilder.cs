@@ -8,7 +8,7 @@ namespace PeachDrawing.Text.Layout
     /// <summary>Breaks a paragraph into lines at a width and places the runs of each line.</summary>
     internal static class ParagraphLayoutBuilder
     {
-        internal readonly record struct LineSpec(int Start, int End, LineEnd Kind);
+        internal readonly record struct LineSpec(int Start, int End, LineEnd Kind, int CutAt = -1);
 
         private readonly record struct Piece(Paragraph.Atom Atom, int From, int To, GlyphRun Glyphs, double Width, bool IsTab = false, bool IsGenerated = false);
 
@@ -20,16 +20,26 @@ namespace PeachDrawing.Text.Layout
             double contentWidth = 0;
             int start = 0;
             int hyphenRun = 0;
+            int maxLines = paragraph.Style.MaxLines ?? int.MaxValue;
+            bool truncated = false;
             while (true)
             {
                 double indent = paragraph.IndentAt(start);
-                var spec = FitLine(paragraph, start, RoomFor(availableWidth, indent), indent, hyphenRun, RoomFor(availableWidth, paragraph.IndentOf(false, false)));
+                double room = RoomFor(availableWidth, indent);
+                var spec = FitLine(paragraph, start, room, indent, hyphenRun, RoomFor(availableWidth, paragraph.IndentOf(false, false)));
                 hyphenRun = spec.Kind == LineEnd.Hyphenated ? hyphenRun + 1 : 0;
+
+                // The last line the paragraph may have holds what does not fit, cut short, and ends with the ellipsis.
+                bool lastAllowed = built.Count + 1 >= maxLines;
+                bool hidesText = lastAllowed && spec.End < paragraph.Text.Length;
+                truncated |= hidesText;
+                spec = Ellipsize(paragraph, spec, room, indent, hidesText);
+
                 var (pieces, width) = Assemble(paragraph, spec, indent);
                 var (ascent, descent, height) = VerticalExtent(paragraph, spec, pieces);
                 built.Add((spec, indent, pieces, width, ascent, descent, height));
                 contentWidth = Math.Max(contentWidth, width + indent);
-                if (spec.Kind == LineEnd.Last)
+                if (spec.Kind == LineEnd.Last || lastAllowed)
                 {
                     break;
                 }
@@ -81,11 +91,65 @@ namespace PeachDrawing.Text.Layout
                     x += pieceWidth;
                 }
 
-                lines[i] = new LineBox(new TextRange(spec.Start, spec.End), paragraph.ContentEnd(spec.Start, spec.End), runs, left, top, width, ascent, descent, height, spec.Kind);
+                lines[i] = new LineBox(new TextRange(spec.Start, spec.End), ContentEndOf(paragraph, spec), runs, left, top, width, ascent, descent, height, spec.Kind, spec.CutAt >= 0);
                 top += height;
             }
 
-            return new ParagraphLayout(paragraph, lines, extent, contentWidth, top);
+            return new ParagraphLayout(paragraph, lines, extent, contentWidth, top, truncated);
+        }
+
+        /// <summary>Where the drawn text of a line ends: where it was cut, or else before the spaces that hang at its end.</summary>
+        private static int ContentEndOf(Paragraph p, LineSpec spec) => spec.CutAt >= 0 ? spec.CutAt : p.ContentEnd(spec.Start, spec.End);
+
+        /// <summary>
+        /// Cuts a line short, at a boundary between characters, so that it and the ellipsis fit: a line that holds the text the paragraph has no room for
+        /// (<paramref name="hidesText"/>), which then ends the paragraph, or one wider than its room when <see cref="ParagraphStyle.TextOverflow"/> asks for that.
+        /// </summary>
+        private static LineSpec Ellipsize(Paragraph p, LineSpec spec, double room, double pen, bool hidesText)
+        {
+            bool overflowing = p.Style.TextOverflow == TextOverflow.Ellipsis && !double.IsInfinity(room);
+            if (!hidesText && !overflowing)
+            {
+                return spec;
+            }
+
+            int natural = p.ContentEnd(spec.Start, spec.End);
+            double contentWidth = p.Measure(spec.Start, natural, pen);
+            if (!hidesText && contentWidth <= room)
+            {
+                return spec;
+            }
+
+            int cut = natural;
+            if (!double.IsInfinity(room))
+            {
+                double ellipsisWidth = p.EllipsisAt(natural, spec.Start).Width;
+                if (contentWidth + ellipsisWidth > room)
+                {
+                    cut = FitWithin(p, spec.Start, natural, room - ellipsisWidth, pen);
+                }
+            }
+
+            // Spaces do not stand before an ellipsis.
+            cut = p.ContentEnd(spec.Start, cut);
+            return hidesText ? new LineSpec(spec.Start, p.Text.Length, LineEnd.Last, cut) : spec with { CutAt = cut };
+        }
+
+        /// <summary>The last grapheme boundary from <paramref name="start"/> to <paramref name="end"/>, or <paramref name="start"/> itself, that the text up to fits in <paramref name="width"/>.</summary>
+        private static int FitWithin(Paragraph p, int start, int end, double width, double pen)
+        {
+            if (width <= 0)
+            {
+                return start;
+            }
+
+            int first = NextBoundary(p, start + 1, end);
+            if (first < 0)
+            {
+                return p.Measure(start, end, pen) <= width ? end : start;
+            }
+
+            return p.Measure(start, first, pen) > width ? start : LargestFit(p, start, end, width, pen);
         }
 
         /// <summary>The width a line of text can fill once its indent is taken from <paramref name="available"/>; it is never less than nothing.</summary>
@@ -497,16 +561,11 @@ namespace PeachDrawing.Text.Layout
         private static (List<Piece> Pieces, double Width) Assemble(Paragraph p, LineSpec spec, double indent)
         {
             var pieces = new List<Piece>();
-            int contentEnd = p.ContentEnd(spec.Start, spec.End);
-            if (contentEnd <= spec.Start)
-            {
-                return (pieces, 0);
-            }
-
-            var tabWidths = TabWidths(p, spec.Start, contentEnd, indent);
+            int contentEnd = ContentEndOf(p, spec);
+            var tabWidths = contentEnd > spec.Start ? TabWidths(p, spec.Start, contentEnd, indent) : null;
             double width = 0;
             var atoms = p.Atoms;
-            foreach (var run in Bidi.ReorderLine(p.Levels, spec.Start, contentEnd - spec.Start))
+            foreach (var run in contentEnd > spec.Start ? Bidi.ReorderLine(p.Levels, spec.Start, contentEnd - spec.Start) : [])
             {
                 var inRun = new List<Piece>();
                 int runEnd = run.Start + run.Length;
@@ -548,23 +607,27 @@ namespace PeachDrawing.Text.Layout
                 }
             }
 
-            if (spec.Kind == LineEnd.Hyphenated)
+            bool cut = spec.CutAt >= 0;
+            if (cut || spec.Kind == LineEnd.Hyphenated)
             {
-                var (glyphs, hyphenStyle, hyphenWidth) = p.HyphenAt(contentEnd);
-                var atom = new Paragraph.Atom(contentEnd, contentEnd, 0, p.ParagraphLevel, "Latn", hyphenStyle);
-                var hyphen = new Piece(atom, contentEnd, contentEnd, glyphs, hyphenWidth, IsGenerated: true);
-
-                // The hyphen ends the text, so it is at the end of the line in the paragraph's direction.
-                if (p.IsRightToLeft)
+                var (glyphs, generatedStyle, generatedWidth) = cut ? p.EllipsisAt(contentEnd, spec.Start) : p.HyphenAt(contentEnd);
+                if (glyphs.Glyphs.Count > 0)
                 {
-                    pieces.Insert(0, hyphen);
-                }
-                else
-                {
-                    pieces.Add(hyphen);
-                }
+                    var atom = new Paragraph.Atom(contentEnd, contentEnd, 0, p.ParagraphLevel, "Latn", generatedStyle);
+                    var generated = new Piece(atom, contentEnd, contentEnd, glyphs, generatedWidth, IsGenerated: true);
 
-                width += hyphenWidth;
+                    // A hyphen or an ellipsis ends the text, so it is at the end of the line in the paragraph's direction.
+                    if (p.IsRightToLeft)
+                    {
+                        pieces.Insert(0, generated);
+                    }
+                    else
+                    {
+                        pieces.Add(generated);
+                    }
+
+                    width += generatedWidth;
+                }
             }
 
             return (pieces, width);

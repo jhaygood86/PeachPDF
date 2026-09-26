@@ -88,6 +88,7 @@ PeachDrawing.Text.Layout.Hyphens : enum Int32
   Manual = 0
   None = 1
 PeachDrawing.Text.Layout.LineBox : sealed class
+  property Boolean IsTruncated { get; }
   property Double Ascent { get; }
   property Double Baseline { get; }
   property Double Descent { get; }
@@ -129,6 +130,7 @@ PeachDrawing.Text.Layout.ParagraphLayout : sealed class
   method TextPosition PositionAt(PointF point)
   method TextRange GraphemeRangeAt(Int32 index)
   method TextRange WordRangeAt(Int32 index)
+  property Boolean IsTruncated { get; }
   property Double ContentWidth { get; }
   property Double Height { get; }
   property Double Width { get; }
@@ -149,13 +151,16 @@ PeachDrawing.Text.Layout.ParagraphStyle : struct
   property LineBreakOptions LineBreak { get; init; }
   property Nullable<Double> LineHeight { get; init; }
   property Nullable<Int32> HyphenateLimitLines { get; init; }
+  property Nullable<Int32> MaxLines { get; init; }
   property Nullable<TextAlign> AlignLast { get; init; }
   property OverflowWrap OverflowWrap { get; init; }
+  property String Ellipsis { get; init; }
   property String HyphenateCharacter { get; init; }
   property TabSize TabSize { get; init; }
   property TextAlign Align { get; init; }
   property TextIndent TextIndent { get; init; }
   property TextJustify TextJustify { get; init; }
+  property TextOverflow TextOverflow { get; init; }
 PeachDrawing.Text.Layout.PlacedRun : sealed class
   method Double GetCaretX(Int32 index)
   method Double GetGlyphAdvance(Int32 glyphIndex)
@@ -215,6 +220,9 @@ PeachDrawing.Text.Layout.TextJustify : enum Int32
   InterCharacter = 3
   InterWord = 2
   None = 1
+PeachDrawing.Text.Layout.TextOverflow : enum Int32
+  Clip = 0
+  Ellipsis = 1
 PeachDrawing.Text.Layout.TextPosition : struct
   ctor(Int32 Index, TextAffinity Affinity = Downstream)
   method Boolean Equals(Object obj)

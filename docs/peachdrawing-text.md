@@ -450,8 +450,15 @@ foreach (LineBox line in layout.Lines)
   caret at a hyphenated break can be on either line as at any soft break, and lies before the hyphen. `MeasureContent()` counts hyphens, and with `Auto` its minimum
   is the widest piece between two places a word may be hyphenated.
 
-Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. A line limit with an ellipsis and inline boxes
-are not part of the layout yet.
+- **Line limit and ellipsis.** `ParagraphStyle.MaxLines` lays the paragraph out in at most that many lines. When text is left over, the last line keeps as much of its text as
+  fits with `ParagraphStyle.Ellipsis` after it (U+2026, or three full stops if the face has no such character; an empty string means only cut), cut at a boundary between
+  characters that a reader sees as one and never after a space; `ParagraphLayout.IsTruncated` is set, and the last line is `LineEnd.Last` with `LineBox.IsTruncated`, a
+  `Range` that runs to the end of the text (the part after `ContentEnd` is hidden, like hanging space) and the ellipsis as a generated run at its end in the paragraph's
+  direction, in the style of the last character drawn. `TextOverflow.Ellipsis` cuts the same way any line that is wider than the width (a `NoWrap` line, or a word wider than
+  the paragraph) without ending the paragraph. A line limit is about lines, so one line that overflows its width is cut only when `TextOverflow` asks for it, and text that
+  ends in a newline does not count as text left out. Only the lines that are laid out are worked out, so a limit on a very long text costs what its lines cost.
+
+Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Inline boxes are not part of the layout yet.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 

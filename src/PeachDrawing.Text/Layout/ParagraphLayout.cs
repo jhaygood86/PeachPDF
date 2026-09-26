@@ -101,8 +101,9 @@ namespace PeachDrawing.Text.Layout
     /// <summary>One line of a laid-out paragraph.</summary>
     public sealed class LineBox
     {
-        internal LineBox(TextRange range, int contentEnd, IReadOnlyList<PlacedRun> runs, double left, double top, double width, double ascent, double descent, double height, LineEnd end)
+        internal LineBox(TextRange range, int contentEnd, IReadOnlyList<PlacedRun> runs, double left, double top, double width, double ascent, double descent, double height, LineEnd end, bool isTruncated = false)
         {
+            IsTruncated = isTruncated;
             Range = range;
             ContentEnd = contentEnd;
             Runs = runs;
@@ -148,6 +149,12 @@ namespace PeachDrawing.Text.Layout
         /// <summary>Why the line ends where it does.</summary>
         public LineEnd End { get; }
 
+        /// <summary>
+        /// Whether the line's text is cut short, by <see cref="ParagraphStyle.MaxLines"/> or <see cref="ParagraphStyle.TextOverflow"/>: what follows <see cref="ContentEnd"/> in
+        /// <see cref="Range"/> is not drawn, and a run that is <see cref="PlacedRun.IsGenerated"/> holds the ellipsis, unless <see cref="ParagraphStyle.Ellipsis"/> is empty.
+        /// </summary>
+        public bool IsTruncated { get; }
+
         /// <summary>The rectangle the line's text is in.</summary>
         public RectangleF Bounds => new((float)Left, (float)Top, (float)Width, (float)Height);
     }
@@ -160,8 +167,9 @@ namespace PeachDrawing.Text.Layout
         private readonly Paragraph _paragraph;
         private readonly LineBox[] _lines;
 
-        internal ParagraphLayout(Paragraph paragraph, LineBox[] lines, double width, double contentWidth, double height)
+        internal ParagraphLayout(Paragraph paragraph, LineBox[] lines, double width, double contentWidth, double height, bool isTruncated)
         {
+            IsTruncated = isTruncated;
             _paragraph = paragraph;
             _lines = lines;
             Width = width;
@@ -180,6 +188,9 @@ namespace PeachDrawing.Text.Layout
 
         /// <summary>The height of all the lines together.</summary>
         public double Height { get; }
+
+        /// <summary>Whether text was left out because <see cref="ParagraphStyle.MaxLines"/> lines were full; the last line ends with the ellipsis and holds the rest of the text as hidden.</summary>
+        public bool IsTruncated { get; }
 
         /// <summary>The paragraph this is a layout of.</summary>
         public Paragraph Paragraph => _paragraph;

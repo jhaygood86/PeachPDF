@@ -64,6 +64,16 @@ namespace PeachDrawing.Text.Layout
         Justify = 5,
     }
 
+    /// <summary>What happens to a line whose text is wider than the width (CSS <c>text-overflow</c>).</summary>
+    public enum TextOverflow
+    {
+        /// <summary>The text overflows; a caller that draws it clips it.</summary>
+        Clip = 0,
+
+        /// <summary>The line is cut, at a boundary between characters, so that it and an ellipsis fit, and ends with the ellipsis.</summary>
+        Ellipsis = 1,
+    }
+
     /// <summary>Whether and how words are broken with a hyphen at the end of a line (CSS <c>hyphens</c>).</summary>
     public enum Hyphens
     {
@@ -291,6 +301,22 @@ namespace PeachDrawing.Text.Layout
 
         /// <summary>Where a justified line gets its room from (CSS <c>text-justify</c>); it matters only where the alignment is <see cref="TextAlign.Justify"/>.</summary>
         public TextJustify TextJustify { get; init; }
+
+        /// <summary>
+        /// The most lines the paragraph is laid out in (CSS <c>line-clamp</c>), or <see langword="null"/> for no limit; it must be one or more. Text that does not fit
+        /// is cut from the last line, which ends with <see cref="Ellipsis"/> in its place, and <see cref="ParagraphLayout.IsTruncated"/> says so. The last line is aligned as
+        /// the last line of a paragraph is.
+        /// </summary>
+        public int? MaxLines { get; init; }
+
+        /// <summary>
+        /// What a line that is cut, by <see cref="MaxLines"/> or <see cref="TextOverflow"/>, ends with, up to 32 UTF-16 units: <see langword="null"/> for the ellipsis
+        /// (U+2026, or three full stops where the face has no such character), and the empty string for nothing at all, so that the line is only cut.
+        /// </summary>
+        public string? Ellipsis { get; init; }
+
+        /// <summary>What happens to a line that is wider than the width (CSS <c>text-overflow</c>).</summary>
+        public TextOverflow TextOverflow { get; init; }
 
         /// <summary>Whether words are broken with a hyphen (CSS <c>hyphens</c>).</summary>
         public Hyphens Hyphens { get; init; }

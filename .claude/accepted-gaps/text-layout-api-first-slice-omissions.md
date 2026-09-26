@@ -2,9 +2,9 @@
 
 The paragraph layout API (`ParagraphBuilder`, `Paragraph`, `ParagraphLayout`) does line breaking (UAX #14 with the CSS tailorings), bidi
 reordering, alignment, carets, hit testing and selection boxes, font fallback, letter and word spacing, justification
-(`text-justify`) with `text-align-last`, `text-indent`, tab stops and hyphenation (`hyphens`, `hyphenate-character`, the four `hyphenate-limit-*`). Tracked in [#1417](https://github.com/jhaygood86/PeachPDF/issues/1417), it does not yet have:
+(`text-justify`) with `text-align-last`, `text-indent`, tab stops, hyphenation (`hyphens`, `hyphenate-character`, the four `hyphenate-limit-*`) and a line limit with an ellipsis
+(`line-clamp`, `text-overflow: ellipsis`). Tracked in [#1417](https://github.com/jhaygood86/PeachPDF/issues/1417), it does not yet have:
 
-- a line limit with an ellipsis;
 - the host-driven tier (`LineFlow`, `FlowCursor`, `LineSpace`);
 - inline atomic boxes.
 
@@ -32,3 +32,7 @@ Hyphenation: `hyphenate-limit-last` offers `always` only (there are no columns, 
 one with digits or an apostrophe in it is left whole, as the pattern engine does; the patterns are the TeX ones for about seventy languages, embedded Brotli-compressed, so in a
 WebAssembly host (which has no Brotli decoder) `Auto` finds no points. A soft hyphen inside a ligature or a kerned pair stops the ligature or kern, since the text is shaped with it
 before its glyph is dropped.
+
+Ellipsis: the cut is at a boundary between grapheme clusters, not at a word (the CSS `line-clamp` algorithm leaves the choice to the agent), and a `Forced` or `Soft` line that is
+cut becomes `LineEnd.Last` only when `MaxLines` ends the paragraph there. `text-overflow: ellipsis` takes a single ellipsis at the end of the line, not the two-value form (which
+puts one at each end), and there is no `text-overflow` string value distinct from `ParagraphStyle.Ellipsis`; a caret in the hidden text is drawn after what is drawn.

@@ -591,12 +591,30 @@ namespace PeachDrawing.Text.Layout
         internal (GlyphRun Run, RunStyle Style, double Width) HyphenAt(int index)
         {
             var style = AtomStyleAt(Math.Max(0, index - 1));
-            var text = Style.HyphenateCharacter;
+            var text = Style.HyphenateCharacter ?? (style.Typeface.TryMapRune(new Rune(0x2010), out _) ? "\u2010" : "-");
+            return Generate(style, text);
+        }
+
+        /// <summary>
+        /// The ellipsis a line cut at <paramref name="cut"/> ends with, in the style of the last character that is drawn (the first of the line if none is): the paragraph's
+        /// own string, or U+2026 where the face has it and three full stops where it does not.
+        /// </summary>
+        internal (GlyphRun Run, RunStyle Style, double Width) EllipsisAt(int cut, int lineStart)
+        {
+            var style = AtomStyleAt(cut > lineStart ? cut - 1 : lineStart);
+            var text = Style.Ellipsis;
             if (text is null)
             {
-                text = style.Typeface.TryMapRune(new Rune(0x2010), out _) ? "\u2010" : "-";
+                Rune.DecodeFromUtf16("\u2026".AsSpan(), out var rune, out _);
+                text = style.Typeface.TryMapRune(rune, out _) || style.Fallback?.Invoke(rune) is not null ? "\u2026" : "...";
             }
 
+            return Generate(style, text);
+        }
+
+        /// <summary>Shapes text that is not the paragraph's, for a generated run: its glyphs, its style (with a stand-in face where the run's cannot draw it) and its width.</summary>
+        private (GlyphRun Run, RunStyle Style, double Width) Generate(RunStyle style, string text)
+        {
             var key = (style, text);
             lock (_hyphens)
             {
@@ -604,6 +622,11 @@ namespace PeachDrawing.Text.Layout
                 {
                     return cached;
                 }
+            }
+
+            if (text.Length == 0)
+            {
+                return (new GlyphRun(style.Typeface, []), style, 0);
             }
 
             Rune.DecodeFromUtf16(text.AsSpan(), out var first, out _);
@@ -847,7 +870,7 @@ namespace PeachDrawing.Text.Layout
         /// <summary>Sets how the paragraph as a whole is set.</summary>
         /// <param name="style">The paragraph style.</param>
         /// <returns>This builder.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">The text indent, the hyphenation zone or a hyphenation limit is not a finite number in its range, or the hyphenation character is not from 1 to 32 UTF-16 units long.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The text indent, the hyphenation zone, a hyphenation limit or the most lines is not a finite number in its range, or the hyphenation character is not from 1 to 32 UTF-16 units long, or the ellipsis is longer than 32.</exception>
         public ParagraphBuilder SetStyle(ParagraphStyle style)
         {
             if (!double.IsFinite(style.TextIndent.Length))
@@ -869,6 +892,16 @@ namespace PeachDrawing.Text.Layout
             if (!double.IsFinite(style.HyphenateLimitZone) || style.HyphenateLimitZone < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(style), style.HyphenateLimitZone, "The hyphenation zone must be a finite number, zero or more.");
+            }
+
+            if (style.MaxLines < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(style), style.MaxLines, "The most lines must be one or more.");
+            }
+
+            if (style.Ellipsis is { Length: > 32 })
+            {
+                throw new ArgumentOutOfRangeException(nameof(style), style.Ellipsis.Length, "The ellipsis must be at most 32 UTF-16 units long.");
             }
 
             if (style.HyphenateCharacter is { } hyphen && (hyphen.Length is < 1 or > 32))
