@@ -20,8 +20,9 @@ namespace PeachDrawing.Text.Layout
 
         private readonly double[] _advances;
 
-        internal PlacedRun(TextRange range, RunStyle style, GlyphRun glyphs, byte level, double x, double baseline, double width, double[] boundaryX, double[] advances)
+        internal PlacedRun(TextRange range, RunStyle style, GlyphRun glyphs, byte level, double x, double baseline, double width, double[] boundaryX, double[] advances, bool isGenerated = false)
         {
+            IsGenerated = isGenerated;
             _advances = advances;
             Range = range;
             Style = style;
@@ -33,8 +34,14 @@ namespace PeachDrawing.Text.Layout
             _boundaryX = boundaryX;
         }
 
-        /// <summary>The text this run stands for.</summary>
+        /// <summary>The text this run stands for; it is empty, at the place the run is generated, for a run that is <see cref="IsGenerated"/>.</summary>
         public TextRange Range { get; }
+
+        /// <summary>
+        /// Whether the run is not text of the paragraph but drawn in it: the hyphen a line broken inside a word ends with, or the ellipsis of a line that is cut. Its
+        /// <see cref="Range"/> is empty, and a caret at the place it is generated is before it (after it, for a right-to-left paragraph). It is drawn like any other run.
+        /// </summary>
+        public bool IsGenerated { get; }
 
         /// <summary>The face and size the run is set in.</summary>
         public RunStyle Style { get; }
@@ -94,8 +101,9 @@ namespace PeachDrawing.Text.Layout
     /// <summary>One line of a laid-out paragraph.</summary>
     public sealed class LineBox
     {
-        internal LineBox(TextRange range, int contentEnd, IReadOnlyList<PlacedRun> runs, double left, double top, double width, double ascent, double descent, double height, LineEnd end)
+        internal LineBox(TextRange range, int contentEnd, IReadOnlyList<PlacedRun> runs, double left, double top, double width, double ascent, double descent, double height, LineEnd end, bool isTruncated = false)
         {
+            IsTruncated = isTruncated;
             Range = range;
             ContentEnd = contentEnd;
             Runs = runs;
@@ -108,10 +116,10 @@ namespace PeachDrawing.Text.Layout
             End = end;
         }
 
-        /// <summary>The text of the line, including the spaces that hang at its end and the character that forces a break.</summary>
+        /// <summary>The text of the line, including the spaces that hang at its end, the character that forces a break, and the text hidden by a cut (see <see cref="IsTruncated"/>).</summary>
         public TextRange Range { get; }
 
-        /// <summary>The offset where the line's drawn text ends; what follows up to the end of <see cref="Range"/> hangs.</summary>
+        /// <summary>The offset where the line's drawn text ends; what follows up to the end of <see cref="Range"/> hangs, or is hidden if <see cref="IsTruncated"/>.</summary>
         public int ContentEnd { get; }
 
         /// <summary>The runs of the line, in the order they are drawn from left to right.</summary>
@@ -141,6 +149,12 @@ namespace PeachDrawing.Text.Layout
         /// <summary>Why the line ends where it does.</summary>
         public LineEnd End { get; }
 
+        /// <summary>
+        /// Whether the line's text is cut short, by <see cref="ParagraphStyle.MaxLines"/> or <see cref="ParagraphStyle.TextOverflow"/>: what follows <see cref="ContentEnd"/> in
+        /// <see cref="Range"/> is not drawn, and a run that is <see cref="PlacedRun.IsGenerated"/> holds the ellipsis, unless <see cref="ParagraphStyle.Ellipsis"/> is empty.
+        /// </summary>
+        public bool IsTruncated { get; }
+
         /// <summary>The rectangle the line's text is in.</summary>
         public RectangleF Bounds => new((float)Left, (float)Top, (float)Width, (float)Height);
     }
@@ -153,8 +167,9 @@ namespace PeachDrawing.Text.Layout
         private readonly Paragraph _paragraph;
         private readonly LineBox[] _lines;
 
-        internal ParagraphLayout(Paragraph paragraph, LineBox[] lines, double width, double contentWidth, double height)
+        internal ParagraphLayout(Paragraph paragraph, LineBox[] lines, double width, double contentWidth, double height, bool isTruncated)
         {
+            IsTruncated = isTruncated;
             _paragraph = paragraph;
             _lines = lines;
             Width = width;
@@ -168,11 +183,14 @@ namespace PeachDrawing.Text.Layout
         /// <summary>The width the paragraph was laid out at, or the width of the widest line when it was laid out without a limit.</summary>
         public double Width { get; }
 
-        /// <summary>The width of the widest line.</summary>
+        /// <summary>The width of the widest line, with the distance its text is indented from the start edge.</summary>
         public double ContentWidth { get; }
 
         /// <summary>The height of all the lines together.</summary>
         public double Height { get; }
+
+        /// <summary>Whether text was left out because <see cref="ParagraphStyle.MaxLines"/> lines were full; the last line ends with <see cref="ParagraphStyle.Ellipsis"/> (unless it is empty) and holds the rest of the text as hidden.</summary>
+        public bool IsTruncated { get; }
 
         /// <summary>The paragraph this is a layout of.</summary>
         public Paragraph Paragraph => _paragraph;
@@ -201,7 +219,7 @@ namespace PeachDrawing.Text.Layout
                 return new TextPosition(line.Range.Start);
             }
 
-            TextPosition At(int index) => new(index, index == line.Range.End && line.End is LineEnd.Soft or LineEnd.Emergency ? TextAffinity.Upstream : TextAffinity.Downstream);
+            TextPosition At(int index) => new(index, index == line.Range.End && IsSoftEnd(line.End) ? TextAffinity.Upstream : TextAffinity.Downstream);
 
             // Left or right of everything: the boundary at that visual edge.
             var first = line.Runs[0];
@@ -245,6 +263,9 @@ namespace PeachDrawing.Text.Layout
 
             return At(line.ContentEnd);
         }
+
+        /// <summary>Whether a line that ends this way continues in the next one at the same place in the text, so that a position there can be on either.</summary>
+        private static bool IsSoftEnd(LineEnd end) => end is LineEnd.Soft or LineEnd.Emergency or LineEnd.Hyphenated;
 
         private int LineIndexAtY(double y)
         {
@@ -305,13 +326,13 @@ namespace PeachDrawing.Text.Layout
                     return _lines[i];
                 }
 
-                if (index == range.Start && !(position.Affinity == TextAffinity.Upstream && i > 0 && _lines[i - 1].End is LineEnd.Soft or LineEnd.Emergency))
+                if (index == range.Start && !(position.Affinity == TextAffinity.Upstream && i > 0 && IsSoftEnd(_lines[i - 1].End)))
                 {
                     return _lines[i];
                 }
 
                 // The end of a line is the start of the next one, except where a soft break lets the position choose.
-                if (index == range.End && (isLast || (position.Affinity == TextAffinity.Upstream && _lines[i].End is LineEnd.Soft or LineEnd.Emergency)))
+                if (index == range.End && (isLast || (position.Affinity == TextAffinity.Upstream && IsSoftEnd(_lines[i].End))))
                 {
                     return _lines[i];
                 }

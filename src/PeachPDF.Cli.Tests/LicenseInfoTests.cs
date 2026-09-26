@@ -39,6 +39,16 @@ public class LicenseInfoTests
     }
 
     [Fact]
+    public void Credits_CarriesTheNoticesOfTheThaiAndKhmerWordLists()
+    {
+        var text = LicenseInfo.Credits;
+        Assert.Contains("ICU word lists", text);
+        Assert.Contains("UNICODE LICENSE V3", text);
+        Assert.Contains("Copyright (c) 2006-2015 International Business Machines Corporation", text);
+        Assert.Contains("Copyright (c) 2011-2015 International Business Machines Corporation", text);
+    }
+
+    [Fact]
     public async Task ShowLicense_PrintsLicenseAndExitsZero()
     {
         var (exit, output) = await RunCapturingStdout(["--show-license"]);

@@ -57,16 +57,27 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
             // LB2: never break at the start of text, which is the default, LineBreakOpportunity.Prohibited.
             var units = BuildUnits(text, options, out int unitCount);
 
+            // LB1 leaves the words of Thai and Khmer, which have no spaces, to a dictionary: where one starts, a line may end
+            // (the rules on either side see two letters and keep them together).
+            var wordStarts = options.ComplexContext == ComplexContextBreaking.Dictionary ? FindComplexContextWordStarts(text) : null;
+
             for (int i = 1; i < unitCount; i++)
             {
                 var decision = Decide(units, unitCount, i, options.Strictness == LineBreakStrictness.Loose);
+                if (decision == LineBreakOpportunity.Allowed && options.WordBreak == WordBreakMode.KeepAll && IsKeepAllPair(units[i - 1].Resolved, units[i].Resolved))
+                {
+                    decision = LineBreakOpportunity.Prohibited;
+                }
+
+                // A word boundary found in the dictionary is not a break between letters that keep-all could forbid: browsers keep
+                // breaking Thai between words under it.
+                if (decision == LineBreakOpportunity.Prohibited && wordStarts is not null && wordStarts[units[i].First] && !units[i - 1].EndsWithJoiner)
+                {
+                    decision = LineBreakOpportunity.Allowed;
+                }
+
                 if (decision != LineBreakOpportunity.Prohibited)
                 {
-                    if (decision == LineBreakOpportunity.Allowed && options.WordBreak == WordBreakMode.KeepAll && IsKeepAllPair(units[i - 1].Resolved, units[i].Resolved))
-                    {
-                        decision = LineBreakOpportunity.Prohibited;
-                    }
-
                     result[text.Offset[units[i].First]] = decision;
                 }
             }
@@ -78,6 +89,53 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
 
             return result;
         }
+
+        /// <summary>
+        /// For each scalar, whether it starts a word of Thai or Khmer text (a maximal run of Complex_Context characters
+        /// of one script, which a zero width joiner or non-joiner does not end), or <see langword="null"/> when there are none.
+        /// </summary>
+        private static bool[]? FindComplexContextWordStarts(in ScalarText text)
+        {
+            bool[]? starts = null;
+            bool[]? graphemes = null;
+            var code = text.Code;
+            int count = text.Count;
+            for (int k = 0; k < count;)
+            {
+                var script = DictionarySegmenter.ScriptOf(code[k]);
+                if (script == ComplexScript.None || !IsComplexContext(code[k]))
+                {
+                    k++;
+                    continue;
+                }
+
+                int end = k + 1;
+                while (end < count)
+                {
+                    int next = code[end];
+                    bool joiner = next is 0x200C or 0x200D && end + 1 < count && DictionarySegmenter.ScriptOf(code[end + 1]) == script && IsComplexContext(code[end + 1]);
+                    if (!joiner && (DictionarySegmenter.ScriptOf(next) != script || !IsComplexContext(next)))
+                    {
+                        break;
+                    }
+
+                    end++;
+                }
+
+                if (end - k >= 2 && WordDictionary.For(script) is { } dictionary)
+                {
+                    starts ??= new bool[count];
+                    graphemes ??= GraphemeBreaker.FindBoundaries(text);
+                    DictionarySegmenter.FindWordStarts(code.AsSpan(k, end - k), graphemes.AsSpan(k, end - k), script, dictionary, starts, k);
+                }
+
+                k = end;
+            }
+
+            return starts;
+        }
+
+        private static bool IsComplexContext(int codePoint) => (LineBreakClass)(SegmentationData.LineBreak(codePoint) & ClassMask) == LineBreakClass.SA;
 
         private static Unit[] BuildUnits(in ScalarText text, in LineBreakOptions options, out int unitCount)
         {

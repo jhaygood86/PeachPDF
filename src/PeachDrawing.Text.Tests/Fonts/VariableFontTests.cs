@@ -14,7 +14,7 @@ namespace PeachDrawing.Text.Tests.Fonts
     {
         private const double Tolerance = 1.0;
 
-        private static Typeface Load(string path)
+        internal static Typeface Load(string path)
         {
             var set = new FontSet();
             var family = set.AddFile(path, new AddOptions { FamilyName = "Variable-" + Guid.NewGuid().ToString("N") });
@@ -24,9 +24,9 @@ namespace PeachDrawing.Text.Tests.Fonts
 
         private static JsonElement Golden() => JsonDocument.Parse(File.ReadAllText(BundledFonts.VariableTestGolden)).RootElement;
 
-        private static readonly string[] GlyphNames = [".notdef", "space", "A", "B", "C", "acute", "Aacute"];
+        internal static readonly string[] GlyphNames = [".notdef", "space", "A", "B", "C", "acute", "Aacute"];
 
-        private static AxisSetting[] Settings(JsonElement location) =>
+        internal static AxisSetting[] Settings(JsonElement location) =>
             location.EnumerateObject().Select(p => new AxisSetting(p.Name, p.Value.GetDouble())).ToArray();
 
         [Fact]
@@ -150,7 +150,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             }
         }
 
-        private static void AssertOutline(JsonElement expected, Typeface instance, ushort glyph, string what)
+        internal static void AssertOutline(JsonElement expected, Typeface instance, ushort glyph, string what)
         {
             var contours = expected.EnumerateArray().ToArray();
             if (contours.Length == 0)
@@ -189,7 +189,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             }
         }
 
-        private static void AssertPoint(JsonElement segment, int at, OutlinePoint actual, string what)
+        internal static void AssertPoint(JsonElement segment, int at, OutlinePoint actual, string what)
         {
             double x = segment[at].GetDouble();
             double y = segment[at + 1].GetDouble();

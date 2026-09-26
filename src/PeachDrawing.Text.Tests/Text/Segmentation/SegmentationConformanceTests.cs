@@ -81,8 +81,9 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
         [Fact]
         public void LineBreakOpportunities_MatchLineBreakTest()
         {
-            // The conformance file is for the default rules, in which a small kana is a non-starter: the strict setting.
-            var options = new LineBreakOptions { Strictness = LineBreakStrictness.Strict };
+            // The conformance file is for the default rules, in which a small kana is a non-starter: the strict setting. It resolves the
+            // Complex_Context class the way rule LB1 does, without a dictionary.
+            var options = new LineBreakOptions { Strictness = LineBreakStrictness.Strict, ComplexContext = ComplexContextBreaking.GeneralCategory };
             AssertAll("LineBreakTest.txt", text =>
             {
                 var opportunities = LineBreaker.FindOpportunities(text, options);
