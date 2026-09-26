@@ -4347,13 +4347,20 @@ namespace PeachPDF.Html.Core.Dom
             var ancestorFloat = DomUtils.GetLastRightIntersectingFloatBox(reference, coordinates);
             var inlineFloat = GetIntersectingInlineFloat(coordinates, Floating.Right);
 
-            if (ancestorFloat is null) return inlineFloat;
-            if (inlineFloat is null) return ancestorFloat;
+            var rightFloat = ancestorFloat is null ? inlineFloat
+                : inlineFloat is null ? ancestorFloat
+                : inlineFloat.Location.X - inlineFloat.ActualMarginLeft
+                  < ancestorFloat.Location.X - ancestorFloat.ActualMarginLeft
+                    ? inlineFloat
+                    : ancestorFloat;
 
-            return inlineFloat.Location.X - inlineFloat.ActualMarginLeft
-                   < ancestorFloat.Location.X - ancestorFloat.ActualMarginLeft
-                ? inlineFloat
-                : ancestorFloat;
+            // Wrapping already uses this edge. Keep it on the line too: alignment happens only after
+            // flow has finished, when the float is no longer part of the alignment call's state.
+            if (rightFloat is not null)
+                coordinates.Line.ContentRight = Math.Min(coordinates.Line.ContentRight,
+                    rightFloat.Location.X - rightFloat.ActualMarginLeft);
+
+            return rightFloat;
         }
 
         /// <summary>
