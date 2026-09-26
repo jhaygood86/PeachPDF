@@ -123,7 +123,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
 
         /// <summary>The typeface this descriptor describes and embeds.</summary>
-        internal Typeface _typeface;
+        internal readonly Typeface _typeface;
 
         /// <summary>
         /// Gets or sets the name of the font.
@@ -143,8 +143,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
         bool _isSymbolFont;
 
-        // HACK FlagsFromDescriptor(OpenTypeDescriptor descriptor)
-        PdfFontDescriptorFlags FlagsFromMetrics(TypefaceMetrics metrics)
+                PdfFontDescriptorFlags FlagsFromMetrics(TypefaceMetrics metrics)
         {
             PdfFontDescriptorFlags flags = 0;
             _isSymbolFont = metrics.IsSymbolic;

@@ -120,6 +120,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
             // Fonts are always embedded.
             ExportedFont subSet = TypefaceExporter.ExportSubset(FontDescriptor._typeface, _cmapInfo.GlyphIndices.Keys, keepCharacterMap: true);
+            if (subSet.HasCffOutlines)
+                throw new System.InvalidOperationException("A simple TrueType font dictionary cannot embed a font with CFF outlines; use a Type 0 font.");
             byte[] fontData = subSet.Data.ToArray();
 
             PdfDictionary fontStream = new PdfDictionary(Owner);

@@ -93,6 +93,24 @@ namespace PeachPDF.Tests.PublicApi
         }
 
         [Fact]
+        public void ExportSubset_RejectsAGlyphTheFaceDoesNotHave()
+        {
+            var face = Face(BundledFonts.Ttf);
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => TypefaceExporter.ExportSubset(face, [-1], true));
+            Assert.Throws<ArgumentOutOfRangeException>(() => TypefaceExporter.ExportSubset(face, [int.MaxValue], true));
+        }
+
+        [Fact]
+        public void Metrics_FlagAMonospacedFont_AndReadTheSerifClass()
+        {
+            Assert.True(Face(BundledFonts.Otf).Metrics.IsFixedPitch);   // Source Code Pro
+            Assert.False(Face(BundledFonts.Ttf).Metrics.IsFixedPitch);  // Source Sans 3
+            Assert.False(Face(BundledFonts.Math).Metrics.HasSerifs);    // no bundled font declares a serif family class
+            Assert.False(Face(BundledFonts.Ttf).Metrics.HasSerifs);
+        }
+
+        [Fact]
         public void ContentHash_IsEqualForEqualData_AndDiffersBetweenFonts()
         {
             var first = Face(BundledFonts.Ttf);
