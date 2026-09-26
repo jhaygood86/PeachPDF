@@ -521,7 +521,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 if (glyph < metricCount)
                 {
                     int advance = hmtx.Metrics[glyph].advanceWidth
-                        + (int)Math.Round(Variations?.GetAdvanceDelta(this, glyph, variation) ?? 0);
+                        + Fonts.OpenType.Variations.FontVariations.Round(Variations?.GetAdvanceDelta(this, glyph, variation) ?? 0);
                     advance = Math.Clamp(advance, 0, ushort.MaxValue);
                     bytes[glyph * 4] = (byte)(advance >> 8);
                     bytes[glyph * 4 + 1] = (byte)advance;

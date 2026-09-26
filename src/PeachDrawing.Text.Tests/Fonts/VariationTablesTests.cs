@@ -314,5 +314,170 @@ namespace PeachDrawing.Text.Tests.Fonts
 
             Assert.Equal(regular.Contours[0].Start, black.Contours[0].Start);
         }
+
+        // ---- hostile tables ---------------------------------------------------------------------------------------------------------
+
+        [Fact]
+        public void AStoreWhoseCountsAreLargerThanItsTable_IsRejectedWithoutAllocating()
+        {
+            // 65535 data sets that all name one data set claiming 65535 items of 65535 deltas: gigabytes if it were believed.
+            var w = new Writer().U16(1).U32(8 + 65535 * 4).U16(65535);
+            for (int i = 0; i < 65535; i++)
+            {
+                w.U32(8 + 65535 * 4 + 4 + 12);
+            }
+
+            w.U16(1).U16(1);                         // axisCount, regionCount
+            w.F2Dot14(0).F2Dot14(1).F2Dot14(1);
+            w.U16(65535).U16(0).U16(65535);          // the data set: itemCount, wordDeltaCount, regionIndexCount
+
+            Assert.Null(ItemVariationStore.TryParse(w.ToArray(), 0));
+        }
+
+        [Fact]
+        public void ADeltaSetIndexMap_WithMoreEntriesThanItsTableHolds_IsRejected()
+        {
+            Assert.Null(DeltaSetIndexMap.TryParse(new Writer().U8(1).U8(0x30).U32(0x7FFFFFF0).ToArray(), 0));
+            Assert.Null(DeltaSetIndexMap.TryParse(new Writer().U8(1).U8(0x30).U32(0xFFFFFFF0).ToArray(), 0));
+        }
+
+        [Fact]
+        public void ADeltaSetIndexMap_WithFourByteEntries_KeepsTheTopBit()
+        {
+            // 32-bit entries with 16 inner bits: outer 0x8000, inner 5 (the top bit is part of the number, not a sign).
+            var map = DeltaSetIndexMap.TryParse(new Writer().U8(0).U8(0x3F).U16(1).U32(0x80000005).ToArray(), 0);
+
+            Assert.NotNull(map);
+            Assert.Equal((0x8000, 5), map!.Map(0));
+        }
+
+        [Fact]
+        public void AnHvarWhoseAdvanceMapIsDamaged_IsIgnored()
+        {
+            var store = BuildStore();
+            // HVAR: version, store offset 20, advance map offset 20 + store length (past the end of the table)
+            var table = new Writer().U16(1).U16(0).U32(20).U32((uint)(20 + store.Length + 100)).U32(0).U32(0).ToArray().Concat(store).ToArray();
+
+            Assert.Null(HvarTable.TryParse(table));
+        }
+
+        [Fact]
+        public void AnAxisWhoseRangeIsUpsideDown_MakesTheFontNotVariable()
+        {
+            var font = FixtureBytes();
+            int record = RecordOf(font, "fvar");
+            int table = (font[record + 8] << 24) | (font[record + 9] << 16) | (font[record + 10] << 8) | font[record + 11];
+            int axesOffset = (font[table + 4] << 8) | font[table + 5];
+            // The first axis: minimum at +4, default at +8, maximum at +12 (16.16); make the minimum the largest value.
+            font[table + axesOffset + 4] = 0x7F;
+
+            Assert.False(LoadBytes(font).IsVariable);
+        }
+
+        [Fact]
+        public void AnFvarWhoseInstanceRecordsAreSmallerThanTheirAxesNeed_MakesTheFontNotVariable()
+        {
+            var font = FixtureBytes();
+            int record = RecordOf(font, "fvar");
+            int table = (font[record + 8] << 24) | (font[record + 9] << 16) | (font[record + 10] << 8) | font[record + 11];
+            font[table + 14] = 0;
+            font[table + 15] = 0;       // instanceSize 0: every instance would read the same bytes
+
+            Assert.False(LoadBytes(font).IsVariable);
+        }
+
+        [Fact]
+        public void AnyOneDamagedByteInAVariationTable_NeverMakesReadingAnInstanceThrow()
+        {
+            var original = FixtureBytes();
+            foreach (var tag in new[] { "fvar", "avar", "gvar", "HVAR", "MVAR" })
+            {
+                int record = RecordOf(original, tag);
+                int offset = (original[record + 8] << 24) | (original[record + 9] << 16) | (original[record + 10] << 8) | original[record + 11];
+                int length = (original[record + 12] << 24) | (original[record + 13] << 16) | (original[record + 14] << 8) | original[record + 15];
+
+                for (int at = offset; at < offset + length; at++)
+                {
+                    foreach (byte value in new byte[] { 0x00, 0xFF, 0x80 })
+                    {
+                        var font = (byte[])original.Clone();
+                        font[at] = value;
+
+                        var face = LoadBytes(font);
+                        var instance = face.WithAxes([new AxisSetting("wght", 850), new AxisSetting("wdth", 90)]);
+                        for (ushort glyph = 1; glyph < 8; glyph++)
+                        {
+                            instance.TryGetOutline(glyph, out _);
+                            instance.GetAdvance(glyph);
+                        }
+
+                        instance.Metrics.ToString();
+                        instance.TryGetScriptPosition(ScriptPlacement.Superscript, out _);
+                    }
+                }
+            }
+        }
+
+        // ---- locations --------------------------------------------------------------------------------------------------------------
+
+        [Fact]
+        public void ValuesThatDifferByLessThanASixtyFourth_AreOneLocation()
+        {
+            var face = LoadBytes(FixtureBytes());
+
+            var a = face.WithAxes([new AxisSetting("wght", 700.001)]);
+            var b = face.WithAxes([new AxisSetting("wght", 700.004)]);
+
+            Assert.Equal(a, b);
+            Assert.Equal(700, a.AxisSettings.Single(s => s.Tag == "wght").Value);
+        }
+
+        [Fact]
+        public void NegativeZero_AndZero_AreOneLocation()
+        {
+            var face = LoadBytes(FixtureBytes());
+            var slant = face.Axes.FirstOrDefault(x => x.Tag == "slnt");
+            if (slant is null)
+            {
+                return;     // the fixture has no slant axis
+            }
+
+            Assert.Equal(face.WithAxes([new AxisSetting("slnt", 0)]), face.WithAxes([new AxisSetting("slnt", -0)]));
+        }
+
+        [Fact]
+        public void SweepingAnAxis_KeepsTheInstanceCacheBounded_AndTypefacesStillCompareEqual()
+        {
+            var face = LoadBytes(FixtureBytes());
+            var first = face.WithAxes([new AxisSetting("wght", 400.5)]);
+
+            for (int i = 0; i < 1200; i++)
+            {
+                face.WithAxes([new AxisSetting("wght", 100 + i * 0.25)]);
+            }
+
+            var again = face.WithAxes([new AxisSetting("wght", 400.5)]);
+            Assert.Equal(first, again);
+            Assert.Equal(first.GetHashCode(), again.GetHashCode());
+        }
+
+        [Fact]
+        public void TheSubscriptAndSuperscriptOffsets_FollowTheMvarTable()
+        {
+            // The fixture leaves the recommended sizes at zero, which a caller reads as "no recommendation"; give the superscript one.
+            var font = FixtureBytes();
+            int record = RecordOf(font, "OS/2");
+            int os2 = (font[record + 8] << 24) | (font[record + 9] << 16) | (font[record + 10] << 8) | font[record + 11];
+            font[os2 + 20] = 0x02;
+            font[os2 + 21] = 0x58;      // ySuperscriptYSize = 600
+
+            var face = LoadBytes(font);
+            var black = face.WithAxes([new AxisSetting("wght", 900)]);
+
+            Assert.True(face.TryGetScriptPosition(ScriptPlacement.Superscript, out var regular));
+            Assert.True(black.TryGetScriptPosition(ScriptPlacement.Superscript, out var heavy));
+
+            Assert.NotEqual(regular.BaselineShift, heavy.BaselineShift);
+        }
     }
 }

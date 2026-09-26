@@ -63,7 +63,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                     key.Append(';');
                 }
 
-                key.Append(tags[i]).Append('=').Append(userValues[i].ToString("R", CultureInfo.InvariantCulture));
+                // + 0 turns -0 into 0, so the two spell one location.
+                key.Append(tags[i]).Append('=').Append((userValues[i] + 0).ToString("R", CultureInfo.InvariantCulture));
                 if (normalized[i] != 0)
                 {
                     isDefault = false;
@@ -136,7 +137,10 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                 int instanceCount = BigEndian.U16(fvar, 12);
                 int instanceSize = BigEndian.U16(fvar, 14);
                 int axesOffset = BigEndian.U16(fvar, 4);
-                if (axisCount == 0 || axisSize < 20)
+                if (axisCount == 0 || axisSize < 20 || axesOffset < 16
+                    || (long)axesOffset + (long)axisCount * axisSize > fvar.Length
+                    || instanceSize < 4 + 4 * axisCount
+                    || (long)axesOffset + (long)axisCount * axisSize + (long)instanceCount * instanceSize > fvar.Length)
                 {
                     return null;
                 }
@@ -152,6 +156,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                         BigEndian.Fixed(fvar, at + 12),
                         (BigEndian.U16(fvar, at + 16) & 1) != 0,
                         FindName(nameTable, BigEndian.U16(fvar, at + 18)));
+
+                    // An axis whose range is upside down or not a number would have no location to be at.
+                    if (!(axes[i].Minimum <= axes[i].Default && axes[i].Default <= axes[i].Maximum))
+                    {
+                        return null;
+                    }
                 }
 
                 var instances = new NamedInstanceInfo[instanceCount];
@@ -179,6 +189,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                 return null;
             }
         }
+
+        /// <summary>Rounds half up (towards positive infinity), which is what the specification, FreeType and fontTools do; <see cref="Math.Round(double)"/> rounds half to even.</summary>
+        internal static int Round(double value) => (int)Math.Floor(value + 0.5);
 
         /// <summary>
         /// How much the advance width of <paramref name="glyph"/> differs from its <c>hmtx</c> entry at <paramref name="coordinates"/>, in design
@@ -219,7 +232,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                 {
                     if (Axes[i].Tag == tag)
                     {
-                        user[i] = Math.Clamp(double.IsNaN(value) ? Axes[i].Default : value, Axes[i].Minimum, Axes[i].Maximum);
+                        // Quantized to 1/64 so that a value driven continuously (an animation) cannot make a new location for every step.
+                        double quantized = double.IsNaN(value) ? Axes[i].Default : Math.Floor(value * 64 + 0.5) / 64;
+                        user[i] = Math.Clamp(quantized, Axes[i].Minimum, Axes[i].Maximum);
                     }
                 }
             }
@@ -253,10 +268,11 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
             n = Math.Clamp(n, -1, 1);
             if (_avar is not null && axis < _avar.Length)
             {
-                n = MapSegments(_avar[axis], n);
+                n = Math.Clamp(MapSegments(_avar[axis], n), -1, 1);
             }
 
-            return Math.Round(n * 16384.0) / 16384.0;
+            // Round half up, as the F2Dot14 conversion of fontTools and FreeType does.
+            return Math.Floor(n * 16384.0 + 0.5) / 16384.0;
         }
 
         /// <summary>Piecewise-linear <c>avar</c> mapping of a normalized coordinate.</summary>

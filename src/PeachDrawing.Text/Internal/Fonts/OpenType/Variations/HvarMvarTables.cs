@@ -32,6 +32,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
 
                 uint mapOffset = BigEndian.U32(table, 8);
                 var map = mapOffset == 0 ? null : DeltaSetIndexMap.TryParse(table, (int)mapOffset);
+                if (mapOffset != 0 && map is null)
+                {
+                    // Reading the advances by glyph index instead would give a wrong answer, not a degraded one.
+                    return null;
+                }
+
                 return new HvarTable(store, map);
             }
             catch (Exception ex) when (ex is IndexOutOfRangeException or ArgumentOutOfRangeException or OverflowException)

@@ -68,6 +68,8 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// <summary>Where in the design space of a variable font this typeface reads, or <see langword="null"/> at its defaults.</summary>
         internal VariationCoordinates? Variation { get; }
 
+        private const int MaxVariationInstances = 256;
+
         private readonly LoadedTypeface? _variationBase;
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, LoadedTypeface> _variationInstances = new();
 
@@ -80,6 +82,11 @@ namespace PeachDrawing.Text.Internal.Fonts
             var root = _variationBase ?? this;
             if (variation.IsDefault)
                 return root;
+
+            // Locations are quantized, but a caller that sweeps an axis still makes many; the instances are cheap to make again, and a
+            // Typeface compares by location, so dropping them all when there are too many loses only identity.
+            if (root._variationInstances.Count >= MaxVariationInstances)
+                root._variationInstances.Clear();
 
             return root._variationInstances.GetOrAdd(variation.Key, _ => new LoadedTypeface(root, variation));
         }

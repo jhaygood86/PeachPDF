@@ -199,8 +199,11 @@ if (face.IsVariable)
 ```
 
 - An axis you leave out keeps the value the typeface has, a tag the font has no axis for is ignored, and a value outside the axis's
-  range is clamped to it. Asking for the same location again gives the same `Typeface`, and every axis at its default gives the
-  font's own default typeface.
+  range is clamped to it. A value is rounded to the nearest 1/64 of a unit, so values that close are one location. Asking for the
+  same location again gives an equal `Typeface`, and every axis at its default gives the font's own default typeface. A `NaN`
+  means the axis's default, axis tags are compared exactly (`wght`, not `WGHT`), and for a tag given twice the last one counts.
+- `IsBold`, `IsItalic` and the weight the family matching sees are the file's own, whatever the location is: a location changes how
+  the glyphs are drawn, not what the file declares.
 - Outlines (including composite glyphs), advance widths, the font-wide metrics of `Typeface.Metrics` and shaping advances follow the
   location. Reading `TypefaceMetrics.XMin` to `YMax` (the font bounding box) and the vertical advances gives the default design's
   values, `GPOS` kerning and mark positions and `GSUB` feature variations are not applied, and a variable font with CFF2 outlines

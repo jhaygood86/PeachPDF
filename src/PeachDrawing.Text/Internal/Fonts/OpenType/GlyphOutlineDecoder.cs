@@ -266,7 +266,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             // Read every component before decoding any: the decoding moves the shared cursor, and a variable font needs all the
             // offsets to apply its deltas (gvar has one point for the offset of each component).
-            var components = new List<(int Glyph, double A, double B, double C, double D, double Dx, double Dy)>();
+            var components = new List<(int Glyph, double A, double B, double C, double D, double Dx, double Dy, bool IsOffset)>();
             while (true)
             {
                 int flags = face.ReadUShort();
@@ -310,7 +310,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     dy = arg2;
                 }
 
-                components.Add((componentGlyph, a, b, cc, d, dx, dy));
+                components.Add((componentGlyph, a, b, cc, d, dx, dy, (flags & ArgsAreXyValues) != 0));
 
                 if ((flags & MoreComponents) == 0)
                     break;
@@ -333,8 +333,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             // which nothing after this point needs.
             for (int i = 0; i < components.Count; i++)
             {
-                var (componentGlyph, a, b, cc, d, dx, dy) = components[i];
-                if (moveX is not null)
+                var (componentGlyph, a, b, cc, d, dx, dy, isOffset) = components[i];
+                if (moveX is not null && isOffset)
                 {
                     dx += moveX[i];
                     dy += moveY![i];

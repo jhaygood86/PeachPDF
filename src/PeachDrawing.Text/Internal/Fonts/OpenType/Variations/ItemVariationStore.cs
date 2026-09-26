@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
 {
@@ -41,6 +42,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
 
                 int axisCount = BigEndian.U16(table, regionListOffset);
                 int regionCount = BigEndian.U16(table, regionListOffset + 2);
+                // A count the table is too short to hold is a damaged table; nothing is allocated for it.
+                if ((long)regionCount * axisCount * 6 > table.Length - regionListOffset - 4 || (long)dataCount * 4 > table.Length - offset - 8)
+                {
+                    return null;
+                }
+
                 var regions = new (double, double, double)[regionCount][];
                 for (int r = 0; r < regionCount; r++)
                 {
@@ -55,6 +62,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                     regions[r] = region;
                 }
 
+                // Several entries may name one data set, and a hostile table could name a large one thousands of times, so each is read once.
+                var parsed = new Dictionary<uint, DataSet>();
                 var sets = new DataSet[dataCount];
                 for (int d = 0; d < dataCount; d++)
                 {
@@ -65,12 +74,26 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                         continue;
                     }
 
+                    if (parsed.TryGetValue(relative, out var seen))
+                    {
+                        sets[d] = seen;
+                        continue;
+                    }
+
                     int at = offset + (int)relative;
                     int itemCount = BigEndian.U16(table, at);
                     int wordDeltaCount = BigEndian.U16(table, at + 2);
                     int regionIndexCount = BigEndian.U16(table, at + 4);
                     bool longWords = (wordDeltaCount & 0x8000) != 0;
                     wordDeltaCount &= 0x7FFF;
+
+                    int wordSize = longWords ? 4 : 2;
+                    int byteSize = longWords ? 2 : 1;
+                    long rowSize = (long)Math.Min(wordDeltaCount, regionIndexCount) * wordSize + (long)Math.Max(0, regionIndexCount - wordDeltaCount) * byteSize;
+                    if ((long)itemCount * rowSize > table.Length - at - 6 - regionIndexCount * 2L)
+                    {
+                        return null;
+                    }
 
                     var set = new DataSet { ItemCount = itemCount, RegionIndexes = new int[regionIndexCount], Deltas = new int[itemCount][] };
                     for (int i = 0; i < regionIndexCount; i++)
@@ -113,6 +136,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                     }
 
                     sets[d] = set;
+                    parsed[relative] = set;
                 }
 
                 return new ItemVariationStore(axisCount, regions, sets);
@@ -170,7 +194,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                 var (start, peak, end) = region[a];
                 // An axis the location does not mention is at its default.
                 double coordinate = a < coordinates.Length ? coordinates[a] : 0;
-                if (peak == 0 || start > peak || peak > end || coordinate == peak)
+                if (peak == 0 || start > peak || peak > end || (start < 0 && end > 0) || coordinate == peak)
                 {
                     continue;
                 }
@@ -227,18 +251,23 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
 
                 int entrySize = ((entryFormat >> 4) & 3) + 1;
                 int innerBits = (entryFormat & 0xF) + 1;
+                if (count < 0 || (long)count * entrySize > table.Length - at)
+                {
+                    return null;
+                }
+
                 var outer = new int[count];
                 var inner = new int[count];
                 for (int i = 0; i < count; i++)
                 {
-                    int value = 0;
+                    uint value = 0;
                     for (int b = 0; b < entrySize; b++)
                     {
                         value = (value << 8) | table[at++];
                     }
 
-                    outer[i] = value >> innerBits;
-                    inner[i] = value & ((1 << innerBits) - 1);
+                    outer[i] = (int)(value >> innerBits);
+                    inner[i] = (int)(value & ((1u << innerBits) - 1));
                 }
 
                 return new DeltaSetIndexMap(outer, inner);

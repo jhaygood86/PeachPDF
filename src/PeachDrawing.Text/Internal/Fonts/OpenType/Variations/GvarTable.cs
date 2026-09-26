@@ -283,6 +283,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
 
                 double lower = start is null ? Math.Min(0, p) : start[a];
                 double upper = end is null ? Math.Max(0, p) : end[a];
+                if (lower > p || p > upper || (lower < 0 && upper > 0))
+                {
+                    // Not a region the specification allows (it may not straddle zero): the axis is ignored, as fontTools and HarfBuzz do.
+                    continue;
+                }
+
                 if (c <= lower || c >= upper)
                 {
                     return 0;

@@ -75,7 +75,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             if (Variation is null || FontFace.Variations?.Mvar is not { } mvar)
                 return value;
 
-            return value + (int)Math.Round(mvar.GetDelta(tag, Variation.Normalized));
+            return value + Variations.FontVariations.Round(mvar.GetDelta(tag, Variation.Normalized));
         }
 
         void Initialize()
@@ -496,8 +496,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             if (FontFace.os2 is not { } os2 || UnitsPerEm <= 0) return null;
 
-            var ySize = superscript ? os2.ySuperscriptYSize : os2.ySubscriptYSize;
-            var yOffset = superscript ? os2.ySuperscriptYOffset : os2.ySubscriptYOffset;
+            var ySize = superscript ? Adjust("spys", os2.ySuperscriptYSize) : Adjust("sbys", os2.ySubscriptYSize);
+            var yOffset = superscript ? Adjust("spyo", os2.ySuperscriptYOffset) : Adjust("sbyo", os2.ySubscriptYOffset);
 
             if (ySize <= 0 || yOffset == 0) return null;
 
@@ -701,7 +701,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     glyphIndex = numberOfHMetrics - 1;
 
                 int width = FontFace.hmtx.Metrics[glyphIndex].advanceWidth;
-                return Variation is null ? width : width + (int)Math.Round(FontFace.Variations?.GetAdvanceDelta(FontFace, originalGlyphIndex, Variation) ?? 0);
+                return Variation is null ? width : width + Variations.FontVariations.Round(FontFace.Variations?.GetAdvanceDelta(FontFace, originalGlyphIndex, Variation) ?? 0);
             }
             catch (Exception)
             {

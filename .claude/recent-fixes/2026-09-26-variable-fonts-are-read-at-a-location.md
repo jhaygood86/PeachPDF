@@ -36,6 +36,26 @@ moved. `cvt`, `fpgm` and `prep` are left out because nothing they hint survives.
 instancer's at `wght=700, wdth=90` (points, contour ends, on-curve flags, advances) agreed to within 0.25 of a unit for every glyph; the
 composite's left bearing differs by one unit because its header bounds come from the outline's control points.
 
+## Review hardening
+
+A read-only review of the slice found these; all are fixed and each has a test in `VariationTablesTests`.
+
+- **A hostile font can make the parsers allocate gigabytes** with a few kilobytes of input: an `ItemVariationStore` whose 65535 data sets
+  all name one large set, a `DeltaSetIndexMap` claiming 2^31 entries, an `fvar` with `instanceSize` 0. Every count is now checked
+  against the bytes the table has before anything is allocated, and each data set is read once however many entries name it.
+- **An axis with `min > default` or `default > max`** made `Math.Clamp` throw out of `WithAxes`; such an `fvar` now makes the font not
+  variable. A byte-flip sweep over every byte of the five variation tables (three values each) asserts that reading an instance never throws.
+- **Rounding is half up** (`FontVariations.Round`), as the specification, FreeType and fontTools do. `Math.Round` rounds half to even,
+  which differs on the half-unit deltas that are common (delta 1 at scalar 0.5).
+- **The instance cache is bounded and locations are quantized to 1/64**, so animating an axis cannot grow it without limit; a `Typeface`
+  compares by location, so dropping the cache loses only object identity.
+- Smaller: a tuple or region that straddles zero is ignored as the specification says, a point-matching composite component gets no
+  `gvar` offset delta, a 4-byte `DeltaSetIndexMap` entry keeps its top bit, an `HVAR` whose advance map will not parse is dropped (the
+  implicit glyph-index mapping would give wrong advances), and the sub/superscript sizes and offsets follow `MVAR` (`sbys`, `sbyo`,
+  `spys`, `spyo`).
+- `hasc`, `hdsc` and `hlgp` are applied to `hhea` as well as to the `OS/2` typographic values, as browsers and HarfBuzz do, although the
+  specification only names the typographic ones.
+
 ## Traps
 
 - **Normalized coordinates are rounded to 2.14 fixed point** (`FontVariations.Normalize`), as the tables are written; comparing with
