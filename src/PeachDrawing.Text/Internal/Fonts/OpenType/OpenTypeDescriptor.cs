@@ -560,6 +560,17 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             return FontFace.bitmap?.TryGet(glyphId, ppem, out glyph) ?? false;
         }
 
+        /// <summary>True when this font carries SVG documents that draw glyphs (the <c>SVG </c> table).</summary>
+        public bool HasSvgGlyphs => FontFace.svg != null;
+
+        /// <summary>The SVG document that draws a glyph, and the range of glyphs it covers, or false when the glyph has none.</summary>
+        public bool TryGetSvgGlyph(int glyphId, out string document, out int firstGlyph, out int lastGlyph)
+        {
+            document = string.Empty;
+            firstGlyph = lastGlyph = 0;
+            return FontFace.svg?.TryGet(glyphId, out document, out firstGlyph, out lastGlyph) ?? false;
+        }
+
         /// <summary>The font's COLR table, or null if it has none.</summary>
         public ColrTable ColorTable => FontFace.colr;
 

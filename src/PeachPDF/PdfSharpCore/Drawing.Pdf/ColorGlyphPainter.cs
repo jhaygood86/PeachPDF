@@ -84,6 +84,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 // The artwork itself is identical wherever the glyph lands, so it is drawn once into a
                 // Form XObject and referenced here; only when that cannot apply is it inlined.
                 if (!PaintBitmapGlyph(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale) &&
+                    !PaintSvgGlyph(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale) &&
                     !TryPaintGlyphFromForm(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale))
                 {
                     PaintGlyph(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale);
@@ -297,6 +298,25 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             _gfx.DrawImage(PeachPDF.Adapters.BitmapGlyphImages.Get(_typeface, glyphId, bitmap), new XRect(left, top, width, height));
             return true;
+        }
+
+        /// <summary>
+        /// Draws the glyph from the font's SVG document (OpenType SVG). It comes after bitmaps, COLR v1 and COLR v0 in the order a
+        /// glyph's colour forms are tried in, so a font that carries those as well keeps drawing them, and before the plain outline.
+        /// False when the glyph has no document, has a COLR paint, or nothing can draw the document.
+        /// </summary>
+        private bool PaintSvgGlyph(int glyphId, double originX, double originYOffset)
+        {
+            if (_measuring || !_typeface.HasSvgGlyphs || _gfx.SvgGlyphPainter is not { } painter
+                || _typeface.GetColorPaint((ushort)glyphId) is not null
+                || _typeface.TryGetColorLayers((ushort)glyphId, out _)
+                || !_typeface.TryGetSvgGlyph((ushort)glyphId, out var svg))
+            {
+                return false;
+            }
+
+            double baselineY = _pageDownwards ? _baselineY - originYOffset : _baselineY + originYOffset;
+            return painter.TryPaint(_typeface, (ushort)glyphId, svg, _font.Size, originX, baselineY, _foreground, _paletteIndex, _overrides);
         }
 
         private void PaintGlyph(int glyphId, double originX, double originYOffset = 0)

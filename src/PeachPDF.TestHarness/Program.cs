@@ -10933,6 +10933,47 @@ await SaveShowcaseAsync("variable_fonts", "Typography & Text", "Variable fonts",
     "Rendered against a small synthetic variable font with weight and width axes.",
     variableFontHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// SVG-in-OpenType colour glyphs: a font's `SVG ` table gives a glyph an SVG document, drawn as vectors. Uses a small synthetic font whose
+// documents use the font's CPAL palette (var(--color0)) and the text colour (context-fill).
+var svgGlyphFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SvgTest.ttf")));
+string SvgGlyphCell(string style, string caption) =>
+    "<td>" +
+    $"<div class=\"sg\" style=\"{style}\">ABCD</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+var svgGlyphHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'SvgTest'; src: url('data:font/truetype;base64,{svgGlyphFontB64}') format('truetype'); }}" +
+    "@font-palette-values --second { font-family: 'SvgTest'; base-palette: 1; }" +
+    "@font-palette-values --custom { font-family: 'SvgTest'; base-palette: 0; override-colors: 0 #7c3aed, 1 #f59e0b; }" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table.sgt { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.sgt td { padding: 8px; vertical-align: top; text-align: center }" +
+    ".sg { font-family: 'SvgTest'; font-size: 40pt; line-height: 1.2; letter-spacing: 4pt }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>SVG-in-OpenType colour glyphs</h1>" +
+    "<p class=\"intro\">A font can give a glyph an SVG document in its <code>SVG&nbsp;</code> table. It is drawn as real vector content: " +
+    "the document's <code>var(--color0)</code> takes the font's palette (so <code>font-palette</code> works), and <code>context-fill</code> " +
+    "and <code>currentColor</code> take the text colour. A, B, C and D are four glyphs of one font; B and C share one document.</p>" +
+    "<table class=\"sgt\"><tr>" +
+    SvgGlyphCell("", "default palette, black text") +
+    SvgGlyphCell("color: #0b7a3b", "color: #0b7a3b (B follows the text colour)") +
+    "</tr><tr>" +
+    SvgGlyphCell("font-palette: --second", "font-palette: --second") +
+    SvgGlyphCell("font-palette: --custom", "override-colors: 0 #7c3aed, 1 #f59e0b") +
+    "</tr><tr>" +
+    SvgGlyphCell("font-size: 20pt", "20pt: the same artwork at another size") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("svg_opentype_glyphs", "Typography & Text", "SVG-in-OpenType glyphs",
+    "Colour glyphs drawn from a font's SVG table: the SVG document of each glyph is rendered as vector content, its palette " +
+    "variables follow font-palette and its context-fill follows the text colour. Rendered against a small synthetic font.",
+    svgGlyphHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // GSUB ligature substitution: font-variant-ligatures actually turns real GSUB liga/clig ligatures
 // on/off (not just a synthesized effect), and the same shaping applies to SVG <text> outlined for a
 // gradient fill. Source Sans 3's GSUB `liga` feature ligates "ff"/"ft"/"fft" (confirmed via

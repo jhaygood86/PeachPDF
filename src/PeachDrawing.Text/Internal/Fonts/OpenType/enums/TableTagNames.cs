@@ -143,6 +143,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// <summary>Standard bitmap graphics (Apple's bitmap colour emoji format).</summary>
         public const string Sbix = "sbix";
 
+        /// <summary>SVG glyph documents (the tag has a trailing space).</summary>
+        public const string Svg = "SVG ";
+
         // --- Color Tables ---
 
         /// <summary>
