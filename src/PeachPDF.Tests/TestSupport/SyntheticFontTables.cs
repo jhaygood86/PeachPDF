@@ -1,3 +1,6 @@
+using System;
+using System.Text;
+
 namespace PeachPDF.Tests.TestSupport
 {
     /// <summary>
@@ -12,6 +15,23 @@ namespace PeachPDF.Tests.TestSupport
     /// </summary>
     internal static class SyntheticFontTables
     {
+        /// <summary>The number of glyphs in <paramref name="fontBytes"/>: the <c>numGlyphs</c> field of its <c>maxp</c> table.</summary>
+        public static int GlyphCount(byte[] fontBytes)
+        {
+            int Be16(int at) => (fontBytes[at] << 8) | fontBytes[at + 1];
+            int Be32(int at) => (Be16(at) << 16) | Be16(at + 2);
+
+            var tableCount = Be16(4);
+            for (var i = 0; i < tableCount; i++)
+            {
+                var record = 12 + 16 * i;
+                if (Encoding.ASCII.GetString(fontBytes, record, 4) == "maxp")
+                    return Be16(Be32(record + 8) + 4);
+            }
+
+            throw new InvalidOperationException("The font has no maxp table.");
+        }
+
         /// <summary>
         /// Splices one new table directory entry into a real, already-valid font file's own SFNT header.
         /// Table data is expected to start immediately after the last existing directory entry (true of

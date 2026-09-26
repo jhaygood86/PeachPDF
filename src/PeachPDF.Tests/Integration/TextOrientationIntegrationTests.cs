@@ -1,14 +1,11 @@
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -385,12 +382,12 @@ body {{ font-family: 'VorgOnlyTest'; margin: 0 }}
 
             if (baseFontNeedsVheaVmtx)
             {
-                var numGlyphs = FontFileData.GetOrCreateFrom(fontBytes).Fontface.maxp.numGlyphs;
-                fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, TableTagNames.VHea, SyntheticFontTables.BuildVhea(ascent: 900, descent: -200, numOfLongVerMetrics: numGlyphs));
-                fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, TableTagNames.VMtx, SyntheticFontTables.BuildVmtxUniform(1000, numGlyphs));
+                var numGlyphs = (ushort)SyntheticFontTables.GlyphCount(fontBytes);
+                fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, "vhea", SyntheticFontTables.BuildVhea(ascent: 900, descent: -200, numOfLongVerMetrics: numGlyphs));
+                fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, "vmtx", SyntheticFontTables.BuildVmtxUniform(1000, numGlyphs));
             }
 
-            fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, TableTagNames.VOrg, SyntheticFontTables.BuildVorg(vertOriginY));
+            fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, "VORG", SyntheticFontTables.BuildVorg(vertOriginY));
             return fontBytes;
         }
 
