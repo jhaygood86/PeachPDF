@@ -4,8 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-using PeachDrawing.Text.Internal.Fonts;
-
 namespace PeachPDF.Tests.TestSupport
 {
     /// <summary>
@@ -250,13 +248,6 @@ namespace PeachPDF.Tests.TestSupport
         internal static string VariableLayoutTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableLayoutTest.golden.json");
 
         /// <summary>
-        /// A real font file path: the first one the host OS reports, or the bundled TTF
-        /// if the host reports none.
-        /// </summary>
-        internal static string AnySupportedFontPath =>
-            FontResolver.SupportedFonts.FirstOrDefault() ?? Ttf;
-
-        /// <summary>
         /// An inline <c>@font-face</c> rule embedding <paramref name="fontPath"/> as a base64 data URL
         /// under <paramref name="familyName"/> - for an HTML-layer (<c>LayoutHarness</c>) test whose
         /// fixture geometry is calibrated against a specific font's real metrics and so must not depend on
@@ -268,21 +259,5 @@ namespace PeachPDF.Tests.TestSupport
         /// </summary>
         internal static string FontFaceRule(string fontPath, string familyName, string mimeType) =>
             $"@font-face {{ font-family: '{familyName}'; src: url('data:{mimeType};base64,{Convert.ToBase64String(File.ReadAllBytes(fontPath))}'); }}";
-
-        /// <summary>
-        /// Ensures <paramref name="resolver"/> can resolve at least one font family and
-        /// returns its name, using a system font if one was detected or registering the
-        /// bundled TTF as a custom font otherwise.
-        /// </summary>
-        internal static string GetOrRegisterKnownFamily(FontResolver resolver)
-        {
-            if (FontResolver.SupportedFonts.Length > 0)
-                return TtfFontDescription.LoadDescription(FontResolver.SupportedFonts[0]).FontFamilyInvariantCulture;
-
-            const string fallbackFamilyName = "__BundledTestFont__";
-            using var stream = File.OpenRead(Ttf);
-            resolver.AddFont(stream, fallbackFamilyName);
-            return fallbackFamilyName;
-        }
     }
 }

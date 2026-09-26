@@ -6,39 +6,68 @@ using System.Text;
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {
     /// <summary>
-    /// The PDF-side conversions that used to be the engine descriptor's, against the engine's own originals, which are still
-    /// there: what a PDF font dictionary records has to be the same numbers it always was.
+    /// The PDF-side conversions of a typeface's public metrics: what a PDF font dictionary records has to stay the numbers it
+    /// always was, so each is checked against the definition written out from <see cref="Typeface.Metrics"/> and
+    /// <see cref="Typeface.GetAdvance(ushort)"/>.
     /// </summary>
     public class PdfTypefaceMetricsTests
     {
+        private static string PathOf(string which) => which switch
+        {
+            "Ttf" => BundledFonts.Ttf,
+            "Otf" => BundledFonts.Otf,
+            "Math" => BundledFonts.Math,
+            _ => BundledFonts.Emoji,
+        };
+
         [Theory]
         [InlineData("Ttf")]
         [InlineData("Otf")]
         [InlineData("Math")]
         [InlineData("Emoji")]
-        public void ConversionsMatchTheEnginesOriginals(string which)
+        public void ConversionsFollowTheirDefinitionOverThePublicMetrics(string which)
         {
-            string path = which switch
-            {
-                "Ttf" => BundledFonts.Ttf,
-                "Otf" => BundledFonts.Otf,
-                "Math" => BundledFonts.Math,
-                _ => BundledFonts.Emoji,
-            };
-            var face = TypefaceFixtures.FromFile(path);
-            var descriptor = face.Face.Descriptor;
+            var face = TypefaceFixtures.FromFile(PathOf(which));
+            int unitsPerEm = face.Metrics.UnitsPerEm;
+            Assert.True(unitsPerEm > 0);
 
             foreach (double value in new double[] { 0, 1, 250, 511.5, 700, -200, 1024, 2048 })
             {
-                Assert.Equal(descriptor.DesignUnitsToPdf(value), PdfTypefaceMetrics.DesignUnitsToPdf(face, value));
+                Assert.Equal((int)Math.Round(value * 1000.0 / unitsPerEm), PdfTypefaceMetrics.DesignUnitsToPdf(face, value));
             }
 
+            bool anyWidth = false;
             for (int glyph = 0; glyph < 400; glyph++)
             {
-                Assert.Equal(descriptor.GlyphIndexToPdfWidth(glyph), PdfTypefaceMetrics.GlyphWidth(face, glyph));
+                // Truncated, not rounded, and untouched when the font is already 1000 units per em.
+                int advance = face.GetAdvance((ushort)glyph);
+                int expected = unitsPerEm == 1000 ? advance : advance * 1000 / unitsPerEm;
+                Assert.Equal(expected, PdfTypefaceMetrics.GlyphWidth(face, glyph));
+                anyWidth |= expected > 0;
             }
 
-            Assert.Equal(face.Face.GetBaseName(), PdfTypefaceMetrics.GetBaseName(face));
+            Assert.True(anyWidth);
+        }
+
+        [Theory]
+        [InlineData("Ttf")]
+        [InlineData("Otf")]
+        [InlineData("Math")]
+        [InlineData("Emoji")]
+        public void BaseName_DropsTheStyleWordsAndAddsTheStyleSuffix(string which)
+        {
+            var face = TypefaceFixtures.FromFile(PathOf(which));
+
+            string name = face.FullName;
+            foreach (string word in new[] { "bold", "italic" })
+            {
+                int at = name.IndexOf(word, StringComparison.OrdinalIgnoreCase);
+                if (at > 0)
+                    name = name.Remove(at, word.Length);
+            }
+
+            string suffix = face.IsBold ? (face.IsItalic ? ",BoldItalic" : ",Bold") : (face.IsItalic ? ",Italic" : "");
+            Assert.Equal(name.Trim() + suffix, PdfTypefaceMetrics.GetBaseName(face));
         }
 
         [Fact]

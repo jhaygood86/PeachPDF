@@ -73,28 +73,24 @@ namespace PeachPDF.Tests.Integration
             // Glyph indices, not measured width: a well-designed font's superscript figures aren't
             // guaranteed to differ in advance width from the default ones.
             var box = await FindWordsBox(SupsFontBase64, "<b id=\"w\" style=\"font-variant-position:super\">42</b>");
-            var descriptor = ((FontAdapter)box.ActualFont).Font.Typeface.Face.Descriptor;
+            var typeface = ((FontAdapter)box.ActualFont).Font.Typeface;
 
-            Assert.NotNull(descriptor);
+            var plain = Shaper.Shape(typeface, "42", ShapeSettings.Default);
+            var superscript = Shaper.Shape(typeface, "42", box.ActualTextShapingFeatures);
 
-            var plain = descriptor!.Shape("42", ShapeSettings.Default);
-            var superscript = descriptor.Shape("42", box.ActualTextShapingFeatures);
-
-            Assert.NotEqual(plain.Select(g => g.GlyphIndex), superscript.Select(g => g.GlyphIndex));
+            Assert.NotEqual(plain.Glyphs.Select(g => g.GlyphIndex), superscript.Glyphs.Select(g => g.GlyphIndex));
         }
 
         [Fact]
         public async Task Sub_OnAFontWithSubs_SubstitutesRealGlyphs()
         {
             var box = await FindWordsBox(SupsFontBase64, "<b id=\"w\" style=\"font-variant-position:sub\">42</b>");
-            var descriptor = ((FontAdapter)box.ActualFont).Font.Typeface.Face.Descriptor;
+            var typeface = ((FontAdapter)box.ActualFont).Font.Typeface;
 
-            Assert.NotNull(descriptor);
+            var plain = Shaper.Shape(typeface, "42", ShapeSettings.Default);
+            var subscript = Shaper.Shape(typeface, "42", box.ActualTextShapingFeatures);
 
-            var plain = descriptor!.Shape("42", ShapeSettings.Default);
-            var subscript = descriptor.Shape("42", box.ActualTextShapingFeatures);
-
-            Assert.NotEqual(plain.Select(g => g.GlyphIndex), subscript.Select(g => g.GlyphIndex));
+            Assert.NotEqual(plain.Glyphs.Select(g => g.GlyphIndex), subscript.Glyphs.Select(g => g.GlyphIndex));
         }
 
         [Fact]

@@ -23,6 +23,7 @@
 #endregion
 
 using PeachDrawing.Text.Internal.Fonts.OpenType;
+using System;
 using System.Collections.Generic;
 
 namespace PeachDrawing.Text.OpenType
@@ -48,15 +49,22 @@ namespace PeachDrawing.Text.OpenType
     /// <summary>How to build a stretchy shape out of glyph parts when no pre-sized <see cref="MathGlyphVariant"/> is large enough (the <c>GlyphAssembly</c> table).</summary>
     public sealed class MathGlyphAssembly
     {
-        internal MathGlyphAssembly()
+        /// <summary>Describes an assembly, for a caller that lays parts out from a description of its own rather than from a font's table.</summary>
+        /// <param name="italicsCorrection">The italics correction of the assembled glyph, in design units.</param>
+        /// <param name="parts">The parts, from left to right for a horizontal extension and from bottom to top for a vertical one.</param>
+        public MathGlyphAssembly(double italicsCorrection, IReadOnlyList<MathGlyphPart> parts)
         {
+            ArgumentNullException.ThrowIfNull(parts);
+
+            ItalicsCorrection = italicsCorrection;
+            Parts = parts;
         }
 
         /// <summary>The italics correction of the assembled glyph, in design units.</summary>
-        public double ItalicsCorrection { get; internal init; }
+        public double ItalicsCorrection { get; }
 
         /// <summary>The parts, from left to right for a horizontal extension and from bottom to top for a vertical one.</summary>
-        public IReadOnlyList<MathGlyphPart> Parts { get; internal init; } = [];
+        public IReadOnlyList<MathGlyphPart> Parts { get; }
     }
 
     /// <summary>Everything needed to find or build an enlarged version of one glyph (the <c>MathGlyphConstruction</c> table).</summary>
@@ -477,7 +485,7 @@ namespace PeachDrawing.Text.OpenType
                     IsExtender: (partFlags & 0x0001) != 0);
             }
 
-            return new MathGlyphAssembly { ItalicsCorrection = italicsCorrectionValue, Parts = System.Array.AsReadOnly(parts) };
+            return new MathGlyphAssembly(italicsCorrectionValue, System.Array.AsReadOnly(parts));
         }
     }
 

@@ -65,7 +65,7 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 | `Typeface.HasMathData`, `MathData`, `MathTable` (`Constants`, `GlyphInfo`, `Variants`) | The `MATH` table of a face | The OpenType `MATH` table and its three sub-tables (`MathConstants`, `MathGlyphInfo`, `MathVariants`) |
 | `MathConstantsTable` | The layout constants | One property per constant, named as in the OpenType specification (`AxisHeight`, `FractionRuleThickness`, ...) |
 | `MathGlyphInfoTable` (`GetItalicsCorrection`, `GetTopAccentAttachment`, `IsExtendedShape`) | Per-glyph information | `MathItalicsCorrectionInfo`, `MathTopAccentAttachment`, `ExtendedShapeCoverage` in the specification |
-| `MathVariantsTable` (`MinConnectorOverlap`, `GetVerticalConstruction`, `GetHorizontalConstruction`), `MathGlyphConstruction`, `MathGlyphVariant`, `MathGlyphAssembly`, `MathGlyphPart` | The stretchy glyph data | `MathVariants`, `MathGlyphConstruction`, `MathGlyphVariantRecord`, `GlyphAssembly`, `GlyphPart` in the specification |
+| `MathVariantsTable` (`MinConnectorOverlap`, `GetVerticalConstruction`, `GetHorizontalConstruction`), `MathGlyphConstruction`, `MathGlyphVariant`, `MathGlyphAssembly` (`ItalicsCorrection`, `Parts`, and a public constructor so a caller can describe an assembly of its own, as the tests of a stretchy-shape layout do), `MathGlyphPart` | The stretchy glyph data | `MathVariants`, `MathGlyphConstruction`, `MathGlyphVariantRecord`, `GlyphAssembly`, `GlyphPart` in the specification |
 
 ### `PeachDrawing.Text`: variable fonts
 
