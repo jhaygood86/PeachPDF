@@ -40,6 +40,7 @@ Run from anywhere: python assets/fonts/generate_variable_fixture.py
 Requires fontTools (any recent version).
 """
 import copy
+import io
 import json
 import os
 import tempfile
@@ -51,13 +52,16 @@ from fontTools.cffLib import FDSelect, SubrsIndex
 from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, InstanceDescriptor, SourceDescriptor
 from fontTools.fontBuilder import FontBuilder
 from fontTools.misc.psCharStrings import T2CharString
+from fontTools.misc.roundTools import otRound
 from fontTools.pens.recordingPen import RecordingPen
 from fontTools.pens.t2CharStringPen import T2CharStringPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import otTables
 from fontTools.varLib import build as varlib_build
-from fontTools.varLib import instancer
+from fontTools.varLib import builder, instancer
+from fontTools.varLib.models import normalizeLocation
+from fontTools.varLib.varStore import VarStoreInstancer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_FONT = os.path.join(HERE, "VariableTest.ttf")
@@ -65,6 +69,13 @@ OUT_FONT_NO_HVAR = os.path.join(HERE, "VariableTestNoHvar.ttf")
 OUT_GOLDEN = os.path.join(HERE, "VariableTest.golden.json")
 OUT_CFF2_FONT = os.path.join(HERE, "VariableCff2Test.otf")
 OUT_CFF2_GOLDEN = os.path.join(HERE, "VariableCff2Test.golden.json")
+OUT_VERTICAL_FONT = os.path.join(HERE, "VariableVerticalTest.ttf")
+OUT_VERTICAL_FONT_NO_VVAR = os.path.join(HERE, "VariableVerticalTestNoVvar.ttf")
+OUT_VERTICAL_GOLDEN = os.path.join(HERE, "VariableVerticalTest.golden.json")
+OUT_CFF2_VERTICAL_FONT = os.path.join(HERE, "VariableCff2VerticalTest.otf")
+OUT_CFF2_VERTICAL_GOLDEN = os.path.join(HERE, "VariableCff2VerticalTest.golden.json")
+OUT_AVAR2_FONT = os.path.join(HERE, "VariableAvar2Test.ttf")
+OUT_AVAR2_GOLDEN = os.path.join(HERE, "VariableAvar2Test.golden.json")
 
 UPM = 1000
 
@@ -86,7 +97,19 @@ def stem(weight):
     return int(round(40 + 45 * weight))
 
 
-def build_master(name, weight, width):
+def add_vertical_metrics(fb, weight, sx):
+    """`vhea` and `vmtx` for a master: an advance height and a top side bearing per glyph that both follow the weight and the width, so
+    that the vertical advance varies (through the phantom points of gvar, and through VVAR that varLib writes from the same metrics)."""
+    metrics = {}
+    for gn in fb.font.getGlyphOrder():
+        glyph = fb.font["glyf"][gn]
+        advance = 900 + int(round(60 * weight)) + int(round(80 * (sx - 1))) + (30 if gn == "A" else 0)
+        metrics[gn] = (advance, 100 + int(round(12 * weight)) if getattr(glyph, "numberOfContours", 0) else 0)
+    fb.setupVerticalMetrics(metrics)
+    fb.setupVerticalHeader(ascent=840 + int(round(18 * weight)), descent=-(160 + int(round(8 * weight))), lineGap=int(round(4 * weight)))
+
+
+def build_master(name, weight, width, vertical=False):
     t = stem(weight)
     sx = width
     glyphs = {}
@@ -168,6 +191,9 @@ def build_master(name, weight, width):
         metrics[gn] = (advance[gn], getattr(g, "xMin", 0))
     fb.setupHorizontalMetrics(metrics)
 
+    if vertical:
+        add_vertical_metrics(fb, weight, sx)
+
     ascent = 800 + int(round(20 * weight))
     descent = -(200 + int(round(10 * weight)))
     fb.setupHorizontalHeader(ascent=ascent, descent=descent, lineGap=int(round(10 * weight)))
@@ -184,7 +210,7 @@ def build_master(name, weight, width):
     return fb.font
 
 
-def build_variable_font(workdir):
+def build_variable_font(workdir, vertical=False):
     doc = DesignSpaceDocument()
 
     weight = AxisDescriptor()
@@ -201,8 +227,8 @@ def build_variable_font(workdir):
     doc.addAxis(width)
 
     for name, design_weight, design_width, wf, wdf in MASTERS:
-        font = build_master(name, wf, wdf)
-        path = os.path.join(workdir, "master-%s.ttf" % name)
+        font = build_master(name, wf, wdf, vertical)
+        path = os.path.join(workdir, "master-%s%s.ttf" % (name, "-v" if vertical else ""))
         font.save(path)
         source = SourceDescriptor()
         source.path = path
@@ -315,7 +341,20 @@ CFF2_GLYPH_ORDER = [".notdef", "space", "A", "B", "C", "D", "E", "F"]
 CFF2_CMAP = {0x20: "space", 0x41: "A", 0x42: "B", 0x43: "C", 0x44: "D", 0x45: "E", 0x46: "F"}
 
 
-def build_cff_master(name, weight, width):
+def add_cff_vertical_metrics(fb, weight, sx):
+    """`vhea`, `vmtx` and `VORG` for a master of the CFF2 font: the advance height and the vertical origin of a glyph follow the weight
+    and the width (varLib writes a VVAR with an advance mapping and a vertical origin mapping from them)."""
+    advances = {}
+    origins = {}
+    for gn in CFF2_GLYPH_ORDER:
+        advances[gn] = (900 + int(round(60 * weight)) + int(round(80 * (sx - 1))) + (30 if gn == "A" else 0), 0)
+        origins[gn] = 850 + int(round(25 * weight)) + int(round(40 * (sx - 1))) + (35 if gn == "B" else 0)
+    fb.setupVerticalMetrics(advances)
+    fb.setupVerticalHeader(ascent=840 + int(round(18 * weight)), descent=-(160 + int(round(8 * weight))), lineGap=int(round(4 * weight)))
+    fb.setupVerticalOrigins(origins, defaultVerticalOrigin=850 + int(round(25 * weight)) + int(round(40 * (sx - 1))))
+
+
+def build_cff_master(name, weight, width, vertical=False):
     """One master of the CFF2 font, as a CFF (version 1) font that varLib merges into CFF2. D, E and F are stand-ins here: their
     charstrings are written by hand in write_cff2_charstrings once the masters are merged."""
     t = stem(weight)
@@ -376,6 +415,8 @@ def build_cff_master(name, weight, width):
     fb.setupCharacterMap(CFF2_CMAP)
     fb.setupCFF("VariableCff2Test-" + name, {"FullName": "Variable Cff2 Test " + name}, charstrings, {})
     fb.setupHorizontalMetrics({glyph: (advances[glyph], 0) for glyph in CFF2_GLYPH_ORDER})
+    if vertical:
+        add_cff_vertical_metrics(fb, weight, sx)
     ascent = 800 + int(round(20 * weight))
     fb.setupHorizontalHeader(ascent=ascent, descent=-200)
     fb.setupNameTable({"familyName": "Variable Cff2 Test", "styleName": "Regular"})
@@ -462,7 +503,7 @@ def write_cff2_charstrings(path):
     font.save(path)
 
 
-def build_variable_cff2_font(workdir):
+def build_variable_cff2_font(workdir, vertical=False):
     doc = DesignSpaceDocument()
 
     weight = AxisDescriptor()
@@ -479,8 +520,8 @@ def build_variable_cff2_font(workdir):
     doc.addAxis(width)
 
     for name, design_weight, design_width, wf, wdf in MASTERS:
-        font = build_cff_master(name, wf, wdf)
-        path = os.path.join(workdir, "cff-master-%s.otf" % name)
+        font = build_cff_master(name, wf, wdf, vertical)
+        path = os.path.join(workdir, "cff-master-%s%s.otf" % (name, "-v" if vertical else ""))
         font.save(path)
         source = SourceDescriptor()
         source.path = path
@@ -498,7 +539,7 @@ def build_variable_cff2_font(workdir):
         doc.addInstance(instance)
 
     variable, _, _ = varlib_build(doc)
-    merged = os.path.join(workdir, "merged.otf")
+    merged = os.path.join(workdir, "merged-v.otf" if vertical else "merged.otf")
     variable.save(merged)
     write_cff2_charstrings(merged)
     return TTFont(merged)
@@ -586,6 +627,155 @@ def main():
         f.write("\n")
     print("tables:", " ".join(cff2_tags))
     print("wrote", OUT_CFF2_FONT, os.path.getsize(OUT_CFF2_FONT), "bytes and", OUT_CFF2_GOLDEN)
+
+    write_vertical_fixtures()
+    write_avar2_fixture()
+
+
+def saved_copy(font):
+    """The font written out and read back, so that the tables fontTools recalculates when it saves (the `head` box) hold their final values."""
+    buffer = io.BytesIO()
+    font.save(buffer)
+    buffer.seek(0)
+    return TTFont(buffer)
+
+
+def box_of(font):
+    head = saved_copy(font)["head"]
+    return [head.xMin, head.yMin, head.xMax, head.yMax]
+
+
+def vertical_entry(instance, box_source):
+    vmtx = instance["vmtx"]
+    return {
+        "advances": {gn: vmtx[gn][0] for gn in instance.getGlyphOrder()},
+        "ascent": instance["vhea"].ascent,
+        "box": box_of(box_source),
+    }
+
+
+def cff2_vertical_origins(variable, location):
+    """The vertical origin of every glyph at `location`, from the VORG table and the vertical origin mapping of VVAR, evaluated with
+    fontTools' own ItemVariationStore code (its instancer does not update VORG)."""
+    axes = variable["fvar"].axes
+    normalized = normalizeLocation(location, {a.axisTag: (a.minValue, a.defaultValue, a.maxValue) for a in axes})
+    normalized = variable["avar"].renormalizeLocation(normalized, variable)
+    vvar = variable["VVAR"].table
+    store = VarStoreInstancer(vvar.VarStore, axes, normalized)
+    vorg = variable["VORG"]
+    origins = {}
+    for gn in variable.getGlyphOrder():
+        base = vorg.VOriginRecords.get(gn, vorg.defaultVertOriginY)
+        origins[gn] = base + otRound(store[vvar.VOrgMap.mapping[gn]])
+    return origins
+
+
+def write_vertical_fixtures():
+    """The vertical-metrics fixtures: a TrueType and a CFF2 font whose vertical advances (and, for CFF2, vertical origins) vary, and the
+    values fontTools' instancer gives at the same locations, together with the font bounding box the instance is saved with."""
+    with tempfile.TemporaryDirectory() as workdir:
+        build_variable_font(workdir, vertical=True).save(OUT_VERTICAL_FONT)
+
+    without_vvar = TTFont(OUT_VERTICAL_FONT)
+    del without_vvar["VVAR"]
+    without_vvar.save(OUT_VERTICAL_FONT_NO_VVAR)
+    tags = sorted(TTFont(OUT_VERTICAL_FONT).keys())
+    assert {"vhea", "vmtx", "VVAR", "gvar", "MVAR"} <= set(tags), tags
+
+    golden = {"locations": []}
+    for loc in LOCATIONS:
+        instance = instancer.instantiateVariableFont(TTFont(OUT_VERTICAL_FONT), dict(loc), inplace=False)
+        golden["locations"].append({"location": loc, **vertical_entry(instance, instance)})
+    write_json(OUT_VERTICAL_GOLDEN, golden)
+    print("wrote", OUT_VERTICAL_FONT, os.path.getsize(OUT_VERTICAL_FONT), "bytes and", OUT_VERTICAL_GOLDEN)
+
+    with tempfile.TemporaryDirectory() as workdir:
+        build_variable_cff2_font(workdir, vertical=True).save(OUT_CFF2_VERTICAL_FONT)
+
+    variable = TTFont(OUT_CFF2_VERTICAL_FONT)
+    assert {"CFF2", "vhea", "vmtx", "VORG", "VVAR"} <= set(variable.keys()), sorted(variable.keys())
+    golden = {"locations": []}
+    for loc in LOCATIONS:
+        instance = instancer.instantiateVariableFont(cff2_oracle_font(OUT_CFF2_VERTICAL_FONT), dict(loc), inplace=False)
+        entry = vertical_entry(instance, instance)
+        entry["origins"] = cff2_vertical_origins(variable, loc)
+        golden["locations"].append({"location": loc, **entry})
+    write_json(OUT_CFF2_VERTICAL_GOLDEN, golden)
+    print("wrote", OUT_CFF2_VERTICAL_FONT, os.path.getsize(OUT_CFF2_VERTICAL_FONT), "bytes and", OUT_CFF2_VERTICAL_GOLDEN)
+
+
+def write_json(path, value):
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(value, f, indent=1)
+        f.write("\n")
+
+
+# Locations for the avar 2 font, in user coordinates: the segment map, the cross-axis mapping (weight reaching width and width reaching weight)
+# and the clamps all matter.
+AVAR2_LOCATIONS = [
+    {"wght": 400, "wdth": 100},
+    {"wght": 700, "wdth": 100},
+    {"wght": 900, "wdth": 100},
+    {"wght": 900, "wdth": 75},
+    {"wght": 600, "wdth": 90},
+    {"wght": 250, "wdth": 80},
+    {"wght": 400, "wdth": 75},
+    {"wght": 700, "wdth": 120},
+    {"wght": 1000, "wdth": 30},
+]
+
+
+def build_avar2_font():
+    """VariableTest.ttf with an `avar` version 2 table: the version 1 segment maps as they are, and an ItemVariationStore that moves the
+    normalized width by an amount that depends on the (mapped) weight, and the weight by an amount that depends on the width. The axis
+    index map sends the axes to the items in the opposite order, so that the map is exercised."""
+    font = TTFont(OUT_FONT)
+    axis_tags = ["wght", "wdth"]
+    supports = [{"wght": (0.0, 1.0, 1.0)}, {"wdth": (-1.0, -1.0, 0.0)}, {"wght": (-1.0, -1.0, 0.0), "wdth": (0.0, 1.0, 1.0)}]
+    regions = builder.buildVarRegionList(supports, axis_tags)
+    # Item 0 changes the width, item 1 the weight (in units of 1/16384): full weight narrows the width by a quarter of its range; a narrow
+    # width makes the weight heavier by an eighth; a light weight with a wide width lowers the weight further.
+    data = builder.buildVarData([0, 1, 2], [[-4096, 0, 0], [0, 2048, -1024]], optimize=False)
+    avar = font["avar"]
+    avar.majorVersion, avar.minorVersion = 2, 0
+    avar.table = otTables.avar()
+    avar.table.Reserved = 0
+    avar.table.VarStore = builder.buildVarStore(regions, [data])
+    index_map = otTables.DeltaSetIndexMap()
+    index_map.Format = 0
+    index_map.mapping = [1, 0]      # the weight is item 1, the width is item 0
+    avar.table.VarIdxMap = index_map
+    return font
+
+
+def write_avar2_fixture():
+    font = build_avar2_font()
+    font.save(OUT_AVAR2_FONT)
+    variable = TTFont(OUT_AVAR2_FONT)
+    assert variable["avar"].majorVersion == 2
+
+    axes = variable["fvar"].axes
+    limits = {a.axisTag: (a.minValue, a.defaultValue, a.maxValue) for a in axes}
+    golden = {"locations": []}
+    for loc in AVAR2_LOCATIONS:
+        normalized = normalizeLocation(loc, limits)
+        mapped = variable["avar"].renormalizeLocation(normalized, variable, dropZeroes=False)
+
+        # The oracle: the same font without any avar, at the user values that normalize to the mapped location.
+        plain = TTFont(OUT_FONT)
+        del plain["avar"]
+        user = {}
+        for tag, n in mapped.items():
+            low, default, high = limits[tag]
+            user[tag] = default + n * (high - default) if n >= 0 else default + n * (default - low)
+        instance = instancer.instantiateVariableFont(plain, user, inplace=False)
+        entry = describe(instance)
+        entry["location"] = loc
+        entry["normalized"] = mapped
+        golden["locations"].append(entry)
+
+    write_json(OUT_AVAR2_GOLDEN, golden)
+    print("wrote", OUT_AVAR2_FONT, os.path.getsize(OUT_AVAR2_FONT), "bytes and", OUT_AVAR2_GOLDEN)
 
 
 if __name__ == "__main__":

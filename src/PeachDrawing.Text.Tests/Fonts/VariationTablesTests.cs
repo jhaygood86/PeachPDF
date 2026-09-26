@@ -182,6 +182,165 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         [Fact]
+        public void Vvar_ReadsTheAdvanceMap_AndTheOriginMap_AndWithoutAnOriginMapDoesNotMoveOrigins()
+        {
+            var store = BuildStore();
+            // header: major, minor, store, advance map, top side bearing map, bottom side bearing map, vertical origin map = 24 bytes
+            var map = new Writer().U8(0).U8(0x00).U16(2).U8(1).U8(0).ToArray();     // one-byte entries with one inner bit: 0 -> (0, 1), 1 -> (0, 0)
+            var full = new Writer().U16(1).U16(0).U32(24).U32((uint)(24 + store.Length)).U32(0).U32(0).U32((uint)(24 + store.Length)).ToArray()
+                .Concat(store).Concat(map).ToArray();
+            var advancesOnly = new Writer().U16(1).U16(0).U32(24).U32(0).U32(0).U32(0).U32(0).ToArray().Concat(store).ToArray();
+
+            var withOrigins = VvarTable.TryParse(full);
+            var plain = VvarTable.TryParse(advancesOnly);
+
+            Assert.NotNull(withOrigins);
+            Assert.NotNull(plain);
+            Assert.True(withOrigins.VariesOrigins);
+            Assert.False(plain.VariesOrigins);
+
+            // Without an advance map glyph 0 and 1 are items 0 and 1 of the first data set; with one they are swapped.
+            Assert.Equal(100, plain.GetAdvanceDelta(0, [1.0]));
+            Assert.Equal(-50, plain.GetAdvanceDelta(1, [1.0]));
+            Assert.Equal(-50, withOrigins.GetAdvanceDelta(0, [1.0]));
+            Assert.Equal(100, withOrigins.GetAdvanceDelta(1, [1.0]));
+
+            // The origin map here is the same map as the advance map (the offset is shared): glyph 0 is item 1.
+            Assert.Equal(-50, withOrigins.GetOriginDelta(0, [1.0]));
+            Assert.Equal(0, plain.GetOriginDelta(0, [1.0]));
+        }
+
+        [Fact]
+        public void Vvar_RejectsATableThatIsTooShortOrTheWrongVersion_OrWhoseMapsAreDamaged()
+        {
+            var store = BuildStore();
+
+            Assert.Null(VvarTable.TryParse(new byte[20]));
+            Assert.Null(VvarTable.TryParse(new Writer().U16(2).U16(0).U32(24).U32(0).U32(0).U32(0).U32(0).ToArray()));
+            Assert.Null(VvarTable.TryParse(new Writer().U16(1).U16(0).U32(900).U32(0).U32(0).U32(0).U32(0).ToArray()));
+
+            // An advance map (and, separately, an origin map) that lies past the end of the table.
+            var advanceBeyond = new Writer().U16(1).U16(0).U32(24).U32((uint)(24 + store.Length + 100)).U32(0).U32(0).U32(0).ToArray().Concat(store).ToArray();
+            var originBeyond = new Writer().U16(1).U16(0).U32(24).U32(0).U32(0).U32(0).U32((uint)(24 + store.Length + 100)).ToArray().Concat(store).ToArray();
+            Assert.Null(VvarTable.TryParse(advanceBeyond));
+            Assert.Null(VvarTable.TryParse(originBeyond));
+        }
+
+        /// <summary>An <c>avar</c> table of one axis with the identity segment map, at the given version, followed by the bytes in <paramref name="rest"/>.</summary>
+        private static byte[] BuildAvar(int version, byte[] rest) =>
+            new Writer().U16(version).U16(0).U16(0).U16(1).U16(3)
+                .F2Dot14(-1).F2Dot14(-1).F2Dot14(0).F2Dot14(0).F2Dot14(1).F2Dot14(1)
+                .ToArray().Concat(rest).ToArray();
+
+        [Fact]
+        public void Avar_Version1_MapsThroughTheSegments()
+        {
+            var bytes = new Writer().U16(1).U16(0).U16(0).U16(1).U16(3)
+                .F2Dot14(-1).F2Dot14(-1).F2Dot14(0).F2Dot14(0).F2Dot14(0.5).F2Dot14(0.25)
+                .ToArray();
+
+            var avar = AvarTable.TryParse(bytes, 1);
+
+            Assert.NotNull(avar);
+            Assert.False(avar.HasCrossAxisMapping);
+            Assert.Equal([0.125], avar.Map([0.25]));
+            Assert.Equal([0.25], avar.Map([0.5]));
+            Assert.Equal([-1.0], avar.Map([-1.0]));
+            // Past the last segment the last value holds.
+            Assert.Equal([0.25], avar.Map([1.0]));
+        }
+
+        [Fact]
+        public void Avar_RejectsAWrongAxisCount_OrVersion()
+        {
+            Assert.Null(AvarTable.TryParse(BuildAvar(1, []), 2));
+            Assert.Null(AvarTable.TryParse(BuildAvar(3, []), 1));
+            Assert.Null(AvarTable.TryParse(new byte[4], 1));
+        }
+
+        [Fact]
+        public void Avar_Version2_AddsTheStoresDeltaInUnitsOfTheFixedPoint()
+        {
+            var store = BuildStore();
+            // Offsets are from the start of the table: 8 header + 2 count + 12 segment bytes + 8 offsets = 30.
+            var bytes = BuildAvar(2, new Writer().U32(0).U32(30).ToArray().Concat(store).ToArray());
+
+            var avar = AvarTable.TryParse(bytes, 1);
+
+            Assert.NotNull(avar);
+            Assert.True(avar.HasCrossAxisMapping);
+            // With no index map axis 0 is item 0, whose delta at 0.5 is 100 * 0.5 = 50 (in 1/16384).
+            Assert.Equal(0.5 + 50 / 16384.0, avar.Map([0.5])[0], precision: 10);
+            // At -1 it is -10, which the clamp to -1 absorbs.
+            Assert.Equal(-1.0, avar.Map([-1.0])[0]);
+            // At the default nothing reaches.
+            Assert.Equal(0.0, avar.Map([0.0])[0]);
+        }
+
+        [Fact]
+        public void Avar_Version2_UsesItsIndexMapToFindTheItem()
+        {
+            var store = BuildStore();
+            // A format 0 map with one entry: (outer 0, inner 1) as a 1-byte entry with 2 inner bits (entryFormat 0x01), so the axis is item 1.
+            var indexMap = new Writer().U8(0).U8(0x01).U16(1).U8(1).ToArray();
+            int storeAt = 8 + 2 + 12 + 8;
+            var bytes = BuildAvar(2, new Writer().U32((uint)(storeAt + store.Length)).U32((uint)storeAt).ToArray().Concat(store).Concat(indexMap).ToArray());
+
+            var avar = AvarTable.TryParse(bytes, 1);
+
+            Assert.NotNull(avar);
+            // Item 1 is -50 at the peak of region 0: at 0.5 it is -25.
+            Assert.Equal(0.5 - 25 / 16384.0, avar.Map([0.5])[0], precision: 10);
+        }
+
+        [Fact]
+        public void Avar_Version2_WithADamagedStoreOrIndexMap_ReadsAsVersion1()
+        {
+            var store = BuildStore();
+            // A store offset past the end of the table, and an index map offset past the end of it.
+            var badStore = BuildAvar(2, new Writer().U32(0).U32(9999).ToArray());
+            var badMap = BuildAvar(2, new Writer().U32(9999).U32(30).ToArray().Concat(store).ToArray());
+            var truncated = BuildAvar(2, new byte[3]);
+
+            foreach (var bytes in new[] { badStore, badMap, truncated })
+            {
+                var avar = AvarTable.TryParse(bytes, 1);
+                Assert.NotNull(avar);
+                Assert.False(avar.HasCrossAxisMapping);
+                Assert.Equal([0.5], avar.Map([0.5]));
+            }
+        }
+
+        [Fact]
+        public void Avar_Version2_WithAStoreForADifferentNumberOfAxes_ReadsAsVersion1()
+        {
+            // The store's regions have one axis; the font (and so the table) has two.
+            var store = BuildStore();
+            var bytes = new Writer().U16(2).U16(0).U16(0).U16(2)
+                .U16(3).F2Dot14(-1).F2Dot14(-1).F2Dot14(0).F2Dot14(0).F2Dot14(1).F2Dot14(1)
+                .U16(3).F2Dot14(-1).F2Dot14(-1).F2Dot14(0).F2Dot14(0).F2Dot14(1).F2Dot14(1)
+                .U32(0).U32(8 + 2 * 14 + 8)
+                .ToArray().Concat(store).ToArray();
+
+            var avar = AvarTable.TryParse(bytes, 2);
+
+            Assert.NotNull(avar);
+            Assert.False(avar.HasCrossAxisMapping);
+            Assert.Equal([0.5, -0.25], avar.Map([0.5, -0.25]));
+        }
+
+        [Fact]
+        public void Avar_Version2_BoundsTheResultToTheAxisRange()
+        {
+            var store = BuildStore();
+            var bytes = BuildAvar(2, new Writer().U32(0).U32(30).ToArray().Concat(store).ToArray());
+            var avar = AvarTable.TryParse(bytes, 1);
+
+            // 70000 (the second data set is not reached), but item 0's 100 * 1.0 at the peak must not push 1.0 above 1.
+            Assert.Equal(1.0, avar!.Map([1.0])[0]);
+        }
+
+        [Fact]
         public void Mvar_FindsAMetricByItsTag()
         {
             var store = BuildStore();

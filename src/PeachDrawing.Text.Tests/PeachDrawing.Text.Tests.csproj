@@ -117,11 +117,38 @@
     <None Include="..\..\assets\fonts\VariableTest.golden.json" Link="VariableTest.golden.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\VariableVerticalTest.ttf" Link="VariableVerticalTest.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\VariableVerticalTestNoVvar.ttf" Link="VariableVerticalTestNoVvar.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\VariableVerticalTest.golden.json" Link="VariableVerticalTest.golden.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\VariableCff2VerticalTest.otf" Link="VariableCff2VerticalTest.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\VariableCff2VerticalTest.golden.json" Link="VariableCff2VerticalTest.golden.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\VariableAvar2Test.ttf" Link="VariableAvar2Test.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\VariableAvar2Test.golden.json" Link="VariableAvar2Test.golden.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <!-- The hinted outlines FreeType itself makes of these fonts (assets/fonts/generate_hinting_golden.py), and the fonts it used. -->
     <None Include="..\..\assets\fonts\HintingGolden.json.gz" Link="HintingGolden.json.gz">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="..\..\assets\fonts\HintingArithmetic.golden.json.gz" Link="HintingArithmetic.golden.json.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingGasp.ttf" Link="HintingGasp.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingGasp.golden.json.gz" Link="HintingGasp.golden.json.gz">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="..\..\assets\fonts\HintingOpcodes.ttf" Link="HintingOpcodes.ttf">
