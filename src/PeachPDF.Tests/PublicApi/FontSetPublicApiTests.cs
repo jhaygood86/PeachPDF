@@ -110,9 +110,9 @@ namespace PeachPDF.Tests.PublicApi
         }
 
         [Fact]
-        public void AddData_AfterAMatchWasMade_ChangesWhatALaterMatchFinds()
+        public void AddData_AfterAMatchWasMade_DoesNotChangeTheAnswerAlreadyGiven()
         {
-            var name = UniqueName("Grows");
+            var name = UniqueName("Stable");
             var set = new FontSet();
             var family = set.AddFile(BundledFonts.Ttf, new AddOptions { FamilyName = name });
 
@@ -121,28 +121,14 @@ namespace PeachPDF.Tests.PublicApi
 
             set.AddFile(BundledFonts.Otf, new AddOptions { FamilyName = name, Weight = 700 });
 
+            // The request was answered before the bold face existed, and the answer stands, so that the measuring and the
+            // drawing of one piece of text cannot end up in different faces.
             Assert.True(family.TryMatch(new TypefaceQuery(TypefaceQuery.BoldWeight), out var after));
-            Assert.Equal(SyntheticStyle.None, after.Synthesis);
-            Assert.Equal("Source Code Pro", after.Typeface.FamilyName);
-        }
+            Assert.Equal(before.Typeface, after.Typeface);
 
-        [Fact]
-        public void AddData_AfterACoveringSearchFoundNothing_LetsALaterSearchFindTheNewFont()
-        {
-            var set = new FontSet();
-            var rune = new Rune(0x10FF10);
-
-            Assert.False(set.TryFindCoveringFamily(rune, EmojiPresentation.NoPreference, out _));
-
-            var name = UniqueName("Late");
-            set.AddFile(BundledFonts.Ttf, new AddOptions
-            {
-                FamilyName = name,
-                UnicodeRanges = [new RuneInterval(new Rune(0x10FF00), new Rune(0x10FFF0))]
-            });
-
-            Assert.True(set.TryFindCoveringFamily(rune, EmojiPresentation.NoPreference, out var family));
-            Assert.Equal(name, family.Name);
+            // A query nobody has asked yet sees the new face.
+            Assert.True(family.TryMatch(new TypefaceQuery(Weight: 800), out var fresh));
+            Assert.Equal("Source Code Pro", fresh.Typeface.FamilyName);
         }
 
         [Fact]

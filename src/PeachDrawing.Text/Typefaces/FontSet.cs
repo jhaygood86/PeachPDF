@@ -21,8 +21,13 @@ namespace PeachDrawing.Text
     /// <para>
     /// A set is not safe for concurrent use: matching and searching fill caches that are private to it, so give each
     /// thread its own set or serialize the calls. What the machine has installed is scanned once per process and is safe
-    /// to share. Adding a font clears what the set has cached, so a match made before a font was added never stands in
-    /// for one made after.
+    /// to share.
+    /// </para>
+    /// <para>
+    /// Add the fonts before the set is used to match. An answer the set has already given, a match or the family found
+    /// for a character, is remembered and does not change when a font is added afterwards. That keeps the measuring and
+    /// the drawing of one piece of text from disagreeing about which face it is set in; a set made after the fonts are
+    /// added sees them all.
     /// </para>
     /// </remarks>
     public sealed class FontSet

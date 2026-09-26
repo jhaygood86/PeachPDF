@@ -322,12 +322,6 @@ namespace PeachDrawing.Text.Internal.Fonts
             InstalledFonts[key] = clonedFamily;
 
             _CustomFonts[faceName] = fontBytes;
-
-            // Everything remembered about earlier requests was decided without this face: a request that fell back to
-            // another weight now has a better answer, and a character no family covered may now be covered.
-            _systemFallbackCache.Clear();
-            InstanceFontResolverInfosByTypefaceKey.Clear();
-            TypefaceCache.ForInstance(this).Clear();
         }
 
         private static bool IsSameFaceSlot(FontFaceEntry entry, int weight, bool isItalic, int stretch, IReadOnlyList<RuneInterval>? ranges)

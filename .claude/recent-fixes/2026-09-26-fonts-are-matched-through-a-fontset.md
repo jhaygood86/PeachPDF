@@ -18,10 +18,12 @@ wraps it (`Typeface.Face` is that bridge, for the PDF writer, until export and m
   added with no name takes the spelling in the font's own name table. (A wrong belief that the reader lowercases it was
   written down and then disproved by reading the fixture's `name` records; the lowercase seen in a failing test was this
   key.)
-- **Adding a font clears what the resolver cached.** The per-instance typeface cache, the resolver-info cache and the
-  covering-family cache were decided without the new face, so a match made before `AddData` kept answering after it (a
-  bold request kept its synthetic bold once a real bold was added; a character nothing covered stayed uncovered). The
-  HTML pipeline registers its fonts before layout, so it never saw this; a public caller adding fonts late does.
+- **Answers already given stay given, on purpose.** The typeface caches and the covering-family cache are not cleared by
+  `AddData`: a request answered before a bold face was added keeps its synthetic bold, and a character resolved to one
+  family stays there, so the measuring and the drawing of one piece of text cannot end up in different faces
+  (`FindFamilyCoveringCodepoint_CachesTheWinner_AcrossLaterRegistrations` pins it). A review suggested clearing the caches on
+  `AddData` as a fix for "stale" results; that broke this test, and the answer is the documented contract on `FontSet`
+  instead: add the fonts before matching.
 - **The last-resort family search must not be tested against private-use code points.** An installed font (Gabriola on
   Windows) covers U+E001, so a test that expected its own font to win failed on that machine. Use a range nothing
   installed covers (U+10FF00 to U+10FFF0) and a code point nothing covers (U+10FFFF).
