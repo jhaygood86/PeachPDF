@@ -90,6 +90,7 @@ def build_font(gasp):
     names = [".notdef", "A", "B"]
     fb = FontBuilder(1000, isTTF=True)
     fb.font.recalcTimestamp = False
+    fb.font.recalcBBoxes = False  # the maximum profile and the bounding boxes are set below
     fb.setupGlyphOrder(names)
     fb.setupCharacterMap({0x41: "A", 0x42: "B"})
     fb.setupGlyf({".notdef": rectangle(600, False), "A": rectangle(697, True), "B": rectangle(733, True)})
@@ -101,6 +102,11 @@ def build_font(gasp):
     head = fb.font["head"]
     head.created = head.modified = 3406620153  # 2011-12-13 11:22:33, as FontBuilder's own default
     head.flags |= 8  # integer ppem, as almost every hinted font has
+    head.xMin, head.yMin, head.xMax, head.yMax = 0, 0, 500, 733
+    maxp = fb.font["maxp"]
+    maxp.maxSizeOfInstructions = len(PROGRAM)  # a font that has glyph programs says how long the longest is: that is how the port tells a hinted font
+    maxp.maxStackElements = 2
+    maxp.maxPoints, maxp.maxContours = 4, 1
 
     buf = io.BytesIO()
     fb.font.save(buf)

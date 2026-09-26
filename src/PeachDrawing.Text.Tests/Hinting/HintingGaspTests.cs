@@ -114,12 +114,17 @@ namespace PeachDrawing.Text.Tests.Hinting
             var points = new List<(long, long)>();
             foreach (var contour in outline.Contours)
             {
+                int first = points.Count;
                 points.Add(((long)Math.Round(contour.Start.X * 64), (long)Math.Round(contour.Start.Y * 64)));
                 foreach (var segment in contour.Segments)
                 {
                     Assert.False(segment.IsCubic);
                     points.Add(((long)Math.Round(segment.End.X * 64), (long)Math.Round(segment.End.Y * 64)));
                 }
+
+                // the outline closes a contour with a line back to where it began; the points of the font do not repeat it
+                if (points.Count - first > 1 && points[^1] == points[first])
+                    points.RemoveAt(points.Count - 1);
             }
 
             return points;

@@ -233,9 +233,14 @@ if (face.TryGetOutline(glyph, request, out GlyphOutline fitted))
 - **Variable fonts** are hinted at the instance's location by moving the points with the `gvar` deltas first and then running the
   instructions. The result is a good approximation, not what FreeType produces bit for bit, and `cvar` (which changes control values by
   location) is not applied.
-- **What the font says about when to hint is not consulted.** The `gasp` table (which sizes want grid-fitting or smoothing), `LTSH` and
-  `VDMX` are not read: a caller that asks for fitting gets it at every size, and decides for itself whether a size is one where hinting
-  is worth having. Pixels are square: one size serves both directions.
+- **The font's `gasp` table decides which sizes are fitted.** A font that has one says, for each range of sizes, whether it wants
+  grid-fitting there (`GASP_GRIDFIT`); fonts often turn hinting off at the smallest sizes, where their programs do more harm than good,
+  and a request for fitting at such a size is answered as for a font that cannot be fitted: the scaled design outline with `IsGridFitted`
+  false, and no fitted advance. The size compared is the whole number of pixels per em the outline is fitted at (11.4 asked of a font that
+  wants whole sizes is 11). A size that no range reaches, a font with no `gasp` table, and a table of a version above 1 or one that is cut
+  short are treated as saying nothing, and the font is fitted. Only `GASP_GRIDFIT`, the flag for standard rasterization, is looked at, for
+  both modes; the flags for ClearType (`GASP_SYMMETRIC_GRIDFIT`, `GASP_SYMMETRIC_SMOOTHING`) are not, since nothing here draws with it.
+  `LTSH` and `VDMX` are not read (FreeType does not use them to load a glyph either). Pixels are square: one size serves both directions.
 
 The instruction interpreter and the CFF engine are ports of FreeType's (the CFF engine is the one Adobe contributed to FreeType), which
 is why the package carries the FreeType Project License notices and Adobe's (see [Licences](#licences)). They give the same fitted

@@ -152,16 +152,8 @@ internal sealed class HintingEngine
         {
             if (!_gaspRead)
             {
-                try
-                {
-                    _gasp = TtGasp.TryRead(_font);
-                }
-                catch (Exception ex) when (ex is not OutOfMemoryException)
-                {
-                    NoteFailure(ex);
-                    _gasp = null;
-                }
-
+                // reading the table checks every offset and length against the table, so it has nothing to throw about a hostile font
+                _gasp = TtGasp.TryRead(_font);
                 Volatile.Write(ref _gaspRead, true);
             }
 

@@ -10,7 +10,8 @@ namespace PeachDrawing.Text.Outlines
     /// drawn. Only the vertical direction is fitted in <see cref="Standard"/> mode, so glyphs keep the horizontal positions
     /// and widths the font's design gives them; that is the mode to use for anti-aliased text. A font with TrueType outlines is
     /// fitted by its instructions; a font with CFF outlines (PostScript outlines in an OpenType font) by the stem hints and blue
-    /// zones of its charstrings, which only fit vertically, so both modes give the same outline for it.
+    /// zones of its charstrings, which only fit vertically, so both modes give the same outline for it. A font whose <c>gasp</c> table does not
+    /// ask for grid-fitting at a size is not fitted at that size.
     /// </remarks>
     public enum GridFitting
     {
