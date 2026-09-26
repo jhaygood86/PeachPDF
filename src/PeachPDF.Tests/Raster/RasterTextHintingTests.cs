@@ -166,6 +166,39 @@ namespace PeachPDF.Tests.Raster
             Assert.NotEmpty(direct);
         }
 
+        /// <summary>Text in a bundled font drawn with the given hinting and stem darkening; the alpha channel of the surface.</summary>
+        private static async Task<byte[]> RenderWith(string fontPath, TextHinting hinting, bool stemDarkening, double fontSize = 9)
+        {
+            var adapter = new PdfSharpAdapter { TextHinting = hinting, TextStemDarkening = stemDarkening };
+            await BundledFonts.RegisterFont(adapter, fontPath, "RasterDarkeningFont");
+            var graphics = new RasterGraphics(adapter, new RasterSurface(120, 40, 0, 0, 1, 1), 1);
+            var font = adapter.GetFont("RasterDarkeningFont", fontSize, RFontStyle.Regular)!;
+            graphics.DrawString("Hlxn", font, Black, new RPoint(10, 10), graphics.MeasureString("Hlxn", font));
+            return Pixels(graphics);
+        }
+
+        private static long Ink(byte[] pixels) => pixels.Where((_, i) => i % 4 == 3).Sum(b => (long)b);
+
+        [Fact]
+        public async Task StemDarkeningMakesTheStemsOfASmallCffFontHeavier()
+        {
+            var plain = await RenderWith(BundledFonts.Otf, TextHinting.Standard, stemDarkening: false);
+            var darkened = await RenderWith(BundledFonts.Otf, TextHinting.Standard, stemDarkening: true);
+
+            Assert.NotEqual(plain, darkened);
+            Assert.True(Ink(darkened) > Ink(plain) * 1.03, $"ink {Ink(plain)} without and {Ink(darkened)} with darkening");
+        }
+
+        [Fact]
+        public async Task StemDarkeningDoesNothingWhereThereIsNoHintingOrNoCffOutline()
+        {
+            // no hinting: the text is the scaled design, whatever else is asked
+            Assert.Equal(await RenderWith(BundledFonts.Otf, TextHinting.None, stemDarkening: false), await RenderWith(BundledFonts.Otf, TextHinting.None, stemDarkening: true));
+
+            // a TrueType font has no stems to darken
+            Assert.Equal(await RenderWith(BundledFonts.Ttf, TextHinting.Standard, stemDarkening: false), await RenderWith(BundledFonts.Ttf, TextHinting.Standard, stemDarkening: true));
+        }
+
         [Fact]
         public async Task TextIsHintedOnlyAtTheSizesWhereTheFontsGaspTableAsksForIt()
         {

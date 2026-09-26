@@ -359,17 +359,17 @@ namespace PeachPDF.Adapters
             return new ImageAdapter(XImage.FromStream(() => memoryStream));
         }
 
-        protected override RFont CreateFontInt(string family, double size, RFontStyle style, int weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
+        protected override RFont CreateFontInt(string family, double size, RFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
         {
             return MatchAndCreateFont(family, size, style, weight, stretch, obliqueSkewSinus, variations);
         }
 
-        protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
+        protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
         {
             return MatchAndCreateFont(((FontFamilyAdapter)family).Name, size, style, weight, stretch, obliqueSkewSinus, variations);
         }
 
-        private FontAdapter MatchAndCreateFont(string family, double size, RFontStyle style, int weight, double stretch, double? obliqueSkewSinus, string? variations)
+        private FontAdapter MatchAndCreateFont(string family, double size, RFontStyle style, double weight, double stretch, double? obliqueSkewSinus, string? variations)
         {
             var fontStyle = (XFontStyle)((int)style);
             var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
@@ -384,11 +384,18 @@ namespace PeachPDF.Adapters
         /// <c>font-variation-settings</c> and the automatic optical size (for a font of <paramref name="size"/> in layout units) come after
         /// and win.
         /// </summary>
-        private TypefaceQuery QueryFor(int weight, double stretch, bool isItalic, System.Text.Rune? mustCover, double size, double? obliqueSkewSinus, string? variations) =>
+        private TypefaceQuery QueryFor(double weight, double stretch, bool isItalic, System.Text.Rune? mustCover, double size, double? obliqueSkewSinus, string? variations) =>
             new(weight, TypefaceQuery.NormalWidth, isItalic, mustCover,
                 FontVariationSettingsResolver.ToAxes(variations, size / PixelsPerPoint / PeachPDF.CSS.Length.PointsPerPx),
                 stretch,
-                obliqueSkewSinus is { } sinus ? Math.Asin(Math.Clamp(sinus, -1, 1)) * 180 / Math.PI : null);
+                obliqueSkewSinus is { } sinus ? ObliqueAngleOf(sinus) : null);
+
+        /// <summary>
+        /// The angle in degrees of an oblique skew's sine. The angle a box asks for went through a single-precision radian and a sine to get
+        /// here, so it does not come back exact (10 degrees comes back as 10.000001), and it is compared with the exact ends of the ranges that
+        /// faces declare. It is rounded to four decimals, far finer than any angle an author writes.
+        /// </summary>
+        private static double ObliqueAngleOf(double sinus) => Math.Round(Math.Asin(Math.Clamp(sinus, -1, 1)) * 180 / Math.PI, 4);
 
         private FontAdapter CreateFontAdapter(double size, XFontStyle fontStyle, TypefaceMatch match, double? obliqueSkewSinus)
         {
@@ -402,7 +409,7 @@ namespace PeachPDF.Adapters
             return new FontAdapter(xFont, PixelsPerPoint);
         }
 
-        protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations)
+        protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations)
         {
             var fontStyle = (XFontStyle)((int)style);
             var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
@@ -418,7 +425,7 @@ namespace PeachPDF.Adapters
             return CreateFontAdapter(size, fontStyle, match, obliqueSkewSinus);
         }
 
-        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations)
+        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations)
         {
             if (!_fontSet.TryFindCoveringFamily(codepoint, presentation, out var fallbackFamily))
                 return null;

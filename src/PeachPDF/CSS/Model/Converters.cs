@@ -36,8 +36,8 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter NaturalIntegerConverter =
             new StructValueConverter<int>(ValueExtensions.ToNaturalInteger);
 
-        public static readonly IValueConverter WeightIntegerConverter =
-            new StructValueConverter<int>(ValueExtensions.ToWeightInteger);
+        public static readonly IValueConverter WeightNumberConverter =
+            new StructValueConverter<double>(ValueExtensions.ToWeightNumber);
 
         public static readonly IValueConverter PositiveIntegerConverter =
             new StructValueConverter<int>(ValueExtensions.ToPositiveInteger);

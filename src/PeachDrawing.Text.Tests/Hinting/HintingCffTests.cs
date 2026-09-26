@@ -213,5 +213,100 @@ namespace PeachDrawing.Text.Tests.Hinting
             Assert.True(TypefaceFixtures.FromFile(Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.ttf")).Face.Descriptor.Hinting.CanHint);
             Assert.False(TypefaceFixtures.FromFile(Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf")).Face.Descriptor.Hinting.CanHint);
         }
+
+        private static OutlineRequest Darkened(double ppem) => new() { PixelsPerEm = ppem, GridFitting = GridFitting.Standard, StemDarkening = true };
+
+        [Fact]
+        public void StemDarkeningIsOffUnlessAskedFor()
+        {
+            Assert.False(default(OutlineRequest).StemDarkening);
+            Assert.False(Request(9).StemDarkening);
+
+            var font = Code;
+            int thickened = 0;
+            foreach (char c in "ehlnoxHIl")
+            {
+                var glyph = GlyphOf(font, c);
+                Assert.True(font.TryGetOutline(glyph, Request(9), out var plain));
+                Assert.True(font.TryGetOutline(glyph, new OutlineRequest { PixelsPerEm = 9, GridFitting = GridFitting.Standard, StemDarkening = false }, out var off));
+                Assert.True(font.TryGetOutline(glyph, Darkened(9), out var on));
+
+                // asking for no darkening is what not asking is, and the darkened outline is another one with the same structure
+                Assert.Equal(PointsOf(plain), PointsOf(off));
+                Assert.Equal(plain.Contours.Count, on.Contours.Count);
+                Assert.True(on.IsGridFitted);
+                if (!PointsOf(plain).SequenceEqual(PointsOf(on)))
+                    thickened++;
+            }
+
+            Assert.True(thickened >= 7, $"only {thickened} of the glyphs changed");
+        }
+
+        [Fact]
+        public void StemDarkeningMakesAThinStemWiderAndLeavesTheAdvanceAlone()
+        {
+            var font = Code;
+            var glyph = GlyphOf(font, 'l');
+
+            Assert.True(font.TryGetOutline(glyph, Request(9), out var plain));
+            Assert.True(font.TryGetOutline(glyph, Darkened(9), out var darkened));
+
+            double Width(GlyphOutline o) => PointsOf(o).Max(p => p.X) - PointsOf(o).Min(p => p.X);
+            Assert.True(Width(darkened) > Width(plain), $"{Width(darkened)} is not wider than {Width(plain)}");
+
+            Assert.Equal(plain.GridFittedAdvance, darkened.GridFittedAdvance);
+            Assert.True(font.TryGetGridFittedAdvance(glyph, Darkened(9), out var advance));
+            Assert.Equal(plain.GridFittedAdvance, advance);
+        }
+
+        [Fact]
+        public void TheDarkenedAndThePlainOutlinesAreCachedApart()
+        {
+            var font = TypefaceFixtures.FromBytes(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceCodePro-Regular.otf")));
+            var glyph = GlyphOf(font, 'n');
+
+            // darkened first, then plain, then each again: neither answer is served for the other request
+            Assert.True(font.TryGetOutline(glyph, Darkened(9), out var darkened));
+            Assert.True(font.TryGetOutline(glyph, Request(9), out var plain));
+            Assert.NotEqual(PointsOf(plain), PointsOf(darkened));
+
+            Assert.True(font.TryGetOutline(glyph, Darkened(9), out var darkenedAgain));
+            Assert.True(font.TryGetOutline(glyph, Request(9), out var plainAgain));
+            Assert.Same(darkened, darkenedAgain);
+            Assert.Same(plain, plainAgain);
+        }
+
+        [Fact]
+        public void StemDarkeningMeansNothingWithoutGridFittingOrForATrueTypeFont()
+        {
+            var code = Code;
+            var glyph = GlyphOf(code, 'e');
+
+            // no grid fitting: the design outline, whatever else is asked
+            Assert.True(code.TryGetOutline(glyph, out var design));
+            Assert.True(code.TryGetOutline(glyph, new OutlineRequest { PixelsPerEm = 9, GridFitting = GridFitting.None, StemDarkening = true }, out var none));
+            Assert.Equal(PointsOf(design), PointsOf(none));
+            Assert.False(none.IsGridFitted);
+
+            // a TrueType font: the same outline, and the very same cached entry
+            var sans = TypefaceFixtures.FromFile(Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.ttf"));
+            var sansGlyph = GlyphOf(sans, 'e');
+            Assert.True(sans.TryGetOutline(sansGlyph, Request(11), out var plain));
+            Assert.True(sans.TryGetOutline(sansGlyph, Darkened(11), out var darkened));
+            Assert.True(plain.IsGridFitted);
+            Assert.Same(plain, darkened);
+        }
+
+        [Fact]
+        public void LargeTextIsNotThickenedByStemDarkening()
+        {
+            // a stem of more than two and a third pixels gets no darkening: at 120 ppem the stems of this font are wider than that
+            var font = Code;
+            var glyph = GlyphOf(font, 'l');
+
+            Assert.True(font.TryGetOutline(glyph, Request(120), out var plain));
+            Assert.True(font.TryGetOutline(glyph, Darkened(120), out var darkened));
+            Assert.Equal(PointsOf(plain), PointsOf(darkened));
+        }
     }
 }

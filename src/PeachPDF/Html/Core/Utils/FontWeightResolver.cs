@@ -1,10 +1,11 @@
 using PeachPDF.CSS;
+using PeachPDF.Html.Core.Parse;
 
 namespace PeachPDF.Html.Core.Utils
 {
     /// <summary>
     /// Resolves a CSS font-weight value (keyword or numeric) to a concrete CSS Fonts numeric weight
-    /// (1-1000), including the <c>bolder</c>/<c>lighter</c> relative keywords, which per CSS2.1/Fonts must
+    /// (1-1000, fractions included), including the <c>bolder</c>/<c>lighter</c> relative keywords, which per CSS2.1/Fonts must
     /// step relative to the parent's own resolved (used) weight rather than always meaning a fixed
     /// "bold"/"normal". Extracted the same way <see cref="FontSizeResolver"/> was, so in-flow content and
     /// any future @page margin-box weight resolution share one implementation.
@@ -19,21 +20,21 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         /// <param name="fontWeightValue">The raw CSS font-weight value (keyword or numeric string).</param>
         /// <param name="parentWeight">The parent's own resolved numeric weight, used by <c>bolder</c>/<c>lighter</c>.</param>
-        internal static int Resolve(string fontWeightValue, int parentWeight)
+        internal static double Resolve(string fontWeightValue, double parentWeight)
         {
-            if (int.TryParse(fontWeightValue, out var numeric))
-                return Resolve(new CssKeywordOrValue<FontWeightKeyword, int>(null, numeric), parentWeight);
+            if (CssValueParser.TryParseNumber(fontWeightValue, out var numeric))
+                return Resolve(new CssKeywordOrValue<FontWeightKeyword, double>(null, numeric), parentWeight);
 
             return Resolve(
                 Map.FontWeightKeywords.TryGetValue(fontWeightValue, out var keyword)
-                    ? new CssKeywordOrValue<FontWeightKeyword, int>(keyword, null)
+                    ? new CssKeywordOrValue<FontWeightKeyword, double>(keyword, null)
                     : default,
                 parentWeight);
         }
 
         /// <param name="fontWeight">The parsed <c>font-weight</c> value.</param>
         /// <param name="parentWeight">The parent's own resolved numeric weight, used by <c>bolder</c>/<c>lighter</c>.</param>
-        internal static int Resolve(CssKeywordOrValue<FontWeightKeyword, int> fontWeight, int parentWeight)
+        internal static double Resolve(CssKeywordOrValue<FontWeightKeyword, double> fontWeight, double parentWeight)
         {
             if (fontWeight.IsValue)
                 return fontWeight.Value!.Value;

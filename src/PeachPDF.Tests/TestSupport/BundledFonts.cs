@@ -260,6 +260,16 @@ namespace PeachPDF.Tests.TestSupport
         internal static string VariableTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableTest.golden.json");
 
         /// <summary>
+        /// A synthetic variable font with CFF2 outlines (see VariableCff2Test.LICENSE.txt, made by generate_variable_fixture.py) on a weight and a
+        /// width axis: glyphs A to F, whose charstrings blend, call a local and a global subroutine, change <c>vsindex</c> and use a second Font
+        /// DICT; <see cref="VariableCff2TestGolden"/> holds what fontTools' instancer draws of it at a grid of locations.
+        /// </summary>
+        internal static string VariableCff2Test => Path.Combine(AppContext.BaseDirectory, "VariableCff2Test.otf");
+
+        /// <summary>The reference values for <see cref="VariableCff2Test"/>: outlines and advances at a grid of locations.</summary>
+        internal static string VariableCff2TestGolden => Path.Combine(AppContext.BaseDirectory, "VariableCff2Test.golden.json");
+
+        /// <summary>
         /// A synthetic variable font whose <c>GPOS</c> varies with weight (see VariableLayoutTest.LICENSE.txt): kerning of A V and V A, a single
         /// adjustment of W and a mark-to-base anchor, with <c>VariationIndex</c> device tables and a <c>GDEF</c> item variation store.
         /// </summary>

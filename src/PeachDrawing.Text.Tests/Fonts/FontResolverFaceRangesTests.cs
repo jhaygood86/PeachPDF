@@ -31,7 +31,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         private static FontResolver.DeclaredFace Widths(double minimum, double maximum) =>
             new(new AxisRange(400), false, new AxisRange(minimum, maximum), null);
 
-        private static FaceRequest Request(int weight, double width = 100, bool italic = false) => new(weight, italic, width);
+        private static FaceRequest Request(double weight, double width = 100, bool italic = false, double? obliqueAngle = null) => new(weight, italic, width, null, obliqueAngle);
 
         [Theory]
         [InlineData(100, "ttf")]
@@ -52,11 +52,24 @@ namespace PeachDrawing.Text.Tests.Fonts
         [InlineData(450, "otf")]
         [InlineData(800, "otf")]   // above 500: search upward first, but nothing is above 700 so the nearest below wins
         [InlineData(50, "ttf")]
-        public void ARequestOutsideEveryRange_TakesTheNearestRangeBySpecificationOrder(int weight, string expected)
+        [InlineData(399.5, "ttf")]   // fractions are searched by the same order: just below 400 searches downward
+        [InlineData(400.5, "otf")]
+        public void ARequestOutsideEveryRange_TakesTheNearestRangeBySpecificationOrder(double weight, string expected)
         {
             var resolver = Build(Weights(100, 300), Weights(500, 700));
 
             Assert.Equal(FaceNameOf(expected == "ttf" ? BundledFonts.Ttf : BundledFonts.Otf), resolver.ResolveFace(Family, Request(weight)).FaceName);
+        }
+
+        [Fact]
+        public void AFractionalWeight_IsHeldByARangeThatHoldsItAndOnlyIt()
+        {
+            // 350.5 is inside the first range and not inside either whole weight around it; matched as 350 it would have missed the range
+            // and taken the nearest of the other one.
+            var resolver = Build(Weights(350.2, 350.8), Weights(100, 300));
+
+            Assert.Equal(FaceNameOf(BundledFonts.Ttf), resolver.ResolveFace(Family, Request(350.5)).FaceName);
+            Assert.Equal(FaceNameOf(BundledFonts.Otf), resolver.ResolveFace(Family, Request(350)).FaceName);
         }
 
         [Fact]
@@ -201,6 +214,184 @@ namespace PeachDrawing.Text.Tests.Fonts
         public void Percentages_ConvertToTheNearestWidthClass(double percent, int expected)
         {
             Assert.Equal(expected, WidthClasses.FromPercent(percent));
+        }
+
+        private static FontResolver.DeclaredFace Oblique(double minimum, double maximum) =>
+            new(null, true, null, new AxisRange(minimum, maximum));
+
+        private static FontResolver.DeclaredFace Italic() => new(null, true, null, null);
+
+        private static FontResolver.DeclaredFace Upright() => new(null, false, null, null);
+
+        private static FontResolver.DeclaredFace At(double weight, bool italic, double width) =>
+            new(new AxisRange(weight), italic, new AxisRange(width), null);
+
+        [Fact]
+        public void TheWidthIsNarrowedBeforeTheStyle_SoACondensedItalicRequestGetsTheCondensedUprightFace()
+        {
+            // The family has a condensed upright face and an italic face of normal width. CSS Fonts 4 section 5.2 narrows by width first, so
+            // condensed italic text is set in the condensed face (and its lean is faked), not in the italic one.
+            var resolver = Build(At(400, italic: false, width: 75), At(400, italic: true, width: 100));
+            var condensed = FaceNameOf(BundledFonts.Ttf);
+            var italic = FaceNameOf(BundledFonts.Otf);
+
+            var condensedItalic = resolver.ResolveFace(Family, Request(400, 75, italic: true));
+            Assert.Equal(condensed, condensedItalic.FaceName);
+            Assert.True(condensedItalic.MustSimulateItalic);
+
+            var normalItalic = resolver.ResolveFace(Family, Request(400, 100, italic: true));
+            Assert.Equal(italic, normalItalic.FaceName);
+            Assert.False(normalItalic.MustSimulateItalic);
+
+            // Normal-width upright text: the width leaves only the italic face, which is then what there is.
+            Assert.Equal(italic, resolver.ResolveFace(Family, Request(400, 100)).FaceName);
+            Assert.Equal(condensed, resolver.ResolveFace(Family, Request(400, 75)).FaceName);
+            // 90% is not a width either has: at or below normal searches narrower first, so 75 wins over 100.
+            Assert.Equal(condensed, resolver.ResolveFace(Family, Request(400, 90, italic: true)).FaceName);
+        }
+
+        [Fact]
+        public void TheStyleIsNarrowedBeforeTheWeight()
+        {
+            // An italic bold request goes to the italic face even though it is the light one; the bold is faked.
+            var resolver = Build(At(700, italic: false, width: 100), At(300, italic: true, width: 100));
+
+            var info = resolver.ResolveFace(Family, Request(700, italic: true));
+
+            Assert.Equal(FaceNameOf(BundledFonts.Otf), info.FaceName);
+            Assert.True(info.MustSimulateBold);
+            Assert.False(info.MustSimulateItalic);
+        }
+
+        [Theory]
+        [InlineData(5.0, 0)]     // inside the first range
+        [InlineData(25.0, 1)]    // inside the second
+        [InlineData(10.5, 0)]    // below 11 degrees: the angles below are searched first
+        [InlineData(15.0, 1)]    // 11 degrees or more: the angles above are searched first
+        [InlineData(12.0, 1)]
+        [InlineData(40.0, 1)]    // nothing above: the nearest below
+        [InlineData(null, 1)]    // italic with no angle is compared as 11 degrees
+        public void AmongObliqueRanges_TheRequestedAngleChoosesTheNearest_WhicheverWasDeclaredLast(double? angle, int expectedRange)
+        {
+            var ranges = new[] { new AxisRange(0, 10), new AxisRange(20, 30) };
+
+            foreach (var reversed in new[] { false, true })
+            {
+                var declared = reversed ? new[] { ranges[1], ranges[0] } : ranges;
+                var resolver = Build(Oblique(declared[0].Minimum, declared[0].Maximum), Oblique(declared[1].Minimum, declared[1].Maximum));
+
+                var info = resolver.ResolveFace(Family, Request(400, italic: true, obliqueAngle: angle));
+
+                Assert.Equal(ranges[expectedRange], info.DeclaredRanges!.Oblique);
+                Assert.False(info.MustSimulateItalic);
+            }
+        }
+
+        [Theory]
+        [InlineData(-25, 1)]
+        [InlineData(-15, 1)]
+        [InlineData(-8, 0)]
+        [InlineData(-10.5, 0)]
+        public void ALeanToTheLeft_IsTheMirrorImage(double angle, int expectedRange)
+        {
+            var ranges = new[] { new AxisRange(-10, -5), new AxisRange(-30, -20) };
+            var resolver = Build(Oblique(ranges[0].Minimum, ranges[0].Maximum), Oblique(ranges[1].Minimum, ranges[1].Maximum));
+
+            var info = resolver.ResolveFace(Family, Request(400, italic: true, obliqueAngle: angle));
+
+            Assert.Equal(ranges[expectedRange], info.DeclaredRanges!.Oblique);
+        }
+
+        [Fact]
+        public void ARangeThatHoldsAnAngleBeatsOneThatIsMerelyNearer()
+        {
+            var resolver = Build(Oblique(0, 20), Oblique(14, 16));
+
+            Assert.Equal(new AxisRange(0, 20), resolver.ResolveFace(Family, Request(400, italic: true, obliqueAngle: 10)).DeclaredRanges!.Oblique);
+            // 15 is held by both, and the one declared last wins.
+            Assert.Equal(new AxisRange(14, 16), resolver.ResolveFace(Family, Request(400, italic: true, obliqueAngle: 15)).DeclaredRanges!.Oblique);
+        }
+
+        [Fact]
+        public void AnItalicFace_IsPreferredToAnObliqueRange_ForItalicText_AndTheRangeForAnExplicitAngle()
+        {
+            foreach (var italicFirst in new[] { true, false })
+            {
+                var resolver = italicFirst ? Build(Italic(), Oblique(0, 14)) : Build(Oblique(0, 14), Italic());
+                var italicName = FaceNameOf(italicFirst ? BundledFonts.Ttf : BundledFonts.Otf);
+                var obliqueName = FaceNameOf(italicFirst ? BundledFonts.Otf : BundledFonts.Ttf);
+
+                Assert.Equal(italicName, resolver.ResolveFace(Family, Request(400, italic: true)).FaceName);
+                Assert.Equal(obliqueName, resolver.ResolveFace(Family, Request(400, italic: true, obliqueAngle: 10)).FaceName);
+            }
+        }
+
+        [Fact]
+        public void AnExplicitAngle_FallsBackToAnItalicFace_WhereThereIsNoObliqueRange()
+        {
+            var resolver = Build(Upright(), Italic());
+
+            var info = resolver.ResolveFace(Family, Request(400, italic: true, obliqueAngle: 10));
+
+            Assert.Equal(FaceNameOf(BundledFonts.Otf), info.FaceName);
+            Assert.False(info.MustSimulateItalic);
+        }
+
+        [Fact]
+        public void ItalicText_WithNoItalicFaceAtAll_TakesAnUprightFaceAndFakesTheLean()
+        {
+            var resolver = Build(Upright(), Upright());
+
+            var info = resolver.ResolveFace(Family, Request(400, italic: true, obliqueAngle: 10));
+
+            Assert.True(info.MustSimulateItalic);
+        }
+
+        [Fact]
+        public void UprightText_WithOnlyObliqueRangesThatExcludeZero_TakesTheOneNearestToUpright()
+        {
+            var resolver = Build(Oblique(20, 30), Oblique(10, 14));
+
+            var info = resolver.ResolveFace(Family, Request(400));
+
+            Assert.Equal(new AxisRange(10, 14), info.DeclaredRanges!.Oblique);
+        }
+
+        [Fact]
+        public void UprightText_WithOnlyItalicFaces_TakesOneOfThem()
+        {
+            var resolver = Build(Italic(), Italic());
+
+            var info = resolver.ResolveFace(Family, Request(400));
+
+            Assert.False(info.MustSimulateItalic);
+            Assert.Equal(FaceNameOf(BundledFonts.Otf), info.FaceName);
+        }
+
+        [Fact]
+        public void UprightText_WithOnlyObliqueRangesBelowZero_TakesTheOneNearestToUpright()
+        {
+            var resolver = Build(Oblique(-30, -20), Oblique(-10, -5));
+
+            var info = resolver.ResolveFace(Family, Request(400));
+
+            Assert.Equal(new AxisRange(-10, -5), info.DeclaredRanges!.Oblique);
+        }
+
+        [Fact]
+        public void ATypefaceKey_CarriesAFractionalWeight_AndTheAngleOfAnItalicRequestOnly()
+        {
+            var whole = new FontResolvingOptions(FaceStyle.Regular, 350).ComputeTypefaceKey("F");
+            var fraction = new FontResolvingOptions(FaceStyle.Regular, 350.5).ComputeTypefaceKey("F");
+            var angled = new FontResolvingOptions(FaceStyle.Italic) { ObliqueAngle = 20 }.ComputeTypefaceKey("F");
+            var plainItalic = new FontResolvingOptions(FaceStyle.Italic).ComputeTypefaceKey("F");
+            var uprightWithAngle = new FontResolvingOptions(FaceStyle.Regular) { ObliqueAngle = 20 }.ComputeTypefaceKey("F");
+
+            Assert.Equal("tk:f/n/350/5", whole);
+            Assert.Equal("tk:f/n/350.5/5", fraction);
+            Assert.Equal("tk:f/i@20/400/5", angled);
+            Assert.Equal("tk:f/i/400/5", plainItalic);
+            Assert.Equal("tk:f/n/400/5", uprightWithAngle);
         }
 
         [Fact]

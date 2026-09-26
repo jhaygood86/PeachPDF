@@ -51,11 +51,9 @@ key of the font caches, and the engine's own typeface key carries the percentage
 
 ## Deliberately not done
 
-- The order the axes are narrowed in (style before width, the specification says width first) and choosing between several oblique
-  ranges by the requested angle: both are recorded in [the accepted gap](../accepted-gaps/font-face-matching-narrows-style-before-width.md).
-- Fractional `font-weight` values in a query (`ActualNumericWeight` is an integer): a range may hold fractions (`350.5 400`), the
-  request cannot.
-- Per-face ranges for **installed** variable fonts: a system font registers at its own default like any installed face.
+- The order the axes are narrowed in, choosing between several oblique ranges by the requested angle, fractional `font-weight` values in a
+  query and per-face ranges for installed variable fonts: all four were left out here and are done in
+  [the face matching entry](2026-09-26-face-matching-width-style-weight-order-and-fractional-weights.md).
 - `font-style: oblique` on the `ital` axis: an italic request sets `ital` to 1 as before; the oblique range only drives `slnt`.
 
 ## Evidence

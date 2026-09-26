@@ -151,7 +151,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             {
                 if (!instanceResolver!.InstanceFontResolverInfosByTypefaceKey.TryGetValue(typefaceKey, out fontResolverInfo))
                 {
-                    fontResolverInfo = instanceResolver.ResolveFace(familyName, new FaceRequest(fontResolvingOptions.Weight, fontResolvingOptions.IsItalic, fontResolvingOptions.WidthPercent));
+                    fontResolverInfo = instanceResolver.ResolveFace(familyName, new FaceRequest(fontResolvingOptions.Weight, fontResolvingOptions.IsItalic, fontResolvingOptions.WidthPercent, ObliqueAngle: fontResolvingOptions.ObliqueAngle));
                     if (fontResolverInfo == null)
                         throw new InvalidOperationException("No appropriate font found.");
 
@@ -202,7 +202,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         }
         private static LoadedTypeface GetOrCreateForCodepoint(string familyName, FontResolvingOptions options, System.Text.Rune codepoint, FontResolver resolver)
         {
-            var info = resolver.ResolveFace(familyName, new FaceRequest(options.Weight, options.IsItalic, options.WidthPercent, codepoint));
+            var info = resolver.ResolveFace(familyName, new FaceRequest(options.Weight, options.IsItalic, options.WidthPercent, codepoint, options.ObliqueAngle));
             if (info == null)
             {
                 // The caller (PdfSharpAdapter) pre-checks coverage before ever building the XFont, so a

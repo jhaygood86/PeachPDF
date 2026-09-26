@@ -36,7 +36,7 @@ namespace PeachDrawing.Text.Outlines
     /// <summary>What a caller wants of an outline: at which size, and how much to fit it to the pixel grid.</summary>
     /// <remarks>
     /// The default value asks for what <see cref="Typeface.TryGetOutline(ushort, out GlyphOutline)"/> gives: the design of the
-    /// font, in design units.
+    /// font, in design units, and, whatever is asked, no stem darkening.
     /// </remarks>
     public readonly struct OutlineRequest
     {
@@ -50,5 +50,18 @@ namespace PeachDrawing.Text.Outlines
 
         /// <summary>How much to fit the outline to the pixel grid.</summary>
         public GridFitting GridFitting { get; init; }
+
+        /// <summary>
+        /// Whether the stems of a glyph of a font with CFF outlines are made a little heavier when the outline is fitted. Off unless asked for.
+        /// </summary>
+        /// <remarks>
+        /// A raster that anti-aliases tends to render the thin stems of small text lighter than the designer meant; this is Adobe's CFF
+        /// engine's compensation for that (FreeType calls it stem darkening and leaves it off by default, as this does). How much a stem is
+        /// thickened depends on how thick it is on the pixel grid: the thinnest stems gain the most, and a stem more than about two and
+        /// a third pixels wide, which is what a stem is at a large size, gains nothing. It applies only
+        /// to a font with CFF outlines that is grid-fitted, so it is ignored for a TrueType font and for <see cref="GridFitting.None"/>,
+        /// and it does not change the advance.
+        /// </remarks>
+        public bool StemDarkening { get; init; }
     }
 }

@@ -22,6 +22,9 @@ namespace PeachDrawing.Text.Internal.Fonts
 
     internal class FontResolver : IFontResolver
     {
+        /// <summary>The angle CSS Fonts 4 §5.2 maps <c>font-style: italic</c> to when it is compared with faces that declare oblique angles.</summary>
+        private const double ItalicAsObliqueAngle = 11;
+
         private static readonly FrozenDictionary<string, (string Path, int FaceIndex)> _systemFontPaths;
         private static readonly FrozenDictionary<string, FontFamilyModel> _systemFamilies;
 
@@ -286,12 +289,10 @@ namespace PeachDrawing.Text.Internal.Fonts
 
             // What a descriptor leaves out (CSS Fonts 4: "auto") a variable font answers with the range of its own axes, so a file
             // registered with no descriptors covers every weight, width and slant it can draw.
-            var (axisWeight, axisWidth, axisOblique) = declared.Weight is null || declared.Width is null || declared.Oblique is null
-                ? ReadAxisRanges(fontBytes)
-                : default;
-            var weightRange = declared.Weight ?? axisWeight;
-            var widthRange = declared.Width ?? axisWidth;
-            var obliqueRange = declared.Oblique ?? (declared.IsItalic is null ? axisOblique : null);
+            var description = fontFileInfo.FontDescription;
+            var weightRange = declared.Weight ?? description.WeightRange;
+            var widthRange = declared.Width ?? description.WidthRange;
+            var obliqueRange = declared.Oblique ?? (declared.IsItalic is null ? description.ObliqueRange : null);
 
             // The nominal weight and width are the ones nearest to normal that the face covers: what the face is when a caller
             // asks for no more than it, and what the rest of the pipeline reads off its description.
@@ -365,46 +366,6 @@ namespace PeachDrawing.Text.Internal.Fonts
             InstalledFonts[key] = clonedFamily;
 
             _CustomFonts[faceName] = fontBytes;
-        }
-
-        /// <summary>
-        /// The weights, widths and oblique angles of the axes of a variable font, in the CSS scales, or nothing for what the font has
-        /// no axis for. A font that cannot be read has none, so registering it still succeeds and the failure surfaces when it is matched.
-        /// </summary>
-        private static (AxisRange? Weight, AxisRange? Width, AxisRange? Oblique) ReadAxisRanges(byte[] fontBytes)
-        {
-            try
-            {
-                if (FontFileData.GetOrCreateFrom(fontBytes).Fontface.Variations is not { } variations)
-                    return default;
-
-                AxisRange? weight = null;
-                AxisRange? width = null;
-                AxisRange? oblique = null;
-                foreach (var axis in variations.Axes)
-                {
-                    switch (axis.Tag)
-                    {
-                        case AxisTags.Weight:
-                            weight = new AxisRange(axis.Minimum, axis.Maximum);
-                            break;
-                        case AxisTags.Width:
-                            width = new AxisRange(axis.Minimum, axis.Maximum);
-                            break;
-                        case AxisTags.Slant:
-                            // The slant axis counts degrees counter-clockwise from vertical, so a lean to the right is negative;
-                            // CSS oblique angles lean to the right.
-                            oblique = new AxisRange(-axis.Maximum, -axis.Minimum);
-                            break;
-                    }
-                }
-
-                return (weight, width, oblique);
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                return default;
-            }
         }
 
         private static bool IsSameFaceSlot(FontFaceEntry existing, FontFaceEntry added)
@@ -490,10 +451,28 @@ namespace PeachDrawing.Text.Internal.Fonts
                 // their cmap supports (resolved lazily). Keep the first face seen per (weight, italic,
                 // stretch) - the same de-dup the previous dictionary key provided.
                 if (!font.Faces.Any(f => f.Weight == info.FontDescription.Weight && f.Italic == isItalic && f.Stretch == info.FontDescription.Stretch))
-                    font.Faces.Add(new FontFaceEntry(info.FontDescription.Weight, isItalic, info.FontDescription.Stretch, null, info.FontDescription));
+                    font.Faces.Add(new FontFaceEntry(info.FontDescription.Weight, isItalic, info.FontDescription.Stretch, null, info.FontDescription)
+                    {
+                        Declared = AxisRangesOf(info.FontDescription)
+                    });
             }
 
             return font;
+        }
+
+        /// <summary>
+        /// What an installed variable font covers: the ranges of its own axes, with the face's own weight and width standing in for an axis
+        /// it lacks. <see langword="null"/> for a font that has none of the three axes, which covers exactly its own weight and width.
+        /// </summary>
+        private static FaceRanges? AxisRangesOf(TtfFontDescription description)
+        {
+            if (description.WeightRange is null && description.WidthRange is null && description.ObliqueRange is null)
+                return null;
+
+            return new FaceRanges(
+                description.WeightRange ?? new AxisRange(description.Weight),
+                description.WidthRange ?? new AxisRange(WidthClasses.ToPercent(description.Stretch)),
+                description.ObliqueRange);
         }
 
         public virtual byte[] GetFont(string fontFaceName)
@@ -632,13 +611,14 @@ namespace PeachDrawing.Text.Internal.Fonts
             face.Ranges.Oblique is { } oblique ? isItalic || oblique.Contains(0) : face.Italic == isItalic;
 
         /// <summary>
-        /// CSS Fonts Level 4 §5 face matching. When the request names a codepoint, only faces
+        /// CSS Fonts Level 4 §5.2 face matching. When the request names a codepoint, only faces
         /// whose effective coverage (explicit <c>unicode-range</c>, else lazily-computed cmap coverage)
         /// includes it are candidates; among equally-good matches the last-declared wins (CSS cascade
         /// order for overlapping ranges). Otherwise every face is a candidate. Within the candidates it
-        /// narrows italic/slant first, then width, then weight; an exact axis match short-circuits. A face
-        /// that declares a range covers every value in it, and a value outside it is measured from the
-        /// nearest end of the range. Returns false when no candidate face qualifies.
+        /// narrows by width first, then style (<see cref="NarrowByStyle"/>), then weight, each step
+        /// keeping only the faces that cover the value it settled on. A face that declares a range covers
+        /// every value in it, and a value outside it is measured from the nearest end of the range.
+        /// Returns false when no candidate face qualifies.
         /// </summary>
         private bool TryFindNearestFace(FontFamilyModel family, FaceRequest request, out FontFaceEntry face)
         {
@@ -651,28 +631,80 @@ namespace PeachDrawing.Text.Internal.Fonts
             if (covering.Count == 0)
                 return false;
 
-            var exact = PreferStrictSlant(covering.Where(f => SlantMatches(f, request.IsItalic)
-                                                              && f.Ranges.Weight.Contains(request.Weight)
-                                                              && f.Ranges.Width.Contains(request.WidthPercent)).ToList(), request.IsItalic);
-            if (exact.Count > 0)
-            {
-                face = exact[^1];
-                return true;
-            }
-
-            var sameSlant = PreferStrictSlant(covering.Where(f => SlantMatches(f, request.IsItalic)).ToList(), request.IsItalic);
-            var candidates = sameSlant.Count > 0 ? sameSlant : covering;
-
             // A face is measured at the value of its range nearest to the request, which is the request itself when the range holds it.
-            var availableWidths = candidates.Select(f => f.Ranges.Width.Clamp(request.WidthPercent)).Distinct().ToList();
+            var availableWidths = covering.Select(f => f.Ranges.Width.Clamp(request.WidthPercent)).Distinct().ToList();
             var chosenWidth = PickNearestStretch(availableWidths, request.WidthPercent);
-            var widthCandidates = candidates.Where(f => f.Ranges.Width.Clamp(request.WidthPercent) == chosenWidth).ToList();
+            var widthCandidates = covering.Where(f => f.Ranges.Width.Clamp(request.WidthPercent) == chosenWidth).ToList();
 
-            var availableWeights = widthCandidates.Select(f => f.Ranges.Weight.Clamp(request.Weight)).Distinct().ToList();
+            var styleCandidates = NarrowByStyle(widthCandidates, request);
+
+            var availableWeights = styleCandidates.Select(f => f.Ranges.Weight.Clamp(request.Weight)).Distinct().ToList();
             var chosenWeight = PickNearestWeight(availableWeights, request.Weight);
 
-            face = widthCandidates.Last(f => f.Ranges.Weight.Clamp(request.Weight) == chosenWeight);
+            face = styleCandidates.Last(f => f.Ranges.Weight.Clamp(request.Weight) == chosenWeight);
             return true;
+        }
+
+        /// <summary>
+        /// The style step of CSS Fonts 4 §5.2 over the faces that survived the width step. A request for upright text takes the faces that
+        /// are upright (<see cref="PreferStrictSlant"/>), and when there are none the oblique range nearest to upright. A request for
+        /// <c>italic</c> takes the faces declared italic and, when there are none, the oblique range nearest to 11 degrees; a request for
+        /// <c>oblique &lt;angle&gt;</c> is the other way round, oblique ranges first (the one holding the angle, else the nearest by
+        /// <see cref="NearestOblique"/>) and then italic faces. Where the family has no face of the kind that was asked for, the faces
+        /// are returned as they were and the caller fakes the slant.
+        /// </summary>
+        private static List<FontFaceEntry> NarrowByStyle(List<FontFaceEntry> faces, FaceRequest request)
+        {
+            var oblique = faces.Where(f => f.Ranges.Oblique is not null).ToList();
+
+            if (!request.IsItalic)
+            {
+                var upright = PreferStrictSlant(faces.Where(f => SlantMatches(f, false)).ToList(), false);
+                if (upright.Count > 0)
+                    return upright;
+
+                return oblique.Count > 0 ? NearestOblique(oblique, 0) : faces;
+            }
+
+            var italic = faces.Where(f => f.Italic && f.Ranges.Oblique is null).ToList();
+
+            List<FontFaceEntry> preferred;
+            if (oblique.Count == 0)
+                preferred = italic;
+            else if (request.ObliqueAngle is { } angle)
+                preferred = NearestOblique(oblique, angle);
+            else
+                preferred = italic.Count > 0 ? italic : NearestOblique(oblique, ItalicAsObliqueAngle);
+
+            return preferred.Count > 0 ? preferred : faces;
+        }
+
+        /// <summary>
+        /// Of faces that all declare an oblique range, the ones that hold <paramref name="angle"/> or, when none does, the ones at the end of
+        /// a range that the specification's search order reaches first: for an angle of 11 degrees or more the angles above it in
+        /// ascending order and then the ones below it in descending order, for a smaller one the angles below it descending and then those
+        /// above it ascending, in both cases only angles above 0 until nothing is left and then the angles at or below 0 descending. A lean
+        /// to the left (a negative angle) is the mirror image.
+        /// </summary>
+        private static List<FontFaceEntry> NearestOblique(List<FontFaceEntry> faces, double angle)
+        {
+            var containing = faces.Where(f => f.Ranges.Oblique.Value.Contains(angle)).ToList();
+            if (containing.Count > 0)
+                return containing;
+
+            // With no range holding the angle a face is measured at the end of its range nearest to it. A negative angle is turned into
+            // its positive twin by flipping every value.
+            var mirror = angle < 0 ? -1.0 : 1.0;
+            var target = Math.Abs(angle);
+            double Measure(FontFaceEntry f) => mirror * f.Ranges.Oblique.Value.Clamp(angle);
+
+            var values = faces.Select(Measure).Distinct().ToList();
+            var above = values.Where(v => v > target).OrderBy(v => v);
+            var below = values.Where(v => v > 0 && v < target).OrderByDescending(v => v);
+            var leaning = target >= ItalicAsObliqueAngle ? above.Concat(below) : below.Concat(above);
+            var chosen = leaning.Concat(values.Where(v => v <= 0).OrderByDescending(v => v)).First();
+
+            return faces.Where(f => Measure(f) == chosen).ToList();
         }
 
         /// <summary>

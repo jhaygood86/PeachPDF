@@ -142,6 +142,7 @@ internal sealed partial class RasterGraphics
         {
             PixelsPerEm = font.Size * scaleX,
             GridFitting = mode == TextHinting.Monochrome ? GridFitting.Monochrome : GridFitting.Standard,
+            StemDarkening = _adapter.TextStemDarkening,
         };
     }
 
