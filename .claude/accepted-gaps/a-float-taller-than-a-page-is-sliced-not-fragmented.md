@@ -16,9 +16,17 @@ independently of the in-flow token chain, which is #317.
 
 A float that is or holds a multi-column container is not laid out unbroken, because the columns engine needs the
 fragmentainer that detaching removes; it still breaks between its lines, with #1339's loss for the text
-beside it. A scroll container around such a float stays monolithic, since the multi-column container
-fails its descendant check. Once auto-height scroll containers fragment (#1321), one *beside* it, such as
-the `overflow: hidden` block of a media object, fragments like a plain block does and has the same loss. A float inside a column also keeps the breaking
+beside it.
+
+A float whose declared width, with its margins, fills its containing block keeps the breaking path too
+(`CssBox.FillsTheInlineSize`): nothing can flow beside it, so its break loses nothing, and the breaking path
+breaks it cleanly between its lines, moves an image or a `break-inside: avoid` block, repeats a table's header
+and honours a forced break. A shrink-to-fit float that happens to fill the line is not recognised, since the
+test runs before layout, and is sliced.
+
+A float moved to the next page keeps the width and line wrapping it was laid out with. On a document whose
+pages differ in width (`@page` sizes or margins per page), it can overflow a narrower next page's content
+edge. A float inside a column also keeps the breaking
 path: laid out unbroken, its lines past the column's foot were drawn below the column, where no page shows
 them, since a column does not continue a slice the way the next page does.
 

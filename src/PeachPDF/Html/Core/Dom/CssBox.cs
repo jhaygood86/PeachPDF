@@ -3370,7 +3370,8 @@ namespace PeachPDF.Html.Core.Dom
             // one never reaches here.
             if (child.IsFloated && !child.IsAbsolutelyPositioned && !child.IsRunningPositioned
                 && child.HtmlContainer is { CurrentFragmentainer.HasOwnBand: false } floatContainer
-                && !IsOrHoldsAMultiColumnContainer(child))
+                && !IsOrHoldsAMultiColumnContainer(child)
+                && !FillsTheInlineSize(child))
             {
                 await LayoutBlockChildUnbroken(g, child, floatContainer, framePlacesChild);
 
@@ -3416,19 +3417,28 @@ namespace PeachPDF.Html.Core.Dom
             // Laid out again (a rewound pass), it is recorded again only if it moves again.
             container.MovedFloats.Remove(box);
 
+            // A flex or grid item's size was fixed by its engine before its content was committed, so a float
+            // moved inside it hung out of the item and over the content after the container.
+            if (IsInsideAFlexOrGridItem(box)) return;
+
             var top = box.StaticTop;
             var bottom = box.StaticBottom;
             var page = container.SlotStartingAt(top);
             if (page < 0) return;
 
             // The usable band, not the bare page: a footnote area or a bottom page float holds back the foot,
-            // and a top page float the head, so a float must neither end in the one nor land on the other.
-            var pageEnd = container.PageBottomOf(page) - container.TotalBandEndReservationFor(page);
+            // and a top page float the head, so a float must neither end in the one nor land on the other. The
+            // float's own notes go wherever it goes, so their room is added to it on every page rather than read
+            // off whichever page they were reserved on last time (HtmlContainerInt.FootnoteRoomCalledFrom).
+            var next = page + 1;
+            var (ownOnPage, ownNotes) = container.FootnoteRoomCalledFrom(box, page);
+            var (ownOnNext, _) = container.FootnoteRoomCalledFrom(box, next);
+
+            var pageEnd = container.PageBottomOf(page) - (container.TotalBandEndReservationFor(page) - ownOnPage) - ownNotes;
             if (bottom - HtmlContainerInt.PageBoundaryEpsilon <= pageEnd) return;
 
-            var next = page + 1;
             var nextTop = container.PageTopOf(next) + container.TopFloatAreaHeightsBySlot.GetValueOrDefault(next);
-            var nextEnd = container.PageBottomOf(next) - container.TotalBandEndReservationFor(next);
+            var nextEnd = container.PageBottomOf(next) - (container.TotalBandEndReservationFor(next) - ownOnNext) - ownNotes;
             if (bottom - top > nextEnd - nextTop) return;
 
             box.OffsetTop(nextTop - top);
@@ -3443,13 +3453,61 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// The root of the block formatting context <paramref name="box"/> is placed in: its nearest ancestor
-        /// that establishes an independent formatting context. The root always does, so there is one.
+        /// Whether float <paramref name="child"/> declares a width that, with its margins, fills this frame's
+        /// content box, so that no line box can sit beside it.
         /// </summary>
+        /// <remarks>
+        /// Such a float keeps the breaking path. Laying a float out in one piece exists for the in-flow content
+        /// beside it, which a break inside the float would put back on a page already emitted; with nothing
+        /// beside it there is nothing to lose, and the breaking path breaks it cleanly between its lines, moves
+        /// an image or a <c>break-inside: avoid</c> block to the next page, repeats a table's header and honours
+        /// a forced break. The <c>width: 100%</c> float wrapper and float-based page layouts rely on that. Asked
+        /// of the declared width, since the float has not been laid out yet: a shrink-to-fit float that happens
+        /// to fill the line is still laid out in one piece.
+        /// </remarks>
+        /// <param name="child">a float among this frame's children</param>
+        private bool FillsTheInlineSize(CssBox child)
+        {
+            if (!CssValueParser.IsValidLength(child.Width)) return false;
+
+            var available = ClientRight - ClientLeft;
+            var outer = CssValueParser.ParseLength(child.Width, available, child) + child.ActualBoxSizeIncludedWidth
+                        + child.ActualMarginLeft + child.ActualMarginRight;
+
+            return outer >= available - HtmlContainerInt.PageBoundaryEpsilon;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is inside a flex or grid item: some ancestor's parent is a flex or grid
+        /// container.
+        /// </summary>
+        private static bool IsInsideAFlexOrGridItem(CssBox box)
+        {
+            for (var item = box.ParentBox; item?.ParentBox is { } parent; item = parent)
+            {
+                if (parent.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
+                    or Keywords.Grid or Keywords.InlineGrid)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The root of the block formatting context <paramref name="box"/> is placed in: its nearest ancestor
+        /// that contains its floats (<see cref="DomUtils.ContainsItsFloats"/>), a multi-column container
+        /// included (css-multicol-1 §2). The root always does, so there is one.
+        /// </summary>
+        /// <remarks>
+        /// A multi-column container counts: without it, a float inside one shared a root with a float moved to
+        /// the next page before the container, and while the columns were measured (with the fragmentainer
+        /// detached, so outside the column guard in <c>CssLayoutEngine.FloatBox</c>) it was held down to that
+        /// float's top, which inflated the measured height the columns were balanced against.
+        /// </remarks>
         internal static CssBox FormattingContextRootOf(CssBox box)
         {
             var ancestor = box.ParentBox ?? box;
-            while (!DomUtils.EstablishesIndependentFormattingContext(ancestor)) ancestor = ancestor.ParentBox!;
+            while (!DomUtils.ContainsItsFloats(ancestor)) ancestor = ancestor.ParentBox!;
             return ancestor;
         }
 

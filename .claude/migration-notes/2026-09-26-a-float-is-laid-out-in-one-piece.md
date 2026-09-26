@@ -16,8 +16,10 @@ content after it flows around it there; a later float is placed no higher than i
 float takes the new page's side of the spread. One taller than a page runs on across pages, each page showing
 its slice, while the text beside it keeps flowing around it: a line of the float that straddles a page
 boundary is cut, part on each page, rather than moved. A forced break inside the float
-(`break-before: page` on one of its children) is no longer honoured. A float that holds a multi-column
-container, and a float inside a column of one, keep the old behaviour.
+(`break-before: page` on one of its children) is no longer honoured. A float whose declared width fills its
+containing block (nothing can flow beside it), a float that is or holds a multi-column container, and a
+float inside a column of one keep the old behaviour. A float inside a flex or grid item is laid out in one
+piece but not moved.
 
 **Why:** CSS Fragmentation 3 §4.4 (content must not be lost) and CSS 2.1 §9.5 (line boxes beside a float
 keep flowing around it). Tracked as #1339 and #1340; full float fragmentation is #317.

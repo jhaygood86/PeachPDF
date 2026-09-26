@@ -47,15 +47,22 @@ How the move is decided and placed:
 A new path that lays an absolutely positioned box, a float, or anything else out of tree-order position must
 do the same, or keep a scroll container around it monolithic.
 
-**The standing exceptions.**
-- A float or absolutely positioned box that is or holds a multi-column container keeps the breaking path,
-  because its columns engine needs the attached fragmentainer (`CssBox.IsOrHoldsAMultiColumnContainer`).
-  Reviews found `float: left; columns: 2`, and then an absolutely positioned `columns: 2` box, each missed,
-  and each lost its last lines.
-- A float inside a column keeps the breaking path too, because a column does not continue a slice the way a
-  page does. Laid out unbroken, its lines past the column's foot were drawn below the page band.
+**The standing exceptions** all concern the block frame's path (`CssBox.LayoutBlockChild`). A float among
+inline content is always laid out unbroken by the inline flow.
+- A block-level float or absolutely positioned box that is or holds a multi-column container keeps the
+  breaking path, because its columns engine needs the attached fragmentainer
+  (`CssBox.IsOrHoldsAMultiColumnContainer`). Reviews found `float: left; columns: 2`, and then an absolutely
+  positioned `columns: 2` box, each missed, and each lost its last lines.
+- A block-level float inside a column keeps the breaking path too, because a column does not continue a
+  slice the way a page does. Laid out unbroken, its lines past the column's foot were drawn below the page
+  band.
 
-Both still break, and still have #1339's loss (see the accepted gap on tall floats).
+These two still break, and still have #1339's loss (see the accepted gap on tall floats).
+- A block-level float whose declared width fills its containing block keeps the breaking path as well
+  (`CssBox.FillsTheInlineSize`). Nothing can flow beside it, so its break loses nothing, and breaking it
+  between its lines beats slicing it.
+- A float inside a flex or grid item is laid out unbroken but never moved: the engine fixed the item's size
+  before committing its content.
 
 The multi-column absolute box's break still ends the pass. The content after it cannot simply be put at its
 §9.3.1 position, because that page is already emitted:

@@ -266,6 +266,57 @@ namespace PeachPDF.Html.Core
             FootnoteAreaHeightsBySlot.GetValueOrDefault(slot) + BottomFloatAreaHeightsBySlot.GetValueOrDefault(slot);
 
         /// <summary>
+        /// The page-area room that footnotes called from inside <paramref name="box"/> took on
+        /// <paramref name="slot"/> in the previous layout attempt, and on every slot together.
+        /// </summary>
+        /// <remarks>
+        /// For a box laid out in one piece and then moved whole (a float,
+        /// <c>CssBox.MoveWholeOntoTheNextPageIfItFits</c>): its notes go wherever it goes, so whether it fits on a
+        /// page is asked with its own notes' room added to it and taken out of what that page already reserves.
+        /// Read off the page's reservation as it stands, the answer flipped between attempts: the notes reserved
+        /// room on page k, the box no longer fit there and moved, its notes followed, page k was free again and
+        /// the box moved back. The loop stopped at its cap in whichever state it had reached, with in-flow
+        /// content pushed off page k by a reservation nothing used.
+        /// A note area holding only this box's notes counts whole, divider included; one shared with other
+        /// calls counts only these bodies. Column note areas never reserve page room and are not counted.
+        /// </remarks>
+        /// <param name="box">the box whose own footnote calls are counted</param>
+        /// <param name="slot">the slot to report separately</param>
+        /// <returns>the room on <paramref name="slot"/>, and the room on every slot</returns>
+        internal (double OnSlot, double Total) FootnoteRoomCalledFrom(CssBox box, int slot)
+        {
+            if (_footnoteAreasBySlot.Count == 0) return (0, 0);
+
+            double onSlot = 0, total = 0;
+            foreach (var (areaSlot, areas) in _footnoteAreasBySlot)
+            {
+                foreach (var area in areas)
+                {
+                    if (area.Column is not null) continue;
+
+                    double own = 0;
+                    var ownCalls = 0;
+                    foreach (var call in area.Calls)
+                    {
+                        if (!DomUtils.IsSelfOrDescendantOf(call, box)) continue;
+
+                        var body = call.Body;
+                        own += body.ActualBottom + body.ActualMarginBottom - (body.Location.Y - body.ActualMarginTop);
+                        ownCalls++;
+                    }
+
+                    if (ownCalls == 0) continue;
+
+                    var room = ownCalls == area.Calls.Count ? area.TotalHeight : own;
+                    total += room;
+                    if (areaSlot == slot) onSlot += room;
+                }
+            }
+
+            return (onSlot, total);
+        }
+
+        /// <summary>
         /// Lazily-built id -&gt; box index backing <see cref="GetBoxById(CssBox, string)"/>
         /// (<c>target-counter()</c>/<c>target-text()</c> resolution, which can look up many ids across
         /// one document - see <see cref="DomUtils.BuildIdIndex"/>). Rebuilt whenever the tree's topmost

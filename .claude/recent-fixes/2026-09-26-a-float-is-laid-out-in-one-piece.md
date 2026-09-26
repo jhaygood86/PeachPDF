@@ -11,8 +11,8 @@ float on page 2, while the in-flow content laid out beside it was placed back on
 emitted. Measured on a 300×200pt page:
 - a block beside a 30-line float drew only B27–B30 (#1339);
 - the line after a float that moved to the next page was drawn on both pages (#1340);
-- inside a fragmenting `overflow: hidden` wrapper, the text beside a float was drawn on no page (the #1334
-  review's repro A).
+- with #1334's fragmenting `overflow: hidden` wrappers, the text beside a float inside one was drawn on no
+  page (that review's repro A). That wrapper change is #1321's, split out separately.
 
 ## The load-bearing idea
 
@@ -65,6 +65,39 @@ breaking path (`IsOrHoldsAMultiColumnContainer`). The float's own `columns` was 
   plain inline box's `Location` where it resets its rectangles (`ResumeOrdinal == 0`).
   `MovedFloatRelayoutIdempotencyTests` compares every box, anonymous ones included, and every word, over
   four layouts against a fresh one.
+
+## Review of the split PR
+
+- **Footnotes inside a moved float.** The fit check read the page's footnote reservation as it stood after
+  the previous attempt, and that reservation depended on where the float had been.
+  - The float's note reserved room on page k, the float no longer fit and moved, the note followed, page k
+    was free again, and the float moved back.
+  - Measured on a 300×200pt page: the attempts stopped with the filler lines before the float pushed off
+    page k by a reservation nothing used.
+  - The check now counts the float's own notes with it on every page (`HtmlContainerInt.FootnoteRoomCalledFrom`),
+    so the answer is the same on every attempt.
+  - `FloatHoldingAFootnoteCall_MovesOnlyWhenItAndItsNoteDoNotFit` fails without it.
+  - A `float: bottom` page float inside a float could feed back the same way through
+    `BottomFloatAreaHeightsBySlot`. It is not handled, and no fixture reached it.
+- **A float that fills its containing block** (`float: left; width: 100%` wrappers, float layouts) has
+  nothing beside it to lose. So it keeps the breaking path, which breaks it cleanly between its lines, where
+  the unbroken path sliced it and cut a line at every page boundary (`CssBox.FillsTheInlineSize`). The test
+  reads the declared width, since the float is not laid out yet.
+- **A float in a multi-column container** shared its formatting-context root with a float moved before the
+  container. While the columns were measured it was held down to that float's top, which inflated the
+  height the columns were balanced against. `FormattingContextRootOf` now stops at `DomUtils.ContainsItsFloats`,
+  which counts a multi-column container (css-multicol-1 §2).
+- **A float inside a flex or grid item** was moved in the item's commit pass, after the engine had fixed
+  the item's size. It hung out of the item and over the paragraph after the container. It is no longer
+  moved. Table cells were already fine, and the test covers them.
+- **The rule 5 scan over moved floats** ran a tree-order walk, with two allocations, for every earlier moved
+  float and every float placed. It now drops a moved float that cannot raise the current start first, and
+  `IsBeforeInTreeOrder` walks both chains to the same depth without allocating.
+- **Not done:**
+  - a moved float keeps the width it was laid out with, which can overflow a narrower next page (recorded in
+    the gap);
+  - a `display: none` or `display: contents` descendant of a moved float still has its never-placed
+    `Location` translated on every layout. Nothing reads it.
 
 ## Not done here
 

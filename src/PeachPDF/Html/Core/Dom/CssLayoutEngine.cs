@@ -1952,7 +1952,8 @@ namespace PeachPDF.Html.Core.Dom
                     if (box.HtmlContainer is { CurrentFragmentainer: not { HasOwnBand: true } } floatContainer)
                     {
                         startY = Math.Max(startY, LowestOuterTopOfAnEarlierFloat(containingBox, currentBoxIdx) + box.ActualMarginTop);
-                        startY = Math.Max(startY, LowestOuterTopOfAnEarlierMovedFloat(floatContainer, box) + box.ActualMarginTop);
+                        startY = Math.Max(startY, LowestOuterTopOfAnEarlierMovedFloat(
+                            floatContainer, box, startY - box.ActualMarginTop) + box.ActualMarginTop);
                     }
                     if (box.EffectiveFloatSide == Floating.Right) FloatBoxRight(box, containingBox, startX, startY);
                     else FloatBoxLeft(box, containingBox, startX, startY);
@@ -2017,20 +2018,28 @@ namespace PeachPDF.Html.Core.Dom
         /// <paramref name="box"/>, in the same block formatting context: rule 5 across nesting, which the
         /// sibling scan (<see cref="LowestOuterTopOfAnEarlierFloat"/>) does not see.
         /// </summary>
+        /// <remarks>
+        /// Asked for every float placed, over every float moved so far in the layout, so a moved float that
+        /// cannot raise <paramref name="floor"/> is dropped before the tree-order walk: in a long report with a
+        /// floated figure per page, almost every earlier moved float is above the one being placed.
+        /// </remarks>
         /// <param name="container">the container recording the moved floats</param>
         /// <param name="box">the float being placed</param>
-        /// <returns>the lowest outer top, or <see cref="double.MinValue"/> when there is none</returns>
-        private static double LowestOuterTopOfAnEarlierMovedFloat(HtmlContainerInt container, CssBox box)
+        /// <param name="floor">the outer top the float is already held at; only a lower one matters</param>
+        /// <returns>the lowest outer top above <paramref name="floor"/>, or <see cref="double.MinValue"/> when there is none</returns>
+        private static double LowestOuterTopOfAnEarlierMovedFloat(HtmlContainerInt container, CssBox box, double floor)
         {
             if (container.MovedFloats.Count == 0) return double.MinValue;
 
-            var root = CssBox.FormattingContextRootOf(box);
+            CssBox? root = null;
             var lowest = double.MinValue;
             foreach (var (moved, movedRoot) in container.MovedFloats)
             {
                 var outerTop = moved.StaticTop - moved.ActualMarginTop;
-                if (ReferenceEquals(moved, box) || !ReferenceEquals(movedRoot, root) || outerTop <= lowest) continue;
-                if (IsBeforeInTreeOrder(moved, box)) lowest = outerTop;
+                if (ReferenceEquals(moved, box) || outerTop <= floor || outerTop <= lowest) continue;
+
+                root ??= CssBox.FormattingContextRootOf(box);
+                if (ReferenceEquals(movedRoot, root) && IsBeforeInTreeOrder(moved, box)) lowest = outerTop;
             }
 
             return lowest;
@@ -2042,24 +2051,30 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static bool IsBeforeInTreeOrder(CssBox a, CssBox b)
         {
-            var chainA = new List<CssBox>();
-            for (var box = a; box is not null; box = box.ParentBox) chainA.Add(box);
+            var depthA = DepthOf(a);
+            var depthB = DepthOf(b);
 
-            var ancestorsOfA = new HashSet<CssBox>(chainA);
-            CssBox? childOfCommonOnB = null;
-            var common = b;
-            while (common is not null && !ancestorsOfA.Contains(common))
+            // Bring both to the same depth; landing on the other box means one contains the other.
+            for (; depthA > depthB; depthA--) a = a.ParentBox!;
+            for (; depthB > depthA; depthB--) b = b.ParentBox!;
+            if (ReferenceEquals(a, b)) return false;
+
+            // Up to the children of the common ancestor, whose order among its boxes is the answer.
+            while (!ReferenceEquals(a.ParentBox, b.ParentBox))
             {
-                childOfCommonOnB = common;
-                common = common.ParentBox;
+                a = a.ParentBox!;
+                b = b.ParentBox!;
             }
 
-            // No common ancestor, or b inside a (the common ancestor is b itself, or a).
-            var indexOfCommon = common is null ? -1 : chainA.IndexOf(common);
-            if (common is null || childOfCommonOnB is null || indexOfCommon <= 0) return false;
+            if (a.ParentBox is not { } common) return false;
+            return common.Boxes.IndexOf(a) < common.Boxes.IndexOf(b);
 
-            var childOfCommonOnA = chainA[indexOfCommon - 1];
-            return common.Boxes.IndexOf(childOfCommonOnA) < common.Boxes.IndexOf(childOfCommonOnB);
+            static int DepthOf(CssBox box)
+            {
+                var depth = 0;
+                for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox) depth++;
+                return depth;
+            }
         }
 
         /// <summary>
@@ -2072,7 +2087,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns>the float's static location</returns>
         internal static RPoint FloatPositionBesideTheFloatsAt(CssBox box, double startY)
         {
-            var containingBox = box.ContainingBlock!;
+            var containingBox = box.ContainingBlock;
             return box.EffectiveFloatSide == Floating.Right
                 ? FloatBoxRightPosition(box, containingBox, containingBox.ClientLeft, startY)
                 : FloatBoxLeftPosition(box, containingBox, containingBox.ClientLeft, startY);
@@ -4279,7 +4294,7 @@ namespace PeachPDF.Html.Core.Dom
 
             (coordinates.InlineFloats ??= []).Add(b);
 
-            var onPages = b.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: false } };
+            var onPages = b.HtmlContainer is { CurrentFragmentainer.HasOwnBand: false };
             await LayoutContentUnbroken(g, b);
             if (onPages) CssBox.MoveWholeOntoTheNextPageIfItFits(b, b.HtmlContainer!);
         }

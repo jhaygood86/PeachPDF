@@ -32,6 +32,21 @@ namespace PeachPDF.Tests.Integration
             AssertEachDrawnOnceInsideABand(placed, 30);
         }
 
+        // A float that fills its containing block's width has nothing beside it to lose, so it keeps the breaking
+        // path: it breaks cleanly between its lines, and every line is drawn inside a page band. Laid out in one
+        // piece it was sliced instead, with the line on each boundary cut in two.
+        [Theory]
+        [InlineData("width:100%")]
+        [InlineData("width:240pt;padding:0 10pt")]
+        [InlineData("width:50%;margin-right:50%")]
+        public async Task FloatThatFillsItsContainingBlock_BreaksBetweenItsLines(string css)
+        {
+            var placed = await WordFragments(
+                $"<div>{Lines("C", 3)}</div><div style='float:left;{css}'>{Lines("W", 30)}</div><p>after</p>");
+
+            AssertEachDrawnOnceInsideABand(placed, 30);
+        }
+
         // A float that does not fit in what is left of a page, and fits on one page, moves whole to the next
         // one, and the text after it is not drawn twice at the boundary. It used to be broken, and the
         // following block's boundary line was drawn at the foot of one page and again above the next one's
@@ -65,6 +80,37 @@ namespace PeachPDF.Tests.Integration
             if (side == "left") Assert.True(later.Location.X >= moved.ActualRight - 0.01, "the later float overlaps the moved one");
         }
 
+        // A float holding a footnote call: its note goes wherever the float goes, so the float moves only when
+        // it and its note do not fit together, and the answer is the same on every layout attempt. Read off the
+        // page's reservation as it stood, it flipped: the note reserved room on page 1, the float moved, the
+        // note followed, page 1 was free again, and the loop stopped at its cap with the filler pushed off page 1
+        // by a reservation nothing used.
+        [Theory]
+        [InlineData(1, false)]
+        [InlineData(6, true)]
+        [InlineData(8, true)]
+        [InlineData(9, true)]
+        public async Task FloatHoldingAFootnoteCall_MovesOnlyWhenItAndItsNoteDoNotFit(int fillerLines, bool moves)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><head><style>body{margin:0;font:10pt/12pt Arial} p{margin:0} " +
+                ".fn{float:footnote;font-size:8pt;line-height:10pt}</style></head><body>" +
+                $"<div>{Lines("C", fillerLines)}</div><div id='f' style='float:right;width:80pt'>" +
+                "F1<br>F2<span class='fn'>Note one<br>line two<br>line three</span><br>F3<br>F4</div>" +
+                $"<div>{Lines("W", 20)}</div></body></html>", pageWidth: 300, pageHeight: PageHeight, margin: Margin);
+            var box = LayoutHarness.FindById(root, "f")!;
+            var page = container.SlotStartingAt(box.Location.Y);
+
+            Assert.Equal(moves ? 1 : 0, page);
+            Assert.Equal([page], container.FootnoteAreaHeightsBySlot.Keys);
+            Assert.True(box.ActualBottom <= container.PageBottomOf(page) - container.TotalBandEndReservationFor(page) + 0.01,
+                "the float runs into its own note area");
+
+            // Nothing on the page before is pushed off it by room the note no longer takes there.
+            var lastFiller = LayoutHarness.Descendants(root).SelectMany(b => b.Words).Where(w => w.Text?.StartsWith('C') == true).Max(w => w.Top);
+            Assert.Equal(0, container.SlotStartingAt(lastFiller));
+        }
+
         // An absolutely positioned box keeps its float value but is not a float (CSS 2.1 §9.7), so rule 5 does not
         // hold a later float below it: placed by its offsets far down, it pushed the real float onto page 2.
         [Fact]
@@ -81,12 +127,14 @@ namespace PeachPDF.Tests.Integration
         // Rule 5 across nesting: a float moved to page 2 from inside an earlier block holds a later float in the
         // same formatting context, which is not its sibling, on page 2 as well. The sibling scan missed it, and
         // the later float stayed on page 1, above the earlier one.
-        [Fact]
-        public async Task FloatMovedFromInsideAnEarlierBlock_HoldsALaterFloatBelowIt()
+        [Theory]
+        [InlineData("<div id='b' style='float:right;width:60pt'>B1</div>")]
+        [InlineData("<div><div id='b' style='float:right;width:60pt'>B1</div></div>")]
+        public async Task FloatMovedFromInsideAnEarlierBlock_HoldsALaterFloatBelowIt(string laterFloat)
         {
             var (root, _) = await LayoutFloats(
                 $"<div>{Lines("C", 10)}</div><div><div id='a' style='float:left;width:60pt'>{Lines("A", 4)}</div></div>" +
-                $"<div id='b' style='float:right;width:60pt'>B1</div><div>{Lines("W", 15)}</div>");
+                $"{laterFloat}<div>{Lines("W", 15)}</div>");
             var moved = LayoutHarness.FindById(root, "a")!;
             var later = LayoutHarness.FindById(root, "b")!;
 
@@ -109,6 +157,41 @@ namespace PeachPDF.Tests.Integration
             Assert.True(later.Location.X > earlier.ActualRight, "the later float must be in the second column");
             Assert.True(later.Location.Y < earlier.Location.Y,
                 $"the later float at {later.Location.Y:F2} was held down to the earlier one's {earlier.Location.Y:F2}");
+        }
+
+        // A multi-column container establishes a formatting context of its own (css-multicol-1 §2), so a float
+        // inside it is not held below a float moved to the next page before the container: the container starts
+        // on the page before, and its float stays with its column there.
+        [Fact]
+        public async Task FloatInAMultiColumnContainer_IsNotHeldBelowAFloatMovedBeforeIt()
+        {
+            var (root, container) = await LayoutFloats(
+                $"<div>{Lines("C", 11)}</div><div id='f' style='float:left;width:60pt'>{Lines("F", 4)}</div>" +
+                $"<div style='columns:2;column-gap:10pt'><div id='g' style='float:left;width:30pt'>G1</div>{Lines("D", 4)}</div>");
+            var moved = LayoutHarness.FindById(root, "f")!;
+            var inColumn = LayoutHarness.FindById(root, "g")!;
+
+            Assert.Equal(1, container.SlotStartingAt(moved.Location.Y));
+            Assert.Equal(0, container.SlotStartingAt(inColumn.Location.Y));
+        }
+
+        // A float inside a flex or grid item, or a table cell, straddling a page boundary: the item's size is
+        // fixed by its engine before its content is committed, so a float moved inside it hung out of the item
+        // and over the paragraph after the container. It stays inside its item and clear of what follows.
+        [Theory]
+        [InlineData("<div style='display:flex'><div id='item' style='width:200pt'>{0}</div></div>")]
+        [InlineData("<div style='display:grid;grid-template-columns:200pt'><div id='item'>{0}</div></div>")]
+        [InlineData("<table><tr><td id='item' style='width:200pt'>{0}</td></tr></table>")]
+        public async Task FloatInsideAnEngineItem_StaysInsideItAndClearOfWhatFollows(string shape)
+        {
+            var inner = $"<div>{Lines("I", 2)}</div><div id='f' style='float:left;width:60pt'>{Lines("F", 4)}</div><div>{Lines("J", 2)}</div>";
+            var (root, _) = await LayoutFloats($"<div>{Lines("C", 9)}</div>" + string.Format(shape, inner) + "<p id='after'>AFTER</p>");
+            var box = LayoutHarness.FindById(root, "f")!;
+            var item = LayoutHarness.FindById(root, "item")!;
+            var after = LayoutHarness.FindById(root, "after")!;
+
+            Assert.True(box.ActualBottom <= item.ActualBottom + 0.01, $"the float ends at {box.ActualBottom:F2}, past its item's {item.ActualBottom:F2}");
+            Assert.True(box.ActualBottom <= after.Location.Y + 0.01, $"the float ends at {box.ActualBottom:F2}, over the paragraph at {after.Location.Y:F2}");
         }
 
         // A float moves onto the next page's usable band: below a float: top figure there, not on top of it.
