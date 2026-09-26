@@ -67,13 +67,6 @@ namespace PeachDrawing.Text.Layout
                 }
             }
 
-            _nextOpportunity = new int[text.Length + 2];
-            _nextOpportunity[text.Length + 1] = text.Length + 1;
-            for (int i = text.Length; i >= 0; i--)
-            {
-                _nextOpportunity[i] = i >= 1 && Opportunities[i] != LineBreakOpportunity.Prohibited ? i : _nextOpportunity[i + 1];
-            }
-
             _isGraphemeBoundary = new bool[text.Length + 1];
             foreach (var boundary in Segmenter.FindGraphemeBoundaries(text))
             {
@@ -82,9 +75,49 @@ namespace PeachDrawing.Text.Layout
 
             _isGraphemeBoundary[0] = true;
             _isGraphemeBoundary[text.Length] = true;
+            AllowBreaksAroundBoxes();
+
+            _nextOpportunity = new int[text.Length + 2];
+            _nextOpportunity[text.Length + 1] = text.Length + 1;
+            for (int i = text.Length; i >= 0; i--)
+            {
+                _nextOpportunity[i] = i >= 1 && Opportunities[i] != LineBreakOpportunity.Prohibited ? i : _nextOpportunity[i + 1];
+            }
+
             _fallbackFaces = ResolveFallbackFaces();
             _atoms = BuildAtoms();
         }
+
+        /// <summary>
+        /// Makes a line breakable before and after every inline box (CSS Text 3 section 5.1: a soft wrap opportunity on both sides of an atomic inline, even next to a
+        /// character that would suppress one, such as a no-break space, a closing bracket or a full stop), except next to a joiner or word joiner, which keep it, and
+        /// before a space, which hangs.
+        /// </summary>
+        private void AllowBreaksAroundBoxes()
+        {
+            if (_boxes is null)
+            {
+                return;
+            }
+
+            foreach (int index in _boxes.Keys)
+            {
+                if (index > 0 && Opportunities[index] == LineBreakOpportunity.Prohibited && !SuppressesBreakAt(Text[index - 1]))
+                {
+                    Opportunities[index] = LineBreakOpportunity.Allowed;
+                }
+
+                int after = index + 1;
+                if (after < Text.Length && _isGraphemeBoundary[after] && Opportunities[after] == LineBreakOpportunity.Prohibited
+                    && !SuppressesBreakAt(Text[after]) && !IsHangingSpace(Text[after]) && Text[after] != (char)0x200B)
+                {
+                    Opportunities[after] = LineBreakOpportunity.Allowed;
+                }
+            }
+        }
+
+        /// <summary>The characters that keep a break from a box beside them: line terminators, the zero width joiner, the word joiner and the zero width no-break space.</summary>
+        private static bool SuppressesBreakAt(char c) => IsLineTerminator(c) || c is (char)0x200D or (char)0x2060 or (char)0xFEFF;
 
         /// <summary>The text of the paragraph.</summary>
         public string Text { get; }
@@ -990,17 +1023,18 @@ namespace PeachDrawing.Text.Layout
         /// <summary>Adds an inline box in the current run: it is one character of the paragraph's text (U+FFFC), sized as given.</summary>
         /// <param name="box">The box.</param>
         /// <returns>This builder.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">A size is negative or a number is not finite.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">A size is negative, or a number is not finite or is more than 1,000,000,000 (in either direction, for the baseline and its shift).</exception>
         public ParagraphBuilder AddInlineBox(InlineBox box)
         {
-            if (!double.IsFinite(box.Width) || box.Width < 0 || !double.IsFinite(box.Height) || box.Height < 0)
+            const double Limit = 1e9;
+            if (!(box.Width >= 0 && box.Width <= Limit) || !(box.Height >= 0 && box.Height <= Limit))
             {
-                throw new ArgumentOutOfRangeException(nameof(box), box, "The size of a box must be zero or more, and finite.");
+                throw new ArgumentOutOfRangeException(nameof(box), box, "The size of a box must be from zero to 1,000,000,000.");
             }
 
-            if (box.Baseline is { } baseline && !double.IsFinite(baseline) || !double.IsFinite(box.BaselineShift))
+            if (box.Baseline is { } baseline && !(Math.Abs(baseline) <= Limit) || !(Math.Abs(box.BaselineShift) <= Limit))
             {
-                throw new ArgumentOutOfRangeException(nameof(box), box, "The baseline and its shift must be finite.");
+                throw new ArgumentOutOfRangeException(nameof(box), box, "The baseline and its shift must be at most 1,000,000,000 either way.");
             }
 
             if (!Enum.IsDefined(box.VerticalAlign))

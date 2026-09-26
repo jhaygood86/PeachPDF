@@ -88,13 +88,13 @@ namespace PeachDrawing.Text.Layout
 
     /// <summary>
     /// A box of a known size set in a paragraph like a single character (CSS: an atomic inline, such as an image or an inline block): it is never broken, takes part in line
-    /// breaking with a break allowed before and after it, and makes its line as tall as it needs. The paragraph's text holds a U+FFFC (object replacement character) for it.
+    /// breaking with a break allowed before and after it (even next to a character that would suppress one, but not next to a joiner), and makes its line as tall as it needs. The paragraph's text holds a U+FFFC (object replacement character) for it.
     /// </summary>
-    /// <param name="Width">The width of the box, in layout units; zero or more, and finite.</param>
-    /// <param name="Height">The height of the box, in layout units; zero or more, and finite.</param>
-    /// <param name="Baseline">The distance from the top of the box to its baseline, or <see langword="null"/> for its bottom edge (what CSS uses for an image); finite.</param>
+    /// <param name="Width">The width of the box, in layout units; from zero to 1,000,000,000.</param>
+    /// <param name="Height">The height of the box, in layout units; from zero to 1,000,000,000.</param>
+    /// <param name="Baseline">The distance from the top of the box to its baseline, or <see langword="null"/> for its bottom edge (what CSS uses for an image); at most 1,000,000,000 either way.</param>
     /// <param name="VerticalAlign">How the box sits on the line.</param>
-    /// <param name="BaselineShift">How far the box is raised above where <paramref name="VerticalAlign"/> puts it (lowered when negative), as a length; finite. It has no effect on <see cref="VerticalAlign.Top"/> and <see cref="VerticalAlign.Bottom"/>.</param>
+    /// <param name="BaselineShift">How far the box is raised above where <paramref name="VerticalAlign"/> puts it (lowered when negative), as a length, at most 1,000,000,000 either way. It has no effect on <see cref="VerticalAlign.Top"/> and <see cref="VerticalAlign.Bottom"/>.</param>
     /// <param name="Tag">Anything the caller wants back with the placed box: <see cref="PlacedRun.InlineBox"/> carries this value.</param>
     public readonly record struct InlineBox(double Width, double Height, double? Baseline = null, VerticalAlign VerticalAlign = VerticalAlign.Baseline, double BaselineShift = 0, object? Tag = null);
 

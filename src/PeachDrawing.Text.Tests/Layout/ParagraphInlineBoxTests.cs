@@ -304,6 +304,42 @@ namespace PeachDrawing.Text.Tests.Layout
         }
 
         [Fact]
+        public void ABreakIsAllowedBeforeAndAfterABox_EvenNextToPunctuationThatWouldSuppressOne()
+        {
+            // "(" and ")" and "," would keep a line from breaking next to an ordinary character.
+            var opening = new ParagraphBuilder(new RunStyle(Face, Size)).AddText("aaaa (").AddInlineBox(new InlineBox(40, 10)).Build();
+            var closing = new ParagraphBuilder(new RunStyle(Face, Size)).AddText("aaaa").AddInlineBox(new InlineBox(40, 10)).AddText(",bbbb").Build();
+
+            var openLayout = opening.Layout(Advance("aaaa (") + 10);
+            Assert.Equal(new TextRange(0, 6), openLayout.Lines[0].Range);
+            Assert.NotNull(BoxRun(openLayout.Lines[1]).InlineBox);
+            var closeLayout = closing.Layout(Advance("aaaa") + 45);
+            Assert.Equal(new TextRange(0, 5), closeLayout.Lines[0].Range);
+            Assert.Equal(new TextRange(5, 10), closeLayout.Lines[1].Range);
+        }
+
+        [Fact]
+        public void ABreakIsNotAllowedNextToAWordJoiner()
+        {
+            var paragraph = new ParagraphBuilder(new RunStyle(Face, Size)).AddText("aaaa\u2060").AddInlineBox(new InlineBox(40, 10)).Build();
+
+            var layout = paragraph.Layout(Advance("aaaa") + 10);
+            Assert.Single(layout.Lines);
+        }
+
+        [Fact]
+        public void ABoxOfAnAbsurdSize_IsRefused()
+        {
+            var builder = new ParagraphBuilder(new RunStyle(Face, Size));
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => builder.AddInlineBox(new InlineBox(double.MaxValue, 1)));
+            Assert.Throws<ArgumentOutOfRangeException>(() => builder.AddInlineBox(new InlineBox(1, 2e9)));
+            Assert.Throws<ArgumentOutOfRangeException>(() => builder.AddInlineBox(new InlineBox(1, 1, Baseline: 2e9)));
+            Assert.Throws<ArgumentOutOfRangeException>(() => builder.AddInlineBox(new InlineBox(1, 1, BaselineShift: -2e9)));
+            builder.AddInlineBox(new InlineBox(1e9, 1e9, BaselineShift: -1e9));
+        }
+
+        [Fact]
         public void ABoxWithABadBaselineShiftOrAlignment_IsRefused()
         {
             var builder = new ParagraphBuilder(new RunStyle(Face, Size));

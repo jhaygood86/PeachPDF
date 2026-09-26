@@ -39,5 +39,5 @@ An ellipsis wider than the room is drawn anyway, as the only content of a line t
 
 Inline boxes: alignment is the baseline family (`baseline`, `middle`, `text-top`, `text-bottom`, `top`, `bottom`, with a shift for `sub`, `super` and lengths); the percentage form of
 `vertical-align` and `vertical-align` relative to an enclosing inline box other than the run the box is in are the caller's to resolve, since a run's own metrics are all the layout has. A box
-is a wall for justification (CSS Text 3 6.4.5 leaves atomic inlines to the agent) and a break is allowed on both sides of it (U+FFFC is line break class CB), where a caller that wants a box
-glued to the word before it must put a no-break character next to it. A line that holds a box does not shrink to fit the text alone: it is at least as tall as the strut of the text it sits in.
+is a wall for justification (CSS Text 3 6.4.5 leaves atomic inlines to the agent) and a break is allowed on both sides of it, where a caller that wants a box glued to the word before it
+must put a word joiner (U+2060) next to it. A combining mark or joiner typed straight after a box makes one grapheme cluster with it, so there is no caret stop between them. A line that holds a box does not shrink to fit the text alone: it is at least as tall as the strut of the text it sits in.
