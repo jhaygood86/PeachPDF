@@ -3,8 +3,8 @@ using System.Threading;
 namespace PeachPDF.Fonts
 {
     /// <summary>
-    /// The one monitor that serialises access to the process-wide font caches (the font factory's font sources,
-    /// the glyph typeface, font face and font descriptor caches, and the PDF layer's font family cache).
+    /// The one monitor that serialises access to the process-wide font caches: the font factory's font sources
+    /// and resolver infos, and the typeface cache.
     /// </summary>
     internal static class FontLock
     {

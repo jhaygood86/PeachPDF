@@ -27,50 +27,45 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.Fonts;
 using PeachPDF.Fonts.OpenType;
-using PeachPDF.PdfSharpCore.Utils;
 using System;
 using System.Diagnostics;
 using System.Globalization;
 
-namespace PeachPDF.PdfSharpCore.Drawing
+namespace PeachPDF.Fonts
 {
     /// <summary>
     /// Specifies a physical font face that corresponds to a font file on the disk or in memory.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
-    internal sealed class XGlyphTypeface
+    internal sealed class Typeface
     {
         // Implementation Notes
-        // XGlyphTypeface is the centerpiece for font management. There is a one to one relationship
-        // between XFont an XGlyphTypeface.
+        // Typeface is the centerpiece for font management. There is a one to one relationship
+        // between XFont an Typeface.
         //
-        // * Each XGlyphTypeface can belong to one or more XFont objects.
-        // * An XGlyphTypeface hold an XFontFamily.
-        // * XGlyphTypeface hold a reference to an OpenTypeFontface. 
+        // * Each Typeface can belong to one or more XFont objects.
+        // * An Typeface hold an XFontFamily.
+        // * Typeface hold a reference to an OpenTypeFontface. 
         // * 
         //
 
         const string KeyPrefix = FontResolvingOptions.TypefaceKeyPrefix;
 
-        public XGlyphTypeface(string key, FontFileData fontSource, SyntheticStyle styleSimulations = SyntheticStyle.None)
+        public Typeface(string key, FontFileData fontSource, SyntheticStyle styleSimulations = SyntheticStyle.None)
         {
-            string familyName = fontSource.Fontface.name.Name;
-            _fontFamily = new XFontFamily(familyName, false);
             _fontface = fontSource.Fontface;
             _isBold = _fontface.os2.IsBold;
             _isItalic = _fontface.os2.IsItalic;
             _styleSimulations = styleSimulations;
 
             _key = key;
-            //_fontFamily =xfont  FontFamilyCache.GetFamilyByName(familyName);
             _fontSource = fontSource;
 
             Initialize();
         }
 
-        public static XGlyphTypeface GetOrCreateFrom(string familyName, FontResolvingOptions fontResolvingOptions, IFontResolver fontResolver)
+        public static Typeface GetOrCreateFrom(string familyName, FontResolvingOptions fontResolvingOptions, IFontResolver fontResolver)
         {
             // Per-codepoint resolution (unicode-range / glyph-coverage fallback) takes a separate path
             // that keys caches by the RESOLVED face rather than by (family, style), so the many codepoints
@@ -94,10 +89,10 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
             if (useInstanceCache)
             {
-                if (GlyphTypefaceCache.ForInstance(instanceResolver!).TryGetValue(typefaceKey, out var instanceCached))
+                if (TypefaceCache.ForInstance(instanceResolver!).TryGetValue(typefaceKey, out var instanceCached))
                     return instanceCached;
             }
-            else if (GlyphTypefaceCache.TryGetGlyphTypeface(typefaceKey, out var globalCached))
+            else if (TypefaceCache.TryGetGlyphTypeface(typefaceKey, out var globalCached))
             {
                 return globalCached;
             }
@@ -141,21 +136,21 @@ namespace PeachPDF.PdfSharpCore.Drawing
             // bold/italic simulation flags the resolver decided this face needs (see
             // FontResolver.ResolveTypeface's nearest-weight/style matching) - previously computed here
             // and then dropped, since this constructor never used to accept them at all.
-            var glyphTypeface = new XGlyphTypeface(typefaceKey, fontSource, fontResolverInfo.StyleSimulations);
+            var glyphTypeface = new Typeface(typefaceKey, fontSource, fontResolverInfo.StyleSimulations);
 
             if (useInstanceCache)
             {
                 glyphTypeface.OwningInstanceResolver = instanceResolver;
-                GlyphTypefaceCache.ForInstance(instanceResolver!)[typefaceKey] = glyphTypeface;
+                TypefaceCache.ForInstance(instanceResolver!)[typefaceKey] = glyphTypeface;
             }
             else
             {
-                GlyphTypefaceCache.AddGlyphTypeface(glyphTypeface);
+                TypefaceCache.AddGlyphTypeface(glyphTypeface);
             }
 
             return glyphTypeface;
         }
-        private static XGlyphTypeface GetOrCreateForCodepoint(string familyName, FontResolvingOptions options, System.Text.Rune codepoint, FontResolver resolver)
+        private static Typeface GetOrCreateForCodepoint(string familyName, FontResolvingOptions options, System.Text.Rune codepoint, FontResolver resolver)
         {
             var info = resolver.ResolveTypeface(familyName, options.Weight, options.IsItalic, options.Stretch, codepoint);
             if (info == null)
@@ -168,15 +163,15 @@ namespace PeachPDF.PdfSharpCore.Drawing
             var simSuffix = (info.MustSimulateBold ? "/b+" : "") + (info.MustSimulateItalic ? "/i+" : "");
             var key = KeyPrefix + "cp/" + info.FaceName.ToLowerInvariant() + simSuffix;
 
-            if (GlyphTypefaceCache.ForInstance(resolver).TryGetValue(key, out var cached))
+            if (TypefaceCache.ForInstance(resolver).TryGetValue(key, out var cached))
                 return cached;
 
             var fontSource = FontFileData.GetOrCreateFrom(resolver.GetFont(info.FaceName));
-            var glyphTypeface = new XGlyphTypeface(key, fontSource, info.StyleSimulations)
+            var glyphTypeface = new Typeface(key, fontSource, info.StyleSimulations)
             {
                 OwningInstanceResolver = resolver
             };
-            GlyphTypefaceCache.ForInstance(resolver)[key] = glyphTypeface;
+            TypefaceCache.ForInstance(resolver)[key] = glyphTypeface;
             return glyphTypeface;
         }
 
@@ -184,24 +179,25 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// The specific <see cref="PeachPDF.Fonts.FontResolver"/> instance this typeface was resolved through its
         /// OWN per-instance cache for (i.e. a custom/<c>@font-face</c>-registered family - see
         /// <see cref="GetOrCreateFrom"/>), or null if it came from the global, process-wide caches (a
-        /// pure system-font request, safe to share). <see cref="Drawing.XFont"/> reads this to route
-        /// <see cref="FontDescriptorCache"/> lookups the same way - that cache is ALSO keyed by
-        /// this typeface's <see cref="Key"/> string alone, so without this it would silently reintroduce
-        /// the exact cross-instance collision the split above fixes, just one layer further down.
+        /// pure system-font request, safe to share). The PDF layer's <c>XFont</c> uses it to tell the two cases apart.
         /// </summary>
         internal FontResolver? OwningInstanceResolver { get; set; }
 
-        public XFontFamily FontFamily
-        {
-            get { return _fontFamily; }
-        }
-        readonly XFontFamily _fontFamily;
 
         internal OpenTypeFontface Fontface
         {
             get { return _fontface; }
         }
         readonly OpenTypeFontface _fontface;
+
+        /// <summary>
+        /// This face's metrics, glyph mapping, shaping and outline entry points, in design units. One per
+        /// typeface, and typefaces are themselves cached by key (per <see cref="FontResolver"/> instance for
+        /// custom families, globally for system families), so a custom family registered with different
+        /// bytes by another <c>PdfGenerator</c> can never share a descriptor with this one.
+        /// </summary>
+        internal OpenTypeDescriptor Descriptor => _descriptor ??= new OpenTypeDescriptor(Key, FamilyName, Fontface);
+        volatile OpenTypeDescriptor? _descriptor;
 
         public FontFileData FontSource
         {
@@ -354,7 +350,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// </summary>
         internal static string ComputeKey(string familyName, bool isBold, bool isItalic)
         {
-            return ComputeKey(familyName, new FontResolvingOptions(FontHelper.CreateStyle(isBold, isItalic).ToFaceStyle()));
+            return ComputeKey(familyName, new FontResolvingOptions((isBold ? FaceStyle.Bold : FaceStyle.Regular) | (isItalic ? FaceStyle.Italic : FaceStyle.Regular)));
         }
         public string Key
         {
