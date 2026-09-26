@@ -187,6 +187,12 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Nabla => Path.Combine(AppContext.BaseDirectory, "NablaSubset.ttf");
 
         /// <summary>
+        /// A synthetic TrueType font (CC0, see HintingGasp.LICENSE.txt): the glyphs A and B are rectangles with a small hinting program, and its
+        /// <c>gasp</c> table asks for grid-fitting at 9 to 20 pixels per em and from 41 up, but not below 9 or from 21 to 40.
+        /// </summary>
+        internal static string Gasp => Path.Combine(AppContext.BaseDirectory, "HintingGasp.ttf");
+
+        /// <summary>
         /// The web-platform-tests GSUB conformance font (see gsubtest-lookup3.LICENSE.txt): every
         /// feature tag (smcp/c2sc/pcap/c2pc/etc.) is implemented as a real GSUB <b>Alternate
         /// Substitution</b> (Lookup Type 3) feature - the only publicly available font found with real
