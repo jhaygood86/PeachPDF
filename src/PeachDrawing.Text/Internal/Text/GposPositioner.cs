@@ -73,11 +73,11 @@ namespace PeachDrawing.Text.Internal.Text
                 {
                     case 1:
                         if (gpos.GetSingleAdjustmentLookup(lookupIndex) is { } single)
-                            ApplySingleAdjustment(single, glyphs);
+                            ApplySingleAdjustment(single, glyphs, descriptor);
                         break;
                     case 2:
                         if (gpos.GetPairAdjustmentLookup(lookupIndex) is { } pair)
-                            ApplyPairAdjustment(pair, glyphs);
+                            ApplyPairAdjustment(pair, glyphs, descriptor);
                         break;
                     case 3:
                         if (gpos.GetCursiveAttachmentLookup(lookupIndex) is { } cursive)
@@ -145,13 +145,13 @@ namespace PeachDrawing.Text.Internal.Text
         // internal rather than private: lets tests exercise the positioning math directly against a
         // synthetic GposTable + hand-built glyph list, without needing a font whose table directory
         // actually lists a GPOS entry (see GposPositionerSyntheticTests's own remarks).
-        internal static void ApplySingleAdjustment(GposSingleAdjustmentLookup lookup, List<PlacedGlyph> glyphs)
+        internal static void ApplySingleAdjustment(GposSingleAdjustmentLookup lookup, List<PlacedGlyph> glyphs, OpenTypeDescriptor? descriptor = null)
         {
             for (int i = 0; i < glyphs.Count; i++)
-                ApplySingleAdjustmentAt(lookup, glyphs, i);
+                ApplySingleAdjustmentAt(lookup, glyphs, i, descriptor);
         }
 
-        private static void ApplySingleAdjustmentAt(GposSingleAdjustmentLookup lookup, List<PlacedGlyph> glyphs, int i)
+        private static void ApplySingleAdjustmentAt(GposSingleAdjustmentLookup lookup, List<PlacedGlyph> glyphs, int i, OpenTypeDescriptor? descriptor = null)
         {
             ushort glyphId = (ushort)glyphs[i].GlyphIndex;
             for (int subtableIndex = 0; subtableIndex < lookup.Subtables.Count; subtableIndex++)
@@ -159,7 +159,7 @@ namespace PeachDrawing.Text.Internal.Text
                 GposSingleAdjustmentSubtable subtable = lookup.Subtables[subtableIndex];
                 if (subtable.TryGetValue(glyphId, out GposValueRecord value))
                 {
-                    glyphs[i] = AddValue(glyphs[i], value);
+                    glyphs[i] = AddValue(glyphs[i], descriptor?.Vary(value) ?? value);
                     break;
                 }
             }
@@ -171,13 +171,13 @@ namespace PeachDrawing.Text.Internal.Text
         /// correctly - matching how real kerning application works.
         /// </summary>
         // internal rather than private - see ApplySingleAdjustment's identical rationale.
-        internal static void ApplyPairAdjustment(GposPairAdjustmentLookup lookup, List<PlacedGlyph> glyphs)
+        internal static void ApplyPairAdjustment(GposPairAdjustmentLookup lookup, List<PlacedGlyph> glyphs, OpenTypeDescriptor? descriptor = null)
         {
             for (int i = 0; i < glyphs.Count - 1; i++)
-                ApplyPairAdjustmentAt(lookup, glyphs, i);
+                ApplyPairAdjustmentAt(lookup, glyphs, i, descriptor);
         }
 
-        private static void ApplyPairAdjustmentAt(GposPairAdjustmentLookup lookup, List<PlacedGlyph> glyphs, int i)
+        private static void ApplyPairAdjustmentAt(GposPairAdjustmentLookup lookup, List<PlacedGlyph> glyphs, int i, OpenTypeDescriptor? descriptor = null)
         {
             if (i + 1 >= glyphs.Count)
                 return;
@@ -190,8 +190,8 @@ namespace PeachDrawing.Text.Internal.Text
                 GposPairAdjustmentSubtable subtable = lookup.Subtables[subtableIndex];
                 if (subtable.TryGetValues(first, second, out GposValueRecord value1, out GposValueRecord value2))
                 {
-                    glyphs[i] = AddValue(glyphs[i], value1);
-                    glyphs[i + 1] = AddValue(glyphs[i + 1], value2);
+                    glyphs[i] = AddValue(glyphs[i], descriptor?.Vary(value1) ?? value1);
+                    glyphs[i + 1] = AddValue(glyphs[i + 1], descriptor?.Vary(value2) ?? value2);
                     break;
                 }
             }
@@ -430,6 +430,9 @@ namespace PeachDrawing.Text.Internal.Text
             if (j < 0 || !TryGetEntryAnchor(lookup, (ushort)glyphs[j].GlyphIndex, out GposAnchor entryAnchor))
                 return;
 
+            exitAnchor = descriptor.Vary(exitAnchor);
+            entryAnchor = descriptor.Vary(entryAnchor);
+
             // i's own exit point is pulled back to the run's current end: its advance (and its own
             // offset, if any earlier lookup already gave it one) both shrink by the same amount, so its
             // painted origin is unchanged but its exit anchor now sits exactly at the pen position the
@@ -541,6 +544,9 @@ namespace PeachDrawing.Text.Internal.Text
         /// </summary>
         private static void ApplyMarkAnchor(OpenTypeDescriptor descriptor, List<PlacedGlyph> glyphs, int baseIndex, int markIndex, GposAnchor markAnchor, GposAnchor baseAnchor)
         {
+            markAnchor = descriptor.Vary(markAnchor);
+            baseAnchor = descriptor.Vary(baseAnchor);
+
             double intermediateAdvance = 0;
             for (int k = baseIndex; k < markIndex; k++)
                 intermediateAdvance += descriptor.GlyphIndexToWidth(glyphs[k].GlyphIndex) + glyphs[k].XAdvanceDelta;
@@ -783,11 +789,11 @@ namespace PeachDrawing.Text.Internal.Text
             {
                 case 1:
                     if (gpos.GetSingleAdjustmentLookup(lookupListIndex) is { } single)
-                        ApplySingleAdjustmentAt(single, glyphs, position);
+                        ApplySingleAdjustmentAt(single, glyphs, position, descriptor);
                     break;
                 case 2:
                     if (gpos.GetPairAdjustmentLookup(lookupListIndex) is { } pair)
-                        ApplyPairAdjustmentAt(pair, glyphs, position);
+                        ApplyPairAdjustmentAt(pair, glyphs, position, descriptor);
                     break;
                 case 3:
                     if (gpos.GetCursiveAttachmentLookup(lookupListIndex) is { } cursive)

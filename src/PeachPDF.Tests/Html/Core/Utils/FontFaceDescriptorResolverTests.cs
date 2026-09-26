@@ -1,13 +1,12 @@
 using PeachPDF.Html.Core.Utils;
 
-using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.Html.Core.Utils
 {
     /// <summary>
     /// Unit tests for <see cref="FontFaceDescriptorResolver"/> - resolving an <c>@font-face</c> rule's own
     /// <c>font-weight</c>/<c>font-style</c>/<c>font-stretch</c> descriptor strings into the override values
-    /// <c>PeachDrawing.Text.Internal.Fonts.FontResolver.AddFont</c> takes. See
+    /// the font set's <c>AddFont</c> takes. See
     /// <c>FontFactoryFontFaceDescriptorOverrideIntegrationTests</c> for the equivalent coverage through the
     /// real cascade.
     /// </summary>

@@ -1,8 +1,6 @@
 using PeachDrawing.Text;
-using PeachDrawing.Text.Internal.Fonts;
 using System.Collections.Generic;
 using System.IO;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.PdfSharpCore.Pdf;

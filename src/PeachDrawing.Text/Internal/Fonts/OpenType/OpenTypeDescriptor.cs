@@ -69,6 +69,40 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// <summary>Where in the design space of a variable font this descriptor reads, or <see langword="null"/> at the defaults (and for every font that is not variable).</summary>
         internal Variations.VariationCoordinates? Variation { get; }
 
+        /// <summary>
+        /// A positioning value at this descriptor's location: the value's own numbers plus the deltas of its <c>VariationIndex</c> device
+        /// tables, rounded half up. The value itself when this is not an instance of a variable font.
+        /// </summary>
+        internal GposValueRecord Vary(GposValueRecord value)
+        {
+            if (value.Variation is not { } variation || Variation is null || FontFace.gdef?.Table?.VariationStore is not { } store)
+                return value;
+
+            return new GposValueRecord(
+                Clamp(value.XPlacement, variation.XPlacement, store),
+                Clamp(value.YPlacement, variation.YPlacement, store),
+                Clamp(value.XAdvance, variation.XAdvance, store),
+                Clamp(value.YAdvance, variation.YAdvance, store));
+        }
+
+        /// <summary>An anchor at this descriptor's location, as <see cref="Vary(GposValueRecord)"/> does for a value.</summary>
+        internal GposAnchor Vary(GposAnchor anchor)
+        {
+            if ((anchor.XDelta is null && anchor.YDelta is null) || Variation is null || FontFace.gdef?.Table?.VariationStore is not { } store)
+                return anchor;
+
+            return new GposAnchor(Clamp(anchor.X, anchor.XDelta, store), Clamp(anchor.Y, anchor.YDelta, store));
+        }
+
+        private short Clamp(short value, DeltaRef? delta, Variations.ItemVariationStore store)
+        {
+            if (delta is not { } d)
+                return value;
+
+            int varied = value + Variations.FontVariations.Round(store.GetDelta(d.Outer, d.Inner, Variation!.Normalized));
+            return (short)System.Math.Clamp(varied, short.MinValue, short.MaxValue);
+        }
+
         /// <summary>How much the font-wide metric with the MVAR value tag <paramref name="tag"/> differs from the default at this descriptor's location.</summary>
         private int Adjust(string tag, int value)
         {
