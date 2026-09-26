@@ -16,12 +16,16 @@ the numbers that apply at the location, so `ColorGlyphPainter` (PeachPDF) needed
   outer index is the index's high 16 bits and the inner index the low 16. `0xFFFFFFFF` is "does not vary". A map that will not parse makes
   the whole store unusable (the indices would read the wrong deltas), a store that will not parse leaves the paints at their defaults.
 - **The paint cache is keyed by location.** `ColrTable` is shared by every instance of a face and cached parsed paints by offset; it now
-  caches by (location key, offset), and clears itself at 131,072 entries so that asking for many locations cannot grow it without limit.
+  caches by (location key, offset), and clears itself at 131,072 entries (paints and colour lines each) so that asking for many locations cannot grow it without limit.
   The default location and a font without a variation store share the empty key and are parsed exactly as before (no delta is added, nothing
   is clamped or sorted), so the PDF of a non-variable font is unchanged.
-- **Two guards that only apply where a delta moved a value**: an opacity is clamped to 0..1, and colour stops that a delta moved out of
-  order are stably sorted (a stable sort keeps hard-edge stops that share an offset in their order). A font's own unsorted stops or
-  out-of-range alpha are left alone.
+- **Three guards that only apply where a delta moved a value**: an opacity is clamped to 0..1, a radius cannot be taken below 0, and colour
+  stops are put back in order (with a stable sort, `OrderBy`: `List.Sort` is not stable above 16 elements, and stops that share an offset make
+  a hard edge, so their order is the colours) only when a delta moved a stop offset and the result is unsorted. A font's own unsorted stops,
+  out-of-range alpha and radii are left alone, at every location.
+- **A colour line is read once per location** (`_lineCache`). Paints may share one line (legal, offsets are shared) and a line may have 65,535
+  stops, so a font could otherwise make the paint cache hold many gigabytes of copies of one line; the review that found it noted that
+  bounding the paint cache by entry count alone does not bound its size.
 
 ## What running it showed
 
