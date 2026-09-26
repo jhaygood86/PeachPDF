@@ -1,0 +1,3 @@
+VariableFeatureTest.ttf is synthetic test data made by generate_variable_feature_fixture.py in this directory: four rectangles and GSUB
+FeatureVariations on a weight axis. It contains no third-party design and is dedicated to the public domain under CC0 1.0 Universal
+(https://creativecommons.org/publicdomain/zero/1.0/).

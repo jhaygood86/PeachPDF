@@ -138,7 +138,7 @@ namespace PeachDrawing.Text.Internal.Text
             if (descriptor.FontFace.cmap.symbol)
                 return glyphs;
 
-            GsubTable? gsub = descriptor.FontFace.gsub?.Table;
+            GsubTable? gsub = descriptor.SubstitutionTable;
             if (gsub is null)
                 return glyphs;
 
@@ -208,7 +208,16 @@ namespace PeachDrawing.Text.Internal.Text
             // substitution feeding into a later ligature match, or vice versa) match real OpenType
             // application order, rather than an arbitrary code-imposed order from separate passes.
             foreach ((int lookupIndex, int alternateIndex) in lookupIndices)
-                ApplyLookup(gsub, lookupIndex, alternateIndex, glyphs, gdef);
+            {
+                try
+                {
+                    ApplyLookup(gsub, lookupIndex, alternateIndex, glyphs, gdef);
+                }
+                catch (Exception ex) when (ex is IndexOutOfRangeException or ArgumentOutOfRangeException or OverflowException or InvalidOperationException)
+                {
+                    // A lookup the font's own data cannot be read for (a damaged table) is skipped, not fatal to the text.
+                }
+            }
 
             return glyphs;
         }
@@ -344,6 +353,10 @@ namespace PeachDrawing.Text.Internal.Text
                 // be Type 3 - only an explicit font-feature-settings value greater than 1 asks for a
                 // later one (collected into customAltIndexByTag below instead).
                 var defaultTags = new HashSet<string>();
+
+                // rvrn (Required Variation Alternates) is what a variable font's FeatureVariations use for glyph swaps at a region of
+                // its design space; it is on for every script and always applied first. A font that is not variable has no such feature.
+                defaultTags.Add("rvrn");
 
                 // ccmp (Glyph Composition/Decomposition) and locl (Localized Forms) are default-on for
                 // every script in the OpenType spec's own feature registry - not opt-in the way liga/dlig

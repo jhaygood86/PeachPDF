@@ -341,14 +341,94 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             _face = face;
 
+            _tableStart = tableStart;
             face.Position = tableStart;
             face.ReadUShort(); // majorVersion
-            face.ReadUShort(); // minorVersion
+            int minorVersion = face.ReadUShort();
             _scriptListOffset = tableStart + face.ReadUShort();
             _featureListOffset = tableStart + face.ReadUShort();
             _lookupListOffset = tableStart + face.ReadUShort();
-            // featureVariationsOffset (minorVersion 1 only) - ignored, variable fonts aren't instanced.
+            uint featureVariationsOffset = minorVersion >= 1 ? face.ReadULong() : 0;
+            _featureVariationsOffset = featureVariationsOffset != 0 ? tableStart + (int)featureVariationsOffset : 0;
         }
+
+        // ---- FeatureVariations (variable fonts) ---------------------------------------------------------------------------------------
+
+        private readonly GposTable? _root;
+        private readonly IReadOnlyDictionary<int, int[]>? _substitutions;
+        private readonly int _tableStart;
+        private readonly int _featureVariationsOffset;
+        private Variations.FeatureVariationsTable? _featureVariations;
+        private bool _featureVariationsLoaded;
+        private readonly ConcurrentDictionary<string, GposTable> _views = new();
+
+        /// <summary>
+        /// A view of the table at a location in the design space of a variable font: the same lookups and caches, but a feature whose
+        /// <c>FeatureVariations</c> record applies there uses the substituted lookups. A view is one object for one location, so a cache keyed
+        /// by the table (the shapers' lookup caches are) is keyed by the location too. The table itself when the font has no
+        /// <c>FeatureVariations</c> or none applies at the location.
+        /// </summary>
+        public GposTable AtLocation(Variations.VariationCoordinates location)
+        {
+            var root = _root ?? this;
+            if (root._featureVariationsOffset == 0)
+                return root;
+
+            var variations = root.LoadFeatureVariations();
+            var substitutions = variations?.SubstitutionsAt(location.Normalized);
+            if (substitutions is null || substitutions.Count == 0)
+                return root;
+
+            // A location that sweeps an axis makes many; a view is cheap to make again.
+            if (root._views.Count >= 32)
+                root._views.Clear();
+
+            return root._views.GetOrAdd(location.Key, _ => new GposTable(root, substitutions));
+        }
+
+        private Variations.FeatureVariationsTable? LoadFeatureVariations()
+        {
+            lock (_face.SyncRoot)
+            {
+                if (!_featureVariationsLoaded)
+                {
+                    if (_face.TableDictionary.TryGetValue(TableTagNames.GPOS, out var entry))
+                    {
+                        var bytes = _face.FontSource.Bytes;
+                        int length = Math.Min(entry.Length, bytes.Length - entry.Offset);
+                        int at = _featureVariationsOffset - entry.Offset;
+                        _featureVariations = at >= 0 && at < length
+                            ? Variations.FeatureVariationsTable.TryParse(bytes.AsSpan(entry.Offset, length), at)
+                            : null;
+                    }
+
+                    _featureVariationsLoaded = true;
+                }
+
+                return _featureVariations;
+            }
+        }
+
+        private GposTable(GposTable root, IReadOnlyDictionary<int, int[]> substitutions)
+        {
+            _root = root;
+            _substitutions = substitutions;
+            _face = root._face;
+            _scriptListOffset = root._scriptListOffset;
+            _featureListOffset = root._featureListOffset;
+            _lookupListOffset = root._lookupListOffset;
+            _tableStart = root._tableStart;
+            _singleAdjustmentCache = root._singleAdjustmentCache;
+            _cursiveAttachmentCache = root._cursiveAttachmentCache;
+            _pairAdjustmentCache = root._pairAdjustmentCache;
+            _markToBaseCache = root._markToBaseCache;
+            _markToMarkCache = root._markToMarkCache;
+            _markToLigatureCache = root._markToLigatureCache;
+            _contextualLookupCache = root._contextualLookupCache;
+            _chainingContextLookupCache = root._chainingContextLookupCache;
+            _resolvedLookupTypeCache = root._resolvedLookupTypeCache;
+        }
+
 
         /// <summary>
         /// Collects the lookup-list indices of every feature in <paramref name="featureTags"/> under
@@ -364,6 +444,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             lock (_face.SyncRoot)
             {
                 var lookupIndices = new SortedSet<int>();
+                try
+                {
 
                 int scriptOffset = FindScript(scriptTagPreference);
                 if (scriptOffset < 0)
@@ -392,6 +474,14 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     if (!featureTags.Contains(tag))
                         return;
 
+                    // A FeatureVariations record that applies at this table's location replaces the feature's lookups; the tag stays.
+                    if (_substitutions is not null && _substitutions.TryGetValue(featureIndex, out var replacement))
+                    {
+                        foreach (int lookupIndex in replacement)
+                            lookupIndices.Add(lookupIndex);
+                        return;
+                    }
+
                     _face.Position = offset;
                     _face.ReadUShort(); // featureParams offset - ignored
                     int lookupIndexCount = _face.ReadUShort();
@@ -406,6 +496,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     CollectFeature(featureIndex);
 
                 return lookupIndices;
+                }
+                catch (Exception ex) when (ex is IndexOutOfRangeException or ArgumentOutOfRangeException or OverflowException)
+                {
+                    // A damaged script or feature list gives no lookups rather than failing the shaping of the text.
+                    return new SortedSet<int>();
+                }
             }
         }
 

@@ -55,7 +55,7 @@ namespace PeachDrawing.Text.Internal.Text
             if (descriptor.FontFace.cmap.symbol)
                 return;
 
-            GposTable? gpos = descriptor.FontFace.gpos?.Table;
+            GposTable? gpos = descriptor.PositioningTable;
             if (gpos is null)
                 return;
 
@@ -67,6 +67,8 @@ namespace PeachDrawing.Text.Internal.Text
 
             foreach (int lookupIndex in lookupIndices)
             {
+                try
+                {
                 switch (gpos.GetResolvedLookupType(lookupIndex))
                 {
                     case 1:
@@ -109,6 +111,11 @@ namespace PeachDrawing.Text.Internal.Text
                         break;
                     // Any unresolved type: not supported, left unmodified - see GposTable's own
                     // file-header gap note.
+                }
+                }
+                catch (Exception ex) when (ex is IndexOutOfRangeException or ArgumentOutOfRangeException or OverflowException or InvalidOperationException)
+                {
+                    // A lookup the font's own data cannot be read for (a damaged table) is skipped, not fatal to the text.
                 }
             }
         }
