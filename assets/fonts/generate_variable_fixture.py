@@ -4,7 +4,7 @@
 The font is synthetic and released under CC0 (see VariableTest.LICENSE.txt): a handful of geometric glyphs on two axes,
 `wght` (100 to 900, default 400, with an `avar` segment map) and `wdth` (75 to 125, default 100). It is assembled with
 fontTools' varLib from six masters, one of which sits at an intermediate weight so that `gvar` gets an intermediate region,
-and it carries the tables the engine reads: `fvar`, `avar`, `gvar`, `HVAR` and `MVAR`.
+and it carries the tables the engine reads: `fvar`, `avar`, `gvar`, `HVAR` and `MVAR`. VariableTestNoHvar.ttf is the same font with `HVAR` removed.
 
 Glyphs (each chosen to exercise something):
 
@@ -28,7 +28,10 @@ import json
 import os
 import tempfile
 
-from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, SourceDescriptor
+# Fixed timestamps, so that running the script again writes the same bytes.
+os.environ.setdefault("SOURCE_DATE_EPOCH", "1767225600")
+
+from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, InstanceDescriptor, SourceDescriptor
 from fontTools.fontBuilder import FontBuilder
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
@@ -37,6 +40,7 @@ from fontTools.varLib import instancer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_FONT = os.path.join(HERE, "VariableTest.ttf")
+OUT_FONT_NO_HVAR = os.path.join(HERE, "VariableTestNoHvar.ttf")
 OUT_GOLDEN = os.path.join(HERE, "VariableTest.golden.json")
 
 UPM = 1000
@@ -164,11 +168,13 @@ def build_variable_font(workdir):
     weight.name, weight.tag = "Weight", "wght"
     weight.minimum, weight.default, weight.maximum = 100, 400, 900
     weight.map = [(100, 100), (400, 400), (700, 600), (900, 900)]
+    weight.labelNames = {"en": "Weight"}
     doc.addAxis(weight)
 
     width = AxisDescriptor()
     width.name, width.tag = "Width", "wdth"
     width.minimum, width.default, width.maximum = 75, 100, 125
+    width.labelNames = {"en": "Width"}
     doc.addAxis(width)
 
     for name, design_weight, design_width, wf, wdf in MASTERS:
@@ -182,6 +188,14 @@ def build_variable_font(workdir):
         if name == "default":
             source.copyInfo = True
         doc.addSource(source)
+
+    # Named instances, which fvar records with their names (locations are in design coordinates: 600 is user weight 700).
+    for style, wght, wdth in (("Light", 250, 100), ("Bold", 600, 100), ("Bold Condensed", 600, 75)):
+        instance = InstanceDescriptor()
+        instance.familyName = "Variable Test"
+        instance.styleName = style
+        instance.location = {"Weight": wght, "Width": wdth}
+        doc.addInstance(instance)
 
     variable, _, _ = varlib_build(doc)
     return variable
@@ -278,6 +292,11 @@ def main():
     with tempfile.TemporaryDirectory() as workdir:
         variable = build_variable_font(workdir)
         variable.save(OUT_FONT)
+
+    # The same font without HVAR, so that an advance has to come from the phantom points of gvar.
+    without_hvar = TTFont(OUT_FONT)
+    del without_hvar["HVAR"]
+    without_hvar.save(OUT_FONT_NO_HVAR)
 
     reference = TTFont(OUT_FONT)
     tags = sorted(reference.keys())

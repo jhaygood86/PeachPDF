@@ -165,10 +165,11 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
         private static double RegionScalar((double Start, double Peak, double End)[] region, ReadOnlySpan<double> coordinates)
         {
             double scalar = 1;
-            for (int a = 0; a < region.Length && a < coordinates.Length; a++)
+            for (int a = 0; a < region.Length; a++)
             {
                 var (start, peak, end) = region[a];
-                double coordinate = coordinates[a];
+                // An axis the location does not mention is at its default.
+                double coordinate = a < coordinates.Length ? coordinates[a] : 0;
                 if (peak == 0 || start > peak || peak > end || coordinate == peak)
                 {
                     continue;

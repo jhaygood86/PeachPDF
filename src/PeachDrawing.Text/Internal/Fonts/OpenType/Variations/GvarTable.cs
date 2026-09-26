@@ -266,7 +266,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
         private static double TupleScalar(double[] peak, double[]? start, double[]? end, ReadOnlySpan<double> coordinates)
         {
             double scalar = 1;
-            for (int a = 0; a < peak.Length && a < coordinates.Length; a++)
+            for (int a = 0; a < peak.Length; a++)
             {
                 double p = peak[a];
                 if (p == 0)
@@ -274,7 +274,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                     continue;
                 }
 
-                double c = coordinates[a];
+                // An axis the location does not mention is at its default.
+                double c = a < coordinates.Length ? coordinates[a] : 0;
                 if (c == p)
                 {
                     continue;

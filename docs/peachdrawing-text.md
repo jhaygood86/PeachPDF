@@ -23,6 +23,7 @@ dotnet add package PeachDrawing.Text
   Universal Shaping Engine for Devanagari, Bengali, Gujarati and Tamil, default-ignorable handling, and `cmap` format 14
   variation sequences.
 - **Outlines and colour:** glyph outlines for `glyf` and CFF, COLR v0 and v1 with CPAL, and CBDT/CBLC and sbix bitmaps.
+- **Variable fonts:** the axes of a font and reading it at a location (`Typeface.WithAxes`): TrueType outlines, advance widths and font-wide metrics follow the axes.
 - **Mathematics:** the `MATH` table: layout constants, per-glyph italics corrections and accent attachment, and the
   variants and assemblies of stretchy glyphs.
 - **Unicode:** the Unicode Bidirectional Algorithm, script itemization, vertical orientation, emoji presentation, and
@@ -177,6 +178,34 @@ if (face.TryMapRune(new Rune('g'), out ushort glyph) && face.TryGetOutline(glyph
   are read with `GetColorLayerPaint`). Variable paints are read at the font's default instance.
 - **Colour glyphs from pictures.** A font whose colour glyphs are bitmaps (`CBDT`/`CBLC` or `sbix`) reports
   `HasBitmapGlyphs`, and `TryGetBitmap` gives the picture of a glyph from the strike best suited to a size, with its bearings.
+
+## Variable fonts
+
+A variable font is one file that holds a whole design space: axes such as weight and width, and the outlines and metrics at every
+point in between. `Typeface.IsVariable` says whether a face is one, `Typeface.Axes` lists its axes (a `VariationAxis` with a tag, a
+range and a default; the tags the specification registers are in `AxisTags`), and `Typeface.NamedVariations` lists the named
+locations the font declares. `Typeface.WithAxes` returns the typeface at a location.
+
+```csharp
+if (face.IsVariable)
+{
+    Typeface bold = face.WithAxes([new AxisSetting(AxisTags.Weight, 700)]);
+    Typeface condensedBold = bold.WithAxes([new AxisSetting(AxisTags.Width, 80)]);   // builds on what bold has
+
+    ushort glyph = ...;
+    int advance = condensedBold.GetAdvance(glyph);                  // design units at that location
+    bool hasOutline = condensedBold.TryGetOutline(glyph, out GlyphOutline outline);
+}
+```
+
+- An axis you leave out keeps the value the typeface has, a tag the font has no axis for is ignored, and a value outside the axis's
+  range is clamped to it. Asking for the same location again gives the same `Typeface`, and every axis at its default gives the
+  font's own default typeface.
+- Outlines (including composite glyphs), advance widths, the font-wide metrics of `Typeface.Metrics` and shaping advances follow the
+  location. Reading `TypefaceMetrics.XMin` to `YMax` (the font bounding box) and the vertical advances gives the default design's
+  values, `GPOS` kerning and mark positions and `GSUB` feature variations are not applied, and a variable font with CFF2 outlines
+  has no outlines: what a location changes is what the `gvar`, `HVAR`, `MVAR` and `avar` tables of a font with TrueType outlines say.
+- Embedding an instance in a PDF, and the CSS properties that would ask for one, come later.
 
 ## Mathematics: `PeachDrawing.Text.OpenType`
 

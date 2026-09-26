@@ -215,6 +215,19 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Recursive => Path.Combine(AppContext.BaseDirectory, "RecursiveSubset.ttf");
 
         /// <summary>
+        /// A synthetic variable font (see VariableTest.LICENSE.txt, made by generate_variable_fixture.py) with a weight and a width axis
+        /// and the tables <c>fvar</c>, <c>avar</c>, <c>gvar</c>, <c>HVAR</c> and <c>MVAR</c>; <see cref="VariableTestGolden"/> holds what
+        /// fontTools' instancer makes of it at a grid of locations.
+        /// </summary>
+        internal static string VariableTest => Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf");
+
+        /// <summary><see cref="VariableTest"/> without its <c>HVAR</c> table, so advances come from the phantom points of <c>gvar</c>.</summary>
+        internal static string VariableTestNoHvar => Path.Combine(AppContext.BaseDirectory, "VariableTestNoHvar.ttf");
+
+        /// <summary>The reference values for <see cref="VariableTest"/>: outlines, advances and metrics at a grid of locations.</summary>
+        internal static string VariableTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableTest.golden.json");
+
+        /// <summary>
         /// A real font file path: the first one the host OS reports, or the bundled TTF
         /// if the host reports none.
         /// </summary>
