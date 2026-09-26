@@ -1,3 +1,4 @@
+﻿using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Svg;
@@ -14,8 +15,8 @@ namespace PeachPDF.Tests.Svg
     /// Coverage for SVG <c>&lt;text&gt;</c>'s <c>font-variant-ligatures/-caps/-numeric/-east-asian</c>,
     /// <c>font-feature-settings</c>, and <c>font-kerning</c> support (issue #533) - previously none of
     /// these were read anywhere in <see cref="SvgTreeBuilder"/>, so every run shaped with
-    /// <see cref="TextShapingFeatures.Default"/> regardless of what was authored. Asserts the resolved
-    /// <see cref="TextShapingFeatures"/> actually reaches <see cref="RGraphics.DrawString"/>.
+    /// <see cref="ShapeSettings.Default"/> regardless of what was authored. Asserts the resolved
+    /// <see cref="ShapeSettings"/> actually reaches <see cref="RGraphics.DrawString"/>.
     /// </summary>
     public class SvgTextFontVariantTests
     {
@@ -41,10 +42,10 @@ namespace PeachPDF.Tests.Svg
 
             var draw = Assert.Single(g.DrawStringCalls);
             var features = draw.Features!.Value;
-            Assert.Equal(LigatureFeatures.Default, features.Ligatures);
-            Assert.Equal(FontVariantCapsFeature.None, features.Caps);
-            Assert.Equal(NumericFeatures.None, features.Numeric);
-            Assert.Equal(EastAsianFeatures.None, features.EastAsian);
+            Assert.Equal(LigatureSet.Default, features.Ligatures);
+            Assert.Equal(CapsMode.None, features.Caps);
+            Assert.Equal(NumeralSet.None, features.Numeric);
+            Assert.Equal(EastAsianSet.None, features.EastAsian);
             Assert.Empty(features.ExplicitFeatures ?? []);
             Assert.True(features.Kerning);
         }
@@ -55,7 +56,7 @@ namespace PeachPDF.Tests.Svg
             var g = Render("""<text x="10" y="50" font-size="20" font-variant-ligatures="none">Hi</text>""");
 
             var draw = Assert.Single(g.DrawStringCalls);
-            Assert.Equal(LigatureFeatures.Required, draw.Features!.Value.Ligatures);
+            Assert.Equal(LigatureSet.Required, draw.Features!.Value.Ligatures);
         }
 
         [Fact]
@@ -65,8 +66,8 @@ namespace PeachPDF.Tests.Svg
 
             var draw = Assert.Single(g.DrawStringCalls);
             var features = draw.Features!.Value;
-            Assert.True((features.Ligatures & LigatureFeatures.Discretionary) != 0);
-            Assert.True((features.Ligatures & LigatureFeatures.Common) != 0); // additive, not replaced
+            Assert.True((features.Ligatures & LigatureSet.Discretionary) != 0);
+            Assert.True((features.Ligatures & LigatureSet.Common) != 0); // additive, not replaced
         }
 
         [Fact]
@@ -75,7 +76,7 @@ namespace PeachPDF.Tests.Svg
             var g = Render("""<text x="10" y="50" font-size="20" font-variant-numeric="tabular-nums">12</text>""");
 
             var draw = Assert.Single(g.DrawStringCalls);
-            Assert.Equal(NumericFeatures.TabularNums, draw.Features!.Value.Numeric);
+            Assert.Equal(NumeralSet.TabularNums, draw.Features!.Value.Numeric);
         }
 
         [Fact]
@@ -84,7 +85,7 @@ namespace PeachPDF.Tests.Svg
             var g = Render("""<text x="10" y="50" font-size="20" font-variant-east-asian="jis78-forms">A</text>""");
 
             var draw = Assert.Single(g.DrawStringCalls);
-            Assert.Equal(EastAsianFeatures.Jis78, draw.Features!.Value.EastAsian);
+            Assert.Equal(EastAsianSet.Jis78, draw.Features!.Value.EastAsian);
         }
 
         [Fact]
@@ -95,7 +96,7 @@ namespace PeachPDF.Tests.Svg
             var draw = Assert.Single(g.DrawStringCalls);
             var settings = draw.Features!.Value.ExplicitFeatures;
             Assert.NotNull(settings);
-            Assert.Contains(("ss01", 1), settings!);
+            Assert.Contains(new FeatureSetting("ss01", 1), settings!);
         }
 
         [Fact]
@@ -125,7 +126,7 @@ namespace PeachPDF.Tests.Svg
             var g = Render("""<text x="10" y="50" font-size="20" font-family="SmallCapsTest" font-variant-caps="small-caps">Hi</text>""");
 
             var draw = Assert.Single(g.DrawStringCalls);
-            Assert.Equal(FontVariantCapsFeature.SmallCaps, draw.Features!.Value.Caps);
+            Assert.Equal(CapsMode.SmallCaps, draw.Features!.Value.Caps);
         }
 
         [Fact]
@@ -134,7 +135,7 @@ namespace PeachPDF.Tests.Svg
             var g = Render("""<text x="10" y="50" font-size="20">Hi</text>""");
 
             var draw = Assert.Single(g.DrawStringCalls);
-            Assert.Equal(FontVariantCapsFeature.None, draw.Features!.Value.Caps);
+            Assert.Equal(CapsMode.None, draw.Features!.Value.Caps);
         }
 
         [Fact]
@@ -143,7 +144,7 @@ namespace PeachPDF.Tests.Svg
             var g = Render("""<text x="10" y="50" font-size="20" font-variant-numeric="oldstyle-nums"><tspan>Hi</tspan></text>""");
 
             var draw = Assert.Single(g.DrawStringCalls);
-            Assert.Equal(NumericFeatures.OldstyleNums, draw.Features!.Value.Numeric);
+            Assert.Equal(NumeralSet.OldstyleNums, draw.Features!.Value.Numeric);
         }
 
         [Fact]

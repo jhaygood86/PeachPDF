@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
@@ -509,7 +510,7 @@ namespace PeachPDF.Svg
         /// Renders a whole <c>&lt;text&gt;</c> element: its subtree is flattened to an addressable-character
         /// stream (SVG 1.1 §10.4), laid out (per-character x/y/dx/dy/rotate lists, text chunks, per-chunk
         /// <c>text-anchor</c>), and painted - consecutive same-run, unrotated, in-flow characters as one
-        /// selectable <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>, anything positioned/rotated/gradient/stroked per
+        /// selectable <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>, anything positioned/rotated/gradient/stroked per
         /// glyph. A <c>&lt;textPath&gt;</c> descendant lays out independently along its path.
         /// </summary>
         private static void RenderText(RGraphics g, SvgDocument document, SvgTextElement text, double opacity)
@@ -637,7 +638,7 @@ namespace PeachPDF.Svg
                             // one atomic block, preserving its own internal logical-order adjacency -
                             // mirroring CssLayoutEngine.MirrorWordTextIfNeeded's HTML precedent (a
                             // joining word's text is never itself reversed/mirrored; only the resulting
-                            // shaped glyph list is, via TextShapingFeatures.ReverseForDisplay - see
+                            // shaped glyph list is, via ShapeSettings.ReverseForDisplay - see
                             // ResolveShapingFeatures). It can never straddle this bidi run's own
                             // boundary: ResolveComplexScriptRuns never lets a run cross an
                             // SvgTextElement (tspan) boundary, and every bidi-level change from an
@@ -848,7 +849,7 @@ namespace PeachPDF.Svg
             // Run unconditionally over the whole stream, like CssBidiParagraphResolver does - a
             // non-joining codepoint's ArabicJoiningType is already Non_Joining (U), which
             // ArabicJoiningShaper resolves to ArabicJoiningForm.None for free.
-            var joiningForms = ArabicJoiningShaper.Resolve(codepoints);
+            var joiningForms = ArabicJoining.Resolve(codepoints);
 
             // Only classified (and only allocated at all) when the stream actually contains Devanagari
             // text - same "don't activate syllable scanning for every run" reasoning as the HTML side.
@@ -858,13 +859,13 @@ namespace PeachPDF.Svg
                 if (resolvedScripts[i] != "Devanagari")
                     continue;
                 useCategories ??= new UseCategory[count];
-                useCategories[i] = UseCategoryClassifier.Classify(codepoints[i]);
+                useCategories[i] = UniversalShaping.Classify(codepoints[i]);
             }
 
             var pos = 0;
             while (pos < count)
             {
-                var isArabicParticipant = ArabicShapingTable.Of(codepoints[pos]) != ArabicJoiningType.U;
+                var isArabicParticipant = ArabicJoining.TypeOf(codepoints[pos]) != ArabicJoiningType.U;
                 var isUseParticipant = !isArabicParticipant && resolvedScripts[pos] == "Devanagari";
 
                 if (!isArabicParticipant && !isUseParticipant)
@@ -894,7 +895,7 @@ namespace PeachPDF.Svg
                        && glyphs[end].X is null && glyphs[end].Y is null
                        && glyphs[end].Dx is null && glyphs[end].Dy is null
                        && (isArabicParticipant
-                           ? ArabicShapingTable.Of(codepoints[end]) != ArabicJoiningType.U
+                           ? ArabicJoining.TypeOf(codepoints[end]) != ArabicJoiningType.U
                            : resolvedScripts[end] == "Devanagari"))
                 {
                     end++;
@@ -930,7 +931,7 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// This glyph's effective <see cref="TextShapingFeatures"/> for measurement/painting: its own
+        /// This glyph's effective <see cref="ShapeSettings"/> for measurement/painting: its own
         /// run's <see cref="SvgTextElement.ShapingFeatures"/>, layered with the run-wide script tag/
         /// joining forms/USE categories/reverse-for-display request when <paramref name="gi"/> is part
         /// of a multi-character complex-script shaping run (see <see cref="GlyphInfo.ShapingRunFirst"/>/
@@ -939,7 +940,7 @@ namespace PeachPDF.Svg
         /// unchanged (today's exact behavior) for every glyph outside such a run - the overwhelming
         /// common case.
         /// </summary>
-        private static TextShapingFeatures ResolveShapingFeatures(GlyphInfo gi) =>
+        private static ShapeSettings ResolveShapingFeatures(GlyphInfo gi) =>
             gi.ShapingRunFirst is not { } first
                 ? gi.Run.ShapingFeatures
                 : gi.Run.ShapingFeatures with
@@ -1138,7 +1139,7 @@ namespace PeachPDF.Svg
 
         /// <summary>
         /// Paints the laid-out character stream. Under <c>horizontal-tb</c>: a maximal contiguous group
-        /// of same-run, unrotated, in-flow characters is painted as one <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>
+        /// of same-run, unrotated, in-flow characters is painted as one <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/>
         /// (kept selectable); an explicitly-rotated character is painted on its own, rotated about its
         /// own position (<see cref="PaintRotatedGlyph"/>). Under a vertical writing mode, every glyph
         /// paints individually - never batched into one string - since consecutive upright glyphs stack
@@ -1208,7 +1209,7 @@ namespace PeachPDF.Svg
                     // together (ResolveComplexScriptRuns already required them to share Run and carry no
                     // mid-run explicit position/rotate); a boundary between two different runs, or
                     // between a run and plain text, always breaks the batch - each needs its own
-                    // TextShapingFeatures (see ResolveShapingFeatures), so merging them would apply one
+                    // ShapeSettings (see ResolveShapingFeatures), so merging them would apply one
                     // run's joining forms/USE categories to the other's text.
                     if (!ReferenceEquals(gc.Run, start.Run) || (gc.Rotate ?? 0) != 0
                         || gc.X is not null || gc.Y is not null || (gc.Dx ?? 0) != 0 || (gc.Dy ?? 0) != 0
@@ -1463,7 +1464,7 @@ namespace PeachPDF.Svg
         /// <summary>
         /// Paints one straight-baseline group of characters (<paramref name="text"/>, all sharing one run's
         /// font/fill/stroke) at a given top-left origin. Plain solid, non-stroked text keeps the fast
-        /// <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/> path (a single-color PDF text show, so it stays
+        /// <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/> path (a single-color PDF text show, so it stays
         /// selectable and tagged-PDF-friendly). A gradient/pattern <c>fill</c> or any <c>stroke</c>
         /// needs the glyphs as an addressable vector path (<see cref="RGraphics.GetTextOutline"/>),
         /// filled/stroked through the same brush/pen machinery shapes use - outlined text is vector art
@@ -1473,7 +1474,7 @@ namespace PeachPDF.Svg
         /// null (the common case) when this run of characters was never bidi-mirrored.
         /// </summary>
         private static void PaintTextGlyphs(RGraphics g, SvgDocument document, SvgTextElement run, string text, RFont font, double drawX, double drawY, RSize size, double opacity,
-            double letterSpacing = 0, TextShapingFeatures? features = null, string? logicalText = null)
+            double letterSpacing = 0, ShapeSettings? features = null, string? logicalText = null)
         {
             var hasStroke = run.Stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
             var needsOutline = run.Fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;

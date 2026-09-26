@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Text.Shaping;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.PdfSharpCore.Pdf;
@@ -1176,7 +1177,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// Draws the specified text string.
         /// </summary>
         /// <summary>
-        /// When true, <see cref="DrawString(string, XFont, XBrush, XRect, XStringFormat, double, XGlyphPalette?, TextShapingFeatures?, string?)"/>
+        /// When true, <see cref="DrawString(string, XFont, XBrush, XRect, XStringFormat, double, XGlyphPalette?, ShapeSettings?, string?)"/>
         /// shows text in PDF text rendering mode 3 (neither filled nor stroked): the glyphs are laid out, embedded and
         /// extractable exactly as visible text is, but paint nothing. Used to keep text selectable and searchable over content
         /// that was drawn as a bitmap. Text decorations and colour-glyph artwork are not painted either.
@@ -1208,7 +1209,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, XBrush brush, double x, double y, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, TextShapingFeatures? features = null, string? logicalText = null)
+        public void DrawString(string s, XFont font, XBrush brush, double x, double y, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
         {
             DrawString(s, font, brush, new XRect(x, y, 0, 0), format, letterSpacing, fontPalette, features, logicalText);
         }
@@ -1228,7 +1229,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// see <see cref="PeachPDF.Html.Adapters.RGraphics"/>'s own equivalent overload for why this
         /// exists (ToUnicode CMap fidelity for a reversed/mirrored RTL word).
         /// </summary>
-        public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, TextShapingFeatures? features = null, string? logicalText = null)
+        public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -1247,7 +1248,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
                 format = XStringFormats.Default;
 
             if (_renderer != null)
-                _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing, fontPalette, features ?? TextShapingFeatures.Default, logicalText);
+                _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing, fontPalette, features ?? ShapeSettings.Default, logicalText);
         }
 
         /// <summary>
@@ -1271,7 +1272,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Measures the specified string when drawn with the specified font.
         /// </summary>
-        public XSize MeasureString(string text, XFont font, XStringFormat stringFormat, TextShapingFeatures? features = null)
+        public XSize MeasureString(string text, XFont font, XStringFormat stringFormat, ShapeSettings? features = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -1280,14 +1281,14 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
             if (stringFormat == null)
                 throw new ArgumentNullException("stringFormat");
 
-            XSize size = FontHelper.MeasureString(text, font, XStringFormats.Default, features ?? TextShapingFeatures.Default);
+            XSize size = FontHelper.MeasureString(text, font, XStringFormats.Default, features ?? ShapeSettings.Default);
             return size;
         }
 
         /// <summary>
         /// Measures the specified string when drawn with the specified font.
         /// </summary>
-        public XSize MeasureString(string text, XFont font, TextShapingFeatures? features = null)
+        public XSize MeasureString(string text, XFont font, ShapeSettings? features = null)
         {
             return MeasureString(text, font, XStringFormats.Default, features);
         }

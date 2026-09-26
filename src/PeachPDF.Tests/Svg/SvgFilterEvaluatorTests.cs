@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -402,12 +403,12 @@ namespace PeachPDF.Tests.Svg
         public override void BeginArtifact() { }
         public override void BeginVariableText() { }
         public override void EndVariableText() { }
-        public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) => new(0, 0);
-        public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => 0;
+        public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null) => new(0, 0);
+        public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null) => 0;
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth) { charFit = 0; charFitWidth = 0; }
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null) { }
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null) { }
         public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color) { }
-        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null) => null;
+        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) => null;
         public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2) { }
         public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }
         public override void DrawPath(RPen pen, RGraphicsPath path) { }

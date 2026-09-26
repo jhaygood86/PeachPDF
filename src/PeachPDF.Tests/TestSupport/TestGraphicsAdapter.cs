@@ -1,4 +1,5 @@
-﻿using PeachDrawing.Text;
+﻿using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Text;
@@ -156,9 +157,9 @@ namespace PeachPDF.Tests.TestSupport
         public override double LeftPadding => 0;
         public override double GetWhitespaceWidth(RGraphics graphics) => size * 0.25;
         public override bool HasGlyph(System.Text.Rune rune) => true;
-        public override bool SupportsFontVariantCaps(FontVariantCapsFeature feature) => false;
+        public override bool SupportsFontVariantCaps(CapsMode feature) => false;
 
-        public override bool SupportsFontVariantPosition(FontVariantPositionFeature feature) => false;
+        public override bool SupportsFontVariantPosition(SubSuperMode feature) => false;
 
         public override (double SizeScale, double BaselineShift)? GetSubSuperscriptMetrics(bool superscript) => null;
         public override string FaceKey => "test";
@@ -268,7 +269,7 @@ namespace PeachPDF.Tests.TestSupport
     /// </summary>
     internal class TestRecordingGraphics : RGraphics
     {
-        public sealed record DrawStringCall(string Text, RFont Font, RColor Color, RPoint Point, RSize Size, double LetterSpacing = 0, TextShapingFeatures? Features = null, string? LogicalText = null);
+        public sealed record DrawStringCall(string Text, RFont Font, RColor Color, RPoint Point, RSize Size, double LetterSpacing = 0, ShapeSettings? Features = null, string? LogicalText = null);
         public sealed record DrawRectCall(RColor Color, double X, double Y, double Width, double Height);
         /// <summary>
         /// A filled or stroked path. <see cref="Points"/> is the path's recorded geometry, which is the only
@@ -380,7 +381,7 @@ namespace PeachPDF.Tests.TestSupport
 
         public TestRecordingGraphics() : base(new TestGraphicsAdapter(), new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null)
         {
             var call = new DrawStringCall(str, font, color, point, size, letterSpacing, features);
             DrawStringCalls.Add(call);
@@ -389,13 +390,13 @@ namespace PeachPDF.Tests.TestSupport
 
         public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color) { }
 
-        /// <summary>See <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?, string?)"/>'s
+        /// <summary>See <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?, string?)"/>'s
         /// own remarks for <paramref name="logicalText"/>. Dispatches through the virtual 8-arg overload
         /// first (rather than recording independently) so a subclass that overrides only that one (e.g.
         /// <c>RenderErrorReportingTests.ThrowingGraphics</c>) still intercepts every call made through
         /// this overload too - then attaches <paramref name="logicalText"/> to the record that call just
         /// appended.</summary>
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, TextShapingFeatures? features, string? logicalText)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, ShapeSettings? features, string? logicalText)
         {
             DrawString(str, font, color, point, size, letterSpacing, fontPalette, features);
             if (logicalText is null) return;
@@ -529,7 +530,7 @@ namespace PeachPDF.Tests.TestSupport
         /// paths can be driven and their <see cref="DrawPath(RBrush, RGraphicsPath)"/>/
         /// <see cref="DrawPath(RPen, RGraphicsPath)"/> calls recorded.
         /// </summary>
-        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null)
+        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null)
         {
             var path = new TestGraphicsPath();
             var penX = baselineOrigin.X;
@@ -571,8 +572,8 @@ namespace PeachPDF.Tests.TestSupport
         public override void BeginArtifact() { }
         public override void BeginVariableText() { }
         public override void EndVariableText() { }
-        public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) => new((str?.Length ?? 0) * font.Size * 0.6, font.Height);
-        public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
+        public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null) => new((str?.Length ?? 0) * font.Size * 0.6, font.Height);
+        public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null) => str?.Length ?? 0;
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
         {
             charFit = str?.Length ?? 0;

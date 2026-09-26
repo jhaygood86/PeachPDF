@@ -1,4 +1,4 @@
-#region PeachPDF - A .NET library for rendering HTML to PDF
+﻿#region PeachPDF - A .NET library for rendering HTML to PDF
 //
 // Reader for the OpenType `GPOS` (Glyph Positioning) table: its own ScriptList/FeatureList/LookupList
 // common tables (independent of GSUB's - GPOS has its own tag registry, e.g. `kern`/`mark`/`mkmk`),
@@ -18,7 +18,7 @@
 // HarfBuzz's own main-direction formula, verified against a real cursive-attachment font - see
 // .claude/accepted-gaps/no-text-shaping.md); and Lookup Type 5 (MarkToLigature Attachment,
 // `MarkLigPosFormat1`) - identifying which ligature *component* a
-// mark attaches to relies on `PeachDrawing.Text.Internal.Text.ShapedGlyph.LigatureComponentClusterStarts`, bookkeeping
+// mark attaches to relies on `PeachDrawing.Text.Shaping.PlacedGlyph.LigatureComponentClusterStarts`, bookkeeping
 // GSUB's own ligature-merge logic (`GsubShaper.TryMatchLigature`) now carries forward for exactly this.
 //
 // `lookupFlag`'s GDEF-based mark filtering (the plain ignore-bits) is honored everywhere via GDEF glyph
@@ -36,6 +36,7 @@
 //
 #endregion
 
+using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

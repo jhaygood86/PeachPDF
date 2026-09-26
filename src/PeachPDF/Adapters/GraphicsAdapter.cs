@@ -1,4 +1,4 @@
-// "Therefore those skilled at the unorthodox
+﻿// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -180,17 +181,16 @@ namespace PeachPDF.Adapters
             }
         }
 
-        public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null)
+        public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null)
         {
             var realFont = ((FontAdapter)font).Font;
-            var size = _g.MeasureString(str, realFont, _stringFormat, features ?? TextShapingFeatures.Default);
+            var size = _g.MeasureString(str, realFont, _stringFormat, features ?? ShapeSettings.Default);
             return Utils.Convert(size, PixelsPerPoint);
         }
 
-        public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null)
+        public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null)
         {
-            var descriptor = ((FontAdapter)font).Font.Descriptor;
-            return descriptor.Shape(str, features ?? TextShapingFeatures.Default).Count;
+            return Shaper.Shape(((FontAdapter)font).Font.Typeface, str, features ?? ShapeSettings.Default).Glyphs.Count;
         }
 
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
@@ -199,14 +199,14 @@ namespace PeachPDF.Adapters
             throw new NotSupportedException();
         }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null) =>
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null) =>
             DrawString(str, font, color, point, size, letterSpacing, fontPalette, features, logicalText: null);
 
-        /// <summary>See <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?, string?)"/>'s
+        /// <summary>See <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?, string?)"/>'s
         /// own remarks for <paramref name="logicalText"/> - threaded straight through to
-        /// <see cref="XGraphics.DrawString(string, XFont, XBrush, double, double, XStringFormat, double, XGlyphPalette?, TextShapingFeatures?, string?)"/>,
+        /// <see cref="XGraphics.DrawString(string, XFont, XBrush, double, double, XStringFormat, double, XGlyphPalette?, ShapeSettings?, string?)"/>,
         /// the one real PDF-writing path that acts on it.</summary>
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, TextShapingFeatures? features, string? logicalText)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, ShapeSettings? features, string? logicalText)
         {
             // Invisible text paints nothing, so its colour is irrelevant - and an opaque one keeps it clear of the alpha and
             // colour-space guards a real colour would pass through.
@@ -222,7 +222,7 @@ namespace PeachPDF.Adapters
             var xLetterSpacing = letterSpacing / PixelsPerPoint;
             try
             {
-                _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, ToGlyphPalette(fontPalette), features ?? TextShapingFeatures.Default, logicalText);
+                _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, ToGlyphPalette(fontPalette), features ?? ShapeSettings.Default, logicalText);
             }
             finally
             {
@@ -263,13 +263,13 @@ namespace PeachPDF.Adapters
             return new XGlyphPalette(palette.BasePaletteIndex, overrides);
         }
 
-        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null) =>
+        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) =>
             TextOutlineBuilder.Build(GetGraphicsPath(), ((FontAdapter)font).Font, PixelsPerPoint, str, baselineOrigin, letterSpacing,
-                features ?? TextShapingFeatures.Default);
+                features ?? ShapeSettings.Default);
 
         public override IReadOnlyList<RInkSpan>? GetInkCrossings(
             string str, RFont font, RPoint origin, double bandTop, double bandBottom,
-            double letterSpacing = 0, TextShapingFeatures? features = null)
+            double letterSpacing = 0, ShapeSettings? features = null)
         {
             var realFont = ((FontAdapter)font).Font;
             var descriptor = realFont.Descriptor;
@@ -289,7 +289,7 @@ namespace PeachPDF.Adapters
             // shape-and-decode. Underlined prose repeats words heavily, and this call is otherwise the
             // most expensive thing a decorated line does.
             var key = new InkCrossingKey(realFont, str, bandTop - baselineY, bandBottom - baselineY,
-                letterSpacing, features ?? TextShapingFeatures.Default);
+                letterSpacing, features ?? ShapeSettings.Default);
 
             if (!_inkCrossings.TryGetValue(key, out var relative))
             {
@@ -327,7 +327,7 @@ namespace PeachPDF.Adapters
             var sawOutline = false;
             double penX = 0;
 
-            foreach (var glyph in descriptor.Shape(str, key.Features))
+            foreach (var glyph in Shaper.Shape(realFont.Typeface, str, key.Features).Glyphs)
             {
                 var glyphId = glyph.GlyphIndex;
 
@@ -412,7 +412,7 @@ namespace PeachPDF.Adapters
         /// </summary>
         private readonly record struct InkCrossingKey(
             XFont Font, string Text, double BandTop, double BandBottom, double LetterSpacing,
-            TextShapingFeatures Features);
+            ShapeSettings Features);
 
         public override RGraphicsPath GetGraphicsPath()
         {

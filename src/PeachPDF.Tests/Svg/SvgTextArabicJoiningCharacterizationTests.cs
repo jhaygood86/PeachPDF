@@ -1,3 +1,5 @@
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
@@ -20,11 +22,11 @@ namespace PeachPDF.Tests.Svg
     /// mirrors <see cref="PeachPDF.Tests.Html.Core.ArabicJoiningCharacterizationTests"/>'s own "prove
     /// it isn't a no-op" standard against real font data, applied to SVG's independent pipeline:
     /// renders through the real SVG pipeline with a <see cref="TestRecordingGraphics"/> mock to
-    /// capture exactly the <c>(text, TextShapingFeatures)</c> pair <c>SvgRenderer.PaintGlyphs</c>
+    /// capture exactly the <c>(text, ShapeSettings)</c> pair <c>SvgRenderer.PaintGlyphs</c>
     /// actually hands to <see cref="RGraphics.DrawString"/>, then re-shapes that exact pair through a
     /// real <see cref="OpenTypeDescriptor"/> (the same bundled Noto Sans Arabic/Aref Ruqaa subsets
     /// HTML's own characterization tests use) to confirm real GSUB/GPOS substitution/positioning
-    /// actually happens - not just that a correctly-shaped <see cref="TextShapingFeatures"/> value got
+    /// actually happens - not just that a correctly-shaped <see cref="ShapeSettings"/> value got
     /// built and never used.
     /// </summary>
     public class SvgTextArabicJoiningCharacterizationTests
@@ -83,7 +85,7 @@ namespace PeachPDF.Tests.Svg
 
             var descriptor = Descriptor(BundledFonts.Arabic);
             var withRlig = descriptor.Shape(draw.Text, draw.Features!.Value).Select(sg => sg.GlyphIndex).ToArray();
-            var positionalOnly = descriptor.Shape(draw.Text, draw.Features.Value with { Ligatures = LigatureFeatures.None })
+            var positionalOnly = descriptor.Shape(draw.Text, draw.Features.Value with { Ligatures = LigatureSet.None })
                 .Select(sg => sg.GlyphIndex).ToArray();
 
             Assert.Equal(2, withRlig.Length);
@@ -146,7 +148,7 @@ namespace PeachPDF.Tests.Svg
 
             var descriptor = Descriptor(BundledFonts.Arabic);
             var viaSvg = descriptor.Shape(draw.Text, draw.Features.Value).Select(sg => sg.GlyphIndex).ToArray();
-            var plain = descriptor.Shape(draw.Text, TextShapingFeatures.Default).Select(sg => sg.GlyphIndex).ToArray();
+            var plain = descriptor.Shape(draw.Text, ShapeSettings.Default).Select(sg => sg.GlyphIndex).ToArray();
 
             Assert.Equal(plain, viaSvg);
         }

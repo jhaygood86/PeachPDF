@@ -17,6 +17,7 @@
 //
 #endregion
 
+using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Generic;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
@@ -69,13 +70,13 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// The vector paths remain the only visible ink; the text show adds selection geometry and
         /// <c>/ActualText</c> preserves the exact per-occurrence Unicode sequence.
         /// </summary>
-        public void Paint(string text, IReadOnlyList<ShapedGlyph> glyphs, string? logicalText = null)
+        public void Paint(string text, IReadOnlyList<PlacedGlyph> glyphs, string? logicalText = null)
         {
             string?[] actualTextByGlyph = BuildActualTextByGlyph(text, logicalText, glyphs);
             double penX = 0;
             for (int i = 0; i < glyphs.Count; i++)
             {
-                ShapedGlyph glyph = glyphs[i];
+                PlacedGlyph glyph = glyphs[i];
                 double glyphX = _baselineX + penX + glyph.XOffset * _scale;
 
                 // GPOS positioning (kerning's XOffset, mark attachment's XOffset/YOffset) shifts where
@@ -106,7 +107,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 penX = 0;
                 for (int i = 0; i < glyphs.Count; i++)
                 {
-                    ShapedGlyph glyph = glyphs[i];
+                    PlacedGlyph glyph = glyphs[i];
                     if (actualTextByGlyph[i] is { Length: > 0 } actualText)
                     {
                         double glyphX = _baselineX + penX + glyph.XOffset * _scale;
@@ -143,7 +144,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// shaping consumed or deleted (VS16, ZWJ, emoji tag characters, bidi controls) in the copied
         /// text even though they correctly have no painted glyph of their own.
         /// </summary>
-        internal static string?[] BuildActualTextByGlyph(string text, string? logicalText, IReadOnlyList<ShapedGlyph> glyphs)
+        internal static string?[] BuildActualTextByGlyph(string text, string? logicalText, IReadOnlyList<PlacedGlyph> glyphs)
         {
             var result = new string?[glyphs.Count];
             if (text.Length == 0 || glyphs.Count == 0)
@@ -165,7 +166,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             bool hasOverlappingClusters = false;
             for (int i = 0; i < glyphs.Count; i++)
             {
-                ShapedGlyph glyph = glyphs[i];
+                PlacedGlyph glyph = glyphs[i];
                 if (glyph.ClusterLength <= 0)
                     continue;
 
@@ -206,7 +207,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
                 foreach (int glyphIndex in sourceBearingGlyphs)
                 {
-                    ShapedGlyph glyph = glyphs[glyphIndex];
+                    PlacedGlyph glyph = glyphs[glyphIndex];
                     int start = Math.Clamp(glyph.ClusterStart, 0, text.Length);
                     int end = Math.Clamp(glyph.ClusterStart + glyph.ClusterLength, start, text.Length);
                     for (int codeUnit = start; codeUnit < end; codeUnit++)

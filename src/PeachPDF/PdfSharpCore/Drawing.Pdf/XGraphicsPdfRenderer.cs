@@ -31,6 +31,7 @@
 
 #define ITALIC_SIMULATION
 
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
@@ -407,7 +408,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawString ---------------------------------------------------------------------------
 
-        public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, TextShapingFeatures features, string? logicalText = null)
+        public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, ShapeSettings features, string? logicalText = null)
         {
             double x = rect.X;
             double y = rect.Y;
@@ -431,7 +432,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             // Invisible text (see XGraphics.InvisibleText) is always the plain outline text object, never colour artwork.
             bool invisible = Gfx.InvisibleText;
             bool isColorFont = font.Unicode && descriptor.IsColorFont && !invisible;
-            IReadOnlyList<ShapedGlyph>? colorGlyphs = isColorFont ? descriptor.Shape(s, features) : null;
+            IReadOnlyList<PlacedGlyph>? colorGlyphs = isColorFont ? Shaper.Shape(font.Typeface, s, features).Glyphs : null;
             double width = colorGlyphs is not null && CanMeasureAsSingleShapedRun(s)
                 ? MeasureShapedRunWidth(s, font, descriptor, colorGlyphs)
                 : _gfx.MeasureString(s, font, features).Width;
@@ -520,14 +521,14 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 realizedFont.AddShapedText(s, features, logicalText);
 
                 string text = null;
-                IReadOnlyList<ShapedGlyph> shapedGlyphs = null;
+                IReadOnlyList<PlacedGlyph> shapedGlyphs = null;
                 bool hasGposDeltas = false;
                 if (font.Unicode)
                 {
-                    shapedGlyphs = descriptor.Shape(s, features);
+                    shapedGlyphs = Shaper.Shape(font.Typeface, s, features).Glyphs;
                     RequireNoMissingGlyphsForPdfA(shapedGlyphs, font);
                     StringBuilder sb = new StringBuilder();
-                    foreach (ShapedGlyph glyph in shapedGlyphs)
+                    foreach (PlacedGlyph glyph in shapedGlyphs)
                     {
                         sb.Append((char)glyph.GlyphIndex);
                         if (glyph.XAdvanceDelta != 0 || glyph.YAdvanceDelta != 0 || glyph.XOffset != 0 || glyph.YOffset != 0)
@@ -647,12 +648,12 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         }
 
         private static double MeasureShapedRunWidth(string text, XFont font, OpenTypeDescriptor descriptor,
-            IReadOnlyList<ShapedGlyph> glyphs)
+            IReadOnlyList<PlacedGlyph> glyphs)
         {
             int designWidth = 0;
             for (int i = 0; i < glyphs.Count; i++)
             {
-                ShapedGlyph glyph = glyphs[i];
+                PlacedGlyph glyph = glyphs[i];
                 designWidth += (int)Math.Round(descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta);
             }
 
@@ -676,7 +677,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// path checks a complete shaped run; color-font vector painting checks each source-bearing
         /// glyph before emitting its invisible selection text.
         /// </summary>
-        void RequireNoMissingGlyphsForPdfA(IReadOnlyList<ShapedGlyph> glyphs, XFont font)
+        void RequireNoMissingGlyphsForPdfA(IReadOnlyList<PlacedGlyph> glyphs, XFont font)
         {
             if (Owner.Options.PdfAConformance == PdfAConformance.None)
                 return;
@@ -705,11 +706,11 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// space) as a sequence of individually positioned Td+Tj pairs, one glyph at a time, instead
         /// of a single Tj over the whole run - see the one caller in <see cref="DrawString"/>. Only
         /// horizontal (X) positioning is affected by page direction sign flips the same way the rest
-        /// of this renderer's Y math already is; <see cref="ShapedGlyph.YAdvanceDelta"/> (vertical
+        /// of this renderer's Y math already is; <see cref="PlacedGlyph.YAdvanceDelta"/> (vertical
         /// writing mode's own advance axis) is intentionally not applied here - this renderer draws
         /// horizontal text only.
         /// </summary>
-        void DrawPositionedGlyphs(IReadOnlyList<ShapedGlyph> glyphs, XFont font, OpenTypeDescriptor descriptor, XPoint startPos)
+        void DrawPositionedGlyphs(IReadOnlyList<PlacedGlyph> glyphs, XFont font, OpenTypeDescriptor descriptor, XPoint startPos)
         {
             const string format2 = Config.SignificantFigures4;
             double scale = font.Size / descriptor.UnitsPerEm;
@@ -718,7 +719,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             double penX = startPos.X;
             double penY = startPos.Y;
 
-            foreach (ShapedGlyph glyph in glyphs)
+            foreach (PlacedGlyph glyph in glyphs)
             {
                 double glyphX = penX + glyph.XOffset * scale;
                 // Font em-square is y-up; a downwards page is y-down, so a positive OpenType YOffset
@@ -747,7 +748,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// addressed directly by font glyph index - the same per-glyph <c>Td</c>+<c>Tj</c> emission
         /// <see cref="DrawPositionedGlyphs"/> already uses, generalized to take already-absolute
         /// positions instead of shaped-run deltas relative to a pen, and to realize the font/brush
-        /// itself (its one caller, <see cref="DrawString(string, XFont, XBrush, XRect, XStringFormat, double, XGlyphPalette?, TextShapingFeatures, string)"/>,
+        /// itself (its one caller, <see cref="DrawString(string, XFont, XBrush, XRect, XStringFormat, double, XGlyphPalette?, ShapeSettings, string)"/>,
         /// already did that before ever reaching <see cref="DrawPositionedGlyphs"/>). No bold/italic
         /// simulation, underline, or strikeout handling - this exists for MathML's stretchy-operator
         /// glyph assemblies (see <c>MathRenderer</c>), which are never any of those.
@@ -1769,7 +1770,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// the surrounding marked-content sequence's <c>/ActualText</c> supplies its exact Unicode,
         /// including sequences which share the same glyph ID.
         /// </summary>
-        internal void DrawInvisibleGlyph(XFont font, ShapedGlyph glyph, string sourceText, double x, double y)
+        internal void DrawInvisibleGlyph(XFont font, PlacedGlyph glyph, string sourceText, double x, double y)
         {
             if (glyph.GlyphIndex == 0)
                 RequireNoMissingGlyphsForPdfA(new[] { glyph }, font);

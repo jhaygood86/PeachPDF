@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Text;
 using PeachDrawing.Text.Internal.Text.Bidi;
 using System;
@@ -247,16 +248,16 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// instead pre-reversed/mirrored at the character level before it ever reaches here
         /// (<c>CssLayoutEngine.MirrorWordTextIfNeeded</c>), so for that caller "logical order" and
         /// "display order" are already the same string by the time <paramref name="text"/> arrives.
-        /// <see cref="TextShapingFeatures.ReverseForDisplay"/> is the other caller's escape hatch: an
+        /// <see cref="ShapeSettings.ReverseForDisplay"/> is the other caller's escape hatch: an
         /// Arabic-family joining word never mutates its own text (see <c>CssRectWord</c>'s own remarks),
         /// so its shaped glyphs still need reversing to paint in the correct right-to-left visual order -
         /// done here, as the very last step, once GSUB/GPOS have both already run in the logical order
         /// they need. This mirrors how real shaping engines apply features in logical order and reverse
         /// only at the end for an RTL run.
         /// </remarks>
-        public IReadOnlyList<ShapedGlyph> Shape(string text, TextShapingFeatures features)
+        public IReadOnlyList<PlacedGlyph> Shape(string text, ShapeSettings features)
         {
-            List<ShapedGlyph> glyphs = GsubShaper.Shape(this, text, features);
+            List<PlacedGlyph> glyphs = GsubShaper.Shape(this, text, features);
             GposPositioner.Apply(this, glyphs, features);
             DropHiddenIgnorables(glyphs);
 
@@ -268,7 +269,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
         /// <summary>
         /// Deletes every glyph <see cref="GsubShaper.MapToGlyphs"/> flagged
-        /// <see cref="ShapedGlyph.IsHiddenIgnorable"/>: every variation selector, plus the missing-glyph
+        /// <see cref="PlacedGlyph.IsHiddenIgnorable"/>: every variation selector, plus the missing-glyph
         /// placeholder (<c>.notdef</c>) standing in for another codepoint Unicode declares
         /// <c>Default_Ignorable_Code_Point</c>, such as ZWJ/ZWNJ, a bidi control, or a language tag
         /// character. Those codepoints have no visible rendering of their own. Letting an unmapped one
@@ -287,16 +288,16 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// (U+00AD, itself default-ignorable, and drawn as a visible hyphen by most fonts when
         /// <c>hyphens: none</c> leaves it in the text) behaving exactly as it did before.
         ///
-        /// <see cref="ShapedGlyph.AttachedToIndex"/> is a <i>glyph-list</i> index, so removal has to remap
+        /// <see cref="PlacedGlyph.AttachedToIndex"/> is a <i>glyph-list</i> index, so removal has to remap
         /// it; a mark attached to a deleted glyph loses its anchor rather than silently pointing at whatever
-        /// slid into that slot. <see cref="ShapedGlyph.LigatureComponentClusterStarts"/> holds text offsets,
+        /// slid into that slot. <see cref="PlacedGlyph.LigatureComponentClusterStarts"/> holds text offsets,
         /// not glyph indices, so it needs no such fixup.
         /// </remarks>
-        private static void DropHiddenIgnorables(List<ShapedGlyph> glyphs)
+        private static void DropHiddenIgnorables(List<PlacedGlyph> glyphs)
         {
             // Overwhelmingly the common case - no ignorable reached .notdef, so nothing is rebuilt.
             var anyToDrop = false;
-            foreach (ShapedGlyph glyph in glyphs)
+            foreach (PlacedGlyph glyph in glyphs)
             {
                 if (glyph.IsHiddenIgnorable)
                 {
@@ -311,7 +312,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             // oldIndex -> newIndex, with -1 marking a deleted glyph, so AttachedToIndex can be rewritten
             // in the second pass below against the list this one produces.
             var remap = new int[glyphs.Count];
-            var kept = new List<ShapedGlyph>(glyphs.Count);
+            var kept = new List<PlacedGlyph>(glyphs.Count);
 
             for (var i = 0; i < glyphs.Count; i++)
             {
@@ -354,7 +355,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// mirror image of the logical-order layout, since reflecting an interval <c>[origin, origin +
         /// advance]</c> around the run's total width is mathematically identical to summing advances in
         /// reverse order. It is NOT correct for a mark <see cref="GposPositioner.ApplyMarkAnchor"/>
-        /// positioned via <see cref="ShapedGlyph.XOffset"/>: that offset bakes in the pen-distance from
+        /// positioned via <see cref="PlacedGlyph.XOffset"/>: that offset bakes in the pen-distance from
         /// the mark's own base to the mark itself, under the walk order GPOS actually computed it in
         /// (logical order) - after reversal, the mark's new neighbors (and so its own natural pen
         /// position relative to its base) are completely different, so reusing the old offset
@@ -363,15 +364,15 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// than by reasoning about the math in the abstract - see this fix's own recent-fixes entry.
         /// Fixed by resolving each glyph's desired absolute X position before reversing - an unattached
         /// glyph's own interval-mirror position, or (recursively, for a glyph with
-        /// <see cref="ShapedGlyph.AttachedToIndex"/> set) its base's own resolved position plus the same
+        /// <see cref="PlacedGlyph.AttachedToIndex"/> set) its base's own resolved position plus the same
         /// relative offset it had from that base in logical order, which is a purely geometric
         /// relationship reversal must not disturb - then, after reversing, assigning each glyph whatever
-        /// new <see cref="ShapedGlyph.XOffset"/> reproduces that resolved position under the new walk
-        /// order. <see cref="ShapedGlyph.YOffset"/> needs no such correction: it is never pen-position-
+        /// new <see cref="PlacedGlyph.XOffset"/> reproduces that resolved position under the new walk
+        /// order. <see cref="PlacedGlyph.YOffset"/> needs no such correction: it is never pen-position-
         /// dependent (vertical placement doesn't accumulate along the line the way horizontal advance
         /// does), so it carries over unchanged.
         /// </remarks>
-        private void ReverseGlyphsForDisplay(List<ShapedGlyph> glyphs, string text)
+        private void ReverseGlyphsForDisplay(List<PlacedGlyph> glyphs, string text)
         {
             int count = glyphs.Count;
 
@@ -404,7 +405,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 for (var newIndex = 0; newIndex < count; newIndex++)
                 {
                     int oldIndex = count - 1 - newIndex;
-                    ShapedGlyph glyph = glyphs[newIndex];
+                    PlacedGlyph glyph = glyphs[newIndex];
                     glyphs[newIndex] = glyph with { XOffset = desiredX[oldIndex]!.Value - newPos, AttachedToIndex = null };
                     // advance[oldIndex] is still this exact glyph's own advance - Reverse() only
                     // reorders list elements, it never mutates the (immutable record struct) values.
@@ -438,12 +439,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// real fonts never stack more than a couple of combining marks; past the guard a glyph is
         /// simply treated as unattached rather than resolved incorrectly or overflowing the stack.
         /// </summary>
-        private double ResolveDesiredDisplayX(List<ShapedGlyph> glyphs, double[] naturalPos, double[] advance, double totalWidth, double?[] desiredX, int i, int depth)
+        private double ResolveDesiredDisplayX(List<PlacedGlyph> glyphs, double[] naturalPos, double[] advance, double totalWidth, double?[] desiredX, int i, int depth)
         {
             if (desiredX[i] is { } cached)
                 return cached;
 
-            ShapedGlyph glyph = glyphs[i];
+            PlacedGlyph glyph = glyphs[i];
             double logicalAbsX = naturalPos[i] + glyph.XOffset;
             double result;
 
@@ -493,12 +494,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// <paramref name="requiredTags"/> - checked independently per tag (see
         /// <see cref="GsubTable.SupportsAllFeatureTags"/>), under <see cref="GsubShaper.ScriptPreference"/>
         /// (the no-script-tag fallback chain `Shape` itself resolves against for a run that carries no
-        /// <see cref="TextShapingFeatures.ScriptTag"/>). This method has no per-run script tag to check
+        /// <see cref="ShapeSettings.ScriptTag"/>). This method has no per-run script tag to check
         /// against - every caller (<c>RFont.SupportsFontVariantCaps</c>, resolved once per box via
         /// <c>DerivedStyle.ActualFontVariantCaps</c>/<c>SvgTreeBuilder.ComputeFontContext</c>) queries at
         /// element granularity, before per-word script-run splitting (<c>CharScripts</c>)
         /// has happened - so "supported" and "actually applied" can disagree for a run whose own
-        /// resolved <see cref="TextShapingFeatures.ScriptTag"/> is non-null (currently: Arabic-family
+        /// resolved <see cref="ShapeSettings.ScriptTag"/> is non-null (currently: Arabic-family
         /// joining text) when the requested tags exist in this font only under that specific script's
         /// `LangSys`, not under `"latn"`/`"DFLT"`: `Shape` would still find and apply them (it prepends
         /// the run's own tag - see <see cref="GsubShaper"/>'s own <c>ResolveScriptPreference</c>), but

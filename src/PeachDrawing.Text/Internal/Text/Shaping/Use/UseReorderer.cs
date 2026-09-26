@@ -29,6 +29,8 @@
 //
 // See THIRD-PARTY-LICENSES.md for how this fits into PeachPDF's own licensing.
 
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Shaping;
 using System.Collections.Generic;
 using PeachDrawing.Text.Internal.Text;
 
@@ -39,12 +41,12 @@ namespace PeachDrawing.Text.Internal.Text.Shaping.Use
     /// <c>reorder_syllable_use</c> (retrieved 2026-09-05 from
     /// https://github.com/harfbuzz/harfbuzz/blob/main/src/hb-ot-shaper-use.cc - Copyright © 2015
     /// Mozilla Foundation, Copyright © 2015 Google, Inc., "Old MIT" license, see
-    /// THIRD-PARTY-LICENSES.md), adapted to PeachPDF's own <see cref="ShapedGlyph"/> list (a plain
+    /// THIRD-PARTY-LICENSES.md), adapted to PeachPDF's own <see cref="PlacedGlyph"/> list (a plain
     /// shift-and-drop loop in place of HarfBuzz's <c>memmove</c> - equivalent for the handful of
     /// glyphs any one syllable ever spans) and to a plain mutable <see cref="UseCategory"/> array kept
     /// in lockstep with the glyph list (HarfBuzz stores the category directly on each
     /// <c>hb_glyph_info_t</c>, so its own array-of-structs already moves the category with the glyph;
-    /// PeachPDF's <see cref="ShapedGlyph"/> doesn't carry a USE category field of its own, so this
+    /// PeachPDF's <see cref="PlacedGlyph"/> doesn't carry a USE category field of its own, so this
     /// class's caller (<c>GsubShaper</c>'s USE-gated stage) must shift the category array by exactly
     /// the same operations it applies to the glyph list, which is exactly what each method below does
     /// whenever it moves a glyph).
@@ -76,7 +78,7 @@ namespace PeachDrawing.Text.Internal.Text.Shaping.Use
         /// <summary>Reorders every eligible syllable in <paramref name="syllables"/> in place, over
         /// <paramref name="glyphs"/>/<paramref name="categories"/> (kept in lockstep - see this
         /// class's own remarks).</summary>
-        public static void ReorderAll(List<ShapedGlyph> glyphs, UseCategory[] categories, IReadOnlyList<UseSyllable> syllables)
+        public static void ReorderAll(List<PlacedGlyph> glyphs, UseCategory[] categories, IReadOnlyList<UseSyllable> syllables)
         {
             foreach (UseSyllable syllable in syllables)
             {
@@ -85,7 +87,7 @@ namespace PeachDrawing.Text.Internal.Text.Shaping.Use
             }
         }
 
-        internal static void ReorderSyllable(List<ShapedGlyph> glyphs, UseCategory[] categories, int start, int end)
+        internal static void ReorderSyllable(List<PlacedGlyph> glyphs, UseCategory[] categories, int start, int end)
         {
             if (end - start < 1)
                 return;
@@ -125,9 +127,9 @@ namespace PeachDrawing.Text.Internal.Text.Shaping.Use
         /// <summary>Moves the glyph at <paramref name="from"/> to <paramref name="to"/> (<c>to &lt;
         /// from</c>), shifting every glyph in between forward by one - HarfBuzz's own <c>memmove</c>
         /// expressed as a loop, since a syllable never spans more than a handful of glyphs.</summary>
-        private static void MoveForward(List<ShapedGlyph> glyphs, UseCategory[] categories, int from, int to)
+        private static void MoveForward(List<PlacedGlyph> glyphs, UseCategory[] categories, int from, int to)
         {
-            ShapedGlyph movedGlyph = glyphs[from];
+            PlacedGlyph movedGlyph = glyphs[from];
             UseCategory movedCategory = categories[from];
             for (int k = from; k < to; k++)
             {
@@ -140,9 +142,9 @@ namespace PeachDrawing.Text.Internal.Text.Shaping.Use
 
         /// <summary>Moves the glyph at <paramref name="from"/> to <paramref name="to"/> (<c>to &lt;
         /// from</c>), shifting every glyph in between backward by one.</summary>
-        private static void MoveBackward(List<ShapedGlyph> glyphs, UseCategory[] categories, int from, int to)
+        private static void MoveBackward(List<PlacedGlyph> glyphs, UseCategory[] categories, int from, int to)
         {
-            ShapedGlyph movedGlyph = glyphs[from];
+            PlacedGlyph movedGlyph = glyphs[from];
             UseCategory movedCategory = categories[from];
             for (int k = from; k > to; k--)
             {
@@ -172,7 +174,7 @@ namespace PeachDrawing.Text.Internal.Text.Shaping.Use
         /// a font's <c>half</c>/<c>cjct</c> feature merged away as part of a conjunct ligature simply
         /// has no surviving glyph of its own by the time this runs (see <see cref="GsubShaper"/>'s own
         /// USE-stage remarks on why re-deriving categories from each glyph's current
-        /// <see cref="ShapedGlyph.ClusterStart"/> after every substitution stage makes that guard
+        /// <see cref="PlacedGlyph.ClusterStart"/> after every substitution stage makes that guard
         /// unnecessary here).</summary>
         private static bool IsHalant(UseCategory category) => category == UseCategory.H;
     }

@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Text;
 
 namespace PeachPDF.PdfSharpCore.Drawing
@@ -127,7 +128,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// The resolved CSS <c>font-palette</c> selection (CPAL palette index + per-entry color overrides) for a
         /// COLR/CPAL color font; <c>null</c> selects palette 0 with no overrides (the default color-glyph path).
         /// </param>
-        /// <param name="features">Which GSUB features (see <see cref="TextShapingFeatures"/>) to apply when shaping <paramref name="s"/>.</param>
+        /// <param name="features">Which GSUB features (see <see cref="ShapeSettings"/>) to apply when shaping <paramref name="s"/>.</param>
         /// <param name="logicalText">
         /// The true logical-order (pre-bidi-mirroring) source text <paramref name="s"/> was derived
         /// from, when the two differ (<c>null</c> when they're the same - the common case). A real PDF
@@ -135,14 +136,14 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// so a reversed/mirrored RTL word's glyphs map back to their true source characters rather than
         /// whichever character occupies that position in the *painted* string.
         /// </param>
-        void DrawString(string s, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, TextShapingFeatures features, string? logicalText = null);
+        void DrawString(string s, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, ShapeSettings features, string? logicalText = null);
 
         /// <summary>
         /// Draws each glyph in <paramref name="glyphs"/> at its own explicit world-space position,
         /// addressed directly by font glyph index rather than by Unicode character - see
         /// <see cref="PeachPDF.Html.Adapters.RGraphics.DrawGlyphs"/>'s own remarks for why this exists
         /// (an OpenType MATH table's stretchy-operator glyphs, which have no Unicode mapping to shape
-        /// through the ordinary <see cref="DrawString(string, XFont, XBrush, XRect, XStringFormat, double, XGlyphPalette?, TextShapingFeatures, string)"/> path).
+        /// through the ordinary <see cref="DrawString(string, XFont, XBrush, XRect, XStringFormat, double, XGlyphPalette?, ShapeSettings, string)"/> path).
         /// </summary>
         void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, XBrush brush);
 

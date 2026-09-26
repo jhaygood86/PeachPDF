@@ -1,3 +1,5 @@
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts;
 using System.Collections.Generic;
 using System.IO;
@@ -158,7 +160,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         public void EachPosition_SubstitutesAccordingToItsOwnResolvedForm()
         {
             var gsub = BuildGsub();
-            var glyphs = new List<ShapedGlyph>
+            var glyphs = new List<PlacedGlyph>
             {
                 new(10, 0, 1), // Init
                 new(20, 1, 1), // Medi
@@ -185,7 +187,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         public void None_LeavesGlyphUnchanged()
         {
             var gsub = BuildGsub();
-            var glyphs = new List<ShapedGlyph> { new(10, 0, 1) };
+            var glyphs = new List<PlacedGlyph> { new(10, 0, 1) };
             var forms = new Dictionary<int, ArabicJoiningForm> { [0] = ArabicJoiningForm.None };
 
             GsubShaper.ApplyArabicJoiningFeatures(gsub, glyphs, forms, languageTag: null, scriptPreference: ["arab"]);
@@ -200,7 +202,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // (Syriac-only forms) lacking one of these must silently leave the glyph as its nominal
             // (pre-joining) form, not throw.
             var gsub = BuildGsub();
-            var glyphs = new List<ShapedGlyph> { new(10, 0, 1) };
+            var glyphs = new List<PlacedGlyph> { new(10, 0, 1) };
             var forms = new Dictionary<int, ArabicJoiningForm> { [0] = ArabicJoiningForm.Fin2 };
 
             GsubShaper.ApplyArabicJoiningFeatures(gsub, glyphs, forms, languageTag: null, scriptPreference: ["arab"]);
@@ -215,7 +217,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var noForms = new Dictionary<int, ArabicJoiningForm>();
 
             GsubShaper.ApplyArabicJoiningFeatures(gsub, [], noForms, languageTag: null, scriptPreference: ["arab"]);
-            GsubShaper.ApplyArabicJoiningFeatures(gsub, new List<ShapedGlyph> { new(10, 0, 1) }, noForms, languageTag: null, scriptPreference: ["arab"]);
+            GsubShaper.ApplyArabicJoiningFeatures(gsub, new List<PlacedGlyph> { new(10, 0, 1) }, noForms, languageTag: null, scriptPreference: ["arab"]);
         }
 
         [Fact]
@@ -226,7 +228,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // joining position, even if formsByClusterStart happens to have an entry at its ClusterStart
             // (here, coincidentally the same offset the primary glyph before it already claimed).
             var gsub = BuildGsub();
-            var glyphs = new List<ShapedGlyph>
+            var glyphs = new List<PlacedGlyph>
             {
                 new(10, 0, 1), // primary glyph at ClusterStart 0 - Init
                 new(999, 1, 0), // trailing zero-length glyph anchored past the source span
@@ -242,12 +244,12 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         [Fact]
         public void IsEmpty_JoiningFormsOnly_NoOtherFeatureRequested_IsNotEmpty()
         {
-            // Regression: TextShapingFeatures.JoiningForms must participate in GsubShaper.IsEmpty's
+            // Regression: ShapeSettings.JoiningForms must participate in GsubShaper.IsEmpty's
             // early-return check - a run requesting JoiningForms but nothing else (every other field at
             // its "empty" value) must not skip GSUB substitution entirely in Shape.
             var forms = new[] { ArabicJoiningForm.Init };
-            var withJoiningForms = new TextShapingFeatures(Ligatures: LigatureFeatures.None, ScriptTag: "arab", JoiningForms: forms);
-            var trulyEmpty = new TextShapingFeatures(Ligatures: LigatureFeatures.None);
+            var withJoiningForms = new ShapeSettings(Ligatures: LigatureSet.None, ScriptTag: "arab", JoiningForms: forms);
+            var trulyEmpty = new ShapeSettings(Ligatures: LigatureSet.None);
 
             Assert.False(GsubShaper.IsEmpty(withJoiningForms));
             Assert.True(GsubShaper.IsEmpty(trulyEmpty));

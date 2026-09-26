@@ -1,3 +1,5 @@
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -47,7 +49,7 @@ namespace PeachPDF.Tests.Html.Core
         }
 
         private static int[] ShapeGlyphIds(OpenTypeDescriptor descriptor, string text, IReadOnlyList<ArabicJoiningForm> forms) =>
-            descriptor.Shape(text, new TextShapingFeatures(ScriptTag: "arab", JoiningForms: forms))
+            descriptor.Shape(text, new ShapeSettings(ScriptTag: "arab", JoiningForms: forms))
                 .Select(g => g.GlyphIndex).ToArray();
 
         [Fact]
@@ -61,7 +63,7 @@ namespace PeachPDF.Tests.Html.Core
             // A single JoiningForms entry of None keeps the positional-substitution/cursive-attachment
             // machinery a no-op here, isolating this test to the mirror-remap step alone.
             var descriptor = Descriptor();
-            var shaped = descriptor.Shape("(", new TextShapingFeatures(
+            var shaped = descriptor.Shape("(", new ShapeSettings(
                 JoiningForms: [ArabicJoiningForm.None], ReverseForDisplay: true));
 
             Assert.Single(shaped);
@@ -102,8 +104,8 @@ namespace PeachPDF.Tests.Html.Core
             var word = Beh + Yeh + Teh;
             var forms = ArabicJoiningShaper.Resolve([Beh[0], Yeh[0], Teh[0]]);
 
-            var shaped = descriptor.Shape(word, new TextShapingFeatures(ScriptTag: "arab", JoiningForms: forms));
-            var isolatedForms = descriptor.Shape(word, new TextShapingFeatures(ScriptTag: "arab",
+            var shaped = descriptor.Shape(word, new ShapeSettings(ScriptTag: "arab", JoiningForms: forms));
+            var isolatedForms = descriptor.Shape(word, new ShapeSettings(ScriptTag: "arab",
                 JoiningForms: [ArabicJoiningForm.Isol, ArabicJoiningForm.Isol, ArabicJoiningForm.Isol]));
 
             // Each letter decomposes into exactly 2 glyphs (base + dot mark) under both requests.
@@ -132,8 +134,8 @@ namespace PeachPDF.Tests.Html.Core
             // GsubShaper.GetActiveLookupIndices' own remarks for what that broke in real emoji fonts.
             var descriptor = Descriptor();
 
-            var withoutForms = descriptor.Shape(Beh, TextShapingFeatures.Default);
-            var withForms = descriptor.Shape(Beh, new TextShapingFeatures(
+            var withoutForms = descriptor.Shape(Beh, ShapeSettings.Default);
+            var withForms = descriptor.Shape(Beh, new ShapeSettings(
                 ScriptTag: "arab", JoiningForms: ArabicJoiningShaper.Resolve([Beh[0]])));
 
             Assert.Equal(2, withoutForms.Count);
@@ -159,11 +161,11 @@ namespace PeachPDF.Tests.Html.Core
             var descriptor = Descriptor();
             var forms = ArabicJoiningShaper.Resolve([Lam[0], Alef[0]]);
 
-            var withRlig = descriptor.Shape(Lam + Alef, new TextShapingFeatures(
-                Ligatures: LigatureFeatures.Default, ScriptTag: "arab", JoiningForms: forms))
+            var withRlig = descriptor.Shape(Lam + Alef, new ShapeSettings(
+                Ligatures: LigatureSet.Default, ScriptTag: "arab", JoiningForms: forms))
                 .Select(g => g.GlyphIndex).ToArray();
-            var positionalOnly = descriptor.Shape(Lam + Alef, new TextShapingFeatures(
-                Ligatures: LigatureFeatures.None, ScriptTag: "arab", JoiningForms: forms))
+            var positionalOnly = descriptor.Shape(Lam + Alef, new ShapeSettings(
+                Ligatures: LigatureSet.None, ScriptTag: "arab", JoiningForms: forms))
                 .Select(g => g.GlyphIndex).ToArray();
 
             Assert.Equal(2, withRlig.Length);
@@ -203,14 +205,14 @@ p {{ width: 400px; direction: ltr; }}
 
             // Exactly what painting itself asks for - see CssBox.ResolveWordShapingFeatures: shape
             // word.Text (still true logical order) with ReverseForDisplay requested.
-            var painted = descriptor.Shape(word.Text, new TextShapingFeatures(
-                Ligatures: LigatureFeatures.Default, ScriptTag: word.ScriptTag,
+            var painted = descriptor.Shape(word.Text, new ShapeSettings(
+                Ligatures: LigatureSet.Default, ScriptTag: word.ScriptTag,
                 JoiningForms: word.EffectiveJoiningForms, ReverseForDisplay: word.DisplayOrderReversed));
 
             // The reference shape: true logical order, rlig applied, no reversal requested - what GSUB/
             // GPOS themselves produce before ReverseForDisplay's own final step runs.
-            var trueLogicalOrderWithRlig = descriptor.Shape(Lam + Alef, new TextShapingFeatures(
-                Ligatures: LigatureFeatures.Default, ScriptTag: "arab", JoiningForms: ArabicJoiningShaper.Resolve([Lam[0], Alef[0]])));
+            var trueLogicalOrderWithRlig = descriptor.Shape(Lam + Alef, new ShapeSettings(
+                Ligatures: LigatureSet.Default, ScriptTag: "arab", JoiningForms: ArabicJoiningShaper.Resolve([Lam[0], Alef[0]])));
 
             Assert.Equal(2, painted.Count);
             Assert.Equal(2, trueLogicalOrderWithRlig.Count);
@@ -239,7 +241,7 @@ p {{ width: 400px; direction: ltr; }}
             // its own base's advance width, since the base and mark are no longer separated by that same
             // pen distance in the new order. See OpenTypeDescriptor.ReverseGlyphsForDisplay's own remarks
             // for the fix: resolve each glyph's desired absolute position before reversing, using the new
-            // ShapedGlyph.AttachedToIndex back-reference to keep an attached mark's position tied to
+            // PlacedGlyph.AttachedToIndex back-reference to keep an attached mark's position tied to
             // wherever its base ends up, rather than reusing an offset computed for the old walk order.
             var word = await LayoutWord($@"<!DOCTYPE html>
 <html><head><style>
@@ -253,8 +255,8 @@ p {{ width: 400px; }}
             Assert.True(word.DisplayOrderReversed);
 
             var descriptor = Descriptor();
-            var shaped = descriptor.Shape(word.Text!, new TextShapingFeatures(
-                Ligatures: LigatureFeatures.Default, ScriptTag: word.ScriptTag,
+            var shaped = descriptor.Shape(word.Text!, new ShapeSettings(
+                Ligatures: LigatureSet.Default, ScriptTag: word.ScriptTag,
                 JoiningForms: word.EffectiveJoiningForms, ReverseForDisplay: word.DisplayOrderReversed));
 
             // Walk the already-reversed (display-order) glyph list computing each glyph's absolute X -
@@ -309,7 +311,7 @@ p {{ width: 400px; direction: rtl; }}
             // true logical adjacency to match real fonts' contextual rlig rules, so both stay in true
             // logical order (BEH, Init) permanently; only DisplayOrderReversed records that this word
             // still reads right-to-left on the page; shaping's own final glyph-list reversal (requested
-            // via TextShapingFeatures.ReverseForDisplay) is what actually displays it correctly.
+            // via ShapeSettings.ReverseForDisplay) is what actually displays it correctly.
             Assert.Equal(Beh, word.Text[0].ToString());
             Assert.Equal(ArabicJoiningForm.Init, word.EffectiveJoiningForms[0]);
             Assert.True(word.DisplayOrderReversed);

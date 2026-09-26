@@ -1,3 +1,5 @@
+﻿using PeachDrawing.Text.Shaping;
+
 namespace PeachPDF.CSS
 {
     using static Converters;
@@ -7,7 +9,7 @@ namespace PeachPDF.CSS
     /// character-variant(&lt;ident&gt;#) || swash(&lt;ident&gt;) || ornaments(&lt;ident&gt;) ||
     /// annotation(&lt;ident&gt;) ]</c> (CSS Fonts Module Level 4 §6.8). Real GSUB activation (not just
     /// parsing/cascading) happens via <c>DerivedStyle.ActualFontVariantAlternates</c> -&gt;
-    /// <see cref="PeachDrawing.Text.Internal.Text.TextShapingFeatures.ExplicitFeatures"/>, resolved against the
+    /// <see cref="PeachDrawing.Text.Shaping.ShapeSettings.ExplicitFeatures"/>, resolved against the
     /// document's <c>@font-feature-values</c> registry
     /// (<see cref="PeachPDF.Html.Core.FontVariantAlternatesResolver"/>).
     /// </summary>

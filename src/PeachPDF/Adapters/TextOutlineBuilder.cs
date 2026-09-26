@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -24,7 +25,7 @@ namespace PeachPDF.Adapters
         /// <param name="letterSpacing">extra advance between glyphs (layout units)</param>
         /// <param name="features">which GSUB features to apply when shaping</param>
         public static RGraphicsPath? Build(RGraphicsPath path, XFont realFont, double pixelsPerPoint, string str,
-            RPoint baselineOrigin, double letterSpacing, TextShapingFeatures features)
+            RPoint baselineOrigin, double letterSpacing, ShapeSettings features)
         {
             var descriptor = realFont.Descriptor;
             if (descriptor is null || descriptor.UnitsPerEm == 0)
@@ -45,7 +46,7 @@ namespace PeachPDF.Adapters
             double baseY = baselineOrigin.Y;
             bool anyGeometry = false;
 
-            foreach (ShapedGlyph glyph in descriptor.Shape(str, features))
+            foreach (PlacedGlyph glyph in Shaper.Shape(realFont.Typeface, str, features).Glyphs)
             {
                 int glyphId = glyph.GlyphIndex;
 

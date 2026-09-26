@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachDrawing.Text.Internal.Text;
@@ -91,7 +92,7 @@ namespace PeachPDF.Tests.TestSupport
         /// returning a small stand-in <see cref="RecordingGraphicsPath"/> per call to simulate a font
         /// with decodable outlines, or <c>null</c> to simulate a CID-keyed CFF/bitmap font's fallback.
         /// </summary>
-        public Func<string, RFont, RPoint, double, TextShapingFeatures?, RGraphicsPath?>? GetTextOutlineOverride { get; set; }
+        public Func<string, RFont, RPoint, double, ShapeSettings?, RGraphicsPath?>? GetTextOutlineOverride { get; set; }
 
         /// <summary>Every destination rect passed to <see cref="DrawImage(RImage, RRect, RRect)"/>/
         /// <see cref="DrawImage(RImage, RRect)"/>, in order - e.g. to confirm a
@@ -186,29 +187,29 @@ namespace PeachPDF.Tests.TestSupport
         public override object SetAntiAliasSmoothingMode() => new object();
         public override void ReturnPreviousSmoothingMode(object? prevMode) { }
         /// <summary>
-        /// Overrides the default fixed <c>(0, 12)</c> <see cref="MeasureString(string, RFont, TextShapingFeatures?)"/>
+        /// Overrides the default fixed <c>(0, 12)</c> <see cref="MeasureString(string, RFont, ShapeSettings?)"/>
         /// result when set - a test whose subject genuinely depends on relative string widths (e.g.
         /// text-overflow's own "does this word/substring still fit" comparisons) can supply a
         /// deterministic, length-sensitive measurement instead of the fixed default every other
         /// consumer of this mock relies on staying zero. Null (the default) preserves the original
         /// behavior exactly.
         /// </summary>
-        public Func<string, RFont, TextShapingFeatures?, RSize>? MeasureStringOverride { get; set; }
+        public Func<string, RFont, ShapeSettings?, RSize>? MeasureStringOverride { get; set; }
 
-        public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) =>
+        public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null) =>
             MeasureStringOverride?.Invoke(str, font, features) ?? new RSize(0, 12);
-        public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
+        public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null) => str?.Length ?? 0;
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth) { charFit = str?.Length ?? 0; charFitWidth = 0; }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null) =>
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null) =>
             DrawString(str, font, color, point, size, letterSpacing, fontPalette, features, logicalText: null);
 
-        /// <summary>See <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?, string?)"/>'s
+        /// <summary>See <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?, string?)"/>'s
         /// own remarks for <paramref name="logicalText"/> - a test asserting on it reads
         /// <see cref="Log"/>'s <see cref="PaintOp.LogicalText"/> field, not <see cref="DrawnStrings"/>
         /// (which stays a plain (Text, Y) pair for every existing consumer, unaffected by this
         /// overload's mere existence).</summary>
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, TextShapingFeatures? features, string? logicalText)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, ShapeSettings? features, string? logicalText)
         {
             DrawnStrings.Add((str, point.Y));
             Log.Add(new PaintOp(PaintOpKind.DrawString, new RRect(point.X, point.Y, size.Width, size.Height), Text: str, LogicalText: logicalText));
@@ -240,7 +241,7 @@ namespace PeachPDF.Tests.TestSupport
         }
         public override RGraphicsPath GetGraphicsPath() => new RecordingGraphicsPath();
 
-        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null)
+        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null)
         {
             GetTextOutlineCalls.Add((str, baselineOrigin));
             return GetTextOutlineOverride?.Invoke(str, font, baselineOrigin, letterSpacing, features);

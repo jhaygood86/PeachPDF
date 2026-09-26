@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
@@ -60,9 +61,9 @@ namespace PeachPDF.Tests.Svg
 
             var descriptor = Descriptor();
             var shaped = descriptor.Shape(draw.Text, draw.Features.Value);
-            var unshaped = descriptor.Shape(draw.Text, TextShapingFeatures.Default);
+            var unshaped = descriptor.Shape(draw.Text, ShapeSettings.Default);
 
-            // TextShapingFeatures.Default never requests UseCategories, so GsubShaper.ApplyUseShaping
+            // ShapeSettings.Default never requests UseCategories, so GsubShaper.ApplyUseShaping
             // (nukt/ccmp/locl/akhn/rphf/half/rkrf/cjct/abvs/blws/pres/psts) never runs for it - it shapes
             // as 4 independent nominal glyphs (KA, VIRAMA, SSA, VOWEL_SIGN_I). The real conjunct
             // ligature (cjct) that SVG's own computed UseCategories requests fuses KA+VIRAMA+SSA into
@@ -102,7 +103,7 @@ namespace PeachPDF.Tests.Svg
 
             var descriptor = Descriptor();
             var viaSvg = descriptor.Shape(draw.Text, draw.Features.Value).Select(sg => sg.GlyphIndex);
-            var plain = descriptor.Shape(draw.Text, TextShapingFeatures.Default).Select(sg => sg.GlyphIndex);
+            var plain = descriptor.Shape(draw.Text, ShapeSettings.Default).Select(sg => sg.GlyphIndex);
 
             Assert.Equal(plain, viaSvg);
         }

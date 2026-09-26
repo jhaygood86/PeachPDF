@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -26,7 +27,7 @@ namespace PeachPDF.Tests.Html.Core
         }
 
         private static int[] Shape(string text) =>
-            Descriptor().Shape(text, TextShapingFeatures.Default).Select(g => g.GlyphIndex).ToArray();
+            Descriptor().Shape(text, ShapeSettings.Default).Select(g => g.GlyphIndex).ToArray();
 
         [Theory]
         [InlineData("\U0001F3F3️‍\U0001F308", "rainbow flag: ZWJ sequence carrying a VS16")]

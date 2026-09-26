@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Parse;
@@ -18,7 +19,7 @@ namespace PeachPDF.Tests.Svg
     /// account for - see <c>docs/html-css-support.md</c>'s "Text shaping" section). Mirrors
     /// <c>CssBox.Language</c>'s HTML-side "own value, else nearest ancestor's" resolution. Asserts the
     /// resolved language actually reaches <see cref="RGraphics.DrawString"/> via
-    /// <see cref="TextShapingFeatures"/>, not just that it parses.
+    /// <see cref="ShapeSettings"/>, not just that it parses.
     /// </summary>
     public class SvgTextLanguageTests
     {

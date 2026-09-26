@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts;
 using System;
 using System.Collections.Generic;
@@ -654,7 +655,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetSingleAdjustmentLookup(0);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(10, 0, 1) };
+            var glyphs = new List<PlacedGlyph> { new(10, 0, 1) };
             GposPositioner.ApplySingleAdjustment(lookup, glyphs);
 
             Assert.Equal(100, glyphs[0].XAdvanceDelta);
@@ -668,7 +669,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetSingleAdjustmentLookup(1);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(20, 0, 1), new(21, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(20, 0, 1), new(21, 1, 1) };
             GposPositioner.ApplySingleAdjustment(lookup, glyphs);
 
             Assert.Equal(5, glyphs[0].XOffset);
@@ -683,7 +684,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetPairAdjustmentLookup(2);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(30, 0, 1), new(31, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(30, 0, 1), new(31, 1, 1) };
             GposPositioner.ApplyPairAdjustment(lookup, glyphs);
 
             Assert.Equal(-20, glyphs[0].XAdvanceDelta);
@@ -698,7 +699,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetPairAdjustmentLookup(2);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(30, 0, 1), new(999, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(30, 0, 1), new(999, 1, 1) };
             GposPositioner.ApplyPairAdjustment(lookup, glyphs);
 
             Assert.Equal(0, glyphs[0].XAdvanceDelta);
@@ -712,7 +713,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetPairAdjustmentLookup(3);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(40, 0, 1), new(50, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(40, 0, 1), new(50, 1, 1) };
             GposPositioner.ApplyPairAdjustment(lookup, glyphs);
 
             Assert.Equal(-15, glyphs[0].XAdvanceDelta);
@@ -727,7 +728,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetMarkToBaseLookup(4);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(61, 0, 1), new(60, 1, 1) }; // base, then mark
+            var glyphs = new List<PlacedGlyph> { new(61, 0, 1), new(60, 1, 1) }; // base, then mark
             GposPositioner.ApplyMarkToBase(descriptor, lookup, glyphs, gdef: null);
 
             // mark.XOffset = baseAnchor.X - markAnchor.X - intermediateAdvance(base's own natural
@@ -749,7 +750,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetMarkToBaseLookup(4);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(61, 0, 1), new(999, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(61, 0, 1), new(999, 1, 1) };
             GposPositioner.ApplyMarkToBase(descriptor, lookup, glyphs, gdef: null);
 
             Assert.Equal(0, glyphs[1].XOffset);
@@ -765,7 +766,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetMarkToMarkLookup(5);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(71, 0, 1), new(70, 1, 1) }; // mark2, then mark
+            var glyphs = new List<PlacedGlyph> { new(71, 0, 1), new(70, 1, 1) }; // mark2, then mark
             GposPositioner.ApplyMarkToMark(descriptor, lookup, glyphs);
 
             double expectedX = 15 - 10 - descriptor.GlyphIndexToWidth(71);
@@ -790,7 +791,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetSingleAdjustmentLookup(6);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(80, 0, 1) };
+            var glyphs = new List<PlacedGlyph> { new(80, 0, 1) };
             GposPositioner.ApplySingleAdjustment(lookup, glyphs);
 
             Assert.Equal(33, glyphs[0].XAdvanceDelta);
@@ -805,7 +806,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetContextualLookup(8);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(200, 0, 1), new(201, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(200, 0, 1), new(201, 1, 1) };
             GposPositioner.ApplySequenceContextLookup(descriptor, gpos, lookup.Subtables, glyphs, gdef: null, lookup.LookupFlag, markFilteringSet: null);
 
             Assert.Equal(0, glyphs[0].XAdvanceDelta);
@@ -821,7 +822,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetContextualLookup(8);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(200, 0, 1), new(999, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(200, 0, 1), new(999, 1, 1) };
             GposPositioner.ApplySequenceContextLookup(descriptor, gpos, lookup.Subtables, glyphs, gdef: null, lookup.LookupFlag, markFilteringSet: null);
 
             Assert.Equal(0, glyphs[0].XAdvanceDelta);
@@ -837,7 +838,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetChainingContextLookup(10);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(210, 0, 1), new(211, 1, 1), new(212, 2, 1) };
+            var glyphs = new List<PlacedGlyph> { new(210, 0, 1), new(211, 1, 1), new(212, 2, 1) };
             GposPositioner.ApplySequenceContextLookup(descriptor, gpos, lookup.Subtables, glyphs, gdef: null, lookup.LookupFlag, markFilteringSet: null);
 
             Assert.Equal(0, glyphs[0].XAdvanceDelta);
@@ -855,7 +856,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.NotNull(lookup);
 
             // No backtrack glyph at all (211/212 start the run) - the chaining rule requires one before it.
-            var glyphs = new List<ShapedGlyph> { new(211, 0, 1), new(212, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(211, 0, 1), new(212, 1, 1) };
             GposPositioner.ApplySequenceContextLookup(descriptor, gpos, lookup.Subtables, glyphs, gdef: null, lookup.LookupFlag, markFilteringSet: null);
 
             Assert.Equal(0, glyphs[0].XAdvanceDelta);
@@ -871,7 +872,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetContextualLookup(11);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(200, 0, 1), new(201, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(200, 0, 1), new(201, 1, 1) };
             GposPositioner.ApplySequenceContextLookup(descriptor, gpos, lookup.Subtables, glyphs, gdef: null, lookup.LookupFlag, markFilteringSet: null);
 
             Assert.Equal(0, glyphs[0].XAdvanceDelta);
@@ -887,7 +888,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetContextualLookup(12);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(200, 0, 1), new(201, 1, 1) };
+            var glyphs = new List<PlacedGlyph> { new(200, 0, 1), new(201, 1, 1) };
             GposPositioner.ApplySequenceContextLookup(descriptor, gpos, lookup.Subtables, glyphs, gdef: null, lookup.LookupFlag, markFilteringSet: null);
 
             Assert.Equal(0, glyphs[0].XAdvanceDelta);
@@ -903,7 +904,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetChainingContextLookup(13);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(210, 0, 1), new(211, 1, 1), new(212, 2, 1) };
+            var glyphs = new List<PlacedGlyph> { new(210, 0, 1), new(211, 1, 1), new(212, 2, 1) };
             GposPositioner.ApplySequenceContextLookup(descriptor, gpos, lookup.Subtables, glyphs, gdef: null, lookup.LookupFlag, markFilteringSet: null);
 
             Assert.Equal(0, glyphs[0].XAdvanceDelta);
@@ -920,7 +921,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetChainingContextLookup(14);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(210, 0, 1), new(211, 1, 1), new(212, 2, 1) };
+            var glyphs = new List<PlacedGlyph> { new(210, 0, 1), new(211, 1, 1), new(212, 2, 1) };
             GposPositioner.ApplySequenceContextLookup(descriptor, gpos, lookup.Subtables, glyphs, gdef: null, lookup.LookupFlag, markFilteringSet: null);
 
             Assert.Equal(0, glyphs[0].XAdvanceDelta);
@@ -937,7 +938,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var lookup = gpos.GetContextualLookup(17);
             Assert.NotNull(lookup);
 
-            var glyphs = new List<ShapedGlyph> { new(600, 0, 1), new(601, 1, 1), new(602, 2, 1) };
+            var glyphs = new List<PlacedGlyph> { new(600, 0, 1), new(601, 1, 1), new(602, 2, 1) };
             GposPositioner.ApplySequenceContextLookup(descriptor, gpos, lookup.Subtables, glyphs, gdef: null, lookup.LookupFlag, markFilteringSet: null);
 
             // Subtable A matches at position 0 (input [600,601,602]) and nests lookup 16 (+50) onto

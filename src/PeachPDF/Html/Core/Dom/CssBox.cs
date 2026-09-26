@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF;
 using PeachPDF.CSS;
@@ -1910,7 +1911,7 @@ namespace PeachPDF.Html.Core.Dom
             // never synthesize at all (real substitution or a silent no-op, never an approximation).
             var isSmallCapsFamily = FontVariantCaps.Value is FontVariantCapsMode.SmallCaps or FontVariantCapsMode.AllSmallCaps;
             var isAllSmallCaps = FontVariantCaps.Value == FontVariantCapsMode.AllSmallCaps;
-            var needsSynthesis = isSmallCapsFamily && ActualFontVariantCaps == FontVariantCapsFeature.None;
+            var needsSynthesis = isSmallCapsFamily && ActualFontVariantCaps == CapsMode.None;
             var synthesisApplies = needsSynthesis && (ContainsLowerLetter(text) || (isAllSmallCaps && ContainsUpperLetter(text)));
 
             // A synthesized font-variant-position: sub/super applies uniformly to the whole word - CSS
@@ -7339,7 +7340,7 @@ namespace PeachPDF.Html.Core.Dom
         /// unbounded <c>tab-size</c> declaration (e.g. <c>tab-size: 1e9</c>) must not be able to turn a
         /// single tab character into a multi-gigabyte string allocation.
         /// </summary>
-        internal static string ExpandTabs(string text, RGraphics g, RFont font, TextShapingFeatures shapingFeatures,
+        internal static string ExpandTabs(string text, RGraphics g, RFont font, ShapeSettings shapingFeatures,
             (bool IsNumber, double Value) tabSize, ref double lineX)
         {
             var spaceWidth = font.GetWhitespaceWidth(g);

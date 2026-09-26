@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
 using Xunit;
 

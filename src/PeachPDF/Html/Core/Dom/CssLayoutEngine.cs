@@ -12,6 +12,7 @@
 
 #nullable enable
 
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
@@ -1530,7 +1531,7 @@ namespace PeachPDF.Html.Core.Dom
         /// (column-thickness) centering, which legitimately does vary per character.
         /// </summary>
         internal static IEnumerable<(string Text, Rune Rune, RSize Size)> MeasureUprightRunCharacters(
-            RGraphics g, string text, RFont font, TextShapingFeatures? features)
+            RGraphics g, string text, RFont font, ShapeSettings? features)
         {
             foreach (var rune in text.EnumerateRunes())
             {

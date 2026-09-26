@@ -7,6 +7,7 @@
 // header - see THIRD-PARTY-LICENSES.md for the full notice text and how this fits into PeachPDF's
 // own licensing.
 
+using PeachDrawing.Text.Unicode;
 using System.Globalization;
 
 namespace PeachDrawing.Text.Internal.Text.Shaping.Use

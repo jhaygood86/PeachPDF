@@ -1,3 +1,5 @@
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Fonts;
 using System.IO;
 using System.Linq;
@@ -44,7 +46,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
         {
             var text = string.Concat(codepoints.Select(cp => new System.Text.Rune(cp).ToString()));
             var categories = codepoints.Select(cp => UseCategoryClassifier.Classify(cp)).ToList();
-            return descriptor.Shape(text, new TextShapingFeatures(ScriptTag: "taml", UseCategories: categories))
+            return descriptor.Shape(text, new ShapeSettings(ScriptTag: "taml", UseCategories: categories))
                 .Select(g => g.GlyphIndex).ToArray();
         }
 

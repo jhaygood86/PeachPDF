@@ -1,3 +1,5 @@
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Svg;
@@ -13,7 +15,7 @@ namespace PeachPDF.Tests.Svg
     /// Coverage for SVG <c>&lt;text&gt;</c>'s Arabic-family joining-form resolution/shaping-run
     /// wiring (issue #533) - <c>SvgRenderer.ResolveComplexScriptRuns</c>/<c>GlyphInfo.ShapingRunFirst</c>,
     /// mirroring <see cref="SvgTextLanguageTests"/>'s own pattern of asserting the resolved
-    /// <see cref="TextShapingFeatures"/> actually reaches <see cref="RGraphics.DrawString"/> via the
+    /// <see cref="ShapeSettings"/> actually reaches <see cref="RGraphics.DrawString"/> via the
     /// <see cref="TestRecordingGraphics"/> mock, not just that some internal state parses correctly.
     /// Real-font glyph-substitution proof (not just wiring) lives in
     /// <see cref="SvgTextArabicJoiningCharacterizationTests"/>.
@@ -75,7 +77,7 @@ namespace PeachPDF.Tests.Svg
             // The core architectural point of this feature: SVG must never mirror/reorder a joining
             // run's own characters before shaping - that would break a font's contextual rlig rules,
             // which need true logical adjacency. Only the resulting shaped glyph list should reverse
-            // for display, via TextShapingFeatures.ReverseForDisplay (see
+            // for display, via ShapeSettings.ReverseForDisplay (see
             // SvgRenderer.ApplyBidiReordering's own remarks, mirroring
             // CssLayoutEngine.MirrorWordTextIfNeeded's HTML precedent).
             var g = Render($"""<text x="190" y="50" font-size="20" direction="rtl">{Beh}{Yeh}{Teh}</text>""");
@@ -93,7 +95,7 @@ namespace PeachPDF.Tests.Svg
             var draw = Assert.Single(g.DrawStringCalls);
             Assert.Equal(Lam + Alef, draw.Text);
             Assert.Equal(new[] { ArabicJoiningForm.Init, ArabicJoiningForm.Fina }, draw.Features!.Value.JoiningForms);
-            Assert.Equal(LigatureFeatures.Default, draw.Features.Value.Ligatures);
+            Assert.Equal(LigatureSet.Default, draw.Features.Value.Ligatures);
         }
 
         [Fact]
@@ -101,7 +103,7 @@ namespace PeachPDF.Tests.Svg
         {
             var g = Render($"""<text x="10" y="50" font-size="20">Hi {Beh}{Yeh}</text>""");
 
-            // "Hi " (no participants) and the Arabic pair each need their own TextShapingFeatures, so
+            // "Hi " (no participants) and the Arabic pair each need their own ShapeSettings, so
             // they can never share one PaintGlyphs batch/DrawString call.
             Assert.Equal(2, g.DrawStringCalls.Count);
             Assert.Equal("Hi ", g.DrawStringCalls[0].Text);

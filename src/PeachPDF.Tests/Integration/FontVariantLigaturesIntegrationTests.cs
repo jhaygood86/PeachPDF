@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Text;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
@@ -23,7 +24,7 @@ namespace PeachPDF.Tests.Integration
     /// of mapping every codepoint 1:1 via <c>cmap</c>. Per CLAUDE.md's testing conventions, a
     /// content-stream-substring check alone isn't sufficient for this kind of change (the exact gap
     /// that let a broken feature ship before), so this covers both the actual
-    /// <c>RGraphics.DrawString</c> call sequence (which <see cref="LigatureFeatures"/> reaches paint)
+    /// <c>RGraphics.DrawString</c> call sequence (which <see cref="LigatureSet"/> reaches paint)
     /// and a full render's embedded ToUnicode map (does the merged ligature glyph still extract back
     /// to its original text).
     /// </summary>
@@ -40,9 +41,9 @@ namespace PeachPDF.Tests.Integration
 
             // font-variant-ligatures: none disables the common-ligatures axis, but per the CSS Fonts
             // spec required ligatures (rlig) are never affected by this property - not even by none -
-            // so this resolves to LigatureFeatures.Required, not LigatureFeatures.None.
-            Assert.Equal(LigatureFeatures.Required, boxNone.ActualFontVariantLigatures);
-            Assert.Equal(LigatureFeatures.Default, boxDefault.ActualFontVariantLigatures);
+            // so this resolves to LigatureSet.Required, not LigatureSet.None.
+            Assert.Equal(LigatureSet.Required, boxNone.ActualFontVariantLigatures);
+            Assert.Equal(LigatureSet.Default, boxDefault.ActualFontVariantLigatures);
         }
 
         [Fact]
@@ -73,8 +74,8 @@ namespace PeachPDF.Tests.Integration
 
             using var g = MeasureGraphics();
             var font = box.ActualFont;
-            var baseWidth = g.MeasureString("ff", font, TextShapingFeatures.Default).Width;
-            var glyphCount = g.CountShapedGlyphs("ff", font, TextShapingFeatures.Default);
+            var baseWidth = g.MeasureString("ff", font, ShapeSettings.Default).Width;
+            var glyphCount = g.CountShapedGlyphs("ff", font, ShapeSettings.Default);
 
             Assert.Equal(1, glyphCount);
             Assert.Equal(baseWidth + glyphCount * box.ActualLetterSpacing, box.Words[0].Width, 3);
@@ -93,8 +94,8 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, boxB, recorder);
 
             Assert.Equal(2, recorder.DrawStringCalls.Count);
-            Assert.Equal(LigatureFeatures.Required, recorder.DrawStringCalls[0].Features.Ligatures);
-            Assert.Equal(LigatureFeatures.Default, recorder.DrawStringCalls[1].Features.Ligatures);
+            Assert.Equal(LigatureSet.Required, recorder.DrawStringCalls[0].Features.Ligatures);
+            Assert.Equal(LigatureSet.Default, recorder.DrawStringCalls[1].Features.Ligatures);
         }
 
         [Theory]
@@ -114,9 +115,9 @@ namespace PeachPDF.Tests.Integration
             // Common+Required stay on (the default, unaffected by this axis) and the requested extra
             // flag is now set too - checked via HasFlag rather than exact ToString() text, since
             // [Flags] enum formatting order isn't something a test should pin.
-            Assert.True(resolved.HasFlag(LigatureFeatures.Common));
-            Assert.True(resolved.HasFlag(LigatureFeatures.Required));
-            Assert.Equal(expectedExtraFlagName, (resolved & ~LigatureFeatures.Default).ToString());
+            Assert.True(resolved.HasFlag(LigatureSet.Common));
+            Assert.True(resolved.HasFlag(LigatureSet.Required));
+            Assert.Equal(expectedExtraFlagName, (resolved & ~LigatureSet.Default).ToString());
         }
 
         [Fact]
@@ -128,7 +129,7 @@ namespace PeachPDF.Tests.Integration
             var container = await LayoutHtml("<span id=\"a\" style=\"font-variant-ligatures:contextual\">ff</span>");
             var box = FindWordsBox(container.Root!, "a");
 
-            Assert.Equal(LigatureFeatures.Default, box.ActualFontVariantLigatures);
+            Assert.Equal(LigatureSet.Default, box.ActualFontVariantLigatures);
         }
 
         [Fact]
@@ -143,7 +144,7 @@ namespace PeachPDF.Tests.Integration
             var box = FindWordsBox(container.Root!, "a");
 
             Assert.Equal("normal", box.FontVariantLigatures);
-            Assert.Equal(LigatureFeatures.Default, box.ActualFontVariantLigatures);
+            Assert.Equal(LigatureSet.Default, box.ActualFontVariantLigatures);
         }
 
         [Fact]
@@ -235,13 +236,13 @@ body {{ font-family: 'SS3'; width: 400px; }}
 
         private sealed class RecordingGraphics : RGraphics
         {
-            public List<(string Text, TextShapingFeatures Features)> DrawStringCalls { get; } = [];
+            public List<(string Text, ShapeSettings Features)> DrawStringCalls { get; } = [];
 
             public RecordingGraphics(RAdapter adapter)
                 : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
-                => DrawStringCalls.Add((str, features ?? TextShapingFeatures.Default));
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null)
+                => DrawStringCalls.Add((str, features ?? ShapeSettings.Default));
             public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color) { }
 
             public override void PushTransform(RMatrix matrix) { }
@@ -256,7 +257,7 @@ body {{ font-family: 'SS3'; width: 400px; }}
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
             public override RGraphicsPath GetGraphicsPath() => null!;
 
-            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null) => null;
+            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) => null;
             public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
             public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
             public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal) { }
@@ -268,8 +269,8 @@ body {{ font-family: 'SS3'; width: 400px; }}
             public override void BeginArtifact() { }
             public override void BeginVariableText() { }
             public override void EndVariableText() { }
-            public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) => new(0, 12);
-            public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
+            public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null) => new(0, 12);
+            public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null) => str?.Length ?? 0;
             public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
             {
                 charFit = str?.Length ?? 0;

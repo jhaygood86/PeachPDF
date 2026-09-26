@@ -1,4 +1,4 @@
-// "Therefore those skilled at the unorthodox
+﻿// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Shaping;
 using MimeKit;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
@@ -200,16 +201,16 @@ namespace PeachPDF.Svg
         private readonly record struct FontContext(
             string Family, double Size, bool Bold, bool Italic, int Stretch,
             double LetterSpacing, double WordSpacing, TextTransform TextTransform,
-            LigatureFeatures Ligatures, FontVariantCapsFeature CapsRequested,
-            NumericFeatures Numeric, EastAsianFeatures EastAsian,
+            LigatureSet Ligatures, CapsMode CapsRequested,
+            NumeralSet Numeric, EastAsianSet EastAsian,
             IReadOnlyList<(string Tag, int Value)> FeatureSettings, bool Kerning, string? Language = null,
-            FontVariantPositionFeature PositionRequested = FontVariantPositionFeature.None,
+            SubSuperMode PositionRequested = SubSuperMode.None,
             bool SizeDeclared = false)
         {
             public static readonly FontContext Default = new(
                 Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
                 Html.Core.Utils.FontStretchResolver.Normal, 0, 0, TextTransform.None,
-                LigatureFeatures.Default, FontVariantCapsFeature.None, NumericFeatures.None, EastAsianFeatures.None,
+                LigatureSet.Default, CapsMode.None, NumeralSet.None, EastAsianSet.None,
                 [], true);
         }
 
@@ -1651,22 +1652,22 @@ namespace PeachPDF.Svg
             // DerivedStyle.ActualFontVariantCaps applies for HTML) - real substitution only, no
             // small-caps synthesis fallback for SVG (a smaller, deliberately scoped gap; see
             // .claude/accepted-gaps/no-text-shaping.md).
-            var resolvedCaps = runFont.CapsRequested != FontVariantCapsFeature.None && run.Font is { } font && font.SupportsFontVariantCaps(runFont.CapsRequested)
+            var resolvedCaps = runFont.CapsRequested != CapsMode.None && run.Font is { } font && font.SupportsFontVariantCaps(runFont.CapsRequested)
                 ? runFont.CapsRequested
-                : FontVariantCapsFeature.None;
+                : CapsMode.None;
 
             // font-variant-position is gated the same way, and for the same reason has no synthesis
             // fallback here: HTML synthesizes a sub/superscript by splitting the run onto a smaller font
             // with a shifted baseline (CssBox.AddWord), machinery SVG text runs don't share.
-            var resolvedPosition = runFont.PositionRequested != FontVariantPositionFeature.None && run.Font is { } positionFont && positionFont.SupportsFontVariantPosition(runFont.PositionRequested)
+            var resolvedPosition = runFont.PositionRequested != SubSuperMode.None && run.Font is { } positionFont && positionFont.SupportsFontVariantPosition(runFont.PositionRequested)
                 ? runFont.PositionRequested
-                : FontVariantPositionFeature.None;
+                : SubSuperMode.None;
 
             run.LetterSpacing = runFont.LetterSpacing;
             run.WordSpacing = runFont.WordSpacing;
-            run.ShapingFeatures = new TextShapingFeatures(
+            run.ShapingFeatures = new ShapeSettings(
                 runFont.Ligatures, resolvedCaps, runFont.Numeric, runFont.EastAsian,
-                runFont.FeatureSettings, Kerning: runFont.Kerning, Language: runFont.Language,
+                TextShapingFeatureResolver.ToFeatureSettings(runFont.FeatureSettings), Kerning: runFont.Kerning, Language: runFont.Language,
                 Position: resolvedPosition);
 
             // text-decoration is this run's own value only - CSS Text Decoration 3 §2 explicitly makes

@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
@@ -183,11 +184,11 @@ namespace PeachPDF.Adapters
         public override bool MatchesEmojiPresentation(System.Text.Rune baseCodepoint, EmojiPresentation presentation) =>
             Font.Typeface.MatchesEmojiPresentation(baseCodepoint, presentation);
 
-        public override bool SupportsFontVariantCaps(FontVariantCapsFeature feature) =>
-            Font.Typeface.SupportsFeatures(GsubShaper.GetFeatureTags(feature));
+        public override bool SupportsFontVariantCaps(CapsMode feature) =>
+            Font.Typeface.SupportsFeatures(Shaper.GetFeatureTags(feature));
 
-        public override bool SupportsFontVariantPosition(FontVariantPositionFeature feature) =>
-            Font.Typeface.SupportsFeatures(GsubShaper.GetFeatureTags(feature));
+        public override bool SupportsFontVariantPosition(SubSuperMode feature) =>
+            Font.Typeface.SupportsFeatures(Shaper.GetFeatureTags(feature));
 
         public override (double SizeScale, double BaselineShift)? GetSubSuperscriptMetrics(bool superscript) =>
             Font.Typeface.TryGetScriptPosition(superscript ? ScriptPlacement.Superscript : ScriptPlacement.Subscript, out var position)

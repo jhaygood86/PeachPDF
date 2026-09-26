@@ -9,8 +9,8 @@ dotnet add package PeachDrawing.Text
 ```
 
 > **Status: pre-1.0.** The library is being opened up area by area. Today the public surface is font loading and
-> matching (`FontSet` and the types around it), what a `Typeface` says about itself (metrics, glyph mapping and advances)
-> and the `PeachDrawing.Text.Unicode` namespace, all described below. Shaping, outlines, colour glyphs, export and paragraph
+> matching (`FontSet` and the types around it), what a `Typeface` says about itself (metrics, glyph mapping and advances),
+> shaping and the `PeachDrawing.Text.Unicode` namespace, all described below. Outlines, colour glyphs, export and paragraph
 > layout are still internal to the package, so PeachPDF is the only consumer of them, and they will be published in later
 > releases. Until 1.0, the public API may change between releases.
 
@@ -107,6 +107,40 @@ Other things a `FontSet` does:
 - `FontSet.InstalledFamilyNames` lists the installed families.
 - Data that is not a font is reported with a `TypefaceFormatException`. Of a TrueType or OpenType collection, only the
   first face is added.
+
+## Shaping: `PeachDrawing.Text.Shaping`
+
+`Shaper.Shape` turns text into glyphs in one face: the `cmap` mapping, the substitutions of the font's `GSUB` table and the
+positioning of its `GPOS` table.
+
+```csharp
+using PeachDrawing.Text.Shaping;
+
+GlyphRun run = Shaper.Shape(face, "office", new ShapeSettings(Caps: CapsMode.SmallCaps));
+
+foreach (PlacedGlyph glyph in run.Glyphs)
+{
+    // glyph.GlyphIndex is the glyph, glyph.ClusterStart and ClusterLength say which characters it stands for, and the
+    // deltas and offsets are the GPOS adjustments, in design units.
+    double advance = face.GetAdvance((ushort)glyph.GlyphIndex) + glyph.XAdvanceDelta;
+}
+```
+
+- `ShapeSettings` folds every request into one: ligatures (`LigatureSet`), caps (`CapsMode`), numerals (`NumeralSet`),
+  East Asian forms (`EastAsianSet`), sub- and superscripts (`SubSuperMode`), kerning, a language, an OpenType script tag,
+  features asked for by tag (`FeatureSetting`), and which presentation of a text-or-emoji character to choose a glyph for.
+  The names are CSS's, from `font-variant-*` and `font-feature-settings`. A tag that a typed group controls is always decided by
+  the group and not by an explicit setting, which is CSS's precedence. Write `new ShapeSettings()` or `ShapeSettings.Default`
+  for the defaults; `default(ShapeSettings)` is all zeros and means no ligatures and no kerning.
+- A ligature is one glyph whose cluster covers the matched characters. A character that is invisible by definition (a variation
+  selector, a joiner, a bidi control) takes part in substitution and positioning, so a lookup that matches on it still sees it,
+  and is removed from the result at the end.
+- For a run of a joining script, `ArabicJoining.Resolve` gives the positional form of every character, and for an Indic
+  script `UniversalShaping.Classify` gives its Universal Shaping Engine category; both go into `ShapeSettings` (`JoiningForms`
+  and `UseCategories`). `ReverseForDisplay` asks for the glyphs in visual order for a right-to-left run.
+- `GlyphRun.Advance` is the distance the pen travels along the run, in design units and without rounding.
+- `Shaper.GetFeatureTags` names the `GSUB` tags behind a caps or position mode. With `Typeface.SupportsFeatures` it says whether a
+  face has a feature for real, or a caller has to fall back to something synthesized.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 

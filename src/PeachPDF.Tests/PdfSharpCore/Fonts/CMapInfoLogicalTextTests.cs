@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using System.IO;
 using System.Text;
 using PeachDrawing.Text.Internal.Fonts;
@@ -51,7 +52,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             const string visual = "(BA)";
             var logicalText = BidiMirrorResolver.ReverseRunes(source);
 
-            cmapInfo.AddShapedText(visual, TextShapingFeatures.Default, logicalText);
+            cmapInfo.AddShapedText(visual, ShapeSettings.Default, logicalText);
 
             // The '(' glyph painted at the start of the visual string is standing in for the source
             // string's closing ')' - extracting it must recover ')', not the '(' it visually is.
@@ -79,9 +80,9 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             var descriptor = Descriptor();
             var cmapInfo = new CMapInfo(descriptor);
-            cmapInfo.AddShapedText(visual, TextShapingFeatures.Default, logicalText);
+            cmapInfo.AddShapedText(visual, ShapeSettings.Default, logicalText);
 
-            var shaped = descriptor.Shape(visual, TextShapingFeatures.Default);
+            var shaped = descriptor.Shape(visual, ShapeSettings.Default);
             var ligatureGlyph = Assert.Single(shaped, g => g.ClusterLength > 1);
             Assert.Equal(2, ligatureGlyph.ClusterLength);
 
@@ -106,7 +107,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var descriptor = Descriptor();
             var cmapInfo = new CMapInfo(descriptor);
 
-            cmapInfo.AddShapedText("AB", TextShapingFeatures.Default);
+            cmapInfo.AddShapedText("AB", ShapeSettings.Default);
 
             Assert.Equal("A", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'A')]);
             Assert.Equal("B", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'B')]);
@@ -121,7 +122,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var descriptor = Descriptor();
             var cmapInfo = new CMapInfo(descriptor);
 
-            cmapInfo.AddShapedText("AB", TextShapingFeatures.Default, logicalText: "AB");
+            cmapInfo.AddShapedText("AB", ShapeSettings.Default, logicalText: "AB");
 
             Assert.Equal("A", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'A')]);
             Assert.Equal("B", cmapInfo.LigatureGlyphToText[GlyphFor(descriptor, 'B')]);

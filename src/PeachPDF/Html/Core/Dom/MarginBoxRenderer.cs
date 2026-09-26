@@ -1,3 +1,4 @@
+﻿using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF;
 using PeachPDF.Adapters;
@@ -1143,7 +1144,7 @@ namespace PeachPDF.Html.Core.Dom
         /// position) when the returned visual string is a single run's whole-string reversal+mirror
         /// (<c>Bidi.Mirror</c>'s own contract), so a caller can recover it for
         /// ToUnicode text-extraction fidelity (see
-        /// <see cref="Html.Adapters.RGraphics.DrawString(string, Html.Adapters.RFont, Html.Adapters.Entities.RColor, Html.Adapters.Entities.RPoint, Html.Adapters.Entities.RSize, double, Html.Adapters.Entities.RFontPalette?, PeachDrawing.Text.Internal.Text.TextShapingFeatures?, string?)"/>).
+        /// <see cref="Html.Adapters.RGraphics.DrawString(string, Html.Adapters.RFont, Html.Adapters.Entities.RColor, Html.Adapters.Entities.RPoint, Html.Adapters.Entities.RSize, double, Html.Adapters.Entities.RFontPalette?, PeachDrawing.Text.Shaping.ShapeSettings?, string?)"/>).
         /// Null whenever that contract doesn't hold: no reordering happened at all (the visual string
         /// already equals <paramref name="text"/>, so there is nothing to recover), or the content mixed
         /// multiple bidi runs of different direction - a per-run reorder-and-concatenate, not a single

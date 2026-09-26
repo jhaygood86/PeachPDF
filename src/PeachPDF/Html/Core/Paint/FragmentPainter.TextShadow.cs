@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -49,7 +50,7 @@ namespace PeachPDF.Html.Core.Paint
         /// unsupported <c>text-shadow</c> always did.
         /// </remarks>
         private static void PaintTextShadows(RGraphics g, CssBox styleSource, RFont font, string text, RPoint point, RSize size,
-            TextShapingFeatures features, string? logicalText)
+            ShapeSettings features, string? logicalText)
         {
             // Shadows are shapes, not text: nothing for an invisible-text pass to supply.
             if (g.InvisibleText)

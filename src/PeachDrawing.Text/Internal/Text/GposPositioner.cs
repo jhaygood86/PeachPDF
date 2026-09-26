@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -42,9 +43,9 @@ namespace PeachDrawing.Text.Internal.Text
 
         // GposTable instances are cached and shared process-wide, same rationale as GsubShaper's own
         // LookupIndexCache.
-        private static readonly ConditionalWeakTable<GposTable, ConcurrentDictionary<TextShapingFeatures, SortedSet<int>>> LookupIndexCache = new();
+        private static readonly ConditionalWeakTable<GposTable, ConcurrentDictionary<ShapeSettings, SortedSet<int>>> LookupIndexCache = new();
 
-        public static void Apply(OpenTypeDescriptor descriptor, List<ShapedGlyph> glyphs, TextShapingFeatures features)
+        public static void Apply(OpenTypeDescriptor descriptor, List<PlacedGlyph> glyphs, ShapeSettings features)
         {
             if (glyphs.Count == 0)
                 return;
@@ -112,7 +113,7 @@ namespace PeachDrawing.Text.Internal.Text
             }
         }
 
-        private static SortedSet<int> GetActiveLookupIndices(GposTable gpos, TextShapingFeatures features)
+        private static SortedSet<int> GetActiveLookupIndices(GposTable gpos, ShapeSettings features)
         {
             var perTableCache = LookupIndexCache.GetOrCreateValue(gpos);
             return perTableCache.GetOrAdd(features, key =>
@@ -137,13 +138,13 @@ namespace PeachDrawing.Text.Internal.Text
         // internal rather than private: lets tests exercise the positioning math directly against a
         // synthetic GposTable + hand-built glyph list, without needing a font whose table directory
         // actually lists a GPOS entry (see GposPositionerSyntheticTests's own remarks).
-        internal static void ApplySingleAdjustment(GposSingleAdjustmentLookup lookup, List<ShapedGlyph> glyphs)
+        internal static void ApplySingleAdjustment(GposSingleAdjustmentLookup lookup, List<PlacedGlyph> glyphs)
         {
             for (int i = 0; i < glyphs.Count; i++)
                 ApplySingleAdjustmentAt(lookup, glyphs, i);
         }
 
-        private static void ApplySingleAdjustmentAt(GposSingleAdjustmentLookup lookup, List<ShapedGlyph> glyphs, int i)
+        private static void ApplySingleAdjustmentAt(GposSingleAdjustmentLookup lookup, List<PlacedGlyph> glyphs, int i)
         {
             ushort glyphId = (ushort)glyphs[i].GlyphIndex;
             for (int subtableIndex = 0; subtableIndex < lookup.Subtables.Count; subtableIndex++)
@@ -163,13 +164,13 @@ namespace PeachDrawing.Text.Internal.Text
         /// correctly - matching how real kerning application works.
         /// </summary>
         // internal rather than private - see ApplySingleAdjustment's identical rationale.
-        internal static void ApplyPairAdjustment(GposPairAdjustmentLookup lookup, List<ShapedGlyph> glyphs)
+        internal static void ApplyPairAdjustment(GposPairAdjustmentLookup lookup, List<PlacedGlyph> glyphs)
         {
             for (int i = 0; i < glyphs.Count - 1; i++)
                 ApplyPairAdjustmentAt(lookup, glyphs, i);
         }
 
-        private static void ApplyPairAdjustmentAt(GposPairAdjustmentLookup lookup, List<ShapedGlyph> glyphs, int i)
+        private static void ApplyPairAdjustmentAt(GposPairAdjustmentLookup lookup, List<PlacedGlyph> glyphs, int i)
         {
             if (i + 1 >= glyphs.Count)
                 return;
@@ -189,7 +190,7 @@ namespace PeachDrawing.Text.Internal.Text
             }
         }
 
-        private static ShapedGlyph AddValue(ShapedGlyph glyph, GposValueRecord value) => glyph with
+        private static PlacedGlyph AddValue(PlacedGlyph glyph, GposValueRecord value) => glyph with
         {
             XAdvanceDelta = glyph.XAdvanceDelta + value.XAdvance,
             YAdvanceDelta = glyph.YAdvanceDelta + value.YAdvance,
@@ -205,13 +206,13 @@ namespace PeachDrawing.Text.Internal.Text
         /// and, if that glyph is covered by `BaseCoverage`, positions the mark against it.
         /// </summary>
         // internal rather than private - see ApplySingleAdjustment's identical rationale.
-        internal static void ApplyMarkToBase(OpenTypeDescriptor descriptor, GposMarkToBaseLookup lookup, List<ShapedGlyph> glyphs, GdefTable? gdef)
+        internal static void ApplyMarkToBase(OpenTypeDescriptor descriptor, GposMarkToBaseLookup lookup, List<PlacedGlyph> glyphs, GdefTable? gdef)
         {
             for (int i = 0; i < glyphs.Count; i++)
                 ApplyMarkToBaseAt(descriptor, lookup, glyphs, i, gdef);
         }
 
-        private static void ApplyMarkToBaseAt(OpenTypeDescriptor descriptor, GposMarkToBaseLookup lookup, List<ShapedGlyph> glyphs, int i, GdefTable? gdef)
+        private static void ApplyMarkToBaseAt(OpenTypeDescriptor descriptor, GposMarkToBaseLookup lookup, List<PlacedGlyph> glyphs, int i, GdefTable? gdef)
         {
             ushort markGlyph = (ushort)glyphs[i].GlyphIndex;
             CoverageTable? markFilteringSet = lookup.MarkFilteringSetIndex is { } mfsIndex ? gdef?.GetMarkGlyphSet(mfsIndex) : null;
@@ -239,18 +240,18 @@ namespace PeachDrawing.Text.Internal.Text
         /// Same base-search as <see cref="ApplyMarkToBase"/>, but the found glyph is a (possibly
         /// GSUB-merged) ligature glyph whose anchors are keyed by *component*, not just by glyph id -
         /// <see cref="ResolveLigatureComponent"/> picks the right one using the ligature glyph's own
-        /// <see cref="ShapedGlyph.LigatureComponentClusterStarts"/> bookkeeping (falling back to
+        /// <see cref="PlacedGlyph.LigatureComponentClusterStarts"/> bookkeeping (falling back to
         /// component 0 for a font-native precomposed ligature glyph GSUB never merged, which carries
         /// no such bookkeeping).
         /// </summary>
         // internal rather than private - see ApplySingleAdjustment's identical rationale.
-        internal static void ApplyMarkToLigature(OpenTypeDescriptor descriptor, GposMarkToLigatureLookup lookup, List<ShapedGlyph> glyphs, GdefTable? gdef)
+        internal static void ApplyMarkToLigature(OpenTypeDescriptor descriptor, GposMarkToLigatureLookup lookup, List<PlacedGlyph> glyphs, GdefTable? gdef)
         {
             for (int i = 0; i < glyphs.Count; i++)
                 ApplyMarkToLigatureAt(descriptor, lookup, glyphs, i, gdef);
         }
 
-        private static void ApplyMarkToLigatureAt(OpenTypeDescriptor descriptor, GposMarkToLigatureLookup lookup, List<ShapedGlyph> glyphs, int i, GdefTable? gdef)
+        private static void ApplyMarkToLigatureAt(OpenTypeDescriptor descriptor, GposMarkToLigatureLookup lookup, List<PlacedGlyph> glyphs, int i, GdefTable? gdef)
         {
             ushort markGlyph = (ushort)glyphs[i].GlyphIndex;
             CoverageTable? markFilteringSet = lookup.MarkFilteringSetIndex is { } mfsIndex ? gdef?.GetMarkGlyphSet(mfsIndex) : null;
@@ -266,7 +267,7 @@ namespace PeachDrawing.Text.Internal.Text
                 if (ligIndex < 0)
                     continue;
 
-                ShapedGlyph ligGlyph = glyphs[ligIndex];
+                PlacedGlyph ligGlyph = glyphs[ligIndex];
                 int ligCoverageIndex = subtable.LigatureCoverage.IndexOfGlyph((ushort)ligGlyph.GlyphIndex);
                 if (ligCoverageIndex < 0 || ligCoverageIndex >= subtable.LigatureAttachments.Length)
                     continue;
@@ -288,7 +289,7 @@ namespace PeachDrawing.Text.Internal.Text
 
         /// <summary>
         /// Picks which ligature component <paramref name="markClusterStart"/> (the mark's own source
-        /// text position) belongs to: the component whose own <see cref="ShapedGlyph.ClusterStart"/>
+        /// text position) belongs to: the component whose own <see cref="PlacedGlyph.ClusterStart"/>
         /// is the closest one at-or-before it - i.e. the last component the mark's source character
         /// could plausibly be attached to in reading order. Falls back to component 0 when
         /// <paramref name="ligatureGlyph"/> carries no bookkeeping at all (never went through a GSUB
@@ -299,7 +300,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// need revisiting once complex-script joining (Arabic/Indic, tracked separately) starts
         /// producing richer ligature-merge scenarios than today's simple component-adjacent-mark case.
         /// </summary>
-        private static int ResolveLigatureComponent(ShapedGlyph ligatureGlyph, int markClusterStart)
+        private static int ResolveLigatureComponent(PlacedGlyph ligatureGlyph, int markClusterStart)
         {
             if (ligatureGlyph.LigatureComponentClusterStarts is not { } starts || starts.Length == 0)
                 return 0;
@@ -320,13 +321,13 @@ namespace PeachDrawing.Text.Internal.Text
         /// by construction, contiguous runs of marks) - no backward-skip search is needed.
         /// </summary>
         // internal rather than private - see ApplySingleAdjustment's identical rationale.
-        internal static void ApplyMarkToMark(OpenTypeDescriptor descriptor, GposMarkToMarkLookup lookup, List<ShapedGlyph> glyphs)
+        internal static void ApplyMarkToMark(OpenTypeDescriptor descriptor, GposMarkToMarkLookup lookup, List<PlacedGlyph> glyphs)
         {
             for (int i = 1; i < glyphs.Count; i++)
                 ApplyMarkToMarkAt(descriptor, lookup, glyphs, i);
         }
 
-        private static void ApplyMarkToMarkAt(OpenTypeDescriptor descriptor, GposMarkToMarkLookup lookup, List<ShapedGlyph> glyphs, int i)
+        private static void ApplyMarkToMarkAt(OpenTypeDescriptor descriptor, GposMarkToMarkLookup lookup, List<PlacedGlyph> glyphs, int i)
         {
             if (i < 1)
                 return;
@@ -373,7 +374,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// joining mechanism, cross-checked against real HarfBuzz's own output for the same text+font -
         /// see this fix's own recent-fixes entry.
         /// </summary>
-        internal static void ApplyCursiveAttachment(OpenTypeDescriptor descriptor, GposCursiveAttachmentLookup lookup, List<ShapedGlyph> glyphs, GdefTable? gdef)
+        internal static void ApplyCursiveAttachment(OpenTypeDescriptor descriptor, GposCursiveAttachmentLookup lookup, List<PlacedGlyph> glyphs, GdefTable? gdef)
         {
             bool rightToLeft = (lookup.LookupFlag & RightToLeftLookupFlag) != 0;
             if (!rightToLeft)
@@ -411,8 +412,8 @@ namespace PeachDrawing.Text.Internal.Text
         // position or on the pen-distance between them - which is also, as a side effect, what makes
         // both corrections safe under a later glyph-list reversal (OpenTypeDescriptor.ReverseGlyphsForDisplay's
         // plain interval-mirror) with no special-casing needed, unlike mark attachment's XOffset (see
-        // ShapedGlyph.AttachedToIndex's own remarks).
-        private static void TryApplyCursivePair(OpenTypeDescriptor descriptor, GposCursiveAttachmentLookup lookup, List<ShapedGlyph> glyphs, int i, GdefTable? gdef, bool rightToLeft)
+        // PlacedGlyph.AttachedToIndex's own remarks).
+        private static void TryApplyCursivePair(OpenTypeDescriptor descriptor, GposCursiveAttachmentLookup lookup, List<PlacedGlyph> glyphs, int i, GdefTable? gdef, bool rightToLeft)
         {
             if (!TryGetExitAnchor(lookup, (ushort)glyphs[i].GlyphIndex, out GposAnchor exitAnchor))
                 return;
@@ -487,7 +488,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// <see cref="GlyphSequenceFilter.Participates"/>), or -1 if none - a single-result use of the
         /// shared <see cref="GsubShaper.FindParticipatingIndices"/> walk, the same primitive Types 7/8's
         /// own matcher above uses, rather than a second hand-written forward scan.</summary>
-        private static int FindParticipatingSuccessor(List<ShapedGlyph> glyphs, int fromIndex, ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet = null) =>
+        private static int FindParticipatingSuccessor(List<PlacedGlyph> glyphs, int fromIndex, ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet = null) =>
             GsubShaper.FindParticipatingIndices(glyphs, fromIndex + 1, +1, 1, lookupFlag, gdef, markFilteringSet) is { } indices ? indices[0] : -1;
 
         private static bool TryGetAnchor(GposMarkAttachmentSubtable subtable, ushort baseGlyph, int markIndex, out GposAnchor markAnchor, out GposAnchor baseAnchor)
@@ -511,7 +512,7 @@ namespace PeachDrawing.Text.Internal.Text
 
         /// <summary>The nearest participating glyph before <paramref name="fromIndex"/>, mirroring
         /// <see cref="FindParticipatingSuccessor"/>.</summary>
-        private static int FindParticipatingPredecessor(List<ShapedGlyph> glyphs, int fromIndex, ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet = null) =>
+        private static int FindParticipatingPredecessor(List<PlacedGlyph> glyphs, int fromIndex, ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet = null) =>
             GsubShaper.FindParticipatingIndices(glyphs, fromIndex - 1, -1, 1, lookupFlag, gdef, markFilteringSet) is { } indices ? indices[0] : -1;
 
         /// <summary>
@@ -524,20 +525,20 @@ namespace PeachDrawing.Text.Internal.Text
         /// <paramref name="markIndex"/>'s nearest participating predecessor). Only the mark's own
         /// placement changes here - never its advance, which is left exactly as `hmtx` (or an earlier
         /// GSUB/GPOS lookup) already resolved it, matching the spec's mark-attachment model.
-        /// Also records <see cref="ShapedGlyph.AttachedToIndex"/> = <paramref name="baseIndex"/> - the
-        /// computed <see cref="ShapedGlyph.XOffset"/> bakes in the pen-distance to the base under
+        /// Also records <see cref="PlacedGlyph.AttachedToIndex"/> = <paramref name="baseIndex"/> - the
+        /// computed <see cref="PlacedGlyph.XOffset"/> bakes in the pen-distance to the base under
         /// *this* walk order, so a caller that later reorders the glyph list (see
         /// <see cref="OpenTypeDescriptor.Shape"/>'s <c>ReverseForDisplay</c> handling) needs this
         /// back-reference to recompute the offset for the new order rather than silently reusing a
         /// value baked in for the old one.
         /// </summary>
-        private static void ApplyMarkAnchor(OpenTypeDescriptor descriptor, List<ShapedGlyph> glyphs, int baseIndex, int markIndex, GposAnchor markAnchor, GposAnchor baseAnchor)
+        private static void ApplyMarkAnchor(OpenTypeDescriptor descriptor, List<PlacedGlyph> glyphs, int baseIndex, int markIndex, GposAnchor markAnchor, GposAnchor baseAnchor)
         {
             double intermediateAdvance = 0;
             for (int k = baseIndex; k < markIndex; k++)
                 intermediateAdvance += descriptor.GlyphIndexToWidth(glyphs[k].GlyphIndex) + glyphs[k].XAdvanceDelta;
 
-            ShapedGlyph baseGlyph = glyphs[baseIndex];
+            PlacedGlyph baseGlyph = glyphs[baseIndex];
             glyphs[markIndex] = glyphs[markIndex] with
             {
                 XOffset = baseAnchor.X - markAnchor.X - intermediateAdvance + baseGlyph.XOffset,
@@ -551,7 +552,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// subtables as a single left-to-right pass over every glyph position - the GPOS mirror of
         /// <see cref="GsubShaper.ApplySequenceContextLookup"/>, sharing its skip-aware backtrack/
         /// input/lookahead walk (<see cref="GsubShaper.FindParticipatingIndices"/>) since that walk
-        /// is pure <see cref="ShapedGlyph"/>/`lookupFlag`/GDEF logic with nothing GSUB-specific about
+        /// is pure <see cref="PlacedGlyph"/>/`lookupFlag`/GDEF logic with nothing GSUB-specific about
         /// it. Unlike GSUB's version, a nested GPOS lookup (Types 1/2/4/6) only ever adjusts
         /// positioning - it never changes <paramref name="glyphs"/>'s count - so there is no
         /// glyph-count-delta bookkeeping to track between records; each input position's real
@@ -559,7 +560,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// record in the same match.
         /// </summary>
         internal static void ApplySequenceContextLookup(OpenTypeDescriptor descriptor, GposTable gpos,
-            IReadOnlyList<GposSequenceContextSubtable> subtables, List<ShapedGlyph> glyphs, GdefTable? gdef,
+            IReadOnlyList<GposSequenceContextSubtable> subtables, List<PlacedGlyph> glyphs, GdefTable? gdef,
             ushort lookupFlag, CoverageTable? markFilteringSet)
         {
             // Resumes past the whole matched span, same as GsubShaper's own outer walk (see its doc
@@ -575,7 +576,7 @@ namespace PeachDrawing.Text.Internal.Text
         }
 
         private static int TryApplySequenceContextAt(OpenTypeDescriptor descriptor, GposTable gpos,
-            IReadOnlyList<GposSequenceContextSubtable> subtables, List<ShapedGlyph> glyphs, int pos, GdefTable? gdef,
+            IReadOnlyList<GposSequenceContextSubtable> subtables, List<PlacedGlyph> glyphs, int pos, GdefTable? gdef,
             ushort lookupFlag, CoverageTable? markFilteringSet)
         {
             for (int subtableIndex = 0; subtableIndex < subtables.Count; subtableIndex++)
@@ -599,7 +600,7 @@ namespace PeachDrawing.Text.Internal.Text
         }
 
         private static (int[] InputIndices, GposSequenceLookupRecord[] Records)? TryMatchSequenceContext(
-            GposSequenceContextSubtable subtable, List<ShapedGlyph> glyphs, int pos, ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet)
+            GposSequenceContextSubtable subtable, List<PlacedGlyph> glyphs, int pos, ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet)
         {
             switch (subtable.Format)
             {
@@ -656,7 +657,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// comment) - shares <see cref="GsubShaper.FindParticipatingIndices"/> rather than
         /// duplicating the skip-aware walk itself, since only the surrounding table-reading/dispatch
         /// code is GSUB/GPOS-specific here.</summary>
-        private static int[]? TryMatchRule(GposSequenceRule rule, List<ShapedGlyph> glyphs, int pos, bool matchGlyph,
+        private static int[]? TryMatchRule(GposSequenceRule rule, List<PlacedGlyph> glyphs, int pos, bool matchGlyph,
             ClassDefTable? inputClassDef, ClassDefTable? backtrackClassDef, ClassDefTable? lookaheadClassDef,
             ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet)
         {
@@ -695,7 +696,7 @@ namespace PeachDrawing.Text.Internal.Text
             => matchGlyph ? glyphIndex == expected : classDef is not null && classDef.GetClass((ushort)glyphIndex) == expected;
 
         private static int[]? TryMatchCoverageSequence(
-            CoverageTable[]? backtrack, CoverageTable[] input, CoverageTable[]? lookahead, List<ShapedGlyph> glyphs, int pos,
+            CoverageTable[]? backtrack, CoverageTable[] input, CoverageTable[]? lookahead, List<PlacedGlyph> glyphs, int pos,
             ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet)
         {
             backtrack ??= [];
@@ -750,7 +751,7 @@ namespace PeachDrawing.Text.Internal.Text
         /// (mirroring the same concern GSUB's version guards against, even though GPOS's own nested
         /// lookups can't recurse into more Type 7/8 lookups - see <see cref="ApplyNestedLookup"/>).
         /// </summary>
-        private static void ApplyMatchedLookups(OpenTypeDescriptor descriptor, GposTable gpos, List<ShapedGlyph> glyphs,
+        private static void ApplyMatchedLookups(OpenTypeDescriptor descriptor, GposTable gpos, List<PlacedGlyph> glyphs,
             int[] inputIndices, GposSequenceLookupRecord[] records, int depth, GdefTable? gdef)
         {
             if (depth >= MaxNestedContextDepth || inputIndices.Length == 0)
@@ -769,7 +770,7 @@ namespace PeachDrawing.Text.Internal.Text
             }
         }
 
-        private static void ApplyNestedLookup(OpenTypeDescriptor descriptor, GposTable gpos, List<ShapedGlyph> glyphs, int position, int lookupListIndex, GdefTable? gdef)
+        private static void ApplyNestedLookup(OpenTypeDescriptor descriptor, GposTable gpos, List<PlacedGlyph> glyphs, int position, int lookupListIndex, GdefTable? gdef)
         {
             switch (gpos.GetResolvedLookupType(lookupListIndex))
             {
