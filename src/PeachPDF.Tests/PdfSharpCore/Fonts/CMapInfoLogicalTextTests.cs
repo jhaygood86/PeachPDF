@@ -1,3 +1,4 @@
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachDrawing.Text.Shaping;
 using System.IO;
 using System.Text;
@@ -40,7 +41,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         public void AddShapedText_WithDifferingLogicalText_RemapsEachGlyphToItsTrueLogicalSource()
         {
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(descriptor);
+            var cmapInfo = new CMapInfo(TestFonts.TypefaceFromFile(BundledFonts.Ttf));
 
             // "(AB)" is what the source document actually contains, in true logical reading order.
             // BidiMirrorResolver.ApplyMirroring's whole-string reversal + per-character mirroring (what
@@ -79,7 +80,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var logicalText = BidiMirrorResolver.ReverseRunes(source);
 
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(descriptor);
+            var cmapInfo = new CMapInfo(TestFonts.TypefaceFromFile(BundledFonts.Ttf));
             cmapInfo.AddShapedText(visual, ShapeSettings.Default, logicalText);
 
             var shaped = descriptor.Shape(visual, ShapeSettings.Default);
@@ -105,7 +106,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // The overwhelming common case (LTR text, or any word never reversed/mirrored for display):
             // omitting logicalText must behave exactly as before this parameter existed.
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(descriptor);
+            var cmapInfo = new CMapInfo(TestFonts.TypefaceFromFile(BundledFonts.Ttf));
 
             cmapInfo.AddShapedText("AB", ShapeSettings.Default);
 
@@ -120,7 +121,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // AddShapedText must recognize this as "nothing to remap" rather than running the remap
             // formula needlessly.
             var descriptor = Descriptor();
-            var cmapInfo = new CMapInfo(descriptor);
+            var cmapInfo = new CMapInfo(TestFonts.TypefaceFromFile(BundledFonts.Ttf));
 
             cmapInfo.AddShapedText("AB", ShapeSettings.Default, logicalText: "AB");
 

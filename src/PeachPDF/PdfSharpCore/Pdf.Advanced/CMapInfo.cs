@@ -29,27 +29,26 @@
 
 #nullable disable warnings
 
+using PeachDrawing.Text;
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
-using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 
-namespace PeachDrawing.Text.Internal.Fonts
+namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
     /// <summary>
     /// Helper class that determines the characters used in a particular font.
     /// </summary>
     internal class CMapInfo
     {
-        public CMapInfo(OpenTypeDescriptor descriptor)
+        public CMapInfo(Typeface typeface)
         {
-            Debug.Assert(descriptor != null);
-            _descriptor = descriptor;
+            Debug.Assert(typeface != null);
+            _typeface = typeface;
         }
-        internal OpenTypeDescriptor _descriptor;
+        readonly Typeface _typeface;
 
         /// <summary>
         /// Adds the characters of the specified string to the hashtable, keyed by Unicode scalar value
@@ -59,7 +58,8 @@ namespace PeachDrawing.Text.Internal.Fonts
         {
             if (text != null)
             {
-                bool symbol = _descriptor.FontFace.cmap.symbol;
+                var metrics = _typeface.Metrics;
+                bool symbol = metrics.IsSymbolic;
                 foreach (Rune rune in text.EnumerateRunes())
                 {
                     int codepoint = rune.Value;
@@ -69,9 +69,10 @@ namespace PeachDrawing.Text.Internal.Fonts
                         if (symbol && codepoint <= 0xFFFF)
                         {
                             // Remap for symbol fonts (BMP-only).
-                            lookup = new Rune(codepoint | (_descriptor.FontFace.os2.usFirstCharIndex & 0xFF00));
+                            lookup = new Rune(codepoint | (metrics.FirstCharIndex & 0xFF00));
                         }
-                        int glyphIndex = _descriptor.CharCodeToGlyphIndex(lookup);
+                        _typeface.TryMapRune(lookup, out ushort mapped);
+                        int glyphIndex = mapped;
                         CharacterToGlyphIndex.Add(codepoint, glyphIndex);
                         GlyphIndices[glyphIndex] = null;
                     }
@@ -121,7 +122,7 @@ namespace PeachDrawing.Text.Internal.Fonts
                 ? logicalText
                 : text;
 
-            foreach (PlacedGlyph glyph in _descriptor.Shape(text, features))
+            foreach (PlacedGlyph glyph in Shaper.Shape(_typeface, text, features).Glyphs)
             {
                 GlyphIndices[glyph.GlyphIndex] = null;
                 LigatureGlyphToText[glyph.GlyphIndex] = source.Substring(glyph.ClusterStart, glyph.ClusterLength);

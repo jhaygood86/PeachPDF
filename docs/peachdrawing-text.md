@@ -10,9 +10,9 @@ dotnet add package PeachDrawing.Text
 
 > **Status: pre-1.0.** The library is being opened up area by area. Today the public surface is font loading and
 > matching (`FontSet` and the types around it), what a `Typeface` says about itself (metrics, glyph mapping and advances),
-> shaping, glyph outlines and colour glyphs, and the `PeachDrawing.Text.Unicode` namespace, all described below. Font subsetting
-> for embedding, the MATH table and paragraph layout are still internal to the package, so PeachPDF is the only consumer of
-> them, and they will be published in later releases. Until 1.0, the public API may change between releases.
+> shaping, glyph outlines and colour glyphs, the `MATH` table, and the `PeachDrawing.Text.Unicode` namespace, all described
+> below. Font subsetting for embedding, described below, is public too. Paragraph layout is still internal to the package, so
+> PeachPDF is the only consumer of it, and it will be published in a later release. Until 1.0, the public API may change between releases.
 
 ## What the engine does
 
@@ -23,6 +23,8 @@ dotnet add package PeachDrawing.Text
   Universal Shaping Engine for Devanagari, Bengali, Gujarati and Tamil, default-ignorable handling, and `cmap` format 14
   variation sequences.
 - **Outlines and colour:** glyph outlines for `glyf` and CFF, COLR v0 and v1 with CPAL, and CBDT/CBLC and sbix bitmaps.
+- **Mathematics:** the `MATH` table: layout constants, per-glyph italics corrections and accent attachment, and the
+  variants and assemblies of stretchy glyphs.
 - **Unicode:** the Unicode Bidirectional Algorithm, script itemization, vertical orientation, emoji presentation, and
   TeX/Liang hyphenation for 73 languages.
 
@@ -175,6 +177,63 @@ if (face.TryMapRune(new Rune('g'), out ushort glyph) && face.TryGetOutline(glyph
   are read with `GetColorLayerPaint`). Variable paints are read at the font's default instance.
 - **Colour glyphs from pictures.** A font whose colour glyphs are bitmaps (`CBDT`/`CBLC` or `sbix`) reports
   `HasBitmapGlyphs`, and `TryGetBitmap` gives the picture of a glyph from the strike best suited to a size, with its bearings.
+
+## Mathematics: `PeachDrawing.Text.OpenType`
+
+A face made for setting mathematics has a `MATH` table, and `Typeface.HasMathData` says so. `Typeface.MathData` returns it as a
+`MathTable` with three parts. `Constants` holds the values a math layout algorithm positions fractions, radicals, scripts,
+stacks and limits with, in design units apart from the percentages. `GlyphInfo` answers per glyph: the italics correction,
+the horizontal position an accent attaches at, and whether the glyph is an extended shape. `Variants` gives the glyphs that
+stretch (fences, radicals, accents, arrows) their pre-sized variants and, for a size beyond the largest, the parts to
+assemble them from.
+
+```csharp
+using PeachDrawing.Text.OpenType;
+
+if (face.MathData is MathTable math && face.TryMapRune(new Rune('('), out ushort paren))
+{
+    double axis = math.Constants.AxisHeight;                      // design units above the baseline
+    MathGlyphConstruction? tall = math.Variants.GetVerticalConstruction(paren);
+
+    foreach (MathGlyphVariant variant in tall?.Variants ?? [])    // smallest to largest
+    {
+        // the first variant whose AdvanceMeasurement reaches the size you need is the one to draw
+    }
+
+    if (tall?.Assembly is MathGlyphAssembly assembly)
+    {
+        // bottom to top: repeat the parts that IsExtender until the target height is reached,
+        // overlapping neighbours by at most their connector lengths and at least Variants.MinConnectorOverlap
+    }
+}
+```
+
+The per-glyph corner kerning of `MathKernInfo` and the device tables that adjust a value at particular sizes are not read.
+
+## Embedding: `PeachDrawing.Text.Export`
+
+A document that embeds a font wants only the glyphs it uses. `TypefaceExporter.ExportSubset` cuts a typeface down to the glyph
+indices you give it and returns the bytes of a font file, an `ExportedFont`.
+
+```csharp
+using PeachDrawing.Text.Export;
+
+ExportedFont subset = TypefaceExporter.ExportSubset(face, usedGlyphs, keepCharacterMap: false);
+byte[] fontFile = subset.Data.ToArray();
+// subset.HasCffOutlines says which kind of font stream to write; subset.IsSubset says whether it was cut down.
+```
+
+- The glyphs keep their indices, so text already encoded as glyph indices stays valid against the subset. The glyphs a composite
+  glyph is made of come along, and so does the notdef glyph.
+- A colour glyph that has no outline of its own (its shapes are its layers) is given a small outline, so a reader can still
+  select the text it stands for.
+- A subset carries no name table, so it is meant to be embedded, not loaded back into a `FontSet`.
+- A font with CFF outlines is not cut down: it is returned whole, and `IsSubset` is `false`.
+- `keepCharacterMap` says whether the character map stays. A font whose text is encoded as glyph indices is smaller without it.
+
+What a font descriptor records about a face comes from the members you already have: `Typeface.Metrics` (with `IsSymbolic`,
+`IsFixedPitch`, `HasSerifs`, `IsItalicStyle` and `FirstCharIndex` for the descriptor flags), `Typeface.GetAdvance` for widths,
+`Typeface.FullName` for a base font name, and `Typeface.ContentHash` to key a cache of what you made from a face.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 

@@ -22,9 +22,7 @@ using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Generic;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachDrawing.Text.Internal.Text;
 
 namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 {

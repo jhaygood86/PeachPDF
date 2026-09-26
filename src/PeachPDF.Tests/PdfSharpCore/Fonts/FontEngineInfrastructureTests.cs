@@ -119,9 +119,9 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         [Fact]
         public void SimpleFontWidths_MapEachWinAnsiCodeToItsGlyphsPdfWidth()
         {
-            var descriptor = WinAnsiDescriptor(out _);
+            var descriptor = WinAnsiDescriptor(out var font);
 
-            int[] widths = PdfSimpleFontWidths.Compute(descriptor);
+            int[] widths = PdfSimpleFontWidths.Compute(font.Typeface);
 
             Assert.Equal(256, widths.Length);
             Assert.True(widths['A'] > 0);
@@ -157,7 +157,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
                 fontSet.AddStream(stream, new AddOptions { FamilyName = family });
 
             font = TestFonts.Create(family, 12, pdfOptions: new XPdfFontOptions(PdfFontEncoding.WinAnsi), fontSet: fontSet);
-            return font.Descriptor;
+            return font.Typeface.Face.Descriptor;
         }
     }
 }

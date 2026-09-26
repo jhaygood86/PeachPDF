@@ -13,7 +13,6 @@
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.Html.Adapters.Entities;
-using PeachDrawing.Text.Internal.Text;
 
 namespace PeachPDF.Html.Adapters
 {
@@ -169,7 +168,7 @@ namespace PeachPDF.Html.Adapters
         public virtual double GetVerticalAdvance(System.Text.Rune rune) => Height;
 
         /// <summary>Whether this font carries a real OpenType <c>VORG</c> table this reader trusts (see
-        /// <see cref="PeachDrawing.Text.Internal.Fonts.OpenType.OpenTypeDescriptor.HasVerticalOrigin"/> for the CFF-only
+        /// <c>OpenTypeDescriptor.HasVerticalOrigin</c> for the CFF-only
         /// restriction that gates this).</summary>
         public virtual bool HasVerticalOrigin => false;
 
@@ -216,7 +215,7 @@ namespace PeachPDF.Html.Adapters
         public virtual bool HasMathTable => false;
 
         /// <summary>This font's parsed MATH table, or null if it has none.</summary>
-        public virtual PeachDrawing.Text.Internal.Fonts.OpenType.MathTable? MathTable => null;
+        public virtual PeachDrawing.Text.OpenType.MathTable? MathTable => null;
 
         /// <summary>This font's design-units-per-em (e.g. 1000 or 2048) - <see cref="MathTable"/>'s
         /// design-unit values need scaling by <c>Size / FontUnitsPerEm</c> to become points. 0 when

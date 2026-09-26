@@ -1,3 +1,4 @@
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachDrawing.Text.Internal.Fonts;
@@ -79,7 +80,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
 
             // An astral emoji is a surrogate pair in UTF-16; the rune-based pipeline must record it as one
             // codepoint→glyph entry, not two surrogate entries.
-            var cmap = new CMapInfo(descriptor);
+            var cmap = new CMapInfo(TestFonts.TypefaceFromBytes(File.ReadAllBytes(BundledFonts.Emoji)));
             cmap.AddChars(char.ConvertFromUtf32(Grin));
 
             Assert.Single(cmap.CharacterToGlyphIndex);

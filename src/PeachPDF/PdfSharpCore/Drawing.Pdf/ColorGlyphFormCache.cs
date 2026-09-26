@@ -19,7 +19,6 @@
 using PeachDrawing.Text;
 using System;
 using System.Collections.Generic;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 
 namespace PeachPDF.PdfSharpCore.Drawing.Pdf

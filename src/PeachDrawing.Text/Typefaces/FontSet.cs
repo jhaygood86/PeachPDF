@@ -41,7 +41,7 @@ namespace PeachDrawing.Text
             Resolver = new FontResolver();
         }
 
-        /// <summary>The engine's resolver behind this set; PeachPDF's PDF writer reads what it needs through it for now.</summary>
+        /// <summary>The engine's resolver behind this set.</summary>
         internal FontResolver Resolver { get; }
 
         /// <summary>

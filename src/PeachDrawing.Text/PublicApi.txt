@@ -5,6 +5,12 @@ PeachDrawing.Text.AddOptions : sealed class
   property Nullable<Int32> Weight { get; init; }
   property Nullable<Int32> Width { get; init; }
   property String FamilyName { get; init; }
+PeachDrawing.Text.Export.ExportedFont : sealed class
+  property Boolean HasCffOutlines { get; }
+  property Boolean IsSubset { get; }
+  property ReadOnlyMemory<Byte> Data { get; }
+PeachDrawing.Text.Export.TypefaceExporter : static class
+  method static ExportedFont ExportSubset(Typeface typeface, IEnumerable<Int32> glyphs, Boolean keepCharacterMap)
 PeachDrawing.Text.FontSet : sealed class
   ctor()
   method Boolean HasExplicitRanges(String familyName)
@@ -25,6 +31,102 @@ PeachDrawing.Text.GenericFamily : enum Int32
   SansSerif = 1
   Serif = 0
   SystemUi = 5
+PeachDrawing.Text.OpenType.MathConstantsTable : sealed class
+  property Double AccentBaseHeight { get; }
+  property Double AxisHeight { get; }
+  property Double DelimitedSubFormulaMinHeight { get; }
+  property Double DisplayOperatorMinHeight { get; }
+  property Double FlattenedAccentBaseHeight { get; }
+  property Double FractionDenomDisplayStyleGapMin { get; }
+  property Double FractionDenominatorDisplayStyleShiftDown { get; }
+  property Double FractionDenominatorGapMin { get; }
+  property Double FractionDenominatorShiftDown { get; }
+  property Double FractionNumDisplayStyleGapMin { get; }
+  property Double FractionNumeratorDisplayStyleShiftUp { get; }
+  property Double FractionNumeratorGapMin { get; }
+  property Double FractionNumeratorShiftUp { get; }
+  property Double FractionRuleThickness { get; }
+  property Double LowerLimitBaselineDropMin { get; }
+  property Double LowerLimitGapMin { get; }
+  property Double MathLeading { get; }
+  property Double OverbarExtraAscender { get; }
+  property Double OverbarRuleThickness { get; }
+  property Double OverbarVerticalGap { get; }
+  property Double RadicalDegreeBottomRaisePercent { get; }
+  property Double RadicalDisplayStyleVerticalGap { get; }
+  property Double RadicalExtraAscender { get; }
+  property Double RadicalKernAfterDegree { get; }
+  property Double RadicalKernBeforeDegree { get; }
+  property Double RadicalRuleThickness { get; }
+  property Double RadicalVerticalGap { get; }
+  property Double ScriptPercentScaleDown { get; }
+  property Double ScriptScriptPercentScaleDown { get; }
+  property Double SkewedFractionHorizontalGap { get; }
+  property Double SkewedFractionVerticalGap { get; }
+  property Double SpaceAfterScript { get; }
+  property Double StackBottomDisplayStyleShiftDown { get; }
+  property Double StackBottomShiftDown { get; }
+  property Double StackDisplayStyleGapMin { get; }
+  property Double StackGapMin { get; }
+  property Double StackTopDisplayStyleShiftUp { get; }
+  property Double StackTopShiftUp { get; }
+  property Double StretchStackBottomShiftDown { get; }
+  property Double StretchStackGapAboveMin { get; }
+  property Double StretchStackGapBelowMin { get; }
+  property Double StretchStackTopShiftUp { get; }
+  property Double SubSuperscriptGapMin { get; }
+  property Double SubscriptBaselineDropMin { get; }
+  property Double SubscriptShiftDown { get; }
+  property Double SubscriptTopMax { get; }
+  property Double SuperscriptBaselineDropMax { get; }
+  property Double SuperscriptBottomMaxWithSubscript { get; }
+  property Double SuperscriptBottomMin { get; }
+  property Double SuperscriptShiftUp { get; }
+  property Double SuperscriptShiftUpCramped { get; }
+  property Double UnderbarExtraDescender { get; }
+  property Double UnderbarRuleThickness { get; }
+  property Double UnderbarVerticalGap { get; }
+  property Double UpperLimitBaselineRiseMin { get; }
+  property Double UpperLimitGapMin { get; }
+PeachDrawing.Text.OpenType.MathGlyphAssembly : sealed class
+  property Double ItalicsCorrection { get; }
+  property IReadOnlyList<MathGlyphPart> Parts { get; }
+PeachDrawing.Text.OpenType.MathGlyphConstruction : sealed class
+  property IReadOnlyList<MathGlyphVariant> Variants { get; }
+  property MathGlyphAssembly Assembly { get; }
+PeachDrawing.Text.OpenType.MathGlyphInfoTable : sealed class
+  method Boolean IsExtendedShape(UInt16 glyphId)
+  method Double GetItalicsCorrection(UInt16 glyphId)
+  method Nullable<Double> GetTopAccentAttachment(UInt16 glyphId)
+PeachDrawing.Text.OpenType.MathGlyphPart : struct
+  ctor(UInt16 GlyphId, Double StartConnectorLength, Double EndConnectorLength, Double FullAdvance, Boolean IsExtender)
+  method Boolean Equals(MathGlyphPart other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out UInt16 GlyphId, out Double StartConnectorLength, out Double EndConnectorLength, out Double FullAdvance, out Boolean IsExtender)
+  property Boolean IsExtender { get; init; }
+  property Double EndConnectorLength { get; init; }
+  property Double FullAdvance { get; init; }
+  property Double StartConnectorLength { get; init; }
+  property UInt16 GlyphId { get; init; }
+PeachDrawing.Text.OpenType.MathGlyphVariant : struct
+  ctor(UInt16 GlyphId, Double AdvanceMeasurement)
+  method Boolean Equals(MathGlyphVariant other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out UInt16 GlyphId, out Double AdvanceMeasurement)
+  property Double AdvanceMeasurement { get; init; }
+  property UInt16 GlyphId { get; init; }
+PeachDrawing.Text.OpenType.MathTable : sealed class
+  property MathConstantsTable Constants { get; }
+  property MathGlyphInfoTable GlyphInfo { get; }
+  property MathVariantsTable Variants { get; }
+PeachDrawing.Text.OpenType.MathVariantsTable : sealed class
+  method MathGlyphConstruction GetHorizontalConstruction(UInt16 glyphId)
+  method MathGlyphConstruction GetVerticalConstruction(UInt16 glyphId)
+  property Double MinConnectorOverlap { get; }
 PeachDrawing.Text.Outlines.Affine2x3 : struct
   ctor(Double XX, Double YX, Double XY, Double YY, Double DX, Double DY)
   field static Affine2x3 Identity
@@ -293,14 +395,18 @@ PeachDrawing.Text.Typeface : sealed class
   method String ToString()
   property Boolean HasBitmapGlyphs { get; }
   property Boolean HasColorGlyphs { get; }
+  property Boolean HasMathData { get; }
   property Boolean HasVerticalMetrics { get; }
   property Boolean HasVerticalOrigin { get; }
   property Boolean IsBold { get; }
   property Boolean IsItalic { get; }
   property ColorPalette ColorPalette { get; }
+  property MathTable MathData { get; }
   property String FamilyName { get; }
+  property String FullName { get; }
   property String StyleName { get; }
   property TypefaceMetrics Metrics { get; }
+  property UInt64 ContentHash { get; }
 PeachDrawing.Text.TypefaceFamily : sealed class
   method Boolean TryMatch(in TypefaceQuery query, out TypefaceMatch match)
   property String Name { get; }
@@ -319,9 +425,14 @@ PeachDrawing.Text.TypefaceMatch : struct
   property Typeface Typeface { get; init; }
 PeachDrawing.Text.TypefaceMetrics : sealed class
   property Boolean HasMeasuredXHeight { get; }
+  property Boolean HasSerifs { get; }
+  property Boolean IsFixedPitch { get; }
+  property Boolean IsItalicStyle { get; }
+  property Boolean IsSymbolic { get; }
   property Int32 CapHeight { get; }
   property Int32 CellAscent { get; }
   property Int32 CellDescent { get; }
+  property Int32 FirstCharIndex { get; }
   property Int32 LineSpacing { get; }
   property Int32 NormalLineAscent { get; }
   property Int32 NormalLineDescent { get; }

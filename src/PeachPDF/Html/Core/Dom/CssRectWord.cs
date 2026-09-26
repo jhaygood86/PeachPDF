@@ -12,8 +12,6 @@
 
 using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
-using PeachDrawing.Text.Internal.Text.Shaping.Use;
 using System;
 using System.Collections.Generic;
 using System.Text;

@@ -28,8 +28,7 @@
 #endregion
 
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
+using PeachDrawing.Text;
 using System.Diagnostics;
 using System.Text;
 
@@ -51,17 +50,11 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             Elements.SetName(Keys.Subtype, "/Type0");
             Elements.SetName(Keys.Encoding, vertical ? "/Identity-V" : "/Identity-H");
 
-            // Reuse the descriptor XFont itself already resolved (via CreateDescriptorAndInitializeFontMetrics),
-            // rather than independently re-deriving it from FontDescriptorCache's global, static,
-            // typeface-key-keyed cache here - that direct call used to bypass XFont's own instance-vs-
-            // global routing entirely, silently reintroducing the exact cross-PdfGenerator-instance font
-            // collision that routing fixes, one layer further down (the actual embedded font data).
-            OpenTypeDescriptor ttDescriptor = font.Descriptor;
-            FontDescriptor = new PdfFontDescriptor(document, ttDescriptor);
+            FontDescriptor = new PdfFontDescriptor(document, font.Typeface);
             _fontOptions = font.PdfOptions;
             Debug.Assert(_fontOptions != null);
 
-            _cmapInfo = new CMapInfo(ttDescriptor);
+            _cmapInfo = new CMapInfo(font.Typeface);
             _descendantFont = new PdfCIDFont(document, FontDescriptor, font);
             _descendantFont.CMapInfo = _cmapInfo;
 
@@ -70,7 +63,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             document.Internals.AddObject(_toUnicode);
             Elements.Add(Keys.ToUnicode, _toUnicode);
 
-            BaseFont = font.GlyphTypeface.GetBaseName();
+            BaseFont = PdfTypefaceMetrics.GetBaseName(font.Typeface);
             // CID fonts are always embedded
             BaseFont = PdfFont.CreateEmbeddedFontSubsetName(BaseFont);
 
@@ -106,7 +99,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             base.PrepareForSave();
 
             // Use GetGlyphIndices to create the widths array.
-            OpenTypeDescriptor descriptor = (OpenTypeDescriptor)FontDescriptor._descriptor;
+            Typeface typeface = FontDescriptor._typeface;
             StringBuilder w = new StringBuilder("[");
             if (_cmapInfo != null)
             {
@@ -115,7 +108,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 int[] glyphWidths = new int[count];
 
                 for (int idx = 0; idx < count; idx++)
-                    glyphWidths[idx] = descriptor.GlyphIndexToPdfWidth(glyphIndices[idx]);
+                    glyphWidths[idx] = PdfTypefaceMetrics.GlyphWidth(typeface, glyphIndices[idx]);
 
                 //TODO: optimize order of indices
 

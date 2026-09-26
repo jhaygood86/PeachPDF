@@ -29,6 +29,7 @@
 
 #define VERBOSE_
 
+using PeachDrawing.Text.OpenType;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;

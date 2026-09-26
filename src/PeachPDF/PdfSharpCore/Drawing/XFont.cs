@@ -30,8 +30,6 @@
 // #??? Clean up
 
 using PeachDrawing.Text;
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 using System;
@@ -69,19 +67,18 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
             // In principle an XFont is a typeface plus an em-size.
             Typeface = match.Typeface;
-            _glyphTypeface = match.Typeface.Face;
+            Synthesis = match.Synthesis;
             InitializeFontMetrics();
         }
 
         /// <summary>The typeface this font sets text in: what the font set matched, with no size.</summary>
         public Typeface Typeface { get; }
 
+        /// <summary>What the renderer has to fake because the typeface lacks it (bold, italic).</summary>
+        internal SyntheticStyle Synthesis { get; }
+
         void InitializeFontMetrics()
         {
-            // The descriptor belongs to the typeface (one per typeface, and typefaces are cached per resolver
-            // instance for custom families), so it needs no cache of its own here.
-            _descriptor = _glyphTypeface.Descriptor;
-
             var metrics = Typeface.Metrics;
             UnitsPerEm = metrics.UnitsPerEm;
             CellAscent = metrics.CellAscent;
@@ -99,12 +96,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// </summary>
         public string Name
         {
-            get { return _glyphTypeface.FamilyName; }
-        }
-
-        internal string FaceName
-        {
-            get { return _glyphTypeface.FaceName; }
+            get { return Typeface.FamilyName; }
         }
 
         /// <summary>
@@ -247,21 +239,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
         }
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        internal LoadedTypeface GlyphTypeface
-        {
-            get { return _glyphTypeface; }
-        }
-        LoadedTypeface _glyphTypeface = null!;
-
-
-        internal OpenTypeDescriptor Descriptor
-        {
-            get { return _descriptor; }
-            private set { _descriptor = value; }
-        }
-        OpenTypeDescriptor _descriptor = null!;
-
 
         internal int UnitsPerEm
         {

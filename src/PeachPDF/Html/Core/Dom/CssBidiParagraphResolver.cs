@@ -1,9 +1,6 @@
 using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Utils;
-using PeachDrawing.Text.Internal.Text;
-using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
-using PeachDrawing.Text.Internal.Text.Shaping.Use;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -163,7 +160,7 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// The Unicode <c>Script</c> property values <see cref="UseCategoryClassifier"/> is scoped to
+        /// The Unicode <c>Script</c> property values <c>UseCategoryClassifier</c> is scoped to
         /// (see its own remarks) - a run resolving to one of these is the only case
         /// <see cref="ResolveScriptsAndJoining"/> ever classifies/allocates USE categories for.
         /// </summary>
@@ -175,18 +172,18 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ArabicJoiningForm"/>, and (when the paragraph contains any text in one of
         /// <see cref="UseShapedScripts"/>) per-character <see cref="UseCategory"/>, all indexed by
         /// UTF-16 offset (matching <see cref="Bidi.Analyze"/>'s own <c>Levels</c> array) rather
-        /// than by codepoint/Rune - <see cref="Scripts"/>/<see cref="ArabicShapingTable"/>/
-        /// <see cref="ArabicJoiningShaper"/>/<see cref="UseCategoryClassifier"/> all operate
+        /// than by codepoint/Rune - <see cref="Scripts"/>/<c>ArabicShapingTable</c>/
+        /// <c>ArabicJoiningShaper</c>/<c>UseCategoryClassifier</c> all operate
         /// per-codepoint, so a codepoint's resolved value is duplicated across both UTF-16 units of a
         /// surrogate pair here, the same "one value per source character, computed once" convention
         /// <see cref="CssBox.CharScripts"/>/<see cref="CssBox.JoiningForms"/>/
         /// <see cref="CssBox.UseCategories"/> share with <see cref="CssBox.BidiLevels"/>.
-        /// <see cref="ArabicJoiningShaper.Resolve"/> runs unconditionally over the whole paragraph
+        /// <c>ArabicJoiningShaper.Resolve</c> runs unconditionally over the whole paragraph
         /// regardless of script - a codepoint outside every Arabic-family joining block already
         /// resolves to <see cref="ArabicJoiningType.U"/> (Non-Joining) in
-        /// <see cref="ArabicShapingTable"/>, so this is a correct no-op for ordinary text, not a wasted
+        /// <c>ArabicShapingTable</c>, so this is a correct no-op for ordinary text, not a wasted
         /// computation guarded by a check that would cost nearly as much itself.
-        /// <see cref="UseCategoryClassifier"/> is different: unlike <see cref="ArabicJoiningType.U"/>,
+        /// <c>UseCategoryClassifier</c> is different: unlike <see cref="ArabicJoiningType.U"/>,
         /// <see cref="UseCategory.O"/> is a real, meaningfully-processed category (not an inert "skip
         /// this codepoint" sentinel), so running it unconditionally over every document would activate
         /// syllable scanning/reordering for every word ever laid out, not just ones in

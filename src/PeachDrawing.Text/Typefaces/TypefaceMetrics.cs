@@ -25,7 +25,7 @@ namespace PeachDrawing.Text
     /// </remarks>
     public sealed class TypefaceMetrics
     {
-        internal TypefaceMetrics(FontDescriptor source)
+        internal TypefaceMetrics(OpenTypeDescriptor source)
         {
             UnitsPerEm = source.UnitsPerEm;
             CellAscent = source.Ascender;
@@ -46,6 +46,14 @@ namespace PeachDrawing.Text
             YMin = source.YMin;
             XMax = source.XMax;
             YMax = source.YMax;
+
+            var face = source.FontFace;
+            IsSymbolic = face.cmap.symbol;
+            IsFixedPitch = face.post.isFixedPitch != 0;
+            var familyClass = (face.os2.sFamilyClass >> 8) & 0xFF;
+            HasSerifs = familyClass is >= 1 and <= 7;
+            IsItalicStyle = face.os2.IsItalic;
+            FirstCharIndex = face.os2.usFirstCharIndex;
         }
 
         /// <summary>The number of design units to the em square (the <c>head</c> table's <c>unitsPerEm</c>).</summary>
@@ -111,5 +119,23 @@ namespace PeachDrawing.Text
 
         /// <summary>The top edge of the box that holds every glyph.</summary>
         public int YMax { get; }
+
+        /// <summary>
+        /// Whether the font's character map is a symbol one (a <c>cmap</c> subtable for platform 3, encoding 0), whose codes are
+        /// in the private range starting at <see cref="FirstCharIndex"/> and not Unicode.
+        /// </summary>
+        public bool IsSymbolic { get; }
+
+        /// <summary>Whether every glyph advances by the same width (the <c>post</c> table's <c>isFixedPitch</c>, the authoritative signal, unlike PANOSE).</summary>
+        public bool IsFixedPitch { get; }
+
+        /// <summary>Whether the font's <c>OS/2</c> family class is one of the serif classes, 1 to 7. A font that says nothing, or is a sans serif, a script or a symbol font, reports <see langword="false"/>.</summary>
+        public bool HasSerifs { get; }
+
+        /// <summary>Whether the <c>OS/2</c> selection flags mark the face italic. This is the font's own claim: <see cref="Typeface.IsItalic"/> is the answer to use for choosing a face.</summary>
+        public bool IsItalicStyle { get; }
+
+        /// <summary>The lowest character code the font's <c>OS/2</c> table says it covers; a symbol font's codes are offset by its high byte.</summary>
+        public int FirstCharIndex { get; }
     }
 }

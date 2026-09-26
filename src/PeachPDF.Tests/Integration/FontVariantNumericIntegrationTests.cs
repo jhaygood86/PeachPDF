@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.Integration
             // well-designed font's oldstyle figures aren't guaranteed to differ in advance width from
             // the default ones.
             var box = await FindWordsBox("<b id=\"w\" style=\"font-variant-numeric:oldstyle-nums\">0123456789</b>");
-            var descriptor = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Descriptor;
+            var descriptor = ((PeachPDF.Adapters.FontAdapter)box.ActualFont).Font.Typeface.Face.Descriptor;
 
             var defaultShaped = descriptor.Shape("0123456789", ShapeSettings.Default);
             var oldstyleShaped = descriptor.Shape("0123456789", box.ActualTextShapingFeatures);

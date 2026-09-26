@@ -1,5 +1,6 @@
 ﻿using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.OpenType;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Unicode;
 using System;
@@ -27,7 +28,7 @@ namespace PeachDrawing.Text
             Face = face;
         }
 
-        /// <summary>The engine's own view of this face; PeachPDF's PDF writer reads what it needs through it for now.</summary>
+        /// <summary>The engine's own view of this face.</summary>
         internal LoadedTypeface Face { get; }
 
         /// <summary>The family name the font file declares, in English, such as <c>Arial</c>.</summary>
@@ -35,6 +36,19 @@ namespace PeachDrawing.Text
 
         /// <summary>The style name the font file declares, in English, such as <c>Bold Italic</c>.</summary>
         public string StyleName => Face.StyleName;
+
+        /// <summary>
+        /// The full name of the face as its font file declares it, such as <c>Arial Bold Italic</c>: the family and the style
+        /// together. A font that does not declare one gets a name made from its family name.
+        /// </summary>
+        public string FullName => Face.DisplayName;
+
+        /// <summary>
+        /// A checksum of the font data the face reads. Two typefaces that read the same data have the same checksum, so it can
+        /// key a cache of things made from a face, such as an embedded copy of it.
+        /// </summary>
+        /// <remarks>It is a plain, non-cryptographic checksum: fit for a cache key, and not for anything that has to withstand a font made to collide.</remarks>
+        public ulong ContentHash => Face.FontSource.Key;
 
         /// <summary>Whether the font file declares the face bold (in its OS/2 table).</summary>
         public bool IsBold => Face.IsBold;
@@ -126,6 +140,18 @@ namespace PeachDrawing.Text
         /// and not from outlines. Almost every font has none.
         /// </summary>
         public bool HasBitmapGlyphs => Face.Descriptor.HasBitmapGlyphs;
+
+        /// <summary>
+        /// Whether the face is made for setting mathematics, which is to say it has a <c>MATH</c> table.
+        /// </summary>
+        public bool HasMathData => Face.Descriptor.HasMathTable;
+
+        /// <summary>
+        /// The <c>MATH</c> table of a face that has one: the constants, per-glyph information and stretchy-glyph variants a
+        /// math layout algorithm reads.
+        /// </summary>
+        /// <value>The table, or <see langword="null"/> when <see cref="HasMathData"/> is <see langword="false"/>.</value>
+        public MathTable? MathData => Face.Descriptor.MathTable;
 
         /// <summary>
         /// The picture of a glyph from the strike best suited to a font size.

@@ -10,16 +10,15 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.OpenType;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachDrawing.Text.Internal.Text;
 using System;
 
 namespace PeachPDF.Adapters
@@ -196,7 +195,9 @@ namespace PeachPDF.Adapters
                 ? (position.SizeScale, position.BaselineShift)
                 : null;
 
-        public override string FaceKey => Font.GlyphTypeface.Key;
+        public override string FaceKey => _faceKey ??= Font.Typeface.ContentHash.ToString("x") + "/" + (int)Font.Synthesis;
+
+        private string? _faceKey;
 
         // ---- CPAL color-palette query surface --------------------------------------------------
         // Backed by the font's OpenTypeDescriptor.ColorPalette (the CPAL table). Null for a non-color font,
@@ -253,11 +254,11 @@ namespace PeachPDF.Adapters
         }
 
         // ---- MATH table query surface -----------------------------------------------------------
-        // Backed by the font's OpenTypeDescriptor's real MATH table parsing (see MathTable.cs).
+        // Backed by the typeface's MATH table (Typeface.MathData).
 
-        public override bool HasMathTable => Font.Descriptor?.HasMathTable ?? false;
+        public override bool HasMathTable => Font.Typeface.HasMathData;
 
-        public override MathTable? MathTable => Font.Descriptor?.MathTable;
+        public override MathTable? MathTable => Font.Typeface.MathData;
 
         public override double FontUnitsPerEm => Font.Typeface.Metrics.UnitsPerEm;
 

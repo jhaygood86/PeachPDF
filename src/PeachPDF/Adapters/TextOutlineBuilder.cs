@@ -1,10 +1,8 @@
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachDrawing.Text.Internal.Text;
 
 namespace PeachPDF.Adapters
 {

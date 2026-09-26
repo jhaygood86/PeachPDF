@@ -51,12 +51,10 @@
 	</ItemGroup>
 	<ItemGroup>
 		<!--
-			TEMPORARY BRIDGE. The public API of this library is still being designed; until it exists, PeachPDF
-			reads the engine's internals directly. Each step of the port removes uses of this bridge, and the
-			step that finishes it deletes the PeachPDF and PeachPDF.Tests entries: the day PeachPDF only uses
-			public API, the compiler enforces it.
+			PeachPDF reads only this library's public API, and the compiler enforces it: there is no InternalsVisibleTo
+			for PeachPDF. What remains is a TEMPORARY bridge for the engine's own tests, which still live in
+			PeachPDF.Tests. It goes when they move to a test project of this library.
 		-->
-		<InternalsVisibleTo Include="PeachPDF" />
 		<InternalsVisibleTo Include="PeachPDF.Tests" />
 	</ItemGroup>
 	<ItemGroup>

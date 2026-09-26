@@ -27,7 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachDrawing.Text.Internal.Fonts.OpenType;
+using PeachDrawing.Text;
 using System;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
@@ -99,30 +99,31 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// </summary>
     internal sealed class PdfFontDescriptor : PdfDictionary
     {
-        internal PdfFontDescriptor(PdfDocument document, OpenTypeDescriptor descriptor)
+        internal PdfFontDescriptor(PdfDocument document, Typeface typeface)
             : base(document)
         {
-            _descriptor = descriptor;
+            _typeface = typeface;
+            var metrics = typeface.Metrics;
             Elements.SetName(Keys.Type, "/FontDescriptor");
 
-            Elements.SetInteger(Keys.Ascent, _descriptor.DesignUnitsToPdf(_descriptor.Ascender));
-            Elements.SetInteger(Keys.CapHeight, _descriptor.DesignUnitsToPdf(_descriptor.CapHeight));
-            Elements.SetInteger(Keys.Descent, _descriptor.DesignUnitsToPdf(_descriptor.Descender));
-            Elements.SetInteger(Keys.Flags, (int)FlagsFromDescriptor(_descriptor));
+            Elements.SetInteger(Keys.Ascent, PdfTypefaceMetrics.DesignUnitsToPdf(typeface, metrics.CellAscent));
+            Elements.SetInteger(Keys.CapHeight, PdfTypefaceMetrics.DesignUnitsToPdf(typeface, metrics.CapHeight));
+            Elements.SetInteger(Keys.Descent, PdfTypefaceMetrics.DesignUnitsToPdf(typeface, metrics.CellDescent));
+            Elements.SetInteger(Keys.Flags, (int)FlagsFromMetrics(metrics));
             Elements.SetRectangle(Keys.FontBBox, new PdfRectangle(
-              _descriptor.DesignUnitsToPdf(_descriptor.XMin),
-              _descriptor.DesignUnitsToPdf(_descriptor.YMin),
-              _descriptor.DesignUnitsToPdf(_descriptor.XMax),
-              _descriptor.DesignUnitsToPdf(_descriptor.YMax)));
-            // not here, done in PdfFont later... 
-            //Elements.SetName(Keys.FontName, "abc"); //descriptor.FontName);
-            Elements.SetReal(Keys.ItalicAngle, _descriptor.ItalicAngle);
-            Elements.SetInteger(Keys.StemV, _descriptor.StemV);
-            Elements.SetInteger(Keys.XHeight, _descriptor.DesignUnitsToPdf(_descriptor.XHeight));
+              PdfTypefaceMetrics.DesignUnitsToPdf(typeface, metrics.XMin),
+              PdfTypefaceMetrics.DesignUnitsToPdf(typeface, metrics.YMin),
+              PdfTypefaceMetrics.DesignUnitsToPdf(typeface, metrics.XMax),
+              PdfTypefaceMetrics.DesignUnitsToPdf(typeface, metrics.YMax)));
+            // The font name is set by the PDF font that owns this descriptor.
+            Elements.SetReal(Keys.ItalicAngle, metrics.ItalicAngle);
+            // The value doesn't matter to a reader that draws from the embedded font, so it is always 0.
+            Elements.SetInteger(Keys.StemV, 0);
+            Elements.SetInteger(Keys.XHeight, PdfTypefaceMetrics.DesignUnitsToPdf(typeface, metrics.XHeight));
         }
 
-        //HACK OpenTypeDescriptor descriptor
-        internal OpenTypeDescriptor _descriptor;
+        /// <summary>The typeface this descriptor describes and embeds.</summary>
+        internal readonly Typeface _typeface;
 
         /// <summary>
         /// Gets or sets the name of the font.
@@ -142,27 +143,24 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
         bool _isSymbolFont;
 
-        // HACK FlagsFromDescriptor(OpenTypeDescriptor descriptor)
-        PdfFontDescriptorFlags FlagsFromDescriptor(OpenTypeDescriptor descriptor)
+                PdfFontDescriptorFlags FlagsFromMetrics(TypefaceMetrics metrics)
         {
             PdfFontDescriptorFlags flags = 0;
-            _isSymbolFont = descriptor.FontFace.cmap.symbol;
-            flags |= descriptor.FontFace.cmap.symbol ? PdfFontDescriptorFlags.Symbolic : PdfFontDescriptorFlags.Nonsymbolic;
+            _isSymbolFont = metrics.IsSymbolic;
+            flags |= metrics.IsSymbolic ? PdfFontDescriptorFlags.Symbolic : PdfFontDescriptorFlags.Nonsymbolic;
 
             // The 'post' table's isFixedPitch is the authoritative OpenType signal for a monospaced
             // font (unlike PANOSE, which is advisory) - nonzero means every glyph advances by the
             // same width.
-            if (descriptor.FontFace.post.isFixedPitch != 0)
+            if (metrics.IsFixedPitch)
                 flags |= PdfFontDescriptorFlags.FixedPitch;
 
-            // 'OS/2' sFamilyClassID's high byte: 1-7 are the serif classes (Oldstyle/Transitional/
-            // Modern/Clarendon/Slab/(6 reserved)/Freeform Serifs), 8 is Sans Serif, the rest (9
-            // Ornamentals, 10 Scripts, 12 Symbolic) are neither - so only 1-7 map to PDF's Serif flag.
-            var familyClassId = (descriptor.FontFace.os2.sFamilyClass >> 8) & 0xFF;
-            if (familyClassId is >= 1 and <= 7)
+            // Only the 'OS/2' serif family classes (1-7) map to PDF's Serif flag; Sans Serif, Ornamentals,
+            // Scripts and Symbolic are none of them.
+            if (metrics.HasSerifs)
                 flags |= PdfFontDescriptorFlags.Serif;
 
-            if (descriptor.FontFace.os2.IsItalic)
+            if (metrics.IsItalicStyle)
                 flags |= PdfFontDescriptorFlags.Italic;
 
             return flags;

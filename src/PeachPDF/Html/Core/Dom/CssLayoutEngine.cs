@@ -23,7 +23,6 @@ using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Buffers;
 using System.Collections.Generic;

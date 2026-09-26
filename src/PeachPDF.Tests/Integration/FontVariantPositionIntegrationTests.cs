@@ -74,7 +74,7 @@ namespace PeachPDF.Tests.Integration
             // Glyph indices, not measured width: a well-designed font's superscript figures aren't
             // guaranteed to differ in advance width from the default ones.
             var box = await FindWordsBox(SupsFontBase64, "<b id=\"w\" style=\"font-variant-position:super\">42</b>");
-            var descriptor = ((FontAdapter)box.ActualFont).Font.Descriptor;
+            var descriptor = ((FontAdapter)box.ActualFont).Font.Typeface.Face.Descriptor;
 
             Assert.NotNull(descriptor);
 
@@ -88,7 +88,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Sub_OnAFontWithSubs_SubstitutesRealGlyphs()
         {
             var box = await FindWordsBox(SupsFontBase64, "<b id=\"w\" style=\"font-variant-position:sub\">42</b>");
-            var descriptor = ((FontAdapter)box.ActualFont).Font.Descriptor;
+            var descriptor = ((FontAdapter)box.ActualFont).Font.Typeface.Face.Descriptor;
 
             Assert.NotNull(descriptor);
 
