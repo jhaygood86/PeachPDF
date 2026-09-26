@@ -65,8 +65,8 @@ namespace PeachDrawing.Text
 
         /// <summary>
         /// Whether the face is one that a renderer draws colour glyphs from: it has <c>COLR</c> and <c>CPAL</c> tables over TrueType
-        /// outlines, or it draws its glyphs as pictures (<see cref="HasBitmapGlyphs"/>). A colour font with CFF outlines reports
-        /// <see langword="false"/>.
+        /// outlines, it draws its glyphs as pictures (<see cref="HasBitmapGlyphs"/>), or it has SVG documents for glyphs
+        /// (<see cref="HasSvgGlyphs"/>). A colour font with CFF outlines and only <c>COLR</c> reports <see langword="false"/>.
         /// </summary>
         public bool HasColorGlyphs => Face.Descriptor.IsColorFont;
 
@@ -142,6 +142,29 @@ namespace PeachDrawing.Text
         /// and not from outlines. Almost every font has none.
         /// </summary>
         public bool HasBitmapGlyphs => Face.Descriptor.HasBitmapGlyphs;
+
+        /// <summary>
+        /// Whether the face has SVG documents that draw glyphs (the <c>SVG </c> table). Almost every font has none.
+        /// </summary>
+        public bool HasSvgGlyphs => Face.Descriptor.HasSvgGlyphs;
+
+        /// <summary>
+        /// The SVG document that draws a glyph.
+        /// </summary>
+        /// <param name="glyph">The glyph.</param>
+        /// <param name="svg">The document and the element in it.</param>
+        /// <returns><see langword="false"/> when the glyph has no document: it is drawn some other way, the face has no <c>SVG </c> table, or the table or the document is damaged (or a compressed document is too large).</returns>
+        public bool TryGetSvgGlyph(ushort glyph, out SvgGlyph svg)
+        {
+            if (Face.Descriptor.TryGetSvgGlyph(glyph, out var document, out int first, out int last))
+            {
+                svg = new SvgGlyph(document, "glyph" + glyph.ToString(System.Globalization.CultureInfo.InvariantCulture), first, last, Metrics.UnitsPerEm);
+                return true;
+            }
+
+            svg = null!;
+            return false;
+        }
 
         /// <summary>
         /// Whether the face is made for setting mathematics, which is to say it has a <c>MATH</c> table.

@@ -269,6 +269,20 @@ PeachDrawing.Text.Outlines.PaintSweepGradient : sealed class
 PeachDrawing.Text.Outlines.PaintTransform : sealed class
   property Affine2x3 Affine { get; }
   property ColorPaint Paint { get; }
+PeachDrawing.Text.Outlines.SvgGlyph : sealed class
+  ctor(String Document, String ElementId, Int32 FirstGlyph, Int32 LastGlyph, Int32 UnitsPerEm)
+  method Boolean Equals(Object obj)
+  method Boolean Equals(SvgGlyph other)
+  method Int32 GetHashCode()
+  method String ToString()
+  method SvgGlyph <Clone>$()
+  method Void Deconstruct(out String Document, out String ElementId, out Int32 FirstGlyph, out Int32 LastGlyph, out Int32 UnitsPerEm)
+  property Boolean CoversOneGlyph { get; }
+  property Int32 FirstGlyph { get; init; }
+  property Int32 LastGlyph { get; init; }
+  property Int32 UnitsPerEm { get; init; }
+  property String Document { get; init; }
+  property String ElementId { get; init; }
 PeachDrawing.Text.RuneInterval : struct
   ctor(Rune Start, Rune End)
   method Boolean Contains(Rune rune)
@@ -403,6 +417,7 @@ PeachDrawing.Text.Typeface : sealed class
   method Boolean TryGetColorLayers(UInt16 glyph, out IReadOnlyList<ColorLayer> layers)
   method Boolean TryGetOutline(UInt16 glyph, out GlyphOutline outline)
   method Boolean TryGetScriptPosition(ScriptPlacement placement, out ScriptPosition position)
+  method Boolean TryGetSvgGlyph(UInt16 glyph, out SvgGlyph svg)
   method Boolean TryMapRune(Rune rune, out UInt16 glyph)
   method ColorPaint GetColorLayerPaint(Int32 index)
   method ColorPaint GetColorPaint(UInt16 glyph)
@@ -415,6 +430,7 @@ PeachDrawing.Text.Typeface : sealed class
   property Boolean HasBitmapGlyphs { get; }
   property Boolean HasColorGlyphs { get; }
   property Boolean HasMathData { get; }
+  property Boolean HasSvgGlyphs { get; }
   property Boolean HasVerticalMetrics { get; }
   property Boolean HasVerticalOrigin { get; }
   property Boolean IsBold { get; }

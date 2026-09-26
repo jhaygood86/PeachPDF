@@ -221,6 +221,13 @@ namespace PeachPDF.Tests.TestSupport
         /// </summary>
         internal static string VariableTest => Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf");
 
+        /// <summary>
+        /// A synthetic font with an <c>SVG </c> table (see SvgTest.LICENSE.txt, made by generate_svg_glyph_fixture.py): <c>A</c> an uncompressed
+        /// document that uses palette variables, <c>B</c> and <c>C</c> one compressed document (<c>B</c> fills with <c>context-fill</c>),
+        /// <c>D</c> a single-glyph document with no element for it and a byte order mark, <c>E</c> a gzip bomb.
+        /// </summary>
+        internal static string SvgTest => Path.Combine(AppContext.BaseDirectory, "SvgTest.ttf");
+
         /// <summary><see cref="VariableTest"/> without its <c>HVAR</c> table, so advances come from the phantom points of <c>gvar</c>.</summary>
         internal static string VariableTestNoHvar => Path.Combine(AppContext.BaseDirectory, "VariableTestNoHvar.ttf");
 

@@ -123,6 +123,7 @@ The `Unicode` namespace gains `ArabicJoining` (`TypeOf`, `Resolve`) with `Arabic
 | `DefaultIgnorables` | The `Default_Ignorable_Code_Point` property | The UCD property name |
 | `Hyphenator` (`FindBreakPoints`) | Liang-pattern hyphenation | TeX hyphenation; `FindBreakPoints` is ours |
 | `Emoji` (`Resolve`, `ResolveAt`, `IsPresentationParticipant`, `IsPresentationSelector`, `SelectorFor`), `EmojiMode`, `EmojiPresentation` | Choice between text and emoji presentation | UTS #51 and CSS Fonts 4 `font-variant-emoji` (`normal`, `text`, `emoji`, `unicode`) |
+| `Typeface.HasSvgGlyphs`, `TryGetSvgGlyph`, `SvgGlyph` | The SVG document that draws a glyph in an OpenType SVG font | the OpenType `SVG ` table (document list, `glyph<N>` element ids); the type carries the document and the element to draw, nothing renders it |
 
 Every name above was taken from the specification it implements, and the member sets follow those specifications rather
 than any library's. The author did not consult SixLabors.Fonts while choosing them, and so could not vouch that no name

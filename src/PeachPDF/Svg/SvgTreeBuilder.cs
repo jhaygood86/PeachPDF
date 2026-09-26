@@ -378,7 +378,10 @@ namespace PeachPDF.Svg
             root = null!;
             try
             {
-                var xdoc = System.Xml.Linq.XDocument.Parse(text);
+                // A document reached from another (an <image> with a data: URI) is as untrusted as the first: no DTD, so no entity expansion.
+                var settings = new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit, XmlResolver = null };
+                using var reader = System.Xml.XmlReader.Create(new System.IO.StringReader(text), settings);
+                var xdoc = System.Xml.Linq.XDocument.Load(reader);
                 if (xdoc.Root is null)
                     return false;
                 root = xdoc.Root;

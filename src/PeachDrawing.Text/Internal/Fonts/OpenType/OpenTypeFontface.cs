@@ -149,11 +149,14 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// <summary>The bitmap colour glyphs (CBDT/CBLC or sbix), or null when the font has none.</summary>
         internal BitmapGlyphSource? bitmap;
 
+        /// <summary>The SVG glyph documents (the <c>SVG </c> table), or null when the font has none.</summary>
+        internal SvgGlyphSource? svg;
+
         /// <summary>
         /// True when this font draws colour glyphs: COLR + CPAL layers over glyf outlines, or CBDT/CBLC/sbix
         /// bitmaps. (A COLR font over CFF outlines is not one this renderer can paint, so it is not counted.)
         /// </summary>
-        internal bool IsColorFont => (colr != null && cpal != null && glyf != null) || bitmap != null;
+        internal bool IsColorFont => (colr != null && cpal != null && glyf != null) || bitmap != null || svg != null;
         internal GlyphMathTable math = null!; // optional - only dedicated math fonts carry one
         internal VerticalHeaderTable vhea = null!; // optional - absent on purely-horizontal fonts
         internal VerticalMetricsTable vmtx = null!; // optional - absent on purely-horizontal fonts
@@ -331,6 +334,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 // Optional bitmap colour glyphs (CBDT/CBLC, sbix): one picture per glyph and size.
                 bitmap = BitmapGlyphSource.TryCreate(this, maxp?.numGlyphs ?? 0);
 
+                // Optional SVG glyph documents (the SVG table).
+                svg = SvgGlyphSource.TryCreate(this);
+
                 // Optional glyph-definition/positioning tables (GDEF/GPOS). Absent on many fonts -
                 // no kerning/mark-attachment/mark-filtering data at all in that case.
                 if (TableDictionary.ContainsKey(TableTagNames.GDEF))
@@ -414,12 +420,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             // a valid contour. Embedding the real layer closure would not help: no Tj references those
             // layer CIDs, and their outlines are already emitted directly as PDF vector paths.
             HashSet<int>? syntheticSelectionGlyphs = null;
-            if (colr != null || bitmap != null)
+            if (colr != null || bitmap != null || svg != null)
             {
                 foreach (int glyphId in glyphs.Keys)
                 {
                     // A bitmap colour glyph (CBDT/sbix) has no outline at all: same treatment as an empty COLR base.
-                    if (((colr?.HasColorGlyph(glyphId) ?? false) || (bitmap?.HasGlyph(glyphId) ?? false)) && glyf.HasNoContours(glyphId))
+                    if (((colr?.HasColorGlyph(glyphId) ?? false) || (bitmap?.HasGlyph(glyphId) ?? false) || (svg?.HasGlyph(glyphId) ?? false)) && glyf.HasNoContours(glyphId))
                         (syntheticSelectionGlyphs ??= []).Add(glyphId);
                 }
             }

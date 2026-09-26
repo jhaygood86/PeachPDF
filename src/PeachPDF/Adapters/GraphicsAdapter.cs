@@ -90,7 +90,14 @@ namespace PeachPDF.Adapters
             _releaseGraphics = releaseGraphics;
 
             PixelsPerPoint = pixelsPerPoint;
+            _previousSvgGlyphPainter = _g.SvgGlyphPainter;
+            _g.SvgGlyphPainter = new SvgGlyphPainter(this);
         }
+
+        private readonly PeachPDF.PdfSharpCore.Drawing.Pdf.ISvgGlyphPainter? _previousSvgGlyphPainter;
+
+        /// <summary>The adapter this graphics draws for, which resolves the fonts and images of what is drawn.</summary>
+        internal RAdapter Adapter => _adapter;
 
         public override void PopClip()
         {
@@ -556,6 +563,10 @@ namespace PeachPDF.Adapters
         {
             _probe?.Dispose();
             _probe = null;
+
+            // Graphics wrapped one after another over one XGraphics: what draws SVG glyphs goes back to the adapter that had it.
+            if (_g.SvgGlyphPainter is SvgGlyphPainter own && ReferenceEquals(own.Host, this))
+                _g.SvgGlyphPainter = _previousSvgGlyphPainter;
 
             if (_releaseGraphics)
                 _g.Dispose();
