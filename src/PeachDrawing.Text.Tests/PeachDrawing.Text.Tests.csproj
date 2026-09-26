@@ -87,6 +87,15 @@
     <None Include="..\..\assets\fonts\RecursiveSubset.ttf" Link="RecursiveSubset.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\VariableTest.ttf" Link="VariableTest.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\VariableTestNoHvar.ttf" Link="VariableTestNoHvar.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\VariableTest.golden.json" Link="VariableTest.golden.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <!--

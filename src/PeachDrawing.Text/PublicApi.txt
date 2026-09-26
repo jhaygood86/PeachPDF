@@ -5,6 +5,21 @@ PeachDrawing.Text.AddOptions : sealed class
   property Nullable<Int32> Weight { get; init; }
   property Nullable<Int32> Width { get; init; }
   property String FamilyName { get; init; }
+PeachDrawing.Text.AxisSetting : struct
+  ctor(String Tag, Double Value)
+  method Boolean Equals(AxisSetting other)
+  method Boolean Equals(Object obj)
+  method Int32 GetHashCode()
+  method String ToString()
+  method Void Deconstruct(out String Tag, out Double Value)
+  property Double Value { get; init; }
+  property String Tag { get; init; }
+PeachDrawing.Text.AxisTags : static class
+  field const String Italic
+  field const String OpticalSize
+  field const String Slant
+  field const String Weight
+  field const String Width
 PeachDrawing.Text.Export.ExportedFont : sealed class
   property Boolean HasCffOutlines { get; }
   property Boolean IsSubset { get; }
@@ -31,6 +46,9 @@ PeachDrawing.Text.GenericFamily : enum Int32
   SansSerif = 1
   Serif = 0
   SystemUi = 5
+PeachDrawing.Text.NamedVariation : sealed class
+  property IReadOnlyList<AxisSetting> Settings { get; }
+  property String Name { get; }
 PeachDrawing.Text.OpenType.MathConstantsTable : sealed class
   property Double AccentBaseHeight { get; }
   property Double AxisHeight { get; }
@@ -393,6 +411,7 @@ PeachDrawing.Text.Typeface : sealed class
   method Int32 GetVerticalAdvance(UInt16 glyph)
   method Point GetVerticalOrigin(UInt16 glyph)
   method String ToString()
+  method Typeface WithAxes(IEnumerable<AxisSetting> settings)
   property Boolean HasBitmapGlyphs { get; }
   property Boolean HasColorGlyphs { get; }
   property Boolean HasMathData { get; }
@@ -400,7 +419,11 @@ PeachDrawing.Text.Typeface : sealed class
   property Boolean HasVerticalOrigin { get; }
   property Boolean IsBold { get; }
   property Boolean IsItalic { get; }
+  property Boolean IsVariable { get; }
   property ColorPalette ColorPalette { get; }
+  property IReadOnlyList<AxisSetting> AxisSettings { get; }
+  property IReadOnlyList<NamedVariation> NamedVariations { get; }
+  property IReadOnlyList<VariationAxis> Axes { get; }
   property MathTable MathData { get; }
   property String FamilyName { get; }
   property String FullName { get; }
@@ -637,3 +660,10 @@ PeachDrawing.Text.Unicode.WordBreakMode : enum Int32
   BreakAll = 1
   KeepAll = 2
   Normal = 0
+PeachDrawing.Text.VariationAxis : sealed class
+  property Boolean IsHidden { get; }
+  property Double Default { get; }
+  property Double Maximum { get; }
+  property Double Minimum { get; }
+  property String Name { get; }
+  property String Tag { get; }

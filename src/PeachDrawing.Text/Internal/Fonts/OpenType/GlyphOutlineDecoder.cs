@@ -13,6 +13,7 @@
 //
 #endregion
 
+using PeachDrawing.Text.Internal.Fonts.OpenType.Variations;
 using PeachDrawing.Text.Outlines;
 using System.Collections.Generic;
 
@@ -46,7 +47,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// empty <paramref name="outline"/>) for an absent glyph subsystem, an out-of-range index,
         /// or an empty glyph (e.g. the space glyph).
         /// </summary>
-        public static bool TryGetGlyphOutline(OpenTypeFontface face, int glyphIndex, out GlyphOutline outline)
+        public static bool TryGetGlyphOutline(OpenTypeFontface face, int glyphIndex, out GlyphOutline outline, VariationCoordinates? variation = null)
         {
             outline = new GlyphOutline();
 
@@ -62,12 +63,67 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             // recursion step, so one whole (possibly multi-component composite) glyph read is atomic.
             lock (face.SyncRoot)
             {
-                DecodeInto(face, glyphIndex, outline, 0);
+                DecodeInto(face, glyphIndex, outline, 0, variation);
             }
             return !outline.IsEmpty;
         }
 
-        private static void DecodeInto(OpenTypeFontface face, int glyphIndex, GlyphOutline outline, int depth)
+        /// <summary>
+        /// The number of points a glyph has as <c>gvar</c> counts them, phantom points included: a simple glyph's outline points, a
+        /// composite glyph's components, and four more.
+        /// </summary>
+        public static int GetVariationPointCount(OpenTypeFontface face, int glyphIndex)
+        {
+            if (face?.glyf is null || face.loca?.LocaTable is null)
+                return 4;
+
+            int[] loca = face.loca.LocaTable;
+            if (glyphIndex < 0 || glyphIndex + 1 >= loca.Length)
+                return 4;
+
+            lock (face.SyncRoot)
+            {
+                int start = face.glyf.GetOffset(glyphIndex);
+                int end = face.glyf.GetOffset(glyphIndex + 1);
+                if (start >= end)
+                    return 4;
+
+                face.Position = start;
+                int numberOfContours = face.ReadShort();
+                face.SeekOffset(8);
+                if (numberOfContours > 0)
+                {
+                    int last = 0;
+                    for (int i = 0; i < numberOfContours; i++)
+                        last = face.ReadUShort();
+                    return last + 1 + 4;
+                }
+
+                if (numberOfContours == 0)
+                    return 4;
+
+                int components = 0;
+                while (true)
+                {
+                    int flags = face.ReadUShort();
+                    face.ReadUShort();
+                    face.SeekOffset((flags & Arg1And2AreWords) != 0 ? 4 : 2);
+                    if ((flags & WeHaveAScale) != 0)
+                        face.SeekOffset(2);
+                    else if ((flags & WeHaveAnXAndYScale) != 0)
+                        face.SeekOffset(4);
+                    else if ((flags & WeHaveATwoByTwo) != 0)
+                        face.SeekOffset(8);
+                    components++;
+                    if ((flags & MoreComponents) == 0)
+                        break;
+                }
+
+                return components + 4;
+            }
+        }
+
+        private static void DecodeInto(OpenTypeFontface face, int glyphIndex, GlyphOutline outline, int depth, VariationCoordinates? variation)
         {
             if (depth > MaxCompositeDepth)
                 return;
@@ -85,13 +141,17 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             int numberOfContours = face.ReadShort();
             face.SeekOffset(8); // skip xMin/yMin/xMax/yMax
 
+            // Only a location away from the defaults changes anything, and only a font with gvar has anything to change it with.
+            var gvar = variation is { IsDefault: false } ? face.Variations?.Gvar : null;
+
             if (numberOfContours >= 0)
-                DecodeSimple(face, numberOfContours, outline);
+                DecodeSimple(face, numberOfContours, outline, glyphIndex, gvar, variation);
             else
-                DecodeComposite(face, outline, depth);
+                DecodeComposite(face, outline, depth, glyphIndex, gvar, variation);
         }
 
-        private static void DecodeSimple(OpenTypeFontface face, int numberOfContours, GlyphOutline outline)
+        private static void DecodeSimple(OpenTypeFontface face, int numberOfContours, GlyphOutline outline, int glyphIndex,
+            GvarTable? gvar, VariationCoordinates? variation)
         {
             if (numberOfContours == 0)
                 return;
@@ -157,6 +217,28 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 ys[i] = y;
             }
 
+            // A variable font moves the points: the deltas gvar gives for this location, added to the coordinates as read.
+            double[]? moveX = null, moveY = null;
+            if (gvar is not null)
+            {
+                int total = numPoints + 4;
+                var originalX = new double[total];
+                var originalY = new double[total];
+                for (int i = 0; i < numPoints; i++)
+                {
+                    originalX[i] = xs[i];
+                    originalY[i] = ys[i];
+                }
+
+                var dx = new double[total];
+                var dy = new double[total];
+                if (gvar.TryAddDeltas(glyphIndex, variation!.Normalized, total, originalX, originalY, endPtsOfContours, dx, dy))
+                {
+                    moveX = dx;
+                    moveY = dy;
+                }
+            }
+
             // Split into contours and convert each to segments. numPoints was sized from the LAST
             // entry of endPtsOfContours; a malformed or corrupted glyph whose entries aren't
             // monotonically increasing could otherwise walk pointIndex past xs/ys's bounds here, so
@@ -168,7 +250,10 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 contourPoints.Clear();
                 int contourEnd = endPtsOfContours[c];
                 for (; pointIndex <= contourEnd && pointIndex < numPoints; pointIndex++)
-                    contourPoints.Add(new RawPoint(xs[pointIndex], ys[pointIndex], (flags[pointIndex] & OnCurvePoint) != 0));
+                    contourPoints.Add(new RawPoint(
+                        xs[pointIndex] + (moveX is null ? 0 : moveX[pointIndex]),
+                        ys[pointIndex] + (moveY is null ? 0 : moveY[pointIndex]),
+                        (flags[pointIndex] & OnCurvePoint) != 0));
 
                 OutlineContour? contour = BuildContour(contourPoints);
                 if (contour is not null)
@@ -176,8 +261,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
         }
 
-        private static void DecodeComposite(OpenTypeFontface face, GlyphOutline outline, int depth)
+        private static void DecodeComposite(OpenTypeFontface face, GlyphOutline outline, int depth, int glyphIndex,
+            GvarTable? gvar, VariationCoordinates? variation)
         {
+            // Read every component before decoding any: the decoding moves the shared cursor, and a variable font needs all the
+            // offsets to apply its deltas (gvar has one point for the offset of each component).
+            var components = new List<(int Glyph, double A, double B, double C, double D, double Dx, double Dy, bool IsOffset)>();
             while (true)
             {
                 int flags = face.ReadUShort();
@@ -221,17 +310,41 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     dy = arg2;
                 }
 
-                // Decode the referenced component, transform it, and append its contours.
-                int resumePosition = face.Position;
-                var child = new GlyphOutline();
-                DecodeInto(face, componentGlyph, child, depth + 1);
-                face.Position = resumePosition;
-
-                foreach (OutlineContour contour in child.ContourList)
-                    outline.ContourList.Add(TransformContour(contour, a, b, cc, d, dx, dy));
+                components.Add((componentGlyph, a, b, cc, d, dx, dy, (flags & ArgsAreXyValues) != 0));
 
                 if ((flags & MoreComponents) == 0)
                     break;
+            }
+
+            double[]? moveX = null, moveY = null;
+            if (gvar is not null)
+            {
+                int total = components.Count + 4;
+                var dx = new double[total];
+                var dy = new double[total];
+                if (gvar.TryAddDeltas(glyphIndex, variation!.Normalized, total, null, null, null, dx, dy))
+                {
+                    moveX = dx;
+                    moveY = dy;
+                }
+            }
+
+            // Decode the referenced components, transform them, and append their contours. Decoding moves the shared cursor,
+            // which nothing after this point needs.
+            for (int i = 0; i < components.Count; i++)
+            {
+                var (componentGlyph, a, b, cc, d, dx, dy, isOffset) = components[i];
+                if (moveX is not null && isOffset)
+                {
+                    dx += moveX[i];
+                    dy += moveY![i];
+                }
+
+                var child = new GlyphOutline();
+                DecodeInto(face, componentGlyph, child, depth + 1, variation);
+
+                foreach (OutlineContour contour in child.ContourList)
+                    outline.ContourList.Add(TransformContour(contour, a, b, cc, d, dx, dy));
             }
         }
 

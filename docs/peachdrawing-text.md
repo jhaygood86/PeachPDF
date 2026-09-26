@@ -23,6 +23,7 @@ dotnet add package PeachDrawing.Text
   Universal Shaping Engine for Devanagari, Bengali, Gujarati and Tamil, default-ignorable handling, and `cmap` format 14
   variation sequences.
 - **Outlines and colour:** glyph outlines for `glyf` and CFF, COLR v0 and v1 with CPAL, and CBDT/CBLC and sbix bitmaps.
+- **Variable fonts:** the axes of a font and reading it at a location (`Typeface.WithAxes`): TrueType outlines, advance widths and font-wide metrics follow the axes.
 - **Mathematics:** the `MATH` table: layout constants, per-glyph italics corrections and accent attachment, and the
   variants and assemblies of stretchy glyphs.
 - **Unicode:** the Unicode Line Breaking Algorithm (UAX #14) and the grapheme cluster, word and sentence boundaries
@@ -179,6 +180,38 @@ if (face.TryMapRune(new Rune('g'), out ushort glyph) && face.TryGetOutline(glyph
 - **Colour glyphs from pictures.** A font whose colour glyphs are bitmaps (`CBDT`/`CBLC` or `sbix`) reports
   `HasBitmapGlyphs`, and `TryGetBitmap` gives the picture of a glyph from the strike best suited to a size, with its bearings.
 
+## Variable fonts
+
+A variable font is one file that holds a whole design space: axes such as weight and width, and the outlines and metrics at every
+point in between. `Typeface.IsVariable` says whether a face is one, `Typeface.Axes` lists its axes (a `VariationAxis` with a tag, a
+range and a default; the tags the specification registers are in `AxisTags`), and `Typeface.NamedVariations` lists the named
+locations the font declares. `Typeface.WithAxes` returns the typeface at a location.
+
+```csharp
+if (face.IsVariable)
+{
+    Typeface bold = face.WithAxes([new AxisSetting(AxisTags.Weight, 700)]);
+    Typeface condensedBold = bold.WithAxes([new AxisSetting(AxisTags.Width, 80)]);   // builds on what bold has
+
+    ushort glyph = ...;
+    int advance = condensedBold.GetAdvance(glyph);                  // design units at that location
+    bool hasOutline = condensedBold.TryGetOutline(glyph, out GlyphOutline outline);
+}
+```
+
+- An axis you leave out keeps the value the typeface has, a tag the font has no axis for is ignored, and a value outside the axis's
+  range is clamped to it. A value is rounded to the nearest 1/64 of a unit, so values that close are one location. Asking for the
+  same location again gives an equal `Typeface`, and every axis at its default gives the font's own default typeface. A `NaN`
+  means the axis's default, axis tags are compared exactly (`wght`, not `WGHT`), and for a tag given twice the last one counts.
+- `IsBold`, `IsItalic` and the weight the family matching sees are the file's own, whatever the location is: a location changes how
+  the glyphs are drawn, not what the file declares.
+- Outlines (including composite glyphs), advance widths, the font-wide metrics of `Typeface.Metrics` and shaping advances follow the
+  location. Reading `TypefaceMetrics.XMin` to `YMax` (the font bounding box) and the vertical advances gives the default design's
+  values, `GPOS` kerning and mark positions and `GSUB` feature variations are not applied, and a variable font with CFF2 outlines
+  has no outlines: what a location changes is what the `gvar`, `HVAR`, `MVAR` and `avar` tables of a font with TrueType outlines say.
+- `TypefaceExporter.ExportSubset` (see Embedding below) writes an instance as a static font, with the location's variations applied
+  to the outlines and metrics of the glyphs you ask for and no hinting instructions, because a PDF cannot embed a variable font.
+
 ## Mathematics: `PeachDrawing.Text.OpenType`
 
 A face made for setting mathematics has a `MATH` table, and `Typeface.HasMathData` says so. `Typeface.MathData` returns it as a
@@ -229,6 +262,8 @@ byte[] fontFile = subset.Data.ToArray();
 - A colour glyph that has no outline of its own (its shapes are its layers) is given a small outline, so a reader can still
   select the text it stands for.
 - A subset carries no name table, so it is meant to be embedded, not loaded back into a `FontSet`.
+- For a typeface from `WithAxes` the subset is a static font at that location: each glyph's points and component offsets have the
+  variations applied, the side bearings and advances of the glyphs are set to match, and the hinting tables are left out.
 - A font with CFF outlines is not cut down: it is returned whole, and `IsSubset` is `false`.
 - `keepCharacterMap` says whether the character map stays. A font whose text is encoded as glyph indices is smaller without it.
 

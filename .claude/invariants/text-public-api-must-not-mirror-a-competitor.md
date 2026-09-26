@@ -66,6 +66,14 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 | `MathGlyphInfoTable` (`GetItalicsCorrection`, `GetTopAccentAttachment`, `IsExtendedShape`) | Per-glyph information | `MathItalicsCorrectionInfo`, `MathTopAccentAttachment`, `ExtendedShapeCoverage` in the specification |
 | `MathVariantsTable` (`MinConnectorOverlap`, `GetVerticalConstruction`, `GetHorizontalConstruction`), `MathGlyphConstruction`, `MathGlyphVariant`, `MathGlyphAssembly`, `MathGlyphPart` | The stretchy glyph data | `MathVariants`, `MathGlyphConstruction`, `MathGlyphVariantRecord`, `GlyphAssembly`, `GlyphPart` in the specification |
 
+### `PeachDrawing.Text`: variable fonts
+
+| Public name | Role | Origin of the name and shape |
+|---|---|---|
+| `Typeface.IsVariable`, `Axes`, `NamedVariations`, `AxisSettings`, `WithAxes` | A variable font's design space, and a face read at a location | OpenType font variations (`fvar` axes and named instances); `WithAxes` is ours: the size-free `Typeface` stays immutable and a location returns another `Typeface` |
+| `VariationAxis` (`Tag`, `Name`, `Minimum`, `Default`, `Maximum`, `IsHidden`) | One axis | The fields of an `fvar` axis record |
+| `NamedVariation` (`Name`, `Settings`) | A named location | The `fvar` named instance |
+| `AxisSetting` (`Tag`, `Value`), `AxisTags` (`Weight`, `Width`, `Italic`, `Slant`, `OpticalSize`) | A value for one axis, and the registered axis tags | OpenType registered axis tags (`wght`, `wdth`, `ital`, `slnt`, `opsz`); CSS names them `font-weight`, `font-stretch`, `font-style`, `font-optical-sizing` |
 ### `PeachDrawing.Text.Unicode`: segmentation
 
 | Public name | Role | Origin of the name and shape |
