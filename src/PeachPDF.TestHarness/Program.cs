@@ -5143,6 +5143,7 @@ var lineBreakingHtml = $$"""
 <h2 style="font-size:11pt;margin:0 0 5pt">Latin text</h2>
 <div class="row">
   <div class="latin">A well-known hyphen breaks after itself; abc-123 stays whole, and !important, and/or and 23/Jan/Feb are never split around the punctuation.</div>
+  <div class="latin">Across elements the same rules apply: foo<b>bar</b> stays whole, <b>well-</b><i>known</i> breaks after its hyphen, <b>abc-</b><i>123</i> does not, and <i>and</i>/<b>or</b> is never split.</div>
   <div class="latin">Text in (parentheses) and “quotes” does not break inside them, and 3.14, $5.00 and 1,000 are single tokens.</div>
 </div>
 </body></html>
