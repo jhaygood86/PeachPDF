@@ -15,7 +15,11 @@ FreeType loads each glyph from a face of its own, because the `random` operator 
 state a glyph leaves for the next one (FreeType would otherwise make a glyph depend on the glyphs loaded before it), and the seed is set
 to zero, which makes it the font's own (initialRandomSeed): what the port does.
 
-The fonts are CC0 (they contain no third-party data; see HintingCff.LICENSE.txt). They are deterministic: a seed fixes every byte.
+The fonts are CC0 (they contain no third-party data; see HintingCff.LICENSE.txt). They are deterministic: a seed fixes every byte of the
+glyph data (the fonts' head tables carry the time they were made, so a font file differs from run to run; the golden file does not).
+
+A second file, HintingCffDicts.golden.json.gz, holds small fonts made by hand whose Top or Private DICT is malformed in a way that does not
+matter to the engine but that FreeType refuses (an operator without its operands, a full stack, ...), each with whether FreeType opens it.
 
 Usage (see generate_hinting_golden.py for --freetype):
 
@@ -24,6 +28,7 @@ Usage (see generate_hinting_golden.py for --freetype):
 Requires freetype-py and fontTools.
 """
 import argparse
+import base64
 import ctypes
 import gzip
 import io
@@ -35,6 +40,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_GOLDEN = os.path.join(HERE, "HintingCff.golden.json.gz")
+OUT_DICTS = os.path.join(HERE, "HintingCffDicts.golden.json.gz")
 
 SEED = 0xCFF2
 
@@ -564,6 +570,153 @@ def build_hostile_font():
     return buf.getvalue(), len(names)
 
 
+# ---- fonts whose DICTs FreeType may refuse -------------------------------------------------------------------------------------
+#
+# The hinting engine reads the Top DICT and the Private DICT of the CFF table as FreeType's loader does, and FreeType refuses a font
+# whose DICT is malformed in ways that do not matter to the engine (an operator that lacks its operands, a stack that is full). These
+# fonts are made whole by hand (fontTools cannot write a DICT that is not well formed), each with one DICT that says something
+# deliberate, and the reference records only whether FreeType opens the face.
+
+def cff_index(items):
+    """A CFF INDEX with two-byte offsets."""
+    if not items:
+        return struct.pack(">H", 0)
+    offsets = [1]
+    for item in items:
+        offsets.append(offsets[-1] + len(item))
+    return struct.pack(">HB", len(items), 2) + b"".join(struct.pack(">H", o) for o in offsets) + b"".join(items)
+
+
+def cff_int5(value):
+    return bytes([29]) + struct.pack(">i", value)
+
+
+def build_dict_font(top_prefix=b"", private=None):
+    """A font of two glyphs (.notdef and `A`, which are only an endchar and a triangle) whose Top DICT begins with `top_prefix` and
+    whose Private DICT is `private` (bytes), in a CFF table written by hand."""
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.misc.psCharStrings import T2CharString
+    from fontTools.ttLib import TTFont
+    from fontTools.ttLib.sfnt import SFNTReader, SFNTWriter
+
+    if private is None:
+        private = num(500) + op(20) + num(560) + op(21)   # defaultWidthX, nominalWidthX
+
+    charstrings = [
+        op(ENDCHAR),
+        num(50) + num(50) + op(RMOVETO) + num(100) + op(HLINETO) + num(100) + op(VLINETO) + op(ENDCHAR),
+    ]
+
+    header = bytes([1, 0, 4, 1])
+    names = cff_index([b"HintingCff-dict"])
+    strings = cff_index([])
+    gsubrs = cff_index([])
+    charstrings_index = cff_index(charstrings)
+
+    def top_dict(charstrings_offset, private_offset):
+        return top_prefix + cff_int5(charstrings_offset) + bytes([17]) + cff_int5(len(private)) + cff_int5(private_offset) + bytes([18])
+
+    # every number of the operators that follow the prefix has a fixed size, so one pass fixes the offsets
+    top_length = len(top_dict(0, 0))
+    top_index_length = len(cff_index([b"\0" * top_length]))
+    charstrings_offset = len(header) + len(names) + top_index_length + len(strings) + len(gsubrs)
+    private_offset = charstrings_offset + len(charstrings_index)
+    table = header + names + cff_index([top_dict(charstrings_offset, private_offset)]) + strings + gsubrs + charstrings_index + private
+    assert len(table) == private_offset + len(private)
+
+    glyph_names = [".notdef", "A"]
+    fb = FontBuilder(1000, isTTF=False)
+    fb.font.recalcBBoxes = False
+    fb.setupGlyphOrder(glyph_names)
+    fb.setupCharacterMap({0x41: "A"})
+    fb.setupCFF("HintingCff-dict", {"FullName": "HintingCff dict", "FamilyName": "HintingCff", "Weight": "Regular", "FontBBox": [0, 0, 1000, 1000]},
+                {n: T2CharString(bytecode=charstrings[i]) for i, n in enumerate(glyph_names)}, {"defaultWidthX": 500, "nominalWidthX": 560})
+    fb.setupHorizontalMetrics({n: (500, 0) for n in glyph_names})
+    fb.setupHorizontalHeader(ascent=800, descent=-200)
+    fb.setupNameTable({"familyName": "HintingCff", "styleName": "dict"})
+    fb.setupOS2(sTypoAscender=800, sTypoDescender=-200, usWinAscent=800, usWinDescent=200)
+    fb.setupPost()
+
+    buf = io.BytesIO()
+    fb.font.save(buf)
+    buf.seek(0)
+    reader = SFNTReader(buf)
+    tables = {tag: reader[tag] for tag in reader.tables}
+    tables["CFF "] = table
+    out = io.BytesIO()
+    writer = SFNTWriter(out, len(tables), reader.sfntVersion)
+    for tag in sorted(tables):
+        writer[tag] = tables[tag]
+    writer.close()
+    return out.getvalue()
+
+
+def dict_variants():
+    """(name, font bytes) for every variant."""
+    def numbers(count):
+        return b"".join(num(i % 100) for i in range(count))
+
+    variants = [("valid", build_dict_font())]
+
+    # the fields of a Top DICT that FreeType reads and the engine does not use, each needs an operand
+    one_operand = [(1, False, "Notice"), (0, False, "version"), (2, False, "FullName"), (3, False, "FamilyName"), (4, False, "Weight"), (13, False, "UniqueID"),
+                   (16, False, "Encoding"), (0, True, "Copyright"), (1, True, "isFixedPitch"), (2, True, "ItalicAngle"), (3, True, "UnderlinePosition"),
+                   (4, True, "UnderlineThickness"), (5, True, "PaintType"), (8, True, "StrokeWidth"), (20, True, "SyntheticBase"),
+                   (21, True, "PostScript"), (31, True, "CIDFontVersion"), (32, True, "CIDFontRevision"), (33, True, "CIDFontType"),
+                   (34, True, "CIDCount"), (35, True, "UIDBase"), (38, True, "FontName")]
+    for code, esc, name in one_operand:
+        variants.append(("top-%s-without-operand" % name, build_dict_font(top_prefix=op(code, esc))))
+        variants.append(("top-%s-with-operand" % name, build_dict_font(top_prefix=num(3) + op(code, esc))))
+
+    # FontBBox: four numbers
+    variants.append(("top-FontBBox-3-operands", build_dict_font(top_prefix=numbers(3) + op(5))))
+    variants.append(("top-FontBBox-4-operands", build_dict_font(top_prefix=numbers(4) + op(5))))
+
+    # MultipleMaster: at least five operands, the first the number of designs, from 2 to 16
+    for designs in (0, 1, 2, 3, 16, 17, 100):
+        variants.append(("top-MultipleMaster-%d-designs" % designs, build_dict_font(top_prefix=num(designs) + numbers(4) + op(24, True))))
+    variants.append(("top-MultipleMaster-4-operands", build_dict_font(top_prefix=num(2) + numbers(3) + op(24, True))))
+
+    # the stack of a Top DICT holds 96 operands, and an operator needs a free slot: 95 and the operator are the most
+    variants.append(("top-95-operands-and-operator", build_dict_font(top_prefix=numbers(95) + op(5))))
+    variants.append(("top-96-operands-and-operator", build_dict_font(top_prefix=numbers(96) + op(5))))
+    variants.append(("top-97-operands", build_dict_font(top_prefix=numbers(97))))
+
+    # the Private DICT: fields that need an operand, and the two arrays that may be empty
+    for code, name in ((14, "ForceBold"), (15, "ForceBoldThreshold"), (16, "lenIV"), (18, "ExpansionFactor")):
+        base = num(500) + op(20)
+        variants.append(("private-%s-without-operand" % name, build_dict_font(private=base + op(code, True))))
+        variants.append(("private-%s-with-operand" % name, build_dict_font(private=base + num(1) + op(code, True))))
+    for code, name in ((12, "StemSnapH"), (13, "StemSnapV")):
+        variants.append(("private-%s-without-operand" % name, build_dict_font(private=num(500) + op(20) + op(code, True))))
+
+    # a Private DICT has one slot more than a Top DICT (for the operator): 96 operands and an operator still run, 97 do not
+    variants.append(("private-96-operands-and-operator", build_dict_font(private=numbers(96) + op(6))))
+    variants.append(("private-97-operands-and-operator", build_dict_font(private=numbers(97) + op(6))))
+    variants.append(("private-97-operands", build_dict_font(private=numbers(97))))
+    variants.append(("private-98-operands", build_dict_font(private=numbers(98))))
+    return variants
+
+
+def record_dict_variants(freetype, raw, variants):
+    """Whether FreeType opens the face of each variant (and how it fails), and, for those it opens, whether it loads glyph 1."""
+    result = []
+    for name, data in variants:
+        cbuf = ctypes.create_string_buffer(data, len(data))
+        lib = freetype.FT_Library()
+        assert raw.FT_Init_FreeType(ctypes.byref(lib)) == 0
+        face = freetype.FT_Face()
+        error = raw.FT_New_Memory_Face(lib, cbuf, len(data), 0, ctypes.byref(face))
+        entry = {"name": name, "font": base64.b64encode(data).decode("ascii"), "error": error}
+        if not error:
+            assert raw.FT_Set_Char_Size(face, 16 * 64, 16 * 64, 72, 72) == 0
+            entry["glyph"] = raw.FT_Load_Glyph(face, 1, FT_LOAD_NO_BITMAP | FT_LOAD_NO_AUTOHINT)
+            raw.FT_Done_Face(face)
+        raw.FT_Done_FreeType(lib)
+        result.append(entry)
+    return result
+
+
 def load_freetype(path):
     """Makes freetype-py use a specific FreeType shared library instead of the one it bundles."""
     if path:
@@ -687,6 +840,16 @@ def main():
     with gzip.GzipFile(args.out, "wb", mtime=0) as f:
         f.write(json.dumps(result, separators=(",", ":")).encode("utf-8"))
     print("wrote", args.out, os.path.getsize(args.out), "bytes")
+
+    dicts = {
+        "freetype": {"version": "%d.%d.%d" % version, "tag": "VER-2-14-3"},
+        "format": "per font: the bytes (base64), FreeType's error from opening the face (0: it opens) and, for one it opens, its error from loading glyph 1",
+        "fonts": record_dict_variants(freetype, raw, dict_variants()),
+    }
+    print(sum(1 for f in dicts["fonts"] if f["error"]), "of", len(dicts["fonts"]), "DICT variants are refused")
+    with gzip.GzipFile(OUT_DICTS, "wb", mtime=0) as f:
+        f.write(json.dumps(dicts, separators=(",", ":")).encode("utf-8"))
+    print("wrote", OUT_DICTS, os.path.getsize(OUT_DICTS), "bytes")
 
 
 if __name__ == "__main__":

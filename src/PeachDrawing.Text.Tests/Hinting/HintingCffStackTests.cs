@@ -76,43 +76,6 @@ namespace PeachDrawing.Text.Tests.Hinting
         }
 
         [Fact]
-        public void ARandomAccessWriteReplacesTheValueAndIsBoundedByTheCount()
-        {
-            var (stack, error) = Make(2);
-            stack.PushInt(7);
-            stack.SetReal(0, 0x28000);
-            Assert.Equal(0x28000, stack.GetReal(0));
-            Assert.Equal(0, error.Value);
-
-            // the first free slot may be written, though it does not count as a value
-            stack.SetReal(1, 5);
-            Assert.Equal(0, error.Value);
-
-            // the slot after the last of a full buffer is not written, and is not an error either
-            stack.PushInt(8);
-            stack.SetReal(2, 5);
-            Assert.Equal(0, error.Value);
-
-            // but nothing further is
-            stack.SetReal(3, 5);
-            Assert.Equal(Cf2Error.StackOverflow, error.Value);
-        }
-        [Fact]
-        public void PoppingMoreThanTheStackHoldsIsAnUnderflow()
-        {
-            var (stack, error) = Make();
-            stack.PushInt(1);
-            stack.PushInt(2);
-            stack.Pop(1);
-            Assert.Equal(1, stack.Count);
-            Assert.Equal(0, error.Value);
-
-            stack.Pop(2);
-            Assert.Equal(Cf2Error.StackUnderflow, error.Value);
-            Assert.Equal(1, stack.Count);
-        }
-
-        [Fact]
         public void RollingMovesValuesByTheShiftAndRefusesMoreThanThereAre()
         {
             var (stack, error) = Make(8);

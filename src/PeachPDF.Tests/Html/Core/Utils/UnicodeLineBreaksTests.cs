@@ -25,6 +25,30 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal((LineBreakOpportunity)expected, Find("\u3042\u3083", lineBreak: strictness)[1]);
         }
 
+        [Theory]
+        [InlineData("ja", "Normal", 1)]
+        [InlineData("zh-Hant", "Loose", 1)]
+        [InlineData("en", "Normal", 0)]
+        [InlineData(null, "Normal", 0)]
+        [InlineData("ja", "Strict", 0)]
+        public void AWaveDash_MayStartALine_OnlyInChineseOrJapaneseText_WhenTheStrictnessAllowsIt(string? language, string lineBreak, int expected)
+        {
+            // A wave dash (U+301C) after a kanji: the language is handed to the algorithm along with the CSS tailorings.
+            var strictness = System.Enum.Parse<PeachPDF.CSS.LineBreak>(lineBreak);
+            Assert.Equal((LineBreakOpportunity)expected,
+                UnicodeLineBreaks.Find("日〜", PeachPDF.CSS.WordBreak.Normal, 0, strictness, language)[1]);
+        }
+
+        [Fact]
+        public void LooseLineBreak_BreaksBeforeASuffixOfEastAsianWidth_OnlyForAJapaneseLanguage()
+        {
+            // "10" and a fullwidth percent sign: the number rules keep them together unless loose Japanese text says otherwise.
+            const string text = "10％";
+            Assert.Equal(LineBreakOpportunity.Allowed, UnicodeLineBreaks.Find(text, PeachPDF.CSS.WordBreak.Normal, 0, PeachPDF.CSS.LineBreak.Loose, "ja")[2]);
+            Assert.Equal(LineBreakOpportunity.Prohibited, UnicodeLineBreaks.Find(text, PeachPDF.CSS.WordBreak.Normal, 0, PeachPDF.CSS.LineBreak.Loose, "en")[2]);
+            Assert.Equal(LineBreakOpportunity.Prohibited, UnicodeLineBreaks.Find(text, PeachPDF.CSS.WordBreak.Normal, 0, PeachPDF.CSS.LineBreak.Normal, "ja")[2]);
+        }
+
         [Fact]
         public void LineBreakAnywhere_AllowsABreakAfterEveryCharacterOfAWord()
         {

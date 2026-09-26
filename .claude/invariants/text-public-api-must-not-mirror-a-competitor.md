@@ -83,7 +83,7 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 |---|---|---|
 | `Segmenter` (`FindGraphemeBoundaries`, `FindWordBoundaries`, `FindSentenceBoundaries`) | Boundaries of grapheme clusters, words and sentences | UAX #29 "Unicode Text Segmentation"; the return shape (increasing UTF-16 indices) is ours |
 | `LineBreaker.FindOpportunities`, `LineBreakOpportunity` (`Prohibited`, `Allowed`, `Mandatory`) | Where a line may or must end | UAX #14 "Unicode Line Breaking Algorithm"; the three values are the algorithm's no-break, break and mandatory-break marks |
-| `LineBreakOptions` (`WordBreak`, `Strictness`), `WordBreakMode` (`Normal`, `BreakAll`, `KeepAll`), `LineBreakStrictness` (`Auto`, `Loose`, `Normal`, `Strict`, `Anywhere`) | The CSS tailorings | CSS Text 3 `word-break` and `line-break` names and keywords |
+| `LineBreakOptions` (`WordBreak`, `Strictness`, `Language`), `WordBreakMode` (`Normal`, `BreakAll`, `KeepAll`), `LineBreakStrictness` (`Auto`, `Loose`, `Normal`, `Strict`, `Anywhere`) | The CSS tailorings, and the language that decides the ones CSS Text 3 limits to Chinese and Japanese text | CSS Text 3 `word-break` and `line-break` names and keywords; `Language` is a BCP 47 tag read by its primary subtag, the name and shape `ShapeSettings.Language` already has, and it rides on `ParagraphStyle.LineBreak` rather than a member of its own |
 
 ### `PeachDrawing.Text.Export`
 

@@ -143,9 +143,13 @@ namespace PeachDrawing.Text.Tests.PublicApi
         {
             const string text = "日〜";     // a kanji and the wave dash
 
-            Assert.Equal([2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Strict }));
-            Assert.Equal([1, 2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Normal }));
-            Assert.Equal([1, 2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Loose }));
+            Assert.Equal([2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Strict, Language = "ja" }));
+            Assert.Equal([1, 2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Normal, Language = "ja" }));
+            Assert.Equal([1, 2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Loose, Language = "zh-Hant" }));
+
+            // Only where the writing system is Chinese or Japanese.
+            Assert.Equal([2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Normal }));
+            Assert.Equal([2], Breaks(text, new LineBreakOptions { Strictness = LineBreakStrictness.Loose, Language = "en" }));
         }
 
         [Fact]
@@ -234,11 +238,21 @@ namespace PeachDrawing.Text.Tests.PublicApi
         }
 
         [Fact]
-        public void Strictness_Loose_AlsoBreaksBeforeAnEllipsisAfterLatinText()
+        public void Strictness_Loose_DoesNotBreakBeforeAnEllipsisAfterLatinText_InAnyLanguage()
         {
-            // The tailoring is not language-aware: see the accepted gap.
-            Assert.Equal([1, 2], Breaks("a…", new LineBreakOptions { Strictness = LineBreakStrictness.Loose }));
+            foreach (var language in new string?[] { null, "en", "ja" })
+            {
+                Assert.Equal([2], Breaks("a…", new LineBreakOptions { Strictness = LineBreakStrictness.Loose, Language = language }));
+            }
+
             Assert.Equal([2], Breaks("a…"));
+        }
+
+        [Fact]
+        public void LineBreakOptions_Language_IsNullByDefault()
+        {
+            Assert.Null(default(LineBreakOptions).Language);
+            Assert.Equal("ja", new LineBreakOptions { Language = "ja" }.Language);
         }
 
         [Fact]

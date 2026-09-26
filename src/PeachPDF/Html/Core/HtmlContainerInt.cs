@@ -1120,11 +1120,19 @@ namespace PeachPDF.Html.Core
         /// The document's language, from the root <c>&lt;html lang="..."&gt;</c> attribute — <c>null</c>
         /// if the document declares none. Used by <c>hyphens: auto</c> (per the CSS Text spec, automatic
         /// hyphenation requires knowing the language; when unknown, a spec-compliant renderer doesn't
-        /// hyphenate). <see cref="PdfGenerateConfig.DefaultLanguage"/> can supply an app-level fallback
-        /// when a document declares none, applied by the caller (see <see cref="PdfGenerator"/>) — this
-        /// property itself only ever reflects what the document actually declared.
+        /// hyphenate) and by the language-dependent tailorings of <c>line-break</c>.
+        /// <see cref="PdfGenerateConfig.DefaultLanguage"/> supplies an app-level fallback when a
+        /// document declares none (<see cref="DefaultLanguage"/>, set by <see cref="PdfGenerator"/>
+        /// before the document is parsed, since the words of every text box are cut at parse time).
         /// </summary>
         internal string? DocumentLanguage { get; set; }
+
+        /// <summary>
+        /// The language a document that declares none is given (<see cref="PdfGenerateConfig.DefaultLanguage"/>),
+        /// or <c>null</c>. Must be set before the document is parsed: the words of every text box are cut
+        /// at parse time, and where a line may end depends on the language.
+        /// </summary>
+        internal string? DefaultLanguage { get; set; }
 
         /// <summary>
         /// The CSS media type the cascade matches <c>@media</c> rules against (see

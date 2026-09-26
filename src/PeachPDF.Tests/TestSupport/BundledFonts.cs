@@ -125,6 +125,14 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Cjk => Path.Combine(AppContext.BaseDirectory, "NotoSansJPSubset.ttf");
 
         /// <summary>
+        /// A hand-authored fixture (public domain, see LineBreakTest.LICENSE.txt) for line breaking tests: every character it covers
+        /// (ASCII, kana, and the CJK punctuation and number affixes CSS <c>line-break</c> tailors) is a square exactly one em wide, a
+        /// space half an em, so a line can be sized in whole ems and no character falls back to a machine-dependent system font.
+        /// Regenerate with <c>assets/fonts/generate_line_break_font.py</c>.
+        /// </summary>
+        internal static string LineBreak => Path.Combine(AppContext.BaseDirectory, "LineBreakTest.ttf");
+
+        /// <summary>
         /// A hand-authored COLR <b>version 0</b> test font (public domain, see
         /// ColorTestFonts.LICENSE.txt): layered outline color glyphs backed by a CPAL palette.
         /// 'A' is a red box under a green triangle, 'B' a blue circle; 'X'/'Y'/'Z' are the plain

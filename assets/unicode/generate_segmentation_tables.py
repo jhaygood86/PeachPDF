@@ -7,7 +7,9 @@ Sources, all in this directory:
 
 * LineBreak.txt - the Line_Break class, plus the General_Category of each listed code point from the comment after each
   entry (Pi and Pf and Mn/Mc and Cn are what the line breaking rules ask about)
-* EastAsianWidth.txt - the wide, fullwidth and halfwidth code points (LB19a and LB30 exclude them)
+* EastAsianWidth.txt - the wide, fullwidth and halfwidth code points (LB19a and LB30 exclude them), and which prefix and
+  postfix characters (line break classes PR and PO) are Ambiguous, Fullwidth or Wide, which CSS Text 3's line-break: loose
+  lets a line break after or before
 * emoji-data.txt - Extended_Pictographic (LB30b, GB11 and WB3c)
 * GraphemeBreakProperty.txt, DerivedCoreProperties.txt (Indic_Conjunct_Break, for GB9c)
 * WordBreakProperty.txt, SentenceBreakProperty.txt
@@ -37,7 +39,7 @@ SB_CLASSES = ["Other", "CR", "LF", "Extend", "Sep", "Format", "Sp", "Lower", "Up
 INCB = {"None": 0, "Linker": 1, "Consonant": 2, "Extend": 3}
 
 # flag bits of the line break table, above the six bits of the class
-LB_PI, LB_PF, LB_MARK, LB_CN, LB_WIDE, LB_EXTPICT = 1 << 6, 1 << 7, 1 << 8, 1 << 9, 1 << 10, 1 << 11
+LB_PI, LB_PF, LB_MARK, LB_CN, LB_WIDE, LB_EXTPICT, LB_EAW_AMBIG_OR_WIDE = 1 << 6, 1 << 7, 1 << 8, 1 << 9, 1 << 10, 1 << 11, 1 << 12
 GCB_EXTPICT = 1 << 5
 WB_EXTPICT = 1 << 5
 
@@ -98,9 +100,15 @@ def build_line_break(pict):
     for cp in range(MAX):
         if not listed[cp]:
             values[cp] |= LB_CN
+    pr, po = LB_CLASSES.index("PR"), LB_CLASSES.index("PO")
     for start, end, ea, _, _ in read_ranges("EastAsianWidth.txt"):
         if ea in ("F", "W", "H"):
             fill(values, start, end, LB_WIDE, "or")
+        if ea in ("A", "F", "W"):
+            # only PR and PO carry it: it is all the loose tailoring asks about them, and it keeps the table small
+            for cp in range(start, end + 1):
+                if values[cp] & 0x3F in (pr, po):
+                    values[cp] |= LB_EAW_AMBIG_OR_WIDE
     for cp in pict:
         values[cp] |= LB_EXTPICT
     return values
@@ -157,6 +165,8 @@ def check(values):
     assert values["line_break"][0xAB] & LB_PI and values["line_break"][0xBB] & LB_PF, "Pi/Pf lost: LineBreak.txt comments changed?"
     assert values["line_break"][0x0E31] & LB_MARK, "Mn/Mc lost: LineBreak.txt comments changed?"
     assert values["line_break"][0x0378] & LB_CN, "Cn lost: LineBreak.txt comments changed?"
+    assert values["line_break"][0xFF05] & LB_EAW_AMBIG_OR_WIDE and values["line_break"][0xFFE5] & LB_EAW_AMBIG_OR_WIDE, "EAW lost: EastAsianWidth.txt changed?"
+    assert not values["line_break"][0x0024] & LB_EAW_AMBIG_OR_WIDE, "a narrow PR became wide"
     assert values["line_break"][0x1F600] & LB_EXTPICT and values["grapheme"][0x1F600] & GCB_EXTPICT
     assert (values["grapheme"][0x094D] >> 6) & 3 == INCB["Linker"], "InCB lost: DerivedCoreProperties.txt changed?"
 
@@ -193,6 +203,8 @@ def main():
         "        internal const int LineBreakUnassigned = 1 << 9;\n"
         "        internal const int LineBreakEastAsian = 1 << 10;\n"
         "        internal const int LineBreakPictographic = 1 << 11;\n"
+        "        // Only for the classes PR and PO: the East Asian Width is Ambiguous, Fullwidth or Wide.\n"
+        "        internal const int LineBreakWideOrAmbiguous = 1 << 12;\n"
         "        // Grapheme table value: the class in bits 0-4, Extended_Pictographic in bit 5, Indic_Conjunct_Break in bits 6-7.\n"
         "        internal const int GraphemePictographic = 1 << 5;\n"
         "        // Word table value: the class in bits 0-4, Extended_Pictographic in bit 5.\n"
