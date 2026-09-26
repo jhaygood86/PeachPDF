@@ -8,7 +8,7 @@ namespace PeachPDF.Tests.TestSupport
     /// <c>VORG</c>) directly into a real font file's own SFNT byte stream - needed by any test that embeds
     /// the resulting bytes through the real font-loading pipeline (<c>@font-face</c>/<c>AddFont</c>), as
     /// opposed to <c>VerticalMetricsTablesTests</c>'s own <c>BuildFaceWithSyntheticTable</c>, which only
-    /// registers appended bytes in an already-parsed <see cref="PeachDrawing.Text.Internal.Fonts.OpenType.OpenTypeFontface"/>'s
+    /// registers appended bytes in an already-parsed font face's
     /// in-memory table dictionary and so never touches a real byte stream. Originally a private helper in
     /// <c>VerticalMetricsTablesTests.cs</c>; extracted here once a second file
     /// (<c>TextOrientationIntegrationTests.cs</c>) needed the identical technique.

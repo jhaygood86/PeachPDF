@@ -4,7 +4,7 @@
 		<AssemblyName>PeachDrawing.Text</AssemblyName>
 		<RootNamespace>PeachDrawing.Text</RootNamespace>
 		<PackageId>PeachDrawing.Text</PackageId>
-		<Description>Font loading, OpenType shaping, bidirectional text and Unicode text primitives for .NET, with no dependencies. The text engine PeachPDF renders HTML with.</Description>
+		<Description>Font loading and matching, OpenType shaping (including variable fonts, colour glyphs and SVG glyphs), bidirectional text, Unicode line breaking and segmentation, and paragraph layout for .NET, with no dependencies. The text engine PeachPDF renders HTML with.</Description>
 		<PackageTags>fonts;opentype;truetype;woff;text;shaping;bidi;unicode;hyphenation;typography</PackageTags>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageIcon>peach.png</PackageIcon>

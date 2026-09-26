@@ -13,7 +13,7 @@ namespace PeachPDF.Tests.Integration
     /// End-to-end coverage that a real bidi-mirrored word actually reaches
     /// <see cref="RGraphics.DrawString(string, PeachPDF.Html.Adapters.RFont, PeachPDF.Html.Adapters.Entities.RColor, PeachPDF.Html.Adapters.Entities.RPoint, PeachPDF.Html.Adapters.Entities.RSize, double, PeachPDF.Html.Adapters.Entities.RFontPalette?, PeachDrawing.Text.Shaping.ShapeSettings?, string?)"/>'s
     /// <c>logicalText</c> parameter with its true logical-order source - the plumbing half of the
-    /// <see cref="PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText"/> ToUnicode fix (see
+    /// <c>CMapInfo.AddShapedText</c> ToUnicode fix (see
     /// <c>CMapInfoLogicalTextTests</c> for direct coverage of the remap math itself). Without this
     /// wiring, <see cref="PeachPDF.Html.Core.Paint.FragmentPainter"/> would still paint the correct
     /// (mirrored) glyphs on the page - only text extraction from the resulting PDF would be wrong -
