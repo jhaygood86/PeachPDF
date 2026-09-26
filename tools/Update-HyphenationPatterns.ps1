@@ -2,7 +2,7 @@
 .SYNOPSIS
 Downloads all hyphenation pattern files from the CTAN hyph-utf8 package (mirrored on GitHub at
 hyphenation/tex-hyphen), converts each to PeachPDF's plain-text pattern format, Brotli-compresses
-it, and writes it to src/PeachPDF/Text/Resources/Patterns for embedding as a resource.
+it, and writes it to src/PeachDrawing.Text/Internal/Text/Resources/Patterns for embedding as a resource.
 
 .DESCRIPTION
 For each `hyph-<tag>.tex` file under the pinned commit's
@@ -28,7 +28,7 @@ System.IO.Compression.BrotliStream.
 
 .PARAMETER OutputDirectory
 Where to write the compressed .txt.br pattern files. Defaults to
-src/PeachPDF/Text/Resources/Patterns relative to this script's location.
+src/PeachDrawing.Text/Internal/Text/Resources/Patterns relative to this script's location.
 
 .PARAMETER Ref
 Commit SHA (or branch/tag) of hyphenation/tex-hyphen to fetch from, pinned by default so re-runs
@@ -36,7 +36,7 @@ are reproducible until deliberately bumped.
 #>
 #Requires -Version 7.0
 param(
-    [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\src\PeachPDF\Text\Resources\Patterns'),
+    [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\src\PeachDrawing.Text\Internal\Text\Resources\Patterns'),
     [string]$Ref = '5684c0f51c0b81133db2efbe60a408b4155a3ff5'
 )
 

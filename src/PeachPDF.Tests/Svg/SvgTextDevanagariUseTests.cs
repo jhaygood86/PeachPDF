@@ -2,7 +2,7 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text.Shaping.Use;
+using PeachDrawing.Text.Internal.Text.Shaping.Use;
 using System.Xml.Linq;
 using Xunit;
 

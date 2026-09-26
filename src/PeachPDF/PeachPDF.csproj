@@ -1,8 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+	<Import Project="..\Version.props" />
 	<PropertyGroup>
 		<AssemblyName>PeachPDF</AssemblyName>
 		<PackageId>PeachPDF</PackageId>
-		<PackageVersion>0.9.20</PackageVersion>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageIcon>peach.png</PackageIcon>
 		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
@@ -52,24 +52,11 @@
 		<PackageReference Include="PeachImage" Version="0.4.6" />
 	</ItemGroup>
 	<ItemGroup>
+		<ProjectReference Include="..\PeachDrawing.Text\PeachDrawing.Text.csproj" />
+	</ItemGroup>
+	<ItemGroup>
 		<None Remove="PdfSharpCore\Resources\Messages.restext" />
 		<EmbeddedResource Include="PdfSharpCore\Resources\Messages.restext" />
-		<None Remove="Text\Resources\Patterns\*.br" />
-		<EmbeddedResource Include="Text\Resources\Patterns\*.br" />
-		<None Remove="Text\Resources\language-tags.txt" />
-		<EmbeddedResource Include="Text\Resources\language-tags.txt" />
-		<None Remove="Text\Resources\opentype-language-tags.txt" />
-		<EmbeddedResource Include="Text\Resources\opentype-language-tags.txt" />
-		<None Remove="Text\Resources\Bidi\*.br" />
-		<EmbeddedResource Include="Text\Resources\Bidi\*.br" />
-		<None Remove="Text\Resources\VerticalOrientation\*.br" />
-		<EmbeddedResource Include="Text\Resources\VerticalOrientation\*.br" />
-		<None Remove="Text\Resources\Script\*.br" />
-		<EmbeddedResource Include="Text\Resources\Script\*.br" />
-		<None Remove="Text\Resources\ArabicJoining\*.br" />
-		<EmbeddedResource Include="Text\Resources\ArabicJoining\*.br" />
-		<None Remove="Text\Resources\Use\*.br" />
-		<EmbeddedResource Include="Text\Resources\Use\*.br" />
 		<None Remove="PdfSharpCore\Resources\ColorProfiles\sRGB2014.icc" />
 		<EmbeddedResource Include="PdfSharpCore\Resources\ColorProfiles\sRGB2014.icc" />
 	</ItemGroup>
@@ -105,6 +92,9 @@
 	</ItemGroup>
 	<ItemGroup>
 		<None Include="..\..\README.md" Pack="true" PackagePath="\" />
+		<!-- The notices the licences of the code in this package require it to carry (PDFsharp, ExCSS); the text engine's ship in its own package. -->
+		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+		<None Include="..\..\THIRD-PARTY-LICENSES.md" Pack="true" PackagePath="\" />
 		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
 	</ItemGroup>
 	<Target Name="GeneratePeachPdfProductInfo" BeforeTargets="BeforeBuild">

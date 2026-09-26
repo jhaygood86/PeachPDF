@@ -1,4 +1,5 @@
-using PeachPDF.Text.Bidi;
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Internal.Text.Bidi;
 using Xunit;
 
 namespace PeachPDF.Tests.Text.Bidi

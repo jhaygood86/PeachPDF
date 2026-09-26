@@ -12,6 +12,7 @@
 
 #nullable enable
 
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
@@ -21,8 +22,7 @@ using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Text;
-using PeachPDF.Text.Bidi;
+using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -1037,7 +1037,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 // hyphens:auto/manual: before giving up and wrapping the whole word, see if a cached
                 // candidate break point (from CssBox.ParseToWords - either an explicit soft hyphen or an
-                // automatic HyphenationEngine suggestion) lets a hyphenated prefix fit in the space
+                // automatic Hyphenator suggestion) lets a hyphenated prefix fit in the space
                 // remaining in this column instead - gated by hyphenate-limit-lines/-zone exactly like
                 // FlowBox's own attempt, just against this column's own local hyphenation-streak counter
                 // rather than CssLineBoxCoordinates's (this method is always a single monolithic pass, so
@@ -5226,7 +5226,7 @@ namespace PeachPDF.Html.Core.Dom
 
                         // hyphens:auto/manual: before giving up and wrapping the whole word, see if a
                         // cached candidate break point (from ParseToWords - either an explicit soft
-                        // hyphen or an automatic HyphenationEngine suggestion) lets a hyphenated prefix
+                        // hyphen or an automatic Hyphenator suggestion) lets a hyphenated prefix
                         // fit in the space remaining on the current line instead - gated by
                         // hyphenate-limit-lines (no more than N consecutive hyphenated lines) and
                         // hyphenate-limit-zone (only bother when skipping the hyphen would otherwise
@@ -6453,7 +6453,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Tries to split <paramref name="word"/> at the widest of its precomputed
         /// <see cref="CssRect.HyphenationCandidates"/> (set by <see cref="CssBox.ParseToWords"/> — either
-        /// an explicit soft hyphen position or an automatic <c>HyphenationEngine</c> suggestion) whose
+        /// an explicit soft hyphen position or an automatic <c>Hyphenator</c> suggestion) whose
         /// hyphenated prefix (with a trailing <c>hyphenate-character</c> glyph, actually measured) still
         /// fits in <paramref name="availableWidth"/> and satisfies <c>hyphenate-limit-chars</c>'s word/
         /// before/after minimums. Candidates are tried from the last (rightmost, keeping the most text on
@@ -7237,7 +7237,7 @@ namespace PeachPDF.Html.Core.Dom
                 j--;
             }
 
-            var runs = BidiResolver.ReorderLine(levels, 0, levels.Length);
+            var runs = Bidi.ReorderLine(levels, 0, levels.Length);
 
             if (runs.Count == 1 && !runs[0].IsRtl) return;
 
@@ -7274,7 +7274,7 @@ namespace PeachPDF.Html.Core.Dom
                 var trailingGap = SlotBoundaryAfter(lastIndexInRun) - (runOldStart + runContentWidth);
 
                 // Within an RTL run both the word order and each word's own text reverse (mirroring
-                // characters where they have a mirror image), matching how BidiResolver's own
+                // characters where they have a mirror image), matching how Bidi's own
                 // conformance reconstruction walks a character-granularity RTL run backwards.
                 for (var k = 0; k < run.Length; k++)
                 {
@@ -7325,7 +7325,7 @@ namespace PeachPDF.Html.Core.Dom
             // against the same word objects (HtmlContainerInt's variable-page-width reflow re-runs
             // LayoutDocument, re-deriving line boxes and re-applying this on every pass) would
             // otherwise toggle back to unmirrored on every second application.
-            rectWord.ReplaceText(BidiMirrorResolver.ApplyMirroring(rectWord.PreMirrorText, level));
+            rectWord.ReplaceText(Bidi.Mirror(rectWord.PreMirrorText, level));
         }
 
         /// <summary>
@@ -7571,7 +7571,7 @@ namespace PeachPDF.Html.Core.Dom
                 j--;
             }
 
-            var runs = BidiResolver.ReorderLine(levels, 0, levels.Length);
+            var runs = Bidi.ReorderLine(levels, 0, levels.Length);
 
             if (runs.Count == 1 && !runs[0].IsRtl) return;
 

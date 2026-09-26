@@ -7,7 +7,7 @@ namespace PeachPDF.CSS
     /// [ &lt;integer&gt; | on | off ]?</c> - the standard CSS Fonts Level 3 escape hatch for activating
     /// an arbitrary OpenType feature by tag. Real GSUB activation (not just parsing/cascading) happens
     /// via <c>DerivedStyle.ActualFontFeatureSettings</c> -&gt;
-    /// <see cref="PeachPDF.Text.TextShapingFeatures.ExplicitFeatures"/>.
+    /// <see cref="PeachDrawing.Text.Internal.Text.TextShapingFeatures.ExplicitFeatures"/>.
     /// </summary>
     internal sealed class FontFeatureSettingsProperty : Property
     {

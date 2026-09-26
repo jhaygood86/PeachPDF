@@ -3,7 +3,7 @@
 ## What was investigated
 
 macOS CI on PR #1094's run hit an unhandled `IndexOutOfRangeException` inside
-`GlyphOutlineDecoder.DecodeSimple` (`src/PeachPDF/Fonts/OpenType/GlyphOutlineDecoder.cs`), reached via
+`GlyphOutlineDecoder.DecodeSimple` (`src/PeachDrawing.Text/Internal/Fonts/OpenType/GlyphOutlineDecoder.cs`), reached via
 `GraphicsAdapter.MeasureInkCrossings` → `OpenTypeDescriptor.TryGetGlyphOutline` while decoding the letter
 `g` for `GraphicsAdapterInkCrossingsTests.ADescender_CrossesABandBelowTheBaseline`. Ubuntu and Windows
 passed in the same run; a rerun of the identical macOS job on identical code passed cleanly; `main`'s own

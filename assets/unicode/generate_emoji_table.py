@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates src/PeachPDF/Text/EmojiProperties.Data.g.cs from the Unicode Character Database's
+"""Generates src/PeachDrawing.Text/Internal/Text/EmojiProperties.Data.g.cs from the Unicode Character Database's
 emoji-variation-sequences.txt and emoji-data.txt (Unicode 18.0.0, UTS #51 - see
 https://www.unicode.org/reports/tr51/), matching the version already checked in for Scripts.txt.
 
@@ -21,7 +21,7 @@ import re
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUT_PATH = os.path.normpath(os.path.join(
-    SCRIPT_DIR, "..", "..", "src", "PeachPDF", "Text", "EmojiProperties.Data.g.cs"))
+    SCRIPT_DIR, "..", "..", "src", "PeachDrawing.Text", "Internal", "Text", "EmojiProperties.Data.g.cs"))
 
 VARIATION_LINE_RE = re.compile(r'^([0-9A-Fa-f]{4,6})\s+(FE0E|FE0F)\s*;')
 PROPERTY_LINE_RE = re.compile(r'^([0-9A-Fa-f]{4,6})(?:\.\.([0-9A-Fa-f]{4,6}))?\s*;\s*(\w+)')
@@ -78,7 +78,7 @@ def main():
         "// emoji-variation-sequences.txt and emoji-data.txt. Do not edit by hand; re-run the script.\n"
         "// </auto-generated>\n"
         "\n"
-        "namespace PeachPDF.Text\n"
+        "namespace PeachDrawing.Text.Internal.Text\n"
         "{\n"
         "    internal static partial class EmojiProperties\n"
         "    {\n"

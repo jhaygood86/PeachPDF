@@ -1,10 +1,11 @@
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -1254,7 +1255,7 @@ namespace PeachPDF.Html.Core.Dom
         /// and script support it," matching real browser behavior for <c>auto</c>'s UA-discretion
         /// wording. Gates GPOS Lookup Types 1/2 (<c>kern</c>) only - mark-to-base/mark-to-mark
         /// positioning (<c>mark</c>/<c>mkmk</c>) is requested unconditionally by
-        /// <see cref="PeachPDF.Text.GposPositioner"/>, since combining-mark attachment isn't a
+        /// <see cref="PeachDrawing.Text.Internal.Text.GposPositioner"/>, since combining-mark attachment isn't a
         /// stylistic opt-out the way kerning is.
         /// </summary>
         public bool ActualFontKerning =>
@@ -1617,7 +1618,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ActualSmallCapsFont"/> when <paramref name="sizeScale"/> marks a small-caps run) when
         /// no declared family covers it. Cached per (codepoint, scale, presentation); mirrors
         /// <see cref="ActualSmallCapsFont"/>'s size/style derivation. <paramref name="presentation"/> is the
-        /// emoji/text presentation the character is to be drawn in (<see cref="EmojiProperties.ResolveAt"/>),
+        /// emoji/text presentation the character is to be drawn in (<see cref="Emoji.ResolveAt"/>),
         /// which steers the choice between a colour and an outline font that both cover it.
         /// </summary>
         public RFont ActualFontForCodepoint(Rune codepoint, double sizeScale = 1.0, EmojiPresentation presentation = EmojiPresentation.NoPreference)

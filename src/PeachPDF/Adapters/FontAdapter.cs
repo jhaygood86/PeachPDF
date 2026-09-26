@@ -10,12 +10,13 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System;
 
 namespace PeachPDF.Adapters

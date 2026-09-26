@@ -1,11 +1,11 @@
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
-using PeachPDF.Text.Shaping.Arabic;
+using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
 using System;
 using System.Collections.Generic;
 using System.IO;

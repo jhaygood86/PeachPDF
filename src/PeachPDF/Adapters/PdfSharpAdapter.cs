@@ -12,13 +12,14 @@
 
 #nullable enable
 
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Utilities;
 using System;
@@ -417,7 +418,7 @@ namespace PeachPDF.Adapters
             return new FontAdapter(xFont, PixelsPerPoint);
         }
 
-        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachPDF.Text.EmojiPresentation presentation)
+        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation)
         {
             var fallbackFamily = _fontResolver.FindFamilyCoveringCodepoint(codepoint, presentation);
             if (fallbackFamily is null)

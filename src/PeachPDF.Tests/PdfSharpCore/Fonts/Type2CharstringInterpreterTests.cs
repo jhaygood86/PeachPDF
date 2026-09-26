@@ -1,4 +1,4 @@
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using Xunit;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts

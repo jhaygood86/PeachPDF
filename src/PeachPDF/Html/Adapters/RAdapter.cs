@@ -12,7 +12,8 @@
 
 #nullable enable
 
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Handlers;
@@ -352,12 +353,12 @@ namespace PeachPDF.Html.Adapters
         /// does. Returns null when nothing registered covers it either, so the caller keeps today's
         /// <c>.notdef</c>/tofu-box behavior.
         /// </summary>
-        public RFont? GetSystemFallbackFontForCodepoint(double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, PeachPDF.Text.EmojiPresentation presentation = PeachPDF.Text.EmojiPresentation.NoPreference)
+        public RFont? GetSystemFallbackFontForCodepoint(double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, PeachDrawing.Text.Unicode.EmojiPresentation presentation = PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference)
         {
             return _fontsHandler.GetCachedSystemFallbackFontForCodepoint(size, style, codepoint, weight, stretch, obliqueSkewSinus, presentation);
         }
 
-        internal RFont? CreateSystemFallbackFontForCodepoint(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachPDF.Text.EmojiPresentation presentation)
+        internal RFont? CreateSystemFallbackFontForCodepoint(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation)
         {
             return CreateSystemFallbackFontForCodepointInt(size, style, weight, stretch, obliqueSkewSinus, codepoint, presentation);
         }
@@ -499,7 +500,7 @@ namespace PeachPDF.Html.Adapters
         /// - the CSS Fonts 4 §5 system-fallback step, tried only after every family in the box's own
         /// <c>font-family</c> stack has already missed. Returns null when nothing registered covers it.
         /// </summary>
-        protected abstract RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachPDF.Text.EmojiPresentation presentation);
+        protected abstract RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation);
 
         /// <summary>Whether any face of <paramref name="family"/> declares an explicit <c>unicode-range</c>.</summary>
         protected abstract bool FamilyHasExplicitUnicodeRangesInt(string family);

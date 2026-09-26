@@ -1,0 +1,10 @@
+<Project>
+  <!--
+    The one version every package this repository publishes carries. PeachDrawing.Text is released in lockstep
+    with PeachPDF (the same tag, the same number), so both projects import this file instead of each keeping a
+    literal. Release automation reads <PackageVersion> from here (publish.yml, pages.yml, the browser demo).
+  -->
+  <PropertyGroup>
+    <PackageVersion>0.9.20</PackageVersion>
+  </PropertyGroup>
+</Project>

@@ -6,7 +6,7 @@ using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -256,7 +256,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <c>ResolveClip</c>'s cue to fall back to the box's ordinary <c>border-box</c> clip instead of
         /// a shape with glyphs missing from it. A word whose glyphs only *partially* decode (e.g. one
         /// character using an escape/seac operator
-        /// <see cref="PeachPDF.Fonts.OpenType.Type2CharstringInterpreter"/> doesn't implement, amid
+        /// <see cref="PeachDrawing.Text.Internal.Fonts.OpenType.Type2CharstringInterpreter"/> doesn't implement, amid
         /// otherwise-decodable sibling glyphs) is accepted as-is rather than triggering
         /// this fallback - <c>GetTextOutline</c> itself has no per-glyph granularity to report that
         /// distinction, so the clip can end up missing just that one glyph's shape. Narrow in practice

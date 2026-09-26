@@ -10,8 +10,9 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 
 namespace PeachPDF.Html.Adapters
 {
@@ -167,7 +168,7 @@ namespace PeachPDF.Html.Adapters
         public virtual double GetVerticalAdvance(System.Text.Rune rune) => Height;
 
         /// <summary>Whether this font carries a real OpenType <c>VORG</c> table this reader trusts (see
-        /// <see cref="PeachPDF.Fonts.OpenType.OpenTypeDescriptor.HasVerticalOrigin"/> for the CFF-only
+        /// <see cref="PeachDrawing.Text.Internal.Fonts.OpenType.OpenTypeDescriptor.HasVerticalOrigin"/> for the CFF-only
         /// restriction that gates this).</summary>
         public virtual bool HasVerticalOrigin => false;
 
@@ -200,7 +201,7 @@ namespace PeachPDF.Html.Adapters
         /// <see cref="EmojiPresentation.NoPreference"/>; the default answers true for every request so a
         /// font with no such data never loses a match it could not judge.
         /// </summary>
-        public virtual bool MatchesEmojiPresentation(System.Text.Rune baseCodepoint, PeachPDF.Text.EmojiPresentation presentation) => true;
+        public virtual bool MatchesEmojiPresentation(System.Text.Rune baseCodepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation) => true;
 
         // ---- MATH table query surface (mathematical typesetting fonts) ------------------------
         // Lets MathLayoutEngine/MathRenderer read a font's OpenType MATH table (constants, per-glyph
@@ -214,7 +215,7 @@ namespace PeachPDF.Html.Adapters
         public virtual bool HasMathTable => false;
 
         /// <summary>This font's parsed MATH table, or null if it has none.</summary>
-        public virtual Fonts.OpenType.MathTable? MathTable => null;
+        public virtual PeachDrawing.Text.Internal.Fonts.OpenType.MathTable? MathTable => null;
 
         /// <summary>This font's design-units-per-em (e.g. 1000 or 2048) - <see cref="MathTable"/>'s
         /// design-unit values need scaling by <c>Size / FontUnitsPerEm</c> to become points. 0 when

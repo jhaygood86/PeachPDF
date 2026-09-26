@@ -1,7 +1,7 @@
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.Html.Core
 {
     /// <summary>
     /// Real-font characterization for GPOS Lookup Type 3 (Cursive Attachment,
-    /// <see cref="PeachPDF.Text.GposPositioner.ApplyCursiveAttachment"/>) against a font whose own Arabic
+    /// <see cref="PeachDrawing.Text.Internal.Text.GposPositioner.ApplyCursiveAttachment"/>) against a font whose own Arabic
     /// joining actually relies on it - <see cref="BundledFonts.ArabicCursive"/> ("Aref Ruqaa"), unlike
     /// <see cref="BundledFonts.Arabic"/> ("Noto Sans Arabic", used by <see cref="ArabicJoiningCharacterizationTests"/>),
     /// which defines no `curs` GPOS feature at all.

@@ -2,7 +2,7 @@
 
 ## What was wrong
 
-`OpenTypeFontface` (`src/PeachPDF/Fonts/OpenType/OpenTypeFontface.cs`) is cached and shared process-wide
+`OpenTypeFontface` (`src/PeachDrawing.Text/Internal/Fonts/OpenType/OpenTypeFontface.cs`) is cached and shared process-wide
 (`OpenTypeFontfaceCache`/`FontFactory`) — the same font file's parsed structure is reused by every test
 or document that needs it, rather than re-parsed each time. Most of its tables (`cmap`, `name`, `GSUB`,
 `GPOS`, `glyf`/`loca` existence, etc.) are fully parsed once, eagerly, at load time — safe to read

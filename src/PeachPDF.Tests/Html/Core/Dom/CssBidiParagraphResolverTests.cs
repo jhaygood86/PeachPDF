@@ -1,3 +1,4 @@
+using PeachDrawing.Text.Unicode;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,7 +8,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 {
     /// <summary>
     /// Regression coverage for issue #575: <c>CssBidiParagraphResolver.Flatten</c> used to append a box's
-    /// own <c>BidiIsolateOverride</c> to the shared overrides list only after recursing into that box's
+    /// own <c>EmbeddingSpan</c> to the shared overrides list only after recursing into that box's
     /// children, so when a nested box's override shared its parent's exact <c>Start</c> index (no
     /// character of the parent's own preceding the child), the child's override landed *before* its
     /// parent's in the list <c>BidiResolver.ResolveExplicitLevels</c> pushes in order. For two boxes with

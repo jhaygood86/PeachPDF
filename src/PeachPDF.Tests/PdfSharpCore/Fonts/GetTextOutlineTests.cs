@@ -2,12 +2,12 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using PeachPDF.Adapters;
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using Xunit;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
@@ -16,8 +16,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     /// Coverage for <see cref="GraphicsAdapter.GetTextOutline"/>: decoding a text run into a
     /// fillable/strokeable vector path (the enabling seam for gradient/pattern fill, stroke,
     /// <c>&lt;textPath&gt;</c> on SVG text, and <c>background-clip: text</c>). Uses the bundled Source
-    /// Sans 3 (TrueType/glyf, via <see cref="Fonts.OpenType.GlyphOutlineDecoder"/>) and Source Code Pro
-    /// (CFF/OTTO, no glyf - via <see cref="Fonts.OpenType.Type2CharstringInterpreter"/>) fonts.
+    /// Sans 3 (TrueType/glyf, via <see cref="PeachDrawing.Text.Internal.Fonts.OpenType.GlyphOutlineDecoder"/>) and Source Code Pro
+    /// (CFF/OTTO, no glyf - via <see cref="PeachDrawing.Text.Internal.Fonts.OpenType.Type2CharstringInterpreter"/>) fonts.
     /// </summary>
     public class GetTextOutlineTests
     {

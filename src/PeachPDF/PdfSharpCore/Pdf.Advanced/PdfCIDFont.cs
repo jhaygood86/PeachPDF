@@ -30,7 +30,7 @@
 #nullable disable warnings
 
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf.Filters;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced

@@ -1,4 +1,4 @@
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 using System.IO.Compression;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;

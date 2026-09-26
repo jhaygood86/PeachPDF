@@ -1,0 +1,768 @@
+#region PDFsharp - A .NET library for processing PDF
+//
+// Authors:
+//   Stefan Lange
+//
+// Copyright (c) 2005-2016 empira Software GmbH, Cologne Area (Germany)
+//
+// https://www.pdfsharp.com/
+// http://sourceforge.net/projects/pdfsharp
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+// DEALINGS IN THE SOFTWARE.
+#endregion
+
+using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.Internal.Text.Bidi;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Text;
+
+namespace PeachDrawing.Text.Internal.Fonts.OpenType
+{
+    /// <summary>
+    /// The OpenType font descriptor.
+    /// Currently the only font type PDFsharp supports.
+    /// </summary>
+    internal sealed class OpenTypeDescriptor : FontDescriptor
+    {
+        // Guards ResolveDesiredDisplayX's own attachment-chain walk against a pathological/adversarial
+        // font stacking marks arbitrarily deep - real fonts never chain more than a couple of combining
+        // marks (e.g. a vowel plus a tone mark). Mirrors GsubShaper.MaxNestedContextDepth's identical
+        // rationale for nested contextual lookups.
+        private const int MaxAttachmentChainDepth = 8;
+
+        /// <summary>
+        /// Describes <paramref name="fontface"/>: a font face's metrics, glyph mapping and shaping entry points, in
+        /// design units (nothing here depends on a font size).
+        /// </summary>
+        public OpenTypeDescriptor(string fontDescriptorKey, string name, OpenTypeFontface fontface)
+            : base(fontDescriptorKey)
+        {
+            FontFace = fontface;
+            FontName = name;
+            Initialize();
+        }
+
+        internal OpenTypeFontface FontFace;
+
+        void Initialize()
+        {
+            // TODO: Respect embedding restrictions.
+            //bool embeddingRestricted = fontData.os2.fsType == 0x0002;
+
+            //fontName = image.n
+            ItalicAngle = FontFace.post.italicAngle;
+
+            XMin = FontFace.head.xMin;
+            YMin = FontFace.head.yMin;
+            XMax = FontFace.head.xMax;
+            YMax = FontFace.head.yMax;
+
+            UnderlinePosition = FontFace.post.underlinePosition;
+            UnderlineThickness = FontFace.post.underlineThickness;
+            StrikeoutPosition = FontFace.os2.yStrikeoutPosition;
+            StrikeoutSize = FontFace.os2.yStrikeoutSize;
+
+            // No documetation found how to get the set vertical stems width from the
+            // TrueType tables.
+            // The following formula comes from PDFlib Lite source code. Acrobat 5.0 sets
+            // /StemV to 0 always. I think the value doesn't matter.
+            //float weight = (float)(image.os2.usWeightClass / 65.0f);
+            //stemV = (int)(50 + weight * weight);  // MAGIC
+            StemV = 0;
+
+            // PDFlib states that some Apple fonts miss the OS/2 table.
+            Debug.Assert(FontFace.os2 != null, "TrueType font has no OS/2 table.");
+
+            UnitsPerEm = FontFace.head.unitsPerEm;
+
+            // Calculate Ascent, Descent, Leading and LineSpacing like in WPF Source Code (see FontDriver.ReadBasicMetrics)
+
+            // OS/2 is an optional table, but we can't determine if it is existing in this font.
+            bool os2SeemsToBeEmpty = FontFace.os2.sTypoAscender == 0 && FontFace.os2.sTypoDescender == 0 && FontFace.os2.sTypoLineGap == 0;
+            //Debug.Assert(!os2SeemsToBeEmpty); // Are there fonts without OS/2 table?
+
+            bool dontUseWinLineMetrics = (FontFace.os2.fsSelection & 128) != 0;
+            if (!os2SeemsToBeEmpty && dontUseWinLineMetrics)
+            {
+                // Comment from WPF: The font specifies that the sTypoAscender, sTypoDescender, and sTypoLineGap fields are valid and
+                // should be used instead of winAscent and winDescent.
+                int typoAscender = FontFace.os2.sTypoAscender;
+                int typoDescender = FontFace.os2.sTypoDescender;
+                int typoLineGap = FontFace.os2.sTypoLineGap;
+
+                // Comment from WPF: We include the line gap in the ascent so that white space is distributed above the line. (Note that
+                // the typo line gap is a different concept than "external leading".)
+                Ascender = typoAscender + typoLineGap;
+                // Comment from WPF: Typo descent is a signed value where the positive direction is up. It is therefore typically negative.
+                // A signed typo descent would be quite unusual as it would indicate the descender was above the baseline
+                Descender = -typoDescender;
+                LineSpacing = typoAscender + typoLineGap - typoDescender;
+
+                // `line-height: normal` (CSS 2.1 §10.8.1): browsers use this same OS/2 typo triple when
+                // USE_TYPO_METRICS is set, but - unlike Ascender/Descender/LineSpacing above - never fall
+                // back to the OS/2 win metrics in the branch below; see that branch's own comment.
+                NormalLineHeightAscent = typoAscender;
+                NormalLineHeightDescent = -typoDescender;
+                NormalLineHeightGap = Math.Max((short)0, typoLineGap);
+            }
+            else
+            {
+                // Comment from WPF: get the ascender field
+                int ascender = FontFace.hhea.ascender;
+                // Comment from WPF: get the descender field; this is measured in the same direction as ascender and is therefore
+                // normally negative whereas we want a positive value; however some fonts get the sign wrong
+                // so instead of just negating we take the absolute value.
+                int descender = Math.Abs(FontFace.hhea.descender);
+                // Comment from WPF: get the lineGap field and make sure it's >= 0
+                int lineGap = Math.Max((short)0, FontFace.hhea.lineGap);
+
+                // `line-height: normal`: browsers resolve this from the raw hhea triple - never the OS/2
+                // win-metrics substitution the block below applies to Ascender/Descender/LineSpacing (that
+                // substitution is a legacy Windows-GDI/old-IE convention; Chromium/Gecko/WebKit all read
+                // hhea here instead - issue #956).
+                NormalLineHeightAscent = ascender;
+                NormalLineHeightDescent = descender;
+                NormalLineHeightGap = lineGap;
+
+                if (!os2SeemsToBeEmpty)
+                {
+                    // Comment from WPF: we could use sTypoAscender, sTypoDescender, and sTypoLineGap which are supposed to represent
+                    // optimal typographic values not constrained by backwards compatibility; however, many fonts get
+                    // these fields wrong or get them right only for Latin text; therefore we use the more reliable
+                    // platform-specific Windows values. We take the absolute value of the win32descent in case some
+                    // fonts get the sign wrong.
+                    int winAscent = FontFace.os2.usWinAscent;
+                    int winDescent = Math.Abs(FontFace.os2.usWinDescent);
+
+                    Ascender = winAscent;
+                    Descender = winDescent;
+                    // Comment from WPF: The following calculation for designLineSpacing is per [....]. The default line spacing
+                    // should be the sum of the Mac ascender, descender, and lineGap unless the resulting value would
+                    // be less than the cell height (winAscent + winDescent) in which case we use the cell height.
+                    // See also http://www.microsoft.com/typography/otspec/recom.htm.
+                    // Note that in theory it's valid for the baseline-to-baseline distance to be less than the cell
+                    // height. However, Windows has never allowed this for Truetype fonts, and fonts built for Windows
+                    // sometimes rely on this behavior and get the hha values wrong or set them all to zero.
+                    LineSpacing = Math.Max(lineGap + ascender + descender, winAscent + winDescent);
+                }
+                else
+                {
+                    Ascender = ascender;
+                    Descender = descender;
+                    LineSpacing = ascender + descender + lineGap;
+                }
+            }
+
+            Debug.Assert(Descender >= 0);
+
+            int cellHeight = Ascender + Descender;
+            int internalLeading = cellHeight - UnitsPerEm; // Not used, only for debugging.
+            int externalLeading = LineSpacing - cellHeight;
+            Leading = externalLeading;
+
+            // sCapHeight and sxHeight are only valid if Version >= 2
+            if (FontFace.os2.version >= 2 && FontFace.os2.sCapHeight != 0)
+                CapHeight = FontFace.os2.sCapHeight;
+            else
+                CapHeight = Ascender;
+
+            if (FontFace.os2.version >= 2 && FontFace.os2.sxHeight != 0)
+            {
+                XHeight = FontFace.os2.sxHeight;
+                HasAuthenticXHeight = true;
+            }
+            else
+                XHeight = (int)(0.66 * Ascender);
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether this instance belongs to a bold font.
+        /// </summary>
+        public override bool IsBoldFace
+        {
+            get
+            {
+                // usWeightClass 700 is Bold
+                //Debug.Assert((fontData.os2.usWeightClass >= 700) == ((fontData.os2.fsSelection & (ushort)OS2Table.FontSelectionFlags.Bold) != 0));
+                return FontFace.os2.IsBold;
+            }
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether this instance belongs to an italic font.
+        /// </summary>
+        public override bool IsItalicFace
+        {
+            get { return FontFace.os2.IsItalic; }
+        }
+
+        internal int DesignUnitsToPdf(double value)
+        {
+            return (int)Math.Round(value * 1000.0 / FontFace.head.unitsPerEm);
+        }
+
+        /// <summary>
+        /// Maps a <see cref="Rune"/> (Unicode scalar value / codepoint) to the index of the corresponding
+        /// glyph. See OpenType spec "cmap - Character To Glyph Index Mapping Table". BMP codepoints resolve
+        /// through the format-4 subtable; codepoints above <c>U+FFFF</c> resolve through the format-12
+        /// subtable when the font provides one, otherwise the missing glyph (index 0).
+        /// </summary>
+        public int CharCodeToGlyphIndex(Rune value) => CharCodeToGlyphIndexCore(value.Value);
+
+        /// <summary>
+        /// Whether this font actually contains a glyph for <paramref name="value"/> - i.e. its cmap maps
+        /// it to something other than the missing glyph. Used to drive per-codepoint font fallback.
+        /// </summary>
+        public bool HasGlyph(Rune value) => CharCodeToGlyphIndexCore(value.Value) != 0;
+
+        /// <summary>
+        /// Maps <paramref name="text"/> to a shaped glyph run: one glyph per codepoint via
+        /// <see cref="CharCodeToGlyphIndex"/>, then GSUB substitution for whatever <paramref name="features"/>
+        /// requests and the font has a GSUB table for. The single glyph-walk shared by measurement,
+        /// painting, outline extraction and glyph subsetting/embedding - see <see cref="GsubShaper"/>.
+        /// </summary>
+        /// <remarks>
+        /// <paramref name="text"/> is always shaped in true logical (source) order - GSUB/GPOS need real
+        /// logical adjacency to match contextual rules a font author actually wrote against (e.g. a
+        /// Format-3 <c>rlig</c> rule pairing Arabic lam with a following alef only matches lam-then-alef,
+        /// never the reverse). A plain RTL word (Hebrew, or Arabic text with no joining-form request) is
+        /// instead pre-reversed/mirrored at the character level before it ever reaches here
+        /// (<c>CssLayoutEngine.MirrorWordTextIfNeeded</c>), so for that caller "logical order" and
+        /// "display order" are already the same string by the time <paramref name="text"/> arrives.
+        /// <see cref="TextShapingFeatures.ReverseForDisplay"/> is the other caller's escape hatch: an
+        /// Arabic-family joining word never mutates its own text (see <c>CssRectWord</c>'s own remarks),
+        /// so its shaped glyphs still need reversing to paint in the correct right-to-left visual order -
+        /// done here, as the very last step, once GSUB/GPOS have both already run in the logical order
+        /// they need. This mirrors how real shaping engines apply features in logical order and reverse
+        /// only at the end for an RTL run.
+        /// </remarks>
+        public IReadOnlyList<ShapedGlyph> Shape(string text, TextShapingFeatures features)
+        {
+            List<ShapedGlyph> glyphs = GsubShaper.Shape(this, text, features);
+            GposPositioner.Apply(this, glyphs, features);
+            DropHiddenIgnorables(glyphs);
+
+            if (features.ReverseForDisplay)
+                ReverseGlyphsForDisplay(glyphs, text);
+
+            return glyphs;
+        }
+
+        /// <summary>
+        /// Deletes every glyph <see cref="GsubShaper.MapToGlyphs"/> flagged
+        /// <see cref="ShapedGlyph.IsHiddenIgnorable"/>: every variation selector, plus the missing-glyph
+        /// placeholder (<c>.notdef</c>) standing in for another codepoint Unicode declares
+        /// <c>Default_Ignorable_Code_Point</c>, such as ZWJ/ZWNJ, a bidi control, or a language tag
+        /// character. Those codepoints have no visible rendering of their own. Letting an unmapped one
+        /// fall through paints tofu; letting a mapped variation selector through can add a false advance.
+        /// </summary>
+        /// <remarks>
+        /// Runs <b>after</b> GSUB and GPOS, never before: an ignorable is load-bearing <i>during</i>
+        /// shaping - ZWJ is exactly what makes an emoji ZWJ sequence ligate, and a bidi control can be the
+        /// context a contextual rule matches on - so it has to reach the lookups and only then be deleted.
+        /// This mirrors how a real shaping engine (HarfBuzz's <c>hide_default_ignorables</c>) sequences the
+        /// same job.
+        ///
+        /// Variation selectors are always flagged because they modify the preceding character and never
+        /// contribute an independent advance. For other default ignorables, only glyph index 0 is flagged,
+        /// so a font that ships a real glyph is honored as authored - which is also what keeps a soft hyphen
+        /// (U+00AD, itself default-ignorable, and drawn as a visible hyphen by most fonts when
+        /// <c>hyphens: none</c> leaves it in the text) behaving exactly as it did before.
+        ///
+        /// <see cref="ShapedGlyph.AttachedToIndex"/> is a <i>glyph-list</i> index, so removal has to remap
+        /// it; a mark attached to a deleted glyph loses its anchor rather than silently pointing at whatever
+        /// slid into that slot. <see cref="ShapedGlyph.LigatureComponentClusterStarts"/> holds text offsets,
+        /// not glyph indices, so it needs no such fixup.
+        /// </remarks>
+        private static void DropHiddenIgnorables(List<ShapedGlyph> glyphs)
+        {
+            // Overwhelmingly the common case - no ignorable reached .notdef, so nothing is rebuilt.
+            var anyToDrop = false;
+            foreach (ShapedGlyph glyph in glyphs)
+            {
+                if (glyph.IsHiddenIgnorable)
+                {
+                    anyToDrop = true;
+                    break;
+                }
+            }
+
+            if (!anyToDrop)
+                return;
+
+            // oldIndex -> newIndex, with -1 marking a deleted glyph, so AttachedToIndex can be rewritten
+            // in the second pass below against the list this one produces.
+            var remap = new int[glyphs.Count];
+            var kept = new List<ShapedGlyph>(glyphs.Count);
+
+            for (var i = 0; i < glyphs.Count; i++)
+            {
+                if (glyphs[i].IsHiddenIgnorable)
+                {
+                    remap[i] = -1;
+                    continue;
+                }
+
+                remap[i] = kept.Count;
+                kept.Add(glyphs[i]);
+            }
+
+            for (var i = 0; i < kept.Count; i++)
+            {
+                if (kept[i].AttachedToIndex is not { } attachedTo)
+                    continue;
+
+                var newAttachedTo = (uint)attachedTo < (uint)remap.Length ? remap[attachedTo] : -1;
+                kept[i] = kept[i] with { AttachedToIndex = newAttachedTo >= 0 ? newAttachedTo : null };
+            }
+
+            glyphs.Clear();
+            glyphs.AddRange(kept);
+        }
+
+        /// <summary>
+        /// Reverses <paramref name="glyphs"/> in place for right-to-left display, and remaps any glyph
+        /// whose entire source cluster is one <c>Bidi_Mirrored</c> character (UAX #9 L4 - e.g. a
+        /// parenthesis embedded in an Arabic-family joining word) to that character's own mirror-image
+        /// glyph, when the font has one. Arabic-family letters themselves have no mirror-image codepoint
+        /// (joining, not character substitution, is what makes them read right-to-left), so this rarely
+        /// changes anything in practice - it exists for the rare case a joining word carries an
+        /// embedded mirrorable character, matching what <c>BidiMirrorResolver.ApplyMirroring</c> already
+        /// does for every other RTL word's own (pre-reversed) text.
+        /// </summary>
+        /// <remarks>
+        /// A plain list reversal is correct for every glyph's own natural (advance-based) position -
+        /// walking the reversed list with fresh left-to-right pen accumulation reproduces an exact
+        /// mirror image of the logical-order layout, since reflecting an interval <c>[origin, origin +
+        /// advance]</c> around the run's total width is mathematically identical to summing advances in
+        /// reverse order. It is NOT correct for a mark <see cref="GposPositioner.ApplyMarkAnchor"/>
+        /// positioned via <see cref="ShapedGlyph.XOffset"/>: that offset bakes in the pen-distance from
+        /// the mark's own base to the mark itself, under the walk order GPOS actually computed it in
+        /// (logical order) - after reversal, the mark's new neighbors (and so its own natural pen
+        /// position relative to its base) are completely different, so reusing the old offset
+        /// mis-positions the mark by roughly its base's own advance width. Found by rasterizing real
+        /// Arabic text (a two-dot combining mark landing tens of points away from its own letter) rather
+        /// than by reasoning about the math in the abstract - see this fix's own recent-fixes entry.
+        /// Fixed by resolving each glyph's desired absolute X position before reversing - an unattached
+        /// glyph's own interval-mirror position, or (recursively, for a glyph with
+        /// <see cref="ShapedGlyph.AttachedToIndex"/> set) its base's own resolved position plus the same
+        /// relative offset it had from that base in logical order, which is a purely geometric
+        /// relationship reversal must not disturb - then, after reversing, assigning each glyph whatever
+        /// new <see cref="ShapedGlyph.XOffset"/> reproduces that resolved position under the new walk
+        /// order. <see cref="ShapedGlyph.YOffset"/> needs no such correction: it is never pen-position-
+        /// dependent (vertical placement doesn't accumulate along the line the way horizontal advance
+        /// does), so it carries over unchanged.
+        /// </remarks>
+        private void ReverseGlyphsForDisplay(List<ShapedGlyph> glyphs, string text)
+        {
+            int count = glyphs.Count;
+
+            // The position fix-up/reversal below is a genuine no-op for a single glyph (nothing to
+            // reorder), but the mirror remap after it is not - a lone glyph can still be one
+            // Bidi_Mirrored character in its own right - so this guard must not skip that part too.
+            if (count > 1)
+            {
+                // Each glyph's own natural advance, computed once and reused by both this method's own
+                // reassembly loop and ResolveDesiredDisplayX's unattached-glyph branch, rather than
+                // calling GlyphIndexToWidth up to 3 times per glyph.
+                var advance = new double[count];
+                var naturalPos = new double[count];
+                double pos = 0;
+                for (var i = 0; i < count; i++)
+                {
+                    naturalPos[i] = pos;
+                    advance[i] = GlyphIndexToWidth(glyphs[i].GlyphIndex) + glyphs[i].XAdvanceDelta;
+                    pos += advance[i];
+                }
+                double totalWidth = pos;
+
+                var desiredX = new double?[count];
+                for (var i = 0; i < count; i++)
+                    ResolveDesiredDisplayX(glyphs, naturalPos, advance, totalWidth, desiredX, i, depth: 0);
+
+                glyphs.Reverse();
+
+                double newPos = 0;
+                for (var newIndex = 0; newIndex < count; newIndex++)
+                {
+                    int oldIndex = count - 1 - newIndex;
+                    ShapedGlyph glyph = glyphs[newIndex];
+                    glyphs[newIndex] = glyph with { XOffset = desiredX[oldIndex]!.Value - newPos, AttachedToIndex = null };
+                    // advance[oldIndex] is still this exact glyph's own advance - Reverse() only
+                    // reorders list elements, it never mutates the (immutable record struct) values.
+                    newPos += advance[oldIndex];
+                }
+            }
+
+            for (var i = 0; i < glyphs.Count; i++)
+            {
+                var glyph = glyphs[i];
+                if (glyph.ClusterLength <= 0)
+                    continue;
+
+                if (!Rune.TryGetRuneAt(text, glyph.ClusterStart, out var rune) || rune.Utf16SequenceLength != glyph.ClusterLength)
+                    continue;
+
+                if (!BidiMirroring.TryGetMirror(rune.Value, out var mirroredCodepoint))
+                    continue;
+
+                var mirroredGlyphIndex = CharCodeToGlyphIndex(new Rune(mirroredCodepoint));
+                if (mirroredGlyphIndex != 0)
+                    glyphs[i] = glyph with { GlyphIndex = mirroredGlyphIndex };
+            }
+        }
+
+        /// <summary>
+        /// Resolves (and memoizes into <paramref name="desiredX"/>) glyph <paramref name="i"/>'s desired
+        /// absolute X position in the not-yet-built display order - see <see cref="ReverseGlyphsForDisplay"/>'s
+        /// own remarks. <paramref name="depth"/> guards a pathological/adversarial font's attachment
+        /// chain the same way <c>GsubShaper.MaxNestedContextDepth</c> guards nested contextual lookups -
+        /// real fonts never stack more than a couple of combining marks; past the guard a glyph is
+        /// simply treated as unattached rather than resolved incorrectly or overflowing the stack.
+        /// </summary>
+        private double ResolveDesiredDisplayX(List<ShapedGlyph> glyphs, double[] naturalPos, double[] advance, double totalWidth, double?[] desiredX, int i, int depth)
+        {
+            if (desiredX[i] is { } cached)
+                return cached;
+
+            ShapedGlyph glyph = glyphs[i];
+            double logicalAbsX = naturalPos[i] + glyph.XOffset;
+            double result;
+
+            if (glyph.AttachedToIndex is { } baseIndex && baseIndex != i && depth < MaxAttachmentChainDepth)
+            {
+                double baseDesiredX = ResolveDesiredDisplayX(glyphs, naturalPos, advance, totalWidth, desiredX, baseIndex, depth + 1);
+                double baseLogicalAbsX = naturalPos[baseIndex] + glyphs[baseIndex].XOffset;
+                result = baseDesiredX + (logicalAbsX - baseLogicalAbsX);
+            }
+            else
+            {
+                result = totalWidth - logicalAbsX - advance[i];
+            }
+
+            desiredX[i] = result;
+            return result;
+        }
+
+        /// <summary>
+        /// The OS/2 table's own recommended geometry for synthesizing a subscript or superscript, as
+        /// fractions of the em: the glyph scale factor, and how far the synthesized baseline sits from
+        /// the main one (always positive - in the direction that variant belongs, so the caller decides
+        /// the sign). Returns null when the font leaves the relevant fields at zero, which is the
+        /// caller's signal to fall back to representative ratios.
+        /// </summary>
+        /// <remarks>
+        /// Per the OpenType OS/2 spec these are "recommended" values a UA is meant to use precisely for
+        /// this purpose, so a synthesized sub/superscript follows the type designer's own intent rather
+        /// than one hardcoded ratio for every face. Only the Y size is read: scaling a glyph
+        /// non-uniformly (ySuperscriptXSize differs from ySuperscriptYSize in some faces) would distort
+        /// it, and PeachPDF scales a synthesized run by picking a smaller font, which is uniform.
+        /// </remarks>
+        public (double SizeScale, double BaselineShift)? GetSubSuperscriptMetrics(bool superscript)
+        {
+            if (FontFace.os2 is not { } os2 || UnitsPerEm <= 0) return null;
+
+            var ySize = superscript ? os2.ySuperscriptYSize : os2.ySubscriptYSize;
+            var yOffset = superscript ? os2.ySuperscriptYOffset : os2.ySubscriptYOffset;
+
+            if (ySize <= 0 || yOffset == 0) return null;
+
+            return (ySize / (double)UnitsPerEm, Math.Abs(yOffset) / (double)UnitsPerEm);
+        }
+
+        /// <summary>
+        /// Whether this font's GSUB table defines an active lookup for every tag in
+        /// <paramref name="requiredTags"/> - checked independently per tag (see
+        /// <see cref="GsubTable.SupportsAllFeatureTags"/>), under <see cref="GsubShaper.ScriptPreference"/>
+        /// (the no-script-tag fallback chain `Shape` itself resolves against for a run that carries no
+        /// <see cref="TextShapingFeatures.ScriptTag"/>). This method has no per-run script tag to check
+        /// against - every caller (<c>RFont.SupportsFontVariantCaps</c>, resolved once per box via
+        /// <c>DerivedStyle.ActualFontVariantCaps</c>/<c>SvgTreeBuilder.ComputeFontContext</c>) queries at
+        /// element granularity, before per-word script-run splitting (<c>CharScripts</c>)
+        /// has happened - so "supported" and "actually applied" can disagree for a run whose own
+        /// resolved <see cref="TextShapingFeatures.ScriptTag"/> is non-null (currently: Arabic-family
+        /// joining text) when the requested tags exist in this font only under that specific script's
+        /// `LangSys`, not under `"latn"`/`"DFLT"`: `Shape` would still find and apply them (it prepends
+        /// the run's own tag - see <see cref="GsubShaper"/>'s own <c>ResolveScriptPreference</c>), but
+        /// this method would report false, since it always checks the same script-agnostic chain
+        /// regardless of which run is asking. Narrow in practice (most fonts author caps/ligature
+        /// features under `DFLT`/`latn` regardless of what other scripts they also support), but a real
+        /// gap worth knowing about before trusting this as a strict "will `Shape` actually do this"
+        /// oracle for script-tagged text.
+        /// </summary>
+        public bool SupportsFeatureTags(IReadOnlySet<string> requiredTags)
+            => FontFace.gsub?.Table?.SupportsAllFeatureTags(GsubShaper.ScriptPreference, requiredTags) ?? false;
+
+        /// <summary>
+        /// True when this font carries COLR + CPAL color-glyph data over glyf outlines, so its color
+        /// glyphs can be drawn as vector fills. CFF-flavored color fonts report false (no glyf).
+        /// </summary>
+        public bool IsColorFont => FontFace.IsColorFont;
+
+        /// <summary>
+        /// Whether the font's cmap format 14 (Unicode Variation Sequences) lists <paramref name="baseCodepoint"/>
+        /// followed by <paramref name="selector"/> (U+FE0E or U+FE0F), and if it gives the sequence a
+        /// dedicated glyph, which.
+        /// </summary>
+        public VariationSequenceSupport LookupVariationSequence(int baseCodepoint, int selector, out int glyph)
+        {
+            glyph = 0;
+            return FontFace.cmap.cmap14?.Lookup(baseCodepoint, selector, out glyph) ?? VariationSequenceSupport.None;
+        }
+
+        /// <summary>True when this font carries bitmap colour glyphs (CBDT/CBLC or sbix): a picture per glyph and size, not outlines.</summary>
+        public bool HasBitmapGlyphs => FontFace.bitmap != null;
+
+        /// <summary>Whether the font has a bitmap picture for <paramref name="glyphId"/>.</summary>
+        public bool HasBitmapGlyph(int glyphId) => FontFace.bitmap?.HasGlyph(glyphId) ?? false;
+
+        /// <summary>
+        /// The bitmap picture of a glyph from the strike best suited to a font size of <paramref name="ppem"/> pixels per em, or false when
+        /// the glyph has none (an outline glyph, or a font without bitmap colour tables).
+        /// </summary>
+        public bool TryGetBitmapGlyph(int glyphId, double ppem, out BitmapGlyph glyph)
+        {
+            glyph = default;
+            return FontFace.bitmap?.TryGet(glyphId, ppem, out glyph) ?? false;
+        }
+
+        /// <summary>The font's COLR table, or null if it has none.</summary>
+        public ColrTable ColorTable => FontFace.colr;
+
+        /// <summary>The font's CPAL palette, or null if it has none.</summary>
+        public CpalTable ColorPalette => FontFace.cpal;
+
+        /// <summary>True when this font carries a MATH table (mathematical typesetting data) - only
+        /// dedicated math fonts (e.g. STIX Two Math, Latin Modern Math) do.</summary>
+        public bool HasMathTable => FontFace.math?.Table != null;
+
+        /// <summary>The font's MATH table, or null if it has none.</summary>
+        public MathTable? MathTable => FontFace.math?.Table;
+
+        /// <summary>
+        /// Decodes a glyph's outline into drawable vector segments - `glyf` contours when the font
+        /// has them, else a CFF font's own Type 2 charstring (see <see cref="Type2CharstringInterpreter"/>)
+        /// when it has one <see cref="CffTable.IsSupported">this reader supports</see> - an ordinary or
+        /// CID-keyed CFF font alike, resolving each glyph's local Subrs via
+        /// <see cref="CffTable.LocalSubrsFor"/>. False for a font with neither (one this reader could
+        /// not parse at all, or a CID-keyed CFF font missing/malformed <c>FDArray</c>/<c>FDSelect</c>).
+        /// </summary>
+        public bool TryGetGlyphOutline(int glyphIndex, out GlyphOutline outline)
+        {
+            if (GlyphOutlineDecoder.TryGetGlyphOutline(FontFace, glyphIndex, out outline))
+                return true;
+
+            if (FontFace.glyf is null && FontFace.cff is { IsSupported: true })
+                return Type2CharstringInterpreter.TryGetGlyphOutline(FontFace.cff, glyphIndex, out outline);
+
+            return false;
+        }
+
+        private int CharCodeToGlyphIndexCore(int value)
+        {
+            // The format-4 cmap only maps the Basic Multilingual Plane. A codepoint above U+FFFF (astral,
+            // e.g. emoji) is resolved through the font's format-12 subtable when it has one; a font
+            // without format-12 has no astral mapping, so it resolves to the missing glyph.
+            if (value > 0xFFFF)
+                return FontFace.cmap.cmap12?.MapCodeToGlyph(value) ?? 0;
+
+            try
+            {
+                CMap4 cmap4 = FontFace.cmap.cmap4;
+                int segCount = cmap4.segCountX2 / 2;
+                int seg;
+                for (seg = 0; seg < segCount; seg++)
+                {
+                    if (value <= cmap4.endCount[seg])
+                        break;
+                }
+                Debug.Assert(seg < segCount);
+
+                if (value < cmap4.startCount[seg])
+                    return 0;
+
+                if (cmap4.idRangeOffs[seg] == 0)
+                    return (value + cmap4.idDelta[seg]) & 0xFFFF;
+
+                int idx = cmap4.idRangeOffs[seg] / 2 + (value - cmap4.startCount[seg]) - (segCount - seg);
+                Debug.Assert(idx >= 0 && idx < cmap4.glyphCount);
+
+                if (cmap4.glyphIdArray[idx] == 0)
+                    return 0;
+
+                return (cmap4.glyphIdArray[idx] + cmap4.idDelta[seg]) & 0xFFFF;
+            }
+            catch
+            {
+                GetType();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Converts the width of a glyph identified by its index to PDF design units.
+        /// </summary>
+        public int GlyphIndexToPdfWidth(int glyphIndex)
+        {
+            try
+            {
+                int numberOfHMetrics = FontFace.hhea.numberOfHMetrics;
+                int unitsPerEm = FontFace.head.unitsPerEm;
+
+                // glyphIndex >= numberOfHMetrics means the font is mono-spaced and all glyphs have the same width
+                if (glyphIndex >= numberOfHMetrics)
+                    glyphIndex = numberOfHMetrics - 1;
+
+                int width = FontFace.hmtx.Metrics[glyphIndex].advanceWidth;
+
+                // Sometimes the unitsPerEm is 1000, sometimes a power of 2.
+                if (unitsPerEm == 1000)
+                    return width;
+                return width * 1000 / unitsPerEm; // normalize
+            }
+            catch (Exception)
+            {
+                GetType();
+                throw;
+            }
+        }
+
+        /// <summary>
+        ///   //Converts the width of a glyph identified by its index to PDF design units.
+        /// </summary>
+        public double GlyphIndexToEmfWidth(int glyphIndex, double emSize)
+        {
+            try
+            {
+                int numberOfHMetrics = FontFace.hhea.numberOfHMetrics;
+                int unitsPerEm = FontFace.head.unitsPerEm;
+
+                // glyphIndex >= numberOfHMetrics means the font is mono-spaced and all glyphs have the same width
+                if (glyphIndex >= numberOfHMetrics)
+                    glyphIndex = numberOfHMetrics - 1;
+
+                int width = FontFace.hmtx.Metrics[glyphIndex].advanceWidth;
+
+                return width * emSize / unitsPerEm; // normalize
+            }
+            catch (Exception)
+            {
+                GetType();
+                throw;
+            }
+        }
+
+        /// <summary>
+        ///   //Converts the width of a glyph identified by its index to PDF design units.
+        /// </summary>
+        public int GlyphIndexToWidth(int glyphIndex)
+        {
+            try
+            {
+                int numberOfHMetrics = FontFace.hhea.numberOfHMetrics;
+
+                // glyphIndex >= numberOfHMetrics means the font is mono-spaced and all glyphs have the same width
+                if (glyphIndex >= numberOfHMetrics)
+                    glyphIndex = numberOfHMetrics - 1;
+
+                int width = FontFace.hmtx.Metrics[glyphIndex].advanceWidth;
+                return width;
+            }
+            catch (Exception)
+            {
+                GetType();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Whether this font has real <c>vhea</c> + <c>vmtx</c> data to consult, as opposed to
+        /// <see cref="GlyphIndexToVerticalAdvance"/>'s own one-em fallback (a real but different value
+        /// from whatever approximation a caller used before consulting this font at all - a caller that
+        /// needs to know whether the *real* metrics are actually available checks this first).
+        /// </summary>
+        public bool HasVerticalMetrics => FontFace.vhea != null && FontFace.vmtx?.Metrics is { Length: > 0 };
+
+        /// <summary>
+        /// Converts a glyph's vertical advance (the axis a <c>vertical-rl</c>/<c>vertical-lr</c> glyph
+        /// run stacks along) to font design units, using <c>vmtx</c> when the font has one. Falls back to
+        /// the OpenType-spec-sanctioned default of one em (<see cref="FontDescriptor.UnitsPerEm"/>) for
+        /// the common case - the large majority of fonts, Latin-oriented ones especially - of a font
+        /// shipping no vertical metrics at all.
+        /// </summary>
+        public int GlyphIndexToVerticalAdvance(int glyphIndex)
+        {
+            VerticalHeaderTable vhea = FontFace.vhea;
+            VerticalMetricsTable vmtx = FontFace.vmtx;
+
+            if (!HasVerticalMetrics)
+                return FontFace.head.unitsPerEm;
+
+            int numMetrics = vhea.numOfLongVerMetrics;
+
+            // glyphIndex >= numMetrics means every remaining glyph shares the last metric's advance
+            // height - the same "monospaced tail" convention GlyphIndexToWidth's hmtx lookup uses.
+            if (glyphIndex >= numMetrics)
+                glyphIndex = numMetrics - 1;
+
+            return vmtx.Metrics[glyphIndex].advanceHeight;
+        }
+
+        /// <summary>
+        /// Whether this font has a real <c>VORG</c> table this reader will actually trust. Per the
+        /// OpenType spec, <c>VORG</c> "may only be used in CFF or CFF2 OpenType fonts" and "if present in
+        /// OpenType fonts containing TrueType outline data, it must be ignored" - a font with real
+        /// <c>glyf</c> outlines has to derive its vertical origin from <c>vmtx</c>'s top-side-bearing plus
+        /// the glyph's own bounding-box top instead, which this reader does not implement, so a
+        /// TrueType-flavored font's <c>VORG</c> table (spurious as it would be) is never consulted -
+        /// <see cref="GlyphIndexToVerticalOrigin"/> falls through to its own <c>vhea</c>/<c>os2</c>/
+        /// one-em chain for such a font exactly as it would for one with no <c>VORG</c> at all.
+        /// </summary>
+        public bool HasVerticalOrigin => FontFace.vorg != null && FontFace.glyf == null;
+
+        /// <summary>
+        /// A glyph's vertical origin, in font design units relative to its horizontal origin. X has no
+        /// dedicated OpenType table (a conformant reader would consult <c>BASE</c>, which PeachPDF does
+        /// not parse) - half the glyph's own advance width is the common implementation fallback, used
+        /// unconditionally since <c>VORG</c> only ever overrides Y. Y comes from <c>VORG</c> when
+        /// <see cref="HasVerticalOrigin"/> is true, else <c>vhea</c>'s own vertical typographic ascender
+        /// (the most on-topic value when present), else the font's general typographic ascender, falling
+        /// back further to one em when even that is unavailable.
+        /// </summary>
+        public (int X, int Y) GlyphIndexToVerticalOrigin(int glyphIndex)
+        {
+            int originX = GlyphIndexToWidth(glyphIndex) / 2;
+
+            if (HasVerticalOrigin)
+                return (originX, FontFace.vorg.VertOriginYFor(glyphIndex));
+
+            VerticalHeaderTable vhea = FontFace.vhea;
+            if (vhea != null && vhea.ascent != 0)
+                return (originX, vhea.ascent);
+
+            OS2Table os2 = FontFace.os2;
+            if (os2 != null && os2.sTypoAscender != 0)
+                return (originX, os2.sTypoAscender);
+
+            return (originX, FontFace.head.unitsPerEm);
+        }
+    }
+}

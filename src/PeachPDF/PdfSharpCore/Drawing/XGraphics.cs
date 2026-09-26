@@ -33,7 +33,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.Text;
+using PeachDrawing.Text.Internal.Text;
 using System;
 
 #pragma warning disable 1587

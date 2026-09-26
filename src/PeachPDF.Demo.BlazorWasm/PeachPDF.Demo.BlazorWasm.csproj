@@ -65,7 +65,7 @@
     version alone is the honest answer.
   -->
   <Target Name="GenerateDemoBuildInfo" BeforeTargets="BeforeBuild">
-    <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)..\PeachPDF\PeachPDF.csproj"
+    <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)..\Version.props"
              Query="/Project/PropertyGroup/PackageVersion/text()">
       <Output TaskParameter="Result" PropertyName="PeachPdfVersion" />
     </XmlPeek>

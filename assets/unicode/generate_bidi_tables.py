@@ -3,8 +3,8 @@
 Unicode Character Database source files in this directory (DerivedBidiClass.txt,
 BidiBrackets.txt, BidiMirroring.txt - Unicode 18.0.0, see PR #542).
 
-Output goes to src/PeachPDF/Text/Resources/Bidi/*.txt.br, consumed by
-PeachPDF.Text.Bidi.BidiClassTable/BidiBrackets/BidiMirroring. Each output file is a plain-text
+Output goes to src/PeachDrawing.Text/Internal/Text/Resources/Bidi/*.txt.br, consumed by
+PeachDrawing.Text.Internal.Text.Bidi.BidiClassTable/BidiBrackets/BidiMirroring. Each output file is a plain-text
 table (one record per line, fields space-separated, hex codepoints) - the same
 "plain text, Brotli-compressed" shape as the existing hyphenation pattern resources
 (Text/Resources/Patterns/*.txt.br) - Brotli-compressed with the .NET-compatible raw Brotli
@@ -19,7 +19,7 @@ import re
 import brotli
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUT_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "..", "src", "PeachPDF", "Text", "Resources", "Bidi"))
+OUT_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "..", "src", "PeachDrawing.Text", "Internal", "Text", "Resources", "Bidi"))
 
 # The four @missing default-value names DerivedBidiClass.txt's own header documents (see the
 # comments above each "# @missing: RANGE; Name" line) - the only spelled-out class names that

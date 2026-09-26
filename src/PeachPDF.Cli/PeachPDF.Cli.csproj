@@ -46,6 +46,7 @@
   <ItemGroup>
     <EmbeddedResource Include="..\..\LICENSE" LogicalName="PeachPDF.Cli.LICENSE" />
     <EmbeddedResource Include="..\..\THIRD-PARTY-LICENSES.md" LogicalName="PeachPDF.Cli.THIRD-PARTY-LICENSES.md" />
+    <EmbeddedResource Include="..\PeachDrawing.Text\THIRD-PARTY-LICENSES.md" LogicalName="PeachPDF.Cli.PeachDrawing.Text.THIRD-PARTY-LICENSES.md" />
   </ItemGroup>
 
 </Project>

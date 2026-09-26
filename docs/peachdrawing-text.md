@@ -1,0 +1,86 @@
+# PeachDrawing.Text
+
+`PeachDrawing.Text` is the font and text engine PeachPDF renders HTML with, published as its own NuGet package so other
+.NET applications can use it without PeachPDF. It has no package dependencies, is trimmable and Native AOT compatible,
+and is versioned in lockstep with PeachPDF: the same version number for every release, and PeachPDF depends on it.
+
+```bash
+dotnet add package PeachDrawing.Text
+```
+
+> **Status: pre-1.0.** The library is being opened up area by area. Today the public surface is the
+> `PeachDrawing.Text.Unicode` namespace described below. The font, shaping, outline and paragraph-layout APIs are
+> still internal to the package, so PeachPDF is the only consumer of them, and they will be published in later
+> releases. Until 1.0, the public API may change between releases.
+
+## What the engine does
+
+- **Fonts:** TrueType, OpenType (`glyf` and CFF), WOFF and WOFF2 loading; TrueType/OpenType collections; installed-font
+  discovery on Windows, macOS, Linux (through fontconfig) and Android; CSS Fonts 4 face matching by weight, width and
+  style; `unicode-range` and glyph-coverage fallback.
+- **Shaping:** GSUB and GPOS (ligatures, kerning, mark attachment, contextual lookups), Arabic and Syriac joining, the
+  Universal Shaping Engine for Devanagari, Bengali, Gujarati and Tamil, default-ignorable handling, and `cmap` format 14
+  variation sequences.
+- **Outlines and colour:** glyph outlines for `glyf` and CFF, COLR v0 and v1 with CPAL, and CBDT/CBLC and sbix bitmaps.
+- **Unicode:** the Unicode Bidirectional Algorithm, script itemization, vertical orientation, emoji presentation, and
+  TeX/Liang hyphenation for 73 languages.
+
+## The `PeachDrawing.Text.Unicode` namespace
+
+Each entry point is a static class named for the algorithm or property it implements, and takes plain strings, runes
+and arrays.
+
+### Bidirectional text
+
+[UAX #9](https://www.unicode.org/reports/tr9/) works in two steps, and so does the API. `Bidi.Analyze` resolves an
+embedding level for every UTF-16 code unit of a paragraph. Once your layout has decided where lines break,
+`Bidi.ReorderLine` puts one line's runs in the order they are drawn.
+
+```csharp
+using PeachDrawing.Text.Unicode;
+
+string text = "abc אבג";
+BidiAnalysis analysis = Bidi.Analyze(text, BaseDirection.Ltr);
+
+foreach (BidiRun run in Bidi.ReorderLine(analysis.Levels, 0, text.Length))
+{
+    string piece = text.Substring(run.Start, run.Length);
+    // A run at an odd level reads right to left: Mirror reverses it and swaps mirrored characters such as brackets.
+    Console.WriteLine(run.IsRtl ? Bidi.Mirror(piece, run.Level) : piece);
+}
+```
+
+`BaseDirection.Auto` detects the direction from the first strong character. A host with its own markup, such as CSS
+`unicode-bidi` or an SVG `direction` attribute, passes `EmbeddingSpan` values to describe embeddings the text itself
+does not spell out. `Bidi.ClassOf` returns a character's `Bidi_Class`, and `Bidi.TryGetMirror` finds a bracket's
+counterpart.
+
+The implementation is checked against Unicode's `BidiCharacterTest.txt` conformance file. Rule L1's last clause, which
+resets the whitespace at the end of each line, is left to the caller because it depends on whether the caller lays
+out in characters, words or glyphs.
+
+### Scripts and OpenType tags
+
+`Scripts.Of` returns the Unicode `Script` of a character (`Latin`, `Arabic`, `Han`, and the shared `Common` and
+`Inherited`). `Scripts.Resolve` gives every character of a text the script it is to be treated as, so that a comma
+between two Arabic words counts as Arabic (UAX #24 section 5.1). `OpenTypeTags.ForScript` and `OpenTypeTags.ForLanguage`
+turn a script name or a BCP 47 language tag into the four-letter tag an OpenType font's layout tables are keyed by.
+Both answer `null` for a script or language the built-in table does not cover.
+
+### Vertical text, invisible characters, hyphenation and emoji
+
+- `VerticalOrientation.IsEffectivelyUpright` says whether a character stays upright in vertical text set with CSS
+  `text-orientation: mixed`; `VerticalOrientation.Of` returns the UAX #50 class behind it.
+- `DefaultIgnorables.Contains` recognises the characters that carry meaning but draw nothing, such as joiners,
+  variation selectors and bidi controls, for which drawing a "missing glyph" box would be wrong.
+- `Hyphenator.FindBreakPoints("hyphenation", "en-US")` returns the indexes at which a hyphen may be inserted, using
+  the TeX patterns for the closest supported language. An unsupported language, a word shorter than that language's
+  minimums, or a word with non-letters in it, yields an empty list.
+- `Emoji.Resolve` and `Emoji.ResolveAt` decide whether a character that has both a text and an emoji appearance is
+  drawn as one or the other, from an `EmojiMode` (CSS `font-variant-emoji`) and any variation selector that follows.
+
+## Licences
+
+The package is BSD 3-Clause. It carries its third-party notices with it, in `THIRD-PARTY-LICENSES.md`: the font readers
+derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz code, and the data tables come from the
+Unicode Character Database and the `hyph-utf8` pattern collection. See [License](license.md) for the whole list.

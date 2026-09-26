@@ -1,4 +1,4 @@
-using PeachPDF.Fonts;
+using PeachDrawing.Text.Internal.Fonts;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Parse;
-using PeachPDF.Fonts.OpenType;
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 
 namespace PeachPDF.Html.Core.Utils
 {
