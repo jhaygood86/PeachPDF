@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Builds VariableFeatureTest.ttf (CC0, see VariableFeatureTest.LICENSE.txt): a variable font whose GSUB has FeatureVariations.
 
-One `wght` axis (100 to 900, default 400). Glyphs: A, B, and A.heavy, B.heavy. The design space has two rules, which fontTools' varLib
+One `wght` axis (100 to 900, default 400). Glyphs: A, B, C, D, and A.heavy, B.heavy (C and D carry the GPOS kern pair, which no substitution touches). The design space has two rules, which fontTools' varLib
 turns into `rvrn` feature variations:
 
 * wght from 600 to 900: A is replaced by A.heavy
 * wght from 800 to 900: B is replaced by B.heavy as well
 
+Its GPOS has a `kern` feature (C D -50) whose FeatureVariations swap in a second lookup (C D -200) from weight 600.
 varLib splits these into two records, in this order: the narrower region (800 to 900, both swaps) first, then 600 to 800 (A only). The first
 record whose conditions hold wins, and a location outside both regions keeps the font's own features. The glyphs are rectangles of
 different widths, so a substitution shows in the advance: A is 500, A.heavy 700, B 500, B.heavy 900.
@@ -18,15 +19,17 @@ import tempfile
 os.environ.setdefault("SOURCE_DATE_EPOCH", "1767225600")
 
 from fontTools.designspaceLib import AxisDescriptor, DesignSpaceDocument, RuleDescriptor, SourceDescriptor
+from fontTools.feaLib.builder import addOpenTypeFeaturesFromString
 from fontTools.fontBuilder import FontBuilder
+from fontTools.varLib import featureVars
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.varLib import build as varlib_build
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "VariableFeatureTest.ttf")
 
-ORDER = [".notdef", "A", "B", "A.heavy", "B.heavy"]
-ADVANCE = {".notdef": 500, "A": 500, "B": 500, "A.heavy": 700, "B.heavy": 900}
+ORDER = [".notdef", "A", "B", "A.heavy", "B.heavy", "C", "D"]
+ADVANCE = {".notdef": 500, "A": 500, "B": 500, "A.heavy": 700, "B.heavy": 900, "C": 500, "D": 500}
 
 
 def master():
@@ -38,14 +41,35 @@ def master():
         glyphs[name] = pen.glyph()
     fb = FontBuilder(1000, isTTF=True)
     fb.setupGlyphOrder(ORDER)
-    fb.setupCharacterMap({0x41: "A", 0x42: "B"})
+    fb.setupCharacterMap({0x41: "A", 0x42: "B", 0x43: "C", 0x44: "D"})
     fb.setupGlyf(glyphs)
     fb.setupHorizontalMetrics({n: (ADVANCE[n], 50) for n in ORDER})
     fb.setupHorizontalHeader(ascent=800, descent=-200)
     fb.setupNameTable({"familyName": "Variable Feature Test", "styleName": "Regular"})
     fb.setupOS2(sTypoAscender=800, sTypoDescender=-200, usWinAscent=800, usWinDescent=200, version=4)
     fb.setupPost()
+    # GPOS: a kern pair, and a second lookup that no feature uses (the heavy kern) which the GPOS FeatureVariations swap in.
+    addOpenTypeFeaturesFromString(fb.font, """
+languagesystem DFLT dflt;
+languagesystem latn dflt;
+lookup kernlight { pos C D -50; } kernlight;
+lookup kernheavy { pos C D -200; } kernheavy;
+feature kern { lookup kernlight; } kern;
+""")
     return fb.font
+
+
+def add_gpos_feature_variations(font):
+    """From weight 600 (normalized 0.4) the `kern` feature of GPOS uses the heavy kern lookup instead of the light one."""
+    gpos = font["GPOS"].table
+    kern = next(i for i, r in enumerate(gpos.FeatureList.FeatureRecord) if r.FeatureTag == "kern")
+    lookups = gpos.LookupList.Lookup
+    light = gpos.FeatureList.FeatureRecord[kern].Feature.LookupListIndex[0]
+    heavy = next(i for i in range(len(lookups)) if i != light)
+    gpos.Version = 0x00010001
+    condition = featureVars.buildConditionTable(0, 0.4, 1.0)
+    record = featureVars.buildFeatureVariationRecord([condition], [featureVars.buildFeatureTableSubstitutionRecord(kern, [heavy])])
+    gpos.FeatureVariations = featureVars.buildFeatureVariations([record])
 
 
 def main():
@@ -80,6 +104,7 @@ def main():
         doc.addRule(second)
 
         variable, _, _ = varlib_build(doc)
+        add_gpos_feature_variations(variable)
         variable.save(OUT)
     print("wrote", OUT, os.path.getsize(OUT), "bytes")
 

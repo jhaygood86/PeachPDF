@@ -42,6 +42,90 @@ namespace PeachDrawing.Text.Tests.Fonts
             Assert.Equal([expectedA, expectedB], Glyphs(instance, "AB"));
         }
 
+        // ---- the same for GPOS: the kern feature uses the heavy kern lookup from weight 600 ---------------------------------------------
+
+        [Theory]
+        [InlineData(400, -50)]
+        [InlineData(100, -50)]
+        [InlineData(550, -50)]
+        [InlineData(650, -200)]
+        [InlineData(900, -200)]
+        public void AGposFeatureSubstitution_ChangesTheKerning(int weight, int expectedKern)
+        {
+            var instance = Face.WithAxes([new AxisSetting("wght", weight)]);
+
+            Assert.Equal(expectedKern, Shaper.Shape(instance, "CD", ShapeSettings.Default).Glyphs[0].XAdvanceDelta);
+        }
+
+        [Fact]
+        public void TheGposViews_DoNotShareAnswersAcrossLocations()
+        {
+            var heavy = Face.WithAxes([new AxisSetting("wght", 900)]);
+            var light = Face.WithAxes([new AxisSetting("wght", 200)]);
+
+            Assert.Equal(-200, Shaper.Shape(heavy, "CD", ShapeSettings.Default).Glyphs[0].XAdvanceDelta);
+            Assert.Equal(-50, Shaper.Shape(light, "CD", ShapeSettings.Default).Glyphs[0].XAdvanceDelta);
+            Assert.Equal(-50, Shaper.Shape(Face, "CD", ShapeSettings.Default).Glyphs[0].XAdvanceDelta);
+            Assert.Equal(-200, Shaper.Shape(heavy, "CD", ShapeSettings.Default).Glyphs[0].XAdvanceDelta);
+        }
+
+        [Fact]
+        public void AFontWithADamagedGposFeatureVariationsTable_ShapesAtItsDefaults()
+        {
+            var bytes = File.ReadAllBytes(BundledFonts.VariableFeatureTest);
+            int count = (bytes[4] << 8) | bytes[5];
+            for (int i = 0; i < count; i++)
+            {
+                int record = 12 + i * 16;
+                if (Encoding.ASCII.GetString(bytes, record, 4) != "GPOS")
+                    continue;
+
+                int offset = (bytes[record + 8] << 24) | (bytes[record + 9] << 16) | (bytes[record + 10] << 8) | bytes[record + 11];
+                bytes[offset + 10] = 0x7F;      // featureVariationsOffset, far past the table
+            }
+
+            var instance = Load(bytes).WithAxes([new AxisSetting("wght", 900)]);
+
+            Assert.Equal(-50, Shaper.Shape(instance, "CD", ShapeSettings.Default).Glyphs[0].XAdvanceDelta);
+        }
+
+        [Fact]
+        public void AnyOneDamagedByteInTheGpos_NeverMakesShapingThrow()
+        {
+            var original = File.ReadAllBytes(BundledFonts.VariableFeatureTest);
+            int count = (original[4] << 8) | original[5];
+            int offset = 0, length = 0;
+            for (int i = 0; i < count; i++)
+            {
+                int record = 12 + i * 16;
+                if (Encoding.ASCII.GetString(original, record, 4) == "GPOS")
+                {
+                    offset = (original[record + 8] << 24) | (original[record + 9] << 16) | (original[record + 10] << 8) | original[record + 11];
+                    length = (original[record + 12] << 24) | (original[record + 13] << 16) | (original[record + 14] << 8) | original[record + 15];
+                }
+            }
+
+            for (int at = offset; at < offset + length; at++)
+            {
+                foreach (byte value in new byte[] { 0x00, 0xFF, 0x80 })
+                {
+                    var font = (byte[])original.Clone();
+                    font[at] = value;
+                    Typeface loaded;
+                    try
+                    {
+                        loaded = Load(font);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        continue;
+                    }
+
+                    Shaper.Shape(loaded.WithAxes([new AxisSetting("wght", 700)]), "ABCD", ShapeSettings.Default);
+                }
+            }
+        }
+
         [Fact]
         public void TheAdvancesFollowTheSubstitutedGlyphs()
         {
@@ -130,7 +214,7 @@ namespace PeachDrawing.Text.Tests.Fonts
                         continue;       // a font too damaged to parse is refused when it is matched, which is allowed
                     }
 
-                    Shaper.Shape(loaded.WithAxes([new AxisSetting("wght", 700)]), "AB", ShapeSettings.Default);
+                    Shaper.Shape(loaded.WithAxes([new AxisSetting("wght", 700)]), "ABCD", ShapeSettings.Default);
                 }
             }
         }
