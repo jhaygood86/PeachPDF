@@ -154,7 +154,7 @@ foreach (PlacedGlyph glyph in run.Glyphs)
 `Typeface.TryGetOutline` reads the shape of a glyph as data: a `GlyphOutline` of closed contours, each a start point and a list
 of segments that are straight lines or cubic curves, in design units with the y axis up. A glyph is filled by the nonzero
 winding rule, which is how it gets its counters. TrueType quadratic curves are raised to cubic ones, so a consumer has two kinds
-of segment to draw. Nothing is grid-fitted.
+of segment to draw. This form is never grid-fitted; for text drawn into pixels, see [Grid fitting (hinting)](#grid-fitting-hinting).
 
 ```csharp
 using PeachDrawing.Text.Outlines;
@@ -184,6 +184,52 @@ if (face.TryMapRune(new Rune('g'), out ushort glyph) && face.TryGetOutline(glyph
   palette colours for `var(--color0)` and the text colour for `context-fill`. The document comes from the font file and is untrusted.
 - **Colour glyphs from pictures.** A font whose colour glyphs are bitmaps (`CBDT`/`CBLC` or `sbix`) reports
   `HasBitmapGlyphs`, and `TryGetBitmap` gives the picture of a glyph from the strike best suited to a size, with its bearings.
+
+### Grid fitting (hinting)
+
+A TrueType font can carry small programs that move the points of a glyph, at one size, so that stems, x-heights and baselines land on
+whole pixels. That makes small text drawn into a pixel raster sharper, and means nothing for vector output. An `OutlineRequest` asks
+for it: a size in pixels per em and a `GridFitting`.
+
+```csharp
+var request = new OutlineRequest { PixelsPerEm = 11, GridFitting = GridFitting.Standard };
+
+if (face.TryGetOutline(glyph, request, out GlyphOutline fitted))
+{
+    // fitted.IsGridFitted: the font's instructions ran. Coordinates are in pixels at 11 ppem, y up, origin at (0, 0).
+    // fitted.GridFittedAdvance: the advance after fitting, rounded to a whole number of pixels as the font's hinting leaves it
+    // (in Monochrome mode from the font's hdmx table where it has one for the size).
+}
+```
+
+- **The size is the size the font is fitted at.** It may be fractional, but a TrueType font whose `head` table asks for whole pixels per
+  em (nearly all do) is fitted at the nearest whole size, as in FreeType: asking for 11.4 gives an outline fitted at 11, which
+  `GlyphOutline.PixelsPerEm` reports. Every fractional size of such a font shares one cached fitting.
+- **`GridFitting.None`** is the default and gives exactly the design-unit outline of the overload without a request.
+- **`GridFitting.Standard`** runs the font's instructions in the interpreter FreeType uses by default (its "v40" behaviour). It fits the
+  vertical direction only, so glyphs keep the horizontal positions and widths of the design, which is what anti-aliased text wants. It
+  applies the compatibility adjustments that modern fonts, built for that interpreter, rely on.
+- **`GridFitting.Monochrome`** runs them in the original interpreter (FreeType's "v35"), which fits both directions, as for text drawn
+  without anti-aliasing.
+- **When a font cannot be fitted**, nothing throws: a font with no TrueType instructions (a CFF font, or a TrueType font without
+  `fpgm`/`prep`/glyph programs), a size the font's own programs refuse, or a glyph whose program is broken, gives the scaled design outline
+  with `IsGridFitted` false. A font may also switch its own glyph instructions off at a size, and is then treated the same way.
+  `TryGetGridFittedAdvance` gives the fitted advance directly, including for glyphs that have no ink.
+- **Untrusted fonts are safe to hint.** The instruction interpreter bounds every table access, the number of instructions run, the loop
+  work of a program and the depth of composite glyphs, and a font that goes past a limit is answered with the unhinted outline. Hinted
+  outlines are cached per face, size and mode.
+- **Layout is not hinted.** `GetAdvance` and the metrics stay unhinted; fitting is a property of an outline drawn at one size, and a
+  caller that lays text out keeps the design advances so that layout does not change with the size of the device.
+- **Variable fonts** are hinted at the instance's location by moving the points with the `gvar` deltas first and then running the
+  instructions. The result is a good approximation, not what FreeType produces bit for bit, and `cvar` (which changes control values by
+  location) is not applied. **CFF fonts** have their own hinting, which is not run.
+- **What the font says about when to hint is not consulted.** The `gasp` table (which sizes want grid-fitting or smoothing), `LTSH` and
+  `VDMX` are not read: a caller that asks for fitting gets it at every size, and decides for itself whether a size is one where hinting
+  is worth having. Pixels are square: one size serves both directions.
+
+The instruction interpreter is a port of FreeType's, which is why the package carries the FreeType Project License notices (see
+[Licences](#licences)). It gives the same fitted points as FreeType 2.14.3, in 26.6 fixed point, for every TrueType font the test
+suite checks it with.
 
 ## Variable fonts
 
@@ -428,5 +474,8 @@ Both answer `null` for a script or language the built-in table does not cover.
 ## Licences
 
 The package is BSD 3-Clause. It carries its third-party notices with it, in `THIRD-PARTY-LICENSES.md`: the font readers
-derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz code, and the data tables come from the
+derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz code, the TrueType instruction interpreter that
+does the [grid fitting](#grid-fitting-hinting) is a port of FreeType's (under the FreeType Project License, whose text ships in
+the package as `FTL.TXT`; an application that redistributes the package has to credit the FreeType Team in its documentation),
+and the data tables come from the
 Unicode Character Database and the `hyph-utf8` pattern collection. See [License](license.md) for the whole list.

@@ -15,6 +15,7 @@
 
 using PeachDrawing.Text.Internal.Fonts.OpenType.Variations;
 using PeachDrawing.Text.Outlines;
+using System;
 using System.Collections.Generic;
 
 namespace PeachDrawing.Text.Internal.Fonts.OpenType
@@ -43,6 +44,17 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         private const int MaxCompositeDepth = 8;
 
         /// <summary>
+        /// How many glyphs one outline may read, components included. A composite may list tens of thousands of components, each of them
+        /// a composite, so a font of a few kilobytes could otherwise make one outline take for ever; real glyphs use a handful.
+        /// </summary>
+        private const int MaxGlyphsPerOutline = 1024;
+
+        private sealed class Budget
+        {
+            public int GlyphsLeft = MaxGlyphsPerOutline;
+        }
+
+        /// <summary>
         /// Attempts to decode the outline of <paramref name="glyphIndex"/>. Returns false (with an
         /// empty <paramref name="outline"/>) for an absent glyph subsystem, an out-of-range index,
         /// or an empty glyph (e.g. the space glyph).
@@ -63,7 +75,16 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             // recursion step, so one whole (possibly multi-component composite) glyph read is atomic.
             lock (face.SyncRoot)
             {
-                DecodeInto(face, glyphIndex, outline, 0, variation);
+                try
+                {
+                    DecodeInto(face, glyphIndex, outline, 0, variation, new Budget());
+                }
+                catch (Exception ex) when (ex is IndexOutOfRangeException or ArgumentException or InvalidOperationException or OverflowException)
+                {
+                    // Glyph data that reaches past the end of the font (the reads go through the shared cursor, which is bounded
+                    // only by the font's bytes), or is otherwise nonsense: the font is damaged, and the glyph has no outline.
+                    outline = new GlyphOutline();
+                }
             }
             return !outline.IsEmpty;
         }
@@ -123,9 +144,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
         }
 
-        private static void DecodeInto(OpenTypeFontface face, int glyphIndex, GlyphOutline outline, int depth, VariationCoordinates? variation)
+        private static void DecodeInto(OpenTypeFontface face, int glyphIndex, GlyphOutline outline, int depth, VariationCoordinates? variation, Budget budget)
         {
-            if (depth > MaxCompositeDepth)
+            if (depth > MaxCompositeDepth || --budget.GlyphsLeft < 0)
                 return;
 
             int[] loca = face.loca.LocaTable;
@@ -147,7 +168,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             if (numberOfContours >= 0)
                 DecodeSimple(face, numberOfContours, outline, glyphIndex, gvar, variation);
             else
-                DecodeComposite(face, outline, depth, glyphIndex, gvar, variation);
+                DecodeComposite(face, outline, depth, glyphIndex, gvar, variation, budget);
         }
 
         private static void DecodeSimple(OpenTypeFontface face, int numberOfContours, GlyphOutline outline, int glyphIndex,
@@ -262,7 +283,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         }
 
         private static void DecodeComposite(OpenTypeFontface face, GlyphOutline outline, int depth, int glyphIndex,
-            GvarTable? gvar, VariationCoordinates? variation)
+            GvarTable? gvar, VariationCoordinates? variation, Budget budget)
         {
             // Read every component before decoding any: the decoding moves the shared cursor, and a variable font needs all the
             // offsets to apply its deltas (gvar has one point for the offset of each component).
@@ -341,7 +362,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 }
 
                 var child = new GlyphOutline();
-                DecodeInto(face, componentGlyph, child, depth + 1, variation);
+                DecodeInto(face, componentGlyph, child, depth + 1, variation, budget);
 
                 foreach (OutlineContour contour in child.ContourList)
                     outline.ContourList.Add(TransformContour(contour, a, b, cc, d, dx, dy));
@@ -368,7 +389,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// segments, inserting implied on-curve midpoints between consecutive off-curve points and
         /// elevating each quadratic to a cubic.
         /// </summary>
-        private static OutlineContour? BuildContour(List<RawPoint> points)
+        internal static OutlineContour? BuildContour(List<RawPoint> points)
         {
             int n = points.Count;
             if (n == 0)
@@ -469,6 +490,6 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
         private static double ReadF2Dot14(OpenTypeFontface face) => face.ReadShort() / 16384.0;
 
-        private readonly record struct RawPoint(double X, double Y, bool OnCurve);
+        internal readonly record struct RawPoint(double X, double Y, bool OnCurve);
     }
 }

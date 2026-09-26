@@ -84,6 +84,111 @@ namespace PeachDrawing.Text
         public bool TryGetOutline(ushort glyph, out GlyphOutline outline) => Face.Descriptor.TryGetGlyphOutline(glyph, out outline);
 
         /// <summary>
+        /// Reads the shape of a glyph as <see cref="TryGetOutline(ushort, out GlyphOutline)"/> does, at a size and, if asked, fitted to
+        /// the pixel grid.
+        /// </summary>
+        /// <remarks>
+        /// With <see cref="GridFitting.None"/> the result is exactly the design-unit outline of <see cref="TryGetOutline(ushort, out GlyphOutline)"/>.
+        /// Otherwise the coordinates are in pixels at <see cref="OutlineRequest.PixelsPerEm"/>, y up, with the glyph origin at (0, 0).
+        /// A TrueType font's own instructions are run, so points sit where the font's designer put them at that size; the result
+        /// is <see cref="GlyphOutline.IsGridFitted"/> and carries <see cref="GlyphOutline.GridFittedAdvance"/>. A font that cannot be
+        /// grid-fitted (it has no TrueType outlines, it has no TrueType instructions to run, or its instructions fail) gets the scaled design outline and
+        /// <see cref="GlyphOutline.IsGridFitted"/> is <see langword="false"/>; nothing throws for a font that is merely unusable.
+        /// Hinted outlines are cached, so asking again for the same glyph and size is cheap; the outline is then shared by every caller that
+        /// asks, which is safe because an outline never changes. Only the outline is fitted: a caller that
+        /// lays text out keeps using the design advances of <see cref="GetAdvance"/>.
+        /// </remarks>
+        /// <param name="glyph">The glyph.</param>
+        /// <param name="request">The size, and how much to fit the outline to the pixel grid.</param>
+        /// <param name="outline">The outline. It is empty when the method returns <see langword="false"/>.</param>
+        /// <returns><see langword="false"/> when the font has no usable outline for the glyph, or the glyph has no ink (a space).</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><see cref="OutlineRequest.GridFitting"/> is not a defined value, or is not <see cref="GridFitting.None"/> and <see cref="OutlineRequest.PixelsPerEm"/> is not a positive number.</exception>
+        public bool TryGetOutline(ushort glyph, in OutlineRequest request, out GlyphOutline outline)
+        {
+            ValidateRequest(request);
+
+            if (request.GridFitting == GridFitting.None)
+            {
+                return TryGetOutline(glyph, out outline);
+            }
+
+            var descriptor = Face.Descriptor;
+            double ppem = request.PixelsPerEm;
+
+            if (TryGridFit(glyph, request, out var fitted))
+            {
+                outline = fitted.Outline!;
+                return !outline.IsEmpty;
+            }
+
+            if (!descriptor.TryGetGlyphOutline(glyph, out var design))
+            {
+                outline = design;
+                return false;
+            }
+
+            outline = design.WithScale(ppem / Metrics.UnitsPerEm, ppem);
+            return true;
+        }
+
+        /// <summary>
+        /// The advance of a glyph in pixels after grid-fitting at a size: a whole number of pixels, as the font's hinting leaves it. It is
+        /// what <see cref="GlyphOutline.GridFittedAdvance"/> gives too, and also answers for a glyph with no ink, which has no outline.
+        /// </summary>
+        /// <param name="glyph">The glyph.</param>
+        /// <param name="request">The size and the kind of grid-fitting; <see cref="GridFitting.None"/> has no fitted advance.</param>
+        /// <param name="advance">The advance in pixels.</param>
+        /// <returns><see langword="false"/> when <see cref="OutlineRequest.GridFitting"/> is <see cref="GridFitting.None"/>, or the glyph cannot be grid-fitted.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><see cref="OutlineRequest.GridFitting"/> is not a defined value, or is not <see cref="GridFitting.None"/> and <see cref="OutlineRequest.PixelsPerEm"/> is not a positive number.</exception>
+        public bool TryGetGridFittedAdvance(ushort glyph, in OutlineRequest request, out double advance)
+        {
+            ValidateRequest(request);
+
+            if (request.GridFitting != GridFitting.None && TryGridFit(glyph, request, out var fitted))
+            {
+                advance = fitted.Advance;
+                return true;
+            }
+
+            advance = 0;
+            return false;
+        }
+
+        private bool TryGridFit(ushort glyph, in OutlineRequest request, out Internal.Hinting.HintedGlyphResult result)
+        {
+            result = Internal.Hinting.HintedGlyphResult.Failed;
+
+            // The hinting programs work on the size in 1/64 pixel; a size that rounds to nothing, or is beyond what the tables can say, is not hinted.
+            double ppem26Dot6 = Math.Round(request.PixelsPerEm * 64);
+            if (!(ppem26Dot6 >= 1 && ppem26Dot6 <= 65535 * 64))
+            {
+                return false;
+            }
+
+            var engine = Face.Descriptor.Hinting;
+            if (!engine.CanHint)
+            {
+                return false;
+            }
+
+            result = engine.Get(glyph, (int)ppem26Dot6, request.GridFitting);
+            return result.Succeeded && result.IsHinted;
+        }
+
+        private static void ValidateRequest(in OutlineRequest request)
+        {
+            if (!Enum.IsDefined(request.GridFitting))
+            {
+                throw new ArgumentOutOfRangeException(nameof(request), request.GridFitting, "The grid fitting is not a defined value.");
+            }
+
+            if (request.GridFitting != GridFitting.None && !(request.PixelsPerEm > 0 && double.IsFinite(request.PixelsPerEm)))
+            {
+                throw new ArgumentOutOfRangeException(nameof(request), request.PixelsPerEm, "The size of a grid-fitted outline must be a positive number of pixels per em.");
+            }
+        }
+
+        /// <summary>
         /// The colours that colour glyphs of this face are painted with, or <see langword="null"/> when <see cref="HasColorGlyphs"/> is
         /// <see langword="false"/> or the face has no <c>CPAL</c> table, as a face with pictures for glyphs has not.
         /// </summary>

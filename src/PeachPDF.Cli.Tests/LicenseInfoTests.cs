@@ -21,6 +21,15 @@ public class LicenseInfoTests
     }
 
     [Fact]
+    public void Credits_CarriesTheFreeTypeCreditLineAndLicense()
+    {
+        var text = LicenseInfo.Credits;
+        Assert.Contains("The FreeType Project (https://freetype.org)", text);
+        Assert.Contains("based in part on the work of the FreeType Team", text);
+        Assert.Contains("The FreeType Project LICENSE", text);
+    }
+
+    [Fact]
     public async Task ShowLicense_PrintsLicenseAndExitsZero()
     {
         var (exit, output) = await RunCapturingStdout(["--show-license"]);

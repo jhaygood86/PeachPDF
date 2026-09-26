@@ -1,0 +1,7 @@
+HintingOpcodes.ttf and HintingOpcodes.golden.json.gz are synthetic test data made by
+generate_hinting_opcode_fixtures.py in this directory: random polygons with random TrueType programs. They contain no third-party
+design and are dedicated to the public domain under CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/).
+
+HintingGolden.json.gz is made by generate_hinting_golden.py from the bundled fonts named in that script: it holds coordinates that
+FreeType computed from those fonts' outlines and instructions, and no font data. Each of those fonts keeps its own license notice
+beside it.

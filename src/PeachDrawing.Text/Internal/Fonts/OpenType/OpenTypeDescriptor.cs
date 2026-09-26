@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Text.Internal.Hinting;
 using PeachDrawing.Text.OpenType;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
@@ -65,6 +66,16 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         }
 
         internal OpenTypeFontface FontFace;
+
+        /// <summary>
+        /// Grid-fits this face's glyphs: what it takes to run the font's TrueType instructions at a size, with the tables read once
+        /// and what each size's programs leave behind cached. One per descriptor, so one per typeface.
+        /// </summary>
+        internal HintingEngine Hinting =>
+            _hinting ?? System.Threading.Interlocked.CompareExchange(ref _hinting,
+                new HintingEngine(FontFace, FontFace.name?.Name, Variation, GlyphIndexToWidth), null) ?? _hinting!;
+
+        private HintingEngine? _hinting;
 
         /// <summary>Where in the design space of a variable font this descriptor reads, or <see langword="null"/> at the defaults (and for every font that is not variable).</summary>
         internal Variations.VariationCoordinates? Variation { get; }

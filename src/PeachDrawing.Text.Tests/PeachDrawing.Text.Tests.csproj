@@ -108,6 +108,28 @@
     <None Include="..\..\assets\fonts\VariableTest.golden.json" Link="VariableTest.golden.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- The hinted outlines FreeType itself makes of these fonts (assets/fonts/generate_hinting_golden.py), and the fonts it used. -->
+    <None Include="..\..\assets\fonts\HintingGolden.json.gz" Link="HintingGolden.json.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingArithmetic.golden.json.gz" Link="HintingArithmetic.golden.json.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingOpcodes.ttf" Link="HintingOpcodes.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingOpcodes.golden.json.gz" Link="HintingOpcodes.golden.json.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\LiberationSerif-Regular.woff" Link="LiberationSerif-Regular.woff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\LiberationMono-Bold.woff" Link="LiberationMono-Bold.woff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\LiberationSans-BoldItalic.woff" Link="LiberationSans-BoldItalic.woff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <!--

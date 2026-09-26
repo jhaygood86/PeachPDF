@@ -336,7 +336,14 @@ PeachDrawing.Text.Outlines.EmbeddedBitmap : struct
 PeachDrawing.Text.Outlines.GlyphOutline : sealed class
   method IReadOnlyList<ValueTuple<Double, Double>> Crossings(Double bandLow, Double bandHigh)
   property Boolean IsEmpty { get; }
+  property Boolean IsGridFitted { get; }
+  property Double PixelsPerEm { get; }
   property IReadOnlyList<OutlineContour> Contours { get; }
+  property Nullable<Double> GridFittedAdvance { get; }
+PeachDrawing.Text.Outlines.GridFitting : enum Int32
+  Monochrome = 2
+  None = 0
+  Standard = 1
 PeachDrawing.Text.Outlines.OutlineContour : sealed class
   property IReadOnlyList<OutlineSegment> Segments { get; }
   property OutlinePoint Start { get; }
@@ -349,6 +356,9 @@ PeachDrawing.Text.Outlines.OutlinePoint : struct
   method Void Deconstruct(out Double X, out Double Y)
   property Double X { get; init; }
   property Double Y { get; init; }
+PeachDrawing.Text.Outlines.OutlineRequest : struct
+  property Double PixelsPerEm { get; init; }
+  property GridFitting GridFitting { get; init; }
 PeachDrawing.Text.Outlines.OutlineSegment : struct
   method static OutlineSegment Cubic(OutlinePoint control1, OutlinePoint control2, OutlinePoint end)
   method static OutlineSegment Line(OutlinePoint end)
@@ -542,6 +552,8 @@ PeachDrawing.Text.Typeface : sealed class
   method Boolean SupportsFeatures(IReadOnlySet<String> tags)
   method Boolean TryGetBitmap(UInt16 glyph, Double ppem, out EmbeddedBitmap bitmap)
   method Boolean TryGetColorLayers(UInt16 glyph, out IReadOnlyList<ColorLayer> layers)
+  method Boolean TryGetGridFittedAdvance(UInt16 glyph, in OutlineRequest request, out Double advance)
+  method Boolean TryGetOutline(UInt16 glyph, in OutlineRequest request, out GlyphOutline outline)
   method Boolean TryGetOutline(UInt16 glyph, out GlyphOutline outline)
   method Boolean TryGetScriptPosition(ScriptPlacement placement, out ScriptPosition position)
   method Boolean TryGetSvgGlyph(UInt16 glyph, out SvgGlyph svg)
