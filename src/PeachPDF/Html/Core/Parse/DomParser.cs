@@ -78,7 +78,7 @@ namespace PeachPDF.Html.Core.Parse
             // <html> element, so it must be located by tag name.
             var htmlBox = DomUtils.GetBoxByTagName(root, "html");
             var lang = htmlBox?.HtmlTag?.TryGetAttribute("lang", "");
-            htmlContainer.DocumentLanguage = string.IsNullOrEmpty(lang) ? null : lang;
+            htmlContainer.DocumentLanguage = string.IsNullOrEmpty(lang) ? htmlContainer.DefaultLanguage : lang;
 
             var metadata = ExtractMetadata(root);
 

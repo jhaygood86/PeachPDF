@@ -31,6 +31,12 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
             internal bool Unassigned;
             internal bool IsDottedCircle;
 
+            /// <summary>A suffix that a loose line may end before (a PO character of East Asian width, in Chinese or Japanese text).</summary>
+            internal bool BreakBefore;
+
+            /// <summary>A prefix that a loose line may end after (a PR character of East Asian width, in Chinese or Japanese text).</summary>
+            internal bool BreakAfter;
+
             /// <summary>How many regional indicators end at this unit, without a gap (LB30a).</summary>
             internal int RegionalRun;
         }
@@ -53,7 +59,7 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
 
             for (int i = 1; i < unitCount; i++)
             {
-                var decision = Decide(units, unitCount, i);
+                var decision = Decide(units, unitCount, i, options.Strictness == LineBreakStrictness.Loose);
                 if (decision != LineBreakOpportunity.Prohibited)
                 {
                     if (decision == LineBreakOpportunity.Allowed && options.WordBreak == WordBreakMode.KeepAll && IsKeepAllPair(units[i - 1].Resolved, units[i].Resolved))
@@ -80,6 +86,7 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
 
             // CSS Text 3 leaves the sets of rules for line-break to the user agent, but requires some breaks: auto is normal.
             var strictness = options.Strictness is LineBreakStrictness.Auto or LineBreakStrictness.Anywhere ? LineBreakStrictness.Normal : options.Strictness;
+            bool chineseOrJapanese = IsChineseOrJapanese(options.Language);
 
             for (int k = 0; k < text.Count; k++)
             {
@@ -96,16 +103,17 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
                     _ => raw,
                 };
 
-                // The CJK hyphen-like characters may start a line in the normal and loose settings.
-                if (strictness != LineBreakStrictness.Strict && cp is 0x301C or 0x30A0)
+                // The CJK hyphen-like characters may start a line in the normal and loose settings, in Chinese and Japanese text only.
+                if (strictness != LineBreakStrictness.Strict && chineseOrJapanese && cp is 0x301C or 0x30A0)
                 {
                     resolved = LineBreakClass.ID;
                 }
 
                 if (strictness == LineBreakStrictness.Loose)
                 {
-                    // Iteration marks, centred punctuation and inseparable characters may start a line; a hyphen only after an ideograph.
-                    if (IsLooseIdeographic(cp) || resolved == LineBreakClass.IN)
+                    // Iteration marks may start a line whatever the language, centred punctuation only in Chinese and Japanese text;
+                    // a hyphen only after an ideograph.
+                    if (IsIterationMark(cp) || (chineseOrJapanese && IsCentredPunctuation(cp)))
                     {
                         resolved = LineBreakClass.ID;
                     }
@@ -140,6 +148,15 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
                     unit.Pictographic = (value & SegmentationData.LineBreakPictographic) != 0;
                     unit.Unassigned = (value & SegmentationData.LineBreakUnassigned) != 0;
                     unit.IsDottedCircle = cp == DottedCircle;
+
+                    // Loose, Chinese and Japanese only: a line may end before a suffix and after a prefix of East Asian width. Browsers
+                    // leave out the Ambiguous characters of Latin-1 (the degree sign, the plus-minus sign, the currency sign), which
+                    // are as much at home in Western text.
+                    if (strictness == LineBreakStrictness.Loose && chineseOrJapanese && cp >= 0x100 && (value & SegmentationData.LineBreakWideOrAmbiguous) != 0)
+                    {
+                        unit.BreakBefore = resolved == LineBreakClass.PO;
+                        unit.BreakAfter = resolved == LineBreakClass.PR;
+                    }
                 }
 
                 unit.Class = unit.Resolved;
@@ -155,7 +172,7 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
             return units;
         }
 
-        private static LineBreakOpportunity Decide(Unit[] units, int count, int i)
+        private static LineBreakOpportunity Decide(Unit[] units, int count, int i, bool loose)
         {
             var a = units[i - 1].Class;
             var b = units[i].Class;
@@ -344,10 +361,18 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
                 return LineBreakOpportunity.Prohibited;
             }
 
-            // LB22
+            // LB22; CSS Text 3 allows line-break: loose to break between two inseparable characters, but not before the first
             if (b == LineBreakClass.IN)
             {
-                return LineBreakOpportunity.Prohibited;
+                return loose && a == LineBreakClass.IN ? LineBreakOpportunity.Allowed : LineBreakOpportunity.Prohibited;
+            }
+
+            // CSS Text 3, line-break: loose in Chinese and Japanese text: a line may end before a suffix and after a prefix of East
+            // Asian width, which the number rules (LB23a, LB24, LB25) would otherwise keep with the digits. The rules before this
+            // one (quotes, hyphens, closing punctuation, inseparable characters) still hold.
+            if (units[i].BreakBefore || units[i - 1].BreakAfter)
+            {
+                return LineBreakOpportunity.Allowed;
             }
 
             // LB23
@@ -585,17 +610,33 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
                 or LineBreakClass.JL or LineBreakClass.JV or LineBreakClass.JT or LineBreakClass.HL or LineBreakClass.SA
                 or LineBreakClass.AK or LineBreakClass.AS;
 
+        /// <summary>The iteration marks CSS <c>line-break: loose</c> lets a line start with, in any language.</summary>
+        private static bool IsIterationMark(int codePoint) => codePoint is 0x3005 or 0x303B or 0x309D or 0x309E or 0x30FD or 0x30FE;
+
         /// <summary>
-        /// The characters CSS <c>line-break: loose</c> lets a line start with: iteration marks, centred punctuation and the like,
-        /// which the default class rules bind to the character before them.
+        /// The centred punctuation, exclamation and question marks CSS <c>line-break: loose</c> lets a line start with in Chinese
+        /// and Japanese text, which the default class rules bind to the character before them.
         /// </summary>
-        private static bool IsLooseIdeographic(int codePoint) => codePoint switch
+        private static bool IsCentredPunctuation(int codePoint) => codePoint is 0x30FB or 0xFF1A or 0xFF1B or 0xFF65
+            or 0x203C or 0x2047 or 0x2048 or 0x2049 or 0xFF01 or 0xFF1F;
+
+        /// <summary>
+        /// Whether the writing system of a BCP 47 language tag is Chinese or Japanese, by its primary language subtag: <c>ja</c> and
+        /// <c>zh</c>, and the Chinese languages tagged with a three-letter code that HTML documents use (<c>yue</c> and <c>cmn</c>).
+        /// </summary>
+        private static bool IsChineseOrJapanese(string? language)
         {
-            0x3005 or 0x303B or 0x309D or 0x309E or 0x30FD or 0x30FE => true,      // iteration marks
-            0x203C or 0x2047 or 0x2048 or 0x2049 or 0xFF01 or 0xFF1F => true,      // exclamation and question mark combinations
-            0x30FB or 0xFF1A or 0xFF1B or 0xFF65 => true,                          // centred punctuation
-            _ => false,
-        };
+            if (string.IsNullOrEmpty(language))
+            {
+                return false;
+            }
+
+            var tag = language.AsSpan().Trim();
+            int end = tag.IndexOfAny('-', '_');
+            var primary = end < 0 ? tag : tag[..end];
+            return primary.Equals("ja", StringComparison.OrdinalIgnoreCase) || primary.Equals("zh", StringComparison.OrdinalIgnoreCase)
+                || primary.Equals("yue", StringComparison.OrdinalIgnoreCase) || primary.Equals("cmn", StringComparison.OrdinalIgnoreCase);
+        }
 
         private static bool IsHardBreak(int codePoint) => codePoint is 0x0A or 0x0B or 0x0C or 0x0D or 0x85 or 0x2028 or 0x2029;
 

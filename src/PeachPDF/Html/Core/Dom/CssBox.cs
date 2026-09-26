@@ -1215,11 +1215,11 @@ namespace PeachPDF.Html.Core.Dom
         /// ancestor's, else (at the root) <see cref="HtmlContainerInt.DocumentLanguage"/> - the
         /// HTML Living Standard's "language of a node" algorithm (a per-element, inherited concept),
         /// computed on demand rather than cached on the box so it always reflects
-        /// <see cref="HtmlContainerInt.DocumentLanguage"/>'s current value (which can still change
-        /// after this box's own tree position is fixed - see <c>PdfGenerator</c>'s config
-        /// <c>DefaultLanguage</c> fallback, applied after the document's own tree is first parsed).
-        /// Feeds both hyphenation (see <see cref="ParseToWords"/>) and GSUB per-language feature
-        /// selection (see <see cref="DerivedStyle.ActualTextShapingFeatures"/>).
+        /// <see cref="HtmlContainerInt.DocumentLanguage"/>'s current value (which is the document's
+        /// own <c>lang</c>, else <see cref="HtmlContainerInt.DefaultLanguage"/>, set when the tree is
+        /// parsed).
+        /// Feeds hyphenation and the language-dependent line breaking (see <see cref="ParseToWords"/>)
+        /// and GSUB per-language feature selection (see <see cref="DerivedStyle.ActualTextShapingFeatures"/>).
         /// </summary>
         internal string? Language
         {
@@ -1632,7 +1632,7 @@ namespace PeachPDF.Html.Core.Dom
 
             // Where a line may end inside this text, from the Unicode line breaking algorithm (UAX #14) with word-break applied. The
             // regional indicators before this box decide whether its first one completes a flag.
-            var breakOpportunities = UnicodeLineBreaks.Find(text, WordBreak.Value, CountPrecedingRegionalIndicators(this), LineBreak.Value);
+            var breakOpportunities = UnicodeLineBreaks.Find(text, WordBreak.Value, CountPrecedingRegionalIndicators(this), LineBreak.Value, Language);
 
             while (startIdx < text.Length)
             {

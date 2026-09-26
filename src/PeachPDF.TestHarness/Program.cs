@@ -5154,6 +5154,51 @@ await SaveShowcaseAsync("unicode_line_breaking", "Typography & Text", "Unicode L
     "Where a line may end follows the Unicode line breaking algorithm (UAX #14): kana and ideographs break between characters, word-break:keep-all keeps them together, break-all also breaks Latin letters, and hyphens, slashes, numbers and punctuation get the algorithm's rules.",
     lineBreakingHtml, pdfConfig);
 
+// --- line-break: language-dependent tailorings showcase ---
+// Set in the line breaking test font (assets/fonts/LineBreakTest.LICENSE.txt): every character is a square one em wide, solid for letters and
+// digits and hollow for punctuation, so the only thing that differs between two cards is where the line ends. Each pair of cards holds the same
+// text in the same width under lang="ja" and lang="en".
+var lineBreakLanguageFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "LineBreakTest.ttf")));
+
+static string LineBreakLanguageRow(string title, string note, string style, string text, string widthEm, string[]? langs = null)
+{
+    var cards = string.Concat((langs ?? ["ja", "zh-Hant", "en"]).Select(lang =>
+        $"<div class=\"cell\"><div class=\"lang\">lang=\"{lang}\"</div><p class=\"card\" lang=\"{lang}\" style=\"width:{widthEm}em;{style}\">{text}</p></div>"));
+    return $"<div class=\"row\"><div class=\"label\"><h2>{title}</h2><p>{note}</p></div><div class=\"cells\">{cards}</div></div>";
+}
+
+var lineBreakLanguageHtml = $$"""
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    @font-face { font-family: 'LineBreakTest'; src: url('data:font/truetype;base64,{{lineBreakLanguageFontB64}}') format('truetype'); }
+    @page { size: A4; margin: 28pt }
+    body { font-family: Arial, sans-serif; color: #222 }
+    h1 { font-size: 18pt; margin: 0 0 5pt }
+    .intro { color: #555; font-size: 9pt; margin: 0 0 12pt; line-height: 1.35 }
+    .row { display: flex; gap: 12pt; margin-bottom: 12pt; padding-bottom: 10pt; border-bottom: 0.5pt solid #ddd }
+    .label { width: 150pt; flex: none }
+    .label h2 { font-size: 10pt; margin: 0 0 3pt; color: #1b4f8a }
+    .label p { font-size: 8pt; margin: 0; color: #555; line-height: 1.3 }
+    .cells { display: flex; gap: 10pt }
+    .cell { flex: none }
+    .lang { font-size: 7pt; color: #777; margin-bottom: 2pt; font-family: monospace }
+    .card { font: 15pt/1.4 LineBreakTest; margin: 0; padding: 3pt; background: #f4f9ff; border: 0.75pt solid #9db8d8; box-sizing: content-box; color: #1b4f8a }
+</style></head><body>
+<h1>line-break and the language of the text</h1>
+<p class="intro">Some of the breaks CSS Text 3 allows for line-break: normal and loose apply only where the writing system is Chinese or Japanese, so the language of the text (its lang attribute, or an ancestor's) decides them. Every character below is a square one em wide, solid for letters and digits and hollow for punctuation, so the only difference between two cards is where the line ends. The same text is set three times, in Japanese, Traditional Chinese and English.</p>
+{{LineBreakLanguageRow("normal: wave dash", "U+301C may start a line in Chinese and Japanese text. In English it stays with the character before it.", "line-break:normal", "あいう〜えお", "3.2")}}
+{{LineBreakLanguageRow("loose: centred punctuation", "The middle dot U+30FB, like the colon, the semicolon and the exclamation and question marks of CJK text, may start a line in loose Chinese and Japanese text.", "line-break:loose", "あいう・えお", "3.2")}}
+{{LineBreakLanguageRow("loose: after Latin text", "The fullwidth exclamation mark after a Latin word: Chinese and Japanese text may leave it on the next line, other text keeps it with the word.", "line-break:loose", "go wait！", "7")}}
+{{LineBreakLanguageRow("loose: suffix", "A fullwidth percent sign (U+FF05), degree Celsius and the like may start a line in loose Chinese and Japanese text, though they follow a number.", "line-break:loose", "あ10％", "3.2")}}
+{{LineBreakLanguageRow("loose: prefix", "A fullwidth yen (U+FFE5), dollar or numero sign may end a line in loose Chinese and Japanese text, before its number.", "line-break:loose", "あ￥100", "4.2")}}
+{{LineBreakLanguageRow("loose: ellipsis", "In no language does loose break between a Latin word and the ellipsis after it: the two dots of a double ellipsis may be split, the ellipsis from the word may not.", "line-break:loose", "go wait…", "7")}}
+{{LineBreakLanguageRow("small kana and iteration marks", "A small kana (here U+3043) may start a line in loose text of any language, as may an iteration mark and a hyphen after an ideograph.", "line-break:loose", "あいうぃえお", "3.2")}}
+</body></html>
+""";
+
+await SaveShowcaseAsync("line_break_language", "Typography & Text", "line-break and Language",
+    "The breaks CSS Text 3 allows for line-break: normal and loose only in Chinese and Japanese text follow the lang attribute: the wave dash and centred punctuation may start a line, and a suffix or prefix of East Asian width may be split from its number, while English text keeps them together.",
+    lineBreakLanguageHtml, pdfConfig);
+
 // --- SVG vertical writing-mode text showcase ---
 
 // A subset of Noto Sans JP (see assets/fonts/NotoSansJPSubset.LICENSE.txt) covering the CJK/Latin

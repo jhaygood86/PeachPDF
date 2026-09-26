@@ -148,6 +148,24 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(container.HtmlContainerInt.DocumentLanguage);
         }
 
+        [Fact]
+        public async Task DefaultLanguage_IsKnownWhenTheWordsAreCut_SoItEnablesAutomaticHyphenation()
+        {
+            // The words of every text box are cut when the document is parsed, so the fallback language has to be there by then,
+            // not applied afterwards: with none, the same document is not hyphenated at all.
+            const string html = "<html><body><p id=\"p\" style=\"width:80px;hyphens:auto\">antidisestablishmentarianism</p></body></html>";
+
+            var (withDefault, _) = await PeachPDF.Tests.TestSupport.PdfGeneratorLayoutHarness.LayoutAsync(
+                html, new PdfGenerateConfig { PageSize = PageSize.A4, DefaultLanguage = "en" });
+            var (without, _) = await PeachPDF.Tests.TestSupport.PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+            var hyphenated = PeachPDF.Tests.TestSupport.LayoutHarness.FindById(withDefault, "p")!;
+            Assert.Contains(PeachPDF.Tests.TestSupport.LayoutHarness.Descendants(hyphenated).SelectMany(b => b.Words), w => w.Text!.EndsWith('-'));
+
+            var plain = PeachPDF.Tests.TestSupport.LayoutHarness.FindById(without, "p")!;
+            Assert.DoesNotContain(PeachPDF.Tests.TestSupport.LayoutHarness.Descendants(plain).SelectMany(b => b.Words), w => w.Text!.EndsWith('-'));
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static async Task<CssBox> FindWordsBoxAsync(string html)

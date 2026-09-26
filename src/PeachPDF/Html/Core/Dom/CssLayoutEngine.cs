@@ -6233,7 +6233,10 @@ namespace PeachPDF.Html.Core.Dom
             var joiner = space && !previous.IsSpaces ? " " : string.Empty;
             var context = string.Concat(previous.Text, joiner, current.Text);
             var seam = previous.Text.Length + joiner.Length;
-            return seam < context.Length && UnicodeLineBreaks.Find(context, wordBreak, 0, lineBreak)[seam] != LineBreakOpportunity.Prohibited;
+
+            // One language for the two words: the one after the seam, which the break before it belongs to.
+            var language = currentBox.Language ?? previousBox.Language;
+            return seam < context.Length && UnicodeLineBreaks.Find(context, wordBreak, 0, lineBreak, language)[seam] != LineBreakOpportunity.Prohibited;
         }
 
         internal static bool IsGraphemeBoundaryBefore(
