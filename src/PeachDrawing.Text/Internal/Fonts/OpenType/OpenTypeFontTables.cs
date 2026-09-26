@@ -389,7 +389,11 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// </summary>
         public bool symbol;
 
-        public CMap4 cmap4 = null!;
+        /// <summary>
+        /// The BMP (format-4) subtable. Null for a font that only carries a format-12 subtable, which then
+        /// answers for the whole of Unicode, the BMP included.
+        /// </summary>
+        public CMap4? cmap4;
 
         /// <summary>
         /// Optional format-12 subtable, present when the font maps supplementary-plane (astral) codepoints
@@ -426,6 +430,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 #endif
 
                 bool cmap4Found = false;
+                bool cmap12IsUnicode = false;
                 for (int idx = 0; idx < numTables; idx++)
                 {
                     PlatformId platformId = (PlatformId)_fontData.ReadUShort();
@@ -452,16 +457,23 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                         (platformId == PlatformId.Win && ((WinEncodingId)encodingId == WinEncodingId.Symbol || (WinEncodingId)encodingId == WinEncodingId.Unicode))
                         || (platformId == PlatformId.Apple && (AppleEncodingId)encodingId == AppleEncodingId.Unicode20BmpOnly);
 
+                    // Any Unicode platform subtable, or the Windows "Unicode BMP" or "Unicode full repertoire" one.
+                    bool isFullUnicodeCandidate =
+                        (platformId == PlatformId.Win && (encodingId == (int)WinEncodingId.Unicode || encodingId == 10))
+                        || platformId == PlatformId.Apple;
+
                     if (!cmap4Found && subtableFormat == 4 && isBmpCandidate)
                     {
                         symbol = platformId == PlatformId.Win && (WinEncodingId)encodingId == WinEncodingId.Symbol;
                         cmap4 = new CMap4(_fontData, symbol ? WinEncodingId.Symbol : WinEncodingId.Unicode);
                         cmap4Found = true;
                     }
-                    // The full-Unicode (format-12) subtable carries astral codepoints; take the first one.
-                    else if (cmap12 is null && subtableFormat == 12)
+                    // The full-Unicode (format-12) subtable carries astral codepoints; take the first one, but prefer one of a Unicode
+                    // platform/encoding to one that is not (a font may be used with no format-4 subtable only if it has one of those).
+                    else if (subtableFormat == 12 && (cmap12 is null || (!cmap12IsUnicode && isFullUnicodeCandidate)))
                     {
                         cmap12 = new CMap12(_fontData, WinEncodingId.Unicode);
+                        cmap12IsUnicode = isFullUnicodeCandidate;
                     }
                     // The Unicode Variation Sequences subtable (platform 0, encoding 5).
                     else if (cmap14 is null && subtableFormat == 14)
@@ -480,10 +492,11 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
                     _fontData.Position = currentPosition;
 
-                    if (cmap4Found && cmap12 is not null && cmap14 is not null)
+                    if (cmap4Found && cmap12IsUnicode && cmap14 is not null)
                         break;
                 }
-                if (!cmap4Found)
+                // A font with no BMP subtable is usable when its format-12 subtable is a Unicode one: that maps the BMP too.
+                if (!cmap4Found && !cmap12IsUnicode)
                     throw new InvalidOperationException("Font has no usable platform or encoding ID. It cannot be used.");
             }
             catch (Exception ex)
