@@ -9,8 +9,30 @@ namespace PeachPDF.Tests.Html.Core.Utils
     /// </summary>
     public class UnicodeLineBreaksTests
     {
-        private static LineBreakOpportunity[] Find(string text, int precedingRegionalIndicators = 0, PeachPDF.CSS.WordBreak wordBreak = PeachPDF.CSS.WordBreak.Normal) =>
-            UnicodeLineBreaks.Find(text, wordBreak, precedingRegionalIndicators);
+        private static LineBreakOpportunity[] Find(string text, int precedingRegionalIndicators = 0, PeachPDF.CSS.WordBreak wordBreak = PeachPDF.CSS.WordBreak.Normal,
+            PeachPDF.CSS.LineBreak lineBreak = PeachPDF.CSS.LineBreak.Auto) =>
+            UnicodeLineBreaks.Find(text, wordBreak, precedingRegionalIndicators, lineBreak);
+
+        [Theory]
+        [InlineData("Auto", 0)]
+        [InlineData("Loose", 1)]
+        [InlineData("Normal", 0)]
+        [InlineData("Strict", 0)]
+        public void ASmallKana_MayStartALine_OnlyWhenTheStrictnessAllowsIt(string lineBreak, int expected)
+        {
+            // A small kana (U+3083) after a full-size one: only loose lets a small kana start a line; auto, normal and strict keep it off.
+            var strictness = System.Enum.Parse<PeachPDF.CSS.LineBreak>(lineBreak);
+            Assert.Equal((LineBreakOpportunity)expected, Find("\u3042\u3083", lineBreak: strictness)[1]);
+        }
+
+        [Fact]
+        public void LineBreakAnywhere_AllowsABreakAfterEveryCharacterOfAWord()
+        {
+            var opportunities = Find("abcd", lineBreak: PeachPDF.CSS.LineBreak.Anywhere);
+
+            Assert.All(new[] { 1, 2, 3 }, i => Assert.Equal(LineBreakOpportunity.Allowed, opportunities[i]));
+            Assert.Equal(LineBreakOpportunity.Prohibited, Find("abcd")[2]);
+        }
 
         [Fact]
         public void TheAnswerHasOneEntryForEveryIndexAndOneForTheEnd()

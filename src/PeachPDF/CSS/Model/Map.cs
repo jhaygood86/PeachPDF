@@ -1014,6 +1014,15 @@ namespace PeachPDF.CSS
                 {Keywords.BreakAll, WordBreak.BreakAll},
                 {Keywords.KeepAll, WordBreak.KeepAll}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, LineBreak> LineBreaks =
+            new Dictionary<string, LineBreak>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, LineBreak.Auto},
+                {Keywords.Loose, LineBreak.Loose},
+                {Keywords.Normal, LineBreak.Normal},
+                {Keywords.Strict, LineBreak.Strict},
+                {Keywords.Anywhere, LineBreak.Anywhere}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, OverflowWrap> OverflowWraps =
             new Dictionary<string, OverflowWrap>(StringComparer.OrdinalIgnoreCase)
             {

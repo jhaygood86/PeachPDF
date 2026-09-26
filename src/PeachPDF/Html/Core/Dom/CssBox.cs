@@ -1632,7 +1632,7 @@ namespace PeachPDF.Html.Core.Dom
 
             // Where a line may end inside this text, from the Unicode line breaking algorithm (UAX #14) with word-break applied. The
             // regional indicators before this box decide whether its first one completes a flag.
-            var breakOpportunities = UnicodeLineBreaks.Find(text, WordBreak.Value, CountPrecedingRegionalIndicators(this));
+            var breakOpportunities = UnicodeLineBreaks.Find(text, WordBreak.Value, CountPrecedingRegionalIndicators(this), LineBreak.Value);
 
             while (startIdx < text.Length)
             {

@@ -5122,6 +5122,9 @@ var lineBreakingHtml = $$"""
     .card p { margin: 0; font-size: 12pt; line-height: 1.4; font-family: CJK }
     .keep-all { word-break: keep-all }
     .break-all { word-break: break-all }
+    .lb-loose { line-break: loose }
+    .lb-strict { line-break: strict }
+    .lb-anywhere { line-break: anywhere; font-family: Arial }
     .latin { width: 92pt; padding: 7pt; border: 1pt solid #bbb; background: #fff8dc; font-size: 10pt; line-height: 1.35 }
 </style></head><body>
 <h1>Unicode line breaking</h1>
@@ -5130,6 +5133,12 @@ var lineBreakingHtml = $$"""
   <div class="card"><h2>normal</h2><p>テキストキストテストスキストテ</p></div>
   <div class="card"><h2>keep-all</h2><p class="keep-all">テキストキスト テストスキスト</p></div>
   <div class="card"><h2>break-all</h2><p class="break-all" style="font-family:Arial">Chargoggagoggmanchaugg 2024</p></div>
+</div>
+<p class="intro">line-break sets how strictly characters that should not start a line are kept off it: strict and normal keep a small kana (ッ) with the character before it, loose lets it start a line, and anywhere allows a break after every character.</p>
+<div class="row">
+  <div class="card"><h2>line-break: strict</h2><p class="lb-strict">テキストッテキストッテキストッテキ</p></div>
+  <div class="card"><h2>line-break: loose</h2><p class="lb-loose">テキストッテキストッテキストッテキ</p></div>
+  <div class="card"><h2>line-break: anywhere</h2><p class="lb-anywhere">Chargoggagoggmanchaugg 2024</p></div>
 </div>
 <h2 style="font-size:11pt;margin:0 0 5pt">Latin text</h2>
 <div class="row">

@@ -421,6 +421,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter StrokeLinecapConverter = Map.StrokeLinecaps.ToConverter();
         public static readonly IValueConverter StrokeLinejoinConverter = Map.StrokeLinejoins.ToConverter();
         public static readonly IValueConverter WordBreakConverter = Map.WordBreaks.ToConverter();
+        public static readonly IValueConverter LineBreakConverter = Map.LineBreaks.ToConverter();
         public static readonly IValueConverter OverflowWrapConverter = Map.OverflowWraps.ToConverter();
         public static readonly IValueConverter FillRuleConverter = Map.FillRules.ToConverter();
         public static readonly IValueConverter IntrinsicSizingConverter = Map.IntrinsicSizings.ToConverter();

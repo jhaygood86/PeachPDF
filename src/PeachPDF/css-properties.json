@@ -2210,6 +2210,32 @@
       }
     },
     {
+      "name": "line-break",
+      "comment": "CSS Text 3 section 5.3: how strictly characters that should not start a line are kept off it. All five keywords are implemented by the strictness tailoring of the Unicode line breaking algorithm (UnicodeLineBreaks); auto is the same as normal. anywhere lets a line end after every typographic character unit (grapheme cluster), which also narrows min-content.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "LineBreak",
+        "keywordMap": "Map.LineBreaks",
+        "fallback": "LineBreak.Auto"
+      },
+      "supportsDataType": "keyword",
+      "supportsSupportedValues": [
+        "auto",
+        "loose",
+        "normal",
+        "strict",
+        "anywhere"
+      ],
+      "html": {
+        "propertyPath": "LineBreak",
+        "csharpDataType": "CssProperty<LineBreak>",
+        "area": "TextArea",
+        "getterExpression": "{box}.LineBreak.ToString()"
+      }
+    },
+    {
       "name": "word-break",
       "comment": "All three keywords are implemented: the line breaking of a box's text comes from the Unicode line breaking algorithm (UAX #14) with word-break applied (UnicodeLineBreaks), where break-all treats letters and digits as ideographs and keep-all forbids breaks between letter units.",
       "inherited": true,

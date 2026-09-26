@@ -386,6 +386,8 @@
         public const string KeepAll = "keep-all";
         public const string BreakWord = "break-word";
         public const string Anywhere = "anywhere";
+        public const string Loose = "loose";
+        public const string Strict = "strict";
         public const string Nonzero = "nonzero";
         public const string Evenodd = "evenodd";
         public const string Row = "row";

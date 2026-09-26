@@ -489,6 +489,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.VerticalAlign, () => new VerticalAlignProperty(), true);
             AddLonghand(PropertyNames.Visibility, () => new VisibilityProperty(), true);
             AddLonghand(PropertyNames.WhiteSpace, () => new WhiteSpaceProperty());
+            AddLonghand(PropertyNames.LineBreak, () => new LineBreakProperty(), true);
             AddLonghand(PropertyNames.Widows, () => new WidowsProperty());
             AddLonghand(PropertyNames.Width, () => new WidthProperty(), true);
             AddLonghand(PropertyNames.WordBreak, () => new WordBreakProperty(), true);
