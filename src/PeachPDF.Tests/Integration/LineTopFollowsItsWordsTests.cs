@@ -53,6 +53,25 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(["H1", "H2", "H3"], painted.Order(StringComparer.Ordinal));
         }
 
+        // A padded `vertical-align: top` inline-block across a page foot. Its words are drawn over its top
+        // padding, above the line top the flow recorded (a separate, older placement bug), so on the lines near
+        // the foot the ink was on one page and the line top on the next: each page rejected the line, and whole
+        // lines were drawn on no page. The line top is only trusted while the ink reaches the page it names.
+        [Theory]
+        [InlineData(30)]
+        [InlineData(12)]
+        public async Task APaddedTopAlignedInlineBlockAcrossAPageFoot_DrawsEveryWordOnce(int padding)
+        {
+            var words = string.Join(" ", Enumerable.Range(1, 59).Select(i => $"w{i}"));
+            var html = $"<!DOCTYPE html><html><head>{Style}</head><body><p>X<span style='display:inline-block;width:100pt;" +
+                       $"vertical-align:top;padding:{padding}pt 6pt 0'>{words}</span>Y</p></body></html>";
+
+            var (_, container) = await Layout(html, 300, 160);
+            var painted = PaintedStrings(container).Where(t => t.Length > 1 && t[0] == 'w' && char.IsDigit(t[1])).ToList();
+
+            Assert.Equal(Enumerable.Range(1, 59).Select(i => $"w{i}").Order(), painted.Order());
+        }
+
         // A bottom-aligned cell with its text directly in it owns the line that text is on, but the
         // alignment moves the cell's children, not the cell. The line's recorded top has to move with its
         // words, since the fragment emitter reads it to decide which page the line is on.
@@ -71,6 +90,27 @@ namespace PeachPDF.Tests.Integration
 
             Assert.True(word.Top > cell.Location.Y + 30, "the fixture must actually move the text down");
             Assert.NotNull(line.FlowTop);
+            Assert.InRange(word.Top - line.FlowTop!.Value, -2, 2);
+        }
+
+        // Undoing a cell's alignment (TableRowCursor.Retract, which moves the content back by the negative of the
+        // distance) has to take the cell's own lines back with its words too, or their recorded top is left where
+        // the alignment put it.
+        [Fact]
+        public async Task UndoingACellsAlignment_TakesItsOwnLineTopBack()
+        {
+            var html = $"<!DOCTYPE html><html><head>{Style}</head><body><table><tr>"
+                       + "<td id='cell' style='vertical-align:bottom;height:100pt'>text</td></tr></table></body></html>";
+
+            var (root, _) = await Layout(html, 300, 200);
+            var cell = LayoutHarness.FindById(root, "cell")!;
+            var line = Assert.Single(cell.LineBoxes);
+            var word = Assert.Single(line.Words);
+            var topBefore = word.Top;
+
+            CssLayoutEngine.OffsetCellContent(cell, -40, isVertical: false);
+
+            Assert.Equal(topBefore - 40, word.Top, 3);
             Assert.InRange(word.Top - line.FlowTop!.Value, -2, 2);
         }
 
