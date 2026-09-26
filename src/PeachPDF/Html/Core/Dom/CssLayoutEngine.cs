@@ -6502,7 +6502,8 @@ namespace PeachPDF.Html.Core.Dom
                 prefix = new CssRectWord(b, prefixText, word.HasSpaceBefore, false)
                 {
                     Width = prefixWidth,
-                    Height = b.ActualFont.Height
+                    Height = b.ActualFont.Height,
+                    UnicodeBreakBefore = word.UnicodeBreakBefore
                 };
                 suffix = new CssRectWord(b, suffixText, false, word.HasSpaceAfter)
                 {
@@ -8320,10 +8321,10 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <remarks>
         /// <para>
-        /// Block scripts are approximated by <see cref="CommonUtils.IsAsianCharacter"/> - deliberately
-        /// the same predicate <c>CssBox.ParseToWords</c> uses to split CJK text one character per word,
-        /// so the opportunities recognized here are exactly the word boundaries that split produces and
-        /// no others. A Latin word has no internal boundary to see (the whole word is one
+        /// Block scripts are approximated by <see cref="CommonUtils.IsAsianCharacter"/> (U+4E00 to
+        /// U+FA2D). <c>CssBox.ParseToWords</c> no longer uses that predicate: it cuts words where the Unicode
+        /// line breaking algorithm allows a line to end, which includes kana and CJK punctuation, so the
+        /// opportunities recognized here are a subset of the word boundaries that split produces. A Latin word has no internal boundary to see (the whole word is one
         /// <see cref="CssRect"/>), and the boundary a hyphen or a <c>word-break: break-all</c> /
         /// <c>overflow-wrap</c> split leaves behind is deliberately not one either - §6.4.5 lists word
         /// separators and block/clustered-script letters, not every soft wrap opportunity.

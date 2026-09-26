@@ -22,6 +22,11 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         internal static LineBreakOpportunity[] Find(string text, PeachPDF.CSS.WordBreak wordBreak, int precedingRegionalIndicators = 0)
         {
+            if (text.Length == 0)
+            {
+                return [LineBreakOpportunity.Mandatory];
+            }
+
             var options = new LineBreakOptions
             {
                 WordBreak = wordBreak switch
@@ -49,9 +54,14 @@ namespace PeachPDF.Html.Core.Utils
             return openFlag ? opportunities[RegionalIndicatorA.Length..] : opportunities;
         }
 
+        /// <summary>Whether a code point is a letter of a script that breaks between characters (ideographs, kana, Hangul), where the algorithm's break after a solidus stands.</summary>
+        private static bool IsIdeographicLetter(int codePoint) =>
+            codePoint is >= 0x1100 and <= 0x11FF or >= 0x3040 and <= 0x30FF or >= 0x3400 and <= 0x4DBF or >= 0x4E00 and <= 0x9FFF
+                or >= 0xAC00 and <= 0xD7AF or >= 0xF900 and <= 0xFAFF or >= 0xFF66 and <= 0xFF9F or >= 0x20000 and <= 0x3FFFF;
+
         /// <summary>
         /// The deviation CSS Text 3 suggests for interoperability: no break between an exclamation mark, a solidus or a vertical line
-        /// and a letter, so that <c>!important</c>, <c>23/Jan/2024</c> and <c>a|b</c> stay whole.
+        /// and a following letter (not an ideograph, kana or Hangul character), so that <c>!important</c>, <c>23/Jan/Feb</c> and <c>a|b</c> stay whole.
         /// </summary>
         private static void SuppressBeforeLetters(string text, LineBreakOpportunity[] opportunities)
         {
@@ -63,7 +73,7 @@ namespace PeachPDF.Html.Core.Utils
                 }
 
                 Rune.DecodeFromUtf16(text.AsSpan(i), out var rune, out _);
-                if (Rune.IsLetter(rune))
+                if (Rune.IsLetter(rune) && !IsIdeographicLetter(rune.Value))
                 {
                     opportunities[i] = LineBreakOpportunity.Prohibited;
                 }

@@ -1629,19 +1629,15 @@ namespace PeachPDF.Html.Core.Dom
             // for the whole box, from its own resolved Direction, is the correct behavior for that text
             // anyway (a lone line-break/space has nothing to bidi-split).
             var fallbackLevel = Direction.Value == DirectionMode.Rtl ? (byte)1 : (byte)0;
-            var trailingRegionalIndicatorCount = CountPrecedingRegionalIndicators(this);
 
-            // Where a line may end inside this text, from the Unicode line breaking algorithm (UAX #14) with word-break applied.
-            var breakOpportunities = UnicodeLineBreaks.Find(text, WordBreak.Value, trailingRegionalIndicatorCount);
+            // Where a line may end inside this text, from the Unicode line breaking algorithm (UAX #14) with word-break applied. The
+            // regional indicators before this box decide whether its first one completes a flag.
+            var breakOpportunities = UnicodeLineBreaks.Find(text, WordBreak.Value, CountPrecedingRegionalIndicators(this));
 
             while (startIdx < text.Length)
             {
-                var segmentStart = startIdx;
                 while (startIdx < text.Length && text[startIdx] == '\r')
                     startIdx++;
-                if (startIdx > segmentStart)
-                    trailingRegionalIndicatorCount = 0;
-                segmentStart = startIdx;
 
                 if (startIdx < text.Length)
                 {
@@ -1787,8 +1783,6 @@ namespace PeachPDF.Html.Core.Dom
                             Words.Add(new CssRectWord(this, "\n", false, false) { BidiLevel = newlineBidiLevel });
                     }
 
-                    trailingRegionalIndicatorCount = CssLayoutEngine.UpdateTrailingRegionalIndicatorCount(
-                        trailingRegionalIndicatorCount, text.AsSpan(segmentStart, endIdx - segmentStart));
                     startIdx = endIdx;
                 }
             }
