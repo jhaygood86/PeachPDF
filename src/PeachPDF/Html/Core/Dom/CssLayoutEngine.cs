@@ -6194,15 +6194,20 @@ namespace PeachPDF.Html.Core.Dom
             if (previous is not CssRectWord previousWord || word is not CssRectWord currentWord)
                 return true;
 
+            // Two words cut from the same box's text: the Unicode line breaking algorithm has already said, over the whole text
+            // and with word-break applied, whether a line may end between them (a space, a hyphen, an ideograph, a slash ...).
+            if (currentWord.UnicodeBreakBefore is { } unicodeBreak && ReferenceEquals(previousWord.OwnerBox, currentWord.OwnerBox))
+            {
+                return unicodeBreak && IsGraphemeBoundaryBefore(previousWord, currentWord, precedingRegionalIndicatorCount,
+                    precedingGraphemeContext);
+            }
+
             Rune.DecodeLastFromUtf16(previousWord.Text.AsSpan(), out var previousRune, out _);
             Rune.DecodeFromUtf16(currentWord.Text.AsSpan(), out var currentRune, out _);
             if (!IsGraphemeBoundaryBefore(previousWord, currentWord, precedingRegionalIndicatorCount,
                     precedingGraphemeContext)
                 || ProhibitsLineBreakAfter(previousRune) || ProhibitsLineBreakBefore(currentRune))
                 return false;
-
-            if (previousWord.BidiLevel != currentWord.BidiLevel)
-                return true;
 
             if (hasWhitespaceBefore || HasInterElementWhitespaceBefore(currentWord) || previousWord.IsSpaces
                 || previousWord.HasSpaceAfter || currentWord.HasSpaceBefore

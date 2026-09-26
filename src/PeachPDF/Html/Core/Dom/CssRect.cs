@@ -385,6 +385,15 @@ namespace PeachPDF.Html.Core.Dom
         public bool SuppressWrapBefore { get; set; } = false;
 
         /// <summary>
+        /// What the Unicode line breaking algorithm (UAX #14, with the CSS tailorings) says about breaking before this word, read
+        /// over the text of the box that produced it: <see langword="true"/> when a line may end just before the word,
+        /// <see langword="false"/> when it may not, and <see langword="null"/> for a rect that was not cut from box text (a leader,
+        /// an atomic inline) or has not been analysed. The answer only speaks about the word's predecessor when both belong to the same
+        /// box; across boxes the layout keeps its own conservative rules. See <see cref="CssLayoutEngine.HasOrdinaryWrapOpportunityBefore"/>.
+        /// </summary>
+        public bool? UnicodeBreakBefore { get; set; }
+
+        /// <summary>
         /// Candidate hyphenation break indices into <see cref="Text"/> — index <c>i</c> means a hyphen
         /// may be inserted between <c>Text[i-1]</c> and <c>Text[i]</c>. Populated by
         /// <see cref="CssBox.ParseToWords"/> from either an explicit soft hyphen (<c>&amp;shy;</c>) or,

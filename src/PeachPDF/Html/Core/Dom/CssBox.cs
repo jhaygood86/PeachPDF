@@ -1631,6 +1631,9 @@ namespace PeachPDF.Html.Core.Dom
             var fallbackLevel = Direction.Value == DirectionMode.Rtl ? (byte)1 : (byte)0;
             var trailingRegionalIndicatorCount = CountPrecedingRegionalIndicators(this);
 
+            // Where a line may end inside this text, from the Unicode line breaking algorithm (UAX #14) with word-break applied.
+            var breakOpportunities = UnicodeLineBreaks.Find(text, WordBreak.Value, trailingRegionalIndicatorCount);
+
             while (startIdx < text.Length)
             {
                 var segmentStart = startIdx;
@@ -1674,31 +1677,18 @@ namespace PeachPDF.Html.Core.Dom
                         // emoji, a CJK Extension-B ideograph, etc.) is never split across its surrogate pair -
                         // its two halves would otherwise each be treated as a separate per-character Asian
                         // word break and emitted as two invalid lone-surrogate words.
+                        // A word runs up to the next place a line may end, or to the next white space.
                         endIdx = startIdx;
                         while (endIdx < text.Length)
                         {
-                            Rune.DecodeFromUtf16(text.AsSpan(endIdx), out var rune, out var runeLength);
-                            if (HtmlUtils.IsCollapsibleWhitespace(text[endIdx]) || text[endIdx] == '-'
-                                || WordBreak.Value == PeachPDF.CSS.WordBreak.BreakAll
-                                || CommonUtils.IsAsianCharacter(rune)
-                                || CommonUtils.IsEmojiLineBreakCharacter(rune))
+                            if (HtmlUtils.IsCollapsibleWhitespace(text[endIdx]))
                                 break;
-                            endIdx += runeLength;
-                        }
 
-                        if (endIdx < text.Length)
-                        {
-                            Rune.DecodeFromUtf16(text.AsSpan(endIdx), out var rune, out var runeLength);
-                            if (CommonUtils.IsEmojiLineBreakCharacter(rune))
-                            {
-                                endIdx += CssLayoutEngine.IsRegionalIndicator(rune)
-                                    && trailingRegionalIndicatorCount % 2 != 0
-                                        ? runeLength
-                                        : StringInfo.GetNextTextElementLength(text.AsSpan(endIdx));
-                            }
-                            else if (text[endIdx] == '-' || WordBreak.Value == PeachPDF.CSS.WordBreak.BreakAll
-                                || CommonUtils.IsAsianCharacter(rune))
-                                endIdx += runeLength;
+                            Rune.DecodeFromUtf16(text.AsSpan(endIdx), out _, out var runeLength);
+                            endIdx += runeLength;
+
+                            if (endIdx < text.Length && breakOpportunities[endIdx] != LineBreakOpportunity.Prohibited)
+                                break;
                         }
 
                         // An extra break opportunity at a UAX#9 embedding-level boundary - on top of the
@@ -1775,6 +1765,8 @@ namespace PeachPDF.Html.Core.Dom
                             // the same bidi level.
                             var wordsBefore = Words.Count;
                             AddWord(cleanWord, hasSpaceBefore, hasSpaceAfter, hyphenationCandidates, cleanOriginalWord, startIdx);
+                            if (Words.Count > wordsBefore)
+                                Words[wordsBefore].UnicodeBreakBefore = breakOpportunities[startIdx] != LineBreakOpportunity.Prohibited;
                             for (var wi = wordsBefore; wi < Words.Count; wi++)
                             {
                                 Words[wi].BidiLevel = wordBidiLevel;

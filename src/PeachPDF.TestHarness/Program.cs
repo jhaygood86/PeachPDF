@@ -5105,6 +5105,44 @@ await SaveShowcaseAsync("svg_text_advanced", "Graphics & Effects", "SVG Text: Gr
     "SVG text with gradient/pattern fill, stroke, and glyphs laid along a path (textPath) - all rendered as real vector PDF content.",
     svgTextAdvancedHtml, pdfConfig);
 
+// --- Unicode line breaking showcase ---
+// The kana are from the Noto Sans JP subset the SVG vertical text showcase below also embeds.
+var lineBreakingCjkFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansJPSubset.ttf")));
+
+var lineBreakingHtml = $$"""
+<!DOCTYPE html><html lang="en"><head><style>
+    @font-face { font-family: 'CJK'; src: url('data:font/truetype;base64,{{lineBreakingCjkFontB64}}') format('truetype'); }
+    @page { size: A4; margin: 28pt }
+    body { font-family: Arial, sans-serif; color: #222 }
+    h1 { font-size: 18pt; margin: 0 0 5pt }
+    .intro { color: #555; font-size: 9pt; margin: 0 0 14pt }
+    .row { display: flex; gap: 10pt; align-items: flex-start; margin-bottom: 14pt }
+    .card { width: 118pt; padding: 7pt; border: 1pt solid #bbb; background: #f4f9ff }
+    .card h2 { font-size: 9pt; margin: 0 0 5pt; color: #1b4f8a }
+    .card p { margin: 0; font-size: 12pt; line-height: 1.4; font-family: CJK }
+    .keep-all { word-break: keep-all }
+    .break-all { word-break: break-all }
+    .latin { width: 92pt; padding: 7pt; border: 1pt solid #bbb; background: #fff8dc; font-size: 10pt; line-height: 1.35 }
+</style></head><body>
+<h1>Unicode line breaking</h1>
+<p class="intro">Where a line may end inside a run of text follows the Unicode line breaking algorithm (UAX #14). Kana and ideographs break between characters; word-break: keep-all keeps them together and break-all also breaks between Latin letters.</p>
+<div class="row">
+  <div class="card"><h2>normal</h2><p>テキストキストテストスキストテ</p></div>
+  <div class="card"><h2>keep-all</h2><p class="keep-all">テキストキスト テストスキスト</p></div>
+  <div class="card"><h2>break-all</h2><p class="break-all" style="font-family:Arial">Chargoggagoggmanchaugg 2024</p></div>
+</div>
+<h2 style="font-size:11pt;margin:0 0 5pt">Latin text</h2>
+<div class="row">
+  <div class="latin">A well-known hyphen breaks after itself; abc-123 stays whole, and !important, and/or and 23/Jan/Feb are never split around the punctuation.</div>
+  <div class="latin">Text in (parentheses) and “quotes” does not break inside them, and 3.14, $5.00 and 1,000 are single tokens.</div>
+</div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("unicode_line_breaking", "Typography & Text", "Unicode Line Breaking",
+    "Where a line may end follows the Unicode line breaking algorithm (UAX #14): kana and ideographs break between characters, word-break:keep-all keeps them together, break-all also breaks Latin letters, and hyphens, slashes, numbers and punctuation get the algorithm's rules.",
+    lineBreakingHtml, pdfConfig);
+
 // --- SVG vertical writing-mode text showcase ---
 
 // A subset of Noto Sans JP (see assets/fonts/NotoSansJPSubset.LICENSE.txt) covering the CJK/Latin
