@@ -124,6 +124,11 @@ The `Unicode` namespace gains `ArabicJoining` (`TypeOf`, `Resolve`) with `Arabic
 | `Hyphenator` (`FindBreakPoints`) | Liang-pattern hyphenation | TeX hyphenation; `FindBreakPoints` is ours |
 | `Emoji` (`Resolve`, `ResolveAt`, `IsPresentationParticipant`, `IsPresentationSelector`, `SelectorFor`), `EmojiMode`, `EmojiPresentation` | Choice between text and emoji presentation | UTS #51 and CSS Fonts 4 `font-variant-emoji` (`normal`, `text`, `emoji`, `unicode`) |
 | `Typeface.HasSvgGlyphs`, `TryGetSvgGlyph`, `SvgGlyph` | The SVG document that draws a glyph in an OpenType SVG font | the OpenType `SVG ` table (document list, `glyph<N>` element ids); the type carries the document and the element to draw, nothing renders it |
+| `ParagraphBuilder`, `Paragraph`, `ParagraphLayout` | Text prepared once and laid out at any width into an immutable snapshot | Skia/Flutter paragraph model (build, then layout at a width); the split between a width-independent `Paragraph` and a `ParagraphLayout` is ours |
+| `RunStyle`, `ParagraphStyle`, `TextAlign`, `OverflowWrap` | The look of a run, and how the paragraph is set | CSS names throughout: `text-align`, `overflow-wrap`, `direction`, `line-height`, `word-break`, `line-break` |
+| `LineBox`, `PlacedRun`, `LineEnd` | A placed line, a drawn stretch of one line, and why a line ended | typography terms (line box, run); data only, nothing draws; the run carries a shaped `GlyphRun` |
+| `TextPosition`, `TextAffinity`, `TextRange`; `PositionAt`, `CaretRect`, `SelectionBoxes`, `WordRangeAt`, `GraphemeRangeAt` | Editing queries on a layout | Skia/Flutter `TextPosition` and affinity, UAX #29 units; the names are the plain description of what each returns |
+| `ContentWidths`, `TextRuler` | The narrowest and widest a paragraph can be; measuring one piece of text | CSS Sizing 3 min-content and max-content; `TextRuler.WidthOf` is ours |
 
 Every name above was taken from the specification it implements, and the member sets follow those specifications rather
 than any library's. The author did not consult SixLabors.Fonts while choosing them, and so could not vouch that no name
