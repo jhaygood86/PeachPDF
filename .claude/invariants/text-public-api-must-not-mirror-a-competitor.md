@@ -66,6 +66,14 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 | `MathGlyphInfoTable` (`GetItalicsCorrection`, `GetTopAccentAttachment`, `IsExtendedShape`) | Per-glyph information | `MathItalicsCorrectionInfo`, `MathTopAccentAttachment`, `ExtendedShapeCoverage` in the specification |
 | `MathVariantsTable` (`MinConnectorOverlap`, `GetVerticalConstruction`, `GetHorizontalConstruction`), `MathGlyphConstruction`, `MathGlyphVariant`, `MathGlyphAssembly`, `MathGlyphPart` | The stretchy glyph data | `MathVariants`, `MathGlyphConstruction`, `MathGlyphVariantRecord`, `GlyphAssembly`, `GlyphPart` in the specification |
 
+### `PeachDrawing.Text.Unicode`: segmentation
+
+| Public name | Role | Origin of the name and shape |
+|---|---|---|
+| `Segmenter` (`FindGraphemeBoundaries`, `FindWordBoundaries`, `FindSentenceBoundaries`) | Boundaries of grapheme clusters, words and sentences | UAX #29 "Unicode Text Segmentation"; the return shape (increasing UTF-16 indices) is ours |
+| `LineBreaker.FindOpportunities`, `LineBreakOpportunity` (`Prohibited`, `Allowed`, `Mandatory`) | Where a line may or must end | UAX #14 "Unicode Line Breaking Algorithm"; the three values are the algorithm's no-break, break and mandatory-break marks |
+| `LineBreakOptions` (`WordBreak`, `Strictness`), `WordBreakMode` (`Normal`, `BreakAll`, `KeepAll`), `LineBreakStrictness` (`Auto`, `Loose`, `Normal`, `Strict`, `Anywhere`) | The CSS tailorings | CSS Text 3 `word-break` and `line-break` names and keywords |
+
 ### `PeachDrawing.Text.Export`
 
 | Public name | Role | Origin of the name and shape |
