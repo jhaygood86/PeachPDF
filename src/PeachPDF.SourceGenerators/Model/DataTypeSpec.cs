@@ -76,7 +76,7 @@ namespace PeachPDF.SourceGenerators.Model
         public string? Fallback { get; }
 
         // "keyword-or-value" — the non-keyword side's grammar/C# type ("integer", "length", or
-        // "length-or-unitless")
+        // "length-or-unitless", or "percentage")
         public string? ValueType { get; }
 
         // "cssom-grammar" — true when the named grammar member returns null for the literal "none" the

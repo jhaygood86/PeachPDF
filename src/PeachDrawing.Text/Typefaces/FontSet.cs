@@ -75,7 +75,7 @@ namespace PeachDrawing.Text
                 var familyName = options?.FamilyName ?? TtfFontDescription.LoadDescription(stream).FontFamilyInvariantCulture;
 
                 stream.Seek(0, SeekOrigin.Begin);
-                Resolver.AddFont(stream, familyName, options?.Weight, options?.IsItalic, options?.Width, options?.UnicodeRanges);
+                Resolver.AddFont(stream, familyName, DeclaredFaceOf(options), options?.UnicodeRanges);
 
                 Resolver.TryGetFamilyName(familyName, out var registered);
                 return new TypefaceFamily(this, registered);
@@ -284,19 +284,32 @@ namespace PeachDrawing.Text
             };
         }
 
+        /// <summary>What an <see cref="AddOptions"/> declares about a face; a range takes the place of the single value it extends.</summary>
+        private static FontResolver.DeclaredFace DeclaredFaceOf(AddOptions? options)
+        {
+            if (options is null)
+                return default;
+
+            return new FontResolver.DeclaredFace(
+                options.WeightRange ?? (options.Weight is { } weight ? new AxisRange(weight) : null),
+                options.IsItalic,
+                options.WidthRange ?? (options.Width is { } width ? new AxisRange(WidthClasses.ToPercent(width)) : null),
+                options.ObliqueRange);
+        }
+
         internal TypefaceMatch MatchCore(string familyName, in TypefaceQuery query)
         {
-            var options = new FontResolvingOptions(query.IsItalic ? FaceStyle.Italic : FaceStyle.Regular, query.Weight, query.Width)
-            {
-                Codepoint = query.MustCover
-            };
+            var options = query.WidthPercent is { } percent
+                ? new FontResolvingOptions(query.IsItalic ? FaceStyle.Italic : FaceStyle.Regular, query.Weight, percent)
+                : new FontResolvingOptions(query.IsItalic ? FaceStyle.Italic : FaceStyle.Regular, query.Weight, query.Width);
+            options.Codepoint = query.MustCover;
 
             var face = LoadedTypeface.GetOrCreateFrom(familyName, options, Resolver);
             var typeface = face.Public;
             var synthesis = face.StyleSimulations;
             if (typeface.IsVariable)
             {
-                (typeface, synthesis) = VariableMatching.Apply(typeface, synthesis, query);
+                (typeface, synthesis) = VariableMatching.Apply(typeface, synthesis, query, face.DeclaredRanges);
             }
 
             return new TypefaceMatch(typeface, synthesis);

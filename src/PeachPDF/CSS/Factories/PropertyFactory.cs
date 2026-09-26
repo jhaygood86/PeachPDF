@@ -301,7 +301,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FontFamily, () => new FontFamilyProperty(), false, true);
             AddLonghand(PropertyNames.FontSize, () => new FontSizeProperty(), true);
             AddLonghand(PropertyNames.FontSizeAdjust, () => new FontSizeAdjustProperty(), true);
-            AddLonghand(PropertyNames.FontStyle, () => new FontStyleProperty(), false, true);
+            AddLonghand(PropertyNames.FontStyle, () => new FontStyleProperty());
             // font-variant is a real shorthand (see FontVariantProperty) over the 4 longhands below
             // plus font-feature-settings; the @font-face `font-variant` descriptor is a separate,
             // unrelated, never-cascaded registration (FontFaceVariantProperty, added to _fontsBuilder
@@ -326,8 +326,8 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FontKerning, () => new FontKerningProperty());
             AddLonghand(PropertyNames.FontOpticalSizing, () => new FontOpticalSizingProperty());
             AddLonghand(PropertyNames.FontVariationSettings, () => new FontVariationSettingsProperty());
-            AddLonghand(PropertyNames.FontWeight, () => new FontWeightProperty(), true, true);
-            AddLonghand(PropertyNames.FontStretch, () => new FontStretchProperty(), true, true);
+            AddLonghand(PropertyNames.FontWeight, () => new FontWeightProperty(), true);
+            AddLonghand(PropertyNames.FontStretch, () => new FontStretchProperty(), true);
             AddLonghand(PropertyNames.FontPalette, () => new FontPaletteProperty());
             AddLonghand(PropertyNames.FootnoteDisplay, () => new FootnoteDisplayProperty());
             AddLonghand(PropertyNames.FootnotePolicy, () => new FootnotePolicyProperty());
@@ -630,6 +630,10 @@ namespace PeachPDF.CSS
             _fontsBuilder.Add(PropertyNames.Src, () => new SrcProperty());
             _fontsBuilder.Add(PropertyNames.UnicodeRange, () => new UnicodeRangeProperty());
             _fontsBuilder.Add(PropertyNames.FontVariant, () => new FontFaceVariantProperty());
+            // The descriptors that take ranges (and "auto") are not the properties of the same names.
+            _fontsBuilder.Add(PropertyNames.FontStyle, () => new FontFaceDescriptorProperty(PropertyNames.FontStyle));
+            _fontsBuilder.Add(PropertyNames.FontWeight, () => new FontFaceDescriptorProperty(PropertyNames.FontWeight));
+            _fontsBuilder.Add(PropertyNames.FontStretch, () => new FontFaceDescriptorProperty(PropertyNames.FontStretch));
 
             _fonts = _fontsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 

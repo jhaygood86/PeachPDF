@@ -2991,18 +2991,19 @@
     },
     {
       "name": "font-stretch",
-      "comment": "CssProperty<FontStretch>-backed (issue #598's follow-up: typed enum storage instead of a raw string) - reuses the pre-existing FontStretch enum/Map.FontStretches map, already used by FontStretchResolver/the legacy CSS-OM layer.",
+      "comment": "CssKeywordOrValue<FontStretch, double>-backed: the nine keywords (reusing the FontStretch enum/Map.FontStretches map) or a non-negative <percentage> of the normal width (CSS Fonts 4 section 3.3), which FontStretchResolver turns into the percentage every font-creation call takes.",
       "inherited": true,
       "initialValue": "normal",
       "cssDataType": {
-        "type": "enum-keyword",
+        "type": "keyword-or-value",
         "enumType": "FontStretch",
         "keywordMap": "Map.FontStretches",
-        "fallback": "FontStretch.Normal"
+        "fallback": "FontStretch.Normal",
+        "valueType": "percentage"
       },
       "html": {
         "propertyPath": "FontStretch",
-        "csharpDataType": "CssProperty<FontStretch>",
+        "csharpDataType": "CssProperty<CssKeywordOrValue<FontStretch, double>>",
         "area": "FontArea",
         "getterExpression": "{box}.FontStretch.ToString()"
       }

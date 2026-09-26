@@ -134,6 +134,12 @@ namespace PeachPDF.CSS
             return null;
         }
 
+        public static Percent? ToNonNegativePercent(this IReadOnlyList<Token> value)
+        {
+            var percent = value.ToPercent();
+            return percent is { Value: >= 0f } ? percent : null;
+        }
+
         public static Percent? ToPercentOrFraction(this IReadOnlyList<Token> value)
         {
             var percent = value.ToPercent();

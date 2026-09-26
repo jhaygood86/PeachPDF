@@ -63,7 +63,15 @@ namespace PeachDrawing.Text.Internal.Fonts
             Variation = variation;
             _variationBase = source;
             OwningInstanceResolver = source.OwningInstanceResolver;
+            DeclaredRanges = source.DeclaredRanges;
         }
+
+        /// <summary>
+        /// The weights, widths and oblique angles the face this typeface was matched to declares that it covers (an <c>@font-face</c>
+        /// range, or the range of the axes of a variable font that was given none), or <see langword="null"/> when it declares none.
+        /// A variable font is set to the requested location kept inside them.
+        /// </summary>
+        internal FaceRanges? DeclaredRanges { get; init; }
 
         /// <summary>Where in the design space of a variable font this typeface reads, or <see langword="null"/> at its defaults.</summary>
         internal VariationCoordinates? Variation { get; }
@@ -143,7 +151,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             {
                 if (!instanceResolver!.InstanceFontResolverInfosByTypefaceKey.TryGetValue(typefaceKey, out fontResolverInfo))
                 {
-                    fontResolverInfo = instanceResolver.ResolveTypeface(familyName, fontResolvingOptions.Weight, fontResolvingOptions.IsItalic, fontResolvingOptions.Stretch);
+                    fontResolverInfo = instanceResolver.ResolveFace(familyName, new FaceRequest(fontResolvingOptions.Weight, fontResolvingOptions.IsItalic, fontResolvingOptions.WidthPercent));
                     if (fontResolverInfo == null)
                         throw new InvalidOperationException("No appropriate font found.");
 
@@ -175,7 +183,10 @@ namespace PeachDrawing.Text.Internal.Fonts
             // bold/italic simulation flags the resolver decided this face needs (see
             // FontResolver.ResolveTypeface's nearest-weight/style matching) - previously computed here
             // and then dropped, since this constructor never used to accept them at all.
-            var glyphTypeface = new LoadedTypeface(typefaceKey, fontSource, fontResolverInfo.StyleSimulations);
+            var glyphTypeface = new LoadedTypeface(typefaceKey, fontSource, fontResolverInfo.StyleSimulations)
+            {
+                DeclaredRanges = fontResolverInfo.DeclaredRanges
+            };
 
             if (useInstanceCache)
             {
@@ -191,7 +202,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         }
         private static LoadedTypeface GetOrCreateForCodepoint(string familyName, FontResolvingOptions options, System.Text.Rune codepoint, FontResolver resolver)
         {
-            var info = resolver.ResolveTypeface(familyName, options.Weight, options.IsItalic, options.Stretch, codepoint);
+            var info = resolver.ResolveFace(familyName, new FaceRequest(options.Weight, options.IsItalic, options.WidthPercent, codepoint));
             if (info == null)
             {
                 // The caller (PdfSharpAdapter) pre-checks coverage before ever building the XFont, so a
@@ -200,7 +211,11 @@ namespace PeachDrawing.Text.Internal.Fonts
             }
 
             var simSuffix = (info.MustSimulateBold ? "/b+" : "") + (info.MustSimulateItalic ? "/i+" : "");
-            var key = KeyPrefix + "cp/" + info.FaceName.ToLowerInvariant() + simSuffix;
+            // Two registrations of one file can declare different ranges (and share a face name), so the ranges are part of the identity.
+            var rangeSuffix = info.DeclaredRanges is { } ranges
+                ? "/r:" + ranges.Weight + "/" + ranges.Width + "/" + (ranges.Oblique is { } oblique ? oblique.ToString() : "-")
+                : "";
+            var key = KeyPrefix + "cp/" + info.FaceName.ToLowerInvariant() + simSuffix + rangeSuffix;
 
             if (TypefaceCache.ForInstance(resolver).TryGetValue(key, out var cached))
                 return cached;
@@ -208,7 +223,8 @@ namespace PeachDrawing.Text.Internal.Fonts
             var fontSource = FontFileData.GetOrCreateFrom(resolver.GetFont(info.FaceName));
             var glyphTypeface = new LoadedTypeface(key, fontSource, info.StyleSimulations)
             {
-                OwningInstanceResolver = resolver
+                OwningInstanceResolver = resolver,
+                DeclaredRanges = info.DeclaredRanges
             };
             TypefaceCache.ForInstance(resolver)[key] = glyphTypeface;
             return glyphTypeface;

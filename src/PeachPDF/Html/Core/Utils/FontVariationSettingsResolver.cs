@@ -71,13 +71,13 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
-        /// The axis settings to ask the font set for: the automatic optical size (the font size in CSS pixels, unless switched off), the slant
-        /// of a declared <c>oblique &lt;angle&gt;</c>, and then the box's own settings, which win over both.
+        /// The axis settings to ask the font set for: the automatic optical size (the font size in CSS pixels, unless switched off), and then
+        /// the box's own settings, which win over it. The weight, width and slant are not among them: the font set derives those from
+        /// the query itself, inside the range the face declares.
         /// </summary>
         /// <param name="encoded">The value of <see cref="Encode"/>.</param>
         /// <param name="sizeInPixels">The font size in CSS pixels.</param>
-        /// <param name="obliqueSkewSinus">The sine of a declared <c>oblique &lt;angle&gt;</c>, if any.</param>
-        internal static IReadOnlyList<AxisSetting> ToAxes(string? encoded, double sizeInPixels, double? obliqueSkewSinus)
+        internal static IReadOnlyList<AxisSetting> ToAxes(string? encoded, double sizeInPixels)
         {
             var axes = new List<AxisSetting>();
             var explicitSettings = new List<AxisSetting>();
@@ -104,12 +104,6 @@ namespace PeachPDF.Html.Core.Utils
             if (opticalSizingAuto)
             {
                 axes.Add(new AxisSetting(AxisTags.OpticalSize, sizeInPixels));
-            }
-
-            if (obliqueSkewSinus is { } sinus)
-            {
-                // CSS oblique angles lean right, and the slnt axis measures a lean to the right as negative.
-                axes.Add(new AxisSetting(AxisTags.Slant, -Math.Asin(Math.Clamp(sinus, -1, 1)) * 180 / Math.PI));
             }
 
             axes.AddRange(explicitSettings);

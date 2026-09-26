@@ -512,10 +512,10 @@ namespace PeachPDF.Html.Core.Dom
         internal TextAlignLast ActualTextAlignLast => DerivedStyle.ActualTextAlignLast;
 
         /// <summary>
-        /// This box's own <see cref="FontStretch"/> keyword, resolved to a concrete CSS Fonts numeric
-        /// stretch (1-9, matching OS/2 <c>usWidthClass</c>).
+        /// This box's own <see cref="FontStretch"/> keyword or percentage, resolved to the percentage of the
+        /// normal width it stands for (50 to 200 for the keywords).
         /// </summary>
-        internal int ActualStretch => DerivedStyle.ActualStretch;
+        internal double ActualStretch => DerivedStyle.ActualStretch;
 
         /// <summary>
         /// This box's own <see cref="FontStyle"/>, resolved to a faux-italic skew factor when it's the CSS

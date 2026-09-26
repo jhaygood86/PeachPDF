@@ -38,10 +38,10 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             public List<EmojiPresentation> SystemFallbackRequests { get; } = [];
 
-            protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, Rune codepoint, string? variations) =>
+            protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, double stretch, double? obliqueSkewSinus, Rune codepoint, string? variations) =>
                 Families.GetValueOrDefault(family);
 
-            protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, Rune codepoint, EmojiPresentation presentation, string? variations)
+            protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, double stretch, double? obliqueSkewSinus, Rune codepoint, EmojiPresentation presentation, string? variations)
             {
                 SystemFallbackRequests.Add(presentation);
                 return SystemFallback.GetValueOrDefault(presentation);

@@ -78,7 +78,7 @@ namespace PeachPDF.Tests.Integration
             var encoded = FontVariationSettingsResolver.Encode(FontOpticalSizingMode.Auto, "\"wght\" 650, \"wdth\" 80.5");
             Assert.Equal("wght=650;wdth=80.5", encoded);
 
-            var axes = FontVariationSettingsResolver.ToAxes(encoded, 16, null);
+            var axes = FontVariationSettingsResolver.ToAxes(encoded, 16);
 
             Assert.Equal(
                 [new AxisSetting("opsz", 16), new AxisSetting("wght", 650), new AxisSetting("wdth", 80.5)],
@@ -91,16 +91,7 @@ namespace PeachPDF.Tests.Integration
             var encoded = FontVariationSettingsResolver.Encode(FontOpticalSizingMode.None, "normal");
             Assert.Equal("-opsz", encoded);
 
-            Assert.Empty(FontVariationSettingsResolver.ToAxes(encoded, 16, null));
-        }
-
-        [Fact]
-        public void AnObliqueAngle_BecomesANegativeSlant()
-        {
-            var axes = FontVariationSettingsResolver.ToAxes(null, 16, Math.Sin(10 * Math.PI / 180));
-
-            var slant = Assert.Single(axes, a => a.Tag == "slnt");
-            Assert.Equal(-10, slant.Value, 6);
+            Assert.Empty(FontVariationSettingsResolver.ToAxes(encoded, 16));
         }
 
         [Theory]
@@ -156,7 +147,7 @@ body {{ font-family: 'VF'; font-size: 24pt; }}
             // Faux bold strokes the glyphs (text render mode 2); the instance is already heavy, so nothing is stroked.
             var pdf = await RenderAsync(Html("<p style=\"font-weight: 700\">ABAB</p>"));
 
-            Assert.DoesNotContain(" 2 Tr", pdf);
+            Assert.DoesNotContain("2 Tr", pdf);
         }
 
         [Fact]

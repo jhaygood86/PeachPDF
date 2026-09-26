@@ -271,6 +271,13 @@ if (face.IsVariable)
   its weight, width class and italic-ness set the `wght`, `wdth` and `ital` axes (or `slnt`, for a font that has a slant axis and no
   italic one), the query's own `Axes` are applied after those, and nothing is left for the caller to fake bold or italic where an axis
   did it. `Typeface.VariationKey` names the location, so a cache of things made from a typeface can tell two instances of one font apart.
+- A query can ask for a width as a percentage of the normal width (`TypefaceQuery.WidthPercent`, where the width class only has nine
+  places) and for an oblique angle (`ObliqueAngle`, 14 degrees when it is left out), which set the `wdth` and `slnt` axes.
+- A font added with a range (`AddOptions.WeightRange`, `WidthRange` and `ObliqueRange`, the `AxisRange` form of the `@font-face`
+  descriptors) is matched as covering every value in it: a request inside the range is exact, and one outside it is measured from the
+  nearest end. The axes of a variable face are then set to the request kept inside the range, and no bold or italic is left to fake that
+  the axes supply. A face oblique over a range that includes 0 also serves upright text. A variable font added with no range covers the
+  range of its own weight, width and slant axes.
 - Outlines (including composite glyphs), advance widths, the font-wide metrics of `Typeface.Metrics` and shaping advances follow the
   location. Reading `TypefaceMetrics.XMin` to `YMax` (the font bounding box) and the vertical advances gives the default design's
   values, and a variable font with CFF2 outlines has no outlines: what a location changes is what the `gvar`, `HVAR`, `MVAR` and

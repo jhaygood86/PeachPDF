@@ -114,7 +114,7 @@ namespace PeachPDF
                     ranges.Add(new RuneInterval(range.Start, range.End));
             }
 
-            await _pdfSharpAdapter.AddFont(stream, null, weightOverride: null, isItalicOverride: null, stretchOverride: null, ranges);
+            await _pdfSharpAdapter.AddFont(stream, null, default, ranges);
         }
 
         /// <summary>

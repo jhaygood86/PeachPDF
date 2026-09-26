@@ -5,7 +5,7 @@ namespace PeachPDF.SourceGenerators.Emit
 {
     /// <summary>
     /// The single place a <c>DataTypeKind.KeywordOrValue</c> entry's <c>valueType</c>
-    /// ("integer"/"length"/"length-or-unitless") maps to real C# — the value-side validation clause, the
+    /// ("integer"/"length"/"length-or-unitless"/"percentage") maps to real C# — the value-side validation clause, the
     /// storage type, and the <c>TryParse</c>-shaped parser to hand to
     /// <see cref="global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText{TEnum,TValue}"/>.
     /// <see cref="ValidatorExpressionBuilder"/> and <see cref="RegistryEmitter"/> both consult this rather
@@ -55,6 +55,10 @@ namespace PeachPDF.SourceGenerators.Emit
             "length-or-unitless" => new Resolved(
                 "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrUnitless(value, out _)",
                 "global::PeachPDF.CSS.LengthOrUnitless", "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrUnitless"),
+            // A non-negative <percentage> stored as a double, e.g. font-stretch's 87.5% (the keywords stand for percentages too).
+            "percentage" => new Resolved(
+                "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNonNegativePercentage(value, out _)",
+                "double", "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNonNegativePercentage"),
             _ => throw new NotSupportedException(
                 $"\"{entry.Name}\" declares a keyword-or-value cssDataType with valueType \"{dt.ValueType}\", " +
                 "which KeywordOrValueGrammar does not yet implement."),

@@ -66,21 +66,21 @@ namespace PeachPDF.Tests.TestSupport
         // stream's real bytes and returns a fixed-size TestImage instead of throwing.
         protected override RImage ImageFromStreamInt(Stream memoryStream) => new TestImage(40, 30);
 
-        protected override RFont CreateFontInt(string family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null, string? variations = null) => new TestFont(size);
+        protected override RFont CreateFontInt(string family, double size, RFontStyle style, int weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null) => new TestFont(size);
 
-        protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null, string? variations = null) => new TestFont(size);
+        protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null) => new TestFont(size);
 
-        protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations) => new TestFont(size);
+        protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations) => new TestFont(size);
 
         // No family this stub knows about ever "wins" the last-resort search - there is no real
         // InstalledFonts registry backing it, so the only faithful answer is "nothing found".
-        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations) => null;
+        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations) => null;
 
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => false;
 
-        protected override Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
+        protected override Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
 
-        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
+        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
     }
 
     /// <summary>A solid-color brush that remembers the color it was created with, and (for a linear
