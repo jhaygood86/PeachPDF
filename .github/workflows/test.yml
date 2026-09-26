@@ -148,6 +148,13 @@ jobs:
       if: steps.changes.outputs.src == 'true'
       run: dotnet test src/PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj --configuration Release --logger "trx;LogFileName=cli-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
+    # The font and text engine (PeachDrawing.Text) has its own test project; run it into the same coverage
+    # directory so the diff-coverage gate below covers the engine's code too. It is small and needs no browser,
+    # so all of its target frameworks run in the one invocation.
+    - name: Test engine (PeachDrawing.Text)
+      if: steps.changes.outputs.src == 'true'
+      run: dotnet test src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --configuration Release --logger "trx;LogFileName=engine-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+
     # The css-properties.json -> CssPropertyRegistry.g.cs/SvgPropertyRegistry.g.cs source generator has
     # its own test project (JSON reader, PPGxxx diagnostics, generated-output shape); run it into the
     # same coverage directory so the diff-coverage gate below covers it too.
@@ -174,6 +181,7 @@ jobs:
         path: |
           src/PeachPDF.Tests/**/*.trx
           src/PeachPDF.Cli.Tests/**/*.trx
+          src/PeachDrawing.Text.Tests/**/*.trx
           src/PeachPDF.SourceGenerators.Tests/**/*.trx
 
     - name: Upload coverage reports

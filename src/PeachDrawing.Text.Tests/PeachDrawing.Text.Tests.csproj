@@ -1,0 +1,143 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The tests of the font and text engine: what PeachDrawing.Text does with fonts, text and Unicode, exercised through its
+    public API and, where a parser or a table is the subject, through its internals (the engine grants them
+    InternalsVisibleTo). Nothing here may reference PeachPDF.
+  -->
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <!--
+    Font assets live in the repository-root assets/fonts/ directory, shared with
+    PeachPDF.TestHarness and PeachPDF.Demo.BlazorWasm so the same file isn't checked in several
+    times. Each is <Link>ed to the output root, so BundledFonts' AppContext.BaseDirectory lookups
+    are unchanged. Listed one by one rather than globbed, so this project still declares exactly
+    which fonts it needs and an unrelated asset can't silently bloat the test output.
+  -->
+  <ItemGroup>
+    <None Include="..\..\assets\fonts\Inter-Medium.woff2" Link="Inter-Medium.woff2">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\LiberationSans-Regular.woff" Link="LiberationSans-Regular.woff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoEmoji-Regular.ttf" Link="NotoEmoji-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\SourceCodePro-Regular.otf" Link="SourceCodePro-Regular.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\SourceSans3-Regular.ttf" Link="SourceSans3-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\ColorTestV0.ttf" Link="ColorTestV0.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\ColorTestV1.ttf" Link="ColorTestV1.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoColorEmojiSequences-Subset.ttf" Link="NotoColorEmojiSequences-Subset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\CcmpLigatureTest.ttf" Link="CcmpLigatureTest.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NablaSubset.ttf" Link="NablaSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoColorEmoji-Subset.ttf" Link="NotoColorEmoji-Subset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoSansHebrewSubset.ttf" Link="NotoSansHebrewSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoSansArabicSubset.ttf" Link="NotoSansArabicSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\ArefRuqaaSubset.ttf" Link="ArefRuqaaSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoSansDevanagariSubset.ttf" Link="NotoSansDevanagariSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoSansBengaliSubset.ttf" Link="NotoSansBengaliSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoSansGujaratiSubset.ttf" Link="NotoSansGujaratiSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoSansTamilSubset.ttf" Link="NotoSansTamilSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoSansJPSubset.ttf" Link="NotoSansJPSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\gsubtest-lookup3.otf" Link="gsubtest-lookup3.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\StixTwoMath-Regular.ttf" Link="StixTwoMath-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\RecursiveSubset.ttf" Link="RecursiveSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!--
+    Unicode's official UAX #9 bidi conformance suite (Unicode 18.0.0), shared from the
+    repository-root assets/unicode/ directory the same way font assets are - see
+    assets/unicode/generate_bidi_tables.py for how the embedded PeachPDF.Text.Bidi lookup tables
+    are generated from this same directory's source files.
+  -->
+  <ItemGroup>
+    <None Include="..\..\assets\unicode\BidiCharacterTest.txt" Link="BidiCharacterTest.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- Helpers shared with PeachPDF.Tests: they need nothing but the engine. -->
+  <ItemGroup>
+    <Compile Include="..\PeachPDF.Tests\TestSupport\BundledFonts.cs" Link="TestSupport\BundledFonts.cs" />
+    <Compile Include="..\PeachPDF.Tests\TestSupport\TypefaceFixtures.cs" Link="TestSupport\TypefaceFixtures.cs" />
+    <Compile Include="..\PeachPDF.Tests\TestSupport\BitmapGlyphFontFixture.cs" Link="TestSupport\BitmapGlyphFontFixture.cs" />
+    <Compile Include="..\PeachPDF.Tests\TestSupport\SfntByteBuilder.cs" Link="TestSupport\SfntByteBuilder.cs" />
+    <Compile Include="..\PeachPDF.Tests\TestSupport\SyntheticFontTables.cs" Link="TestSupport\SyntheticFontTables.cs" />
+    <Compile Include="..\PeachPDF.Tests\TestSupport\SyntheticUvsFont.cs" Link="TestSupport\SyntheticUvsFont.cs" />
+    <Compile Include="..\PeachPDF.Tests\TestSupport\SyntheticFontCollection.cs" Link="TestSupport\SyntheticFontCollection.cs" />
+    <Compile Include="..\PeachPDF.Tests\TestSupport\AllocationProbe.cs" Link="TestSupport\AllocationProbe.cs" />
+    <Compile Include="..\PeachPDF.Tests\TestSupport\TempDirectory.cs" Link="TestSupport\TempDirectory.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.0" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.analyzers" Version="1.27.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PeachDrawing.Text\PeachDrawing.Text.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>
