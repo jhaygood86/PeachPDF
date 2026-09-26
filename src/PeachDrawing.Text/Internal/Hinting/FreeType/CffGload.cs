@@ -121,7 +121,7 @@ internal sealed class CffSize
     /// <summary>The size in whole pixels per em (<c>metrics.y_ppem</c>).</summary>
     public int Ppem { get; }
 
-    /// <summary>Whether the engine's stem darkening is on (off in FreeType by default; the tests turn it on).</summary>
+    /// <summary>Whether the engine's stem darkening is on (off in FreeType by default; <see cref="Outlines.OutlineRequest.StemDarkening"/> turns it on).</summary>
     public bool StemDarkening { get; }
 
     /// <summary>The size a request makes (<c>FT_Request_Metrics</c> for a nominal size).</summary>
