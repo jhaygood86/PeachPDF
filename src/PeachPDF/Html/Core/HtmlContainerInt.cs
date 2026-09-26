@@ -187,6 +187,16 @@ namespace PeachPDF.Html.Core
         internal Dictionary<CssBox, double> PageFloatPlacements { get; private set; } = [];
 
         /// <summary>
+        /// The floats moved whole to the next page in this layout attempt, with the root of the block
+        /// formatting context each is placed in. A later float in the same context may not rise above one
+        /// (CSS 2.1 §9.5.1 rule 5), even when it is not the moved float's sibling: a float inside an earlier
+        /// block moved to page 2 while a later float beside that block stayed on page 1. The position is read
+        /// from the float when it is compared, not stored, so a mover that shifts it afterwards cannot leave a
+        /// stale one behind.
+        /// </summary>
+        internal Dictionary<CssBox, CssBox> MovedFloats { get; } = [];
+
+        /// <summary>
         /// The room a <c>float-reference: column</c> page float pinned to a column's block-start edge
         /// needs in that column, as resolved on the previous attempt - the column-scoped counterpart of
         /// <see cref="TopFloatAreaHeightsBySlot"/>, seeded into that column's own
@@ -2383,6 +2393,7 @@ namespace PeachPDF.Html.Core
         private async ValueTask LayoutDocument(RGraphics g)
         {
             LayoutGeneration++;
+            MovedFloats.Clear();
             FragmentainerPasses = 0;
             LastResortRelayouts = 0;
             PassRewinds = 0;

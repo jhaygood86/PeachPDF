@@ -1945,6 +1945,15 @@ namespace PeachPDF.Html.Core.Dom
                     // (collision scanning, line wrapping, shrink-to-fit, "floats share the line") reads
                     // EffectiveFloatSide rather than the raw Float value, so it applies to all four the
                     // same way.
+                    // Compared in document Y, which orders floats only in page space: every column of a
+                    // multi-column container spans the same Y range, so a float low in column 1 would push a
+                    // later one at the top of column 2 down. A float is moved to the next page only on pages
+                    // anyway (CssBox.MoveWholeOntoTheNextPageIfItFits), so columns keep the old placement.
+                    if (box.HtmlContainer is { CurrentFragmentainer: not { HasOwnBand: true } } floatContainer)
+                    {
+                        startY = Math.Max(startY, LowestOuterTopOfAnEarlierFloat(containingBox, currentBoxIdx) + box.ActualMarginTop);
+                        startY = Math.Max(startY, LowestOuterTopOfAnEarlierMovedFloat(floatContainer, box) + box.ActualMarginTop);
+                    }
                     if (box.EffectiveFloatSide == Floating.Right) FloatBoxRight(box, containingBox, startX, startY);
                     else FloatBoxLeft(box, containingBox, startX, startY);
                     break;
@@ -1973,6 +1982,100 @@ namespace PeachPDF.Html.Core.Dom
                 else if (box.EffectiveFloatSide == Floating.Left)
                     FloatBoxLeft(box, containingBox, startX, box.Location.Y);
             }
+        }
+
+        /// <summary>
+        /// The lowest outer top among the floats before index <paramref name="boxIndex"/> in
+        /// <paramref name="containingBox"/>, which CSS 2.1 §9.5.1 rule 5 keeps a later float from rising above.
+        /// </summary>
+        /// <remarks>
+        /// A float's static position is never above an earlier float's, except when that float was moved whole
+        /// to the next page (<c>CssBox.MoveWholeOntoTheNextPageIfItFits</c>); without this the later float was
+        /// placed on the page before it.
+        /// </remarks>
+        /// <param name="containingBox">the box whose children are scanned</param>
+        /// <param name="boxIndex">the float's index among them, or -1 when it is not a direct child</param>
+        /// <returns>the lowest outer top, or <see cref="double.MinValue"/> when there is no earlier float</returns>
+        private static double LowestOuterTopOfAnEarlierFloat(CssBox containingBox, int boxIndex)
+        {
+            var lowest = double.MinValue;
+            for (var i = 0; i < boxIndex; i++)
+            {
+                var sibling = containingBox.Boxes[i];
+                // An absolutely positioned, fixed or running box keeps its float value but is not a float
+                // (CSS 2.1 §9.7): placed by its offsets, it would otherwise push every later float down to it.
+                if (!sibling.IsFloated || sibling.IsAbsolutelyPositioned || sibling.IsRunningPositioned
+                    || sibling.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                lowest = Math.Max(lowest, sibling.StaticTop - sibling.ActualMarginTop);
+            }
+
+            return lowest;
+        }
+
+        /// <summary>
+        /// The lowest outer top among the floats moved whole to the next page earlier in tree order than
+        /// <paramref name="box"/>, in the same block formatting context: rule 5 across nesting, which the
+        /// sibling scan (<see cref="LowestOuterTopOfAnEarlierFloat"/>) does not see.
+        /// </summary>
+        /// <param name="container">the container recording the moved floats</param>
+        /// <param name="box">the float being placed</param>
+        /// <returns>the lowest outer top, or <see cref="double.MinValue"/> when there is none</returns>
+        private static double LowestOuterTopOfAnEarlierMovedFloat(HtmlContainerInt container, CssBox box)
+        {
+            if (container.MovedFloats.Count == 0) return double.MinValue;
+
+            var root = CssBox.FormattingContextRootOf(box);
+            var lowest = double.MinValue;
+            foreach (var (moved, movedRoot) in container.MovedFloats)
+            {
+                var outerTop = moved.StaticTop - moved.ActualMarginTop;
+                if (ReferenceEquals(moved, box) || !ReferenceEquals(movedRoot, root) || outerTop <= lowest) continue;
+                if (IsBeforeInTreeOrder(moved, box)) lowest = outerTop;
+            }
+
+            return lowest;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="a"/> comes before <paramref name="b"/> in tree order, neither containing the
+        /// other.
+        /// </summary>
+        private static bool IsBeforeInTreeOrder(CssBox a, CssBox b)
+        {
+            var chainA = new List<CssBox>();
+            for (var box = a; box is not null; box = box.ParentBox) chainA.Add(box);
+
+            var ancestorsOfA = new HashSet<CssBox>(chainA);
+            CssBox? childOfCommonOnB = null;
+            var common = b;
+            while (common is not null && !ancestorsOfA.Contains(common))
+            {
+                childOfCommonOnB = common;
+                common = common.ParentBox;
+            }
+
+            // No common ancestor, or b inside a (the common ancestor is b itself, or a).
+            var indexOfCommon = common is null ? -1 : chainA.IndexOf(common);
+            if (common is null || childOfCommonOnB is null || indexOfCommon <= 0) return false;
+
+            var childOfCommonOnA = chainA[indexOfCommon - 1];
+            return common.Boxes.IndexOf(childOfCommonOnA) < common.Boxes.IndexOf(childOfCommonOnB);
+        }
+
+        /// <summary>
+        /// Where a left/right float starting at <paramref name="startY"/> is placed, against the floats
+        /// already there and the side of the spread that Y is on (<c>inside</c>/<c>outside</c>). The box is
+        /// not moved.
+        /// </summary>
+        /// <param name="box">a float</param>
+        /// <param name="startY">the top it starts from, with no relative offset</param>
+        /// <returns>the float's static location</returns>
+        internal static RPoint FloatPositionBesideTheFloatsAt(CssBox box, double startY)
+        {
+            var containingBox = box.ContainingBlock!;
+            return box.EffectiveFloatSide == Floating.Right
+                ? FloatBoxRightPosition(box, containingBox, containingBox.ClientLeft, startY)
+                : FloatBoxLeftPosition(box, containingBox, containingBox.ClientLeft, startY);
         }
 
         /// <summary>
@@ -3234,7 +3337,10 @@ namespace PeachPDF.Html.Core.Dom
             return clearance;
         }
 
-        private static void FloatBoxLeft(CssBox box, CssBox containingBox, double startX, double startY)
+        private static void FloatBoxLeft(CssBox box, CssBox containingBox, double startX, double startY) =>
+            box.Location = FloatBoxLeftPosition(box, containingBox, startX, startY);
+
+        private static RPoint FloatBoxLeftPosition(CssBox box, CssBox containingBox, double startX, double startY)
         {
             var limitRight = ContentRightOf(containingBox, startY);
 
@@ -3284,11 +3390,13 @@ namespace PeachPDF.Html.Core.Dom
                 }
             } while (true);
 
-            box.Location = new RPoint(coordinates.Left, coordinates.Top);
-
+            return new RPoint(coordinates.Left, coordinates.Top);
         }
 
-        private static void FloatBoxRight(CssBox box, CssBox containingBox, double startX, double startY)
+        private static void FloatBoxRight(CssBox box, CssBox containingBox, double startX, double startY) =>
+            box.Location = FloatBoxRightPosition(box, containingBox, startX, startY);
+
+        private static RPoint FloatBoxRightPosition(CssBox box, CssBox containingBox, double startX, double startY)
         {
             var limitRight = ContentRightOf(containingBox, startY);
 
@@ -3333,7 +3441,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
             } while (true);
 
-            box.Location = new RPoint(coordinates.FloatRightStartX, coordinates.Top);
+            return new RPoint(coordinates.FloatRightStartX, coordinates.Top);
         }
 
         /// <summary>
@@ -3772,6 +3880,13 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Whether <paramref name="b"/> is a non-atomic, in-flow inline box: one the flow places only as
+        /// line rectangles and words, never through its own <see cref="CssBox.Location"/>.
+        /// </summary>
+        private static bool IsPlainInlineBox(CssBox b) =>
+            b.Display.Value == DisplayMode.Inline && !b.IsOutOfFlow && !DomUtils.IsAtomicInline(b);
+
+        /// <summary>
         /// Treats an inline-flex child as an atomic inline element: positions it, runs flex layout over
         /// its children, applies its own string-set/named-page-name, then advances the cursor by its
         /// outer size and registers it in the line so its border/background paints.
@@ -4164,7 +4279,9 @@ namespace PeachPDF.Html.Core.Dom
 
             (coordinates.InlineFloats ??= []).Add(b);
 
+            var onPages = b.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: false } };
             await LayoutContentUnbroken(g, b);
+            if (onPages) CssBox.MoveWholeOntoTheNextPageIfItFits(b, b.HtmlContainer!);
         }
 
         /// <summary>
@@ -5045,7 +5162,17 @@ namespace PeachPDF.Html.Core.Dom
                 // A resumed flow is continuing this block, so the per-line rectangles bubbled into
                 // inline boxes by the fragmentainers already filled must survive - resetting them here
                 // would blank out their backgrounds, borders and text decoration on those pages.
-                if (coordinates.ResumeOrdinal == 0) b.RectanglesReset();
+                if (coordinates.ResumeOrdinal == 0)
+                {
+                    b.RectanglesReset();
+
+                    // A plain inline box's own Location is never placed by the flow - its geometry is its
+                    // rectangles and words - so it holds only what translations of an ancestor added to
+                    // it (a float moved whole onto the next page). Left alone it gains that offset again
+                    // on every layout of the same tree.
+                    if (IsPlainInlineBox(b)) b.Location = RPoint.Empty;
+                }
+
                 await b.MeasureWordsSize(g);
 
                 // Still on blockBox's first formatted line and a ::first-line rule applies to it -

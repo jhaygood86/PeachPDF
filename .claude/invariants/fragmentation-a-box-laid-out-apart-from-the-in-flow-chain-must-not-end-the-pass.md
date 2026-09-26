@@ -25,14 +25,39 @@ So such a box is laid out unbroken, with the fragmentainer detached and word pag
 
 It then shows one slice per page.
 
+**A float that fits on a page is moved whole instead** (`CssBox.MoveWholeOntoTheNextPageIfItFits`). That is
+safe only because:
+- the float is placed before the in-flow content after it;
+- `CssLayoutEngine.FloatBox` keeps a later float from rising above it (CSS 2.1 §9.5.1 rule 5). Without that
+  clamp, the later float's static position was still on the page before, and it was placed there, above the
+  float it follows. A float moved from inside an earlier block holds later floats in the same formatting
+  context too (`HtmlContainerInt.MovedFloats`).
+
+How the move is decided and placed:
+- It is decided on the float's static position, since a relative offset takes no part in layout.
+- It measures against each page's usable band, net of a `float: top` strip, a footnote area and a bottom
+  page float. A review found the bare page top put a moved float on a `float: top` figure.
+- It re-places the float at the new band top, which is where an `inside`/`outside` float learns its new
+  side.
+- It translates the float's subtree, which a plain inline box's `Location` does not survive: the inline flow
+  never places that `Location`, so it resets it per layout. Without the reset, the move added itself to it
+  again on every layout of the same tree.
+
 A new path that lays an absolutely positioned box, a float, or anything else out of tree-order position must
 do the same, or keep a scroll container around it monolithic.
 
-**The standing exception.** A box that is or holds a multi-column container keeps the breaking path, because
-its columns engine needs the attached fragmentainer (`CssBox.IsOrHoldsAMultiColumnContainer`). A review found
-an absolutely positioned `columns: 2` box missed, and it lost its last lines. Such a box's break still ends
-the pass, and the content after it cannot simply be put at its §9.3.1 position, because that page is already
-emitted:
+**The standing exceptions.**
+- A float or absolutely positioned box that is or holds a multi-column container keeps the breaking path,
+  because its columns engine needs the attached fragmentainer (`CssBox.IsOrHoldsAMultiColumnContainer`).
+  Reviews found `float: left; columns: 2`, and then an absolutely positioned `columns: 2` box, each missed,
+  and each lost its last lines.
+- A float inside a column keeps the breaking path too, because a column does not continue a slice the way a
+  page does. Laid out unbroken, its lines past the column's foot were drawn below the page band.
+
+Both still break, and still have #1339's loss (see the accepted gap on tall floats).
+
+The multi-column absolute box's break still ends the pass. The content after it cannot simply be put at its
+§9.3.1 position, because that page is already emitted:
 - re-opening the page draws a short block, but no pass paginates content laid out behind it;
 - so a long following block was sliced across the page margin;
 - and a following multi-column block lost its first page.

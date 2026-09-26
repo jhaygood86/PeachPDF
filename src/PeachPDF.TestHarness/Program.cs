@@ -2454,6 +2454,58 @@ await SaveShowcaseAsync("absolute_boxes_across_pages", "Paged Media", "Absolute 
     "An absolutely positioned sidebar taller than a page laid out in one piece and shown a slice per page while the paragraphs after it flow on undisturbed, and a DRAFT stamp declared at the end of the document drawn at the top of the first page.",
     absoluteBoxesAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── Floats across page breaks ──────────────────────────────────────────────
+// A block-level float is laid out in one piece. One that fits on a page but would straddle a page boundary
+// moves whole to the next page, with the text after it wrapping around it there; one taller than a page is
+// drawn a slice per page while the text beside it keeps flowing around it.
+var floatsFiller = string.Concat(Enumerable.Range(1, 6).Select(i =>
+    $"<p>Paragraph {i} fills the page so that the note below starts close to its foot. The text flows at "
+    + "full width here, as there is nothing floated beside it yet.</p>"));
+var floatsAfterNote = string.Concat(Enumerable.Range(1, 6).Select(i =>
+    $"<p>Text after the note, part {i}. It does not wait for the note: it fills the rest of the page at full "
+    + "width, and the text that reaches the next page wraps around the note there.</p>"));
+var floatsTallSidebar = string.Join("<br>", Enumerable.Range(1, 45).Select(i => $"Margin note {i}"));
+var floatsBeside = string.Concat(Enumerable.Range(1, 12).Select(i =>
+    $"<p>Column text {i}. The floated margin notes to the right are taller than a page. Every line of this "
+    + "column is drawn, on the page it belongs to, flowing beside the notes.</p>"));
+
+var floatsAcrossPagesHtml = $$"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: 105mm 148mm;
+      margin: 12mm 10mm;
+      @bottom-center { content: "Page " counter(page); font-size: 7pt; font-family: Arial; color: #888; }
+    }
+    body { font-family: Arial, sans-serif; font-size: 8.5pt; line-height: 1.35; margin: 0; color: #1f2937; }
+    h1 { font-size: 12pt; margin: 0 0 6pt; }
+    h2 { font-size: 10pt; margin: 10pt 0 4pt; clear: both; }
+    p { margin: 0 0 4pt; }
+    .note { float: right; width: 110pt; margin: 0 0 4pt 8pt; background: #fff7ed; border: 0.75pt solid #ea580c; padding: 4pt; }
+    .notes { float: right; width: 80pt; margin: 0 0 4pt 8pt; background: #f0fdf4; border-left: 2pt solid #16a34a; padding: 2pt 4pt; font-size: 7pt; }
+    </style>
+    </head>
+    <body>
+    <h1>Floats across page breaks</h1>
+    <h2>A float moves whole</h2>
+    {{floatsFiller}}
+    <div class="note"><b>Note</b><br>This floated note would have straddled the page edge. It fits on one
+    page, so it has moved whole to the top of this page rather than being split.</div>
+    {{floatsAfterNote}}
+    <h2>A float taller than a page</h2>
+    <div class="notes">{{floatsTallSidebar}}</div>
+    {{floatsBeside}}
+    <p>End of document.</p>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("floats_across_pages", "Paged Media", "Floats Across Pages",
+    "A floated note that would straddle a page boundary moving whole to the top of the next page with the text after it wrapping around it there, and floated margin notes taller than a page drawn a slice per page while the column beside them flows on with no line lost.",
+    floatsAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──
 // The classic hand-authored table of contents: leader() fills the gap between a chapter
 // title and its page number with a dotted rule, and target-counter(attr(href), page)
