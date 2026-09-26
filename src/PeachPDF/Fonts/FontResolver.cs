@@ -219,7 +219,6 @@ namespace PeachPDF.Fonts
 
             public string FamilyName => this.FontDescription.FontFamilyInvariantCulture;
 
-            public FaceStyle GuessFontStyle() => this.FontDescription.Style;
 
             public static FontFileInfo From(TtfFontDescription fontDescription) => new(fontDescription);
         }
