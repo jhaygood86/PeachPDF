@@ -245,17 +245,15 @@ namespace PeachPDF.Tests.CSS
             Assert.True(supports.Condition.Check());
         }
 
-        // word-break's cssDataType includes 'keep-all' (Layer A's own WordBreakConverter/Map.WordBreaks
-        // parses and stores it), but its supportsDataType override excludes it - CssBox.cs's line-breaking
-        // logic only special-cases break-all, so 'keep-all' has no distinct effect and @supports must say
-        // no. Same shape as break-before/column-span above.
+        // word-break: keep-all is implemented by the Unicode line breaking algorithm's keep-all tailoring
+        // (UnicodeLineBreaks), so @supports says yes.
         [Fact]
-        public void SupportsWordBreakKeepAllRule_NotGenuinelyEnforced()
+        public void SupportsWordBreakKeepAllRule()
         {
             var source = @"@supports (word-break: keep-all) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.False(supports.Condition.Check());
+            Assert.True(supports.Condition.Check());
         }
 
         // CssBox.cs's ApplyTextTransform implements 'full-width' (converts characters to their Unicode

@@ -294,6 +294,7 @@ namespace PeachPDF.Html.Core.Dom
                 IsUprightOrientation = IsUprightOrientation,
                 ScriptTag = ScriptTag,
                 SuppressWrapBefore = charStart == 0 && SuppressWrapBefore,
+                UnicodeBreakBefore = charStart == 0 ? UnicodeBreakBefore : null,
                 UsesPerCodepointFont = UsesPerCodepointFont
             };
 

@@ -93,7 +93,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task HorizontalTb_NeverSplitsByOrientation_Regression()
         {
-            var html = Wrap($"<p id=\"w\" style=\"width:400px\">{Upright}{Latin}</p>", null);
+            var html = Wrap($"<p id=\"w\" style=\"width:400px;word-break:keep-all\">{Upright}{Latin}</p>", null);
             var container = await LayoutHtml(html);
             var box = FindWordsBox(container.Root!, "w");
 
@@ -445,7 +445,7 @@ body {{ font-family: 'VorgOnlyTest'; margin: 0 }}
         public async Task Sideways_PaintsEveryFragmentRotated_NoUprightCallsAtAll()
         {
             var html = Wrap(
-                $"<div id=\"w\" style=\"writing-mode:vertical-rl;height:200px\">{Upright}</div>",
+                $"<div id=\"w\" style=\"writing-mode:vertical-rl;height:200px;word-break:keep-all\">{Upright}</div>",
                 "sideways");
             var container = await LayoutHtml(html);
             var elementBox = FindById(container.Root!, "w")!;
@@ -470,7 +470,8 @@ body {{ font-family: 'VorgOnlyTest'; margin: 0 }}
                 TextOrientationValue.Sideways => "sideways",
                 _ => "mixed"
             };
-            var html = Wrap($"<div id=\"w\" style=\"writing-mode:vertical-rl;height:200px\">{text}</div>", cssValue);
+            // keep-all: the subject here is where orientation splits a word, not where a line may end between two kana.
+            var html = Wrap($"<div id=\"w\" style=\"writing-mode:vertical-rl;height:200px;word-break:keep-all\">{text}</div>", cssValue);
             var container = await LayoutHtml(html);
             return FindWordsBox(container.Root!, "w");
         }
