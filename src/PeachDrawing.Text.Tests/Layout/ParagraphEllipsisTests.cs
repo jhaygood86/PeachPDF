@@ -282,6 +282,19 @@ namespace PeachDrawing.Text.Tests.Layout
         }
 
         [Fact]
+        public void AnEllipsisInAnotherSize_StillFitsTheLine()
+        {
+            for (double width = 60; width < 260; width += 7.3)
+            {
+                var builder = new ParagraphBuilder(new RunStyle(Face, 10)).SetStyle(new ParagraphStyle { MaxLines = 1 });
+                builder.AddText("abc ").PushRun(new RunStyle(Face, 40)).AddText("defghijklmnopqrstuvwxyz ").PopRun().AddText("tail of small text");
+                var line = builder.Build().Layout(width).Lines[0];
+
+                Assert.True(line.Width <= width + 1e-6, $"{line.Width} in {width}");
+            }
+        }
+
+        [Fact]
         public void TheEllipsis_UsesTheStyleOfTheLastCharacterDrawn()
         {
             var builder = new ParagraphBuilder(new RunStyle(Face, Size)).SetStyle(new ParagraphStyle { MaxLines = 1 });

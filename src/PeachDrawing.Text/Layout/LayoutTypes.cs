@@ -160,7 +160,7 @@ namespace PeachDrawing.Text.Layout
         /// <summary>In the middle of a word, because the word is wider than a line and the paragraph allows breaking it.</summary>
         Emergency = 2,
 
-        /// <summary>It is the last line, ending at the end of the text.</summary>
+        /// <summary>It is the last line, ending at the end of the text; a line that <see cref="ParagraphStyle.MaxLines"/> cut is this, whatever its natural end was.</summary>
         Last = 3,
 
         /// <summary>

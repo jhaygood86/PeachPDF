@@ -36,3 +36,4 @@ before its glyph is dropped.
 Ellipsis: the cut is at a boundary between grapheme clusters, not at a word (the CSS `line-clamp` algorithm leaves the choice to the agent), and a `Forced` or `Soft` line that is
 cut becomes `LineEnd.Last` only when `MaxLines` ends the paragraph there. `text-overflow: ellipsis` takes a single ellipsis at the end of the line, not the two-value form (which
 puts one at each end), and there is no `text-overflow` string value distinct from `ParagraphStyle.Ellipsis`; a caret in the hidden text is drawn after what is drawn.
+An ellipsis wider than the room is drawn anyway, as the only content of a line that overflows; CSS UI 4 says it is clipped, which is the caller's to do.

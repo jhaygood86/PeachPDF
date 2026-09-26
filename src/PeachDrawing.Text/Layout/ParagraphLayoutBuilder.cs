@@ -132,6 +132,19 @@ namespace PeachDrawing.Text.Layout
 
             // Spaces do not stand before an ellipsis.
             cut = p.ContentEnd(spec.Start, cut);
+
+            // The ellipsis takes the style of the last character drawn, which the cut may have moved into a run of another size or face: measure the one that is drawn.
+            while (cut > spec.Start && !double.IsInfinity(room))
+            {
+                double drawn = p.EllipsisAt(cut, spec.Start).Width;
+                if (p.Measure(spec.Start, cut, pen) + drawn <= room)
+                {
+                    break;
+                }
+
+                cut = p.ContentEnd(spec.Start, FitWithin(p, spec.Start, cut, room - drawn, pen));
+            }
+
             return hidesText ? new LineSpec(spec.Start, p.Text.Length, LineEnd.Last, cut) : spec with { CutAt = cut };
         }
 

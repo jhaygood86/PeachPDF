@@ -38,8 +38,8 @@ namespace PeachDrawing.Text.Layout
         public TextRange Range { get; }
 
         /// <summary>
-        /// Whether the run is not text of the paragraph but drawn in it: the hyphen a line broken inside a word ends with. Its <see cref="Range"/> is empty, and
-        /// a caret at the place it is generated is before it (after it, for a right-to-left paragraph). It is drawn like any other run.
+        /// Whether the run is not text of the paragraph but drawn in it: the hyphen a line broken inside a word ends with, or the ellipsis of a line that is cut. Its
+        /// <see cref="Range"/> is empty, and a caret at the place it is generated is before it (after it, for a right-to-left paragraph). It is drawn like any other run.
         /// </summary>
         public bool IsGenerated { get; }
 
@@ -116,10 +116,10 @@ namespace PeachDrawing.Text.Layout
             End = end;
         }
 
-        /// <summary>The text of the line, including the spaces that hang at its end and the character that forces a break.</summary>
+        /// <summary>The text of the line, including the spaces that hang at its end, the character that forces a break, and the text hidden by a cut (see <see cref="IsTruncated"/>).</summary>
         public TextRange Range { get; }
 
-        /// <summary>The offset where the line's drawn text ends; what follows up to the end of <see cref="Range"/> hangs.</summary>
+        /// <summary>The offset where the line's drawn text ends; what follows up to the end of <see cref="Range"/> hangs, or is hidden if <see cref="IsTruncated"/>.</summary>
         public int ContentEnd { get; }
 
         /// <summary>The runs of the line, in the order they are drawn from left to right.</summary>
@@ -189,7 +189,7 @@ namespace PeachDrawing.Text.Layout
         /// <summary>The height of all the lines together.</summary>
         public double Height { get; }
 
-        /// <summary>Whether text was left out because <see cref="ParagraphStyle.MaxLines"/> lines were full; the last line ends with the ellipsis and holds the rest of the text as hidden.</summary>
+        /// <summary>Whether text was left out because <see cref="ParagraphStyle.MaxLines"/> lines were full; the last line ends with <see cref="ParagraphStyle.Ellipsis"/> (unless it is empty) and holds the rest of the text as hidden.</summary>
         public bool IsTruncated { get; }
 
         /// <summary>The paragraph this is a layout of.</summary>
