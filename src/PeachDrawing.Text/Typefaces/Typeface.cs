@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 
 namespace PeachDrawing.Text
 {
@@ -15,7 +16,8 @@ namespace PeachDrawing.Text
     /// </summary>
     /// <remarks>
     /// Two typefaces are equal when they read the same font data, whichever query matched them. A typeface stays
-    /// valid for as long as it is referenced, including after the <see cref="FontSet"/> that found it is gone.
+    /// valid for as long as it is referenced, including after the <see cref="FontSet"/> that found it is gone. Reading a
+    /// typeface, its <see cref="Metrics"/> included, is safe from any number of threads at once.
     /// </remarks>
     public sealed class Typeface : IEquatable<Typeface>
     {
@@ -40,7 +42,7 @@ namespace PeachDrawing.Text
         public bool IsItalic => Face.IsItalic;
 
         /// <summary>The vertical dimensions of the face, in design units.</summary>
-        public TypefaceMetrics Metrics => _metrics ??= new TypefaceMetrics(Face.Descriptor);
+        public TypefaceMetrics Metrics => _metrics ?? Interlocked.CompareExchange(ref _metrics, new TypefaceMetrics(Face.Descriptor), null) ?? _metrics!;
 
         private TypefaceMetrics? _metrics;
 
@@ -95,6 +97,11 @@ namespace PeachDrawing.Text
         /// The vertical origin of a glyph, in design units relative to its horizontal origin: where the glyph hangs from
         /// when text is set vertically.
         /// </summary>
+        /// <remarks>
+        /// The horizontal coordinate is always half the glyph's horizontal advance; no font table supplies it. The vertical
+        /// one is the font's own <c>VORG</c> value when <see cref="HasVerticalOrigin"/> is <see langword="true"/>, and
+        /// otherwise the first of the <c>vhea</c> ascent, the <c>OS/2</c> typographic ascender and one em that the font has.
+        /// </remarks>
         /// <param name="glyph">The glyph.</param>
         public Point GetVerticalOrigin(ushort glyph)
         {

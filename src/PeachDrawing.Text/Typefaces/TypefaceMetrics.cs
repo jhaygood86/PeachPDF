@@ -9,15 +9,18 @@ namespace PeachDrawing.Text
     /// <remarks>
     /// <para>
     /// Nothing here depends on a text size. To get a length at a size, multiply by the size and divide by
-    /// <see cref="UnitsPerEm"/>. Distances above the baseline are positive, and the descent is a positive length below it.
+    /// <see cref="UnitsPerEm"/>. Distances above the baseline are positive, and a descent is a positive length below it in
+    /// every font that follows the specification; a font that records a descent with the wrong sign is reported as it is.
     /// </para>
     /// <para>
     /// Two sets of line dimensions are given because platforms disagree about which one text is laid out with.
     /// <see cref="CellAscent"/>, <see cref="CellDescent"/> and <see cref="LineSpacing"/> are the rectangle Windows
     /// draws a line of text in, derived from the <c>OS/2</c> Windows metrics unless the font asks for its typographic
-    /// metrics. <see cref="NormalLineAscent"/>, <see cref="NormalLineDescent"/> and <see cref="NormalLineGap"/> are what
-    /// browsers use for CSS <c>line-height: normal</c>: the <c>hhea</c> triple, or the <c>OS/2</c> typographic triple when
-    /// the font sets its USE_TYPO_METRICS bit.
+    /// metrics; in that case the typographic line gap is folded into the cell ascent, so the cell can be taller than
+    /// <see cref="NormalLineAscent"/>. <see cref="NormalLineAscent"/>, <see cref="NormalLineDescent"/> and
+    /// <see cref="NormalLineGap"/> are what browsers use for CSS <c>line-height: normal</c>: the <c>hhea</c> triple, or
+    /// the <c>OS/2</c> typographic triple when the font sets its USE_TYPO_METRICS bit and records typographic metrics
+    /// at all.
     /// </para>
     /// </remarks>
     public sealed class TypefaceMetrics
@@ -51,16 +54,16 @@ namespace PeachDrawing.Text
         /// <summary>The height of the line cell above the baseline.</summary>
         public int CellAscent { get; }
 
-        /// <summary>The depth of the line cell below the baseline, as a positive number.</summary>
+        /// <summary>The depth of the line cell below the baseline.</summary>
         public int CellDescent { get; }
 
-        /// <summary>The distance from one baseline to the next when lines are set solid: the cell plus any external leading.</summary>
+        /// <summary>The distance from one baseline to the next when lines are set solid: the cell plus any external leading, which is none when the font asks for its typographic metrics.</summary>
         public int LineSpacing { get; }
 
         /// <summary>The height above the baseline that CSS <c>line-height: normal</c> uses.</summary>
         public int NormalLineAscent { get; }
 
-        /// <summary>The depth below the baseline that CSS <c>line-height: normal</c> uses, as a positive number.</summary>
+        /// <summary>The depth below the baseline that CSS <c>line-height: normal</c> uses.</summary>
         public int NormalLineDescent { get; }
 
         /// <summary>The gap between lines that CSS <c>line-height: normal</c> adds to the ascent and descent, never negative.</summary>
@@ -87,7 +90,7 @@ namespace PeachDrawing.Text
 
         /// <summary>
         /// The height of a lower-case letter without an ascender above the baseline. A font that does not record it reports
-        /// two thirds of its <see cref="CellAscent"/>, and <see cref="HasMeasuredXHeight"/> says so.
+        /// 66 percent of its <see cref="CellAscent"/>, and <see cref="HasMeasuredXHeight"/> says so.
         /// </summary>
         public int XHeight { get; }
 

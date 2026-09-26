@@ -116,6 +116,28 @@ namespace PeachPDF.Tests.PublicApi
         }
 
         [Fact]
+        public void TryMatch_OfAFontThatCannotBeParsed_ThrowsWhenTheFontIsFirstRead()
+        {
+            var bytes = File.ReadAllBytes(BundledFonts.Ttf);
+            var tables = System.Buffers.Binary.BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(4));
+            for (var i = 0; i < tables; i++)
+            {
+                var record = 12 + 16 * i;
+                if (Encoding.ASCII.GetString(bytes, record, 4) == "hhea")
+                {
+                    var offset = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(record + 8));
+                    System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(offset + 34), 0); // numberOfHMetrics
+                }
+            }
+
+            var set = new FontSet();
+            // Adding reads only the names, so it accepts the font, and matching is what parses it in full.
+            var family = set.AddData(bytes, new AddOptions { FamilyName = "NoHMetrics-" + Guid.NewGuid().ToString("N") });
+
+            Assert.Throws<InvalidOperationException>(() => family.TryMatch(new TypefaceQuery(), out _));
+        }
+
+        [Fact]
         public void VerticalMetrics_OfAFontWithNone_AreOneEmAndHaveNoOrigin()
         {
             var typeface = Face(BundledFonts.Ttf);
