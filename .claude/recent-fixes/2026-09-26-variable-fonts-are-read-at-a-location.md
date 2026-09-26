@@ -64,9 +64,25 @@ A read-only review of the slice found these; all are fixed and each has a test i
   index.
 - **The advance from `gvar`** is the distance between the first two phantom points, which are the last four points of the glyph, so
   the point count of a glyph (for a composite, its components) has to be known even when the outlines are not decoded.
-- **A `Typeface` from `WithAxes` is not distinguished by PeachPDF's per-face caches yet**: they key by `ContentHash` plus synthesis,
-  which two instances share. Nothing in PeachPDF calls `WithAxes` yet; the PDF embedding of an instance (which must write a static font,
-  because PDF cannot embed a variable one) and the CSS wiring are the next slice and must add the location to those keys.
+- **Two instances of one font share `ContentHash`**, so every cache of something made from a typeface has to add `Typeface.VariationKey`:
+  `FontAdapter.FaceKey` and `PdfFontTable.ComputeKey` do. A cache keyed by the content hash alone would embed the first instance and
+  draw every later weight with it.
+
+## Reaching the axes from CSS
+
+`FontSet` matching (`VariableMatching`) turns the weight, width class and italic-ness of a `TypefaceQuery` into `wght`/`wdth`/`ital`
+(or `slnt`) and then applies the query's own `Axes`; PeachPDF's `font-variation-settings` and `font-optical-sizing` reach it as one
+encoded string (`FontVariationSettingsResolver`) that is a trailing `variations` argument of the whole font-creation chain
+(`DerivedStyle` to `PdfSharpAdapter.MatchAndCreateFont`), and part of `FontsHandler`'s cache keys. Traps:
+
+- The argument is **last** in every signature, because callers pass `presentation` positionally; `GetSystemFallbackFontForCodepoint` in
+  `FontFamilyResolver` uses `variations:` by name for that reason.
+- `font-optical-sizing: auto` is the initial value and needs the font size, so it is added in the adapter (`AxesFor`), where the size is
+  known, not in `DerivedStyle`; the encoded string is `null` for a box with the initial values, so nothing changes for a document that
+  does not use variable fonts.
+- **Suppressing faux bold and italic**: an instance whose `wght` axis reached the requested weight is not also emboldened, and a face with
+  a `slnt` axis draws `oblique <angle>` itself, so the adapter drops the shear (`CreateFontAdapter`).
+- The `font` shorthand resets both properties (CSS Fonts 4 section 7.7), which moved `CssFontWithSlashAndContent`'s longhand count from 15 to 17.
 
 ## Evidence
 

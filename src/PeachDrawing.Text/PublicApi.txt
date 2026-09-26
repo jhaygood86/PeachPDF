@@ -428,6 +428,7 @@ PeachDrawing.Text.Typeface : sealed class
   property String FamilyName { get; }
   property String FullName { get; }
   property String StyleName { get; }
+  property String VariationKey { get; }
   property TypefaceMetrics Metrics { get; }
   property UInt64 ContentHash { get; }
 PeachDrawing.Text.TypefaceFamily : sealed class
@@ -473,7 +474,7 @@ PeachDrawing.Text.TypefaceMetrics : sealed class
   property Single ItalicAngle { get; }
 PeachDrawing.Text.TypefaceQuery : struct
   ctor()
-  ctor(Int32 Weight = 400, Int32 Width = 5, Boolean IsItalic = False, Nullable<Rune> MustCover = null)
+  ctor(Int32 Weight = 400, Int32 Width = 5, Boolean IsItalic = False, Nullable<Rune> MustCover = null, IReadOnlyList<AxisSetting> Axes = null)
   field const Int32 BoldWeight
   field const Int32 NormalWeight
   field const Int32 NormalWidth
@@ -481,8 +482,9 @@ PeachDrawing.Text.TypefaceQuery : struct
   method Boolean Equals(TypefaceQuery other)
   method Int32 GetHashCode()
   method String ToString()
-  method Void Deconstruct(out Int32 Weight, out Int32 Width, out Boolean IsItalic, out Nullable<Rune> MustCover)
+  method Void Deconstruct(out Int32 Weight, out Int32 Width, out Boolean IsItalic, out Nullable<Rune> MustCover, out IReadOnlyList<AxisSetting> Axes)
   property Boolean IsItalic { get; init; }
+  property IReadOnlyList<AxisSetting> Axes { get; init; }
   property Int32 Weight { get; init; }
   property Int32 Width { get; init; }
   property Nullable<Rune> MustCover { get; init; }

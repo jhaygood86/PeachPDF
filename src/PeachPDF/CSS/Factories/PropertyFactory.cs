@@ -294,6 +294,8 @@ namespace PeachPDF.CSS
                 PropertyNames.FontVariantEmoji,
                 PropertyNames.FontVariantAlternates,
                 PropertyNames.FontKerning,
+                PropertyNames.FontOpticalSizing,
+                PropertyNames.FontVariationSettings,
                 PropertyNames.FontWeight,
                 PropertyNames.LineHeight);
             AddLonghand(PropertyNames.FontFamily, () => new FontFamilyProperty(), false, true);
@@ -322,6 +324,8 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FontVariantAlternates, () => new FontVariantAlternatesProperty());
             AddLonghand(PropertyNames.FontFeatureSettings, () => new FontFeatureSettingsProperty());
             AddLonghand(PropertyNames.FontKerning, () => new FontKerningProperty());
+            AddLonghand(PropertyNames.FontOpticalSizing, () => new FontOpticalSizingProperty());
+            AddLonghand(PropertyNames.FontVariationSettings, () => new FontVariationSettingsProperty());
             AddLonghand(PropertyNames.FontWeight, () => new FontWeightProperty(), true, true);
             AddLonghand(PropertyNames.FontStretch, () => new FontStretchProperty(), true, true);
             AddLonghand(PropertyNames.FontPalette, () => new FontPaletteProperty());

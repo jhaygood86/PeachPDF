@@ -9684,14 +9684,14 @@ namespace PeachPDF.Html.Core.Dom
         private void OnBlockAxisRelocated(double fromY, double toY) =>
             NotifyGeometryChanged(Math.Min(fromY, toY), 0);
 
-        internal RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
+        internal RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
-            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, weight, stretch, obliqueSkewSinus);
+            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, weight, stretch, obliqueSkewSinus, variations);
         }
 
-        internal RFont? GetCachedFontForCodepoint(string fontFamily, double fsize, RFontStyle st, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, EmojiPresentation presentation = EmojiPresentation.NoPreference)
+        internal RFont? GetCachedFontForCodepoint(string fontFamily, double fsize, RFontStyle st, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, EmojiPresentation presentation = EmojiPresentation.NoPreference, string? variations = null)
         {
-            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, codepoint, weight, stretch, obliqueSkewSinus, presentation);
+            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, codepoint, weight, stretch, obliqueSkewSinus, presentation, variations);
         }
 
         internal RColor GetActualColor(string colorStr)
