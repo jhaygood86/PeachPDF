@@ -304,6 +304,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
 
             return Math.Clamp(n, -1, 1);
         }
+
         /// <summary>The string with a name ID in the <c>name</c> table, preferring English, or <see langword="null"/>.</summary>
         internal static string? FindName(ReadOnlySpan<byte> name, int nameId)
         {

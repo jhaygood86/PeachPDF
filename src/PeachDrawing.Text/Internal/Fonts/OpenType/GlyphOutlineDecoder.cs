@@ -49,9 +49,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// </summary>
         private const int MaxGlyphsPerOutline = 1024;
 
-        private sealed class Budget(int glyphs = MaxGlyphsPerOutline)
+        private sealed class Budget(int glyphs = MaxGlyphsPerOutline, long work = long.MaxValue)
         {
             public int GlyphsLeft = glyphs;
+
+            /// <summary>Points still to be read, each counted as much as the work of reading it takes (more with variation data).</summary>
+            public long WorkLeft = work;
         }
 
         /// <summary>
@@ -59,6 +62,13 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// that a font whose composites name each other over and over cannot make it take for ever.
         /// </summary>
         private const int MaxGlyphsForFontBounds = 1 << 18;
+
+        /// <summary>
+        /// How much reading the points of a whole font for its bounds may cost: a point counts once, and 64 times where a <c>gvar</c> table
+        /// works out its deltas (a glyph can have 65,536 points and thousands of tuples). Real fonts use a small part of it; a hostile one whose
+        /// glyphs each declare the most points in a few hundred bytes cannot make the scan, which holds the face's lock, run for long.
+        /// </summary>
+        private const long MaxWorkForFontBounds = 1L << 29;
 
         /// <summary>
         /// Attempts to decode the outline of <paramref name="glyphIndex"/>. Returns false (with an
@@ -163,7 +173,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
             int glyphCount = face.loca.LocaTable.Length - 1;
             var gvar = variation.IsDefault ? null : face.Variations?.Gvar;
-            var budget = new Budget(MaxGlyphsForFontBounds);
+            var budget = new Budget(MaxGlyphsForFontBounds, MaxWorkForFontBounds);
             double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
 
             lock (face.SyncRoot)
@@ -181,7 +191,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                         continue;
                     }
 
-                    if (budget.GlyphsLeft < 0)
+                    if (budget.GlyphsLeft < 0 || budget.WorkLeft < 0)
                         return false;
 
                     if (points.Any)
@@ -256,7 +266,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             if (numberOfContours >= 0)
             {
                 if (!TryReadSimplePoints(face, numberOfContours, glyphIndex, gvar, variation,
-                        out _, out _, out var xs, out var ys, out var moveX, out var moveY))
+                        out _, out _, out var xs, out var ys, out var moveX, out var moveY, budget))
                     return;
 
                 for (int i = 0; i < xs.Length; i++)
@@ -274,6 +284,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             foreach (var component in components)
                 AccumulateControlPoints(face, component.Glyph, transform.Then(component), depth + 1, gvar, variation, budget, ref bounds);
         }
+
         private static void DecodeInto(OpenTypeFontface face, int glyphIndex, GlyphOutline outline, int depth, VariationCoordinates? variation, Budget budget)
         {
             if (depth > MaxCompositeDepth || --budget.GlyphsLeft < 0)
@@ -337,7 +348,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// at index <c>i</c> is at <c>xs[i] + moveX[i]</c>. The cursor of <paramref name="face"/> must be at the glyph's contour count's successor.
         /// </summary>
         private static bool TryReadSimplePoints(OpenTypeFontface face, int numberOfContours, int glyphIndex, GvarTable? gvar, VariationCoordinates? variation,
-            out int[] endPtsOfContours, out byte[] flags, out int[] xs, out int[] ys, out double[]? moveX, out double[]? moveY)
+            out int[] endPtsOfContours, out byte[] flags, out int[] xs, out int[] ys, out double[]? moveX, out double[]? moveY, Budget? budget = null)
         {
             endPtsOfContours = [];
             flags = [];
@@ -354,6 +365,10 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
             int numPoints = endPtsOfContours[numberOfContours - 1] + 1;
             if (numPoints <= 0)
+                return false;
+
+            // A caller reading a whole font pays for the points before anything is allocated for them.
+            if (budget is not null && (budget.WorkLeft -= (long)numPoints * (gvar is null ? 1 : 64)) < 0)
                 return false;
 
             int instructionLength = face.ReadUShort();
@@ -410,7 +425,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
 
             // A variable font moves the points: the deltas gvar gives for this location, added to the coordinates as read.
-                        if (gvar is not null)
+            if (gvar is not null)
             {
                 int total = numPoints + 4;
                 var originalX = new double[total];
@@ -529,6 +544,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     outline.ContourList.Add(TransformContour(contour, component.A, component.B, component.C, component.D, component.Dx, component.Dy));
             }
         }
+
         private static OutlineContour TransformContour(OutlineContour source, double a, double b, double c, double d, double dx, double dy)
         {
             OutlinePoint Map(OutlinePoint p)

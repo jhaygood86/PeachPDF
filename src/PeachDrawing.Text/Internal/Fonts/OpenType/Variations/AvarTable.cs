@@ -9,6 +9,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
     /// </summary>
     internal sealed class AvarTable
     {
+        /// <summary>Most axes a font can have and keep its version 2 mapping: real fonts have a dozen at most.</summary>
+        private const int MaxAxesForCrossAxisMapping = 128;
+
         private readonly double[][][] _segments;
         private readonly ItemVariationStore? _store;
         private readonly DeltaSetIndexMap? _indexMap;
@@ -63,6 +66,15 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                     if (storeOffset != 0)
                     {
                         store = ItemVariationStore.TryParse(avar, (int)storeOffset);
+
+                        // The regions of the store have a range for every axis of the font, and a font has no more axes than a mapping that
+                        // works each of them out from all of them (a quadratic cost for every location) can afford: a store that says
+                        // otherwise is not one this reader can use.
+                        if (store is not null && (store.AxisCount != axisCount || axisCount > MaxAxesForCrossAxisMapping))
+                        {
+                            store = null;
+                        }
+
                         if (store is not null && mapOffset != 0)
                         {
                             indexMap = DeltaSetIndexMap.TryParse(avar, (int)mapOffset);

@@ -114,29 +114,32 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             return (short)System.Math.Clamp(varied, short.MinValue, short.MaxValue);
         }
 
-        private (int XMin, int YMin, int XMax, int YMax)? _fontBox;
+        private sealed record FontBoxValue(int XMin, int YMin, int XMax, int YMax);
+
+        // Published whole (an immutable object through a volatile write), so a thread never sees half of a box. Two threads that ask at once may
+        // both work it out; they get the same answer.
+        private FontBoxValue? _fontBox;
 
         /// <summary>
         /// The box that holds every glyph: <c>head</c>'s, or at a location of a variable font the box of the glyphs as they are drawn there
         /// (<see cref="Variations.InstanceFontBox"/>), which is worked out the first time it is asked for since it reads every glyph.
         /// </summary>
-        private (int XMin, int YMin, int XMax, int YMax) FontBox
+        private FontBoxValue FontBox
         {
             get
             {
-                if (_fontBox is { } known)
+                if (System.Threading.Volatile.Read(ref _fontBox) is { } known)
                     return known;
 
                 var head = FontFace.head;
-                (int XMin, int YMin, int XMax, int YMax) box = (head.xMin, head.yMin, head.xMax, head.yMax);
+                var box = new FontBoxValue(head.xMin, head.yMin, head.xMax, head.yMax);
                 if (Variation is not null && Variations.InstanceFontBox.TryCompute(FontFace, Variation, out var computed))
-                    box = computed;
+                    box = new FontBoxValue(computed.XMin, computed.YMin, computed.XMax, computed.YMax);
 
-                _fontBox = box;
+                System.Threading.Volatile.Write(ref _fontBox, box);
                 return box;
             }
         }
-
         /// <inheritdoc/>
         public override int XMin => FontBox.XMin;
 
@@ -148,6 +151,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
         /// <inheritdoc/>
         public override int YMax => FontBox.YMax;
+
         /// <summary>How much the font-wide metric with the MVAR value tag <paramref name="tag"/> differs from the default at this descriptor's location.</summary>
         private int Adjust(string tag, int value)
         {
@@ -164,7 +168,6 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
             //fontName = image.n
             ItalicAngle = FontFace.post.italicAngle;
-
 
             UnderlinePosition = Adjust("undo", FontFace.post.underlinePosition);
             UnderlineThickness = Adjust("unds", FontFace.post.underlineThickness);

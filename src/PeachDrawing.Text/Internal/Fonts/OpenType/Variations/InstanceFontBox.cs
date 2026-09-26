@@ -1,6 +1,5 @@
 using PeachDrawing.Text.Outlines;
 using System;
-using System.Linq;
 
 namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
 {
@@ -87,8 +86,13 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
             ref double minX, ref double minY, ref double maxX, ref double maxY)
         {
             Include(p3, ref minX, ref minY, ref maxX, ref maxY);
-            foreach (double t in Extremes(p0.X, p1.X, p2.X, p3.X).Concat(Extremes(p0.Y, p1.Y, p2.Y, p3.Y)))
+
+            Span<double> roots = stackalloc double[4];
+            int count = Extremes(p0.X, p1.X, p2.X, p3.X, roots);
+            count += Extremes(p0.Y, p1.Y, p2.Y, p3.Y, roots[count..]);
+            for (int i = 0; i < count; i++)
             {
+                double t = roots[i];
                 double u = 1 - t;
                 double x = u * u * u * p0.X + 3 * u * u * t * p1.X + 3 * u * t * t * p2.X + t * t * t * p3.X;
                 double y = u * u * u * p0.Y + 3 * u * u * t * p1.Y + 3 * u * t * t * p2.Y + t * t * t * p3.Y;
@@ -96,36 +100,40 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
             }
         }
 
-        /// <summary>The parameters in (0, 1) at which one coordinate of a cubic Bezier curve has a zero derivative.</summary>
-        private static System.Collections.Generic.IEnumerable<double> Extremes(double a, double b, double c, double d)
+        /// <summary>Writes the parameters in (0, 1) at which one coordinate of a cubic Bezier curve has a zero derivative to <paramref name="roots"/> (room for two) and returns how many.</summary>
+        private static int Extremes(double a, double b, double c, double d, Span<double> roots)
         {
             // The derivative is 3 * (q2 * t^2 + q1 * t + q0) with these coefficients.
             double q2 = -a + 3 * b - 3 * c + d;
             double q1 = 2 * (a - 2 * b + c);
             double q0 = b - a;
 
+            int count = 0;
             if (Math.Abs(q2) < 1e-12)
             {
                 if (Math.Abs(q1) > 1e-12)
                 {
                     double t = -q0 / q1;
                     if (t > 0 && t < 1)
-                        yield return t;
+                        roots[count++] = t;
                 }
 
-                yield break;
+                return count;
             }
 
             double discriminant = q1 * q1 - 4 * q2 * q0;
             if (discriminant < 0)
-                yield break;
+                return 0;
 
             double root = Math.Sqrt(discriminant);
-            foreach (double t in new[] { (-q1 + root) / (2 * q2), (-q1 - root) / (2 * q2) })
-            {
-                if (t > 0 && t < 1)
-                    yield return t;
-            }
+            double first = (-q1 + root) / (2 * q2);
+            double second = (-q1 - root) / (2 * q2);
+            if (first > 0 && first < 1)
+                roots[count++] = first;
+            if (second > 0 && second < 1)
+                roots[count++] = second;
+
+            return count;
         }
     }
 }

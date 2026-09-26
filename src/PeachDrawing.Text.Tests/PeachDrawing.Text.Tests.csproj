@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!--
     The tests of the font and text engine: what PeachDrawing.Text does with fonts, text and Unicode, exercised through its

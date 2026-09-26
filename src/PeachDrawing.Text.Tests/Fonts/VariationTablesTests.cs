@@ -312,6 +312,24 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         [Fact]
+        public void Avar_Version2_WithAStoreForADifferentNumberOfAxes_ReadsAsVersion1()
+        {
+            // The store's regions have one axis; the font (and so the table) has two.
+            var store = BuildStore();
+            var bytes = new Writer().U16(2).U16(0).U16(0).U16(2)
+                .U16(3).F2Dot14(-1).F2Dot14(-1).F2Dot14(0).F2Dot14(0).F2Dot14(1).F2Dot14(1)
+                .U16(3).F2Dot14(-1).F2Dot14(-1).F2Dot14(0).F2Dot14(0).F2Dot14(1).F2Dot14(1)
+                .U32(0).U32(8 + 2 * 14 + 8)
+                .ToArray().Concat(store).ToArray();
+
+            var avar = AvarTable.TryParse(bytes, 2);
+
+            Assert.NotNull(avar);
+            Assert.False(avar.HasCrossAxisMapping);
+            Assert.Equal([0.5, -0.25], avar.Map([0.5, -0.25]));
+        }
+
+        [Fact]
         public void Avar_Version2_BoundsTheResultToTheAxisRange()
         {
             var store = BuildStore();

@@ -1,4 +1,4 @@
-#region PeachPDF - A .NET library for rendering HTML to PDF
+﻿#region PeachPDF - A .NET library for rendering HTML to PDF
 //
 // Decodes a CFF font's Type 2 charstrings (Adobe Technical Note #5177, "The
 // Type 2 Charstring Format") into the same GlyphOutline model

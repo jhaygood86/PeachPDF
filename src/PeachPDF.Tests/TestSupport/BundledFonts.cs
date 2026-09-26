@@ -292,6 +292,7 @@ namespace PeachPDF.Tests.TestSupport
 
         /// <summary>The reference values for <see cref="VariableAvar2Test"/>: outlines, advances and the normalized coordinates fontTools maps each location to.</summary>
         internal static string VariableAvar2TestGolden => Path.Combine(AppContext.BaseDirectory, "VariableAvar2Test.golden.json");
+
         /// <summary>
         /// A synthetic variable font whose <c>GPOS</c> varies with weight (see VariableLayoutTest.LICENSE.txt): kerning of A V and V A, a single
         /// adjustment of W and a mark-to-base anchor, with <c>VariationIndex</c> device tables and a <c>GDEF</c> item variation store.
