@@ -347,6 +347,14 @@ internal sealed class TtFace
             Normalized = variation.Normalized;
             InstanceAdvance = instanceAdvance;
         }
+
+        // cvar: the control values at the instance's location. The size scales these, as it does the font's own, so the programs measure with what
+        // the location says. (FreeType's 16.16 arithmetic for this is not reproduced: the deltas are added in 26.6, rounded.)
+        if (variation is { IsDefault: false } && Cvt.Length > 0 && font.Variations?.Cvar is { } cvar && cvar.GetDeltas(variation.Normalized, Cvt.Length) is { } cvtDeltas)
+        {
+            for (int i = 0; i < Cvt.Length; i++)
+                Cvt[i] += FontVariations.Round(cvtDeltas[i] * 64);
+        }
     }
 
     /// <summary>

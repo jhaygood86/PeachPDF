@@ -300,6 +300,15 @@ namespace PeachPDF.Tests.TestSupport
         internal static string VariableAvar2TestGolden => Path.Combine(AppContext.BaseDirectory, "VariableAvar2Test.golden.json");
 
         /// <summary>
+        /// A synthetic variable TrueType font with a <c>cvar</c> table (see VariableCvarTest.LICENSE.txt, made by generate_variable_cvar_fixture.py): glyph H's
+        /// instructions move its top edge to control value 0, and the six control values move with the weight and the width.
+        /// </summary>
+        internal static string VariableCvarTest => Path.Combine(AppContext.BaseDirectory, "VariableCvarTest.ttf");
+
+        /// <summary>The <c>cvt</c> table fontTools' instancer leaves for <see cref="VariableCvarTest"/> at a grid of locations.</summary>
+        internal static string VariableCvarTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableCvarTest.golden.json");
+
+        /// <summary>
         /// A synthetic variable font whose <c>GPOS</c> varies with weight (see VariableLayoutTest.LICENSE.txt): kerning of A V and V A, a single
         /// adjustment of W and a mark-to-base anchor, with <c>VariationIndex</c> device tables and a <c>GDEF</c> item variation store.
         /// </summary>
