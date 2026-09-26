@@ -216,7 +216,7 @@ namespace PeachPDF.Html.Adapters
         public virtual bool HasMathTable => false;
 
         /// <summary>This font's parsed MATH table, or null if it has none.</summary>
-        public virtual PeachDrawing.Text.Internal.Fonts.OpenType.MathTable? MathTable => null;
+        public virtual PeachDrawing.Text.OpenType.MathTable? MathTable => null;
 
         /// <summary>This font's design-units-per-em (e.g. 1000 or 2048) - <see cref="MathTable"/>'s
         /// design-unit values need scaling by <c>Size / FontUnitsPerEm</c> to become points. 0 when

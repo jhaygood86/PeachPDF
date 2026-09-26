@@ -57,6 +57,15 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 | `ColorPaint`, `PaintColrLayers`, `PaintSolid`, `PaintLinearGradient`, `PaintRadialGradient`, `PaintSweepGradient`, `PaintGlyph`, `PaintColrGlyph`, `PaintTransform`, `PaintComposite`, `ColorLine`, `ColorStop`, `ColorExtend`, `Affine2x3` | The COLR version 1 paint graph | The names of the paint formats and records in the COLR specification |
 | `Typeface.HasBitmapGlyphs`, `TryGetBitmap`, `EmbeddedBitmap` | Pictures for bitmap colour fonts | OpenType `CBDT`/`CBLC` and `sbix` ("bitmap strike"); the record is named for what it holds |
 
+### `PeachDrawing.Text.OpenType`
+
+| Public name | Role | Origin of the name and shape |
+|---|---|---|
+| `Typeface.HasMathData`, `MathData`, `MathTable` (`Constants`, `GlyphInfo`, `Variants`) | The `MATH` table of a face | The OpenType `MATH` table and its three sub-tables (`MathConstants`, `MathGlyphInfo`, `MathVariants`) |
+| `MathConstantsTable` | The layout constants | One property per constant, named as in the OpenType specification (`AxisHeight`, `FractionRuleThickness`, ...) |
+| `MathGlyphInfoTable` (`GetItalicsCorrection`, `GetTopAccentAttachment`, `IsExtendedShape`) | Per-glyph information | `MathItalicsCorrectionInfo`, `MathTopAccentAttachment`, `ExtendedShapeCoverage` in the specification |
+| `MathVariantsTable` (`MinConnectorOverlap`, `GetVerticalConstruction`, `GetHorizontalConstruction`), `MathGlyphConstruction`, `MathGlyphVariant`, `MathGlyphAssembly`, `MathGlyphPart` | The stretchy glyph data | `MathVariants`, `MathGlyphConstruction`, `MathGlyphVariantRecord`, `GlyphAssembly`, `GlyphPart` in the specification |
+
 ### `PeachDrawing.Text.Shaping`
 
 | Public name | Role | Origin of the name and shape |

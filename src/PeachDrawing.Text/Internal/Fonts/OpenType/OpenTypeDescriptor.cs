@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachDrawing.Text.OpenType;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Internal.Text;

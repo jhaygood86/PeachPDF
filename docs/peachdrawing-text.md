@@ -10,9 +10,9 @@ dotnet add package PeachDrawing.Text
 
 > **Status: pre-1.0.** The library is being opened up area by area. Today the public surface is font loading and
 > matching (`FontSet` and the types around it), what a `Typeface` says about itself (metrics, glyph mapping and advances),
-> shaping, glyph outlines and colour glyphs, and the `PeachDrawing.Text.Unicode` namespace, all described below. Font subsetting
-> for embedding, the MATH table and paragraph layout are still internal to the package, so PeachPDF is the only consumer of
-> them, and they will be published in later releases. Until 1.0, the public API may change between releases.
+> shaping, glyph outlines and colour glyphs, the `MATH` table, and the `PeachDrawing.Text.Unicode` namespace, all described
+> below. Font subsetting for embedding and paragraph layout are still internal to the package, so PeachPDF is the only
+> consumer of them, and they will be published in later releases. Until 1.0, the public API may change between releases.
 
 ## What the engine does
 
@@ -23,6 +23,8 @@ dotnet add package PeachDrawing.Text
   Universal Shaping Engine for Devanagari, Bengali, Gujarati and Tamil, default-ignorable handling, and `cmap` format 14
   variation sequences.
 - **Outlines and colour:** glyph outlines for `glyf` and CFF, COLR v0 and v1 with CPAL, and CBDT/CBLC and sbix bitmaps.
+- **Mathematics:** the `MATH` table: layout constants, per-glyph italics corrections and accent attachment, and the
+  variants and assemblies of stretchy glyphs.
 - **Unicode:** the Unicode Bidirectional Algorithm, script itemization, vertical orientation, emoji presentation, and
   TeX/Liang hyphenation for 73 languages.
 
@@ -175,6 +177,38 @@ if (face.TryMapRune(new Rune('g'), out ushort glyph) && face.TryGetOutline(glyph
   are read with `GetColorLayerPaint`). Variable paints are read at the font's default instance.
 - **Colour glyphs from pictures.** A font whose colour glyphs are bitmaps (`CBDT`/`CBLC` or `sbix`) reports
   `HasBitmapGlyphs`, and `TryGetBitmap` gives the picture of a glyph from the strike best suited to a size, with its bearings.
+
+## Mathematics: `PeachDrawing.Text.OpenType`
+
+A face made for setting mathematics has a `MATH` table, and `Typeface.HasMathData` says so. `Typeface.MathData` returns it as a
+`MathTable` with three parts. `Constants` holds the values a math layout algorithm positions fractions, radicals, scripts,
+stacks and limits with, in design units apart from the percentages. `GlyphInfo` answers per glyph: the italics correction,
+the horizontal position an accent attaches at, and whether the glyph is an extended shape. `Variants` gives the glyphs that
+stretch (fences, radicals, accents, arrows) their pre-sized variants and, for a size beyond the largest, the parts to
+assemble them from.
+
+```csharp
+using PeachDrawing.Text.OpenType;
+
+if (face.MathData is MathTable math && face.TryMapRune(new Rune('('), out ushort paren))
+{
+    double axis = math.Constants.AxisHeight;                      // design units above the baseline
+    MathGlyphConstruction? tall = math.Variants.GetVerticalConstruction(paren);
+
+    foreach (MathGlyphVariant variant in tall?.Variants ?? [])    // smallest to largest
+    {
+        // variant.GlyphId is drawn when it is at least variant.AdvanceMeasurement tall
+    }
+
+    if (tall?.Assembly is MathGlyphAssembly assembly)
+    {
+        // bottom to top: repeat the parts that IsExtender until the target height is reached,
+        // overlapping neighbours by at most their connector lengths and at least Variants.MinConnectorOverlap
+    }
+}
+```
+
+The per-glyph corner kerning of `MathKernInfo` and the device tables that adjust a value at particular sizes are not read.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 

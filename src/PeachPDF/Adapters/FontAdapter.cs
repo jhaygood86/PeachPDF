@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachDrawing.Text.OpenType;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
@@ -253,11 +254,11 @@ namespace PeachPDF.Adapters
         }
 
         // ---- MATH table query surface -----------------------------------------------------------
-        // Backed by the font's OpenTypeDescriptor's real MATH table parsing (see MathTable.cs).
+        // Backed by the typeface's MATH table (Typeface.MathData).
 
-        public override bool HasMathTable => Font.Descriptor?.HasMathTable ?? false;
+        public override bool HasMathTable => Font.Typeface.HasMathData;
 
-        public override MathTable? MathTable => Font.Descriptor?.MathTable;
+        public override MathTable? MathTable => Font.Typeface.MathData;
 
         public override double FontUnitsPerEm => Font.Typeface.Metrics.UnitsPerEm;
 

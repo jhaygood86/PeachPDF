@@ -22,112 +22,182 @@
 //
 #endregion
 
+using PeachDrawing.Text.Internal.Fonts.OpenType;
 using System.Collections.Generic;
 
-namespace PeachDrawing.Text.Internal.Fonts.OpenType
+namespace PeachDrawing.Text.OpenType
 {
-    /// <summary>One pre-sized glyph variant for a stretchy shape (<c>MathGlyphVariantRecord</c>):
-    /// an alternate glyph and its measurement (advance width for a horizontally-growing variant,
-    /// advance height for a vertically-growing one) in the direction of extension.</summary>
-    internal readonly record struct MathGlyphVariant(ushort GlyphId, double AdvanceMeasurement);
+    /// <summary>One pre-sized variant of a glyph that can stretch (the <c>MathGlyphVariantRecord</c> of the MATH table).</summary>
+    /// <param name="GlyphId">The alternate glyph.</param>
+    /// <param name="AdvanceMeasurement">How far the variant extends in the direction it grows: its advance width for a horizontally growing one, and its advance height for a vertically growing one, in design units.</param>
+    public readonly record struct MathGlyphVariant(ushort GlyphId, double AdvanceMeasurement);
 
-    /// <summary>One part of a glyph assembly (<c>GlyphPart</c> record) - a single glyph plus how much
-    /// of its start/end can overlap with a neighboring part's connector, its own full advance, and
-    /// whether it's an extender (repeatable/skippable to reach a target size).</summary>
-    internal readonly record struct MathGlyphPart(
+    /// <summary>One part of a glyph assembly (the <c>GlyphPart</c> record of the MATH table).</summary>
+    /// <param name="GlyphId">The part's glyph.</param>
+    /// <param name="StartConnectorLength">How much of the start of the part can overlap the connector of the part before it.</param>
+    /// <param name="EndConnectorLength">How much of the end of the part can overlap the connector of the part after it.</param>
+    /// <param name="FullAdvance">The part's full advance in the direction of assembly.</param>
+    /// <param name="IsExtender">Whether the part may be repeated, or left out, to reach a target size.</param>
+    public readonly record struct MathGlyphPart(
         ushort GlyphId,
         double StartConnectorLength,
         double EndConnectorLength,
         double FullAdvance,
         bool IsExtender);
 
-    /// <summary>How to assemble a stretchy shape from glyph parts when no pre-sized
-    /// <see cref="MathGlyphVariant"/> is large enough (<c>GlyphAssembly</c> table).</summary>
-    internal sealed class MathGlyphAssembly
+    /// <summary>How to build a stretchy shape out of glyph parts when no pre-sized <see cref="MathGlyphVariant"/> is large enough (the <c>GlyphAssembly</c> table).</summary>
+    public sealed class MathGlyphAssembly
     {
-        public required double ItalicsCorrection { get; init; }
+        internal MathGlyphAssembly()
+        {
+        }
 
-        /// <summary>Left-to-right (horizontal extension) or bottom-to-top (vertical extension) order.</summary>
-        public required IReadOnlyList<MathGlyphPart> Parts { get; init; }
+        /// <summary>The italics correction of the assembled glyph, in design units.</summary>
+        public double ItalicsCorrection { get; internal init; }
+
+        /// <summary>The parts, from left to right for a horizontal extension and from bottom to top for a vertical one.</summary>
+        public IReadOnlyList<MathGlyphPart> Parts { get; internal init; } = [];
     }
 
-    /// <summary>Everything needed to find or build an enlarged variant of one glyph
-    /// (<c>MathGlyphConstruction</c> table): its pre-sized variants (smallest to largest, per spec
-    /// order) and, if the font provides one, a part-based assembly for sizes beyond the largest
-    /// pre-sized variant.</summary>
-    internal sealed class MathGlyphConstruction
+    /// <summary>Everything needed to find or build an enlarged version of one glyph (the <c>MathGlyphConstruction</c> table).</summary>
+    public sealed class MathGlyphConstruction
     {
-        public MathGlyphAssembly? Assembly { get; init; }
-        public required IReadOnlyList<MathGlyphVariant> Variants { get; init; }
+        internal MathGlyphConstruction()
+        {
+        }
+
+        /// <summary>How to assemble the glyph from parts for a size beyond the largest variant, or <see langword="null"/> when the font gives none.</summary>
+        public MathGlyphAssembly? Assembly { get; internal init; }
+
+        /// <summary>The pre-sized variants, from the smallest to the largest.</summary>
+        public IReadOnlyList<MathGlyphVariant> Variants { get; internal init; } = [];
     }
 
     /// <summary>
-    /// The ~50 named constants MathML Core's layout algorithm reads for fraction/radical/script/
-    /// stack/limit positioning (see <c>MathLayoutEngine</c>). Every field is in font design units
-    /// (FUnits) - the caller scales by <c>fontSize / unitsPerEm</c>. Field order matches the OpenType
-    /// spec's MathConstants table exactly (a fixed-size, fully sequential layout - no offsets to
-    /// chase), so the constructor is a straight sequential read.
+    /// The named constants a math layout algorithm reads to position fractions, radicals, scripts, stacks and limits (the
+    /// <c>MathConstants</c> table).
     /// </summary>
-    internal sealed class MathConstantsTable
+    /// <remarks>
+    /// Every value is in design units, apart from the percentages, so a length at a size is the value times the size divided by
+    /// <see cref="TypefaceMetrics.UnitsPerEm"/>. The values are those of the table's records; the device tables that
+    /// adjust a value at particular pixel sizes are not read.
+    /// </remarks>
+    public sealed class MathConstantsTable
     {
+        /// <summary>The percentage a level 1 superscript or subscript is scaled down to, such as 80.</summary>
         public double ScriptPercentScaleDown { get; }
+        /// <summary>The percentage a level 2 superscript or subscript is scaled down to, such as 60.</summary>
         public double ScriptScriptPercentScaleDown { get; }
+        /// <summary>The least height a delimited expression must have to be treated as a subformula.</summary>
         public double DelimitedSubFormulaMinHeight { get; }
+        /// <summary>The least height of an n-ary operator (an integral or a summation) in display style.</summary>
         public double DisplayOperatorMinHeight { get; }
+        /// <summary>The white space to leave between formulas so that lines keep a proper spacing.</summary>
         public double MathLeading { get; }
+        /// <summary>The height of the math axis above the baseline: the line that fraction bars and operators are centred on.</summary>
         public double AxisHeight { get; }
+        /// <summary>The tallest base an accent is placed on without being raised: on a taller base the accent moves up with it.</summary>
         public double AccentBaseHeight { get; }
+        /// <summary>The tallest base that still uses the flattened form of an accent.</summary>
         public double FlattenedAccentBaseHeight { get; }
+        /// <summary>The standard distance a subscript is shifted down from the baseline.</summary>
         public double SubscriptShiftDown { get; }
+        /// <summary>The greatest height of the top of a subscript that does not need moving further down.</summary>
         public double SubscriptTopMax { get; }
+        /// <summary>The least drop of a subscript's baseline below the bottom of its base.</summary>
         public double SubscriptBaselineDropMin { get; }
+        /// <summary>The standard distance a superscript is shifted up from the baseline.</summary>
         public double SuperscriptShiftUp { get; }
+        /// <summary>The standard distance a superscript is shifted up in cramped style.</summary>
         public double SuperscriptShiftUpCramped { get; }
+        /// <summary>The least height of the bottom of a superscript that does not need moving further up.</summary>
         public double SuperscriptBottomMin { get; }
+        /// <summary>The greatest drop of a superscript's baseline below the top of its base.</summary>
         public double SuperscriptBaselineDropMax { get; }
+        /// <summary>The least gap between the bottom of a superscript and the top of a subscript when both are present.</summary>
         public double SubSuperscriptGapMin { get; }
+        /// <summary>The greatest height the bottom of a superscript is pushed up to open a gap from a subscript, before the subscript starts moving down.</summary>
         public double SuperscriptBottomMaxWithSubscript { get; }
+        /// <summary>The extra white space added after each subscript and superscript.</summary>
         public double SpaceAfterScript { get; }
+        /// <summary>The least gap between the bottom of an upper limit and the top of its base operator.</summary>
         public double UpperLimitGapMin { get; }
+        /// <summary>The least distance between the baseline of an upper limit and the top of its base operator.</summary>
         public double UpperLimitBaselineRiseMin { get; }
+        /// <summary>The least gap between the top of a lower limit and the bottom of its base operator.</summary>
         public double LowerLimitGapMin { get; }
+        /// <summary>The least distance between the baseline of a lower limit and the bottom of its base operator.</summary>
         public double LowerLimitBaselineDropMin { get; }
+        /// <summary>The standard distance the top element of a stack is shifted up.</summary>
         public double StackTopShiftUp { get; }
+        /// <summary>The standard distance the top element of a stack is shifted up in display style.</summary>
         public double StackTopDisplayStyleShiftUp { get; }
+        /// <summary>The standard distance the bottom element of a stack is shifted down.</summary>
         public double StackBottomShiftDown { get; }
+        /// <summary>The standard distance the bottom element of a stack is shifted down in display style.</summary>
         public double StackBottomDisplayStyleShiftDown { get; }
+        /// <summary>The least gap between the bottom of the top element of a stack and the top of the bottom element.</summary>
         public double StackGapMin { get; }
+        /// <summary>The least gap between the elements of a stack in display style.</summary>
         public double StackDisplayStyleGapMin { get; }
+        /// <summary>The standard distance the top element of a stretch stack is shifted up.</summary>
         public double StretchStackTopShiftUp { get; }
+        /// <summary>The standard distance the bottom element of a stretch stack is shifted down.</summary>
         public double StretchStackBottomShiftDown { get; }
+        /// <summary>The least gap between the ink of the stretched element of a stretch stack and the bottom of the element above it.</summary>
         public double StretchStackGapAboveMin { get; }
+        /// <summary>The least gap between the ink of the stretched element of a stretch stack and the top of the element below it.</summary>
         public double StretchStackGapBelowMin { get; }
+        /// <summary>The standard distance a numerator is shifted up.</summary>
         public double FractionNumeratorShiftUp { get; }
+        /// <summary>The standard distance a numerator is shifted up in display style.</summary>
         public double FractionNumeratorDisplayStyleShiftUp { get; }
+        /// <summary>The standard distance a denominator is shifted down.</summary>
         public double FractionDenominatorShiftDown { get; }
+        /// <summary>The standard distance a denominator is shifted down in display style.</summary>
         public double FractionDenominatorDisplayStyleShiftDown { get; }
+        /// <summary>The least gap between the bottom of a numerator and the fraction rule.</summary>
         public double FractionNumeratorGapMin { get; }
+        /// <summary>The least gap between the bottom of a numerator and the fraction rule in display style.</summary>
         public double FractionNumDisplayStyleGapMin { get; }
+        /// <summary>The thickness of the fraction rule.</summary>
         public double FractionRuleThickness { get; }
+        /// <summary>The least gap between the fraction rule and the top of a denominator.</summary>
         public double FractionDenominatorGapMin { get; }
+        /// <summary>The least gap between the fraction rule and the top of a denominator in display style.</summary>
         public double FractionDenomDisplayStyleGapMin { get; }
+        /// <summary>The horizontal distance between the top and bottom elements of a skewed fraction.</summary>
         public double SkewedFractionHorizontalGap { get; }
+        /// <summary>The vertical distance between the ink of the top and bottom elements of a skewed fraction.</summary>
         public double SkewedFractionVerticalGap { get; }
+        /// <summary>The distance between an overbar and the top of its base.</summary>
         public double OverbarVerticalGap { get; }
+        /// <summary>The thickness of an overbar.</summary>
         public double OverbarRuleThickness { get; }
+        /// <summary>The extra white space reserved above an overbar.</summary>
         public double OverbarExtraAscender { get; }
+        /// <summary>The distance between an underbar and the bottom of its base.</summary>
         public double UnderbarVerticalGap { get; }
+        /// <summary>The thickness of an underbar.</summary>
         public double UnderbarRuleThickness { get; }
+        /// <summary>The extra white space reserved below an underbar.</summary>
         public double UnderbarExtraDescender { get; }
+        /// <summary>The space between the top of the radicand and the radical rule, in text style.</summary>
         public double RadicalVerticalGap { get; }
+        /// <summary>The space between the top of the radicand and the radical rule, in display style.</summary>
         public double RadicalDisplayStyleVerticalGap { get; }
+        /// <summary>The thickness of the radical rule.</summary>
         public double RadicalRuleThickness { get; }
+        /// <summary>The extra white space reserved above a radical.</summary>
         public double RadicalExtraAscender { get; }
+        /// <summary>The extra white space reserved before the degree of a radical.</summary>
         public double RadicalKernBeforeDegree { get; }
+        /// <summary>The kern after the degree of a radical, which is usually negative.</summary>
         public double RadicalKernAfterDegree { get; }
+        /// <summary>The height of the bottom of the degree of a radical as a percentage of the height of the radical sign.</summary>
         public double RadicalDegreeBottomRaisePercent { get; }
 
-        public MathConstantsTable(OpenTypeFontface face, int tableStart)
+        internal MathConstantsTable(OpenTypeFontface face, int tableStart)
         {
             face.Position = tableStart;
 
@@ -244,18 +314,15 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         public bool HasValue(ushort glyphId) => _coverage.IndexOfGlyph(glyphId) >= 0;
     }
 
-    /// <summary>The <c>MathGlyphInfo</c> table: per-glyph italics correction, top-accent attachment,
-    /// and which glyphs are "extended shapes" (already-tall/wide variants that should be positioned
-    /// by their own ink box rather than the default MathConstants-driven position - see
-    /// <c>IsExtendedShape</c>'s use in <c>MathLayoutEngine</c>). <c>MathKernInfo</c> is present in
-    /// the font but intentionally not read - see this file's header comment.</summary>
-    internal sealed class MathGlyphInfoTable
+    /// <summary>The <c>MathGlyphInfo</c> table: per-glyph italics correction, top-accent attachment, and which glyphs are extended shapes.</summary>
+    /// <remarks>The per-glyph corner kerning of the <c>MathKernInfo</c> table is not read.</remarks>
+    public sealed class MathGlyphInfoTable
     {
         readonly MathPerGlyphValueTable? _italicsCorrection;
         readonly MathPerGlyphValueTable? _topAccentAttachment;
         readonly CoverageTable? _extendedShapeCoverage;
 
-        public MathGlyphInfoTable(OpenTypeFontface face, int tableStart)
+        internal MathGlyphInfoTable(OpenTypeFontface face, int tableStart)
         {
             face.Position = tableStart;
 
@@ -280,11 +347,13 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
         /// <summary>The glyph's italics correction, in design units, or 0 if the font provides none
         /// for this glyph (including when the font has no MathItalicsCorrectionInfo table at all).</summary>
+        /// <param name="glyphId">The glyph.</param>
         public double GetItalicsCorrection(ushort glyphId) => _italicsCorrection?.GetValue(glyphId) ?? 0;
 
         /// <summary>The glyph's top-accent horizontal attachment point, in design units, or null if
         /// the font provides none for this glyph - callers fall back to the glyph's own geometric
         /// center (advance width / 2), per the OpenType spec's own guidance for an uncovered glyph.</summary>
+        /// <param name="glyphId">The glyph.</param>
         public double? GetTopAccentAttachment(ushort glyphId)
         {
             if (_topAccentAttachment is null)
@@ -295,22 +364,23 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             return _topAccentAttachment.HasValue(glyphId) ? _topAccentAttachment.GetValue(glyphId) : null;
         }
 
+        /// <summary>Whether the glyph is an extended shape: an already tall or wide variant whose ink box is used to position an accent instead of the default constants.</summary>
+        /// <param name="glyphId">The glyph.</param>
         public bool IsExtendedShape(ushort glyphId) => _extendedShapeCoverage?.IndexOfGlyph(glyphId) >= 0;
     }
 
-    /// <summary>The <c>MathVariants</c> table: for glyphs that need to stretch (fences, radicals,
-    /// accents, arrows, ...), the pre-sized variants and/or glyph-assembly parts to grow them
-    /// vertically or horizontally - see <c>MathLayoutEngine</c>'s stretch algorithm.</summary>
-    internal sealed class MathVariantsTable
+    /// <summary>The <c>MathVariants</c> table: for glyphs that have to stretch (fences, radicals, accents, arrows), the pre-sized variants or the glyph parts to grow them vertically or horizontally.</summary>
+    public sealed class MathVariantsTable
     {
         readonly CoverageTable? _vertCoverage;
         readonly CoverageTable? _horizCoverage;
         readonly MathGlyphConstruction?[] _vertConstructions;
         readonly MathGlyphConstruction?[] _horizConstructions;
 
+        /// <summary>The least overlap of the connectors of two adjacent parts of an assembly, in design units.</summary>
         public double MinConnectorOverlap { get; }
 
-        public MathVariantsTable(OpenTypeFontface face, int tableStart)
+        internal MathVariantsTable(OpenTypeFontface face, int tableStart)
         {
             face.Position = tableStart;
 
@@ -344,9 +414,15 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 _horizConstructions[i] = ReadGlyphConstruction(face, tableStart + horizConstructionOffsets[i]);
         }
 
+        /// <summary>How a glyph grows vertically.</summary>
+        /// <param name="glyphId">The glyph.</param>
+        /// <returns>The variants and assembly, or <see langword="null"/> when the glyph does not grow vertically.</returns>
         public MathGlyphConstruction? GetVerticalConstruction(ushort glyphId) =>
             GetConstruction(_vertCoverage, _vertConstructions, glyphId);
 
+        /// <summary>How a glyph grows horizontally.</summary>
+        /// <param name="glyphId">The glyph.</param>
+        /// <returns>The variants and assembly, or <see langword="null"/> when the glyph does not grow horizontally.</returns>
         public MathGlyphConstruction? GetHorizontalConstruction(ushort glyphId) =>
             GetConstruction(_horizCoverage, _horizConstructions, glyphId);
 
@@ -405,15 +481,19 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         }
     }
 
-    /// <summary>The top-level <c>MATH</c> table: <see cref="Constants"/>, <see cref="GlyphInfo"/>,
-    /// and <see cref="Variants"/>.</summary>
-    internal sealed class MathTable
+    /// <summary>The <c>MATH</c> table of a font that is made for setting mathematics: <see cref="Constants"/>, <see cref="GlyphInfo"/> and <see cref="Variants"/>.</summary>
+    public sealed class MathTable
     {
+        /// <summary>The layout constants.</summary>
         public MathConstantsTable Constants { get; }
+
+        /// <summary>The per-glyph information.</summary>
         public MathGlyphInfoTable GlyphInfo { get; }
+
+        /// <summary>The variants and assemblies of glyphs that stretch.</summary>
         public MathVariantsTable Variants { get; }
 
-        public MathTable(OpenTypeFontface face, int tableStart)
+        internal MathTable(OpenTypeFontface face, int tableStart)
         {
             // MathTable instances are cached and shared process-wide, exactly like GsubTable/
             // GdefTable/GposTable (see GdefTable.cs) - lock around the whole eager parse against

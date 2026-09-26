@@ -1,5 +1,6 @@
 ﻿using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.OpenType;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Unicode;
 using System;
@@ -126,6 +127,18 @@ namespace PeachDrawing.Text
         /// and not from outlines. Almost every font has none.
         /// </summary>
         public bool HasBitmapGlyphs => Face.Descriptor.HasBitmapGlyphs;
+
+        /// <summary>
+        /// Whether the face is made for setting mathematics, which is to say it has a <c>MATH</c> table.
+        /// </summary>
+        public bool HasMathData => Face.Descriptor.HasMathTable;
+
+        /// <summary>
+        /// The <c>MATH</c> table of a face that has one: the constants, per-glyph information and stretchy-glyph variants a
+        /// math layout algorithm reads.
+        /// </summary>
+        /// <value>The table, or <see langword="null"/> when <see cref="HasMathData"/> is <see langword="false"/>.</value>
+        public MathTable? MathData => Face.Descriptor.MathTable;
 
         /// <summary>
         /// The picture of a glyph from the strike best suited to a font size.
