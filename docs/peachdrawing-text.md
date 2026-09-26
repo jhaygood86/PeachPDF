@@ -422,11 +422,13 @@ foreach (LineBox line in layout.Lines)
   face at the run's size; without one, or where it answers `null`, the face's missing-glyph shape is drawn. `FontSet.CreateFallback(query)` makes one
   from the families of a set, choosing the family whose coverage best fits the character's script.
 - **Spacing and justification.** `RunStyle.LetterSpacing` and `WordSpacing` add distance after every glyph and every space; both count in where lines
-  break and in the caret positions. `TextAlign.Justify` widens the spaces of every line that is not the last (nor ends in a forced break) so that it
-  fills the width, equally; a line with no space in it is left as it is, and `ParagraphStyle.AlignLast` sets how the last line and forced-break lines
-  are aligned (the start, by default). `PlacedRun.GetGlyphAdvance` gives the pen movement after each glyph, spacing and justification included, which
-  is what a caller draws with.
-
+  break and in the caret positions, and letter spacing turns off the optional ligatures of the text it is on. `TextAlign.Justify` shares the room a line
+  has left between its opportunities so that it fills the width, equally, in every line that is not the last (nor ends in a forced break);
+  `ParagraphStyle.TextJustify` says where the opportunities are: `Auto` (the spaces and the boundaries next to a Han, Hiragana, Katakana, Bopomofo or Yi
+  letter), `InterWord` (the spaces only), `InterCharacter` (every pair of adjacent characters, except joined cursive letters) or `None` (no justification).
+  A line with no opportunity is left as it is, a tab is a wall that nothing is added next to, and `ParagraphStyle.AlignLast` sets how the last line and
+  forced-break lines are aligned (the start, by default). `PlacedRun.GetGlyphAdvance` gives the pen movement after each glyph, spacing and justification
+  included, which is what a caller draws with.
 - **Indent and tab stops.** `ParagraphStyle.TextIndent` moves the start of a line in from the start edge (the left of a left-to-right paragraph, the right
   of a right-to-left one): by default the first line only, with `EachLine` also the line after every forced break, and with `Hanging` every line
   except those. The indent takes room from the line, which breaks earlier, and alignment and justification work in what is left; a negative indent moves
@@ -436,8 +438,27 @@ foreach (LineBox line in layout.Lines)
   the text is written, indent included; a tab at the end of a line hangs; a tab is a run of its own with no glyphs, so it draws nothing, and it is
   not a justification opportunity. `ContentWidth` and `MeasureContent()` count the indent.
 
-Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Hyphenation, a line limit with an
-ellipsis, inline boxes and justification between characters (as opposed to between words) are not part of the layout yet.
+- **Hyphenation.** `ParagraphStyle.Hyphens` is `Manual` by default: a soft hyphen (U+00AD) is a place a line may break, the line then ends with a hyphen
+  (`LineBox.End` is `Hyphenated`), and a soft hyphen the line does not end at draws nothing and takes no room. `None` makes soft hyphens no place to break,
+  and `Auto` also breaks words where the patterns of their language allow (`Hyphenator`; the language is the `ShapeSettings.Language` of the run the word is in, or the
+  `Language` of `ParagraphStyle.LineBreak`; a word with neither is left whole). A word is hyphenated when it would not fit, as far along as it goes, before
+  the emergency cut of `OverflowWrap` is tried. The hyphen is a generated run (`PlacedRun.IsGenerated`, an empty `Range`, drawn like any run) at the end of the line in the
+  paragraph's direction, U+2010 if the face has it and a hyphen-minus otherwise, or `ParagraphStyle.HyphenateCharacter`; it counts in the line's width. If the hyphen
+  would not fit after a soft hyphen the line ends at the last earlier place that has room for it. `HyphenateLimitChars` (word, before and after; 5, 2 and 2
+  by default), `HyphenateLimitLines` (hyphenated lines in a row), `HyphenateLimitZone` (room a line may leave before its last word is hyphenated) and
+  `HyphenateLimitLast` (`Always` keeps the last full line, the one before a rest that fits a line of its own, from ending with a hyphenation) restrict it. A
+  caret at a hyphenated break can be on either line as at any soft break, and lies before the hyphen. `MeasureContent()` counts hyphens, and with `Auto` its minimum
+  is the widest piece between two places a word may be hyphenated.
+
+- **Line limit and ellipsis.** `ParagraphStyle.MaxLines` lays the paragraph out in at most that many lines. When text is left over, the last line keeps as much of its text as
+  fits with `ParagraphStyle.Ellipsis` after it (U+2026, or three full stops if the face has no such character; an empty string means only cut), cut at a boundary between
+  characters that a reader sees as one and never after a space; `ParagraphLayout.IsTruncated` is set, and the last line is `LineEnd.Last` with `LineBox.IsTruncated`, a
+  `Range` that runs to the end of the text (the part after `ContentEnd` is hidden, like hanging space) and the ellipsis as a generated run at its end in the paragraph's
+  direction, in the style of the last character drawn. `TextOverflow.Ellipsis` cuts the same way any line that is wider than the width (a `NoWrap` line, or a word wider than
+  the paragraph) without ending the paragraph. A line limit is about lines, so one line that overflows its width is cut only when `TextOverflow` asks for it, and text that
+  ends in a newline does not count as text left out. Only the lines that are laid out are worked out, so a limit on a very long text costs what its lines cost.
+
+Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Inline boxes are not part of the layout yet.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 
@@ -473,8 +494,20 @@ and the katakana double hyphen may start a line in `Normal` and `Loose` only whe
 there `Loose` also lets a line start with a middle dot, the colon and semicolon of CJK text and a fullwidth or double exclamation or
 question mark, end before a suffix and after a prefix of East Asian width (`％`, `℃`, `￥`), which the number rules would otherwise
 keep with their digits. `Anywhere` allows a break after every grapheme cluster, whatever the
-character rules say, and keeps only hard line breaks. Thai, Lao, Khmer and Burmese are broken as their letters, without a
-dictionary, so their lines have no opportunities where the script writes no spaces.
+character rules say, and keeps only hard line breaks.
+
+Thai and Khmer write no spaces between words, so no rule of the algorithm can find where a line may end (UAX #14 leaves those
+characters, its `SA` or Complex_Context class, to a dictionary). The library carries a word list for each, taken from ICU's
+break-iterator dictionaries, and by default `LineBreaker` allows a break between the words it finds, as browsers do. It chooses the
+words by looking a few words ahead for the choice that covers the text best, preferring the longer word when two choices cover it
+alike; a stretch that no word matches stays whole, cut off from the words around it; and it never breaks inside a syllable (no
+break before a dependent vowel, tone mark or other sign, after a leading vowel, or inside a Khmer subscript). The script decides, not
+`Language`, and `WordBreak`, `Strictness` and overflow wrapping apply on top of it. A word list is read the first time text of its
+script is analysed (about 0.3 MB of embedded data in all, stored with DEFLATE so that it also loads in WebAssembly, where there is no
+Brotli decoder), and is kept for the life of the process. A compound that the list has as one word stays whole even where a browser
+splits it. Set `LineBreakOptions.ComplexContext` to `ComplexContextBreaking.GeneralCategory` to have no opportunity inside a run of
+these scripts, which is what rule LB1 itself falls back to (a caller with its own dictionary wants that); the other Complex_Context
+scripts (Lao, Burmese, Tai Tham, Cham and the rest) have no word list yet and always get it.
 
 `Segmenter` finds the boundaries of [UAX #29](https://www.unicode.org/reports/tr29/): `FindGraphemeBoundaries` (extended
 grapheme clusters: a letter with its accents, a Hangul syllable, an emoji sequence, a flag), `FindWordBoundaries` and
@@ -541,4 +574,4 @@ derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz cod
 Adobe's CFF engine that do the [grid fitting](#grid-fitting-hinting) are ports of FreeType's (under the FreeType Project License,
 whose text ships in the package as `FTL.TXT`, with Adobe's patent licence grant for the CFF engine; an application that redistributes
 the package has to credit the FreeType Team in its documentation), and the data tables come from the
-Unicode Character Database and the `hyph-utf8` pattern collection. See [License](license.md) for the whole list.
+Unicode Character Database, the `hyph-utf8` pattern collection and ICU's Thai and Khmer word lists. See [License](license.md) for the whole list.

@@ -59,9 +59,32 @@ namespace PeachDrawing.Text.Unicode
     }
 
     /// <summary>
+    /// How the characters of the Complex_Context line breaking class (<c>SA</c>) are resolved. UAX #14 rule LB1 leaves this to criteria
+    /// outside the algorithm, and for the scripts written without spaces between words the criterion that matters is a word list.
+    /// </summary>
+    public enum ComplexContextBreaking
+    {
+        /// <summary>
+        /// A line may end between the words of Thai and Khmer text, found in a word list the library carries and never
+        /// inside a syllable, as browsers do. The lists load the first time text of the script is analysed. Text in other
+        /// Complex_Context scripts, such as Lao, Burmese and Tai Tham, is resolved by <see cref="GeneralCategory"/>, as is text in Thai or
+        /// Khmer when its word list cannot be read.
+        /// </summary>
+        Dictionary = 0,
+
+        /// <summary>
+        /// The fallback rule LB1 itself gives: a nonspacing or spacing mark is a combining mark and every other Complex_Context
+        /// character a letter, so a run of one script has no opportunity inside it. This is what the Unicode conformance file for the
+        /// algorithm expects, and what a caller that segments the text with its own dictionary wants.
+        /// </summary>
+        GeneralCategory = 1,
+    }
+
+    /// <summary>
     /// The tailorings CSS applies to the line breaking algorithm. The default value is <see cref="LineBreakStrictness.Auto"/> and
-    /// <see cref="WordBreakMode.Normal"/>, which is <see cref="LineBreakStrictness.Normal"/>: set <see cref="Strictness"/> to
-    /// <see cref="LineBreakStrictness.Strict"/> for the algorithm's own default.
+    /// <see cref="WordBreakMode.Normal"/>, which is <see cref="LineBreakStrictness.Normal"/>, with <see cref="ComplexContextBreaking.Dictionary"/>:
+    /// set <see cref="Strictness"/> to <see cref="LineBreakStrictness.Strict"/> and <see cref="ComplexContext"/> to
+    /// <see cref="ComplexContextBreaking.GeneralCategory"/> for the algorithm's own default.
     /// </summary>
     public readonly struct LineBreakOptions
     {
@@ -78,5 +101,13 @@ namespace PeachDrawing.Text.Unicode
         /// Chinese or Japanese: with any other language, or none, those breaks stay forbidden.
         /// </summary>
         public string? Language { get; init; }
+
+        /// <summary>
+        /// How text in the Complex_Context class (Thai and Khmer, which write no spaces between words, have a word list) is broken. The
+        /// default finds the words in a dictionary and allows a line to end between them; the language of the text is not read, the
+        /// script is. <see cref="ComplexContextBreaking.GeneralCategory"/> gives no opportunity inside a run of one script.
+        /// <see cref="WordBreak"/> and <see cref="Strictness"/> apply on top of either choice.
+        /// </summary>
+        public ComplexContextBreaking ComplexContext { get; init; }
     }
 }

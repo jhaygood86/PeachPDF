@@ -70,6 +70,73 @@ Each UCD source file carries this notice in its own header, reproduced here rath
 > © 2026 Unicode®, Inc. Unicode and the Unicode Logo are registered trademarks of Unicode, Inc. in the U.S. and other countries. For terms of use and license, see https://www.unicode.org/terms_of_use.html
 
 
+## ICU word lists (Thai and Khmer line breaking)
+
+- **Location:** [`src/PeachDrawing.Text/Internal/Text/Resources/Dictionaries/`](Internal/Text/Resources/Dictionaries/) — `thai.dict` and `khmer.dict`, one embedded resource per script, read by `PeachDrawing.Text.Internal.Text.Segmentation.WordDictionary` (raw DEFLATE, not Brotli). Each is the word list of the break-iterator dictionary of the same script in ICU (`thaidict.txt`, `khmerdict.txt`), normalized (NFC, without zero width joiners), deduplicated and stored as a sorted, prefix-compressed list. They let the line breaking algorithm allow a break between the words of scripts that are written without spaces.
+- **Upstream source:** [`icu4c/source/data/brkitr/dictionaries/`](https://github.com/unicode-org/icu/tree/release-78.3/icu4c/source/data/brkitr/dictionaries) of the ICU repository at the release tag `release-78.3`. The two files are not vendored: the generator downloads them from that tag and checks a SHA-256 for each.
+- **Generation script:** [`assets/unicode/generate_dictionary_breaking.py`](../../assets/unicode/generate_dictionary_breaking.py)
+- **Not used:** ICU's `cjdict.txt` (Chinese and Japanese break by the rules of the algorithm itself).
+
+The ICU repository's `LICENSE` file, at that tag, puts the Thai and Khmer lists under the Unicode License v3 (they are ICU data: the header of each names Unicode, Inc., IBM and, for the Thai list, Apple), reproduced below.
+
+### Thai and Khmer word lists: Unicode License v3
+
+```
+# Copyright (C) 2016 and later: Unicode, Inc. and others.
+# License & terms of use: http://www.unicode.org/copyright.html
+# Copyright (c) 2006-2015 International Business Machines Corporation,
+# Apple Inc., and others. All Rights Reserved.       (thaidict.txt)
+
+# Copyright (C) 2016 and later: Unicode, Inc. and others.
+# License & terms of use: http://www.unicode.org/copyright.html
+# Copyright (c) 2011-2015 International Business Machines Corporation
+# and others. All Rights Reserved.                   (khmerdict.txt)
+```
+
+```
+UNICODE LICENSE V3
+
+COPYRIGHT AND PERMISSION NOTICE
+
+Copyright © 2016-2025 Unicode, Inc.
+
+NOTICE TO USER: Carefully read the following legal agreement. BY
+DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING DATA FILES, AND/OR
+SOFTWARE, YOU UNEQUIVOCALLY ACCEPT, AND AGREE TO BE BOUND BY, ALL OF THE
+TERMS AND CONDITIONS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT
+DOWNLOAD, INSTALL, COPY, DISTRIBUTE OR USE THE DATA FILES OR SOFTWARE.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of data files and any associated documentation (the "Data Files") or
+software and any associated documentation (the "Software") to deal in the
+Data Files or Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, and/or sell
+copies of the Data Files or Software, and to permit persons to whom the
+Data Files or Software are furnished to do so, provided that either (a)
+this copyright and permission notice appear with all copies of the Data
+Files or Software, or (b) this copyright and permission notice appear in
+associated Documentation.
+
+THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+THIRD PARTY RIGHTS.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE
+BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES,
+OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA
+FILES OR SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder shall
+not be used in advertising or otherwise to promote the sale, use or other
+dealings in these Data Files or Software without prior written
+authorization of the copyright holder.
+
+SPDX-License-Identifier: Unicode-3.0
+```
+
 ## HarfBuzz (ported Arabic/Syriac joining state machine)
 
 - **Location:** [`src/PeachDrawing.Text/Internal/Text/Shaping/Arabic/ArabicJoiningStateTable.cs`](Internal/Text/Shaping/Arabic/ArabicJoiningStateTable.cs), [`src/PeachDrawing.Text/Internal/Text/Shaping/Arabic/ArabicJoiningShaper.cs`](Internal/Text/Shaping/Arabic/ArabicJoiningShaper.cs) — a line-by-line C# port of the cursive-joining state machine (`arabic_state_table`/`arabic_joining`), not merely inspired by it

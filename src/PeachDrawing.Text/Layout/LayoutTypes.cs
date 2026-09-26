@@ -57,10 +57,79 @@ namespace PeachDrawing.Text.Layout
         Center = 4,
 
         /// <summary>
-        /// Both edges: the space between the words of each line is widened to fill it. The last line of the paragraph and a line that ends in a forced
-        /// break are aligned as <see cref="ParagraphStyle.AlignLast"/> says (the start, by default), and a line with no spaces in it is not changed.
+        /// Both edges: the room a line has left is shared out to fill it, at the spaces and, as <see cref="ParagraphStyle.TextJustify"/> says, between characters.
+        /// The last line of the paragraph and a line that ends in a forced break are aligned as <see cref="ParagraphStyle.AlignLast"/> says (the start, by default),
+        /// and a line with nowhere to add room is not changed.
         /// </summary>
         Justify = 5,
+    }
+
+    /// <summary>What happens to a line whose text is wider than the width (CSS <c>text-overflow</c>).</summary>
+    public enum TextOverflow
+    {
+        /// <summary>The text overflows; a caller that draws it clips it.</summary>
+        Clip = 0,
+
+        /// <summary>The line is cut, at a boundary between characters, so that it and an ellipsis fit, and ends with the ellipsis.</summary>
+        Ellipsis = 1,
+    }
+
+    /// <summary>Whether and how words are broken with a hyphen at the end of a line (CSS <c>hyphens</c>).</summary>
+    public enum Hyphens
+    {
+        /// <summary>A line breaks inside a word only where the text has a soft hyphen (U+00AD), and ends with a hyphen there.</summary>
+        Manual = 0,
+
+        /// <summary>Soft hyphens are not break opportunities, and no word is hyphenated.</summary>
+        None = 1,
+
+        /// <summary>
+        /// Soft hyphens are used, and words are also hyphenated where the patterns of the language allow (see <see cref="Hyphenator"/>). The language is the
+        /// <see cref="ShapeSettings.Language"/> of the run the word is in, or <see cref="LineBreakOptions.Language"/> of the paragraph's line breaking; a
+        /// word with neither is not hyphenated.
+        /// </summary>
+        Auto = 2,
+    }
+
+    /// <summary>The smallest a hyphenated word and the pieces of it may be (CSS <c>hyphenate-limit-chars</c>).</summary>
+    /// <param name="WordLength">The fewest characters a word must have to be hyphenated, or <see langword="null"/> for 5.</param>
+    /// <param name="BeforeBreak">The fewest characters that must stay before the hyphen, or <see langword="null"/> for 2.</param>
+    /// <param name="AfterBreak">The fewest characters that must go after the hyphen, or <see langword="null"/> for 2.</param>
+    public readonly record struct HyphenateLimitChars(int? WordLength = null, int? BeforeBreak = null, int? AfterBreak = null);
+
+    /// <summary>Whether the last full line of a paragraph may be hyphenated (CSS <c>hyphenate-limit-last</c>).</summary>
+    public enum HyphenateLimitLast
+    {
+        /// <summary>There is no restriction.</summary>
+        None = 0,
+
+        /// <summary>
+        /// The last full line, the one that ends where the rest of the text before the paragraph's end or the next forced break fits on a line of its own,
+        /// does not end with a hyphenation.
+        /// </summary>
+        Always = 1,
+    }
+
+    /// <summary>Where a justified line gets its extra room (CSS <c>text-justify</c>).</summary>
+    public enum TextJustify
+    {
+        /// <summary>
+        /// The room is shared between the spaces of the line and the boundaries next to a letter of a script written without spaces (Han, Hiragana, Katakana,
+        /// Bopomofo and Yi), so a line of Chinese or Japanese is justified too. A line with neither is left as it is.
+        /// </summary>
+        Auto = 0,
+
+        /// <summary>Lines are not justified: <see cref="TextAlign.Justify"/> aligns them as <see cref="TextAlign.Start"/> does.</summary>
+        None = 1,
+
+        /// <summary>The room is shared between the spaces of the line only.</summary>
+        InterWord = 2,
+
+        /// <summary>
+        /// The room is shared between every pair of adjacent characters, spaces included, except where the joined letters of a cursive script would be pulled
+        /// apart. A line of any script is justified, if it has two characters.
+        /// </summary>
+        InterCharacter = 3,
     }
 
     /// <summary>What may be done to a word that is too long for a line on its own (CSS <c>overflow-wrap</c>).</summary>
@@ -91,8 +160,14 @@ namespace PeachDrawing.Text.Layout
         /// <summary>In the middle of a word, because the word is wider than a line and the paragraph allows breaking it.</summary>
         Emergency = 2,
 
-        /// <summary>It is the last line, ending at the end of the text.</summary>
+        /// <summary>It is the last line, ending at the end of the text; a line that <see cref="ParagraphStyle.MaxLines"/> cut is this, whatever its natural end was.</summary>
         Last = 3,
+
+        /// <summary>
+        /// Inside a word, at a soft hyphen or a place automatic hyphenation chose, and the line ends with a hyphen: a generated run (see
+        /// <see cref="PlacedRun.IsGenerated"/>) that is not part of the text.
+        /// </summary>
+        Hyphenated = 4,
     }
 
     /// <summary>The narrowest and widest a paragraph can be laid out.</summary>
@@ -223,6 +298,52 @@ namespace PeachDrawing.Text.Layout
         /// moves off its stop by what the spaces before it gained.
         /// </summary>
         public TabSize TabSize { get; init; }
+
+        /// <summary>Where a justified line gets its room from (CSS <c>text-justify</c>); it matters only where the alignment is <see cref="TextAlign.Justify"/>.</summary>
+        public TextJustify TextJustify { get; init; }
+
+        /// <summary>
+        /// The most lines the paragraph is laid out in (CSS <c>line-clamp</c>), or <see langword="null"/> for no limit; it must be one or more. Text that does not fit
+        /// is cut from the last line, which ends with <see cref="Ellipsis"/> in its place, and <see cref="ParagraphLayout.IsTruncated"/> says so. The last line is aligned as
+        /// the last line of a paragraph is.
+        /// </summary>
+        public int? MaxLines { get; init; }
+
+        /// <summary>
+        /// What a line that is cut, by <see cref="MaxLines"/> or <see cref="TextOverflow"/>, ends with, up to 32 UTF-16 units: <see langword="null"/> for the ellipsis
+        /// (U+2026, or three full stops where the face has no such character), and the empty string for nothing at all, so that the line is only cut.
+        /// </summary>
+        public string? Ellipsis { get; init; }
+
+        /// <summary>What happens to a line that is wider than the width (CSS <c>text-overflow</c>).</summary>
+        public TextOverflow TextOverflow { get; init; }
+
+        /// <summary>Whether words are broken with a hyphen (CSS <c>hyphens</c>).</summary>
+        public Hyphens Hyphens { get; init; }
+
+        /// <summary>
+        /// The string a hyphenated line ends with (CSS <c>hyphenate-character</c>), from 1 to 32 UTF-16 units, or <see langword="null"/> for the hyphen (U+2010)
+        /// where the face has it and the hyphen-minus otherwise.
+        /// </summary>
+        public string? HyphenateCharacter { get; init; }
+
+        /// <summary>
+        /// The smallest a hyphenated word and its pieces may be (CSS <c>hyphenate-limit-chars</c>). Counts are of UTF-16 units and must not be negative. The patterns of a
+        /// language have minimums of their own, which these cannot go below, and a word of more than 128 UTF-16 units is not hyphenated.
+        /// </summary>
+        public HyphenateLimitChars HyphenateLimitChars { get; init; }
+
+        /// <summary>The most lines in a row that may end with a hyphenation (CSS <c>hyphenate-limit-lines</c>), or <see langword="null"/> for no limit; it must not be negative.</summary>
+        public int? HyphenateLimitLines { get; init; }
+
+        /// <summary>
+        /// How much room a line may have left at its end before its last word is hyphenated (CSS <c>hyphenate-limit-zone</c>), in layout units; a word is
+        /// hyphenated to fill a line only when the unfilled space would be at least this. It is not negative or infinite, and a percentage is the caller's to resolve.
+        /// </summary>
+        public double HyphenateLimitZone { get; init; }
+
+        /// <summary>Whether the last full line may end with a hyphenation (CSS <c>hyphenate-limit-last</c>).</summary>
+        public HyphenateLimitLast HyphenateLimitLast { get; init; }
 
         /// <summary>How CSS <c>word-break</c> and <c>line-break</c> tailor where lines may break.</summary>
         public LineBreakOptions LineBreak { get; init; }
