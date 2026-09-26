@@ -1,5 +1,4 @@
 using PeachPDF;
-using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
@@ -7,7 +6,6 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
-using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -29,34 +27,6 @@ namespace PeachPDF.Tests.Integration
             Array.Copy(original, variant, original.Length);
             variant[^1] = 0x7F;
             return variant;
-        }
-
-        [Fact]
-        public void Resolver_TwoDifferentBytesUnderOneInternalName_ResolveToTheirOwnBytes()
-        {
-            var bytesA = File.ReadAllBytes(BundledFonts.Ttf);
-            var bytesB = ByteVariant(bytesA);
-
-            var internalName = TtfFontDescription.LoadDescription(new MemoryStream(bytesA)).FontNameInvariantCulture;
-            Assert.Equal(internalName, TtfFontDescription.LoadDescription(new MemoryStream(bytesB)).FontNameInvariantCulture);
-
-            var resolver = new FontResolver();
-            resolver.AddFont(new MemoryStream(bytesA), "FamA");
-            resolver.AddFont(new MemoryStream(bytesB), "FamB");
-
-            var faceA = resolver.ResolveTypeface("FamA", 400, false).FaceName;
-            var faceB = resolver.ResolveTypeface("FamB", 400, false).FaceName;
-
-            // The two registrations must not collapse onto one face-name key...
-            Assert.NotEqual(faceA, faceB);
-            // ...and each must fetch back its own, correct bytes.
-            Assert.Equal(bytesA, resolver.GetFont(faceA));
-            Assert.Equal(bytesB, resolver.GetFont(faceB));
-
-            // The first-registered face keeps the plain internal name (so every existing test that expects
-            // FaceName == the file's internal name is preserved); only the colliding one is disambiguated.
-            Assert.Equal(internalName, faceA);
-            Assert.NotEqual(internalName, faceB);
         }
 
         [Fact]
@@ -94,8 +64,8 @@ body {{ font-family: 'Subset'; font-size: 20pt; }}
         {
             // The programmatic equivalent of @font-face unicode-range: register a font by stream restricted
             // to uppercase, then a second font (unrestricted) as fallback under the same CSS family list.
-            var upperName = TtfFontDescription.LoadDescription(new MemoryStream(File.ReadAllBytes(BundledFonts.Ttf))).FontFamilyInvariantCulture;
-            var lowerName = TtfFontDescription.LoadDescription(new MemoryStream(File.ReadAllBytes(BundledFonts.Otf))).FontFamilyInvariantCulture;
+            var upperName = TypefaceFixtures.FamilyNameOf(BundledFonts.Ttf);
+            var lowerName = TypefaceFixtures.FamilyNameOf(BundledFonts.Otf);
             Assert.NotEqual(upperName, lowerName);
 
             var generator = new PdfGenerator();

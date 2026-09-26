@@ -3,7 +3,7 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachDrawing.Text.Internal.Text;
+using PeachDrawing.Text.Unicode;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Integration
             var box = await FindWordsBoxAsync(
                 "<html lang=\"en\"><body><p id=\"p\" style=\"width:80px;hyphens:auto\">antidisestablishmentarianism</p></body></html>");
 
-            var candidates = HyphenationEngine.FindHyphenationPoints("antidisestablishmentarianism", "en");
+            var candidates = Hyphenator.FindBreakPoints("antidisestablishmentarianism", "en");
             var firstFragmentLength = box.Words[0].Text!.TrimEnd('-').Length;
 
             Assert.Contains(firstFragmentLength, candidates);

@@ -15,22 +15,8 @@ namespace PeachPDF.Tests.TestSupport
         /// <summary>The glyph id of <paramref name="ch"/> in <paramref name="fontBytes"/>.</summary>
         internal static int GlyphId(byte[] fontBytes, char ch) => TypefaceFixtures.FromBytes(fontBytes).GlyphOf(ch);
 
-        /// <summary>The number of glyphs in <paramref name="fontBytes"/>: the <c>numGlyphs</c> field of its <c>maxp</c> table.</summary>
-        internal static int GlyphCount(byte[] fontBytes)
-        {
-            int Be16(int at) => (fontBytes[at] << 8) | fontBytes[at + 1];
-            int Be32(int at) => (Be16(at) << 16) | Be16(at + 2);
-
-            var tableCount = Be16(4);
-            for (var i = 0; i < tableCount; i++)
-            {
-                var record = 12 + 16 * i;
-                if (Encoding.ASCII.GetString(fontBytes, record, 4) == "maxp")
-                    return Be16(Be32(record + 8) + 4);
-            }
-
-            throw new InvalidOperationException("The font has no maxp table.");
-        }
+        /// <summary>The number of glyphs in <paramref name="fontBytes"/>.</summary>
+        internal static int GlyphCount(byte[] fontBytes) => SyntheticFontTables.GlyphCount(fontBytes);
 
         /// <summary>The base font with <c>CBLC</c> and <c>CBDT</c> tables holding <paramref name="pictures"/> (index format 1, image formats 17/18, or 19 with index format 2).</summary>
         internal static byte[] WithCbdt(byte[] fontBytes, params Picture[] pictures)

@@ -5,7 +5,6 @@ using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
 
-using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.Html.Core
 {
@@ -39,7 +38,7 @@ namespace PeachPDF.Tests.Html.Core
         {
             var otfBytes = File.ReadAllBytes(BundledFonts.Otf);
             var b64 = Convert.ToBase64String(otfBytes);
-            var expectedFontName = TtfFontDescription.LoadDescription(BundledFonts.Otf).FontNameInvariantCulture;
+            var expectedFontName = TypefaceFixtures.FromFile(BundledFonts.Otf).FullName;
 
             var html = $@"<!DOCTYPE html>
 <html><head><style>
