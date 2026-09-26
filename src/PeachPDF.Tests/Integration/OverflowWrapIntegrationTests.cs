@@ -99,7 +99,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task InlineMarkup_PreservesBidiLevelWrapOpportunity()
+        public async Task InlineMarkup_DoesNotAddAWrapOpportunityBetweenLettersOfDifferentScripts()
         {
             var html = LayoutHarness.Wrap("""
                 <p id="plain" style="width:30pt; font-size:16pt">abcאבג</p>
@@ -110,8 +110,10 @@ namespace PeachPDF.Tests.Integration
             var plain = LayoutHarness.FindById(root, "plain")!;
             var markup = LayoutHarness.FindById(root, "markup")!;
 
+            // Two letters of different scripts have no line break opportunity between them (UAX #14, LB28), inside one box or across
+            // an inline boundary, so neither paragraph wraps in the middle of the word.
             Assert.Equal(LinesWithText(plain), LinesWithText(markup));
-            Assert.True(LinesWithText(markup) > 1);
+            Assert.Equal(1, LinesWithText(markup));
         }
 
         [Fact]

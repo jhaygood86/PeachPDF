@@ -2211,7 +2211,7 @@
     },
     {
       "name": "word-break",
-      "comment": "cssDataType's own Map.WordBreaks includes keep-all because Layer A's own WordBreakConverter/Map.WordBreaks parses and stores it as valid CSS (WordBreak.KeepAll), even though CssBox.cs's line-breaking logic only special-cases break-all - keep-all has no distinct effect (see .claude/accepted-gaps/word-break-keep-all-no-effect.md). supportsDataType is the stricter, @supports-only list excluding keep-all for exactly that reason, same shape as break-before's region/avoid-region split.",
+      "comment": "All three keywords are implemented: the line breaking of a box's text comes from the Unicode line breaking algorithm (UAX #14) with word-break applied (UnicodeLineBreaks), where break-all treats letters and digits as ideographs and keep-all forbids breaks between letter units.",
       "inherited": true,
       "initialValue": "normal",
       "cssDataType": {
@@ -2223,7 +2223,8 @@
       "supportsDataType": "keyword",
       "supportsSupportedValues": [
         "normal",
-        "break-all"
+        "break-all",
+        "keep-all"
       ],
       "html": {
         "propertyPath": "WordBreak",

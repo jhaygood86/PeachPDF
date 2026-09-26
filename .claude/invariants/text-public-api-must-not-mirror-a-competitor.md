@@ -75,6 +75,13 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 | `NamedVariation` (`Name`, `Settings`) | A named location | The `fvar` named instance |
 | `AxisSetting` (`Tag`, `Value`), `AxisTags` (`Weight`, `Width`, `Italic`, `Slant`, `OpticalSize`) | A value for one axis, and the registered axis tags | OpenType registered axis tags (`wght`, `wdth`, `ital`, `slnt`, `opsz`); CSS names them `font-weight`, `font-stretch`, `font-style`, `font-optical-sizing` |
 | `TypefaceQuery.Axes`, `Typeface.VariationKey` | Axis settings that ride with a match query (CSS `font-variation-settings`), and the canonical text of a typeface's location, for cache keys | CSS Fonts 4 (`font-variation-settings` applies after the weight, width and style have selected axis values); the key is ours |
+### `PeachDrawing.Text.Unicode`: segmentation
+
+| Public name | Role | Origin of the name and shape |
+|---|---|---|
+| `Segmenter` (`FindGraphemeBoundaries`, `FindWordBoundaries`, `FindSentenceBoundaries`) | Boundaries of grapheme clusters, words and sentences | UAX #29 "Unicode Text Segmentation"; the return shape (increasing UTF-16 indices) is ours |
+| `LineBreaker.FindOpportunities`, `LineBreakOpportunity` (`Prohibited`, `Allowed`, `Mandatory`) | Where a line may or must end | UAX #14 "Unicode Line Breaking Algorithm"; the three values are the algorithm's no-break, break and mandatory-break marks |
+| `LineBreakOptions` (`WordBreak`, `Strictness`), `WordBreakMode` (`Normal`, `BreakAll`, `KeepAll`), `LineBreakStrictness` (`Auto`, `Loose`, `Normal`, `Strict`, `Anywhere`) | The CSS tailorings | CSS Text 3 `word-break` and `line-break` names and keywords |
 
 ### `PeachDrawing.Text.Export`
 

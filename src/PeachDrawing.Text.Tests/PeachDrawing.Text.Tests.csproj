@@ -108,6 +108,18 @@
     <None Include="..\..\assets\unicode\BidiCharacterTest.txt" Link="BidiCharacterTest.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\unicode\LineBreakTest.txt" Link="LineBreakTest.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\unicode\GraphemeBreakTest.txt" Link="GraphemeBreakTest.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\unicode\WordBreakTest.txt" Link="WordBreakTest.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\unicode\SentenceBreakTest.txt" Link="SentenceBreakTest.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <!-- Helpers shared with PeachPDF.Tests: they need nothing but the engine. -->

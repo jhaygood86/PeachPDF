@@ -599,6 +599,21 @@ PeachDrawing.Text.Unicode.ExplicitPush : enum Byte
   Rlo = 3
 PeachDrawing.Text.Unicode.Hyphenator : static class
   method static IReadOnlyList<Int32> FindBreakPoints(String word, String language)
+PeachDrawing.Text.Unicode.LineBreakOpportunity : enum Byte
+  Allowed = 1
+  Mandatory = 2
+  Prohibited = 0
+PeachDrawing.Text.Unicode.LineBreakOptions : struct
+  property LineBreakStrictness Strictness { get; init; }
+  property WordBreakMode WordBreak { get; init; }
+PeachDrawing.Text.Unicode.LineBreakStrictness : enum Int32
+  Anywhere = 4
+  Auto = 0
+  Loose = 1
+  Normal = 2
+  Strict = 3
+PeachDrawing.Text.Unicode.LineBreaker : static class
+  method static LineBreakOpportunity[] FindOpportunities(ReadOnlySpan<Char> text, LineBreakOptions options = null)
 PeachDrawing.Text.Unicode.OpenTypeTags : static class
   method static String ForLanguage(String language)
   method static String ForScript(String script)
@@ -610,6 +625,10 @@ PeachDrawing.Text.Unicode.Scripts : static class
   method static IReadOnlyList<String> ResolveLooked(IReadOnlyList<String> scripts)
   method static String Of(Int32 codepoint)
   method static String Of(Rune rune)
+PeachDrawing.Text.Unicode.Segmenter : static class
+  method static Int32[] FindGraphemeBoundaries(ReadOnlySpan<Char> text)
+  method static Int32[] FindSentenceBoundaries(ReadOnlySpan<Char> text)
+  method static Int32[] FindWordBoundaries(ReadOnlySpan<Char> text)
 PeachDrawing.Text.Unicode.UniversalShaping : static class
   method static UseCategory Classify(Int32 codepoint)
 PeachDrawing.Text.Unicode.UseCategory : enum Byte
@@ -639,6 +658,10 @@ PeachDrawing.Text.Unicode.VerticalOrientationClass : enum Byte
   Tr = 3
   Tu = 2
   U = 0
+PeachDrawing.Text.Unicode.WordBreakMode : enum Int32
+  BreakAll = 1
+  KeepAll = 2
+  Normal = 0
 PeachDrawing.Text.VariationAxis : sealed class
   property Boolean IsHidden { get; }
   property Double Default { get; }
