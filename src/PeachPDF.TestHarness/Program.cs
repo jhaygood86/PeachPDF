@@ -94,6 +94,7 @@ static PdfGenerateConfig ClonePdfAConfig(PdfGenerateConfig source, DateTimeOffse
     MaximumDownscaleMultiplier = source.MaximumDownscaleMultiplier,
     RasterizationDpi = source.RasterizationDpi,
     TextHinting = source.TextHinting,
+    TextStemDarkening = source.TextStemDarkening,
     MaxRasterPixels = source.MaxRasterPixels,
     MarginTop = source.MarginTop,
     MarginBottom = source.MarginBottom,
@@ -12203,6 +12204,19 @@ await SaveShowcaseAsync("text_hinting_cff_none", "Graphics & Effects", "Raster T
         PageOrientation = PageOrientation.Portrait,
         ShrinkToFit = true,
         RasterizationDpi = 72
+    });
+
+await SaveShowcaseAsync("text_hinting_cff_stem_darkening", "Graphics & Effects", "Stem-Darkened Raster Text (CFF Outlines)",
+    "PdfGenerateConfig.TextStemDarkening = true on top of TextHinting = Standard, with a font whose outlines are CFF: Adobe's stem darkening makes the thinnest stems a little heavier, which offsets the way anti-aliasing thins small text; stems of more than about two and a third pixels are left alone. Compare with the hinted CFF page without it.",
+    TextHintingHtml("The lines below are rasterized at 72 dpi, in a font with CFF outlines, hinted and with stem darkening on: the small sizes are visibly heavier than in the hinted page without it.", textHintingCffCss),
+    new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PageOrientation = PageOrientation.Portrait,
+        ShrinkToFit = true,
+        RasterizationDpi = 72,
+        TextHinting = TextHinting.Standard,
+        TextStemDarkening = true
     });
 
 // --- Raster shadows showcase (text-shadow, Gaussian box-shadow, silhouette drop-shadow) ---

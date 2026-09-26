@@ -367,6 +367,18 @@ namespace PeachPDF
         public TextHinting TextHinting { get; set; } = TextHinting.None;
 
         /// <summary>
+        /// Whether hinted text that PeachPDF draws into a bitmap is also made a little heavier at its stems, when its font has CFF outlines.
+        /// Defaults to <see langword="false"/>. It has an effect only where <see cref="TextHinting"/> is not <see cref="PeachPDF.TextHinting.None"/>.
+        /// </summary>
+        /// <remarks>
+        /// Thin stems of small text tend to look lighter than the designer intended once they are anti-aliased; this is the compensation of
+        /// Adobe's CFF engine for that, which FreeType calls stem darkening and also leaves off by default. It thickens the thinnest stems the most, and does
+        /// nothing for stems more than about two and a third pixels wide. It applies to fonts with CFF outlines only (a TrueType font is
+        /// unchanged), and never to the PDF's own vector text.
+        /// </remarks>
+        public bool TextStemDarkening { get; set; }
+
+        /// <summary>
         /// What happens when a document that targets PDF/A-1 or PDF/X-1a/X-3 (all of which forbid transparency) uses something that needs it.
         /// <see cref="TransparencyPolicy.Reject"/> (the default) fails generation with an error naming the construct;
         /// <see cref="TransparencyPolicy.Flatten"/> renders the affected region into an opaque bitmap at <see cref="RasterizationDpi"/> instead

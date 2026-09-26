@@ -371,6 +371,7 @@ PeachDrawing.Text.Outlines.OutlinePoint : struct
   property Double X { get; init; }
   property Double Y { get; init; }
 PeachDrawing.Text.Outlines.OutlineRequest : struct
+  property Boolean StemDarkening { get; init; }
   property Double PixelsPerEm { get; init; }
   property GridFitting GridFitting { get; init; }
 PeachDrawing.Text.Outlines.OutlineSegment : struct
