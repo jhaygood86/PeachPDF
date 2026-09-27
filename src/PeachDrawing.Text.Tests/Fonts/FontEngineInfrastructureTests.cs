@@ -7,25 +7,24 @@ using Xunit;
 namespace PeachDrawing.Text.Tests.Fonts
 {
     /// <summary>
-    /// The font engine's own infrastructure - the font-file bytes/identity type, the checksum and the descriptor
+    /// The font engine's own infrastructure - the font-file bytes/identity type, its content hash and the descriptor
     /// cache - which used to live inside the PDF writer's namespaces and is now owned by <c>PeachDrawing.Text.Internal.Fonts</c>.
     /// The simple-font <c>/Widths</c> table, which sits beside the PDF font objects, is tested in PeachPDF.Tests.
     /// </summary>
     public class FontEngineInfrastructureTests
     {
         [Fact]
-        public void CalcChecksum_RejectsNull()
+        public void ContentHash_RejectsNull()
         {
-            Assert.Throws<ArgumentNullException>(() => FontFileData.CalcChecksum(null!));
+            Assert.Throws<ArgumentNullException>(() => FontContentHash.Compute(null!));
+            Assert.Throws<ArgumentNullException>(() => FontFileData.GetOrComputeHash(null!));
         }
 
         [Fact]
-        public void CalcChecksum_IsAdler32InTheHighWordAndTheLengthInTheLow()
+        public void ContentHash_IsTheFirst128BitsOfTheSha256OfTheBytes()
         {
-            // Adler-32 of {1,2,3}: s1 = 1+2+3 = 6, s2 = 1 + 3 + 6 = 10; then (s2 << 16 | s1) << 32 | length.
-            ulong expected = (((10UL << 16) | 6UL) << 32) | 3UL;
-
-            Assert.Equal(expected, FontFileData.CalcChecksum([1, 2, 3]));
+            // SHA-256 of {1,2,3} is 039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81.
+            Assert.Equal("039058c6f2c0cb492c533b0a4d14ef77", FontContentHash.Compute([1, 2, 3]).ToString());
         }
 
         [Fact]
@@ -35,7 +34,7 @@ namespace PeachDrawing.Text.Tests.Fonts
 
             var compiled = FontFileData.CreateCompiledFont(bytes);
 
-            Assert.Equal(FontFileData.CalcChecksum(bytes), compiled.Key);
+            Assert.Equal(FontContentHash.Compute(bytes), compiled.Key);
         }
 
         [Fact]
@@ -58,12 +57,12 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         [Fact]
-        public void OpenTypeFontface_CheckSumIsTheChecksumOfItsFileBytes()
+        public void OpenTypeFontface_SourceKeyIsTheHashOfItsFileBytes()
         {
             byte[] bytes = File.ReadAllBytes(BundledFonts.Ttf);
             var face = new OpenTypeFontface(FontFileData.CreateCompiledFont(bytes));
 
-            Assert.Equal(FontFileData.CalcChecksum(bytes), face.CheckSum);
+            Assert.Equal(FontContentHash.Compute(bytes), face.FontSource.Key);
         }
 
         [Fact]

@@ -11342,12 +11342,15 @@ var svgGlyphHtml =
     "</tr><tr>" +
     SvgGlyphCell("color: #7c3aed", "F: the square is context-fill orange with a context-stroke blue edge from its &lt;use&gt;; the disc is the text colour", "F") +
     SvgGlyphCell("color: #0b7a3b; filter: drop-shadow(4pt 4pt 3pt rgba(0,0,0,.45))", "the same, in a raster region: both paints survive", "F") +
+    "</tr><tr>" +
+    SvgGlyphCell("", "G: a red block left of the origin and a green one two and a half ems to its right, beyond the em box: not clipped", "G") +
+    SvgGlyphCell("filter: drop-shadow(4pt 4pt 3pt rgba(0,0,0,.45))", "the same, in a raster region", "G") +
     "</tr></table>" +
     "</body></html>";
 await SaveShowcaseAsync("svg_opentype_glyphs", "Typography & Text", "SVG-in-OpenType glyphs",
     "Colour glyphs drawn from a font's SVG table: the SVG document of each glyph is rendered as vector content, its palette " +
     "variables follow font-palette, and context-fill and context-stroke follow the text and the <use> they are inside, also inside a " +
-    "filtered (rasterized) element. Rendered against a small synthetic font.",
+    "filtered (rasterized) element; artwork that lies outside the em box is drawn, not clipped. Rendered against a small synthetic font.",
     svgGlyphHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // SVG 2 context paint in the SVG engine itself: a shape written once says context-fill / context-stroke and each <use> gives it a fill and a

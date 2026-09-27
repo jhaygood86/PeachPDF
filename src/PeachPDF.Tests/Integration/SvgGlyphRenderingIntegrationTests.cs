@@ -84,6 +84,25 @@ body {{ font-family: 'SvgTest'; font-size: 40pt; }}
         }
 
         [Fact]
+        public async Task AGlyphWithinTheEmBox_IsDrawnFromTheLeastCanvas()
+        {
+            var pdf = await RenderAsync("<p>A</p>");
+
+            // 3 x 2 ems at 40 pt
+            Assert.Matches(@"/BBox \[0 0 120(\.0+)? 80(\.0+)?\]", pdf);
+        }
+
+        [Fact]
+        public async Task AGlyphThatDrawsBeyondTheEmBox_IsDrawnFromACanvasThatHoldsIt()
+        {
+            var pdf = await RenderAsync("<p>G</p>");
+
+            // the form is 1.61 ems left of the origin to 2.81 ems right of it (4.42 ems, 176.8 pt at 40 pt), where the least canvas is 3 ems, 120 pt
+            Assert.Matches(@"/BBox \[0 0 176\.8\d* 80(\.0+)?\]", pdf);
+            Assert.DoesNotMatch(@"/BBox \[0 0 120(\.0+)? 80(\.0+)?\]", pdf);
+        }
+
+        [Fact]
         public async Task ARepeatedSvgGlyph_IsSharedAcrossPages()
         {
             var onePage = await RenderAsync("<p>A</p>");

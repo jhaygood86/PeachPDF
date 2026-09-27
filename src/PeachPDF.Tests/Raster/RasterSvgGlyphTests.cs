@@ -129,6 +129,27 @@ namespace PeachPDF.Tests.Raster
         }
 
         [Fact]
+        public async Task ArtworkBeyondTheEmBox_IsDrawn_NotClippedAtTheLeastCanvas()
+        {
+            var (g, font, _) = await NewFixture(320, 120);
+
+            // origin at x = 120: the red block lies 1.2 to 1.6 ems left of it and the green one 2.2 to 2.8 ems right of it (60 px per em), both
+            // outside the least canvas (one em left, two right), and the blue disc is in the middle
+            g.DrawString("G", font, RColor.FromArgb(255, 0, 0, 0), new RPoint(120, 10), g.MeasureString("G", font), 0, null);
+
+            var opaque = Pixels(g).Where(p => p.A == 255).ToList();
+            var red = opaque.Where(p => p is { R: 204, G: 0, B: 0 }).ToList();
+            var green = opaque.Where(p => p is { R: 0, G: 170, B: 0 }).ToList();
+            Assert.Contains(opaque, p => p is { R: 0, G: 0, B: 204 });
+            Assert.True(red.Count > 300, $"{red.Count} red pixels");
+            Assert.True(green.Count > 400, $"{green.Count} green pixels");
+            Assert.InRange(red.Min(p => p.X), 23, 25);
+            Assert.InRange(red.Max(p => p.X), 46, 48);
+            Assert.InRange(green.Min(p => p.X), 251, 253);
+            Assert.InRange(green.Max(p => p.X), 286, 288);
+        }
+
+        [Fact]
         public async Task AnotherPalette_ChangesTheColours()
         {
             var (g, font, _) = await NewFixture();

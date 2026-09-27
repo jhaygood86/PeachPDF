@@ -84,10 +84,11 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// Includes bezier control points and arc endpoints as a conservative envelope rather than
-        /// computing exact curve extrema - a slight over-estimate for curved segments, adequate for
-        /// objectBoundingBox gradient/pattern/mask positioning (minor over-estimation just shifts
-        /// stops/tiles slightly, with no visible artifact).
+        /// Includes bezier control points and arc endpoints rather than computing exact curve
+        /// extrema - a slight over-estimate for a bezier and (for an arc, whose bulge is not
+        /// counted) an under-estimate, adequate for objectBoundingBox gradient/pattern/mask
+        /// positioning (minor error just shifts stops/tiles slightly, with no visible artifact).
+        /// <see cref="SvgInkExtent"/>, which needs a box that holds the ink, adds an allowance for arcs.
         /// </summary>
         private static RRect? PathBounds(IReadOnlyList<PathSegment> segments)
         {

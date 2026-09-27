@@ -656,7 +656,7 @@ Cross-family fallback needs the whole authored `font-family` stack, which the or
 
 #### Content-addressed font identity
 
-PeachPDF identifies a custom font by its bytes, not by its self-reported internal name — the same model browsers use. Two different files that happen to share an internal name (a common webfont-subset pattern, where each subset file is named identically) therefore no longer collide: `FontResolver._CustomFonts` disambiguates on a content checksum (only when a genuine collision occurs, so the common case keeps `FaceName == internal name`), `PdfFontTable.ComputeKey` folds `FontSource.Key` into its cache key, and the name-keyed cache (`FontFactory.CacheFontSource`) tolerates a second same-name/different-bytes entry instead of throwing.
+PeachPDF identifies a custom font by its bytes, not by its self-reported internal name — the same model browsers use. Two different files that happen to share an internal name (a common webfont-subset pattern, where each subset file is named identically) therefore no longer collide: `FontResolver._CustomFonts` disambiguates on a content hash (a SHA-256 of the bytes, so a font made to collide with another cannot take its place; only when a genuine collision occurs, so the common case keeps `FaceName == internal name`), `PdfFontTable.ComputeKey` folds `Typeface.ContentHash` into its cache key, and the name-keyed cache (`FontFactory.CacheFontSource`) tolerates a second same-name/different-bytes entry instead of throwing.
 
 #### Composite fonts and the Rune-based CID pipeline
 

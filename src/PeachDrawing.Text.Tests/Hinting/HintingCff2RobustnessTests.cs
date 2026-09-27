@@ -4,7 +4,6 @@ using PeachDrawing.Text.Internal.Fonts.OpenType.Variations;
 using PeachDrawing.Text.Internal.Hinting;
 using PeachDrawing.Text.Internal.Hinting.FreeType;
 using PeachDrawing.Text.Outlines;
-using System.Diagnostics;
 
 namespace PeachDrawing.Text.Tests.Hinting
 {
@@ -67,7 +66,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             var table = HostileFonts.TableBytes(original, "CFF2");
             long unexpectedBefore = HintingEngine.UnexpectedFailures;
 
-            var watch = Stopwatch.StartNew();
+            // (the bound is on each case, not on the sweep: see WorkBounds)
             int hinted = 0;
             foreach (byte mask in new byte[] { 0xFF, 0x80, 0x01 })
             {
@@ -75,12 +74,11 @@ namespace PeachDrawing.Text.Tests.Hinting
                 {
                     var font = (byte[])original.Clone();
                     font[offset + at] ^= mask;
-                    if (Hint(font, 4))
+                    if (WorkBounds.Case(() => Hint(font, 4), $"byte {at} ^ {mask:X2}"))
                         hinted++;
                 }
             }
 
-            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(120), $"took {watch.Elapsed.TotalSeconds:F1} s");
             Assert.True(hinted > table.Length, $"only {hinted} of the damaged fonts hinted at all");
             Assert.Equal(unexpectedBefore, HintingEngine.UnexpectedFailures);
         }
@@ -92,7 +90,6 @@ namespace PeachDrawing.Text.Tests.Hinting
             long unexpectedBefore = HintingEngine.UnexpectedFailures;
             int hinted = 0, unhinted = 0;
 
-            var watch = Stopwatch.StartNew();
             foreach (var file in new[] { "HintingCff2.otf", "HintingCff2Single.otf" })
             {
                 var original = Fixture(file);
@@ -101,14 +98,13 @@ namespace PeachDrawing.Text.Tests.Hinting
                     var font = (byte[])original.Clone();
                     HostileFonts.Scramble(font, "CFF2", random, 1 + random.Next(60));
 
-                    if (Hint(font, 6, random))
+                    if (WorkBounds.Case(() => Hint(font, 6, random), $"{file} damage {iteration}"))
                         hinted++;
                     else
                         unhinted++;
                 }
             }
 
-            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(180), $"took {watch.Elapsed.TotalSeconds:F1} s");
             Assert.True(hinted > 100, $"only {hinted} damaged fonts hinted");
             Assert.True(unhinted > 100, $"only {unhinted} damaged fonts were refused");
             Assert.Equal(unexpectedBefore, HintingEngine.UnexpectedFailures);
@@ -138,12 +134,10 @@ namespace PeachDrawing.Text.Tests.Hinting
             {
                 var font = Convert.FromBase64String(variant.Font);
                 long before = GC.GetAllocatedBytesForCurrentThread();
-                var watch = Stopwatch.StartNew();
 
-                Hint(font, 40, new Random(1));
+                WorkBounds.Case(() => Hint(font, 40, new Random(1)), variant.Name);
 
                 long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-                Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"{variant.Name}: took {watch.Elapsed.TotalSeconds:F1} s");
                 Assert.True(allocated < 64L * 1024 * 1024, $"{variant.Name}: allocated {allocated / 1024 / 1024} MB");
             }
 
