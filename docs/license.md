@@ -85,6 +85,7 @@ Every font the repository bundles lives in one place — the `assets/fonts/` dir
 | Noto Sans Gujarati (subset; © 2022 The Noto Project Authors) — real Gujarati glyphs for the same showcase; see `assets/fonts/NotoSansGujaratiSubset.LICENSE.txt` | Tests, showcase | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Noto Sans Tamil (subset; © 2022 The Noto Project Authors) — real Tamil glyphs for the same showcase; see `assets/fonts/NotoSansTamilSubset.LICENSE.txt` | Tests, showcase | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Noto Sans Thai (subset; © 2022 The Noto Project Authors) — real Thai glyphs for the dictionary line breaking showcase; see `assets/fonts/NotoSansThaiSubset.LICENSE.txt` | Tests, showcase | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Noto Sans Lao (subset; © 2022 The Noto Project Authors) — real Lao glyphs for the same showcase; see `assets/fonts/NotoSansLaoSubset.LICENSE.txt` | Showcase | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Inter | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Source Code Pro | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Source Sans 3 | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |
