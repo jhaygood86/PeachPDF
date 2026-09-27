@@ -188,6 +188,95 @@ namespace PeachDrawing.Text.Tests.Hinting
         }
 
         [Fact]
+        public void AGlyphThatWasAskedForAgainAndAgainIsHintedAnewOnceTheCacheHasLetItGo()
+        {
+            // the glyphs asked for lately are also kept where every thread finds them without a lock: an entry that leaves the cache must leave that too
+            var typeface = TypefaceFixtures.FromFile(Path.Combine(AppContext.BaseDirectory, "LiberationSans-Regular.woff"));
+            Assert.True(typeface.TryMapRune(new Rune('B'), out var glyph));
+            var request = new OutlineRequest { PixelsPerEm = 10, GridFitting = GridFitting.Standard };
+
+            Assert.True(typeface.TryGetOutline(glyph, request, out var first));
+            for (int i = 0; i < 3; i++)
+            {
+                Assert.True(typeface.TryGetOutline(glyph, request, out var again));
+                Assert.Same(first, again);
+            }
+
+            for (int size = 11; size < 51; size++)
+                for (ushort g = 1; g < 120; g++)
+                    typeface.TryGetOutline(g, new OutlineRequest { PixelsPerEm = size, GridFitting = GridFitting.Standard }, out _);
+
+            Assert.True(typeface.TryGetOutline(glyph, request, out var after));
+            Assert.NotSame(first, after);
+            AssertSameOutline(first, after);
+        }
+
+        [Theory]
+        [InlineData("LiberationSans-Regular.woff")]
+        [InlineData("HintingCff.otf")]
+        public void ManyThreadsAskingForTheSameGlyphsAtOnceGetTheOutlinesOneThreadGets(string file)
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, file);
+            double[] sizes = [9, 12.5, 16, 24, 40];
+            ushort[] glyphs = [.. Enumerable.Range(1, 200).Select(g => (ushort)g)];
+
+            var reference = TypefaceFixtures.FromFile(path);
+            var expected = new Dictionary<(double, ushort), GlyphOutline?>();
+            foreach (double size in sizes)
+                foreach (ushort glyph in glyphs)
+                    expected[(size, glyph)] = reference.TryGetOutline(glyph, new OutlineRequest { PixelsPerEm = size, GridFitting = GridFitting.Standard }, out var outline) ? outline : null;
+
+            // a font of its own, that nothing has been asked of: the threads meet its sizes, its programs and its glyphs for the first time together
+            var shared = TypefaceFixtures.FromFile(path);
+            var errors = new List<string>();
+            var workers = Enumerable.Range(0, 8).Select(t => new Thread(() =>
+            {
+                var random = new Random(t);
+                for (int i = 0; i < 3000; i++)
+                {
+                    double size = sizes[random.Next(sizes.Length)];
+                    ushort glyph = glyphs[random.Next(glyphs.Length)];
+                    bool found = shared.TryGetOutline(glyph, new OutlineRequest { PixelsPerEm = size, GridFitting = GridFitting.Standard }, out var outline);
+                    var want = expected[(size, glyph)];
+
+                    if (found != (want is not null))
+                        lock (errors) errors.Add($"glyph {glyph} at {size}: found {found}");
+                    else if (want is not null && !SameOutline(want, outline))
+                        lock (errors) errors.Add($"glyph {glyph} at {size}: a different outline");
+                }
+            })).ToList();
+
+            workers.ForEach(w => w.Start());
+            workers.ForEach(w => w.Join());
+            Assert.Empty(errors.Take(10));
+        }
+
+        private static bool SameOutline(GlyphOutline a, GlyphOutline b)
+        {
+            if (a.IsGridFitted != b.IsGridFitted || a.Contours.Count != b.Contours.Count)
+                return false;
+
+            for (int c = 0; c < a.Contours.Count; c++)
+            {
+                var x = a.Contours[c];
+                var y = b.Contours[c];
+                if (!x.Start.Equals(y.Start) || x.Segments.Count != y.Segments.Count)
+                    return false;
+
+                for (int s = 0; s < x.Segments.Count; s++)
+                {
+                    if (!x.Segments[s].Equals(y.Segments[s]))
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static void AssertSameOutline(GlyphOutline expected, GlyphOutline actual) =>
+            Assert.True(SameOutline(expected, actual), "the outlines differ");
+
+        [Fact]
         public void AFontWhoseSizeFailsAnswersUnhintedEveryTime()
         {
             var font = HostileFonts.WithTable(HostileFonts.Original(), "prep", [.. HostileFonts.PushWord(-3), 0x1C]);
