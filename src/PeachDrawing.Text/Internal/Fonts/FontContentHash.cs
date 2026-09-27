@@ -38,37 +38,39 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// <summary>Whether this is the default value, which is no font's hash: it stands for "not computed yet".</summary>
         public bool IsEmpty => (_high | _low) == 0;
 
+        /// <summary>Computes the SHA-256 of <paramref name="bytes"/> into <paramref name="digest"/>, or reports that it cannot.</summary>
+        internal delegate bool Sha256Function(byte[] bytes, Span<byte> digest);
+
         /// <summary>The hash of <paramref name="bytes"/>.</summary>
-        public static FontContentHash Compute(byte[] bytes)
+        public static FontContentHash Compute(byte[] bytes) => Compute(bytes, static (data, digest) => SHA256.TryHashData(data, digest, out _));
+
+        /// <summary>
+        /// The hash of <paramref name="bytes"/>, taken with <paramref name="platform"/>: the platform's SHA-256, which is hardware
+        /// accelerated where the processor has it and is by far the fastest way to walk a multi-megabyte font. A platform without one
+        /// (it throws, as a WebAssembly host may) is left to the portable implementation, which computes the same digest.
+        /// </summary>
+        internal static FontContentHash Compute(byte[] bytes, Sha256Function platform)
         {
             ArgumentNullException.ThrowIfNull(bytes);
 
             Span<byte> digest = stackalloc byte[32];
-            if (!TryHashWithPlatform(bytes, digest))
+            bool hashed;
+            try
+            {
+                hashed = platform(bytes, digest);
+            }
+            catch (Exception exception) when (exception is PlatformNotSupportedException or CryptographicException)
+            {
+                hashed = false;
+            }
+
+            if (!hashed)
                 PortableSha256.Hash(bytes, digest);
 
             return new FontContentHash(
                 BinaryPrimitives.ReadUInt64BigEndian(digest),
                 BinaryPrimitives.ReadUInt64BigEndian(digest[8..Length]));
         }
-
-        /// <summary>
-        /// Hashes with the platform's SHA-256, which is hardware accelerated where the processor has it and is by far the fastest
-        /// way to walk a multi-megabyte font. A platform without one (it throws, as a WebAssembly host may) is left to
-        /// the portable implementation, which computes the same digest.
-        /// </summary>
-        private static bool TryHashWithPlatform(byte[] bytes, Span<byte> digest)
-        {
-            try
-            {
-                return SHA256.TryHashData(bytes, digest, out _);
-            }
-            catch (Exception exception) when (exception is PlatformNotSupportedException or CryptographicException)
-            {
-                return false;
-            }
-        }
-
         /// <inheritdoc />
         public bool Equals(FontContentHash other) => _high == other._high && _low == other._low;
 

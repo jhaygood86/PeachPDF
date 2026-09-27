@@ -50,6 +50,24 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         [Fact]
+        public void Compute_WithoutAPlatformSha256_GivesTheSameHash()
+        {
+            byte[] bytes = File.ReadAllBytes(BundledFonts.Ttf);
+            var expected = FontContentHash.Compute(bytes);
+
+            // A platform that throws, or that says it cannot, is left to the portable digest.
+            Assert.Equal(expected, FontContentHash.Compute(bytes, static (_, _) => throw new PlatformNotSupportedException()));
+            Assert.Equal(expected, FontContentHash.Compute(bytes, static (_, _) => throw new CryptographicException()));
+            Assert.Equal(expected, FontContentHash.Compute(bytes, static (_, _) => false));
+        }
+
+        [Fact]
+        public void Compute_LetsAnUnrelatedFailureOfThePlatformThrough()
+        {
+            Assert.Throws<InvalidOperationException>(() => FontContentHash.Compute([1], static (_, _) => throw new InvalidOperationException()));
+        }
+
+        [Fact]
         public void Default_IsEmpty_AndAComputedHashIsNot()
         {
             Assert.True(default(FontContentHash).IsEmpty);
