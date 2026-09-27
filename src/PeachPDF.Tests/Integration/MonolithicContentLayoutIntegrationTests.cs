@@ -314,6 +314,43 @@ namespace PeachPDF.Tests.Integration
                 word => Assert.Contains(word, drawn));
         }
 
+        // A first child whose parent's top padding crosses the page foot. The parent's content starts on the
+        // next page, but the child was still placed on the page being filled, a margin below that content
+        // top, while its first line resumed at the next page's top: above the child's own box. A scroll
+        // container clips to its box, so that line was cut away. The break now falls before the child, the
+        // parent moves whole, and the first line starts at the child's content top.
+        [Theory]
+        [InlineData("overflow:hidden")]
+        [InlineData("overflow:auto")]
+        [InlineData("")]
+        public async Task FirstChildOfAParentWhosePaddingCrossesThePageFoot_StartsItsFirstLineInsideItsBox(string css)
+        {
+            const string font = "MonolithicPaddingTestSans";
+            var words = string.Join(" ", Enumerable.Range(10, 40).Select(i => $"w1_{i}"));
+            var html = "<!DOCTYPE html><html><head></head>" +
+                       $"<body style='margin:0;font-family:\"{font}\";font-size:10pt;line-height:12pt'>" +
+                       "<div style='height:155.5pt'>w1_1</div>" +
+                       $"<div id='parent' style='padding-top:5pt'><p id='p' style='{css}'>{words}</p></div>" +
+                       "<p>w1_90 w1_91</p></body></html>";
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: PageHeight, margin: Margin,
+                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.LiberationSans, font));
+
+            var parent = LayoutHarness.FindById(root, "parent")!;
+            var p = LayoutHarness.FindById(root, "p")!;
+
+            // The parent moves whole to the next page's top, and the paragraph's first line starts at its own
+            // content top rather than above it.
+            Assert.Equal(container.PageTopOf(1), parent.Location.Y, 3);
+            Assert.Equal(p.ClientTop, p.LineBoxes[0].FlowTop!.Value, 3);
+
+            var drawn = container.FragmentTree!.Fragmentainers
+                .SelectMany(page => Flatten(page.Root).SelectMany(f => f.Words))
+                .Select(w => w.Word.Text)
+                .ToHashSet();
+            Assert.All(Enumerable.Range(10, 40).Select(i => $"w1_{i}"), word => Assert.Contains(word, drawn));
+        }
+
         private const string CardFont = "MonolithicCardTestSans";
 
         // A wrapper that fragments has to carry the break through everything inside it, and some content

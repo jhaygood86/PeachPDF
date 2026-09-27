@@ -158,6 +158,30 @@ in Liberation Sans because Arial's metrics decide the line breaks). With the res
 1 of the 1,782 rendered plain documents differs from the merge-base (f50101 recovers 54 words and loses none),
 and all four of the reviewer's regressions render byte-identical to the merge-base.
 
+## Final review: a first child whose parent's padding crosses the page foot
+
+An auto-height `overflow: hidden` block whose parent's top padding or border crossed the page foot lost its
+whole first line (`<div style="padding-top:5pt"><p style="overflow:hidden">…</p></div>` starting 4.5pt
+above the foot). The misplacement was older and affects every block: `CssBox.ResolveBlockChildOffset`
+asked whether the child's margin crosses a boundary against the band its starting point (the parent's
+content top) *ends in*, which is already the next page. So the child was placed a margin below that content
+top while the pass was still filling the previous page, the pass broke before its first line, and the next
+pass started that line at the page's top: above the child's box. A plain block drew the line there; a box
+that clips to its fragment cut it away.
+
+A first child now declines to be placed when its parent's content top already falls past the live
+fragmentainer's band, and resumes at that band's bottom. The parent then moves whole to the next page (it
+has nothing left on this one), and the child's first line starts at its own content top, as in Chrome.
+`FirstChildOfAParentWhosePaddingCrossesThePageFoot_StartsItsFirstLineInsideItsBox` fails without it. On the
+reviewer's two N2 sweeps (2,610 documents: padded and bordered parents, `p`, `ul` and margin-top cards, in
+0.5pt steps) head lost 72 and 184 words; with the rule, none. All 185 existing showcases are byte-identical.
+
+It changes documents without scroll containers too, because it applies to every block. With pruning off
+on both builds (#1487 would otherwise dominate the comparison), the `flow-root` control corpora lost 352 and
+452 words against the merge-base and recovered 429 and 322. The worst, f50447 (178 words), minimizes to a
+`break-inside: avoid` block taller than a page whose boundary line moves: the merge-base loses
+`w50447_1113`/`1114`, head loses `w50447_1177`, which is the #1369 family moving rather than a new loss.
+
 ## User-visible side effect
 
 An auto-height `overflow: hidden|auto|scroll` card that straddles a page boundary is now split across it

@@ -6452,6 +6452,23 @@ namespace PeachPDF.Html.Core.Dom
                         // EndingAt answers by naming no fragmentainer.
                         var boundary = BlockConstraint.EndingAt(child.HtmlContainer!, child, baseTop);
 
+                        // A first child whose parent's leading padding or border has already crossed out of
+                        // the fragmentainer being filled: the break falls between that edge and the child, so
+                        // §5.2 truncates the child's margin and the child starts where the parent's content
+                        // resumes. Asked of the live fragmentainer, not of the band baseTop ends in - that band
+                        // is already the next one, so the margin never "crosses" it, and the child used to be
+                        // placed a margin below the parent's content top while its first line resumed at the
+                        // band's top, above the box. A box that clips its content (overflow: hidden) then cut
+                        // that line away.
+                        if (prevSibling is null
+                            && child.HtmlContainer is { IsFragmenting: true, CurrentFragmentainer: { } filling }
+                            && top > baseTop
+                            && HtmlContainerInt.FallsPast(baseTop, filling.Band))
+                        {
+                            child.RequestBreakBefore(filling.BandBottom);
+                            return null;
+                        }
+
                         if (boundary.FallsPast(top))
                         {
                             // The band's own bottom, which is the next one's top: bands are contiguous,
