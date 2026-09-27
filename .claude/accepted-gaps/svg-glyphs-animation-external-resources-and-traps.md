@@ -1,11 +1,15 @@
-# SVG-in-OpenType glyphs: the canvas
+# SVG-in-OpenType glyphs: animation, external resources, and what to know before touching them
 
-A glyph's SVG document is drawn by `SvgGlyphPainter` (on the PDF graphics and on the raster one) from `SvgGlyphDocument`. Tracked in
-[#1419](https://github.com/jhaygood86/PeachPDF/issues/1419), it leaves out:
+A glyph's SVG document is drawn by `SvgGlyphPainter` (on the PDF graphics and on the raster one) from `SvgGlyphDocument`. On purpose it leaves out:
 
-- **A fixed canvas** around the glyph origin (`SvgGlyphDocument.Canvas*Ems`): one em left, 1.5 above, two right, half an em below; the
-  document's own viewBox is replaced because OpenType SVG puts the glyph origin at (0, 0), not at a corner.
-- Animation, and any external resource (only `data:` images resolve: the document is untrusted).
+- **Animation** (a PDF has no timeline; OpenType SVG asks for a static rendering, which is what this is).
+- **Any external resource** (only `data:` images resolve: the document comes from a font file and is untrusted).
+- **A filter's painted region, a marker's content and text** in the extent that sizes the glyph's canvas (`SvgInkExtent`): the canvas is the
+  em-based least canvas grown to hold the shapes, so a glyph whose filter region reaches beyond it is clipped there as before. The canvas
+  is also never more than `SvgGlyphDocument.MaxCanvasReachEms` (8 ems) from the glyph origin in any direction.
+
+The document's canvas: OpenType SVG puts the glyph origin at (0, 0) in font units with y down, and does not clip to the viewport, so the
+document's own viewBox is replaced (by the least canvas while the tree is built, so percentages resolve, then by `CanvasFor`).
 
 Traps worth knowing: a `fill="var(--color0, red)"` presentation attribute does not resolve `var()` in a cascade, so such attributes are
 moved into `style` (`MoveVariableAttributesToStyle`); and the custom-property cascade has to run even when the document has no

@@ -30,13 +30,20 @@ namespace PeachPDF.Svg
     internal static class SvgGlyphDocument
     {
         /// <summary>
-        /// The drawing is built on a canvas of this many ems around the glyph origin: one em to its left, two to its right, an em and
-        /// a half above it and half an em below, which holds any glyph a font would draw.
+        /// The least canvas a glyph is drawn on, in ems around the glyph origin: one em to its left, two to its right, an em and a half
+        /// above it and half an em below, which holds the artwork of nearly every glyph. A glyph that draws beyond it gets a canvas grown to
+        /// hold it (<see cref="CanvasFor"/>).
         /// </summary>
         internal const double CanvasLeftEms = 1;
         internal const double CanvasTopEms = 1.5;
         internal const double CanvasWidthEms = 3;
         internal const double CanvasHeightEms = 2;
+
+        /// <summary>
+        /// The most a canvas may reach from the glyph origin in any direction, in ems. The artwork of a glyph is the font's to draw, so this only
+        /// bounds what a hostile document can make of it: the canvas is a clip and the size of the form the artwork is stored in.
+        /// </summary>
+        internal const double MaxCanvasReachEms = 8;
 
         /// <summary>The deepest a document's elements may nest, and the most the tree may come to once <c>use</c> elements are expanded.</summary>
         internal const int MaxDepth = 48;
@@ -96,12 +103,43 @@ namespace PeachPDF.Svg
                 // The text is the context element of a glyph document (what Firefox does, and what the OpenType SVG note on context paint
                 // describes): context-fill is the text's fill, which is its colour. The text has no stroke here (there is no text stroke in the
                 // HTML this draws for), so context-stroke is no paint, as it is for any text without one.
-                return SvgTreeBuilder.Build(sourceNode, adapter, foreground, contextFill: SvgPaint.Solid(foreground), contextStroke: SvgPaint.None);
+                var document = SvgTreeBuilder.Build(sourceNode, adapter, foreground, contextFill: SvgPaint.Solid(foreground), contextStroke: SvgPaint.None);
+
+                // The canvas the document was built on is the least one; a glyph that draws beyond it gets one that holds its artwork, so it is
+                // not cut off where the em box ends (OpenType SVG does not clip a glyph to the viewport).
+                var canvas = CanvasFor(SvgInkExtent.Of(document), svg.UnitsPerEm);
+                document.ViewBox = canvas;
+                document.Width = canvas.Width;
+                document.Height = canvas.Height;
+                return document;
             }
             catch (Exception ex) when (ex is XmlException or InvalidOperationException or ArgumentException or FormatException)
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// The canvas, in font units with the glyph origin at (0, 0) and y down, that a glyph whose artwork covers <paramref name="ink"/> is drawn
+        /// on: the least canvas, grown in each direction to hold the artwork (with a hair of margin for anti-aliasing) and no further from the
+        /// origin than <see cref="MaxCanvasReachEms"/>.
+        /// </summary>
+        internal static RRect CanvasFor(RRect? ink, int unitsPerEm)
+        {
+            double left = -CanvasLeftEms * unitsPerEm, top = -CanvasTopEms * unitsPerEm;
+            double right = (CanvasWidthEms - CanvasLeftEms) * unitsPerEm, bottom = (CanvasHeightEms - CanvasTopEms) * unitsPerEm;
+
+            if (ink is { } box)
+            {
+                var margin = unitsPerEm / 100.0;
+                var reach = MaxCanvasReachEms * unitsPerEm;
+                left = Math.Min(left, Math.Max(box.X - margin, -reach));
+                top = Math.Min(top, Math.Max(box.Y - margin, -reach));
+                right = Math.Max(right, Math.Min(box.X + box.Width + margin, reach));
+                bottom = Math.Max(bottom, Math.Min(box.Y + box.Height + margin, reach));
+            }
+
+            return new RRect(left, top, right - left, bottom - top);
         }
 
         /// <summary>
@@ -182,7 +220,8 @@ namespace PeachPDF.Svg
 
         /// <summary>
         /// The drawing is in font units with the glyph origin at (0, 0) and y pointing down; the root's own size and view box are
-        /// replaced by a canvas around the origin, and the renderer maps it to the em size the text is drawn at.
+        /// replaced by the least canvas around the origin (what a percentage length resolves against while the tree is built), which
+        /// <see cref="Build"/> then grows to hold the artwork, and the renderer maps it to the em size the text is drawn at.
         /// </summary>
         private static void SetTheCanvas(XElement root, int unitsPerEm)
         {

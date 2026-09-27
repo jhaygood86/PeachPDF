@@ -141,6 +141,63 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void AGlyphWithinTheLeastCanvas_KeepsIt()
+        {
+            var doc = Build(Glyph($"<svg {Ns} viewBox=\"0 0 5 5\"><g id=\"glyph2\"><rect x=\"100\" y=\"-800\" width=\"800\" height=\"800\"/></g></svg>"));
+
+            Assert.Equal(new RRect(-1000, -1500, 3000, 2000), doc!.ViewBox);
+            Assert.Equal(3000, doc.Width);
+            Assert.Equal(2000, doc.Height);
+        }
+
+        [Fact]
+        public void AGlyphDrawingBeyondTheLeastCanvas_GetsACanvasThatHoldsIt()
+        {
+            var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect x=\"-1600\" y=\"-1800\" width=\"400\" height=\"300\"/><rect x=\"2200\" y=\"100\" width=\"600\" height=\"900\"/></g></svg>"));
+
+            var canvas = doc!.ViewBox!.Value;
+            // the least canvas grown to the artwork and a hair (10 units) of margin, on the sides it overflows only
+            Assert.Equal(-1610, canvas.X);
+            Assert.Equal(-1810, canvas.Y);
+            Assert.Equal(2810, canvas.X + canvas.Width);
+            Assert.Equal(1010, canvas.Y + canvas.Height);
+            Assert.Equal(canvas.Width, doc.Width);
+            Assert.Equal(canvas.Height, doc.Height);
+        }
+
+        [Fact]
+        public void AStrokeAndATransform_CountTowardsTheCanvas()
+        {
+            var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\" transform=\"translate(2000 0)\"><path d=\"M0 -100 L500 -100\" stroke=\"#000\" stroke-width=\"200\" stroke-linejoin=\"round\" fill=\"none\"/></g></svg>"));
+
+            // the line, moved by 2000, ends at x = 2500 and its stroke reaches 100 further (a round join: no miter allowance): only the right side overflows
+            var canvas = doc!.ViewBox!.Value;
+            Assert.Equal(-1000, canvas.X);
+            Assert.Equal(2610, canvas.X + canvas.Width);
+        }
+
+        [Fact]
+        public void ADocumentThatDrawsFarBeyondAnyGlyph_IsCappedAtTheReach()
+        {
+            var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect x=\"-90000\" y=\"-90000\" width=\"180000\" height=\"180000\"/></g></svg>"));
+
+            var canvas = doc!.ViewBox!.Value;
+            var reach = SvgGlyphDocument.MaxCanvasReachEms * 1000;
+            Assert.Equal(-reach, canvas.X);
+            Assert.Equal(-reach, canvas.Y);
+            Assert.Equal(reach, canvas.X + canvas.Width);
+            Assert.Equal(reach, canvas.Y + canvas.Height);
+        }
+
+        [Fact]
+        public void ADocumentWithNothingOfKnownExtent_KeepsTheLeastCanvas()
+        {
+            var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect width=\"0\" height=\"0\"/></g></svg>"));
+
+            Assert.Equal(new RRect(-1000, -1500, 3000, 2000), doc!.ViewBox);
+        }
+
+        [Fact]
         public void TheCanvas_ReplacesTheDocumentsOwnViewBox()
         {
             var doc = Build(Glyph($"<svg {Ns} viewBox=\"0 0 5 5\" width=\"5\" height=\"5\"><g id=\"glyph2\"><rect width=\"10\" height=\"10\"/></g></svg>"));
