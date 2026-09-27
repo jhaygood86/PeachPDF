@@ -264,10 +264,37 @@ internal sealed class Cf2Buffer
 internal sealed class Cf2ArrStack<T>
     where T : new()
 {
-    private readonly Cf2Error _error;
+    private Cf2Error _error;
     private T[] _items = [];
 
     public Cf2ArrStack(Cf2Error error) => _error = error;
+
+    /// <summary>
+    /// Makes the stack what <c>new Cf2ArrStack&lt;T&gt;(error)</c> would be, keeping the room it has grown to (the stack of a thread that loads
+    /// glyphs is used again from glyph to glyph). Elements that are values are zeroed, as a new stack's are; elements that are objects are
+    /// kept and are not the caller's to read before it sets them (every one is set when it is pushed on).
+    /// </summary>
+    public void Reset(Cf2Error error)
+    {
+        _error = error;
+        Count = 0;
+
+        if (typeof(T).IsValueType)
+            Array.Clear(_items);
+    }
+
+    /// <summary>Drops the room of a stack that has grown past <paramref name="maxElements"/>, so that a thread does not keep what a hostile font asked for.</summary>
+    public void TrimTo(int maxElements)
+    {
+        if (_items.Length > maxElements)
+        {
+            _items = [];
+            Count = 0;
+        }
+    }
+
+    /// <summary>The room the stack has (for the tests of what a thread keeps).</summary>
+    internal int Capacity => _items.Length;
 
     /// <summary><c>cf2_arrstack_size</c>: the number of items.</summary>
     public int Count { get; private set; }

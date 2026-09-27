@@ -144,7 +144,7 @@ internal sealed class Cf2Font
     public bool StemDarkened;
 
     /// <summary>In 1000 unit character space.</summary>
-    public int[] DarkenParams = (int[])DefaultDarkenParams.Clone();
+    public int[] DarkenParams = DefaultDarkenParams; // shared: nothing writes it (ComputeDarkening only reads)
 
     // variables that depend on both FontDict and Transform
 
@@ -164,7 +164,7 @@ internal sealed class Cf2Font
     public bool ReverseWinding;
 
     /// <summary>Computed zone data.</summary>
-    public Cf2Blues Blues = new();
+    public Cf2Blues Blues = null!; // made by Setup, before anything reads it
 
     /// <summary>Whether the glyph is in a CFF2 font: no width, no <c>endchar</c>, and the <c>vsindex</c> and <c>blend</c> operators (<c>isCFF2</c>).</summary>
     public bool IsCff2;

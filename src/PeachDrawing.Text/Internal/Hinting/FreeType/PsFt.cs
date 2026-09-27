@@ -298,6 +298,33 @@ internal sealed class Cf2Outline : Cf2OutlineCallbacks
     /// <summary>Where the first error the outline callbacks meet is recorded: the font's shared error.</summary>
     public Cf2Error ErrorSink = new();
 
+    /// <summary>
+    /// Makes an outline that a thread keeps ready for another glyph: what a new one has, with the arrays it has grown to.
+    /// </summary>
+    public void Prepare()
+    {
+        Reset();
+        _pathBegun = false;
+    }
+
+    /// <summary>
+    /// Lets go of the glyph's decoder and error, and of arrays that a glyph of many points made big, so that an outline that a thread keeps for
+    /// the next glyph does not keep a font alive or a hostile font's megabytes.
+    /// </summary>
+    public void Release(int maxRetainedElements)
+    {
+        Decoder = null!;
+        ErrorSink = null!;
+
+        if (X.Length > maxRetainedElements || Contours.Length > maxRetainedElements)
+        {
+            X = new int[64];
+            Y = new int[64];
+            Tags = new byte[64];
+            Contours = new int[8];
+        }
+    }
+
     /// <summary><c>cf2_outline_reset</c>: starts the outline again, for another run of the charstring.</summary>
     public void Reset()
     {

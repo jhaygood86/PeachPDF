@@ -16,6 +16,7 @@ internal static class FontFiles
         ["HintingOpcodes"] = "HintingOpcodes.ttf",
         ["HintingCff"] = "HintingCff.otf",
         ["HintingCffCid"] = "HintingCffCid.otf",
+        ["SourceCodePro"] = "SourceCodePro-Regular.otf",
     };
 
     private static byte[] Read(string font) => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, Files[font]));

@@ -99,16 +99,44 @@ internal struct Cf2StackNumber
 /// <summary>The operand stack of a charstring (<c>CF2_Stack</c>).</summary>
 internal sealed class Cf2Stack
 {
-    private readonly Cf2StackNumber[] _buffer;
-    private readonly Cf2Error _error;
+    // The buffer may be bigger than the stack: a stack that a thread keeps for the next glyph (see Reset) has the room of the biggest it was
+    // asked for, and holds no more than the size it was asked for this time, which is what _capacity is.
+    private Cf2StackNumber[] _buffer;
+    private Cf2Error _error;
+    private int _capacity;
     private int _top;
 
     /// <summary><c>cf2_stack_init</c>.</summary>
     public Cf2Stack(Cf2Error error, int stackSize)
     {
         _error = error;
+        _capacity = stackSize;
         _buffer = new Cf2StackNumber[stackSize];
     }
+
+    /// <summary>
+    /// Makes the stack what <c>new Cf2Stack(error, stackSize)</c> would be. What the buffer held is left: nothing reads a number that was not
+    /// pushed since (an index is checked against the count), and a push sets both of a number's fields.
+    /// </summary>
+    public void Reset(Cf2Error error, int stackSize)
+    {
+        _error = error;
+        _capacity = stackSize;
+        _top = 0;
+
+        if (_buffer.Length < stackSize)
+            _buffer = new Cf2StackNumber[stackSize];
+    }
+
+    /// <summary>Drops the room of a stack that has grown past <paramref name="maxElements"/> (a CFF2 font may ask for tens of thousands).</summary>
+    public void TrimTo(int maxElements)
+    {
+        if (_buffer.Length > maxElements)
+            _buffer = [];
+    }
+
+    /// <summary>The room the stack has (for the tests of what a thread keeps).</summary>
+    internal int Capacity => _buffer.Length;
 
     /// <summary><c>cf2_stack_count</c>.</summary>
     public int Count => _top;
@@ -119,7 +147,7 @@ internal sealed class Cf2Stack
     /// <summary><c>cf2_stack_pushInt</c>.</summary>
     public void PushInt(int val)
     {
-        if (_top == _buffer.Length)
+        if (_top == _capacity)
         {
             _error.Set(Cf2Error.StackOverflow);
             return; // stack overflow
@@ -133,7 +161,7 @@ internal sealed class Cf2Stack
     /// <summary><c>cf2_stack_pushFixed</c>.</summary>
     public void PushFixed(int val)
     {
-        if (_top == _buffer.Length)
+        if (_top == _capacity)
         {
             _error.Set(Cf2Error.StackOverflow);
             return; // stack overflow
@@ -208,7 +236,7 @@ internal sealed class Cf2Stack
         }
 
         // an index equal to the count is accepted, as FreeType accepts it, and is one past the values the stack holds
-        if (idx == _buffer.Length)
+        if (idx == _capacity)
             return;
 
         _buffer[idx].Value = val;

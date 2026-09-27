@@ -314,8 +314,8 @@ internal sealed class HintingEngine
 
         try
         {
-            CffHintedGlyph hinted = CffGlyphLoader.Load(size, glyph);
-            return new HintedGlyphResult(ToOutline(hinted, sizeKey.Ppem26Dot6), hinted.Advance / 64.0, true);
+            // the outline is made from the thread's own arrays, without a copy of them first
+            return CffGlyphLoader.Load(size, glyph, sizeKey.Ppem26Dot6, s_readCffGlyph);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -383,7 +383,10 @@ internal sealed class HintingEngine
 
     // The outline of a CFF glyph: each contour starts at an on-curve point and goes on by lines (an on-curve point) and cubic curves (two
     // control points and an on-curve point).
-    private static GlyphOutline ToOutline(CffHintedGlyph hinted, int ppem26Dot6)
+    private static readonly CffGlyphReader<int, HintedGlyphResult> s_readCffGlyph =
+        static (in CffGlyphView hinted, int ppem26Dot6) => new HintedGlyphResult(ToOutline(hinted, ppem26Dot6), hinted.Advance / 64.0, true);
+
+    private static GlyphOutline ToOutline(in CffGlyphView hinted, int ppem26Dot6)
     {
         var outline = new GlyphOutline
         {
@@ -392,36 +395,41 @@ internal sealed class HintingEngine
             GridFittedAdvance = hinted.Advance / 64.0,
         };
 
+        outline.ContourList.Capacity = hinted.ContourEnds.Length;
+
+        ReadOnlySpan<int> xs = hinted.X;
+        ReadOnlySpan<int> ys = hinted.Y;
+        ReadOnlySpan<byte> tags = hinted.Tags;
+
         int start = 0;
         foreach (int end in hinted.ContourEnds)
         {
-            OutlinePoint At(int i) => new(hinted.X[i] / 64.0, hinted.Y[i] / 64.0);
-
-            if ((hinted.Tags[start] & Cf2Outline.TagOn) == 0)
+            if ((tags[start] & Cf2Outline.TagOn) == 0)
                 throw new HintingException("A contour does not start on the curve.");
 
-            var contour = new OutlineContour(At(start));
+            // one segment for each line and each curve: counted first, so that the list is made as big as it is going to be, not grown
+            var contour = new OutlineContour(At(xs, ys, start), CountSegments(tags, start, end));
             int i = start + 1;
             while (i <= end)
             {
-                if ((hinted.Tags[i] & Cf2Outline.TagOn) != 0)
+                if ((tags[i] & Cf2Outline.TagOn) != 0)
                 {
-                    contour.SegmentList.Add(OutlineSegment.Line(At(i)));
+                    contour.SegmentList.Add(OutlineSegment.Line(At(xs, ys, i)));
                     i++;
                 }
-                else if (i + 1 == end && (hinted.Tags[i + 1] & Cf2Outline.TagOn) == 0)
+                else if (i + 1 == end && (tags[i + 1] & Cf2Outline.TagOn) == 0)
                 {
                     // the last curve of a contour ends where it began: its end point was dropped, as FreeType drops a last point that lies
                     // on the first, and it ends at the start of the contour
-                    contour.SegmentList.Add(OutlineSegment.Cubic(At(i), At(i + 1), At(start)));
+                    contour.SegmentList.Add(OutlineSegment.Cubic(At(xs, ys, i), At(xs, ys, i + 1), At(xs, ys, start)));
                     i += 2;
                 }
                 else
                 {
-                    if (i + 2 > end || (hinted.Tags[i + 1] & Cf2Outline.TagOn) != 0 || (hinted.Tags[i + 2] & Cf2Outline.TagOn) == 0)
+                    if (i + 2 > end || (tags[i + 1] & Cf2Outline.TagOn) != 0 || (tags[i + 2] & Cf2Outline.TagOn) == 0)
                         throw new HintingException("A cubic curve is not made of two control points and an end point.");
 
-                    contour.SegmentList.Add(OutlineSegment.Cubic(At(i), At(i + 1), At(i + 2)));
+                    contour.SegmentList.Add(OutlineSegment.Cubic(At(xs, ys, i), At(xs, ys, i + 1), At(xs, ys, i + 2)));
                     i += 3;
                 }
             }
@@ -431,6 +439,30 @@ internal sealed class HintingEngine
         }
 
         return outline;
+    }
+
+    private static OutlinePoint At(ReadOnlySpan<int> xs, ReadOnlySpan<int> ys, int i) => new(xs[i] / 64.0, ys[i] / 64.0);
+
+    // How many segments the loop of ToOutline makes of a contour: it walks the tags as that loop does (a malformed contour is not this method's to
+    // refuse; the loop throws for it).
+    private static int CountSegments(ReadOnlySpan<byte> tags, int start, int end)
+    {
+        int segments = 0;
+        int i = start + 1;
+
+        while (i <= end)
+        {
+            segments++;
+
+            if ((tags[i] & Cf2Outline.TagOn) != 0)
+                i++;
+            else if (i + 1 == end && (tags[i + 1] & Cf2Outline.TagOn) == 0)
+                i += 2;
+            else
+                i += 3;
+        }
+
+        return segments;
     }
 
     private static readonly TtGlyphReader<int, HintedGlyphResult> s_readTrueTypeGlyph =
