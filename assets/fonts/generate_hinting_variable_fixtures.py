@@ -959,6 +959,7 @@ def main():
     ranges = axis_ranges(main_font)
     locations = [
         {"design": None, "blend": None},
+        {"design": [design_value(ranges[0], 0), design_value(ranges[1], 0)], "blend": None},    # set to the defaults: a face that has a blend that varies nothing
         {"design": [design_value(ranges[0], 0.7), design_value(ranges[1], -0.3)], "blend": None},
         {"design": None, "blend": [19661, -45875]},
     ]

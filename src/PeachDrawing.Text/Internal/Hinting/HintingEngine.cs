@@ -197,10 +197,18 @@ internal sealed class HintingEngine
         {
             if (!_blendRead)
             {
-                if (GetFace() is { } face)
-                    _blend = face.Blend; // a font with TrueType outlines has it in its face
-                else if (TtVarTables.For(_font) is { } tables)
-                    _blend = TtBlend.TryCreate(tables, NormalizedCoordinates() ?? [], isCff2: true);
+                try
+                {
+                    if (GetFace() is { } face)
+                        _blend = face.Blend; // a font with TrueType outlines has it in its face
+                    else if (_variation is not null && TtVarTables.For(_font) is { } tables)
+                        _blend = TtBlend.TryCreate(tables, NormalizedCoordinates() ?? [], isCff2: true); // (a face nothing was set on has none)
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    NoteFailure(ex);
+                    _blend = null;
+                }
 
                 Volatile.Write(ref _blendRead, true);
             }
@@ -220,9 +228,9 @@ internal sealed class HintingEngine
 
         return glyph =>
         {
-            // a glyph past the long metrics shares the last one's advance
+            // a glyph past the long metrics shares the last one's advance; a font with none has an advance of 0
             int index = Math.Min(glyph, _font.hhea.numberOfHMetrics - 1);
-            return blend.AdjustAdvance(false, glyph, _font.hmtx.Metrics[index].advanceWidth);
+            return blend.AdjustAdvance(false, glyph, index < 0 ? 0 : _font.hmtx.Metrics[index].advanceWidth);
         };
     }
 
@@ -235,7 +243,7 @@ internal sealed class HintingEngine
         {
             if (!_gaspRead)
             {
-                // reading the table checks every offset and length against the table, so it has nothing to throw about a hostile font
+                // reading the table checks every offset and length against the table, and the location's own tables are read inside GetBlend, which catches what a hostile font makes them throw
                 _gasp = TtGasp.TryRead(_font)?.AtLocation(GetBlend());
                 Volatile.Write(ref _gaspRead, true);
             }

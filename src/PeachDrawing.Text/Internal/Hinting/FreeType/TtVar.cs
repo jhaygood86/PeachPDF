@@ -74,7 +74,6 @@ using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachDrawing.Text.Internal.Fonts.OpenType.Variations;
 using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -116,9 +115,6 @@ internal sealed class FtMemStream
 
     /// <summary>The position (<c>stream->pos</c>).</summary>
     public uint Pos { get; private set; }
-
-    /// <summary>The number of bytes of the file.</summary>
-    public long Size => _size;
 
     /// <summary><c>FT_Stream_Seek</c>: seeking to the first position after the file is valid.</summary>
     public bool Seek(uint pos)
@@ -508,6 +504,7 @@ internal sealed class TtItemVarStore
             VarData[i] = new TtItemVarData();
 
         DataCount = dataCount;
+        long regionIndexTotal = 0;
 
         for (int i = 0; i < dataCount; i++)
         {
@@ -527,6 +524,12 @@ internal sealed class TtItemVarStore
                 return TtVarError.InvalidTable;
 
             if (regionIdxCount > RegionCount)
+                return TtVarError.InvalidTable;
+
+            // Data sets may share a header (their offsets can point at the same one), and each names up to 32,767 regions: the ones of all of them together may not be more than the
+            // font has bytes (as for the store of a CFF2 font), where FreeType allocates and walks all of them
+            regionIndexTotal += regionIdxCount;
+            if (regionIndexTotal > _data.Length)
                 return TtVarError.InvalidTable;
 
             // parse region indices
@@ -869,12 +872,14 @@ internal sealed class TtVarTables
         _default = defaults;
         _maximum = maximum;
 
+        VerticalInfo = GotoTable(font, "vhea", out _, out uint vheaLength) && vheaLength >= 36 && GotoTable(font, "vmtx", out _, out _);
+
         LoadAvar();
         LoadMvar();
 
-        _gvar = new Lazy<GvarData>(LoadGvar, LazyThreadSafetyMode.ExecutionAndPublication);
-        _hvar = new Lazy<HvvarData?>(() => LoadHvvar("HVAR"), LazyThreadSafetyMode.ExecutionAndPublication);
-        _vvar = new Lazy<HvvarData?>(() => LoadHvvar("VVAR"), LazyThreadSafetyMode.ExecutionAndPublication);
+        _gvar = new Lazy<GvarData>(LoadGvar, LazyThreadSafetyMode.PublicationOnly);
+        _hvar = new Lazy<HvvarData?>(() => LoadHvvar("HVAR"), LazyThreadSafetyMode.PublicationOnly);
+        _vvar = new Lazy<HvvarData?>(() => LoadHvvar("VVAR"), LazyThreadSafetyMode.PublicationOnly);
     }
 
     /// <summary>
@@ -959,7 +964,8 @@ internal sealed class TtVarTables
         offset = 0;
         length = 0;
 
-        if (!font.TableDictionary.TryGetValue(tag, out var entry))
+        // tt_face_lookup_table: a table of no bytes is no table
+        if (!font.TableDictionary.TryGetValue(tag, out var entry) || entry.Length == 0)
             return false;
 
         long fileLength = font.FontSource.Bytes.Length;
@@ -1317,8 +1323,7 @@ internal sealed class TtVarTables
     }
 
     /// <summary>Whether the font has vertical metrics (<c>face->vertical_info</c>): a <c>vhea</c> table and a <c>vmtx</c> table.</summary>
-    public bool VerticalInfo =>
-        GotoTable(_font, "vhea", out _, out uint vheaLength) && vheaLength >= 36 && GotoTable(_font, "vmtx", out _, out _);
+    public bool VerticalInfo { get; }
 
     /// <summary>The <c>HVAR</c> table when it loaded (<c>TT_FACE_FLAG_VAR_HADVANCE</c>).</summary>
     internal HvvarData? Hvar => _hvar.Value;
@@ -1513,7 +1518,7 @@ internal sealed class TtBlend
 
     /// <summary>
     /// <c>TT_Set_MM_Blend</c>: the location given by normalized coordinates (in 16.16, one for each axis of the font; the missing ones are 0). Null when FreeType refuses to set it: a coordinate is outside
-    /// -1 to 1, or the <c>gvar</c> table is malformed. (The defaults are never refused: nothing is read then, whatever the tables hold.)
+    /// -1 to 1, or the <c>gvar</c> table is malformed (whatever the coordinates: a face set to the defaults is refused as well).
     /// </summary>
     /// <param name="tables">The variation tables of the font.</param>
     /// <param name="normalized">The normalized coordinates in 16.16.</param>
@@ -1522,7 +1527,6 @@ internal sealed class TtBlend
     {
         int numCoords = Math.Min(normalized.Length, tables.NumAxis);
         var coords = new int[tables.NumAxis];
-        bool allZero = true;
 
         for (int i = 0; i < numCoords; i++)
         {
@@ -1530,10 +1534,9 @@ internal sealed class TtBlend
                 return null;
 
             coords[i] = normalized[i];
-            allZero &= normalized[i] == 0;
         }
 
-        if (!isCff2 && !allZero)
+        if (!isCff2)
         {
             // While a missing 'gvar' table is acceptable, an incorrect SFNT table offset or size for 'gvar', or an inconsistent 'gvar' table is not.
             int error = tables.Gvar.Error;
@@ -1588,7 +1591,7 @@ internal sealed class TtBlend
     }
 
     /// <summary><c>tt_apply_mvar</c> for one value of the font: the value with what <c>MVAR</c> adds to it at this location.</summary>
-    public short MvarAdjust(uint tag, short unmodified) => DoBlend ? _tables.MvarAdjust(NormalizedCoords, tag, unmodified) : unmodified;
+    public short MvarAdjust(uint tag, short unmodified) => _tables.MvarAdjust(NormalizedCoords, tag, unmodified);
 
     // ---------------------------------------------------------------------------------------------------------------
     //                                                      tuples
@@ -2014,7 +2017,7 @@ internal sealed class TtBlend
 
         TtVarTables.GvarData gvar = _tables.Gvar;
 
-        if (gvar.GlyphOffsets is null || glyphIndex >= gvar.GlyphCount || gvar.GlyphOffsets[glyphIndex] == gvar.GlyphOffsets[glyphIndex + 1])
+        if (gvar.GlyphOffsets is null || (uint)glyphIndex >= (uint)gvar.GlyphCount || gvar.GlyphOffsets[glyphIndex] == gvar.GlyphOffsets[glyphIndex + 1])
         {
             // no variation data for this glyph
             return TtVarError.Ok;

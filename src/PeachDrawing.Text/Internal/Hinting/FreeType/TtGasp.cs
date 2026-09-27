@@ -141,7 +141,7 @@ internal sealed class TtGasp
     /// <param name="blend">The location, or null for a font that is not variable.</param>
     public TtGasp AtLocation(TtBlend? blend)
     {
-        if (blend is not { DoBlend: true } || _maxPpem.Length < 2)
+        if (blend is null || _maxPpem.Length < 2)
             return this;
 
         ushort[]? moved = null;

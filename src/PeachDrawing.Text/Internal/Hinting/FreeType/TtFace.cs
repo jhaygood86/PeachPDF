@@ -348,15 +348,13 @@ internal sealed class TtFace
                 ?? throw new HintingException("FreeType cannot set this location of the font.");
             Blend = blend;
 
-            if (blend.DoBlend)
-            {
-                if (blend.VaryCvt(Cvt) != TtVarError.Ok)
-                    throw new HintingException("The cvar table of the font is malformed.");
+            // tt_set_mm_blend varies the control values of a face that has been set, whatever the coordinates (a face at the defaults gets the tuples whose peak is 0 on every axis)
+            if (blend.VaryCvt(Cvt) != TtVarError.Ok)
+                throw new HintingException("The cvar table of the font is malformed.");
 
-                // MVAR: the typographic ascender and descender, which the vertical metrics of a font with no vmtx are made of
-                TypoAscender = blend.MvarAdjust(MvarHasc, (short)TypoAscender);
-                TypoDescender = blend.MvarAdjust(MvarHdsc, (short)TypoDescender);
-            }
+            // MVAR: the typographic ascender and descender, which the vertical metrics of a font with no vmtx are made of
+            TypoAscender = blend.MvarAdjust(MvarHasc, (short)TypoAscender);
+            TypoDescender = blend.MvarAdjust(MvarHdsc, (short)TypoDescender);
         }
     }
 

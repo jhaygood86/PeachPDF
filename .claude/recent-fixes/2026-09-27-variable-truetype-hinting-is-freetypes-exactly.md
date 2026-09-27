@@ -24,7 +24,7 @@ point in 26.6, refusals included. Closes [the exactness gap](https://github.com/
   only for a font with vertical metrics, because FreeType loads `VVAR` only when it asks for a vertical metric. Empty glyphs and composites go through the same
   function with a small outline of component offsets (each its own contour) and the phantom points, and the offsets are truncated to `FT_Int16` afterwards.
 - **A face nothing was set on has no blend at all.** `TtFace.TryCreate(font, name, null)` is FreeType's face before any variation function was called; `normalized` all zero
-  is a face that was set to the defaults (it has a blend that varies nothing). The two differ in `GETINFO` (the variation bit), `GETVARIATION`, and, for a `cvar` tuple
+  is a face that was set to the defaults (it has a blend that varies nothing, and its control values and `MVAR` values are varied by the tuples and regions that apply at the defaults, as FreeType's are). The two differ in `GETINFO` (the variation bit), `GETVARIATION`, and, for a `cvar` tuple
   whose peak is 0 on every axis, in the control values. The public API's default typeface is the first.
 
 ## What running it showed
