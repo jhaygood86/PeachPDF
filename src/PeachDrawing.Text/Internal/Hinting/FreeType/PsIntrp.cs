@@ -345,7 +345,14 @@ internal static class Cf2Interpreter
             int sum = opStack.GetReal(unchecked((int)(i + baseIndex)));
 
             for (int j = 1; j < blend.LenBV; j++)
+            {
+                // A blend with too few operands makes an error at its first read, and the glyph is lost as soon as the interpreter looks at it;
+                // the reads that follow (up to 513 x 65,536 of them) change nothing.
+                if (opStack.Failed)
+                    return;
+
                 sum = unchecked(sum + FtCalc.MulFix(blend.BV[weightIndex++], opStack.GetReal(unchecked((int)delta++))));
+            }
 
             // store blended result
             opStack.SetReal(unchecked((int)(i + baseIndex)), sum);

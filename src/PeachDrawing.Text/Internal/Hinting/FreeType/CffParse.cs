@@ -87,14 +87,10 @@ internal sealed class CffPrivate
 }
 
 /// <summary>What the <c>blend</c> and <c>vsindex</c> operators of a CFF2 Private DICT reach (<c>priv-&gt;subfont</c>): the blend vector of the subfont and the location.</summary>
-internal sealed class CffBlendContext(CffBlend blend, int lenNdv, int[]? ndv)
-{
-    public CffBlend Blend { get; } = blend;
-
-    public int LenNdv { get; } = lenNdv;
-
-    public int[]? Ndv { get; } = ndv;
-}
+/// <param name="Blend">The blend vector of the subfont, and what it was made from.</param>
+/// <param name="LenNdv">The number of coordinates of the normalized vector (<c>subfont->lenNDV</c>); zero for the default location.</param>
+/// <param name="Ndv">The normalized vector in 16.16 (<c>subfont->NDV</c>).</param>
+internal sealed record CffBlendContext(CffBlend Blend, int LenNdv, int[]? Ndv);
 
 /// <summary>
 /// The parser of CFF DICT data (<c>cff_parser_run</c> and the number readers), reading the operators the hinter needs from a Top DICT, a
@@ -110,6 +106,9 @@ internal static class CffParser
     /// <summary>The stack of a CFF2 Top DICT and Font DICT, and the size of a CFF2 charstring's (<c>CFF2_DEFAULT_STACK</c>; the <c>maxstack</c> operator cannot lower it and <c>CFF2_MAX_STACK</c> is the same number).</summary>
     public const int Cff2DefaultStack = 513;
     private const uint Cff2MaxStack = 513;
+
+    /// <summary>The most bytes the results of the <c>blend</c> operators of one Private DICT may take (5 for each value, so 13,107 values).</summary>
+    private const int MaxBlendResults = 1 << 16;
 
     // operator codes: the second byte of a two-byte operator is added to 0x100
     private const int OpFontBBox = 5;
@@ -330,10 +329,17 @@ internal static class CffParser
         if (numOperands > count)
             throw new HintingException("The blend operator of a CFF2 Private DICT lacks operands.");
 
-        // check whether we have room for `numBlends' values at `blend_top'
+        // check whether we have room for `numBlends' values at `blend_top'; FreeType grows its buffer as it needs to, and so does this, but
+        // the results of a DICT of a few kilobytes could fill a buffer of any size (a run of 512 blends of no regions is five bytes of DICT for
+        // 2,560 bytes of results), so what a Private DICT may append is bounded (a real one appends a few dozen bytes)
         int room = 5 * (int)numBlends;
         if (blendTop + room > data.Length)
-            Array.Resize(ref data, blendTop + room);
+        {
+            if (blendTop + room - limit > MaxBlendResults)
+                throw new HintingException("The blend operators of a CFF2 Private DICT make too many values.");
+
+            Array.Resize(ref data, Math.Max(blendTop + room, Math.Min(limit + MaxBlendResults, data.Length * 2)));
+        }
 
         int baseIndex = (int)(count - numOperands); // index of first blend arg
         int delta = baseIndex + (int)numBlends; // index of first delta arg

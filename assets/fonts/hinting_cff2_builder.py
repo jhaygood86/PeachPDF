@@ -12,7 +12,6 @@ import struct
 from fontTools.fontBuilder import FontBuilder
 from fontTools.ttLib import newTable
 from fontTools.ttLib.sfnt import SFNTReader, SFNTWriter
-from fontTools.ttLib.tables import otTables
 
 ESCAPE = 12
 
@@ -50,7 +49,9 @@ def dreal(x):
     if s.endswith(".0"):
         s = s[:-2]
     nibbles = []
-    for c in s:
+    i = 0
+    while i < len(s):
+        c = s[i]
         if c.isdigit():
             nibbles.append(int(c))
         elif c == ".":
@@ -58,9 +59,17 @@ def dreal(x):
         elif c == "-":
             nibbles.append(0xE)
         elif c in "eE":
-            nibbles.append(0xB)
+            # "E-" is a nibble of its own; "E" alone (a positive exponent, which repr writes as e+NN) is 0xB
+            if s[i + 1:i + 2] == "-":
+                nibbles.append(0xC)
+                i += 1
+            else:
+                nibbles.append(0xB)
+                if s[i + 1:i + 2] == "+":
+                    i += 1
         else:
             raise ValueError(s)
+        i += 1
     nibbles.append(0xF)
     if len(nibbles) % 2:
         nibbles.append(0xF)
@@ -85,9 +94,14 @@ def blended(base, deltas):
     return ("blend", base, list(deltas))
 
 
-def operands(values, encode):
+# the blend operator: 23 in a DICT and 16 in a charstring
+CHARSTRING_BLEND = 16
+
+
+def operands(values, encode, blend_op=BLEND):
     """The operands of an operator, some of which may be blended (`blended(...)`): plain values first as they are, then the run of blended
-    ones as `bases..., deltas..., n, blend`. A blended value in the middle of the plain ones is written as its own blend."""
+    ones as `bases..., deltas..., n, blend`. A blended value in the middle of the plain ones is written as its own blend. `blend_op` is the
+    operator of a DICT (23) or, for a charstring, CHARSTRING_BLEND."""
     out = b""
     i = 0
     while i < len(values):
@@ -100,7 +114,7 @@ def operands(values, encode):
             out += b"".join(encode(b[1]) for b in run)
             for b in run:
                 out += b"".join(encode(d) for d in b[2])
-            out += dnum(len(run)) + dop(BLEND)
+            out += dnum(len(run)) + dop(blend_op)
         else:
             out += encode(v)
             i += 1
@@ -363,3 +377,9 @@ REGIONS = [
 ]
 # four data sets, of two, three, four and one regions
 DATA_SETS = [[0, 1], [2, 3, 4], [0, 2, 4, 5], [1]]
+
+
+def table_offset(font_bytes, tag):
+    """Where a table begins in the font file."""
+    return SFNTReader(io.BytesIO(font_bytes)).tables[tag].offset
+

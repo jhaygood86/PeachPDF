@@ -10,7 +10,6 @@ The fonts are CC0 (see HintingCff2.LICENSE.txt).
 """
 import importlib.util
 import os
-import random
 import struct
 
 import hinting_cff2_builder as b
@@ -30,7 +29,7 @@ CALLGSUBR = 29
 
 def n(*values):
     """Charstring operands, some of which may be blended (`BL(default, [deltas])`)."""
-    return b.operands(list(values), num)
+    return b.operands(list(values), num, b.CHARSTRING_BLEND)
 
 
 def o(code, esc=False):

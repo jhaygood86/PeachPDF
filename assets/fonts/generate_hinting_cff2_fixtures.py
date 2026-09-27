@@ -41,7 +41,6 @@ import io
 import json
 import os
 import random
-import struct
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -541,7 +540,7 @@ def record_variants(freetype, raw, rng, mutant_count=None, mutant_base="baseline
 
     refused = 0
     base_font = None
-    for name, data, glyph_count, axes in variants.table_variants():
+    for name, data, glyph_count, _axes in variants.table_variants():
         entry = {"name": name, "font": base64.b64encode(data).decode("ascii")}
         entry.update(record_blob(freetype, raw, data, glyph_count))
         result["variants"].append(entry)
@@ -566,11 +565,14 @@ def record_variants(freetype, raw, rng, mutant_count=None, mutant_base="baseline
         table, mutant_edits = variants.mutants(rng, mutant_count, bytes(b.table_of(base_font, "CFF2")))
         result["cases"].append({"name": mutant_base, "font": base64.b64encode(base_font).decode("ascii")})
     opened = 0
+    # the bytes are changed in the font itself, not in a font written again around the new table: a damaged INDEX can read on into the tables
+    # that follow (and their checksums are among the bytes it reads), so the port has to be given the very bytes FreeType is
+    table_offset = b.table_offset(base_font, "CFF2")
     for edits in mutant_edits:
-        edited = bytearray(table)
+        edited = bytearray(base_font)
         for offset, value in edits:
-            edited[offset] = value
-        data = b.replace_table(base_font, "CFF2", bytes(edited))
+            edited[table_offset + offset] = value
+        data = bytes(edited)
         entry = {"base": {"baseline": "baseline", "cases": "charstring cases"}.get(mutant_base, mutant_base), "edits": [[o, v] for o, v in edits]}
         entry.update(record_blob(freetype, raw, data, glyphs, locations=[None, [19661, -45875]]))
         result["mutants"].append(entry)

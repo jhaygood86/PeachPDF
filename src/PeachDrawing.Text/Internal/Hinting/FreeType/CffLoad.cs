@@ -89,9 +89,10 @@ internal sealed class CffIndex
             if (offSize < 1 || offSize > 4)
                 throw new HintingException("A CFF INDEX has an invalid offset size.");
 
-            // FreeType computes the size of the table of offsets in the 32-bit unsigned numbers of its Windows build, where a count of
-            // 2^30 or more wraps; those counts are refused here (the table would be far larger than the font, or FreeType reads a
-            // table of a few bytes for billions of elements)
+            // FreeType computes the size of the table of offsets in the 32-bit unsigned numbers of its Windows build, where the size wraps
+            // for a count of 2^30 or more (with offsets of four bytes; 2^31 with two): it then reads a table of a few bytes for billions of
+            // elements. Here the size does not wrap, and a table of offsets that is larger than the font fails when it is skipped below;
+            // this only keeps the count in an int.
             if (count >= int.MaxValue)
                 throw new HintingException("A CFF INDEX has too many elements.");
 
@@ -304,6 +305,7 @@ internal readonly record struct CffAxisCoords(int StartCoord, int PeakCoord, int
 /// <summary>What a data set of a CFF2 variation store names: the regions its deltas belong to (<c>CFF_VarData</c>).</summary>
 internal sealed class CffVarData
 {
+    /// <summary>The regions of the data set, in the order its deltas come in a <c>blend</c> (<c>regionIndices</c>).</summary>
     public required int[] RegionIndices { get; init; }
 }
 
@@ -313,17 +315,14 @@ internal sealed class CffVStore
     /// <summary>A font with no variation store.</summary>
     public static readonly CffVStore Empty = new();
 
+    /// <summary>The number of axes of every region (<c>axisCount</c>).</summary>
     public int AxisCount { get; private init; }
 
+    /// <summary>The regions: the extent of each along every axis (<c>varRegionList</c>).</summary>
     public CffAxisCoords[][] Regions { get; private init; } = [];
 
+    /// <summary>The data sets (<c>varData</c>), which a <c>vsindex</c> chooses between.</summary>
     public CffVarData[] Data { get; private init; } = [];
-
-    /// <summary>
-    /// The most region indexes all the data sets of a store may name together. FreeType reads every data set in full, however many share the
-    /// same bytes; a store of a real font names each region index in bytes of its own, so this is the number of bytes of the font.
-    /// </summary>
-    private static long RegionIndexBudget(byte[] data) => data.Length;
 
     /// <summary>Reads the store the Top DICT points to (<c>cff_vstore_load</c>); a store at offset zero is no store.</summary>
     /// <exception cref="HintingException">The store is malformed or reaches past the end of the font.</exception>
@@ -385,7 +384,10 @@ internal sealed class CffVStore
         // use dataOffsetArray now to parse varData items; entries that name the same bytes share one data set
         var sets = new CffVarData[dataCount];
         var known = new Dictionary<uint, CffVarData>();
-        long budget = RegionIndexBudget(data);
+
+        // The most region indexes all the data sets may name together. FreeType reads every data set in full, however many share bytes; a store
+        // of a real font names each region index in bytes of its own, so this is the number of bytes of the font.
+        long budget = data.Length;
 
         for (int i = 0; i < dataCount; i++)
         {
@@ -468,9 +470,16 @@ internal sealed class CffBlend
     /// <summary>Whether a <c>blend</c> was used (a <c>vsindex</c> is not allowed after one).</summary>
     public bool UsedBV;
 
+    /// <summary>Whether <see cref="BV"/> was built, and from what: the data set (<c>lastVsindex</c>), the number of coordinates and the normalized vector (<c>lastNDV</c>).</summary>
     public bool BuiltBV;
+
+    /// <summary>The data set the blend vector was built for.</summary>
     public uint LastVsindex;
+
+    /// <summary>The number of coordinates of the normalized vector it was built for.</summary>
     public int LenNdv;
+
+    /// <summary>The normalized vector it was built for, when there was one.</summary>
     public int[]? LastNdv;
 
     /// <summary>The number of factors, the default one included (<c>lenBV</c>).</summary>
@@ -823,6 +832,7 @@ internal sealed class CffFont
             }
             catch (HintingException)
             {
+                // FreeType does not look at the outcome of this read (see the comment above): the Private DICT stays as far as it was read
             }
         }
     }

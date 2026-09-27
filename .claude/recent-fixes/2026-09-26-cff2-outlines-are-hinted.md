@@ -56,6 +56,11 @@ lists every file and difference); what was missing were the `isCFF2` branches of
   dyadic fraction of the axis, so the fixtures record locations of that kind, and the golden file carries the vector FreeType kept for each: the engine
   tests hand it to the port, and the API tests (`WithAxes`) check the package's vector is the same before comparing outlines. The real font's `avar` maps 0.6
   to 0.4, so some of its locations have a vector that is not a multiple of 1/16384; those are compared through the engine only.
+- **Two amplification traps found in review, both untrusted-font side.** A blend leaves its results on the stack, so `512 blend` can be repeated for two
+  bytes of DICT each time while every repeat appends 2,560 bytes of results (and, resizing an array for each, copies the whole buffer): a Private DICT of
+  half a megabyte asked for gigabytes and minutes. What a Private DICT may append is bounded to 64 KB now, and the buffer grows geometrically
+  (`AChainOfBlendsThatWouldFillMemoryIsRefusedInBoundedTimeAndSpace`). And a charstring `blend` whose operands are missing used to keep reading, `numBlends x
+  regions` times (513 x 65,536 for a hostile store), after its first read had already recorded the error that loses the glyph; the loop stops at the error.
 - **HVAR advances agree.** The advance of a hinted glyph is `hmtx` plus the `HVAR` delta, rounded to a pixel; the package's delta is a double sum and FreeType's a
   16.16 one, and they gave the same integer at every recorded location of the real font, including the raw ones.
 
@@ -65,7 +70,10 @@ lists every file and difference); what was missing were the `isCFF2` branches of
 - Type 1 and multiple-master code of the engine is not ported; a CFF2 font has neither.
 - A `FontMatrix` in a Font DICT and the Top DICT is read (the fixtures have both), as for CFF, and blends in a Top or Font DICT are not: FreeType has no
   `blend` field there either.
-- A showcase is not made from the fixtures: they are random shapes, and no font with real hinted CFF2 outlines is bundled. (See the end of this entry if that changed.)
+- The random fixtures are not the showcase font: they are unreadable shapes, and no font with real hinted CFF2 outlines is bundled. The showcase
+  (`text_hinting_cff2_standard` and `text_hinting_cff2_none`) uses `HintingCff2Boxes.otf`, a 2 KB CC0 variable font of boxy letters written for it
+  (`generate_hinting_cff2_boxes.py`: one `wght` axis, strokes that thicken inward so the advances need no HVAR, hints and blue zones blended for the
+  weight). Rasterized with PDFium and MuPDF, both show the hinted page's tops and bars crisper than the unhinted page's at 9 to 16 px, at all four weights.
 
 ## Evidence
 

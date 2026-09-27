@@ -113,6 +113,9 @@ internal sealed class Cf2Stack
     /// <summary><c>cf2_stack_count</c>.</summary>
     public int Count => _top;
 
+    /// <summary>Whether an error has been recorded (the glyph is lost once one is: the interpreter looks at the error before it runs the next operator).</summary>
+    public bool Failed => _error.Value != 0;
+
     /// <summary><c>cf2_stack_pushInt</c>.</summary>
     public void PushInt(int val)
     {
