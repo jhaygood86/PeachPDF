@@ -11338,11 +11338,12 @@ var svgGlyphHtml =
     SvgGlyphCell("font-palette: --custom", "override-colors: 0 #7c3aed, 1 #f59e0b") +
     "</tr><tr>" +
     SvgGlyphCell("font-size: 20pt", "20pt: the same artwork at another size") +
+    SvgGlyphCell("filter: drop-shadow(4pt 4pt 3pt rgba(0,0,0,.45))", "filter: drop-shadow(): a raster region, still the real glyph") +
     "</tr></table>" +
     "</body></html>";
 await SaveShowcaseAsync("svg_opentype_glyphs", "Typography & Text", "SVG-in-OpenType glyphs",
     "Colour glyphs drawn from a font's SVG table: the SVG document of each glyph is rendered as vector content, its palette " +
-    "variables follow font-palette and its context-fill follows the text colour. Rendered against a small synthetic font.",
+    "variables follow font-palette and its context-fill follows the text colour, also inside a filtered (rasterized) element. Rendered against a small synthetic font.",
     svgGlyphHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // GSUB ligature substitution: font-variant-ligatures actually turns real GSUB liga/clig ligatures
