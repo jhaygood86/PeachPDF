@@ -5,16 +5,13 @@ straddled a page boundary moved whole to the next page. One taller than a page w
 each slice boundary was lost: it was clipped on the page it started on, and missing from the next.
 
 **Now:** a scroll container that is a block box in ordinary block flow is monolithic only when its block
-size is fixed:
-- a non-auto `height` with no `max-height`;
-- for `overflow: auto`/`scroll`, also an `aspect-ratio`;
-- in a vertical writing mode, `width`/`max-width` instead (where a `max-width` still counts).
+size is capped: a non-auto `height`, a `max-height`, an `aspect-ratio`, or both `top` and `bottom` on an
+absolutely positioned box (in a vertical writing mode, `width`/`max-width` instead).
 
-A box capped only by `max-height` breaks too, as Chrome prints it, unless its content overflows the cap;
-then it stays whole as before. The space a break leaves unused at the foot of the page counts against the
-cap, so content that only just fits under it still keeps the box whole. An auto-height box breaks between its lines like any other block, as
-browsers do when printing, so a tall `overflow: hidden` wrapper around paragraphs, a table or a `<pre>`
-listing no longer drops a line per page.
+An auto-height box with no cap breaks between its lines like any other block, as browsers do when
+printing, so a tall `overflow: hidden` wrapper around paragraphs, a table or a `<pre>` listing no longer
+drops a line per page. A box with a `max-height` stays whole as before, even when its content fits under
+the cap.
 
 Everything else stays monolithic as before, whatever its height:
 - **What the box is:** an `inline-block`, a float (including a page float), a flex or grid item, or an
@@ -27,9 +24,8 @@ Everything else stays monolithic as before, whatever its height:
   laid out apart from its block flow: an absolutely or fixed positioned box, a page float, a multi-column,
   flex or grid container, or a table caption. So a clearfix wrapper around a floated menu still stays whole.
 
-A short auto-height card near the bottom of a page, or one capped only by `max-height` whose content fits
-under the cap with room to spare, is now split across the break instead of moving whole. Add `break-inside: avoid` to keep
-the old result.
+A short auto-height card near the bottom of a page is now split across the break instead of moving whole.
+Add `break-inside: avoid` to keep the old result.
 
 **Why:** css-break-3 §2 only lets a UA treat `overflow: hidden` as monolithic when its logical height is
 non-auto with no max, and it only permits (never requires) the same for `auto`/`scroll`.

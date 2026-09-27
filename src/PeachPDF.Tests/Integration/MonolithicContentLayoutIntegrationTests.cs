@@ -245,6 +245,42 @@ namespace PeachPDF.Tests.Integration
             });
         }
 
+        // A card starting near the page foot whose first child's top margin reaches past it. The margin cannot
+        // collapse through a scroll container, so the card's piece on the first page holds nothing, and a mover
+        // sends layout back to the slot the pass has just filled. The emitter then marked html and body, still
+        // on the break chain, as having emitted nothing from that slot on, and pruned both following pages
+        // away: only the card's last line and what follows it were drawn. Every line is drawn once, in its
+        // page's band.
+        [Theory]
+        [InlineData("overflow: hidden")]
+        [InlineData("overflow: auto")]
+        public async Task CardWhoseFirstChildsMarginReachesPastThePageFoot_DrawsEveryLineOnce(string css)
+        {
+            const int count = 20;
+            var html = "<!DOCTYPE html><html><head><style>p{margin:0 0 4pt 0}</style></head>" +
+                       $"<body style='margin:0;font-family:\"{CardFont}\";font-size:10pt;line-height:12pt'>" +
+                       "<div style='height:140pt'>S</div>" +
+                       $"<div style='{css}'><p style='margin-top:30pt'>L0</p>" +
+                       string.Concat(Enumerable.Range(1, count).Select(i => $"<p>L{i}</p>")) +
+                       "</div><p>L21</p><p>L22</p></body></html>";
+
+            var (_, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: PageHeight, margin: Margin,
+                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, CardFont));
+
+            var placed = container.FragmentTree!.Fragmentainers
+                .SelectMany(page => Flatten(page.Root).SelectMany(f => f.Words))
+                .Where(w => w.Word.Text?.StartsWith('L') == true)
+                .ToList();
+
+            Assert.Equal(Enumerable.Range(0, count + 3).Select(i => $"L{i}"), placed.Select(w => w.Word.Text!));
+
+            // The glyph box is taller than the 12pt line, so a line at a page's top reaches just above the band;
+            // its middle is what names the page that shows it.
+            Assert.All(placed, w => Assert.InRange((w.Rect.Top + w.Rect.Bottom) / 2, Margin, PageHeight - Margin));
+        }
+
+        private const string CardFont = "MonolithicCardTestSans";
+
         // A wrapper that fragments has to carry the break through everything inside it, and some content
         // is laid out by paths that drop it. Each shape here lost every line past the first boundary (the
         // clearfix float, the .row of floats, the inline-block), the absolutely positioned badge, or the
@@ -276,69 +312,17 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(Enumerable.Range(1, 14).Select(i => $"W{i}"), placed.Order(WordNumber.Instance));
         }
 
-        // A box whose clipped content stays on the page its clip edge is on loses nothing at a break, so it is
-        // not noted and the document is not laid out again for it. Noting every clip doubled the layout time
-        // of a document with an ordinary clipped card.
+        // A clipping box whose visible part itself crosses the page is kept whole, and every visible line is
+        // drawn. Broken, the lines after the break landed beyond the cap and were lost.
         [Fact]
-        public async Task ScrollContainerClippedWithinAPage_IsNotLaidOutAgain()
-        {
-            var (root, container) = await LayoutBody(
-                $"<div id='card' style='overflow:hidden;max-height:30pt'>{Lines("X", 6)}</div><div>{Lines("W", 3)}</div>");
-            var card = LayoutHarness.FindById(root, "card")!;
-
-            Assert.DoesNotContain(card, container.ScrollContainersThatClip);
-        }
-
-        // The clip edge is a bottom edge: one exactly on page 1's foot belongs to page 1, and the clipped lines
-        // past it run onto page 2, so the box is noted and kept whole. Taken as a top edge, it was measured
-        // against page 2's foot and missed, and the box stayed breakable among its clipped lines.
-        [Fact]
-        public async Task ScrollContainerClippedExactlyAtThePageFoot_IsNoted()
-        {
-            var (root, container) = await LayoutBody(
-                $"<div>{Lines("C", 10)}</div><div id='card' style='overflow:hidden;max-height:40pt'>{Lines("X", 10)}</div>" +
-                $"<div>{Lines("W", 5)}</div>");
-            var card = LayoutHarness.FindById(root, "card")!;
-
-            Assert.Contains(card, container.ScrollContainersThatClip);
-        }
-
-        // A clipping box whose visible part itself crosses the page: its clip edge is past the page's foot, so
-        // asking only whether the clipped lines cross a page missed it. Broken, the lines after the break landed
-        // beyond the cap and were lost; it is noted, kept whole, and every visible line is drawn.
-        [Fact]
-        public async Task ClippingScrollContainerWhoseVisiblePartCrossesThePage_IsNoted()
+        public async Task ClippingScrollContainerWhoseVisiblePartCrossesThePage_StaysWhole()
         {
             var (root, container) = await LayoutBody(
                 $"<div>{Lines("C", 2)}</div><div id='card' style='overflow:hidden;max-height:150pt'>{Lines("X", 15)}</div>" +
                 $"<div>{Lines("W", 3)}</div>");
             var card = LayoutHarness.FindById(root, "card")!;
 
-            Assert.Contains(card, container.ScrollContainersThatClip);
             Assert.Equal(container.SlotStartingAt(card.Location.Y), container.SlotEndingAt(card.ActualBottom));
-        }
-
-        // Which boxes clip is decided per layout. A box that clipped its content and was kept whole may fit
-        // under its cap once widened, and the next layout of the same container lets it break again, as a
-        // fresh layout of the wider box does.
-        [Fact]
-        public async Task ScrollContainerThatStopsClipping_BreaksAgainOnTheNextLayout()
-        {
-            var words = string.Join(" ", Enumerable.Range(1, 16).Select(i => $"Word{i}"));
-            await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap($"<div id='card' style='overflow:hidden;max-height:60pt;width:60pt;line-height:20pt;font-size:10pt'>{words}</div>"),
-                pageHeight: PageHeight, margin: Margin,
-                after: async (root, container, graphics) =>
-                {
-                    var card = LayoutHarness.FindById(root, "card")!;
-                    Assert.Contains(card, container.ScrollContainersThatClip);
-
-                    card.Width = "260pt";
-                    await container.PerformLayout(graphics);
-
-                    Assert.DoesNotContain(card, container.ScrollContainersThatClip);
-                    Assert.False(PeachPDF.Html.Core.Fragmentation.MonolithicContent.IsMonolithic(card));
-                });
         }
 
         private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutBody(string body) =>
@@ -530,24 +514,21 @@ namespace PeachPDF.Tests.Integration
             Assert.True(await CardStaysOnOnePage(css));
         }
 
-        // Capped by max-height alone, with content that fits under the cap, a scroll container breaks like a
-        // plain block for every overflow value, as Chrome prints it. §2 names only a fixed height with no
-        // max-height for hidden, and makes auto and scroll optional. An overflow: hidden box capped by an
-        // aspect-ratio breaks too.
+        // Capped by max-height, a scroll container moves whole for every overflow value, even when its content
+        // fits under the cap, because whether it would clip is only known after layout (a clipping box that
+        // broke lost the content after it). The cap here is far above the card, so it does not change its size.
         [Theory]
         [InlineData("overflow: scroll; max-height: 1000pt")]
         [InlineData("overflow: auto; max-height: 1000pt")]
         [InlineData("overflow: hidden; max-height: 1000pt")]
-        [InlineData("overflow: hidden; height: 1000pt; max-height: 1000pt")]
-        [InlineData("overflow: hidden; aspect-ratio: 1")]
-        public async Task ScrollContainerWithoutAFixedHeight_Breaks(string css)
+        public async Task ScrollContainerCappedByMaxHeight_MovesWhole(string css)
         {
-            Assert.False(await CardStaysOnOnePage(css));
+            Assert.False(await CardStaysOnOnePage("max-height: 1000pt"), "the card must straddle without overflow");
+            Assert.True(await CardStaysOnOnePage(css));
         }
 
-        // A scroll container that may break but whose content overflows its max-height is kept whole:
-        // its clipped lines lie past its end, and a break among them lost the content after the box. Layout
-        // notices the clip and lays the document out again with the box monolithic.
+        // A capped scroll container whose content overflows its cap is kept whole: its clipped lines lie past
+        // its end, and a break among them would lose the content after the box.
         [Theory]
         [InlineData("hidden", 10, 96)]
         [InlineData("hidden", 2, 60)]
@@ -560,7 +541,6 @@ namespace PeachPDF.Tests.Integration
             var card = LayoutHarness.FindById(root, "card")!;
 
             Assert.Equal(container.SlotStartingAt(card.Location.Y), container.SlotEndingAt(card.ActualBottom));
-            Assert.Contains(card, container.ScrollContainersThatClip);
 
             var placed = container.FragmentTree!.Fragmentainers
                 .SelectMany((page, index) => Flatten(page.Root).SelectMany(f => f.Words)
@@ -570,34 +550,17 @@ namespace PeachPDF.Tests.Integration
             AssertEachDrawnOnceInsideABand(placed, 10);
         }
 
-        // The cap is measured from the box's top in document space, so the space a break leaves unused at the
-        // page's foot counts against it. Here three of the eight 12pt lines fit above the boundary and the
-        // fourth moves to the next page, leaving 4pt: 96pt of content needs a 100pt cap to break, and with a
-        // 98pt one the last line is clipped, so the box is kept whole.
+        // A block size fixed some other way than by max-height caps the box too, for every overflow value. These
+        // do change the card's size, so the control checks that the resized card still straddles once it is not
+        // a scroll container: what moves it whole is the rule, not the new size.
         [Theory]
-        [InlineData(98, true)]
-        [InlineData(100, false)]
-        public async Task StraddlingScrollContainerCappedByMaxHeight_BreaksOnlyWithRoomForTheSpaceLeftAtThePageFoot(int cap, bool keptWhole)
-        {
-            var (root, container) = await LayoutBody(
-                $"<div>{Lines("C", 10)}</div><div id='card' style='overflow:hidden;max-height:{cap}pt'>{Lines("X", 8)}</div>" +
-                $"<div>{Lines("W", 5)}</div>");
-            var card = LayoutHarness.FindById(root, "card")!;
-
-            Assert.Equal(keptWhole, container.ScrollContainersThatClip.Contains(card));
-            Assert.Equal(keptWhole, container.SlotStartingAt(card.Location.Y) == container.SlotEndingAt(card.ActualBottom));
-        }
-
-        // A block size fixed some other way than by max-height caps the box too. These do change the card's
-        // size, so the control checks that the resized card still straddles once it is not a scroll
-        // container: what moves it whole is the rule, not the new size.
-        [Theory]
-        [InlineData("height: 60pt")]
-        [InlineData("aspect-ratio: 1")]
-        public async Task ScrollContainerWithAFixedBlockSize_MovesWhole(string sizeCss)
+        [InlineData("height: 60pt", "auto")]
+        [InlineData("aspect-ratio: 1", "auto")]
+        [InlineData("aspect-ratio: 1", "hidden")]
+        public async Task ScrollContainerWithAFixedBlockSize_MovesWhole(string sizeCss, string overflow)
         {
             Assert.False(await CardStaysOnOnePage(sizeCss), "the resized card must straddle without overflow");
-            Assert.True(await CardStaysOnOnePage($"overflow: auto; {sizeCss}"));
+            Assert.True(await CardStaysOnOnePage($"overflow: {overflow}; {sizeCss}"));
         }
 
         private static async Task<bool> CardStaysOnOnePage(string css)

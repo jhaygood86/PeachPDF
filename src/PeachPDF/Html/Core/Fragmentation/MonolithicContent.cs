@@ -75,7 +75,6 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         private static bool BreaksInBlockFlow(CssBox box) =>
             box.DerivedStyle.ActualDisplay is Keywords.Block or Keywords.ListItem
-            && !IsFloat(box)
             && !box.IsExcludedFromFlow
             && !AvoidsBreakInside(box)
             && box.ParentBox?.DerivedStyle.ActualDisplay is not (Keywords.Flex or Keywords.InlineFlex
@@ -112,8 +111,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </para>
         /// <para>
         /// Anything not listed keeps a scroll container inside it monolithic, which is the behaviour
-        /// before auto-height scroll containers became fragmentable. So an unlisted placement can only
-        /// leave that fix out, never lose content.
+        /// before auto-height scroll containers became fragmentable, so an unlisted ancestor only leaves that
+        /// fix out. The lists look at the box's ancestors and contents, not at the flow around it: a box that
+        /// breaks still loses content wherever a plain block there does, such as beside a float from outside
+        /// it or when a child reaches past its end.
         /// </para>
         /// </remarks>
         private static bool EveryAncestorCarriesABreak(CssBox box)
@@ -124,7 +125,6 @@ namespace PeachPDF.Html.Core.Fragmentation
                         is Keywords.Block or Keywords.ListItem or Keywords.Flex or Keywords.Grid
                         or Keywords.Table or Keywords.TableRowGroup or Keywords.TableHeaderGroup
                         or Keywords.TableFooterGroup or Keywords.TableRow or Keywords.TableCell
-                    && !IsFloat(ancestor)
                     && !ancestor.IsExcludedFromFlow
                     && !ancestor.EstablishesMultiColumnContext
                     && !IsUnresumableOrthogonalFlow(ancestor)
@@ -286,15 +286,15 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// and a line on the slice boundary is then lost.
         /// </para>
         /// <para>
-        /// PeachPDF treats a scroll container as monolithic only when its block size is fixed: a non-auto
-        /// <c>height</c> with no <c>max-height</c>, the one case the sentence names for <c>hidden</c>, and
-        /// for <c>auto</c>/<c>scroll</c> also an <c>aspect-ratio</c> or both block-axis insets, which the
-        /// "may" allows. A box capped by <c>max-height</c> alone breaks like a plain block for every
-        /// overflow value, as Chrome prints it. The one exception is a box whose content actually overflows
-        /// its cap. Its clipped lines lie past the box's own end, and a break among them ended the pass while
-        /// the content after the box was placed back on the page the break left, so it was drawn on no page.
-        /// Layout records such a box (<see cref="HtmlContainerInt.NoteScrollContainerClips"/>) and lays the
-        /// document out again with it monolithic.
+        /// PeachPDF treats a scroll container as monolithic whenever its block size is capped: a non-auto
+        /// <c>height</c>, a <c>max-height</c>, an <c>aspect-ratio</c> or both block-axis insets. Content that
+        /// overflows a cap lies past the box's own end, and a break among those clipped lines ends the pass
+        /// while the content after the box is placed back on the page the break left, so it is drawn on no
+        /// page. Whether the content overflows is only known after layout, so every capped box stays whole,
+        /// including one whose content would fit under its cap. For <c>auto</c>/<c>scroll</c> the "may"
+        /// allows that. For <c>overflow: hidden</c> with a <c>max-height</c> or an <c>aspect-ratio</c> it
+        /// does not, and that is a known gap, as is breaking a capped box whose content fits, as browsers
+        /// print it.
         /// </para>
         /// <para>
         /// A percentage against an indefinite base behaves as <c>auto</c>/<c>none</c> (CSS 2.1 §10.5,
@@ -318,14 +318,6 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             var vertical = IsVertical(box);
             var (size, maxSize) = vertical ? (box.Width, box.MaxWidth) : (box.Height, box.MaxHeight);
-
-            if (!vertical)
-            {
-                return (Constrains(size, isMax: false) && !Constrains(maxSize, isMax: true))
-                       || box.HtmlContainer?.ScrollContainersThatClip.Contains(box) == true
-                       || (box.Overflow.Value != Overflow.Hidden
-                           && (HasPreferredAspectRatio(box) || IsSizedByBothBlockInsets(box, vertical: false)));
-            }
 
             // The height and max-height percentages resolve against different bases in layout: height
             // against the box's own percentage base (GetBoxHeight), max-height against its in-flow
@@ -358,7 +350,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// Asked of the declaration rather than through <c>CssLayoutEngine.TryGetAspectRatioHeight</c>,
         /// which needs the box's used width and so would answer differently before its width is laid out.
         /// </remarks>
-        internal static bool HasPreferredAspectRatio(CssBox box) =>
+        private static bool HasPreferredAspectRatio(CssBox box) =>
             !string.IsNullOrEmpty(box.AspectRatio)
             && !string.Equals(box.AspectRatio, Keywords.Auto, StringComparison.OrdinalIgnoreCase);
 

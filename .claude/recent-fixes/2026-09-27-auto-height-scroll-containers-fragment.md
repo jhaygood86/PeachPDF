@@ -32,8 +32,9 @@ The second condition is an allow-list in three parts:
 - **every ancestor:** a kind that carries a break on (`EveryAncestorCarriesABreak`);
 - **everything inside:** a kind that carries a break too (`EveryDescendantCarriesABreak`).
 
-An unlisted kind keeps `main`'s monolithic behaviour. It can leave the fix out, but it can never lose
-content.
+An unlisted kind keeps `main`'s monolithic behaviour, so it only leaves the fix out. The lists do not look
+at the flow around the box, so a box that breaks still loses content wherever a plain block in its place
+already does ([the gap](../accepted-gaps/an-auto-height-scroll-container-that-breaks-inherits-block-flow-losses.md)).
 
 ## How the allow-list was found (each round measured lines disappear)
 
@@ -89,31 +90,20 @@ rejected in `EveryDescendantCarriesABreak`, and so is a scroll container that is
 running positioned. Its break ends the pass the same way while the content after it goes back on the emitted
 page (#1349).
 
-## A box capped only by max-height breaks, as Chrome prints it
+## A box capped by max-height stays whole
 
-Chrome prints `overflow: hidden; max-height` and `overflow: auto; max-height` boxes across two pages. §2's
-permission for `hidden` is a non-auto height *and no max-height*. So `HasConstrainedBlockSize` takes §2's
-own case for every overflow value: a `height` with no `max-height`, plus `aspect-ratio` and both insets for
-`auto`/`scroll`.
+`HasConstrainedBlockSize` counts any cap: a `height`, a `max-height`, an `aspect-ratio` or both insets, for
+every overflow value. Chrome prints a `max-height` box whose content fits under its cap across two pages,
+but when the content overflows the cap, the clipped lines lie past the box's end, and a break among them
+ends the pass with the content after the box placed back on an emitted page (all ten lines after a
+60pt-capped 30-line box were lost). Whether it overflows is only known after layout.
 
-That exposed a trap: when the content overflows the cap, the clipped lines lie past the box's end, and a
-break among them ends the pass with the content after the box placed back on an emitted page. Probes:
-- all ten lines after a 60pt-capped 30-line box were lost;
-- three lines after a straddling 96pt one were lost, and an empty page was added.
-
-So the layout epilogue checks such a box after `ApplyHeight` (`CssBox.NoteIfAFragmentingScrollContainerClips`).
-It looks for content reaching past the end of the page the box starts on, since any break inside a clipping
-box loses content. `HtmlContainerInt.LayoutDocument` then lays the document out again with the box
-monolithic:
-- It runs at most three times, and the set is frozen on the last attempt.
-- It runs inside every layout call: the per-page width reflow and the footnote/page-float and
-  `target-counter` loops lay out at their own geometry.
-- The set is cleared per layout (`PerformLayoutOnePass`), so a box widened since the last layout can break
-  again.
-- A box clipped within its own page costs no extra layout.
-
-This is an [accepted gap](../accepted-gaps/a-scroll-container-that-clips-past-its-max-height-is-kept-whole.md)
-(#1375). Vertical writing modes keep the old rule.
+A first version broke every capped box, noted one that clipped after `ApplyHeight`, and laid the whole
+document out again with it kept whole. The second review removed it: the retry reset only the root's size
+and position, so a table row broken across the page on the first attempt came out 38pt taller on the retry
+(an anonymous inline box kept its first-attempt position, and `GetMaximumBottom` read it), and 400 clipping
+cards rendered 7–9x slower for byte-identical output. Both samples are in #1479; this is an
+[accepted gap](../accepted-gaps/a-scroll-container-with-a-max-height-is-kept-whole.md) (#1375, #1479).
 
 ## What was found by running it
 
@@ -137,16 +127,25 @@ This is an [accepted gap](../accepted-gaps/a-scroll-container-that-clips-past-it
     box, and every paragraph after that box was lost.
   - `EveryAncestorCarriesABreak` now rejects `IsExcludedFromFlow`.
   - `AutoHeightScrollContainerInsideAnAbsoluteBox_LosesNothingAfterIt` fails without it.
-- **The page-correction fallback replay.** `TryApplyDimensionChangingPageCorrection`'s fallback pass
-  inherited the clipping set from its speculative pass, which laid out at another geometry. So it was no
-  longer the exact replay its remarks promise. The set is now snapshotted before that pass and restored
-  before the fallback.
-- **What the `max-height` "page gap" is.** The review read the cap as measured across the page margins,
-  which would keep most straddling capped boxes whole. Measured, it is not: document space is contiguous
-  bands. Only the space a break leaves unused at the page foot counts, which is 4pt for 96pt of content in
-  12pt lines three lines above the boundary. A 100pt cap breaks and a 98pt one is kept whole
-  (`StraddlingScrollContainerCappedByMaxHeight_BreaksOnlyWithRoomForTheSpaceLeftAtThePageFoot`). The docs
-  now say that slack counts.
+
+## Second review: a card whose first child's margin reaches past the page foot
+
+An auto-height card starting within its first child's `margin-top` of the page foot drew only its last line
+and what followed it. The cause was in the fragment emitter, not the classifier:
+- The margin cannot collapse through a scroll container, so the card's piece on the first page holds
+  nothing, and a mover relocates the card whole. The pass then ends with a break token resuming in the slot
+  it has just filled, having placed nothing there.
+- `FragmentEmitter.EmitPass`'s final `CommitRemainingObservations(commit: true)` marked `html` and `body`
+  "emitted nothing from this slot on", although both were on that outgoing break chain.
+- The re-run pass placed the card at the same position, which discards no mark, so every later emission of
+  those slots pruned the whole root away. `PEACHPDF_VERIFY_FRAGMENT_PRUNING=1` reported it as "the root
+  draft is 'null' with pruning and 'a draft' without it".
+
+A plain block never reached it: the child's margin collapses through it and the whole block moves instead.
+`CommitRemainingObservations` now skips a box on the outgoing chain (`_continuesInto`), as
+`CommitGeometricallySettledObservations` already did. `CardWhoseFirstChildsMarginReachesPastThePageFoot_DrawsEveryLineOnce`
+fails without it. On the review's heading sweep (82 documents, a 0.5pt spacer sweep) the PR head lost 302
+words that the merge-base draws, and none with the fix.
 
 ## User-visible side effect
 

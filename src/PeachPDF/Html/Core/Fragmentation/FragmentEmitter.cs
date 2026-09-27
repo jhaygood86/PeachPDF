@@ -965,6 +965,15 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 foreach (var (box, sinceSlot) in _emptySincePass)
                 {
+                    // A box the pass stopped inside is not done: its content resumes on the next pass, so
+                    // "nothing from here on" is false for it however empty this range was. It is empty only
+                    // when the pass placed nothing at all, which happens when a mover sent the pass back
+                    // to lay a box out again in the slot it has just left. The re-run can put the box back at
+                    // the same position, which discards no mark, so marking the chain here pruned every
+                    // later emission of that slot away (CommitGeometricallySettledObservations excludes the
+                    // chain for the same reason).
+                    if (_continuesInto.Contains((new FragmentKey(box, 0), sinceSlot))) continue;
+
                     var scopeOwner = ScopeOwnerOf(box);
                     box.RecordEmittedNothingAt(sinceSlot, scopeOwner, HistoryFor(scopeOwner).Count);
                 }

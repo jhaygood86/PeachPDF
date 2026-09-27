@@ -2,9 +2,9 @@
 
 _CSS Fragmentation Level 3 §4.4. Tracker: [#1328](https://github.com/jhaygood86/PeachPDF/issues/1328)._
 
-A scroll container with a fixed block size (a non-auto `height` and no `max-height`; for `auto`/`scroll`
-also an `aspect-ratio` or both block insets), or one whose content overflows its cap, is monolithic
-(`MonolithicContent.IsMonolithic`). When it is taller than every page's band it can't be moved, so
+A scroll container with a capped block size (a non-auto `height`, a `max-height`, an `aspect-ratio` or
+both block insets) is monolithic (`MonolithicContent.IsMonolithic`;
+[why a `max-height` counts](a-scroll-container-with-a-max-height-is-kept-whole.md)). When it is taller than every page's band it can't be moved, so
 `CssBox.LayoutContents` lays its content out with the fragmentainer detached, and each page shows one
 slice of it. A line straddling a slice boundary is claimed only by the fragmentainer its top falls in
 (`FragmentEmitter.ClaimsLine`), so that page draws it past its band, the page clip hides it, and no other
@@ -18,7 +18,7 @@ The auto-height case (a panel of paragraphs, a `<pre>` listing) was fixed for #1
 of the monolithic set wherever the break is known to survive. A wrapper that stays monolithic for another
 reason, such as one under `break-inside: avoid` or one holding a float, an inline-block, an absolutely
 positioned box or a multi-column container, still loses its slice-boundary lines here; see
-[the recent fix](../recent-fixes/2026-09-26-auto-height-scroll-containers-fragment.md). This capped case
+[the recent fix](../recent-fixes/2026-09-27-auto-height-scroll-containers-fragment.md). This capped case
 was left out because either fix changes the emitter's line-membership rule, which
 [#484](https://github.com/jhaygood86/PeachPDF/issues/484) narrowed on purpose
 ([the invariant](../invariants/fragmentation-one-membership-question-is-asked-with-one-tolerance.md)).

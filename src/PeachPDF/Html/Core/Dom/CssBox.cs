@@ -6851,58 +6851,6 @@ namespace PeachPDF.Html.Core.Dom
             ReferenceEquals(child.ParentBox, this) ? DomUtils.GetPreviousSibling(child, false) : null;
 
         /// <summary>
-        /// Records a scroll container that was allowed to break across pages but whose content
-        /// runs past its own end, so the next layout attempt keeps it in one piece
-        /// (<see cref="HtmlContainerInt.NoteScrollContainerClips"/>).
-        /// </summary>
-        /// <remarks>
-        /// Its clipped lines lie past the box's end, and a page break among them ends the pass: the content
-        /// after the box is then placed back on the page the break left, which is already emitted. Only a
-        /// scroll container that fragments reaches the subtree walk; one kept monolithic is laid out
-        /// unbroken and cannot end the pass (<see cref="MonolithicContent.HasConstrainedBlockSize"/>).
-        /// </remarks>
-        private void NoteIfAFragmentingScrollContainerClips()
-        {
-            // Only a size that does not grow with the content can clip it; an auto-height box has none. (Both
-            // block insets would too, but only on an absolutely positioned box, which never fragments.)
-            var mayCap = CssValueParser.IsValidLength(Height) || CssValueParser.IsValidLength(MaxHeight)
-                         || MonolithicContent.HasPreferredAspectRatio(this);
-
-            if (!mayCap
-                || WritingMode.Value is PeachPDF.CSS.WritingMode.VerticalRl or PeachPDF.CSS.WritingMode.VerticalLr
-                || HtmlContainer is not { HasRealPageGrid: true, CurrentFragmentainer: not null } container
-                || container.ScrollContainersThatClip.Contains(this)
-                || !MonolithicContent.IsScrollContainer(this)
-                || MonolithicContent.IsMonolithic(this))
-            {
-                return;
-            }
-
-            var clipEdge = ActualBottom - ActualBorderBottomWidth;
-            var contentBottom = clipEdge;
-            foreach (var child in Boxes)
-            {
-                if (child.IsAbsolutelyPositioned) continue;
-                contentBottom = Math.Max(contentBottom, GetMaximumBottom(child, contentBottom));
-            }
-
-            // Only a box whose content reaches past the end of the page it starts on can take a break inside
-            // it, and any break inside a clipping box loses content: among its clipped lines the pass ends past
-            // the box's end, and before them the lines after the break land beyond the cap, which is measured in
-            // document space across the page gap. One clipped within its page loses nothing, and laying the whole
-            // document out again for it would only cost time. Nor can a box inside unbroken content (no
-            // fragmentainer attached). A column never gets here: a scroll container inside a multi-column
-            // container is monolithic (EveryAncestorCarriesABreak).
-            var bandEnd = container.PageBottomOf(container.SlotStartingAt(Location.Y));
-
-            if (contentBottom > clipEdge + HtmlContainerInt.PageBoundaryEpsilon
-                && contentBottom > bandEnd + HtmlContainerInt.PageBoundaryEpsilon)
-            {
-                container.NoteScrollContainerClips(this);
-            }
-        }
-
-        /// <summary>
         /// Everything that must happen exactly once, after this box's content is complete: resolving its
         /// height, and the corrections that can only be judged against a finished box — the
         /// keep-with-next first-line retry, <c>break-inside: avoid</c>, <c>orphans</c>/<c>widows</c>, the
@@ -6915,7 +6863,6 @@ namespace PeachPDF.Html.Core.Dom
         private async ValueTask PerformLayoutEpilogue(RGraphics g)
         {
             CssLayoutEngine.ApplyHeight(this);
-            NoteIfAFragmentingScrollContainerClips();
 
             if (_pendingCrossAxisRtlReflection is { Count: > 0 } stackedChildren)
             {
