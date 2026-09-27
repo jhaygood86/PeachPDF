@@ -88,17 +88,6 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         }
         readonly string _fullFaceName;
 
-        public ulong CheckSum
-        {
-            get
-            {
-                if (_checkSum == 0)
-                    _checkSum = FontFileData.CalcChecksum(FontSource.Bytes);
-                return _checkSum;
-            }
-        }
-        ulong _checkSum;
-
         /// <summary>
         /// Gets the bytes that represents the font data.
         /// </summary>

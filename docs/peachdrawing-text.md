@@ -391,7 +391,7 @@ byte[] fontFile = subset.Data.ToArray();
 
 What a font descriptor records about a face comes from the members you already have: `Typeface.Metrics` (with `IsSymbolic`,
 `IsFixedPitch`, `HasSerifs`, `IsItalicStyle` and `FirstCharIndex` for the descriptor flags), `Typeface.GetAdvance` for widths,
-`Typeface.FullName` for a base font name, and `Typeface.ContentHash` to key a cache of what you made from a face.
+`Typeface.FullName` for a base font name, and `Typeface.ContentHash` (a 128-bit hash of the font data, so two different fonts never share one) to key a cache of what you made from a face.
 
 ## Laying out text: `PeachDrawing.Text.Layout`
 

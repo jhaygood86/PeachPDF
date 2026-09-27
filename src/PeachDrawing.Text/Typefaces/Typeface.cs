@@ -46,11 +46,15 @@ namespace PeachDrawing.Text
         public string FullName => Face.DisplayName;
 
         /// <summary>
-        /// A checksum of the font data the face reads. Two typefaces that read the same data have the same checksum, so it can
-        /// key a cache of things made from a face, such as an embedded copy of it.
+        /// A hash of the font data the face reads, as 32 lowercase hexadecimal digits. Two typefaces that read the same data have
+        /// the same hash, so it can key a cache of things made from a face, such as an embedded copy of it.
         /// </summary>
-        /// <remarks>It is a plain, non-cryptographic checksum: fit for a cache key, and not for anything that has to withstand a font made to collide.</remarks>
-        public ulong ContentHash => Face.FontSource.Key;
+        /// <remarks>
+        /// It is the first 128 bits of the SHA-256 of the data, so two different fonts do not share one, not even when one was made
+        /// to look like the other; a cache keyed by it cannot be made to serve one font for another. It says nothing of where in
+        /// the design space of a variable font the face reads (see <see cref="VariationKey"/>).
+        /// </remarks>
+        public string ContentHash => Face.FontSource.KeyText;
 
         /// <summary>Whether the font file declares the face bold (in its OS/2 table).</summary>
         public bool IsBold => Face.IsBold;
