@@ -76,7 +76,18 @@ internal sealed class HintingEngine
 
     private readonly LruCache<SizeKey, TtSize?> _sizes = new(MaxSizes);
     private readonly LruCache<SizeKey, CffSize?> _cffSizes = new(MaxSizes);
-    private readonly LruCache<GlyphKey, HintedGlyphResult> _glyphs = new(MaxGlyphs, WeightOf, MaxGlyphWeight);
+    private readonly LruCache<GlyphKey, HintedGlyphResult> _glyphs;
+    private readonly Func<SizeKey, TtSize?> _createSize;
+    private readonly Func<SizeKey, CffSize?> _createCffSize;
+
+    // Glyphs that were asked for lately, where any number of threads can find them without taking a lock. Every glyph cache hit takes the one lock of the
+    // cache and moves the entry to the front of its list, which is a write to memory that every thread shares: with several threads asking for the same few
+    // glyphs (text is mostly a few hundred of them) the threads spend their time waiting for each other and for the cache lines, tens of times what a hit costs
+    // alone. An entry is immutable and so is what it holds; the array is direct-mapped, an entry that goes out of _glyphs is taken out of it too, and a thread
+    // that finds nothing here asks _glyphs and puts what it finds here. The price is that a hit here does not move the entry to the front of _glyphs, so an
+    // entry that is asked for over and over may reach the end of it and be hinted again after all: that costs one more hinting of the glyph, never a wrong answer.
+    private const int FrontBits = 11;
+    private FrontEntry?[]? _front; // made by the first glyph that is found in _glyphs, so an engine that only ever hints each glyph once does not have it
 
     public HintingEngine(OpenTypeFontface font, string? familyName, VariationCoordinates? variation, Func<int, int> instanceAdvance)
     {
@@ -85,6 +96,9 @@ internal sealed class HintingEngine
         _variation = variation;
         _instanceAdvance = instanceAdvance;
         _variationKey = variation?.Key;
+        _glyphs = new(MaxGlyphs, WeightOf, MaxGlyphWeight, (key, _) => Forget(key));
+        _createSize = CreateSize;
+        _createCffSize = CreateCffSize;
     }
 
     /// <summary>
@@ -106,6 +120,20 @@ internal sealed class HintingEngine
         }
 
         return result;
+    }
+
+    private static int FrontSlot(in GlyphKey key) =>
+        (int)(((uint)key.Glyph * 0x9E3779B1u + (uint)key.Size.Ppem26Dot6 * 0x85EBCA6Bu + (uint)key.Size.Mode * 0xC2B2AE35u + (key.Size.StemDarkening ? 0x27D4EB2Fu : 0u)) >> (32 - FrontBits));
+
+    private void Forget(in GlyphKey key)
+    {
+        if (Volatile.Read(ref _front) is not { } front)
+            return;
+
+        ref FrontEntry? slot = ref front[FrontSlot(key)];
+        FrontEntry? entry = Volatile.Read(ref slot);
+        if (entry is not null && entry.Key.Equals(key))
+            Interlocked.CompareExchange(ref slot, null, entry);
     }
 
     /// <summary>
@@ -218,8 +246,23 @@ internal sealed class HintingEngine
         var sizeKey = new SizeKey(ppem26Dot6, mode, stemDarkening, _variationKey);
         var key = new GlyphKey(sizeKey, glyph);
 
+        int slot = FrontSlot(key);
+        FrontEntry?[]? front = Volatile.Read(ref _front);
+        if (front is not null && Volatile.Read(ref front[slot]) is { } entry && entry.Key.Equals(key))
+            return entry.Result;
+
         if (_glyphs.TryGet(key, out HintedGlyphResult? cached))
+        {
+            if (front is null)
+            {
+                // two threads that make it at the same moment share whichever was stored first
+                front = new FrontEntry?[1 << FrontBits];
+                front = Interlocked.CompareExchange(ref _front, front, null) ?? front;
+            }
+
+            Volatile.Write(ref front[slot], new FrontEntry(key, cached!));
             return cached!;
+        }
 
         HintedGlyphResult result = Compute(glyph, sizeKey);
         _glyphs.Set(key, result);
@@ -282,57 +325,48 @@ internal sealed class HintingEngine
         }
     }
 
-    private CffSize? GetCffSize(SizeKey key)
+    // A size is made once however many threads want it at the same moment (the cache's GetOrAdd): making one runs the font's fpgm and prep programs.
+    private CffSize? GetCffSize(SizeKey key) => _cffSizes.GetOrAdd(key, _createCffSize);
+
+    private CffSize? CreateCffSize(SizeKey key)
     {
-        if (_cffSizes.TryGet(key, out CffSize? cached))
-            return cached;
-
-        CffSize? size = null;
         CffFace? face = GetCffFace();
-        if (face is not null)
-        {
-            try
-            {
-                size = new CffSize(face, key.Ppem26Dot6, key.StemDarkening);
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                NoteFailure(ex);
-                size = null;
-            }
-        }
+        if (face is null)
+            return null;
 
-        _cffSizes.Set(key, size);
-        return size;
+        try
+        {
+            return new CffSize(face, key.Ppem26Dot6, key.StemDarkening);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            NoteFailure(ex);
+            return null;
+        }
     }
 
-    private TtSize? GetSize(SizeKey key)
+    private TtSize? GetSize(SizeKey key) => _sizes.GetOrAdd(key, _createSize);
+
+    // a size that fails is remembered as well: its programs would fail again, and slowly
+    private TtSize? CreateSize(SizeKey key)
     {
-        if (_sizes.TryGet(key, out TtSize? cached))
-            return cached;
-
-        TtSize? size = null;
         TtFace? face = GetFace();
-        if (face is not null)
+        if (face is null)
+            return null;
+
+        try
         {
-            try
-            {
-                var (version, renderMode) = key.Mode == GridFitting.Monochrome
-                    ? (TtInterpreterVersion.V35, TtRenderMode.Mono)
-                    : (TtInterpreterVersion.V40, TtRenderMode.Normal);
+            var (version, renderMode) = key.Mode == GridFitting.Monochrome
+                ? (TtInterpreterVersion.V35, TtRenderMode.Mono)
+                : (TtInterpreterVersion.V40, TtRenderMode.Normal);
 
-                size = TtSize.Create(face, key.Ppem26Dot6, version, renderMode);
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                NoteFailure(ex);
-                size = null;
-            }
+            return TtSize.Create(face, key.Ppem26Dot6, version, renderMode);
         }
-
-        // a size that fails is remembered as well: its programs would fail again, and slowly
-        _sizes.Set(key, size);
-        return size;
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            NoteFailure(ex);
+            return null;
+        }
     }
 
     private static int WeightOf(HintedGlyphResult result)
@@ -445,4 +479,11 @@ internal sealed class HintingEngine
     private readonly record struct SizeKey(int Ppem26Dot6, GridFitting Mode, bool StemDarkening, string? Variation);
 
     private readonly record struct GlyphKey(SizeKey Size, int Glyph);
+
+    /// <summary>A glyph and what hinting it gave, in <see cref="_front"/>.</summary>
+    private sealed class FrontEntry(GlyphKey key, HintedGlyphResult result)
+    {
+        public readonly GlyphKey Key = key;
+        public readonly HintedGlyphResult Result = result;
+    }
 }
