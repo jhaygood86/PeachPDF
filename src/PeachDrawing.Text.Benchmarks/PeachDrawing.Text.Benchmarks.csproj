@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    BenchmarkDotNet benchmarks of the font and text engine, run by hand when a change is expected to move performance
+    (see docs/testing.md). Not part of any CI job: no workflow builds or runs it, and it is not packable. Like the engine's
+    tests it reads the engine only through its public API and never references PeachPDF. Single-TFM net10.0, overriding the
+    default of src/Directory.Build.props, so the numbers of two runs are comparable whatever the SDK offers.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>false</IsPublishable>
+    <!--
+      BenchmarkDotNet builds a project of its own next to the benchmark assembly and, although it turns Directory.Build.props
+      off inside that project, the props are imported before that setting is read: under src/ the generated project would
+      inherit the net8.0;net10.0 target list and fail to restore against this net10.0-only one. Building outside src/
+      (artifacts/ is ignored by git) keeps the generated project clear of src/Directory.Build.props.
+    -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\benchmarks\$(Configuration)\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PeachDrawing.Text\PeachDrawing.Text.csproj" />
+  </ItemGroup>
+
+  <!--
+    Fonts live in the repository-root assets/fonts/ directory, shared with the tests. Each is <Link>ed to the output root,
+    and listed one by one so this project still declares exactly which fonts it needs.
+  -->
+  <ItemGroup>
+    <None Include="..\..\assets\fonts\LiberationSans-Regular.woff" Link="LiberationSans-Regular.woff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\LiberationSerif-Regular.woff" Link="LiberationSerif-Regular.woff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\SourceSans3-Regular.ttf" Link="SourceSans3-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingOpcodes.ttf" Link="HintingOpcodes.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingCff.otf" Link="HintingCff.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingCffCid.otf" Link="HintingCffCid.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\SourceCodePro-Regular.otf" Link="SourceCodePro-Regular.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
