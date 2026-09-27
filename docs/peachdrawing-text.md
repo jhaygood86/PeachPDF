@@ -63,8 +63,11 @@ if (brand.TryMatch(new TypefaceQuery(Weight: 600, IsItalic: true), out TypefaceM
 weight, taking the nearest face when none is exact, so a request for condensed italic text gets the condensed face of a
 family whose condensed face is upright and whose italic face is of normal width, and the lean is faked. Among faces that
 declare an oblique range, the query's `ObliqueAngle` chooses the one that holds the angle or else the nearest; a face
-declared italic beats an oblique range for an italic request with no angle, and the other way round when an angle is
-given. The weight is a number, not a whole number: `350.5` is a weight, and a face whose range holds it is preferred to
+declared italic beats an oblique range for an italic request with no angle. For an explicit `oblique <angle>` of 0
+degrees or more, the oblique ranges leaning the same way as the angle are tried first, then a declared italic face, and
+only then the ranges leaning the other way. A request for `oblique 0deg` is upright's equivalent on this scale, and a
+genuinely upright face is preferred to any oblique range - one that merely includes 0 as much as one that excludes it.
+The weight is a number, not a whole number: `350.5` is a weight, and a face whose range holds it is preferred to
 one that only holds 350. A face is taken to cover the characters of its `unicode-range` if it has one, and the ones its
 `cmap` maps otherwise. `Synthesis` says what the caller has to fake because the face falls short: bold when 600 or more
 was asked for and the face is lighter, italic when italic was asked for and the face is upright.
