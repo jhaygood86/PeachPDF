@@ -225,7 +225,7 @@ internal static class Cf2Interpreter
     /// <summary>The maximum subroutine nesting (<c>CF2_MAX_SUBR</c>); only 10 are allowed but some fonts exceed it.</summary>
     private const int MaxSubr = 16;
 
-    private const int StorageSize = 32;
+    private const int StorageSize = Cf2InterpBuffers.StorageSize;
 
     /// <summary>
     /// The most stem hints a charstring may declare. FreeType keeps every one (a glyph of more than 96 fails at its first hint mask or move,
@@ -394,12 +394,18 @@ internal static class Cf2Interpreter
         // save this for hinting seac accents
         int hintOriginY = curY;
 
-        var storage = new int[StorageSize]; // for `put' and `get'
+        // the operand stack is as big as the charstring type says
+        uint stackSize = font.IsCff2 ? font.MaxStack : OperandStackSize;
+
+        // the buffers of the run: the thread's own, and given back at Exit (a run that throws leaves them to the collector)
+        Cf2InterpBuffers buffers = Cf2Pool.RentInterp(error, (int)stackSize);
+
+        int[] storage = buffers.Storage; // for `put' and `get'
 
         // the instruction limit is the font's, shared by the charstring, its accent and the run again for the winding order (FreeType's
         // is a local of each call)
 
-        var subrStack = new Cf2ArrStack<Cf2Buffer>(error);
+        Cf2ArrStack<Cf2Buffer> subrStack = buffers.SubrStack;
 
         bool haveWidth;
         Cf2Buffer? charstring = null;
@@ -407,10 +413,10 @@ internal static class Cf2Interpreter
         int charstringIndex = -1; // initialize to empty
 
         // objects used for hinting
-        var hStemHintArray = new Cf2ArrStack<Cf2StemHint>(error);
-        var vStemHintArray = new Cf2ArrStack<Cf2StemHint>(error);
+        Cf2ArrStack<Cf2StemHint> hStemHintArray = buffers.HStemHints;
+        Cf2ArrStack<Cf2StemHint> vStemHintArray = buffers.VStemHints;
 
-        var hintMask = new Cf2HintMask();
+        Cf2HintMask hintMask = Cf2Pool.RentHintMask();
         Cf2HintMap? counterHintMap = null; // for the counter masks, made when the first is met and used again
         Cf2HintMask? counterMask = null;
         Cf2GlyphPath glyphPath;
@@ -421,7 +427,7 @@ internal static class Cf2Interpreter
         // initialize path map to manage drawing operations
         //
         // Note: last 4 params are used to handle `MoveToPermissive', which may need to call `hintMap.Build'
-        glyphPath = new Cf2GlyphPath(font, callbacks, scaleY, hStemHintArray, vStemHintArray, hintMask, hintOriginY, translation);
+        glyphPath = new Cf2GlyphPath(font, callbacks, scaleY, hStemHintArray, vStemHintArray, buffers.HintMoves, hintMask, hintOriginY, translation);
 
         // Initialize state for width parsing.  From the CFF Spec:
         //
@@ -437,9 +443,8 @@ internal static class Cf2Interpreter
         haveWidth = font.IsCff2;
         width = Cf2Fixed.FromInt(priv.DefaultWidth);
 
-        // allocate an operand stack
-        uint stackSize = font.IsCff2 ? font.MaxStack : OperandStackSize;
-        var opStack = new Cf2Stack(error, (int)stackSize);
+        // the operand stack (its size was worked out above)
+        Cf2Stack opStack = buffers.OpStack;
 
         // initialize subroutine stack by placing top level charstring as first element (max depth plus one for the charstring)
         // Note: Caller owns and must finalize the first charstring.  Our copy of it does not change that requirement.
@@ -1066,8 +1071,8 @@ internal static class Cf2Interpreter
                         // chances of conflicts between hstems that are initially placed in separate hint groups and then brought
                         // together.  The positions are copied back to `hStemHintArray', so we can discard `counterMask' and
                         // `counterHintMap'.
-                        counterHintMap ??= new Cf2HintMap();
-                        counterMask ??= new Cf2HintMask();
+                        counterHintMap ??= Cf2Pool.RentHintMap();
+                        counterMask ??= Cf2Pool.RentHintMask();
 
                         counterHintMap.Init(font, glyphPath.InitialHintMap, glyphPath.HintMoves, scaleY);
                         counterMask.Init(error);
@@ -1356,6 +1361,17 @@ internal static class Cf2Interpreter
     Exit:
         // check whether last error seen is also the first one
         error.Set(lastError);
+
+        // the maps and masks go back to the thread's pool (a load that throws does not get here, and its objects are left to the collector)
+        glyphPath.ReleaseMaps();
+        Cf2Pool.ReturnInterp(buffers);
+        Cf2Pool.ReturnHintMask(hintMask);
+
+        if (counterHintMap is not null)
+            Cf2Pool.ReturnHintMap(counterHintMap);
+
+        if (counterMask is not null)
+            Cf2Pool.ReturnHintMask(counterMask);
     }
 
     // a 32bit version of the `xorshift' algorithm (cff_random)

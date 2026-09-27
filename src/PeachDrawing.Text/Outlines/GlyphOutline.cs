@@ -53,6 +53,14 @@ namespace PeachDrawing.Text.Outlines
         internal OutlineContour(OutlinePoint start)
         {
             Start = start;
+            SegmentList = [];
+        }
+
+        /// <summary>A contour that is going to have <paramref name="segments"/> segments: their list is made that big at once, not grown.</summary>
+        internal OutlineContour(OutlinePoint start, int segments)
+        {
+            Start = start;
+            SegmentList = new List<OutlineSegment>(segments);
         }
 
         /// <summary>Where the contour begins.</summary>
@@ -61,7 +69,7 @@ namespace PeachDrawing.Text.Outlines
         /// <summary>The segments of the contour, in order.</summary>
         public IReadOnlyList<OutlineSegment> Segments => SegmentList;
 
-        internal List<OutlineSegment> SegmentList { get; } = [];
+        internal List<OutlineSegment> SegmentList { get; }
     }
 
     /// <summary>

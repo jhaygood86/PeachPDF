@@ -105,7 +105,8 @@ internal sealed partial class Cf2HintMask
     /// <summary>The maximum number of hints (<c>CF2_MAX_HINTS</c>).</summary>
     public const int MaxHints = 96;
 
-    public Cf2Error Error = new();
+    /// <summary>The shared error; set by <c>Init</c> or <see cref="CopyFrom"/> before a mask is used.</summary>
+    public Cf2Error Error = null!;
 
     public bool IsValid;
     public bool IsNew;
@@ -114,6 +115,9 @@ internal sealed partial class Cf2HintMask
     public int ByteCount;
 
     public byte[] Mask = new byte[(MaxHints + 7) / 8];
+
+    /// <summary>Lets go of the error (a mask that a thread keeps for the next glyph must not keep the last glyph's alive).</summary>
+    public void Release() => Error = null!;
 
     /// <summary>A structure copy of another mask.</summary>
     public void CopyFrom(Cf2HintMask other)
@@ -176,7 +180,9 @@ internal sealed class Cf2HintMap
         IsValid = false;
         Count = 0;
         LastIndex = 0;
-        Array.Clear(Edge);
+
+        // (The edges are not cleared: nothing reads an edge at or past Count, and a map is used again from glyph to glyph, so what is there
+        // is what an earlier glyph left.)
 
         // copy parameters from font instance
         Hinted = font.Hinted;
@@ -199,7 +205,17 @@ internal sealed class Cf2HintMap
         Scale = other.Scale;
         Count = other.Count;
         LastIndex = other.LastIndex;
-        Array.Copy(other.Edge, Edge, Edge.Length);
+
+        // the edges that count: a copy of the rest would be a copy of what nothing reads
+        Array.Copy(other.Edge, Edge, other.Count);
+    }
+
+    /// <summary>Lets go of the font and what the map shared with the glyph it was for, so that a map a thread keeps does not keep them alive.</summary>
+    public void Release()
+    {
+        Font = null!;
+        InitialHintMap = null!;
+        HintMoves = null!;
     }
 
     private static bool HintIsValid(in Cf2Hint hint) => hint.Flags != 0;
@@ -648,8 +664,22 @@ internal sealed class Cf2HintMap
     /// </remarks>
     public void Build(Cf2ArrStack<Cf2StemHint> hStemHintArray, Cf2ArrStack<Cf2StemHint> vStemHintArray, Cf2HintMask hintMask, int hintOrigin, bool initialMap)
     {
+        // a temporary mask, from the thread's own and back (nothing that Build does keeps it)
+        Cf2HintMask tempHintMask = Cf2Pool.RentHintMask();
+
+        try
+        {
+            BuildWith(tempHintMask, hStemHintArray, vStemHintArray, hintMask, hintOrigin, initialMap);
+        }
+        finally
+        {
+            Cf2Pool.ReturnHintMask(tempHintMask);
+        }
+    }
+
+    private void BuildWith(Cf2HintMask tempHintMask, Cf2ArrStack<Cf2StemHint> hStemHintArray, Cf2ArrStack<Cf2StemHint> vStemHintArray, Cf2HintMask hintMask, int hintOrigin, bool initialMap)
+    {
         Cf2Font font = Font;
-        var tempHintMask = new Cf2HintMask();
 
         // check whether initial map is constructed
         if (!initialMap && !InitialHintMap.IsValid)
@@ -828,9 +858,11 @@ internal sealed class Cf2GlyphPath
     private readonly Cf2Font _font;
     private readonly Cf2OutlineCallbacks _callbacks;
 
-    private readonly Cf2HintMap _hintMap = new();       // current hint map
-    private readonly Cf2HintMap _firstHintMap = new();  // saved copy
-    private readonly Cf2HintMap _initialHintMap = new(); // based on all captured hints
+    // The three maps are the thread's own, kept from glyph to glyph (each has an array of 192 edges, which was most of what loading a glyph
+    // allocated); ReleaseMaps gives them back.
+    private readonly Cf2HintMap _hintMap = Cf2Pool.RentHintMap();       // current hint map
+    private readonly Cf2HintMap _firstHintMap = Cf2Pool.RentHintMap();  // saved copy
+    private readonly Cf2HintMap _initialHintMap = Cf2Pool.RentHintMap(); // based on all captured hints
 
     private readonly Cf2ArrStack<Cf2HintMove> _hintMoves; // list of hint moves for 2nd pass
 
@@ -883,12 +915,12 @@ internal sealed class Cf2GlyphPath
 
     /// <summary><c>cf2_glyphpath_init</c>.</summary>
     public Cf2GlyphPath(Cf2Font font, Cf2OutlineCallbacks callbacks, int scaleY, Cf2ArrStack<Cf2StemHint> hStemHintArray,
-        Cf2ArrStack<Cf2StemHint> vStemHintArray, Cf2HintMask hintMask, int hintOriginY, FtVector fractionalTranslation)
+        Cf2ArrStack<Cf2StemHint> vStemHintArray, Cf2ArrStack<Cf2HintMove> hintMoves, Cf2HintMask hintMask, int hintOriginY, FtVector fractionalTranslation)
     {
         _font = font;
         _callbacks = callbacks;
 
-        _hintMoves = new Cf2ArrStack<Cf2HintMove>(font.Error);
+        _hintMoves = hintMoves; // the interpreter's, which it makes ready for each run
 
         _initialHintMap.Init(font, _initialHintMap, _hintMoves, scaleY);
         _firstHintMap.Init(font, _initialHintMap, _hintMoves, scaleY);
@@ -1418,6 +1450,14 @@ internal sealed class Cf2GlyphPath
             _pathIsClosing = false;
             _elemIsQueued = false;
         }
+    }
+
+    /// <summary>Gives the three hint maps back to the thread's pool; the path is not used after this.</summary>
+    public void ReleaseMaps()
+    {
+        Cf2Pool.ReturnHintMap(_hintMap);
+        Cf2Pool.ReturnHintMap(_firstHintMap);
+        Cf2Pool.ReturnHintMap(_initialHintMap);
     }
 
     /// <summary>The hint moves array, which the counter-mask hint map of the interpreter shares (<c>glyphpath->hintMoves</c>).</summary>

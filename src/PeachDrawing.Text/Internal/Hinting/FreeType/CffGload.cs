@@ -181,12 +181,53 @@ internal sealed class CffHintedGlyph
     public int Advance { get; init; }
 }
 
+/// <summary>
+/// A CFF glyph loaded and hinted, as the loader holds it: the spans are the thread's own scratch arrays and stay good only until the reader
+/// that was handed the view returns (see <see cref="CffGlyphLoader.Load{TState, TResult}"/>).
+/// </summary>
+internal readonly ref struct CffGlyphView
+{
+    /// <summary>The point coordinates in 26.6 pixels, y up, with the glyph origin at (0, 0).</summary>
+    public required ReadOnlySpan<int> X { get; init; }
+
+    public required ReadOnlySpan<int> Y { get; init; }
+
+    /// <summary>The point tags: <see cref="Cf2Outline.TagOn"/> or <see cref="Cf2Outline.TagCubic"/>.</summary>
+    public required ReadOnlySpan<byte> Tags { get; init; }
+
+    /// <summary>The index of the last point of each contour.</summary>
+    public required ReadOnlySpan<int> ContourEnds { get; init; }
+
+    /// <summary>The advance width in 26.6 pixels, rounded to a whole pixel.</summary>
+    public int Advance { get; init; }
+}
+
+/// <summary>Reads a loaded glyph while the loader still holds it.</summary>
+internal delegate TResult CffGlyphReader<in TState, out TResult>(in CffGlyphView glyph, TState state);
+
 /// <summary>The CFF glyph loader (<c>cff_slot_load</c> for a hinted glyph): runs Adobe's engine on a glyph, then places and scales the result.</summary>
 internal static class CffGlyphLoader
 {
-    /// <summary>Loads and hints a glyph at a size.</summary>
+    /// <summary>Loads and hints a glyph at a size, into arrays of its own.</summary>
     /// <exception cref="HintingException">The glyph cannot be loaded: its data is malformed, or a limit is reached.</exception>
-    public static CffHintedGlyph Load(CffSize size, int glyphIndex)
+    public static CffHintedGlyph Load(CffSize size, int glyphIndex) =>
+        Load(size, glyphIndex, 0, static (in CffGlyphView glyph, int _) => new CffHintedGlyph
+        {
+            X = glyph.X.ToArray(),
+            Y = glyph.Y.ToArray(),
+            Tags = glyph.Tags.ToArray(),
+            ContourEnds = glyph.ContourEnds.ToArray(),
+            NPoints = glyph.X.Length,
+            Advance = glyph.Advance,
+        });
+
+    /// <summary>
+    /// Loads and hints a glyph at a size and hands it to <paramref name="read"/> where it is, in the thread's scratch arrays, without a copy. What
+    /// the reader is given is good until it returns, so it must not keep it (or a span of it); the state is handed to it as it is, so that a reader
+    /// needs no closure.
+    /// </summary>
+    /// <exception cref="HintingException">The glyph cannot be loaded: its data is malformed, or a limit is reached.</exception>
+    public static TResult Load<TState, TResult>(CffSize size, int glyphIndex, TState state, CffGlyphReader<TState, TResult> read)
     {
         CffFace face = size.Face;
         CffFont cff = face.Font;
@@ -204,10 +245,13 @@ internal static class CffGlyphLoader
         int offsetX, offsetY;
         CffSubFont sub = cff.TopFont;
 
+        // the Font DICT of the glyph, looked up once for the matrix and for the subfont below
+        int fdSelect = cff.SubFonts.Length > 0 ? cff.FdSelectGet(glyphIndex) : 0;
+
         // if we have a CID subfont, use its matrix (which has already been multiplied with the root matrix)
         if (cff.SubFonts.Length > 0)
         {
-            int fdIndex = cff.FdSelectGet(glyphIndex);
+            int fdIndex = fdSelect;
             if (fdIndex >= cff.SubFonts.Length)
                 fdIndex = cff.SubFonts.Length - 1;
 
@@ -241,7 +285,7 @@ internal static class CffGlyphLoader
         // this function also checks for a valid subfont index (cff_decoder_prepare)
         if (cff.SubFonts.Length > 0)
         {
-            int fdIndex = cff.FdSelectGet(glyphIndex);
+            int fdIndex = fdSelect;
             if (fdIndex >= cff.SubFonts.Length)
                 throw new HintingException("The glyph's Font DICT does not exist.");
 
@@ -264,79 +308,84 @@ internal static class CffGlyphLoader
         if (!cff.CharStrings.TryGetElement(glyphIndex, out int position, out int length))
             throw new HintingException("The glyph has no charstring.");
 
-        var outline = new Cf2Outline();
-        int error = decoder.ParseCharstrings(outline, position, length, hinted: true);
-        if (error != 0)
-            throw new HintingException("Adobe's engine failed with error " + error + ".");
+        // the outline is the thread's own, made ready for this glyph and given back when the reader is done with it
+        Cf2Outline outline = Cf2Pool.RentOutline();
 
-        // Now, set the metrics -- this is rather simple, as the left side bearing is the xMin, and the top side bearing the yMax.
-        int nPoints = outline.NPoints;
-        var x = new int[nPoints];
-        var y = new int[nPoints];
-        Array.Copy(outline.X, x, nPoints);
-        Array.Copy(outline.Y, y, nPoints);
-
-        // the advance of the font's hmtx table (a font with a CFF table always has one), in font units
-        int horiAdvance = face.Advance(glyphIndex);
-
-        // apply the font matrix, if any
-        if (matrixXx != 0x10000 || matrixYy != 0x10000 || matrixXy != 0 || matrixYx != 0)
+        try
         {
-            for (int i = 0; i < nPoints; i++)
-                FtCalc.VectorTransform(ref x[i], ref y[i], matrixXx, matrixXy, matrixYx, matrixYy);
+            int error = decoder.ParseCharstrings(outline, position, length, hinted: true);
+            if (error != 0)
+                throw new HintingException("Adobe's engine failed with error " + error + ".");
 
-            horiAdvance = FtCalc.MulFix(horiAdvance, matrixXx);
-        }
+            // Now, set the metrics -- this is rather simple, as the left side bearing is the xMin, and the top side bearing the yMax.
+            int nPoints = outline.NPoints;
+            int[] x = outline.X;
+            int[] y = outline.Y;
 
-        if (offsetX != 0 || offsetY != 0)
-        {
-            for (int i = 0; i < nPoints; i++)
+            // the advance of the font's hmtx table (a font with a CFF table always has one), in font units
+            int horiAdvance = face.Advance(glyphIndex);
+
+            // apply the font matrix, if any
+            if (matrixXx != 0x10000 || matrixYy != 0x10000 || matrixXy != 0 || matrixYx != 0)
             {
-                x[i] = unchecked(x[i] + offsetX);
-                y[i] = unchecked(y[i] + offsetY);
+                for (int i = 0; i < nPoints; i++)
+                    FtCalc.VectorTransform(ref x[i], ref y[i], matrixXx, matrixXy, matrixYx, matrixYy);
+
+                horiAdvance = FtCalc.MulFix(horiAdvance, matrixXx);
             }
 
-            horiAdvance = unchecked(horiAdvance + offsetX);
-        }
-
-        // scale the metrics; the points of a hinted glyph are in pixels already
-        horiAdvance = FtCalc.MulFix(horiAdvance, xScale);
-
-        // ft_glyphslot_grid_fit_metrics: the advance of a hinted glyph is a whole number of pixels
-        horiAdvance = FtCalc.PixRound(horiAdvance);
-
-        // FT_Outline_Check: the contours end inside the points, in order, and the last one at the last point
-        var ends = new int[outline.NContours];
-        if (nPoints > 0 || ends.Length > 0)
-        {
-            if (nPoints <= 0 || ends.Length <= 0)
-                throw new HintingException("The glyph's outline is invalid.");
-
-            int last = -1;
-            for (int i = 0; i < ends.Length; i++)
+            if (offsetX != 0 || offsetY != 0)
             {
-                ends[i] = outline.Contours[i];
-                if (ends[i] <= last || ends[i] >= nPoints)
+                for (int i = 0; i < nPoints; i++)
+                {
+                    x[i] = unchecked(x[i] + offsetX);
+                    y[i] = unchecked(y[i] + offsetY);
+                }
+
+                horiAdvance = unchecked(horiAdvance + offsetX);
+            }
+
+            // scale the metrics; the points of a hinted glyph are in pixels already
+            horiAdvance = FtCalc.MulFix(horiAdvance, xScale);
+
+            // ft_glyphslot_grid_fit_metrics: the advance of a hinted glyph is a whole number of pixels
+            horiAdvance = FtCalc.PixRound(horiAdvance);
+
+            // FT_Outline_Check: the contours end inside the points, in order, and the last one at the last point
+            int nContours = outline.NContours;
+            if (nPoints > 0 || nContours > 0)
+            {
+                if (nPoints <= 0 || nContours <= 0)
                     throw new HintingException("The glyph's outline is invalid.");
 
-                last = ends[i];
+                int last = -1;
+                for (int i = 0; i < nContours; i++)
+                {
+                    int end = outline.Contours[i];
+                    if (end <= last || end >= nPoints)
+                        throw new HintingException("The glyph's outline is invalid.");
+
+                    last = end;
+                }
+
+                if (last != nPoints - 1)
+                    throw new HintingException("The glyph's outline is invalid.");
             }
 
-            if (last != nPoints - 1)
-                throw new HintingException("The glyph's outline is invalid.");
+            var view = new CffGlyphView
+            {
+                X = x.AsSpan(0, nPoints),
+                Y = y.AsSpan(0, nPoints),
+                Tags = outline.Tags.AsSpan(0, nPoints),
+                ContourEnds = outline.Contours.AsSpan(0, nContours),
+                Advance = horiAdvance,
+            };
+
+            return read(in view, state);
         }
-
-        var tags = new byte[nPoints];
-        Array.Copy(outline.Tags, tags, nPoints);
-
-        return new CffHintedGlyph
+        finally
         {
-            X = x,
-            Y = y,
-            Tags = tags,
-            ContourEnds = ends,
-            NPoints = nPoints,
-            Advance = horiAdvance,
-        };
+            Cf2Pool.ReturnOutline(outline);
+        }
     }
 }

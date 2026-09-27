@@ -16,7 +16,7 @@ namespace PeachDrawing.Text.Benchmarks;
 [SimpleJob(RunStrategy.Monitoring, RuntimeMoniker.Net10_0, warmupCount: 5, iterationCount: 40)]
 public class HintingColdBenchmarks
 {
-    /// <summary>The bundled fonts to hint: hinted TrueType fonts (two with composites) and the two CFF ones.</summary>
+    /// <summary>The bundled fonts to hint: hinted TrueType fonts (two with composites) and three CFF ones (two are fixtures, and HintingCff has glyphs the engine refuses, which cost an exception each).</summary>
     public static string[] Fonts { get; } =
     [
         "LiberationSans",
@@ -25,6 +25,7 @@ public class HintingColdBenchmarks
         "HintingOpcodes",
         "HintingCff",
         "HintingCffCid",
+        "SourceCodePro",
     ];
 
     /// <summary>The sizes, in pixels per em, a font is hinted at.</summary>
