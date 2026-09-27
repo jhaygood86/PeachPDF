@@ -143,6 +143,8 @@
         public const string Plaintext = "plaintext";
         public const string Default = "default";
         public const string ContextMenu = "context-menu";
+        public const string ContextFill = "context-fill";
+        public const string ContextStroke = "context-stroke";
         public const string Help = "help";
         public const string Pointer = "pointer";
         public const string Progress = "progress";

@@ -11307,9 +11307,9 @@ await SaveShowcaseAsync("face_matching_order", "Typography & Text", "Face matchi
 // SVG-in-OpenType colour glyphs: a font's `SVG ` table gives a glyph an SVG document, drawn as vectors. Uses a small synthetic font whose
 // documents use the font's CPAL palette (var(--color0)) and the text colour (context-fill).
 var svgGlyphFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SvgTest.ttf")));
-string SvgGlyphCell(string style, string caption) =>
+string SvgGlyphCell(string style, string caption, string text = "ABCD") =>
     "<td>" +
-    $"<div class=\"sg\" style=\"{style}\">ABCD</div>" +
+    $"<div class=\"sg\" style=\"{style}\">{text}</div>" +
     $"<div class=\"css\">{caption}</div>" +
     "</td>";
 var svgGlyphHtml =
@@ -11339,12 +11339,44 @@ var svgGlyphHtml =
     "</tr><tr>" +
     SvgGlyphCell("font-size: 20pt", "20pt: the same artwork at another size") +
     SvgGlyphCell("filter: drop-shadow(4pt 4pt 3pt rgba(0,0,0,.45))", "filter: drop-shadow(): a raster region, still the real glyph") +
+    "</tr><tr>" +
+    SvgGlyphCell("color: #7c3aed", "F: the square is context-fill orange with a context-stroke blue edge from its &lt;use&gt;; the disc is the text colour", "F") +
+    SvgGlyphCell("color: #0b7a3b; filter: drop-shadow(4pt 4pt 3pt rgba(0,0,0,.45))", "the same, in a raster region: both paints survive", "F") +
     "</tr></table>" +
     "</body></html>";
 await SaveShowcaseAsync("svg_opentype_glyphs", "Typography & Text", "SVG-in-OpenType glyphs",
     "Colour glyphs drawn from a font's SVG table: the SVG document of each glyph is rendered as vector content, its palette " +
-    "variables follow font-palette and its context-fill follows the text colour, also inside a filtered (rasterized) element. Rendered against a small synthetic font.",
+    "variables follow font-palette, and context-fill and context-stroke follow the text and the <use> they are inside, also inside a " +
+    "filtered (rasterized) element. Rendered against a small synthetic font.",
     svgGlyphHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// SVG 2 context paint in the SVG engine itself: a shape written once says context-fill / context-stroke and each <use> gives it a fill and a
+// stroke, and a marker draws with the fill and stroke of the shape it sits on.
+var svgContextHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm } body { font: 9pt Arial, sans-serif; margin: 0 } h1 { font-size: 15pt; margin: 0 0 0.3em } " +
+    "p { color: #555; margin: 0 0 0.8em } svg { display: block; margin: 0 0 1em; border: 1px solid #ddd }" +
+    "</style></head><body>" +
+    "<h1>SVG context-fill and context-stroke</h1>" +
+    "<p>One badge shape is defined once, with <code>fill=\"context-fill\" stroke=\"context-stroke\"</code>. Each <code>&lt;use&gt;</code> below gives it its own fill and stroke.</p>" +
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"520\" height=\"130\" viewBox=\"0 0 520 130\">" +
+    "<defs><g id=\"badge\"><rect width=\"90\" height=\"90\" rx=\"18\" fill=\"context-fill\" stroke=\"context-stroke\" stroke-width=\"8\"/>" +
+    "<circle cx=\"45\" cy=\"45\" r=\"20\" fill=\"context-stroke\"/></g></defs>" +
+    "<use xlink:href=\"#badge\" x=\"20\" y=\"20\" fill=\"#f59e0b\" stroke=\"#7c2d12\"/>" +
+    "<use xlink:href=\"#badge\" x=\"150\" y=\"20\" fill=\"#38bdf8\" stroke=\"#0c4a6e\"/>" +
+    "<use xlink:href=\"#badge\" x=\"280\" y=\"20\" fill=\"#a3e635\" stroke=\"#365314\"/>" +
+    "<use xlink:href=\"#badge\" x=\"410\" y=\"20\" fill=\"#f472b6\" stroke=\"#831843\"/></svg>" +
+    "<p>A marker draws with the fill and stroke of the shape it is placed on: the same arrowhead on two paths.</p>" +
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"520\" height=\"130\" viewBox=\"0 0 520 130\">" +
+    "<defs><marker id=\"head\" markerWidth=\"22\" markerHeight=\"22\" refX=\"11\" refY=\"11\" markerUnits=\"userSpaceOnUse\" orient=\"auto\">" +
+    "<path d=\"M2,2 L20,11 L2,20 Z\" fill=\"context-stroke\"/><circle cx=\"6\" cy=\"11\" r=\"3\" fill=\"context-fill\"/></marker></defs>" +
+    "<path d=\"M30,35 C120,5 200,65 250,35\" fill=\"#fde68a\" stroke=\"#b45309\" stroke-width=\"4\" marker-end=\"url(#head)\"/>" +
+    "<path d=\"M290,95 C380,65 460,125 500,95\" fill=\"#bfdbfe\" stroke=\"#1d4ed8\" stroke-width=\"4\" marker-end=\"url(#head)\"/></svg>" +
+    "</body></html>";
+await SaveShowcaseAsync("svg_context_paint", "Graphics & Effects", "SVG context paint",
+    "SVG 2 context-fill and context-stroke: a shape defined once takes the fill and stroke of each <use> that instantiates it, and a marker " +
+    "draws with the fill and stroke of the shape it is placed on.",
+    svgContextHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // GSUB ligature substitution: font-variant-ligatures actually turns real GSUB liga/clig ligatures
 // on/off (not just a synthesized effect), and the same shaping applies to SVG <text> outlined for a

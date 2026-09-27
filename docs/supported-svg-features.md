@@ -32,7 +32,7 @@ PeachPDF renders SVG — inline `<svg>` elements in HTML, standalone SVG (`<img 
 
 | Feature | MDN Reference | Notes |
 |---------|--------------|-------|
-| `fill` | [fill](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fill) | Solid colors (named, hex, `rgb()`), gradient references (`url(#id)`), pattern references (`url(#id)`), `none`, and `currentColor` |
+| `fill` | [fill](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fill) | Solid colors (named, hex, `rgb()`), gradient references (`url(#id)`), pattern references (`url(#id)`), `none`, `currentColor`, and the SVG 2 `context-fill` / `context-stroke` keywords (see [Context paint](#context-paint)) |
 | `fill-rule` | [fill-rule](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fill-rule) | `nonzero` and `evenodd`, inherited |
 | `fill-opacity` | [fill-opacity](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fill-opacity) | Full support, inherited, independent of `opacity` and `stroke-opacity` |
 | `stroke` | [stroke](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke) | Solid colors and gradient references paint a real stroke (including a real gradient-filled stroke, not an approximation). Pattern-filled strokes are not supported — see [Unsupported SVG Features](#unsupported-svg-features) |
@@ -46,6 +46,16 @@ PeachPDF renders SVG — inline `<svg>` elements in HTML, standalone SVG (`<img 
 | `opacity` | [opacity](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/opacity) | Not inherited as a property — it composites instead, per spec. On a leaf shape (no children), applied as a simple alpha multiply on the shape's own fill/stroke/text color. On a container (`<g>`, `<a>`, nested `<svg>`, or a `<use>` referencing one — including a container whose only content is `<text>` or `<image>`) it's rendered as a genuine, isolated PDF transparency group — the container's children are painted into an offscreen Form XObject and flattened, then that single flattened result is composited once at the container's own opacity, so overlapping children never double-blend where they overlap. |
 | `currentColor` | [currentColor](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value/currentcolor) | Resolves to the CSS `color` property of the inline `<svg>`'s HTML ancestor; for standalone SVG (no CSS context), resolves to black |
 | `color-interpolation-filters` | [color-interpolation-filters](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/color-interpolation-filters) | Honoured on a `<filter>` and its primitives when the filter is evaluated over pixels (see [Filters](#filters)); a vector-only filter always computes in sRGB. `color-interpolation` (for gradients and compositing) is not supported |
+
+### Context paint
+
+`context-fill` and `context-stroke` (SVG 2) are values of `fill` and `stroke` that stand for the fill and stroke of the *context element*:
+
+- **`<use>`** is the context element of what it instantiates, so one shape can be reused with a different fill and stroke per use: the shape says `fill="context-fill" stroke="context-stroke"` and each `<use>` gives them. A nested `<use>` changes the context for its own content; a keyword written on the `<use>` itself refers to the context outside it. `fill="context-stroke"` (a fill taking the stroke) is valid.
+- **A marker** draws with the fill and stroke of the shape it is placed on, for every instance separately.
+- **Elsewhere** there is no context element and the keywords paint nothing, unless the document was built for something that supplies one: the SVG document of an [OpenType SVG glyph](html-css-support.md#fonts) is drawn for text, so `context-fill` is the text's fill (its colour) and `context-stroke` its stroke, which is none because PeachPDF's text has no stroke paint.
+
+Gradients and patterns pass through `<use>` (measured against the box of what the `<use>` instantiates); through a marker only a colour or `none` is carried, and a gradient or pattern on the marked shape paints nothing inside the marker.
 
 ## Gradients
 

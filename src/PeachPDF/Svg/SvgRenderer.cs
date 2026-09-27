@@ -2366,23 +2366,29 @@ namespace PeachPDF.Svg
             // fill op anyway would be visually harmless (PDF implicitly closes an open subpath before
             // filling, and a straight two-point "path" encloses zero area either way), but issuing a
             // real fill call is still wasted content-stream bytes and not what a real SVG renderer does.
-            if (element is not SvgLineElement && element.Fill.Kind != SvgPaintKind.None)
+            // Inside a marker, context-fill / context-stroke are the paints of the shape the marker is drawn on.
+            var fill = Effective(element.Fill);
+            var stroke = Effective(element.Stroke);
+
+            if (element is not SvgLineElement && fill.Kind != SvgPaintKind.None)
             {
-                if (element.Fill.Kind == SvgPaintKind.PatternRef)
+                // A gradient or pattern that came through context-fill is measured against the context element, not this one.
+                var fillBounds = ContextBounds(fill);
+                if (fill.Kind == SvgPaintKind.PatternRef)
                 {
-                    PaintPatternFill(g, document, element, path, opacity * element.FillOpacity);
+                    PaintPatternFill(g, document, element, path, opacity * element.FillOpacity, fillBounds, fill);
                 }
                 else
                 {
-                    var brush = ResolvePaintBrush(g, document, element, element.Fill, opacity * element.FillOpacity);
+                    var brush = ResolvePaintBrush(g, document, element, fill, opacity * element.FillOpacity, fillBounds);
                     if (brush is not null)
                         g.DrawPath(brush, path);
                 }
             }
 
-            if (element.Stroke.Kind != SvgPaintKind.None && element.StrokeWidth > 0)
+            if (stroke.Kind != SvgPaintKind.None && element.StrokeWidth > 0)
             {
-                var pen = ResolveStrokePen(g, document, element, opacity * element.StrokeOpacity);
+                var pen = ResolveStrokePen(g, document, element, opacity * element.StrokeOpacity, ContextBounds(stroke), stroke);
                 if (pen is not null)
                     g.DrawPath(pen, path);
             }
@@ -2412,14 +2418,57 @@ namespace PeachPDF.Svg
             if (vertices is null)
                 return;
 
-            foreach (var vertex in vertices)
+            // This shape is the context element of what its markers draw. Its own paint may itself be a context keyword (a shape inside a
+            // marker), which is resolved against the marker it is in, before this shape's markers take over.
+            var outer = s_markerContext;
+            s_markerContext = new MarkerContext(ForMarker(Effective(element.Fill)), ForMarker(Effective(element.Stroke)));
+            try
             {
-                var markerRef = vertex.IsStart ? element.MarkerStartRef : vertex.IsEnd ? element.MarkerEndRef : element.MarkerMidRef;
+                foreach (var vertex in vertices)
+                {
+                    var markerRef = vertex.IsStart ? element.MarkerStartRef : vertex.IsEnd ? element.MarkerEndRef : element.MarkerMidRef;
 
-                if (markerRef is not null && document.Markers.TryGetValue(markerRef, out var marker))
-                    PaintMarker(g, document, marker, vertex, element.StrokeWidth, opacity);
+                    if (markerRef is not null && document.Markers.TryGetValue(markerRef, out var marker))
+                        PaintMarker(g, document, marker, vertex, element.StrokeWidth, opacity);
+                }
+            }
+            finally
+            {
+                s_markerContext = outer;
             }
         }
+
+        /// <summary>The paints of the shape whose markers are being drawn: what <c>context-fill</c> and <c>context-stroke</c> mean inside them.</summary>
+        private sealed record MarkerContext(SvgPaint Fill, SvgPaint Stroke);
+
+        [ThreadStatic]
+        private static MarkerContext? s_markerContext;
+
+        /// <summary>
+        /// A paint with its context keywords replaced, when it is drawn inside a marker (the only place the tree builder leaves them, because the
+        /// context element differs for every instance). With no marker being drawn there is no context element, so no paint.
+        /// </summary>
+        private static SvgPaint Effective(SvgPaint paint) => paint.Kind switch
+        {
+            SvgPaintKind.ContextFill => s_markerContext?.Fill ?? SvgPaint.None,
+            SvgPaintKind.ContextStroke => s_markerContext?.Stroke ?? SvgPaint.None,
+            _ => paint,
+        };
+
+        /// <summary>
+        /// The paint a marker's content gets from its shape: a colour or none. A gradient or pattern would have to be measured in the shape's
+        /// own coordinate system, which the marker's placement has moved away from, so it is not carried into the marker.
+        /// </summary>
+        private static SvgPaint ForMarker(SvgPaint paint) => paint.Kind is SvgPaintKind.Solid or SvgPaintKind.None ? paint : SvgPaint.None;
+
+        /// <summary>The box a gradient or pattern that came through context paint is measured against: the context element's. Null when the paint was the element's own.</summary>
+        private static RRect? ContextBounds(SvgPaint paint) => paint.ContextElement switch
+        {
+            // What a use instantiates is drawn in the use's own coordinate system, already moved by its x and y.
+            SvgUseElement { Target: { } target } => SvgGeometryBounds.GetBoundingBox(target),
+            { } context => SvgGeometryBounds.GetBoundingBox(context),
+            _ => null,
+        };
 
         /// <summary>
         /// Places one marker instance: establishes its own (markerWidth x markerHeight, optionally
@@ -2510,9 +2559,10 @@ namespace PeachPDF.Svg
         /// this stays fully vector - never rasterizes, matching this renderer's core design principle
         /// - unlike a "render once to a bitmap, then repeat the bitmap" approach would.
         /// </summary>
-        private static void PaintPatternFill(RGraphics g, SvgDocument document, SvgElement element, RGraphicsPath path, double opacity, RRect? boundsOverride = null)
+        private static void PaintPatternFill(RGraphics g, SvgDocument document, SvgElement element, RGraphicsPath path, double opacity, RRect? boundsOverride = null,
+            SvgPaint? paint = null)
         {
-            if (element.Fill.ReferenceId is not { } id || !document.Patterns.TryGetValue(id, out var pattern))
+            if ((paint ?? element.Fill).ReferenceId is not { } id || !document.Patterns.TryGetValue(id, out var pattern))
                 return;
 
             var (x, y, width, height) = ResolvePatternRect(element, pattern, boundsOverride);
@@ -2793,16 +2843,18 @@ namespace PeachPDF.Svg
             return rawR * Math.Sqrt((bbox.Width * bbox.Width + bbox.Height * bbox.Height) / 2.0);
         }
 
-        private static RPen? ResolveStrokePen(RGraphics g, SvgDocument document, SvgElement element, double opacity, RRect? boundsOverride = null)
+        private static RPen? ResolveStrokePen(RGraphics g, SvgDocument document, SvgElement element, double opacity, RRect? boundsOverride = null,
+            SvgPaint? paint = null)
         {
             RPen pen;
+            var stroke = paint ?? element.Stroke;
 
-            if (element.Stroke.Kind == SvgPaintKind.Solid)
+            if (stroke.Kind == SvgPaintKind.Solid)
             {
-                pen = g.GetPen(ApplyOpacity(element.Stroke.Color, opacity));
+                pen = g.GetPen(ApplyOpacity(stroke.Color, opacity));
             }
-            else if (element.Stroke.Kind == SvgPaintKind.GradientRef &&
-                     element.Stroke.ReferenceId is { } id &&
+            else if (stroke.Kind == SvgPaintKind.GradientRef &&
+                     stroke.ReferenceId is { } id &&
                      document.Gradients.TryGetValue(id, out var gradient))
             {
                 var brush = ResolveGradientBrush(g, element, gradient, opacity, boundsOverride);

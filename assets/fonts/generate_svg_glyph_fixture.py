@@ -7,6 +7,7 @@ A tiny TrueType font with an `SVG ` table, one glyph per case:
 * B, C (glyphs 3-4) - one gzip-compressed document that covers both, with the elements `glyph3` and `glyph4`; B fills with `context-fill`
 * D (glyph 5)      - a single-glyph document with no `glyph5` element, which is drawn whole; it starts with a UTF-8 byte order mark
 * E (glyph 6)      - a gzip bomb: a few kilobytes that inflate to more than the 4 MiB the reader allows
+* F (glyph 7)      - a glyph whose <use> is the context element of a shape that paints with context-fill and context-stroke
 
 It also has a CPAL table so the `--colorN` variables have palette entries to stand for. The outlines (plain squares) are what a
 renderer without SVG support draws. Run from anywhere: python assets/fonts/generate_svg_glyph_fixture.py. Requires fontTools.
@@ -37,6 +38,15 @@ DOC_BC = (
 DOC_D = (
     f'<svg {NS}><rect x="100" y="-800" width="800" height="800" fill="#008080"/></svg>'
 )
+# The <use> is the context element of the rect it instantiates, so the square is orange with a blue edge while the disc, outside any
+# <use>, takes the text's fill. The stroked frame asks for the text's stroke, which HTML text does not have: it is not drawn.
+DOC_F = (
+    f'<svg {NS} xmlns:xlink="http://www.w3.org/1999/xlink">'
+    '<defs><rect id="shape" x="100" y="-800" width="800" height="800" fill="context-fill" stroke="context-stroke" stroke-width="80"/></defs>'
+    '<g id="glyph7"><use xlink:href="#shape" fill="#ff8800" stroke="#0044cc"/>'
+    '<circle cx="500" cy="-400" r="220" fill="context-fill"/>'
+    '<rect x="150" y="-750" width="700" height="700" fill="none" stroke="context-stroke" stroke-width="30"/></g></svg>'
+)
 # 6 MiB of one character compresses to well under 10 KiB.
 BOMB = f'<svg {NS}><!--'.encode() + b"a" * (6 * 1024 * 1024) + b'--></svg>'
 
@@ -52,10 +62,10 @@ def square():
 
 
 def main():
-    names = [".notdef", "space", "A", "B", "C", "D", "E"]
+    names = [".notdef", "space", "A", "B", "C", "D", "E", "F"]
     fb = FontBuilder(1000, isTTF=True)
     fb.setupGlyphOrder(names)
-    fb.setupCharacterMap({0x20: "space", 0x41: "A", 0x42: "B", 0x43: "C", 0x44: "D", 0x45: "E"})
+    fb.setupCharacterMap({0x20: "space", 0x41: "A", 0x42: "B", 0x43: "C", 0x44: "D", 0x45: "E", 0x46: "F"})
     empty = TTGlyphPen(None).glyph()
     glyphs = {n: (empty if n == "space" else square()) for n in names}
     fb.setupGlyf(glyphs)
@@ -72,6 +82,7 @@ def main():
         SVGDocument(gzip.compress(DOC_BC.encode(), mtime=0), 3, 4, True),
         SVGDocument("﻿" + DOC_D, 5, 5, False),
         SVGDocument(gzip.compress(BOMB, mtime=0), 6, 6, True),
+        SVGDocument(DOC_F, 7, 7, False),
     ]
     fb.font["SVG "] = svg
     fb.save(OUT)

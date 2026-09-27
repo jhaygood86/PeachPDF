@@ -5,6 +5,7 @@ using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 
 namespace PeachPDF.Tests.Svg
@@ -79,6 +80,27 @@ namespace PeachPDF.Tests.Svg
             var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect width=\"10\" height=\"10\" {paint}/></g></svg>"));
 
             Assert.Equal(Text, Only(doc!).Fill.Color);
+        }
+
+        [Fact]
+        public void ContextStroke_IsNoPaint_BecauseTheTextHasNoStroke()
+        {
+            var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect width=\"10\" height=\"10\" fill=\"none\" stroke=\"context-stroke\" stroke-width=\"3\"/></g></svg>"));
+
+            Assert.Equal(SvgPaintKind.None, Only(doc!).Stroke.Kind);
+        }
+
+        [Fact]
+        public void AUseInsideTheGlyph_IsTheContextOfItsShape_AndTheTextIsTheContextOfTheRest()
+        {
+            var doc = Build(Glyph($"<svg {Ns} xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs><rect id=\"s\" width=\"10\" height=\"10\" fill=\"context-fill\" stroke=\"context-stroke\"/></defs>" +
+                "<g id=\"glyph2\"><use xlink:href=\"#s\" fill=\"#ff0000\" stroke=\"#0000ff\"/><circle r=\"5\" fill=\"context-fill\"/></g></svg>"));
+
+            var elements = Flatten(doc!.Children).ToList();
+            var rect = Assert.IsType<SvgRectElement>(Assert.IsType<SvgUseElement>(elements[0]).Target);
+            Assert.Equal(RColor.FromArgb(255, 255, 0, 0), rect.Fill.Color);
+            Assert.Equal(RColor.FromArgb(255, 0, 0, 255), rect.Stroke.Color);
+            Assert.Equal(Text, elements[1].Fill.Color);
         }
 
         [Fact]
@@ -202,7 +224,7 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
-        public void ContextPaintRewriting_LeavesIdsAndReferencesAlone()
+        public void ContextPaintKeywords_AreNotConfusedWithIdsOrClasses()
         {
             var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect id=\"context-fill\" class=\"context-stroke\" width=\"1\" height=\"1\" fill=\"#010101\"/></g></svg>"));
 

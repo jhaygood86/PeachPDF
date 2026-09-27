@@ -583,7 +583,9 @@ namespace PeachPDF.CSS
 
         public static readonly IValueConverter CurrentColorConverter = ColorConverter.WithCurrentColor();
         public static readonly IValueConverter InvertedColorConverter = CurrentColorConverter.Or(Keywords.Invert);
-        public static readonly IValueConverter PaintConverter = UrlConverter.Or(CurrentColorConverter.OrNone());
+        // SVG 2 <paint>: the context-fill / context-stroke keywords are the paint of the context element (a use, a marker's shape, the text).
+        public static readonly IValueConverter PaintConverter = UrlConverter.Or(CurrentColorConverter.OrNone())
+            .Or(Keywords.ContextFill).Or(Keywords.ContextStroke);
 
         public static readonly IValueConverter StrokeDasharrayConverter =
             LengthOrPercentConverter.Or(NumberConverter).Many().OrNone();

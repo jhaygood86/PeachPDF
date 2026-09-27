@@ -471,6 +471,20 @@ namespace PeachPDF.Svg
                 return true;
             }
 
+            // SVG 2's context paint. What they stand for depends on where the element sits (a use, a marker, the text a glyph
+            // document is drawn for), so the value stays a keyword here and the tree builder resolves it.
+            if (trimmed.Equals("context-fill", StringComparison.OrdinalIgnoreCase))
+            {
+                paint = SvgPaint.ContextFill;
+                return true;
+            }
+
+            if (trimmed.Equals("context-stroke", StringComparison.OrdinalIgnoreCase))
+            {
+                paint = SvgPaint.ContextStroke;
+                return true;
+            }
+
             var valueParser = new CssValueParser(adapter);
             paint = SvgPaint.Solid(valueParser.GetActualColor(trimmed));
             return valueParser.IsColorValid(trimmed);

@@ -192,7 +192,7 @@ if (face.TryMapRune(new Rune('g'), out ushort glyph) && face.TryGetOutline(glyph
 - **Colour glyphs from SVG.** A font with an `SVG ` table reports `HasSvgGlyphs`, and `TryGetSvgGlyph` gives the SVG document that draws a glyph (gzip-compressed
   documents are inflated, up to 4 MiB), the id of the element in it that is the glyph (`glyph` and the glyph's number), and the range of glyphs the document covers.
   The library does not render SVG: a caller draws the document with the glyph's origin at (0, 0), y pointing down and one design unit as one unit, with the font's
-  palette colours for `var(--color0)` and the text colour for `context-fill`. The document comes from the font file and is untrusted.
+  palette colours for `var(--color0)` and the text's fill for `context-fill`. The document comes from the font file and is untrusted.
 - **Colour glyphs from pictures.** A font whose colour glyphs are bitmaps (`CBDT`/`CBLC` or `sbix`) reports
   `HasBitmapGlyphs`, and `TryGetBitmap` gives the picture of a glyph from the strike best suited to a size, with its bearings.
 

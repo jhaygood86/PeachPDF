@@ -106,6 +106,29 @@ namespace PeachPDF.Tests.Raster
         }
 
         [Fact]
+        public async Task AUseInTheGlyph_GivesItsShapeADistinctFillAndStroke_AndTheTextIsTheContextOfTheRest()
+        {
+            var (g, font, _) = await NewFixture();
+
+            Draw(g, font, "F", RColor.FromArgb(255, 128, 0, 128));
+
+            var opaque = Pixels(g).Where(p => p.A == 255).ToList();
+            var orange = opaque.Where(p => p is { R: 255, G: 136, B: 0 }).ToList();
+            var blue = opaque.Where(p => p is { R: 0, G: 68, B: 204 }).ToList();
+            var text = opaque.Where(p => p is { R: 128, G: 0, B: 128 }).ToList();
+
+            // The <use> is the context of the square: its own orange fill and blue stroke, two paints, not the one the text has.
+            Assert.True(orange.Count > 1000, $"{orange.Count} orange pixels");
+            Assert.True(blue.Count > 200, $"{blue.Count} blue pixels");
+
+            // The disc is outside the use: it takes the text's fill. The frame that asks for the text's stroke is not drawn (the text has none),
+            // so nothing in the text colour lies outside the disc.
+            Assert.True(text.Count > 300, $"{text.Count} text-coloured pixels");
+            var (cx, cy) = Centre(text.Select(p => (p.X, p.Y)));
+            Assert.All(text, p => Assert.True(Math.Sqrt((p.X - cx) * (p.X - cx) + (p.Y - cy) * (p.Y - cy)) < 15, $"({p.X}, {p.Y}) is outside the disc"));
+        }
+
+        [Fact]
         public async Task AnotherPalette_ChangesTheColours()
         {
             var (g, font, _) = await NewFixture();
