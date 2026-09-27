@@ -231,8 +231,8 @@ if (face.TryGetOutline(glyph, request, out GlyphOutline fitted))
   alignment of ideographic fonts. The advance is the design advance rounded to a whole pixel. A variable font with CFF2 outlines is fitted
   the same way at the location of the typeface (`WithAxes`): the operands of its hints, and the blue zones and stem widths of its
   Private DICTs, are blended for the location before the hints are applied, so a weight or width moves the stems the way the font's
-  designer set out. The blending is done in FreeType's 16.16 arithmetic, and the outlines are its outlines exactly when the location is
-  one FreeType has too (see the note on variable fonts below).
+  designer set out. The blending is done in FreeType's 16.16 arithmetic, and the outlines are FreeType's exactly (see the note on variable
+  fonts below).
 - **Stem darkening** (`OutlineRequest.StemDarkening`, off by default, as it is in FreeType) makes the stems of a CFF font's glyphs a little heavier
   when it is grid-fitted, which offsets the way anti-aliasing thins the thinnest stems of small text. Adobe's engine decides the amount from how thick a
   stem is on the pixel grid: the thinnest stems gain the most, and a stem of more than about two and a third pixels (that is, text at a large size) gains
@@ -253,14 +253,18 @@ var request = new OutlineRequest { PixelsPerEm = 9, GridFitting = GridFitting.St
   are cached per face, size and mode.
 - **Layout is not hinted.** `GetAdvance` and the metrics stay unhinted; fitting is a property of an outline drawn at one size, and a
   caller that lays text out keeps the design advances so that layout does not change with the size of the device.
-- **Variable fonts** with TrueType outlines are hinted at the instance's location by moving the points with the `gvar` deltas first and
-  then running the instructions, and the font's `cvar` table (which changes the control values the instructions measure with by location)
-  is applied to them first. The result is a good approximation, not what FreeType produces bit for bit: the deltas are added in 26.6 with
-  rounding where FreeType uses 16.16 fixed point. Variable fonts with CFF2 outlines are fitted as FreeType fits them, blends included: the
-  normalized coordinates of a location are those of the `fvar` and `avar` tables rounded to 2.14 (as the variation tables themselves are
-  written), where FreeType keeps them in 16.16, so the two agree where the design coordinate is a dyadic fraction of the axis and can differ
-  elsewhere by up to about 3 parts in 100,000 of each blended delta; the glyph advances are those of `HVAR` at the location. Fitted outlines
-  are cached per location.
+- **Variable fonts** are hinted at the location of the typeface (`WithAxes`) as FreeType hints a variable font, in its own 16.16 arithmetic,
+  so the fitted points are FreeType's exactly. The normalized coordinates of a location are made from its design coordinates the way
+  FreeType makes them (the ranges of the axes and the `avar` table, version 2 included, in 16.16: not the 2.14 the variation tables are
+  written in, which the unhinted outlines of a variable font use). With TrueType outlines the points are moved by the `gvar` deltas first
+  (the scalar of each tuple, the sum of the deltas, the points a tuple leaves out interpolated as the `IUP` instruction would, and the
+  rounding of the sum are FreeType's) and then the instructions run, on the control values that the font's `cvar` table has moved for the
+  location. The advances follow `HVAR`, and the vertical ones `VVAR`, or the phantom points of `gvar` for a font that has none, and `MVAR`
+  moves the ranges of the `gasp` table (below) and the font's typographic ascender and descender. With CFF2 outlines the operands of the
+  hints and the Private DICTs are blended for the location (above). A variation table that is wrong is not an error: a glyph whose
+  variation data cannot be read is answered with the unhinted outline, and so is every glyph of a location FreeType would refuse to set
+  (a `cvar` or `gvar` table with a bad header, for example), and a glyph or a set of control values whose tables ask for an unreasonable
+  amount of work (more than 16 million deltas) is refused. Fitted outlines are cached per location.
 - **The font's `gasp` table decides which sizes are fitted.** A font that has one says, for each range of sizes, whether it wants
   grid-fitting there (`GASP_GRIDFIT`); fonts often turn hinting off at the smallest sizes, where their programs do more harm than good,
   and a request for fitting at such a size is answered as for a font that cannot be fitted: the scaled design outline with `IsGridFitted`
@@ -268,12 +272,14 @@ var request = new OutlineRequest { PixelsPerEm = 9, GridFitting = GridFitting.St
   wants whole sizes is 11). A size that no range reaches, a font with no `gasp` table, and a table of a version above 1 or one that is cut
   short are treated as saying nothing, and the font is fitted. Only `GASP_GRIDFIT`, the flag for standard rasterization, is looked at, for
   both modes; the flags for ClearType (`GASP_SYMMETRIC_GRIDFIT`, `GASP_SYMMETRIC_SMOOTHING`) are not, since nothing here draws with it.
-  `LTSH` and `VDMX` are not read (FreeType does not use them to load a glyph either). Pixels are square: one size serves both directions.
+  At a location of a variable font the `MVAR` table moves the largest size of the first ten ranges (its `gsp0` to `gsp9` values), so which
+  sizes are fitted can change with the weight or the width. `LTSH` and `VDMX` are not read (FreeType does not use them to load a glyph
+  either). Pixels are square: one size serves both directions.
 
 The instruction interpreter and the CFF engine are ports of FreeType's (the CFF engine is the one Adobe contributed to FreeType), which
 is why the package carries the FreeType Project License notices and Adobe's (see [Licences](#licences)). They give the same fitted
 points as FreeType 2.14.3, in 26.6 fixed point, for every font the test suite checks them with, including fonts made of random
-programs and charstrings that FreeType is compared with point for point.
+programs and charstrings, and variable fonts at many locations of their design spaces, that FreeType is compared with point for point.
 
 ## Variable fonts
 

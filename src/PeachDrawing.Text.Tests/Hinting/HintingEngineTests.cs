@@ -67,7 +67,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             Assert.Null(outline.GridFittedAdvance);
             Assert.False(typeface.TryGetGridFittedAdvance(glyph, new OutlineRequest { PixelsPerEm = 20, GridFitting = GridFitting.Standard }, out _));
 
-            var patched = TtFace.TryCreate(typeface.Face.Fontface, typeface.Face.FamilyName, null, null)!;
+            var patched = TtFace.TryCreate(typeface.Face.Fontface, typeface.Face.FamilyName, null)!;
             var size = TtSize.Create(patched, 20 * 64, TtInterpreterVersion.V40, TtRenderMode.Normal);
             Assert.True(size.HintingDisabled);
             Assert.False(TtGlyphLoader.Load(size, glyph).IsHinted);
@@ -95,7 +95,7 @@ namespace PeachDrawing.Text.Tests.Hinting
         public void ASizeOfAFontWithoutProgramsStartsFromTheDefaultGraphicsStateWhateverRanBeforeIt()
         {
             var switchedOff = TypefaceFixtures.FromBytes(HostileFonts.WithTable(HostileFonts.Original(), "prep", [0xB1, 1, 1, 0x8E]));
-            var switchedOffFace = TtFace.TryCreate(switchedOff.Face.Fontface, switchedOff.Face.FamilyName, null, null)!;
+            var switchedOffFace = TtFace.TryCreate(switchedOff.Face.Fontface, switchedOff.Face.FamilyName, null)!;
             Assert.True(TtSize.Create(switchedOffFace, 12 * 64, TtInterpreterVersion.V40, TtRenderMode.Normal).HintingDisabled);
 
             var plain = HintingFixtures.Face("HintingGasp.ttf");

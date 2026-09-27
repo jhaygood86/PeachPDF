@@ -355,7 +355,7 @@ internal sealed class TtGlyphLoader
         exec.Mode = size.Mode;
         exec.Grayscale = size.Version == TtInterpreterVersion.V35 && size.Mode != TtRenderMode.Mono;
         exec.NumGlyphs = face.NumGlyphs;
-        exec.HasBlend = face.Normalized is not null;
+        exec.HasBlend = face.Blend is not null;
         exec.BlendCoordinates = face.BlendCoordinates;
 
         exec.MaxFDefs = face.MaxFunctionDefs;
@@ -891,10 +891,21 @@ internal sealed class TtGlyphLoader
 
         nPoints += 4;
 
-        // Deltas apply to the unscaled data.
-        double[]? scaledX = null, scaledY = null;
-        if (_face.Gvar is not null)
-            ApplySimpleDeltas(glyphIndex, nPoints, xs, ys, out scaledX, out scaledY);
+        // Deltas apply to the unscaled data. A face that is at a location that varies (it is not the default instance) has them applied in 16.16, and keeps the points in 26.6 as well.
+        TtBlend? blend = _face.Blend is { DoBlend: true } b ? b : null;
+        if (blend is not null)
+        {
+            EnsureUnrounded(nPoints);
+
+            int error = blend.ApplyGlyphDeltas(glyphIndex, nPoints - 4, xs.AsSpan(0, nPoints), ys.AsSpan(0, nPoints), _current.Contours.AsSpan(0, _current.NContours), _current.NContours,
+                _unroundedX, _unroundedY, out bool reached);
+
+            if (error != TtVarError.Ok)
+                throw new HintingException("The variation data of a glyph is malformed.");
+
+            if (reached)
+                TakePhantomPoints(blend, xs.AsSpan(nPoints - 4, 4), ys.AsSpan(nPoints - 4, 4));
+        }
 
         if (_hinted)
         {
@@ -904,13 +915,13 @@ internal sealed class TtGlyphLoader
         }
 
         // scale the glyph
-        if (scaledX is not null && scaledY is not null)
+        if (blend is not null)
         {
-            // an instance: the deltas were added to the unscaled points and the result is rounded once to 26.6
+            // an instance: the points are scaled from their unrounded 26.6 values
             for (int i = 0; i < nPoints; i++)
             {
-                xs[i] = (int)Math.Floor(scaledX[i] * (_xScale / 65536.0) + 0.5);
-                ys[i] = (int)Math.Floor(scaledY[i] * (_yScale / 65536.0) + 0.5);
+                xs[i] = unchecked(FtCalc.MulFix(_unroundedX[i], _xScale) + 32) >> 6;
+                ys[i] = unchecked(FtCalc.MulFix(_unroundedY[i], _yScale) + 32) >> 6;
             }
         }
         else
@@ -922,10 +933,33 @@ internal sealed class TtGlyphLoader
             }
         }
 
-        _pp1x = xs[nPoints - 4]; _pp1y = ys[nPoints - 4];
-        _pp2x = xs[nPoints - 3]; _pp2y = ys[nPoints - 3];
-        _pp3x = xs[nPoints - 2]; _pp3y = ys[nPoints - 2];
-        _pp4x = xs[nPoints - 1]; _pp4y = ys[nPoints - 1];
+        // if we have a HVAR table, `pp1' and/or `pp2' are already adjusted but unscaled
+        if (blend is not null && blend.HAdvanceSupport && _hinted)
+        {
+            _pp1x = FtCalc.MulFix(_pp1x, _xScale);
+            _pp2x = FtCalc.MulFix(_pp2x, _xScale);
+
+            // pp1.y and pp2.y are always zero
+        }
+        else
+        {
+            _pp1x = xs[nPoints - 4]; _pp1y = ys[nPoints - 4];
+            _pp2x = xs[nPoints - 3]; _pp2y = ys[nPoints - 3];
+        }
+
+        // if we have a VVAR table, `pp3' and/or `pp4' are already adjusted but unscaled
+        if (blend is not null && blend.VAdvanceSupport && _hinted)
+        {
+            _pp3x = FtCalc.MulFix(_pp3x, _xScale);
+            _pp3y = FtCalc.MulFix(_pp3y, _yScale);
+            _pp4x = FtCalc.MulFix(_pp4x, _xScale);
+            _pp4y = FtCalc.MulFix(_pp4y, _yScale);
+        }
+        else
+        {
+            _pp3x = xs[nPoints - 2]; _pp3y = ys[nPoints - 2];
+            _pp4x = xs[nPoints - 1]; _pp4y = ys[nPoints - 1];
+        }
 
         if (_hinted)
         {
@@ -955,6 +989,19 @@ internal sealed class TtGlyphLoader
             _orgY = new int[size];
             _orusX = new int[size];
             _orusY = new int[size];
+        }
+    }
+
+    private int[] _unroundedX = [];
+    private int[] _unroundedY = [];
+
+    private void EnsureUnrounded(int points)
+    {
+        if (_unroundedX.Length < points)
+        {
+            int size = Math.Max(points, 64);
+            _unroundedX = new int[size];
+            _unroundedY = new int[size];
         }
     }
 
@@ -1342,131 +1389,91 @@ internal sealed class TtGlyphLoader
     }
 
     // ---------------------------------------------------------------------------------------------------------------
-    //                                     variation instances (not bit-exact, see PORTING-NOTES.md)
+    //                                              variation instances
     // ---------------------------------------------------------------------------------------------------------------
 
-    // The phantom point deltas of a glyph with no outline of its own.
+    // The phantom point deltas of a glyph with no outline of its own (the "shortcut for empty glyphs" of load_truetype_glyph).
     private void ApplyPhantomDeltas(int glyphIndex)
     {
-        if (_face.Gvar is not { } gvar || _face.Normalized is not { } normalized)
+        if (_face.Blend is not { DoBlend: true } blend)
             return;
 
-        var dx = new double[4];
-        var dy = new double[4];
-        if (!gvar.TryAddDeltas(glyphIndex, normalized, 4, null, null, null, dx, dy))
-            return;
+        // a small outline structure with four elements for communication with `TT_Vary_Apply_Glyph_Deltas'
+        int[] x = [_pp1x, _pp2x, _pp3x, _pp4x];
+        int[] y = [_pp1y, _pp2y, _pp3y, _pp4y];
+        Span<int> unroundedX = stackalloc int[4];
+        Span<int> unroundedY = stackalloc int[4];
 
-        ApplyPhantomDeltasTo(dx, dy, 0);
+        // this must be done before scaling
+        int error = blend.ApplyGlyphDeltas(glyphIndex, 0, x, y, default, 0, unroundedX, unroundedY, out bool reached);
+        if (error != TtVarError.Ok)
+            throw new HintingException("The variation data of a glyph is malformed.");
+
+        if (reached)
+            TakePhantomPoints(blend, x, y);
     }
 
-    private void ApplyPhantomDeltasTo(double[] dx, double[] dy, int first)
+    // the end of TT_Vary_Apply_Glyph_Deltas: the phantom points of the outline become the loader's, but for the ones an HVAR or VVAR table adjusted already
+    private void TakePhantomPoints(TtBlend blend, ReadOnlySpan<int> x, ReadOnlySpan<int> y)
     {
-        // With an HVAR table the advance is already the instance's, and the horizontal phantom points follow it.
-        if (_face.InstanceAdvance is null)
+        int n = x.Length;
+
+        if (!blend.HAdvanceSupport)
         {
-            _pp1x += (int)Math.Round(dx[first]);
-            _pp1y += (int)Math.Round(dy[first]);
-            _pp2x += (int)Math.Round(dx[first + 1]);
-            _pp2y += (int)Math.Round(dy[first + 1]);
+            _pp1x = x[n - 4]; _pp1y = y[n - 4];
+            _pp2x = x[n - 3]; _pp2y = y[n - 3];
         }
 
-        _pp3x += (int)Math.Round(dx[first + 2]);
-        _pp3y += (int)Math.Round(dy[first + 2]);
-        _pp4x += (int)Math.Round(dx[first + 3]);
-        _pp4y += (int)Math.Round(dy[first + 3]);
-    }
-
-    private void ApplySimpleDeltas(int glyphIndex, int total, int[] xs, int[] ys, out double[]? scaledX, out double[]? scaledY)
-    {
-        scaledX = null;
-        scaledY = null;
-
-        if (_face.Gvar is not { } gvar || _face.Normalized is not { } normalized)
-            return;
-
-        int points = total - 4;
-        var originalX = new double[total];
-        var originalY = new double[total];
-        for (int i = 0; i < points; i++)
+        if (!blend.VAdvanceSupport)
         {
-            originalX[i] = xs[i];
-            originalY[i] = ys[i];
-        }
-
-        var ends = new int[_current.NContours];
-        for (int i = 0; i < ends.Length; i++)
-            ends[i] = _current.Contours[i];
-
-        var dx = new double[total];
-        var dy = new double[total];
-        if (!gvar.TryAddDeltas(glyphIndex, normalized, total, originalX, originalY, ends, dx, dy))
-            return;
-
-        scaledX = new double[total];
-        scaledY = new double[total];
-        for (int i = 0; i < total; i++)
-        {
-            double vx = (i < points ? xs[i] : PhantomX(i - points)) + dx[i];
-            double vy = (i < points ? ys[i] : PhantomY(i - points)) + dy[i];
-
-            scaledX[i] = vx;
-            scaledY[i] = vy;
-
-            // the unscaled outline of an instance is rounded to whole font units
-            if (i < points)
-            {
-                xs[i] = (int)Math.Round(vx);
-                ys[i] = (int)Math.Round(vy);
-            }
-        }
-
-        // the phantom points, unscaled and rounded like the points, for the zone's unscaled copy
-        xs[points] = (int)Math.Round(scaledX[points]);
-        ys[points] = (int)Math.Round(scaledY[points]);
-        xs[points + 1] = (int)Math.Round(scaledX[points + 1]);
-        ys[points + 1] = (int)Math.Round(scaledY[points + 1]);
-        xs[points + 2] = (int)Math.Round(scaledX[points + 2]);
-        ys[points + 2] = (int)Math.Round(scaledY[points + 2]);
-        xs[points + 3] = (int)Math.Round(scaledX[points + 3]);
-        ys[points + 3] = (int)Math.Round(scaledY[points + 3]);
-
-        if (_face.InstanceAdvance is not null)
-        {
-            // the horizontal phantom points keep the instance's advance from HVAR
-            scaledX[points] = _pp1x;
-            scaledX[points + 1] = _pp2x;
-            xs[points] = _pp1x;
-            xs[points + 1] = _pp2x;
+            _pp3x = x[n - 2]; _pp3y = y[n - 2];
+            _pp4x = x[n - 1]; _pp4y = y[n - 1];
         }
     }
-
-    private double PhantomX(int i) => i switch { 0 => _pp1x, 1 => _pp2x, 2 => _pp3x, _ => _pp4x };
-
-    private double PhantomY(int i) => i switch { 0 => _pp1y, 1 => _pp2y, 2 => _pp3y, _ => _pp4y };
 
     private void ApplyCompositeDeltas(int glyphIndex, int first, int count)
     {
-        if (_face.Gvar is not { } gvar || _face.Normalized is not { } normalized)
+        if (_face.Blend is not { DoBlend: true } blend)
             return;
 
-        // applying deltas for anchor points doesn't make sense, but we don't have to specially check this since unused delta
-        // values are zero anyways
+        // construct an outline structure for communication with `TT_Vary_Apply_Glyph_Deltas': the offsets of the components are its points and
+        // each is a contour of its own, so that the deltas of the glyph give each component's translation
         int total = count + 4;
-        var dx = new double[total];
-        var dy = new double[total];
-        if (!gvar.TryAddDeltas(glyphIndex, normalized, total, null, null, null, dx, dy))
-            return;
+        var x = new int[total];
+        var y = new int[total];
+        var contours = new ushort[count];
+        var unroundedX = new int[total];
+        var unroundedY = new int[total];
+
+        // applying deltas for anchor points doesn't make sense, but we don't have to specially check this since unused delta values are zero anyways
+        for (int i = 0; i < count; i++)
+        {
+            x[i] = _subglyphs[first + i].Arg1;
+            y[i] = _subglyphs[first + i].Arg2;
+            contours[i] = (ushort)i;
+        }
+
+        x[count] = _pp1x; y[count] = _pp1y;
+        x[count + 1] = _pp2x; y[count + 1] = _pp2y;
+        x[count + 2] = _pp3x; y[count + 2] = _pp3y;
+        x[count + 3] = _pp4x; y[count + 3] = _pp4y;
+
+        // this call provides additional offsets for each component's translation
+        int error = blend.ApplyGlyphDeltas(glyphIndex, count, x, y, contours, count, unroundedX, unroundedY, out bool reached);
+        if (error != TtVarError.Ok)
+            throw new HintingException("The variation data of a glyph is malformed.");
 
         for (int i = 0; i < count; i++)
         {
             ref SubGlyph subglyph = ref _subglyphs[first + i];
             if ((subglyph.Flags & ArgsAreXyValues) != 0)
             {
-                subglyph.Arg1 = (short)Math.Round(subglyph.Arg1 + dx[i]);
-                subglyph.Arg2 = (short)Math.Round(subglyph.Arg2 + dy[i]);
+                subglyph.Arg1 = (short)x[i];
+                subglyph.Arg2 = (short)y[i];
             }
         }
 
-        ApplyPhantomDeltasTo(dx, dy, count);
+        if (reached)
+            TakePhantomPoints(blend, x.AsSpan(count, 4), y.AsSpan(count, 4));
     }
 }

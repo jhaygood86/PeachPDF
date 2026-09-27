@@ -71,7 +71,6 @@
 // The changes are recorded in PORTING-NOTES.md, next to FTL.TXT.
 
 using PeachDrawing.Text.Internal.Fonts.OpenType;
-using PeachDrawing.Text.Internal.Fonts.OpenType.Variations;
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
@@ -163,19 +162,16 @@ internal sealed class TtFace
     /// <summary>Whether the font is one of the "tricky" fonts (<c>FT_FACE_FLAG_TRICKY</c>) whose bytecode must run without backward compatibility.</summary>
     public bool IsTricky { get; }
 
-    /// <summary>The variation tables of a variable font, and the location a variation instance reads them at (null for the default instance).</summary>
-    public GvarTable? Gvar { get; }
+    /// <summary>
+    /// The location of a variable font this face was set to (<c>face->blend</c>), or null for a font that is not variable or a face nothing was set on. A location at the
+    /// defaults exists and varies nothing (<see cref="TtBlend.DoBlend"/> is false): FreeType's face has a blend as soon as an application has set a location, even that one.
+    /// </summary>
+    public TtBlend? Blend { get; }
 
-    /// <summary>The normalized coordinates of the instance, in the range -1 to 1; null for a font that is not an instance.</summary>
-    public double[]? Normalized { get; }
+    /// <summary>The normalized coordinates in 16.16 (<c>face->blend->normalizedcoords</c>), which the interpreter's <c>GETVARIATION</c> hands to a program; empty for a font that is not variable.</summary>
+    public int[] BlendCoordinates => Blend?.NormalizedCoords ?? [];
 
-    /// <summary>The normalized coordinates in 16.16 (<c>face->blend->normalizedcoords</c>), which the interpreter's <c>GETVARIATION</c> hands to a program; empty for a font that is not an instance. Made once for the face, not for every glyph.</summary>
-    public int[] BlendCoordinates { get; } = [];
-
-    /// <summary>The advance of a glyph in font units at the instance's location, when that differs from the <c>hmtx</c> one (an <c>HVAR</c> table).</summary>
-    public Func<int, int>? InstanceAdvance { get; }
-
-    private TtFace(OpenTypeFontface font, string? familyName, VariationCoordinates? variation, Func<int, int>? instanceAdvance)
+    private TtFace(OpenTypeFontface font, string? familyName, int[]? normalized)
     {
         Data = font.FontSource.Bytes;
         var tables = font.TableDictionary;
@@ -344,22 +340,27 @@ internal sealed class TtFace
 
         IsTricky = CheckTrickiness(tables, familyName);
 
-        if (variation is { IsDefault: false } && font.Variations?.Gvar is { } gvar)
+        // the variation instance: FreeType sets a location with TT_Set_MM_Blend (tt_set_mm_blend), which loads the gvar table, varies the control values by the cvar table (tt_face_vary_cvt) and
+        // applies MVAR (tt_apply_mvar) to what it varies
+        if (normalized is not null && TtVarTables.For(font) is { } variationTables)
         {
-            Gvar = gvar;
-            Normalized = variation.Normalized;
-            BlendCoordinates = Array.ConvertAll(variation.Normalized, v => (int)Math.Round(v * 65536.0));
-            InstanceAdvance = instanceAdvance;
-        }
+            TtBlend? blend = TtBlend.TryCreate(variationTables, normalized, isCff2: false)
+                ?? throw new HintingException("FreeType cannot set this location of the font.");
+            Blend = blend;
 
-        // cvar: the control values at the instance's location, in 26.6 like the font's own; the size scales them (dropping the fraction, as it does
-        // for the font's, 	t_size_reset's cvt / 64). FreeType's 16.16 arithmetic for the sum is not reproduced: the deltas are doubles, rounded once.
-        if (variation is { IsDefault: false } && Cvt.Length > 0 && font.Variations?.Cvar is { } cvar && cvar.GetDeltas(variation.Normalized, Cvt.Length) is { } cvtDeltas)
-        {
-            for (int i = 0; i < Cvt.Length; i++)
-                Cvt[i] = (int)Math.Clamp(Cvt[i] + Math.Floor(cvtDeltas[i] * 64 + 0.5), int.MinValue, int.MaxValue);
+            // tt_set_mm_blend varies the control values of a face that has been set, whatever the coordinates (a face at the defaults gets the tuples whose peak is 0 on every axis)
+            if (blend.VaryCvt(Cvt) != TtVarError.Ok)
+                throw new HintingException("The cvar table of the font is malformed.");
+
+            // MVAR: the typographic ascender and descender, which the vertical metrics of a font with no vmtx are made of
+            TypoAscender = blend.MvarAdjust(MvarHasc, (short)TypoAscender);
+            TypoDescender = blend.MvarAdjust(MvarHdsc, (short)TypoDescender);
         }
     }
+
+    // the MVAR value tags of the typographic ascender and descender ('hasc' and 'hdsc')
+    private const uint MvarHasc = 0x68617363;
+    private const uint MvarHdsc = 0x68647363;
 
     /// <summary>
     /// Reads the tables of a font for hinting. Returns null when the font is not one this port can hint: it has no
@@ -367,9 +368,11 @@ internal sealed class TtFace
     /// </summary>
     /// <param name="font">The font.</param>
     /// <param name="familyName">The family name, which the trickiness check reads.</param>
-    /// <param name="variation">The location of a variable font instance, or null.</param>
-    /// <param name="instanceAdvance">The advance in font units of a glyph at that location, or null.</param>
-    public static TtFace? TryCreate(OpenTypeFontface font, string? familyName, VariationCoordinates? variation, Func<int, int>? instanceAdvance)
+    /// <param name="normalized">
+    /// The location of a variable font: its normalized coordinates in 16.16, one for each axis (as FreeType keeps them), or null for a face nothing was set on (which has no
+    /// blend at all, where a face at the defaults has one that varies nothing). The result is null for a font FreeType cannot set that location of.
+    /// </param>
+    public static TtFace? TryCreate(OpenTypeFontface font, string? familyName, int[]? normalized)
     {
         var tables = font.TableDictionary;
         if (!tables.ContainsKey("glyf") || !tables.ContainsKey("loca") || !tables.ContainsKey("head") ||
@@ -378,7 +381,7 @@ internal sealed class TtFace
 
         try
         {
-            return new TtFace(font, familyName, variation, instanceAdvance);
+            return new TtFace(font, familyName, normalized);
         }
         catch (Exception ex) when (ex is HintingException or IndexOutOfRangeException or ArgumentException)
         {
@@ -482,8 +485,9 @@ internal sealed class TtFace
     {
         GetMetrics(_hmtxOffset, _hmtxSize, _numHMetrics, gindex, out lsb, out advance);
 
-        if (InstanceAdvance is { } adjust)
-            advance = adjust(gindex);
+        // tt_face_get_metrics: the advance of a variation instance follows HVAR
+        if (Blend is { DoBlend: true } blend)
+            advance = blend.AdjustAdvance(false, gindex, advance);
     }
 
     /// <summary>The top side bearing and the advance height of a glyph in font units, computed when the font has no vertical metrics (<c>TT_Get_VMetrics</c>).</summary>
@@ -492,6 +496,10 @@ internal sealed class TtFace
         if (VerticalInfo)
         {
             GetMetrics(_vmtxOffset, _vmtxSize, _numVMetrics, gindex, out tsb, out advanceHeight);
+
+            // the advance height of a variation instance follows VVAR
+            if (Blend is { DoBlend: true } blend)
+                advanceHeight = blend.AdjustAdvance(true, gindex, advanceHeight);
         }
         else if (Os2Version != 0xFFFF)
         {

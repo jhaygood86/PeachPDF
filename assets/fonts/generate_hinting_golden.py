@@ -24,6 +24,9 @@ The FreeType this needs is the one the port was made from. freetype-py bundles a
   python generate_hinting_golden.py --freetype path/to/freetype.dll
 
 Requires freetype-py and fontTools (for reading the bundled WOFF files as plain sfnt). Run from anywhere.
+
+Variable TrueType fonts (HintingVariable*.ttf and the bundled Variable*.ttf, at many locations of their design spaces) are recorded by
+generate_hinting_variable_fixtures.py, and the CFF ones by generate_hinting_cff2_fixtures.py.
 """
 import argparse
 import ctypes

@@ -106,7 +106,7 @@ namespace PeachDrawing.Text.Tests.Hinting
                 $"{fontFile} {mode} {run.Size / 64.0} ppem: {problems.Count} mismatch(es)\n" + string.Join("\n", problems.Take(12)));
         }
 
-        private static void Compare(List<string> problems, int glyph, GlyphGolden expected, TtHintedGlyph actual)
+        internal static void Compare(List<string> problems, int glyph, GlyphGolden expected, TtHintedGlyph actual)
         {
             if (actual.NPoints != expected.X.Length)
             {
@@ -213,7 +213,7 @@ namespace PeachDrawing.Text.Tests.Hinting
         public static TtFace Face(string fileName) => Faces.GetOrAdd(fileName, name =>
         {
             var typeface = PeachPDF.Tests.TestSupport.TypefaceFixtures.FromFile(Path.Combine(AppContext.BaseDirectory, name));
-            return TtFace.TryCreate(typeface.Face.Fontface, typeface.Face.FamilyName, null, null)
+            return TtFace.TryCreate(typeface.Face.Fontface, typeface.Face.FamilyName, null)
                 ?? throw new InvalidOperationException(name + " has no TrueType outlines to hint.");
         });
     }

@@ -135,6 +135,31 @@ internal sealed class TtGasp
     }
 
     /// <summary>
+    /// The table at a location of a variable font: <c>MVAR</c> moves the largest size of the first ten ranges (<c>gsp0</c> to <c>gsp9</c>), as <c>tt_apply_mvar</c> does; the last range,
+    /// which reaches every size, keeps its own. The table itself when nothing moves.
+    /// </summary>
+    /// <param name="blend">The location, or null for a font that is not variable.</param>
+    public TtGasp AtLocation(TtBlend? blend)
+    {
+        if (blend is null || _maxPpem.Length < 2)
+            return this;
+
+        ushort[]? moved = null;
+        for (int i = 0; i < 10 && i < _maxPpem.Length - 1; i++)
+        {
+            // MVAR_TAG_GASP_0 to MVAR_TAG_GASP_9: `gsp0' to `gsp9'
+            ushort adjusted = (ushort)blend.MvarAdjust(0x67737030u + (uint)i, (short)_maxPpem[i]);
+            if (adjusted != _maxPpem[i])
+            {
+                moved ??= (ushort[])_maxPpem.Clone();
+                moved[i] = adjusted;
+            }
+        }
+
+        return moved is null ? this : new TtGasp(_version, moved, _flags);
+    }
+
+    /// <summary>
     /// The flags of the first range whose largest size is at least <paramref name="ppem"/> (<c>FT_Get_Gasp</c>), with the bits a version 0 table
     /// does not define cleared, or <see cref="NoTable"/> when the table has no ranges or none reaches the size.
     /// </summary>
