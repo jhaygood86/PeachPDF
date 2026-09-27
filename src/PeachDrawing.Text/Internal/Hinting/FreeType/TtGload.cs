@@ -70,9 +70,41 @@ internal sealed class TtHintedGlyph
 }
 
 /// <summary>
+/// A glyph loaded and hinted at one size, as the loader holds it: the spans are the loader's own scratch arrays and stay good only
+/// until the reader that was handed the view returns (see <see cref="TtGlyphLoader.Load{TState, TResult}"/>).
+/// </summary>
+internal readonly ref struct TtGlyphView
+{
+    /// <summary>The point coordinates in 26.6 pixels, y up, with the glyph origin at (0, 0).</summary>
+    public required ReadOnlySpan<int> X { get; init; }
+
+    public required ReadOnlySpan<int> Y { get; init; }
+
+    /// <summary>The point tags: bit 0 is set for on-curve points.</summary>
+    public required ReadOnlySpan<byte> Tags { get; init; }
+
+    /// <summary>The index of the last point of each contour.</summary>
+    public required ReadOnlySpan<ushort> ContourEnds { get; init; }
+
+    /// <summary>The advance width in 26.6 pixels, rounded to a whole pixel.</summary>
+    public int Advance { get; init; }
+
+    /// <summary>False when the font's CVT program turned hinting off at this size, so the outline is only scaled.</summary>
+    public bool IsHinted { get; init; }
+
+    /// <summary>The last error a glyph program stopped with, or 0.</summary>
+    public int ProgramError { get; init; }
+}
+
+/// <summary>Reads a loaded glyph while the loader still holds it.</summary>
+internal delegate TResult TtGlyphReader<in TState, out TResult>(in TtGlyphView glyph, TState state);
+
+/// <summary>
 /// The TrueType glyph loader (<c>TT_Load_Glyph</c> and what it calls in <c>ttgload.c</c>): reads a glyph, scales it,
 /// hints it with the bytecode interpreter, and puts composites together, with the phantom points and the backward
-/// compatibility of the v40 interpreter. One instance loads one glyph; it is not shared.
+/// compatibility of the v40 interpreter. A thread has one loader, which its execution context keeps from glyph to glyph together
+/// with the scratch arrays it works in (two outlines, the composite path, the zone copies, the components of a composite); it
+/// loads one glyph at a time and is not shared.
 /// </summary>
 internal sealed class TtGlyphLoader
 {
@@ -139,17 +171,29 @@ internal sealed class TtGlyphLoader
             if (contours > Contours.Length)
                 Array.Resize(ref Contours, Math.Max(contours, Contours.Length + (Contours.Length >> 1)));
         }
+
+        /// <summary>Goes back to the room a new outline has, if this one has more than <paramref name="points"/> points of it.</summary>
+        public void TrimTo(int points)
+        {
+            if (X.Length <= points && Contours.Length <= points)
+                return;
+
+            X = new int[64];
+            Y = new int[64];
+            Tags = new byte[64];
+            Contours = new ushort[16];
+        }
     }
 
-    private readonly TtSize _size;
-    private readonly TtFace _face;
-    private readonly TtExecContext _exec;
+    private TtSize _size = null!;
+    private TtFace _face = null!;
+    private TtExecContext _exec = null!;
 
     /// <summary>Whether glyphs are hinted (<c>IS_HINTED( load_flags )</c>): false when the CVT program disabled it.</summary>
-    private readonly bool _hinted;
+    private bool _hinted;
 
-    private readonly int _xScale;
-    private readonly int _yScale;
+    private int _xScale;
+    private int _yScale;
 
     // the glyph being loaded (TT_LoaderRec)
     private int _nContours;
@@ -180,7 +224,20 @@ internal sealed class TtGlyphLoader
     private int[] _orgX = [], _orgY = [], _orusX = [], _orusY = [];
     private readonly TtGlyphZone _zone = new();
 
-    private TtGlyphLoader(TtSize size, TtExecContext exec)
+    // the copy of a composite glyph's points that its own instructions are run on, and the components of the composite glyphs being loaded: a
+    // stack, since a component that is a composite reads its own after its parent's
+    private int[] _compositeCurX = [], _compositeCurY = [];
+    private byte[] _compositeTags = [];
+    private ushort[] _compositeContours = [];
+    private SubGlyph[] _subglyphs = new SubGlyph[8];
+    private int _subglyphTop;
+
+    private TtGlyphLoader()
+    {
+    }
+
+    /// <summary>Makes the loader ready for a glyph of a size: nothing of the glyph loaded before it is left.</summary>
+    private void Init(TtSize size, TtExecContext exec)
     {
         _size = size;
         _face = size.Face;
@@ -188,20 +245,97 @@ internal sealed class TtGlyphLoader
         _hinted = !size.HintingDisabled;
         _xScale = size.Metrics.XScale;
         _yScale = size.Metrics.YScale;
+
+        _nContours = 0;
+        _bboxYMax = 0;
+        _bboxXMin = 0;
+        _byteLen = 0;
+        _leftBearing = _advance = _topBearing = _vAdvance = 0;
+        _pp1x = _pp1y = _pp2x = _pp2y = _pp3x = _pp3y = _pp4x = _pp4y = 0;
+        _insPos = 0;
+        _programError = 0;
+        _glyphsLeft = MaxGlyphsPerLoad;
+        _subglyphTop = 0;
+
+        _base.Reset();
+        _current.Reset();
         Array.Fill(_compositePath, -1);
     }
 
-    /// <summary>Loads and hints a glyph at the size.</summary>
+    /// <summary>Lets go of the font, size and context of the last glyph, so that a thread that has loaded glyphs does not keep them alive.</summary>
+    internal void Release()
+    {
+        _size = null!;
+        _face = null!;
+        _exec = null!;
+        _zone.CurX = _zone.CurY = _zone.OrgX = _zone.OrgY = _zone.OrusX = _zone.OrusY = [];
+        _zone.Tags = [];
+        _zone.Contours = [];
+    }
+
+    /// <summary>How many array elements the loader's scratch has room for (see <see cref="TtExecContext.RetainedElements"/>).</summary>
+    internal long RetainedElements =>
+        (long)_base.X.Length + _base.Contours.Length + _current.X.Length + _current.Contours.Length + _orgX.Length + _compositeCurX.Length + _compositeContours.Length + _subglyphs.Length;
+
+    /// <summary>Drops the scratch that has room for more than <paramref name="points"/> points, as <see cref="TtExecContext"/> does for what it keeps.</summary>
+    internal void TrimTo(int points)
+    {
+        _base.TrimTo(points);
+        _current.TrimTo(points);
+
+        if (_orgX.Length > points)
+            _orgX = _orgY = _orusX = _orusY = [];
+
+        if (_compositeCurX.Length > points || _compositeContours.Length > points)
+        {
+            _compositeCurX = _compositeCurY = [];
+            _compositeTags = [];
+            _compositeContours = [];
+        }
+
+        // a hostile composite names up to 65,535 components
+        if (_subglyphs.Length > 512)
+            _subglyphs = new SubGlyph[8];
+    }
+
+    /// <summary>Loads and hints a glyph at the size, into arrays of its own.</summary>
     /// <exception cref="HintingException">The glyph cannot be loaded: its data is malformed, or a limit is reached.</exception>
-    public static TtHintedGlyph Load(TtSize size, int glyphIndex)
+    public static TtHintedGlyph Load(TtSize size, int glyphIndex) =>
+        Load(size, glyphIndex, 0, static (in TtGlyphView glyph, int _) =>
+        {
+            var ends = new int[glyph.ContourEnds.Length];
+            for (int i = 0; i < ends.Length; i++)
+                ends[i] = glyph.ContourEnds[i];
+
+            return new TtHintedGlyph
+            {
+                X = glyph.X.ToArray(),
+                Y = glyph.Y.ToArray(),
+                Tags = glyph.Tags.ToArray(),
+                ContourEnds = ends,
+                NPoints = glyph.X.Length,
+                Advance = glyph.Advance,
+                IsHinted = glyph.IsHinted,
+                ProgramError = glyph.ProgramError,
+            };
+        });
+
+    /// <summary>
+    /// Loads and hints a glyph at the size and hands it to <paramref name="read"/> where it is, in the loader's scratch arrays, without a copy. What the
+    /// reader is given is good until it returns, so it must not keep it (or a span of it); the state is handed to it as it is, so that a reader needs no closure.
+    /// </summary>
+    /// <exception cref="HintingException">The glyph cannot be loaded: its data is malformed, or a limit is reached.</exception>
+    public static TResult Load<TState, TResult>(TtSize size, int glyphIndex, TState state, TtGlyphReader<TState, TResult> read)
     {
         TtExecContext exec = TtExecContext.Rent();
 
         try
         {
-            var loader = new TtGlyphLoader(size, exec);
+            TtGlyphLoader loader = exec.Loader ??= new TtGlyphLoader();
+            loader.Init(size, exec);
             loader.PrepareContext();
-            return loader.LoadGlyph(glyphIndex);
+            TtGlyphView glyph = loader.LoadGlyph(glyphIndex);
+            return read(in glyph, state);
         }
         finally
         {
@@ -222,7 +356,7 @@ internal sealed class TtGlyphLoader
         exec.Grayscale = size.Version == TtInterpreterVersion.V35 && size.Mode != TtRenderMode.Mono;
         exec.NumGlyphs = face.NumGlyphs;
         exec.HasBlend = face.Normalized is not null;
-        exec.BlendCoordinates = face.Normalized is { } normalized ? Array.ConvertAll(normalized, v => (int)Math.Round(v * 65536.0)) : [];
+        exec.BlendCoordinates = face.BlendCoordinates;
 
         exec.MaxFDefs = face.MaxFunctionDefs;
         exec.MaxIDefs = face.MaxInstructionDefs;
@@ -259,7 +393,7 @@ internal sealed class TtGlyphLoader
         exec.ResetBudget();
     }
 
-    private TtHintedGlyph LoadGlyph(int glyphIndex)
+    private TtGlyphView LoadGlyph(int glyphIndex)
     {
         // main loading loop
         LoadTrueTypeGlyph(glyphIndex, 0);
@@ -283,23 +417,12 @@ internal sealed class TtGlyphLoader
         // ft_glyphslot_grid_fit_metrics
         advance = unchecked(FtCalc.PixRound(advance));
 
-        var x = new int[n];
-        var y = new int[n];
-        var tags = new byte[n];
-        var ends = new int[_base.NContours];
-        Array.Copy(_base.X, x, n);
-        Array.Copy(_base.Y, y, n);
-        Array.Copy(_base.Tags, tags, n);
-        for (int i = 0; i < ends.Length; i++)
-            ends[i] = _base.Contours[i];
-
-        return new TtHintedGlyph
+        return new TtGlyphView
         {
-            X = x,
-            Y = y,
-            Tags = tags,
-            ContourEnds = ends,
-            NPoints = n,
+            X = _base.X.AsSpan(0, n),
+            Y = _base.Y.AsSpan(0, n),
+            Tags = _base.Tags.AsSpan(0, n),
+            ContourEnds = _base.Contours.AsSpan(0, _base.NContours),
             Advance = advance,
             IsHinted = _hinted,
             ProgramError = _programError,
@@ -521,13 +644,14 @@ internal sealed class TtGlyphLoader
             int startPoint = _base.NPoints;
             int startContour = _base.NContours;
 
-            // for each subglyph, read composite header
-            SubGlyph[] subglyphs = ReadCompositeGlyph(frame, offset, out int insPos);
+            // for each subglyph, read composite header: its components are the entries of the stack from `first' on, and a component that is a
+            // composite reads its own after them
+            int first = ReadCompositeGlyph(frame, offset, out int insPos, out int count);
 
             // store the offset of instructions
             _insPos = insPos;
 
-            ApplyCompositeDeltas(glyphIndex, subglyphs);
+            ApplyCompositeDeltas(glyphIndex, first, count);
 
             // scale phantom points; they get rounded in `TT_Hint_Glyph'
             ScalePhantomPoints();
@@ -537,18 +661,19 @@ internal sealed class TtGlyphLoader
             int savedInsPos = insPos;
 
             // read each subglyph independently
-            for (int n = 0; n < subglyphs.Length; n++)
+            for (int n = 0; n < count; n++)
             {
-                SubGlyph subglyph = subglyphs[n];
+                int subglyphIndex = _subglyphs[first + n].Index;
+                int subglyphFlags = _subglyphs[first + n].Flags;
 
                 int pp1x = _pp1x, pp1y = _pp1y, pp2x = _pp2x, pp2y = _pp2y, pp3x = _pp3x, pp3y = _pp3y, pp4x = _pp4x, pp4y = _pp4y;
 
                 int numBasePoints = _base.NPoints;
 
-                LoadTrueTypeGlyph(subglyph.Index, recurseCount + 1);
+                LoadTrueTypeGlyph(subglyphIndex, recurseCount + 1);
 
                 // restore phantom points if necessary
-                if ((subglyph.Flags & UseMyMetrics) == 0)
+                if ((subglyphFlags & UseMyMetrics) == 0)
                 {
                     _pp1x = pp1x; _pp1y = pp1y; _pp2x = pp2x; _pp2y = pp2y;
                     _pp3x = pp3x; _pp3y = pp3y; _pp4x = pp4x; _pp4y = pp4y;
@@ -567,14 +692,20 @@ internal sealed class TtGlyphLoader
                 // (1) points that exist from the beginning
                 // (2) component points that have been loaded so far
                 // (3) points of the newly loaded component
-                ProcessCompositeComponent(subglyph, startPoint, numBasePoints);
+                // (the stack may have been grown by the component, so the entry is fetched again)
+                ProcessCompositeComponent(in _subglyphs[first + n], startPoint, numBasePoints);
             }
 
             _byteLen = oldByteLen;
 
             // process the glyph
             _insPos = savedInsPos;
-            if (_hinted && subglyphs.Length > 0 && (subglyphs[^1].Flags & WeHaveInstr) != 0 && numPoints > startPoint)
+            bool hasInstructions = count > 0 && (_subglyphs[first + count - 1].Flags & WeHaveInstr) != 0;
+
+            // the components are done with: the next composite reads its own from here
+            _subglyphTop = first;
+
+            if (_hinted && hasInstructions && numPoints > startPoint)
                 ProcessCompositeGlyph(startPoint, startContour);
         }
     }
@@ -632,8 +763,18 @@ internal sealed class TtGlyphLoader
 
         if (_hinted)
         {
-            // we don't trust `maxSizeOfInstructions' in the `maxp' table and thus allocate the bytecode array size by ourselves
-            _exec.GlyphIns = nIns > 0 ? frame.Slice(p, nIns).ToArray() : [];
+            // we don't trust `maxSizeOfInstructions' in the `maxp' table and thus size the bytecode buffer by ourselves
+            if (nIns > 0)
+            {
+                byte[] instructions = _exec.RentInstructionBuffer(nIns);
+                frame.Slice(p, nIns).CopyTo(instructions);
+                _exec.GlyphIns = instructions;
+            }
+            else
+            {
+                _exec.GlyphIns = [];
+            }
+
             _exec.GlyphSize = nIns;
         }
 
@@ -904,11 +1045,13 @@ internal sealed class TtGlyphLoader
     //                                              composite glyphs
     // ---------------------------------------------------------------------------------------------------------------
 
-    // TT_Load_Composite_Glyph
-    private SubGlyph[] ReadCompositeGlyph(ReadOnlySpan<byte> frame, int glyphOffset, out int insPos)
+    // TT_Load_Composite_Glyph: the components are pushed on the stack of `_subglyphs' (a composite glyph's are in the loader's scratch and not in
+    // an array of their own); the result is the index of the first of them, and `count' how many there are.
+    private int ReadCompositeGlyph(ReadOnlySpan<byte> frame, int glyphOffset, out int insPos, out int components)
     {
         int p = 0;
-        var list = new System.Collections.Generic.List<SubGlyph>(4);
+        int first = _subglyphTop;
+        int n = 0;
         SubGlyph subglyph;
 
         do
@@ -1003,9 +1146,13 @@ internal sealed class TtGlyphLoader
             subglyph.Yx = yx;
             subglyph.Yy = yy;
 
-            list.Add(subglyph);
+            if (first + n == _subglyphs.Length)
+                Array.Resize(ref _subglyphs, _subglyphs.Length * 2);
 
-            if (list.Count > 0xFFFF)
+            _subglyphs[first + n] = subglyph;
+            n++;
+
+            if (n > 0xFFFF)
                 throw new HintingException("A composite glyph has too many components.");
         }
         while ((subglyph.Flags & MoreComponents) != 0);
@@ -1014,12 +1161,14 @@ internal sealed class TtGlyphLoader
         // them later.
         insPos = (int)((long)_face.GlyfOffset + glyphOffset + 10 + p);
 
-        return list.ToArray();
+        components = n;
+        _subglyphTop = first + n;
+        return first;
     }
 
     // TT_Process_Composite_Component: once a composite component has been loaded, it needs to be processed. Usually, this
     // means transforming and translating.
-    private void ProcessCompositeComponent(SubGlyph subglyph, int startPoint, int numBasePoints)
+    private void ProcessCompositeComponent(in SubGlyph subglyph, int startPoint, int numBasePoints)
     {
         int end = _base.NPoints;
 
@@ -1138,7 +1287,9 @@ internal sealed class TtGlyphLoader
         if ((long)_insPos + 2 + nIns > _face.Data.Length)
             throw new HintingException("A composite glyph's instructions are outside the font.");
 
-        exec.GlyphIns = _face.Data.AsSpan(_insPos + 2, nIns).ToArray();
+        byte[] instructions = exec.RentInstructionBuffer(nIns);
+        _face.Data.AsSpan(_insPos + 2, nIns).CopyTo(instructions);
+        exec.GlyphIns = instructions;
         exec.GlyphSize = nIns;
 
         // tt_prepare_zone( &loader->zone, &loader->gloader->base, start_point, start_contour ): the zone is a copy of the
@@ -1147,10 +1298,20 @@ internal sealed class TtGlyphLoader
         int zoneContours = _base.NContours - startContour;
 
         EnsureScratch(zonePoints);
-        var curX = new int[zonePoints];
-        var curY = new int[zonePoints];
-        var tags = new byte[zonePoints];
-        var contours = new ushort[zoneContours];
+        if (_compositeCurX.Length < zonePoints)
+        {
+            _compositeCurX = new int[zonePoints];
+            _compositeCurY = new int[zonePoints];
+            _compositeTags = new byte[zonePoints];
+        }
+
+        if (_compositeContours.Length < zoneContours)
+            _compositeContours = new ushort[zoneContours];
+
+        int[] curX = _compositeCurX;
+        int[] curY = _compositeCurY;
+        byte[] tags = _compositeTags;
+        ushort[] contours = _compositeContours;
 
         Array.Copy(_base.X, startPoint, curX, 0, zonePoints);
         Array.Copy(_base.Y, startPoint, curY, 0, zonePoints);
@@ -1283,28 +1444,29 @@ internal sealed class TtGlyphLoader
 
     private double PhantomY(int i) => i switch { 0 => _pp1y, 1 => _pp2y, 2 => _pp3y, _ => _pp4y };
 
-    private void ApplyCompositeDeltas(int glyphIndex, SubGlyph[] subglyphs)
+    private void ApplyCompositeDeltas(int glyphIndex, int first, int count)
     {
         if (_face.Gvar is not { } gvar || _face.Normalized is not { } normalized)
             return;
 
         // applying deltas for anchor points doesn't make sense, but we don't have to specially check this since unused delta
         // values are zero anyways
-        int total = subglyphs.Length + 4;
+        int total = count + 4;
         var dx = new double[total];
         var dy = new double[total];
         if (!gvar.TryAddDeltas(glyphIndex, normalized, total, null, null, null, dx, dy))
             return;
 
-        for (int i = 0; i < subglyphs.Length; i++)
+        for (int i = 0; i < count; i++)
         {
-            if ((subglyphs[i].Flags & ArgsAreXyValues) != 0)
+            ref SubGlyph subglyph = ref _subglyphs[first + i];
+            if ((subglyph.Flags & ArgsAreXyValues) != 0)
             {
-                subglyphs[i].Arg1 = (short)Math.Round(subglyphs[i].Arg1 + dx[i]);
-                subglyphs[i].Arg2 = (short)Math.Round(subglyphs[i].Arg2 + dy[i]);
+                subglyph.Arg1 = (short)Math.Round(subglyph.Arg1 + dx[i]);
+                subglyph.Arg2 = (short)Math.Round(subglyph.Arg2 + dy[i]);
             }
         }
 
-        ApplyPhantomDeltasTo(dx, dy, subglyphs.Length);
+        ApplyPhantomDeltasTo(dx, dy, count);
     }
 }

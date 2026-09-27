@@ -1,10 +1,8 @@
-# SVG-in-OpenType glyphs: context paint and the canvas
+# SVG-in-OpenType glyphs: the canvas
 
 A glyph's SVG document is drawn by `SvgGlyphPainter` (on the PDF graphics and on the raster one) from `SvgGlyphDocument`. Tracked in
 [#1419](https://github.com/jhaygood86/PeachPDF/issues/1419), it leaves out:
 
-- **Distinct `context-fill` and `context-stroke`**: both are rewritten to `currentColor` (`SvgGlyphDocument.MakeContextPaintTheTextColour`),
-  which is the text's fill colour. The SVG engine has no context-paint notion, and the common uses (a glyph that follows the text colour) work.
 - **A fixed canvas** around the glyph origin (`SvgGlyphDocument.Canvas*Ems`): one em left, 1.5 above, two right, half an em below; the
   document's own viewBox is replaced because OpenType SVG puts the glyph origin at (0, 0), not at a corner.
 - Animation, and any external resource (only `data:` images resolve: the document is untrusted).

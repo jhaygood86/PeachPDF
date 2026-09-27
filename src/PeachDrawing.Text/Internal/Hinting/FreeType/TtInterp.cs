@@ -247,9 +247,64 @@ internal sealed partial class TtExecContext
         return exec;
     }
 
+    /// <summary>
+    /// The most that a context keeps of a font that asked for a lot. A stack, a copy of the CVT or of the storage, a twilight zone or a glyph's points
+    /// are capacity that the next glyph reuses; a hostile font can make any of them megabytes, and a thread would keep that for as long as it lives.
+    /// A real glyph has a few hundred points and a real font a stack of a few hundred elements, so nothing that is used for real is dropped.
+    /// </summary>
+    private const int MaxRetainedElements = 4096;
+
+    /// <summary>The most stack elements a context keeps room for: fonts declare a few hundred and the safety margin adds half as much again.</summary>
+    private const int MaxRetainedStack = 16384;
+
+    /// <summary>The most bytes of glyph instructions a context keeps room for.</summary>
+    private const int MaxRetainedInstructionBytes = 16384;
+
+    private byte[] _glyphInstructions = [];
+
+    /// <summary>The loader of this context's thread (see <see cref="TtGlyphLoader"/>): it keeps its scratch arrays from glyph to glyph.</summary>
+    internal TtGlyphLoader? Loader;
+
+    /// <summary>
+    /// A buffer of at least <paramref name="length"/> bytes for the instructions of the glyph that is being loaded, reused for the next glyph. Nothing keeps
+    /// a glyph's instructions after its program has run, and a component's program has run before the composite's instructions are read.
+    /// </summary>
+    public byte[] RentInstructionBuffer(int length)
+    {
+        if (_glyphInstructions.Length < length)
+            _glyphInstructions = new byte[Math.Max(length, 256)];
+
+        return _glyphInstructions;
+    }
+
+    /// <summary>How many array elements this context, and the loader it keeps, hold on to: what the tests look at to see that a font that asked for a lot is not kept.</summary>
+    internal long RetainedElements =>
+        (long)Stack.Length + _glyfCvt.Length + _glyfStorage.Length + _glyphInstructions.Length + TwilightScratch.OrgX.Length + TwilightScratch.Contours.Length + (Loader?.RetainedElements ?? 0);
+
+    /// <summary>Drops the capacity that is more than <see cref="MaxRetainedElements"/>, as the remarks of that constant say.</summary>
+    private void TrimCapacity()
+    {
+        if (Stack.Length > MaxRetainedStack)
+            Stack = [];
+
+        if (_glyfCvt.Length > MaxRetainedElements)
+            _glyfCvt = [];
+
+        if (_glyfStorage.Length > MaxRetainedElements)
+            _glyfStorage = [];
+
+        if (_glyphInstructions.Length > MaxRetainedInstructionBytes)
+            _glyphInstructions = [];
+
+        TwilightScratch.TrimTo(MaxRetainedElements);
+        Loader?.TrimTo(MaxRetainedElements);
+    }
+
     /// <summary>Gives a context back for the next glyph, dropping what it holds of the last one.</summary>
     public static void Return(TtExecContext exec)
     {
+        exec.TrimCapacity();
+        exec.Loader?.Release();
         // Do not keep a font's arrays alive from a thread-static: the stack and the working copies are only capacity and stay.
         exec.Cvt = [];
         exec.Storage = [];
