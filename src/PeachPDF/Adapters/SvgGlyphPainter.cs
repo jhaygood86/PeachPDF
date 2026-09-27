@@ -58,11 +58,14 @@ namespace PeachPDF.Adapters
 
             double scale = fontSize / svg.UnitsPerEm;
             double ppp = _host.PixelsPerPoint;
+
+            // The canvas the document holds is in font units around the glyph origin, y down.
+            var canvas = document.ViewBox!.Value;
             var viewport = new RRect(
-                (originX - SvgGlyphDocument.CanvasLeftEms * svg.UnitsPerEm * scale) * ppp,
-                (baselineY - SvgGlyphDocument.CanvasTopEms * svg.UnitsPerEm * scale) * ppp,
-                SvgGlyphDocument.CanvasWidthEms * svg.UnitsPerEm * scale * ppp,
-                SvgGlyphDocument.CanvasHeightEms * svg.UnitsPerEm * scale * ppp);
+                (originX + canvas.X * scale) * ppp,
+                (baselineY + canvas.Y * scale) * ppp,
+                canvas.Width * scale * ppp,
+                canvas.Height * scale * ppp);
             SvgRenderer.RenderCachedInto(_host, document, viewport);
             return true;
         }
