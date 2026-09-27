@@ -549,7 +549,8 @@ kept for the life of the process. A compound that the list has as one word stays
 which is what rule LB1 itself falls back to (a caller with its own dictionary wants that); the other Complex_Context scripts (Tai
 Tham, Cham and the rest) have no word list and always get it. A host with no Brotli decoder of its own (WebAssembly, at the time of
 writing) gets no word list either, and every script falls back the same way, unless it registers one with
-`PeachDrawing.Text.Compression.BrotliDecompression.SetDecompressor` - see [Fonts](#fonts) below.
+`PeachDrawing.Text.Compression.BrotliDecompression.SetDecompressor` - see [The Unicode/hyphenation/dictionary data, and its Brotli
+decoder seam](#the-unicodehyphenationdictionary-data-and-its-brotli-decoder-seam) below.
 
 `Segmenter` finds the boundaries of [UAX #29](https://www.unicode.org/reports/tr29/): `FindGraphemeBoundaries` (extended
 grapheme clusters: a letter with its accents, a Hangul syllable, an emoji sequence, a flag), `FindWordBoundaries` and
@@ -619,6 +620,23 @@ throws `PlatformNotSupportedException` - gets an empty table or an unhyphenated 
 data moved packages. `PeachDrawing.Text.Compression.BrotliDecompression.SetDecompressor` lets a host register a managed Brotli
 decoder of its own instead, to recover that data there; call it once, before using any feature backed by this data, since each table
 is read once and cached for the life of the process.
+
+`PeachDrawing.Text.Brotli` is a ready-made decoder for that seam: a pure-managed port of
+[google/brotli](https://github.com/google/brotli)'s own C# decoder, with no dependency beyond `PeachDrawing.Text` itself, kept as a
+separate opt-in project rather than folded into `PeachDrawing.Text` so a host that never needs it never pays for it. Call
+`PeachDrawing.Text.Brotli.ManagedBrotliDecompressor.Register()` once at startup:
+
+```csharp
+using PeachDrawing.Text.Brotli;
+
+if (OperatingSystem.IsBrowser())
+{
+    ManagedBrotliDecompressor.Register();
+}
+```
+
+`PeachPDF.Demo.BlazorWasm`'s `Program.cs` does exactly this, which is how its own WOFF2 fonts, `hyphens: auto` and Thai/Lao/Khmer/
+Burmese dictionary line breaking all work in the browser.
 
 ## Licences
 

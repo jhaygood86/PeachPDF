@@ -206,7 +206,18 @@ generator.AddFontFamilyMapping("serif", "Liberation Serif");
 
 The default font on a browser host is Liberation Sans; register a family under that name and it is used directly. Register something else and PeachPDF adopts the first family you register as the default, so text still renders. Note that font-family mapping is consulted only when the requested family isn't registered, and it is single-hop — every mapping has to name a real registered family.
 
-**Use WOFF or TrueType, not WOFF2.** WOFF2 is Brotli-compressed and a browser/WebAssembly host has no Brotli decoder — `System.IO.Compression.Brotli` throws there. WOFF 1.0 uses deflate and works, at roughly 55% of the TrueType size. The same limitation makes `hyphens: auto` unavailable in the browser: PeachPDF's hyphenation patterns are Brotli-compressed, so text lays out unhyphenated rather than failing.
+**WOFF2 and `hyphens: auto` need a registered Brotli decoder.** `System.IO.Compression.BrotliStream` throws `PlatformNotSupportedException` in a browser, and WOFF2's font tables and PeachPDF's hyphenation patterns are both Brotli-compressed — without a decoder, a WOFF2 font fails to load and `hyphens: auto` lays out text unhyphenated rather than failing the render. Register [`PeachDrawing.Text.Brotli`](peachdrawing-text.md#the-unicodehyphenationdictionary-data-and-its-brotli-decoder-seam), a pure-managed decoder built for exactly this seam, once at startup:
+
+```csharp
+using PeachDrawing.Text.Brotli;
+
+if (OperatingSystem.IsBrowser())
+{
+    ManagedBrotliDecompressor.Register();
+}
+```
+
+WOFF 1.0 or plain TrueType/OpenType fonts need no decoder at all, so they remain the simpler choice when you don't otherwise need WOFF2's smaller download.
 
 **Pin the culture.** A Blazor WebAssembly app adopts the browser's locale, and CSS is invariant by definition — a visitor whose browser is set to a comma-decimal locale would otherwise have lengths misparsed. Set `<InvariantGlobalization>true</InvariantGlobalization>` in the project file, which also drops the ICU data from the download.
 

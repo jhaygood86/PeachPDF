@@ -30,6 +30,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PeachPDF\PeachPDF.csproj" />
+    <!--
+      Registers a pure-managed Brotli decoder at startup (see Program.cs) so the shared Unicode/hyphenation/
+      dictionary data and WOFF2 fonts - both Brotli-compressed - decode here too: a browser has no Brotli decoder
+      of its own, and System.IO.Compression.BrotliStream throws PlatformNotSupportedException in WebAssembly.
+    -->
+    <ProjectReference Include="..\PeachDrawing.Text.Brotli\PeachDrawing.Text.Brotli.csproj" />
   </ItemGroup>
 
   <!--
