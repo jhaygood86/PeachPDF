@@ -41,8 +41,8 @@ point in 26.6, refusals included. Closes [the exactness gap](https://github.com/
 - **The first golden run matched in the engine (every run, once the loader was written)** and the mutation checks show it is not vacuous: rounding `FT_fixedToInt` down fails 14 runs, truncating
   `FT_fixedToFdot6` 657, not applying `cvar` 667, `HVAR` 774, scaling from the rounded points 1,315, no interpolation 1,381, ignoring the phantom points 247, `MVAR` on
   `gasp` 218, the avar map rounded to 2.14 47. (Doing the tuple scalar's `MulDiv` in floating point fails one: the scalar is rarely at a half.)
-- **A differential fuzz found no difference in 80,000 mutants** (one to four bytes of `fvar`, `avar`, `gvar`, `cvar`, `HVAR` or `MVAR` changed, three locations each, 26 glyphs
-  each), after the two corrections above; 600 of them and 82 hand-made faults are the committed reference. About one location in twelve of the mutants is one FreeType refuses to
+- **A differential fuzz found no difference in 140,000 mutants** (one to four bytes of `fvar`, `avar`, `gvar`, `cvar`, `HVAR`, `VVAR` or `MVAR` changed, in the four synthetic fonts, three
+  locations each, 26 glyphs each; the first 80,000 in the main font only), after the two corrections above; 600 of them and 113 hand-made faults are the committed reference. About one location in twelve of the mutants is one FreeType refuses to
   set, so refusals are compared as much as points.
 - **A table can make FreeType do work no font needs, and the port does not follow it there.** Each of 4,095 tuples may apply to every point of a glyph with data of size 0 (so all
   read the same bytes): 4,095 x 65,535 additions and two arrays of 65,535 for each tuple, gigabytes of transient allocation for one glyph. The port reads into buffers rented once
@@ -60,6 +60,6 @@ point in 26.6, refusals included. Closes [the exactness gap](https://github.com/
 ## Evidence
 
 `PeachDrawing.Text.Tests`: `HintingVariableGoldenTests` (engine and API, 24 locations of 14 fonts, two modes, three sizes: the normalized vector and `FT_Get_Gasp` exactly, and every
-glyph point for point), `HintingVariableVariantTests` (82 faults and 600 mutants against FreeType), `HintingVariableRobustnessTests` (byte-flip sweeps of every variation table,
+glyph point for point), `HintingVariableVariantTests` (113 faults and 600 mutants against FreeType), `HintingVariableRobustnessTests` (byte-flip sweeps of every variation table,
 random damage to four fonts, truncations, work-amplifying tables, threads, the caches of two locations); the existing TrueType and CFF2 goldens unchanged. Suite in Debug and
 Release, `PeachPDF.Tests`, and the diff coverage gate: see the pull request.

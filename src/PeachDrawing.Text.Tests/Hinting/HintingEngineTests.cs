@@ -95,7 +95,7 @@ namespace PeachDrawing.Text.Tests.Hinting
         public void ASizeOfAFontWithoutProgramsStartsFromTheDefaultGraphicsStateWhateverRanBeforeIt()
         {
             var switchedOff = TypefaceFixtures.FromBytes(HostileFonts.WithTable(HostileFonts.Original(), "prep", [0xB1, 1, 1, 0x8E]));
-            var switchedOffFace = TtFace.TryCreate(switchedOff.Face.Fontface, switchedOff.Face.FamilyName, null, null)!;
+            var switchedOffFace = TtFace.TryCreate(switchedOff.Face.Fontface, switchedOff.Face.FamilyName, null)!;
             Assert.True(TtSize.Create(switchedOffFace, 12 * 64, TtInterpreterVersion.V40, TtRenderMode.Normal).HintingDisabled);
 
             var plain = HintingFixtures.Face("HintingGasp.ttf");

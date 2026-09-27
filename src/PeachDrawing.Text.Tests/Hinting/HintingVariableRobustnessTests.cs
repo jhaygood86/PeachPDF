@@ -154,11 +154,11 @@ namespace PeachDrawing.Text.Tests.Hinting
         {
             // the faults include tables that name 65,535 glyphs, 4,095 tuples, 40,000 regions and offsets and counts of every size
             var golden = HintingGoldenData.Load<VariableVariantFile>("HintingVariableVariants.golden.json.gz");
-            var main = Fixture("HintingVariable.ttf");
             long unexpectedBefore = HintingEngine.UnexpectedFailures;
 
             foreach (var variant in golden.Variants)
             {
+                var main = Fixture(variant.Base);
                 var font = variant.Name == "baseline" ? main : variant.Data is null ? HostileFonts.WithoutTable(main, variant.Table) : HostileFonts.WithTable(main, variant.Table, Convert.FromBase64String(variant.Data));
                 long before = GC.GetAllocatedBytesForCurrentThread();
 

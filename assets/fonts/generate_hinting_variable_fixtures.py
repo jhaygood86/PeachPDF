@@ -784,18 +784,76 @@ def variants_of(base):
     return out
 
 
-# the tables the mutants change, with how many of them are made of the whole
-MUTATED_TABLES = [("gvar", 10), ("cvar", 3), ("avar", 1), ("HVAR", 3), ("MVAR", 2), ("fvar", 1)]
+def flavor_variants_of(vertical, avar2):
+    """Faults of the tables only the other two fonts have: VVAR and the vertical metrics of the vertical font, and the item variation store and axis map of the avar
+    table of version 2 of the other. (name, the font they are made in, table, its new bytes or None)."""
+    out = []
+
+    def add(font_name, font, name, tag, fn):
+        out.append((name, font_name, tag, edit(font, tag, fn)))
+
+    def vv(name, fn):
+        add("HintingVariableVertical.ttf", vertical, name, "VVAR", fn)
+
+    vv("VVAR version 2", lambda t: put16(t, 0, 2))
+    vv("VVAR store offset past the table", lambda t: put32(t, 4, len(t) + 40))
+    vv("VVAR store offset 0", lambda t: put32(t, 4, 0))
+    vv("VVAR height map offset past the table", lambda t: put32(t, 8, len(t) + 40))
+    vv("VVAR height map offset 0", lambda t: put32(t, 8, 0))
+    vv("VVAR store format 2", lambda t: put16(t, 24, 2))
+    vv("VVAR store data count 0", lambda t: put16(t, 30, 0))
+    vv("VVAR store region count 40000", lambda t: put16(t, 24 + get32(t, 26) + 2, 40000))
+    vv("VVAR truncated", lambda t: bytearray(t[:len(t) - 30]))
+    vv("VVAR map entry out of range", lambda t: t.__setitem__(len(t) - 1, 0xFF))
+    out.append(("VVAR missing", "HintingVariableVertical.ttf", "VVAR", None))
+    # (a vhea table with no long metrics, or a vmtx table that is cut short, is one the package's own font reader refuses, which is not what is compared here)
+    add("HintingVariableVertical.ttf", vertical, "vhea truncated", "vhea", lambda t: bytearray(t[:30]))
+    out.append(("vhea missing", "HintingVariableVertical.ttf", "vhea", None))
+    out.append(("vmtx missing", "HintingVariableVertical.ttf", "vmtx", None))
+
+    def a2(name, fn):
+        add("HintingVariableAvar2.ttf", avar2, name, "avar", fn)
+
+    # the version 2 table: 48 bytes of header and segment maps, then the offsets of the axis map (48) and of the store (52)
+    a2("avar2 store offset past the table", lambda t: put32(t, 52, len(t) + 50))
+    a2("avar2 store offset 0", lambda t: put32(t, 52, 0))
+    a2("avar2 axis map offset past the table", lambda t: put32(t, 48, len(t) + 50))
+    a2("avar2 axis map offset 0", lambda t: put32(t, 48, 0))
+    a2("avar2 store format 2", lambda t: put16(t, get32(t, 52), 2))
+    a2("avar2 store data count 0", lambda t: put16(t, get32(t, 52) + 6, 0))
+    a2("avar2 store region axis count 3", lambda t: put16(t, get32(t, 52) + get32(t, get32(t, 52) + 2), 3))
+    a2("avar2 store region count 40000", lambda t: put16(t, get32(t, 52) + get32(t, get32(t, 52) + 2) + 2, 40000))
+    a2("avar2 axis map format 2", lambda t: t.__setitem__(get32(t, 48), 2))
+    a2("avar2 axis map entry format bad", lambda t: t.__setitem__(get32(t, 48) + 1, 0xC0))
+    a2("avar2 axis map count 65535", lambda t: put16(t, get32(t, 48) + 2, 0xFFFF))
+    a2("avar2 axis map entry out of range", lambda t: t.__setitem__(get32(t, 48) + 4, 0xFC))
+    a2("avar2 axis map entry unused", lambda t: t.__setitem__(slice(get32(t, 48) + 4, get32(t, 48) + 6), b"\xff\xff"))
+    a2("avar2 truncated", lambda t: bytearray(t[:len(t) - 20]))
+    a2("avar2 truncated to the segment maps", lambda t: bytearray(t[:48]))
+    a2("avar2 truncated in the offsets", lambda t: bytearray(t[:52]))
+    a2("avar2 version 3", lambda t: put32(t, 0, 0x00030000))
+    return out
 
 
-def mutants_of(rng, base, count):
-    """`count` fonts made from `base` by changing one to four bytes of one variation table: (table, [(offset in the table, value)], the new table)."""
-    tables = {t: table_bytes(base, t) for t, _ in MUTATED_TABLES}
-    weights = [w for _, w in MUTATED_TABLES]
+# the tables the mutants change in each font, with how many of them are made of the whole
+MUTATED = [
+    ("HintingVariable.ttf", 40, [("gvar", 10), ("cvar", 3), ("avar", 1), ("HVAR", 3), ("MVAR", 2), ("fvar", 1)]),
+    ("HintingVariableNoHvar.ttf", 8, [("gvar", 10), ("cvar", 2), ("MVAR", 1)]),
+    ("HintingVariableVertical.ttf", 26, [("VVAR", 6), ("HVAR", 2), ("gvar", 3), ("MVAR", 1)]),
+    ("HintingVariableAvar2.ttf", 26, [("avar", 8), ("HVAR", 2), ("gvar", 2), ("fvar", 1)]),
+]
+
+
+def mutants_of(rng, fonts, count):
+    """`count` fonts made by changing one to four bytes of one variation table of one of the four fonts (`fonts` maps a name to its bytes):
+    (the font, table, [(offset in the table, value)], the new table)."""
+    names = [n for n, _, _ in MUTATED]
     out = []
     for _ in range(count):
-        tag = rng.choices([t for t, _ in MUTATED_TABLES], weights)[0]
-        table = bytearray(tables[tag])
+        name = rng.choices(names, [w for _, w, _ in MUTATED])[0]
+        tables = dict((n, t) for n, _, t in MUTATED)[name]
+        tag = rng.choices([t for t, _ in tables], [w for _, w in tables])[0]
+        table = bytearray(table_bytes(fonts[name], tag))
         edits = []
         for _ in range(rng.choice([1, 1, 2, 3, 4])):
             # the header of a table decides the most, so the first bytes are changed more often
@@ -803,7 +861,7 @@ def mutants_of(rng, base, count):
             value = rng.choice([0, 0xFF, 0x80, 0x01, 0x7F, (table[at] + 1) & 0xFF, (table[at] - 1) & 0xFF, rng.randrange(256)])
             table[at] = value
             edits.append((at, value))
-        out.append((tag, edits, bytes(table)))
+        out.append((name, tag, edits, bytes(table)))
     return out
 
 
@@ -907,9 +965,9 @@ def main():
     probe = list(range(0, glyph_count, 4))
     small = {
         "freetype": {"version": "%d.%d.%d" % version, "tag": "VER-2-14-3"},
-        "format": "a variant is the table of the main font (HintingVariable.ttf) named, replaced by the base64 data (or left out: null); error is FreeType's error from opening the face (0: it opens); a run is a location (none: as it opens): set is FreeType's error "
+        "format": "a variant is the table of the font named (base) replaced by the base64 data (or left out: null); error is FreeType's error from opening the face (0: it opens); a run is a location (none: as it opens): set is FreeType's error "
                   "from setting it, ndv the normalized vector it kept, gasp FT_Get_Gasp for the ppems 0 to 40, glyphs a digest of every glyph (FNV-1a 64 of the advance, "
-                  "the contour ends and the points; e<n> for FreeType's error n); a mutant is the base font with the bytes of one variation table changed at the "
+                  "the contour ends and the points; e<n> for FreeType's error n); a mutant is the font named (base) with the bytes of one of its tables changed at the "
                   "offsets given (offset from the start of the table, new value)",
         "glyphs": probe,
         "locations": [{"design": l["design"], "blend": l["blend"]} for l in locations],
@@ -919,9 +977,12 @@ def main():
 
     refused = 0
     base_variant = None
-    for name, tag, table in variants_of(main_font):
-        data = main_font if name == "baseline" else with_table(main_font, tag, table)
-        entry = {"name": name, "table": tag, "data": None if table is None else base64.b64encode(table).decode("ascii")}
+    by_name = dict(fonts)
+    variants = [(name, "HintingVariable.ttf", tag, table) for name, tag, table in variants_of(main_font)]
+    variants += flavor_variants_of(by_name["HintingVariableVertical.ttf"], by_name["HintingVariableAvar2.ttf"])
+    for name, base_name, tag, table in variants:
+        data = main_font if name == "baseline" else with_table(by_name[base_name], tag, table)
+        entry = {"name": name, "base": base_name, "table": tag, "data": None if table is None else base64.b64encode(table).decode("ascii")}
         entry.update(record_blob(freetype, raw, data, probe, locations))
         small["variants"].append(entry)
         refused += sum(1 for r in entry.get("runs", []) if r["set"])
@@ -929,10 +990,10 @@ def main():
 
     mrng = random.Random(SEED + args.mutant_seed)
     unset = 0
-    mutated = mutants_of(mrng, main_font, args.mutants)
-    for tag, edits, table in mutated:
-        data = with_table(main_font, tag, table)
-        entry = {"table": tag, "edits": [[o, v] for o, v in edits]}
+    mutated = mutants_of(mrng, by_name, args.mutants)
+    for base_name, tag, edits, table in mutated:
+        data = with_table(by_name[base_name], tag, table)
+        entry = {"base": base_name, "table": tag, "edits": [[o, v] for o, v in edits]}
         entry.update(record_blob(freetype, raw, data, probe, locations))
         small["mutants"].append(entry)
         unset += sum(1 for r in entry.get("runs", []) if r["set"])

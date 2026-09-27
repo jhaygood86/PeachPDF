@@ -74,6 +74,9 @@ internal sealed class HintingEngine
     private TtGasp? _gasp;
     private bool _gaspRead;
 
+    private TtBlend? _blend;
+    private bool _blendRead;
+
     private readonly LruCache<SizeKey, TtSize?> _sizes = new(MaxSizes);
     private readonly LruCache<SizeKey, CffSize?> _cffSizes = new(MaxSizes);
     private readonly LruCache<GlyphKey, HintedGlyphResult> _glyphs;
@@ -187,14 +190,23 @@ internal sealed class HintingEngine
     /// <summary>The location of a variable font as FreeType keeps it (which is what <c>MVAR</c> moves the <c>gasp</c> ranges of), or null for a font that is not variable.</summary>
     private TtBlend? GetBlend()
     {
-        // a font with TrueType outlines has it in its face
-        if (GetFace() is { } face)
-            return face.Blend;
+        if (Volatile.Read(ref _blendRead))
+            return _blend;
 
-        if (TtVarTables.For(_font) is { } tables)
-            return TtBlend.TryCreate(tables, NormalizedCoordinates() ?? [], isCff2: true);
+        lock (_faceLock)
+        {
+            if (!_blendRead)
+            {
+                if (GetFace() is { } face)
+                    _blend = face.Blend; // a font with TrueType outlines has it in its face
+                else if (TtVarTables.For(_font) is { } tables)
+                    _blend = TtBlend.TryCreate(tables, NormalizedCoordinates() ?? [], isCff2: true);
 
-        return null;
+                Volatile.Write(ref _blendRead, true);
+            }
+
+            return _blend;
+        }
     }
 
     /// <summary>

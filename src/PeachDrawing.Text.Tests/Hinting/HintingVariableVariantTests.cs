@@ -18,7 +18,7 @@ namespace PeachDrawing.Text.Tests.Hinting
     public class HintingVariableVariantTests
     {
         private static readonly Lazy<VariableVariantFile> Golden = new(() => HintingGoldenData.Load<VariableVariantFile>("HintingVariableVariants.golden.json.gz"));
-        private static readonly Lazy<byte[]> MainFont = new(() => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "HintingVariable.ttf")));
+        private static byte[] Base(string fileName) => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, fileName));
 
         public static TheoryData<int> Variants()
         {
@@ -53,6 +53,8 @@ namespace PeachDrawing.Text.Tests.Hinting
 
             // the variants that FreeType lives with draw differently from the base font, so the digests tell them apart
             var baseline = Golden.Value.Variants.Single(v => v.Name == "baseline");
+            Assert.True(Golden.Value.Variants.Count(v => v.Base != "HintingVariable.ttf") > 20, "the faults of the vertical and avar 2 fonts are missing");
+            Assert.True(Golden.Value.Mutants.Select(m => m.Base).Distinct().Count() == 4);
             Assert.True(Golden.Value.Variants.Count(v => v.Runs.Zip(baseline.Runs).Any(p => p.First.Set == 0 && p.Second.Set == 0 && p.First.Glyphs != null && !p.First.Glyphs.SequenceEqual(p.Second.Glyphs!))) > 20);
         }
 
@@ -61,7 +63,7 @@ namespace PeachDrawing.Text.Tests.Hinting
         public void EveryVariantIsAnsweredAsFreeTypeAnswersIt(int index)
         {
             var variant = Golden.Value.Variants[index];
-            var font = variant.Name == "baseline" ? MainFont.Value : WithTable(MainFont.Value, variant.Table, variant.Data is null ? null : Convert.FromBase64String(variant.Data));
+            var font = variant.Name == "baseline" ? Base(variant.Base) : WithTable(Base(variant.Base), variant.Table, variant.Data is null ? null : Convert.FromBase64String(variant.Data));
 
             var problems = Compare(font, variant);
             Assert.True(problems.Count == 0, $"{variant.Name}: {problems.Count} difference(s)\n" + string.Join("\n", problems.Take(8)));
@@ -74,13 +76,14 @@ namespace PeachDrawing.Text.Tests.Hinting
             for (int i = 0; i < Golden.Value.Mutants.Count; i++)
             {
                 var mutant = Golden.Value.Mutants[i];
-                var table = (byte[])Table(MainFont.Value, mutant.Table).Clone();
+                var original = Base(mutant.Base);
+                var table = (byte[])Table(original, mutant.Table).Clone();
                 foreach (var edit in mutant.Edits)
                     table[edit[0]] = (byte)edit[1];
 
-                var problems = Compare(WithTable(MainFont.Value, mutant.Table, table), mutant);
+                var problems = Compare(WithTable(original, mutant.Table, table), mutant);
                 if (problems.Count != 0)
-                    failures.Add($"mutant {i} ({mutant.Table}, edits {string.Join(", ", mutant.Edits.Select(e => $"[{e[0]}]={e[1]}"))}): {problems[0]}");
+                    failures.Add($"mutant {i} ({mutant.Base} {mutant.Table}, edits {string.Join(", ", mutant.Edits.Select(e => $"[{e[0]}]={e[1]}"))}): {problems[0]}");
             }
 
             Assert.True(failures.Count == 0, $"{failures.Count} of {Golden.Value.Mutants.Count} mutants differ:\n" + string.Join("\n", failures.Take(15)));
@@ -343,6 +346,10 @@ namespace PeachDrawing.Text.Tests.Hinting
         [JsonPropertyName("name")]
         public string Name { get; set; } = "";
 
+        /// <summary>The font of the fixtures the table is replaced in.</summary>
+        [JsonPropertyName("base")]
+        public string Base { get; set; } = "HintingVariable.ttf";
+
         [JsonPropertyName("table")]
         public string Table { get; set; } = "";
 
@@ -352,6 +359,9 @@ namespace PeachDrawing.Text.Tests.Hinting
 
     internal sealed class VariableMutantGolden : VariantBlobGolden
     {
+        [JsonPropertyName("base")]
+        public string Base { get; set; } = "HintingVariable.ttf";
+
         [JsonPropertyName("table")]
         public string Table { get; set; } = "";
 

@@ -1745,6 +1745,11 @@ internal sealed class TtBlend
                         imEndCoords[j] = stream.GetShort() << 2;
                 }
 
+                // a font of 16,382 axes has 4,095 tuples of them: weighing a tuple against the location is work as well
+                work += numAxis;
+                if (work > MaxDeltaWork)
+                    return TtVarError.WorkLimit;
+
                 int apply = ApplyTuple(tupleIndex, tupleCoords, imStartCoords, imEndCoords);
 
                 if (apply == 0) // tuple isn't active for our blend
@@ -2137,6 +2142,11 @@ internal sealed class TtBlend
                         p += 2;
                     }
                 }
+
+                // a font of 16,382 axes has 4,095 tuples of them: weighing a tuple against the location is work as well
+                work += numAxis;
+                if (work > MaxDeltaWork)
+                    return TtVarError.WorkLimit;
 
                 int apply = ApplyTuple(tupleIndex, tupleCoords, imStartCoords, imEndCoords);
 
