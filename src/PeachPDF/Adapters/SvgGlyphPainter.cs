@@ -1,5 +1,6 @@
-using PeachDrawing.Text;
+﻿using PeachDrawing.Text;
 using PeachDrawing.Text.Outlines;
+using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
@@ -9,30 +10,34 @@ using System.Collections.Generic;
 namespace PeachPDF.Adapters
 {
     /// <summary>
-    /// Draws the SVG document of a font's glyph (OpenType SVG) through the SVG renderer, onto the graphics a <see cref="GraphicsAdapter"/> wraps.
+    /// Draws the SVG document of a font's glyph (OpenType SVG) through the SVG renderer, onto a graphics: the PDF one a
+    /// <see cref="GraphicsAdapter"/> wraps, or a raster surface.
     /// </summary>
     /// <remarks>
     /// A document is built once per glyph, palette and text colour (<see cref="SvgGlyphDocument"/>) and painted through
-    /// <see cref="SvgRenderer.RenderCachedInto"/>, which puts the artwork in a Form XObject shared by every occurrence at one size, so a
-    /// repeated glyph is in the PDF once and referenced. A document that cannot be built is remembered as such and the glyph is drawn as its
-    /// outline.
+    /// <see cref="SvgRenderer.RenderCachedInto"/>. On the PDF graphics that puts the artwork in a Form XObject shared by every occurrence at
+    /// one size, so a repeated glyph is in the PDF once and referenced; a graphics with no PDF document to own a form (the raster one) is
+    /// painted into directly, so a filter, a shadow or a flattened region sees the real glyph. A document that cannot be built is remembered
+    /// as such and the glyph is drawn as its outline.
     /// </remarks>
     internal sealed class SvgGlyphPainter : ISvgGlyphPainter
     {
-        private readonly GraphicsAdapter _host;
+        private readonly RGraphics _host;
+        private readonly RAdapter _adapter;
         // One set of drawings for each PDF document, so a glyph repeated across pages is built once and its form is shared: the form cache
-        // of the SVG renderer is keyed by the drawing's identity.
+        // of the SVG renderer is keyed by the drawing's identity. A graphics with no PDF document (the raster one) shares them per adapter.
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, Dictionary<ColorGlyphFormCache.Selector, SvgDocument?>> Documents = new();
 
         private readonly Dictionary<ColorGlyphFormCache.Selector, SvgDocument?> _documents;
 
-        /// <summary>The adapter whose graphics this draws on.</summary>
-        internal GraphicsAdapter Host => _host;
+        /// <summary>The graphics this draws on.</summary>
+        internal RGraphics Host => _host;
 
-        internal SvgGlyphPainter(GraphicsAdapter host)
+        internal SvgGlyphPainter(RGraphics host, RAdapter adapter)
         {
             _host = host;
-            _documents = host.FormCacheOwner is { } owner ? Documents.GetOrCreateValue(owner) : [];
+            _adapter = adapter;
+            _documents = Documents.GetOrCreateValue(host.FormCacheOwner ?? adapter);
         }
 
         public bool TryPaint(Typeface typeface, ushort glyph, SvgGlyph svg, double fontSize, double originX, double baselineY,
@@ -42,7 +47,7 @@ namespace PeachPDF.Adapters
             if (!_documents.TryGetValue(key, out var document))
             {
                 document = SvgGlyphDocument.Build(svg, entry => PaletteColour(typeface, paletteIndex, overrides, entry),
-                    typeface.ColorPalette?.EntriesPerPalette ?? 0, ToRColor(foreground), _host.Adapter);
+                    typeface.ColorPalette?.EntriesPerPalette ?? 0, ToRColor(foreground), _adapter);
                 _documents[key] = document;
             }
 

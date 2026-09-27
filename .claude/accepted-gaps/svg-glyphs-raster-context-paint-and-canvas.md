@@ -1,10 +1,8 @@
-# SVG-in-OpenType glyphs: the raster backend, context paint and the canvas
+# SVG-in-OpenType glyphs: context paint and the canvas
 
-The PDF path draws a glyph's SVG document (`SvgGlyphPainter`, `SvgGlyphDocument`). Tracked in
+A glyph's SVG document is drawn by `SvgGlyphPainter` (on the PDF graphics and on the raster one) from `SvgGlyphDocument`. Tracked in
 [#1419](https://github.com/jhaygood86/PeachPDF/issues/1419), it leaves out:
 
-- **The raster backend** (`RasterGraphics.Text`): an SVG glyph is its plain outline in the text colour there, as COLR glyphs already are.
-  Filters, shadows and PDF/A flattening are where that shows.
 - **Distinct `context-fill` and `context-stroke`**: both are rewritten to `currentColor` (`SvgGlyphDocument.MakeContextPaintTheTextColour`),
   which is the text's fill colour. The SVG engine has no context-paint notion, and the common uses (a glyph that follows the text colour) work.
 - **A fixed canvas** around the glyph origin (`SvgGlyphDocument.Canvas*Ems`): one em left, 1.5 above, two right, half an em below; the

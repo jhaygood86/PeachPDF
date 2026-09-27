@@ -55,6 +55,7 @@ internal sealed partial class RasterGraphics
         var toDevice = UserToDevice;
         var tolerance = 0.1 / Math.Max(toDevice.MaxScale, 1e-9);
         var hinting = HintingRequest(xFont, toDevice);
+        var svgOverrides = typeface.HasSvgGlyphs ? ToGlyphOverrides(fontPalette) : null;
 
         var penX = originX;
         foreach (var glyph in glyphs)
@@ -62,6 +63,11 @@ internal sealed partial class RasterGraphics
             if (typeface.HasBitmapGlyphs && typeface.TryGetBitmap((ushort)glyph.GlyphIndex, xFont.Size, out var bitmap))
             {
                 DrawBitmapGlyph(typeface, glyph.GlyphIndex, bitmap, xFont.Size, penX + glyph.XOffset * scale, baselineY - glyph.YOffset * scale);
+            }
+            else if (typeface.HasSvgGlyphs && TryDrawSvgGlyph(typeface, glyph.GlyphIndex, xFont.Size, color, fontPalette?.BasePaletteIndex ?? 0,
+                         svgOverrides, penX + glyph.XOffset * scale, baselineY - glyph.YOffset * scale))
+            {
+                // drawn from the glyph's own SVG document
             }
             else if (hinting is { } request && typeface.TryGetOutline((ushort)glyph.GlyphIndex, request, out var fitted))
             {
@@ -92,6 +98,37 @@ internal sealed partial class RasterGraphics
         // The picture is a layout-unit rectangle to DrawImage, like every other image.
         var image = new ImageAdapter(BitmapGlyphImages.Get(typeface, glyphId, bitmap));
         DrawImage(image, new RRect(left * _pixelsPerPoint, top * _pixelsPerPoint, width * _pixelsPerPoint, height * _pixelsPerPoint));
+    }
+
+    /// <summary>
+    /// Draws a glyph from its SVG document (OpenType SVG) at a glyph origin given in points, through the SVG renderer on this surface, so
+    /// what a filter, a shadow or a flattened region shows is the glyph a PDF page would show, in the font's palette colours. False when the
+    /// glyph has no document (or has a COLR paint, which comes first), or the document cannot be used: the caller draws the outline.
+    /// </summary>
+    private bool TryDrawSvgGlyph(Typeface typeface, int glyphId, double fontSize, RColor color, int paletteIndex,
+        IReadOnlyDictionary<int, XColor>? overrides, double originX, double baselineY)
+    {
+        if (typeface.GetColorPaint((ushort)glyphId) is not null || typeface.TryGetColorLayers((ushort)glyphId, out _) ||
+            !typeface.TryGetSvgGlyph((ushort)glyphId, out var svg))
+            return false;
+
+        _svgGlyphs ??= new SvgGlyphPainter(this, _adapter);
+        return _svgGlyphs.TryPaint(typeface, (ushort)glyphId, svg, fontSize, originX, baselineY,
+            XColor.FromArgb(color.A, color.R, color.G, color.B), paletteIndex, overrides);
+    }
+
+    private SvgGlyphPainter? _svgGlyphs;
+
+    private static Dictionary<int, XColor>? ToGlyphOverrides(RFontPalette? palette)
+    {
+        if (palette is not { Overrides.Count: > 0 })
+            return null;
+
+        var overrides = new Dictionary<int, XColor>(palette.Overrides.Count);
+        foreach (var (entry, colour) in palette.Overrides)
+            overrides[entry] = XColor.FromArgb(colour.A, colour.R, colour.G, colour.B);
+
+        return overrides;
     }
 
     public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color)

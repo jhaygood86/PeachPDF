@@ -91,7 +91,7 @@ namespace PeachPDF.Adapters
 
             PixelsPerPoint = pixelsPerPoint;
             _previousSvgGlyphPainter = _g.SvgGlyphPainter;
-            _g.SvgGlyphPainter = new SvgGlyphPainter(this);
+            _g.SvgGlyphPainter = new SvgGlyphPainter(this, adapter);
         }
 
         private readonly PeachPDF.PdfSharpCore.Drawing.Pdf.ISvgGlyphPainter? _previousSvgGlyphPainter;

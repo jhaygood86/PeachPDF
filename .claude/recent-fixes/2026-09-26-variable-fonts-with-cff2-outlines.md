@@ -2,7 +2,7 @@
 
 A font with a `CFF2` table now has outlines at a location: `Typeface.TryGetOutline` on a `WithAxes` typeface runs the glyph's charstring with every
 `blend` resolved, and `TypefaceExporter.ExportSubset` writes such a typeface (at any location, the default one included) as a static CID-keyed OpenType/CFF
-font of the glyphs asked for, which is what a PDF can embed. The accepted gap and issue (#1407) are closed; hinting of CFF2 (#1441) is still a gap.
+font of the glyphs asked for, which is what a PDF can embed. The accepted gap and issue (#1407) are closed; hinting of CFF2 followed in [CFF2 outlines are hinted](2026-09-26-cff2-outlines-are-hinted.md).
 
 ## What the load-bearing idea was
 
@@ -53,7 +53,7 @@ font of the glyphs asked for, which is what a PDF can embed. The accepted gap an
 
 ## Deliberately not done
 
-- Grid-fitting CFF2 outlines: [text-hinting-cff2-outlines-are-not-hinted](../accepted-gaps/text-hinting-cff2-outlines-are-not-hinted.md).
+- Grid-fitting CFF2 outlines (done since: [CFF2 outlines are hinted](2026-09-26-cff2-outlines-are-hinted.md)).
 - `FontMatrix` (the Top DICT's and the Font DICTs'): the outlines are in the `head` units-per-em, as for CFF.
 - The arithmetic, storage and conditional operators and the four-operand `endchar` of `seac` (not in CFF2 at all): a glyph that uses one has no outline, as in CFF.
 - COLR colour glyphs over CFF2 outlines: `IsColorFont` still needs `glyf`, as for CFF (the synthetic selection glyph of an empty COLR base is a TrueType contour).
