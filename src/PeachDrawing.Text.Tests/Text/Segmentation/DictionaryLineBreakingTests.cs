@@ -381,7 +381,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
 
         // ---- hostile input -----------------------------------------------------------------------------------------------------------
 
-        private static readonly (int First, int Last)[] Blocks = [(0x0E00, 0x0E7F), (0x1780, 0x17FF)];
+        private static readonly (int First, int Last)[] Blocks = [(0x0E00, 0x0E7F), (0x1780, 0x17FF), (0x0E80, 0x0EFF), (0x1000, 0x109F)];
 
         private static string RandomText(Random random, int length, (int First, int Last) block)
         {
@@ -433,15 +433,20 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
 
         private static string Escape(string text) => string.Concat(text.Select(c => "\\u" + ((int)c).ToString("X4")));
 
-        /// <summary>The Thai leading vowels and the Khmer coeng: what a break must never follow.</summary>
-        private static bool IsLeading(char c) => c is >= '\u0E40' and <= '\u0E44' or '\u17D2';
+        /// <summary>The Thai and Lao leading vowels and the Khmer coeng and Myanmar virama: what a break must never follow.</summary>
+        private static bool IsLeading(char c) =>
+            c is >= '\u0E40' and <= '\u0E44'    // Thai SARA E..AI MAIMALAI
+            or >= '\u0EC0' and <= '\u0EC4'      // Lao VOWEL SIGN E..AI (the same prepended-vowel role as the Thai set above)
+            or '\u17D2'                         // Khmer coeng: precedes the subscript consonant it forms
+            or '\u1039';                        // Myanmar virama: precedes the stacked consonant it forms, the same role as coeng
 
-        /// <summary>The marks and dependent vowels of the two scripts (the categories Mn and Mc), and the letters that only follow one.</summary>
+        /// <summary>The marks and dependent vowels of the four scripts (the categories Mn and Mc), and the letters that only follow one.</summary>
         private static bool IsDependent(char c)
         {
             var category = char.GetUnicodeCategory(c);
             return category is System.Globalization.UnicodeCategory.NonSpacingMark or System.Globalization.UnicodeCategory.SpacingCombiningMark
-                || c is '\u0E30' or '\u0E32' or '\u0E33' or '\u0E45';
+                || c is '\u0E30' or '\u0E32' or '\u0E33' or '\u0E45'   // Thai SARA A, SARA AA, SARA AM, LAKKHANGYAO
+                || c is '\u0EB0' or '\u0EB2' or '\u0EB3';              // Lao SARA A, SARA AA, SARA AM (the same follow-only vowels, Lao has no LAKKHANGYAO analogue)
         }
 
         [Fact]
