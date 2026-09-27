@@ -208,6 +208,24 @@
     <None Include="..\..\assets\fonts\HintingCffHostile.otf" Link="HintingCffHostile.otf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\HintingVariable.golden.json.gz" Link="HintingVariable.golden.json.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingVariableVariants.golden.json.gz" Link="HintingVariableVariants.golden.json.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingVariable.ttf" Link="HintingVariable.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingVariableNoHvar.ttf" Link="HintingVariableNoHvar.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingVariableVertical.ttf" Link="HintingVariableVertical.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\HintingVariableAvar2.ttf" Link="HintingVariableAvar2.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\..\assets\fonts\LiberationSerif-Regular.woff" Link="LiberationSerif-Regular.woff">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

@@ -2,7 +2,7 @@
 
 A TrueType instance from `Typeface.WithAxes` is hinted with the control values its location gives: `TtFace` (the hinting port's per-face tables)
 adds the deltas of the font's `cvar` table to its `cvt` array before any size scales it. This closes the last item of the variable-font gap
-issue; what remains of variable-font hinting is [the exactness gap](../accepted-gaps/text-hinting-variable-fonts-are-not-bit-exact.md).
+issue; what remained of variable-font hinting, its exactness with FreeType, was closed later (see the 2026-09-27 entry on it).
 
 ## What the load-bearing idea was
 

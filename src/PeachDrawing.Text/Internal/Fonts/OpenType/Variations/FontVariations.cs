@@ -92,12 +92,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
     }
 
     /// <summary>
-    /// The variation tables of one font face (<c>fvar</c>, <c>avar</c>, <c>gvar</c>, <c>cvar</c>, <c>HVAR</c>, <c>VVAR</c>, <c>MVAR</c>), parsed from its bytes once.
+    /// The variation tables of one font face (<c>fvar</c>, <c>avar</c>, <c>gvar</c>, <c>HVAR</c>, <c>VVAR</c>, <c>MVAR</c>; the <c>cvar</c> table is read only when a font is hinted, by the port of FreeType's variation code), parsed from its bytes once.
     /// Nothing here depends on a location; a <see cref="VariationCoordinates"/> says where in the design space to read.
     /// </summary>
     internal sealed class FontVariations
     {
-        private FontVariations(AxisInfo[] axes, NamedInstanceInfo[] instances, AvarTable? avar, GvarTable? gvar, HvarTable? hvar, VvarTable? vvar, MvarTable? mvar, CvarTable? cvar)
+        private FontVariations(AxisInfo[] axes, NamedInstanceInfo[] instances, AvarTable? avar, GvarTable? gvar, HvarTable? hvar, VvarTable? vvar, MvarTable? mvar)
         {
             Axes = axes;
             Instances = instances;
@@ -106,7 +106,6 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
             Hvar = hvar;
             Vvar = vvar;
             Mvar = mvar;
-            Cvar = cvar;
         }
 
         private readonly AvarTable? _avar;
@@ -117,9 +116,6 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
         internal HvarTable? Hvar { get; }
         internal VvarTable? Vvar { get; }
         internal MvarTable? Mvar { get; }
-
-        /// <summary>How the control values of the <c>cvt</c> table change with the axes, or <see langword="null"/> when the font has no <c>cvar</c> table.</summary>
-        internal CvarTable? Cvar { get; }
 
         /// <summary>Reads the variation tables of <paramref name="face"/>, or returns <see langword="null"/> for a font that is not variable.</summary>
         internal static FontVariations? TryCreate(OpenTypeFontface face)
@@ -189,8 +185,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
                 HvarTable? hvar = Memory("HVAR") is { Length: > 0 } h ? HvarTable.TryParse(h.Span) : null;
                 VvarTable? vvar = Memory("VVAR") is { Length: > 0 } v ? VvarTable.TryParse(v.Span) : null;
                 MvarTable? mvar = Memory("MVAR") is { Length: > 0 } m ? MvarTable.TryParse(m.Span) : null;
-                CvarTable? cvar = Memory("cvar") is { Length: > 0 } c ? CvarTable.TryParse(c, axisCount) : null;
-                return new FontVariations(axes, instances, avar, gvar, hvar, vvar, mvar, cvar);
+                return new FontVariations(axes, instances, avar, gvar, hvar, vvar, mvar);
             }
             catch (Exception ex) when (ex is IndexOutOfRangeException or ArgumentOutOfRangeException or OverflowException)
             {

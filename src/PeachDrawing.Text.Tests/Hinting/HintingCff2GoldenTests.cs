@@ -165,9 +165,9 @@ namespace PeachDrawing.Text.Tests.Hinting
         [Fact]
         public void TheLocationsOfTheApiAreTheOnesFreeTypeNormalized()
         {
-            // The golden data is made with design coordinates that FreeType normalizes in 16.16 and the package in 2.14 (as fontTools does), so
-            // the two are the same number only where FreeType's is a multiple of 4 in 16.16 (an avar map of a real font can give one that is
-            // not, and then the package's differs by at most 2). The API comparison above is over the locations where they are the same.
+            // The golden data is made with design coordinates that FreeType normalizes in 16.16 (with the avar table, in 16.16 as well), and the package's own coordinates are
+            // rounded to 2.14 (as fontTools does), so the two differ by at most 2 where FreeType's is not a multiple of 4. The hinting engine does not use the package's: it
+            // normalizes the design coordinates of the location as FreeType does, and that vector is FreeType's exactly.
             foreach (var font in Golden.Value.Fonts)
             {
                 foreach (var loc in font.Locations.Where(l => l.Design is not null))
@@ -183,11 +183,10 @@ namespace PeachDrawing.Text.Tests.Hinting
                     }
 
                     Assert.NotNull(coordinates);
+                    Assert.Equal(expected, TtVarTables.NormalizedCoordinates(typeface.Face.Fontface, coordinates));
+
                     var actual = coordinates.Normalized.Select(n => (int)Math.Round(n * 65536)).ToArray();
-                    if (HintingCff2Fixtures.IsReachableByTheApi(font, loc))
-                        Assert.Equal(expected, actual);
-                    else
-                        Assert.All(expected.Zip(actual), pair => Assert.InRange(Math.Abs(pair.First - pair.Second), 0, 2));
+                    Assert.All(expected.Zip(actual), pair => Assert.InRange(Math.Abs(pair.First - pair.Second), 0, 2));
                 }
             }
         }
@@ -260,9 +259,9 @@ namespace PeachDrawing.Text.Tests.Hinting
             return location.Design is null ? typeface : typeface.WithAxes(typeface.Axes.Select((axis, i) => new AxisSetting(axis.Tag, location.Design[i])));
         }
 
-        /// <summary>Whether the API's location is FreeType's exactly: the design coordinates are normalized to multiples of 1/16384 by both.</summary>
+        /// <summary>Whether the API can be at the location: it has design coordinates, which the engine normalizes as FreeType does (raw normalized coordinates are only for the engine).</summary>
         public static bool IsReachableByTheApi(Cff2FontGolden font, Cff2LocationGolden location) =>
-            font.Axes == 0 || (location.Design is not null && location.Ndv!.All(v => v % 4 == 0));
+            font.Axes == 0 || location.Design is not null;
 
         /// <summary>The face the engine has at a location: the normalized vector FreeType kept, and the advances at it.</summary>
         public static CffFace Face(string fileName, Cff2LocationGolden location) => Faces.GetOrAdd((fileName, location.Name), _ =>

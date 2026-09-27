@@ -18,7 +18,7 @@ namespace PeachDrawing.Text.Tests.Hinting
         {
             // the font read directly, so that a font the public loader would not accept (a required table cut short) still reaches the hinter
             var fontface = new OpenTypeFontface(FontFileData.CreateCompiledFont(font));
-            return TtFace.TryCreate(fontface, family, null, null);
+            return TtFace.TryCreate(fontface, family, null);
         }
 
         private static byte[] SetUInt16(byte[] table, int offset, int value)

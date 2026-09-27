@@ -67,7 +67,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             Assert.Null(outline.GridFittedAdvance);
             Assert.False(typeface.TryGetGridFittedAdvance(glyph, new OutlineRequest { PixelsPerEm = 20, GridFitting = GridFitting.Standard }, out _));
 
-            var patched = TtFace.TryCreate(typeface.Face.Fontface, typeface.Face.FamilyName, null, null)!;
+            var patched = TtFace.TryCreate(typeface.Face.Fontface, typeface.Face.FamilyName, null)!;
             var size = TtSize.Create(patched, 20 * 64, TtInterpreterVersion.V40, TtRenderMode.Normal);
             Assert.True(size.HintingDisabled);
             Assert.False(TtGlyphLoader.Load(size, glyph).IsHinted);

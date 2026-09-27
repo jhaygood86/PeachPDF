@@ -102,25 +102,11 @@ internal sealed class HintingEngine
     }
 
     /// <summary>
-    /// The normalized coordinates, in 16.16, FreeType has for a variable font: one for each axis of the font (zero at the defaults), which is
-    /// how it keeps a font that has an <c>fvar</c> table even when nothing was set; null for a font that has none.
+    /// The normalized coordinates, in 16.16, FreeType has for a variable font at the location of this engine: one for each axis of the font (zero at the defaults, which is how it keeps
+    /// a font that has an <c>fvar</c> table even when nothing was set), or null for a font that has none. They are made from the design coordinates as FreeType makes them
+    /// (<c>ft_var_to_normalized</c>, with the <c>avar</c> table in 16.16), not by rounding the package's own 2.14 coordinates.
     /// </summary>
-    private int[]? NormalizedCoordinates()
-    {
-        int axes = _font.Variations?.Axes.Length ?? 0;
-        if (axes == 0)
-            return null;
-
-        var result = new int[axes];
-        if (_variation is { } variation)
-        {
-            // the coordinates are multiples of 1/16384 (2.14), so this is exact
-            for (int i = 0; i < axes && i < variation.Normalized.Length; i++)
-                result[i] = (int)Math.Round(variation.Normalized[i] * 65536);
-        }
-
-        return result;
-    }
+    private int[]? NormalizedCoordinates() => TtVarTables.NormalizedCoordinates(_font, _variation);
 
     private static int FrontSlot(in GlyphKey key) =>
         (int)(((uint)key.Glyph * 0x9E3779B1u + (uint)key.Size.Ppem26Dot6 * 0x85EBCA6Bu + (uint)key.Size.Mode * 0xC2B2AE35u + (key.Size.StemDarkening ? 0x27D4EB2Fu : 0u)) >> (32 - FrontBits));
@@ -153,7 +139,7 @@ internal sealed class HintingEngine
             {
                 try
                 {
-                    _face = TtFace.TryCreate(_font, _familyName, _variation, _instanceAdvance);
+                    _face = TtFace.TryCreate(_font, _familyName, _variation is null ? null : NormalizedCoordinates());
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
@@ -183,7 +169,7 @@ internal sealed class HintingEngine
             {
                 try
                 {
-                    _cffFace = CffFace.TryCreate(_font, _instanceAdvance, NormalizedCoordinates());
+                    _cffFace = CffFace.TryCreate(_font, CffAdvance(), NormalizedCoordinates());
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
@@ -198,6 +184,36 @@ internal sealed class HintingEngine
         }
     }
 
+    /// <summary>The location of a variable font as FreeType keeps it (which is what <c>MVAR</c> moves the <c>gasp</c> ranges of), or null for a font that is not variable.</summary>
+    private TtBlend? GetBlend()
+    {
+        // a font with TrueType outlines has it in its face
+        if (GetFace() is { } face)
+            return face.Blend;
+
+        if (TtVarTables.For(_font) is { } tables)
+            return TtBlend.TryCreate(tables, NormalizedCoordinates() ?? [], isCff2: true);
+
+        return null;
+    }
+
+    /// <summary>
+    /// The advance of a glyph of a font with CFF outlines, in font units: its <c>hmtx</c> entry, and at a location of a variable font what <c>HVAR</c> makes of it, in the 16.16
+    /// arithmetic FreeType uses (the package's own is in floating point), as <c>cff_slot_load</c> reads it.
+    /// </summary>
+    private Func<int, int> CffAdvance()
+    {
+        if (GetBlend() is not { DoBlend: true } blend || _font.hhea is null || _font.hmtx is null)
+            return _instanceAdvance;
+
+        return glyph =>
+        {
+            // a glyph past the long metrics shares the last one's advance
+            int index = Math.Min(glyph, _font.hhea.numberOfHMetrics - 1);
+            return blend.AdjustAdvance(false, glyph, _font.hmtx.Metrics[index].advanceWidth);
+        };
+    }
+
     private TtGasp? GetGasp()
     {
         if (Volatile.Read(ref _gaspRead))
@@ -208,7 +224,7 @@ internal sealed class HintingEngine
             if (!_gaspRead)
             {
                 // reading the table checks every offset and length against the table, so it has nothing to throw about a hostile font
-                _gasp = TtGasp.TryRead(_font);
+                _gasp = TtGasp.TryRead(_font)?.AtLocation(GetBlend());
                 Volatile.Write(ref _gaspRead, true);
             }
 

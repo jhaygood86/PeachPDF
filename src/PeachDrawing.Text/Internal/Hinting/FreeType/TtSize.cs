@@ -188,7 +188,7 @@ internal sealed class TtSize
             exec.PedanticHinting = pedantic;
             exec.Version = Version;
             exec.NumGlyphs = face.NumGlyphs;
-            exec.HasBlend = face.Normalized is not null;
+            exec.HasBlend = face.Blend is not null;
             exec.BlendCoordinates = face.BlendCoordinates;
 
             exec.MaxFDefs = face.MaxFunctionDefs;

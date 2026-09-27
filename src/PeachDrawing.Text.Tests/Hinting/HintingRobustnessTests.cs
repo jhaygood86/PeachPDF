@@ -18,7 +18,7 @@ namespace PeachDrawing.Text.Tests.Hinting
         private static TtFace FaceOf(byte[] data)
         {
             var typeface = PeachPDF.Tests.TestSupport.TypefaceFixtures.FromBytes(data);
-            return TtFace.TryCreate(typeface.Face.Fontface, typeface.Face.FamilyName, null, null)
+            return TtFace.TryCreate(typeface.Face.Fontface, typeface.Face.FamilyName, null)
                 ?? throw new InvalidOperationException("The font has no TrueType outlines.");
         }
 

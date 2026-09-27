@@ -156,7 +156,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             var thread = new Thread(() =>
             {
                 var typeface = TypefaceFixtures.FromBytes(font);
-                var face = TtFace.TryCreate(typeface.Face.Fontface, typeface.Face.FamilyName, null, null)!;
+                var face = TtFace.TryCreate(typeface.Face.Fontface, typeface.Face.FamilyName, null)!;
                 try
                 {
                     var size = TtSize.Create(face, 16 * 64, TtInterpreterVersion.V40, TtRenderMode.Normal);
