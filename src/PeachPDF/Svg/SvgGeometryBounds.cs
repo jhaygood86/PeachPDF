@@ -49,10 +49,42 @@ namespace PeachPDF.Svg
                 if (bounds is not { } b)
                     continue;
 
+                // A child's own bbox is measured in its own (post-child-transform) frame - see the
+                // class remarks; composing it into the group's frame needs the child's transform
+                // applied before it is unioned in, or a transformed child silently contributes its
+                // untransformed geometry instead (SvgRenderer's context-paint-through-use fix relies
+                // on this being correct, not just "close enough").
+                if (element.Transform is { } transform)
+                    b = TransformBounds(b, transform);
+
                 result = result is { } r ? Union(r, b) : b;
             }
 
             return result;
+        }
+
+        /// <summary>The axis-aligned envelope of <paramref name="rect"/>'s four corners mapped through <paramref name="matrix"/>.</summary>
+        private static RRect TransformBounds(RRect rect, RMatrix matrix)
+        {
+            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+
+            Span<(double X, double Y)> corners =
+            [
+                (rect.X, rect.Y), (rect.X + rect.Width, rect.Y),
+                (rect.X, rect.Y + rect.Height), (rect.X + rect.Width, rect.Y + rect.Height),
+            ];
+
+            foreach (var (x, y) in corners)
+            {
+                var px = x * matrix.M11 + y * matrix.M21 + matrix.OffsetX;
+                var py = x * matrix.M12 + y * matrix.M22 + matrix.OffsetY;
+                minX = Math.Min(minX, px);
+                maxX = Math.Max(maxX, px);
+                minY = Math.Min(minY, py);
+                maxY = Math.Max(maxY, py);
+            }
+
+            return new RRect(minX, minY, maxX - minX, maxY - minY);
         }
 
         private static RRect Union(RRect a, RRect b)
