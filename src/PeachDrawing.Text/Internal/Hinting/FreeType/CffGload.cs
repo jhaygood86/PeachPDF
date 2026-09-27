@@ -79,11 +79,24 @@ internal sealed class CffFace
         Advance = advance;
     }
 
-    /// <summary>Reads the CFF table of a font, or returns null for a font that has none (or one that FreeType would refuse).</summary>
-    public static CffFace? TryCreate(OpenTypeFontface font, Func<int, int> advance)
+    /// <summary>
+    /// Reads the CFF table (or, giving it priority as FreeType does, the CFF2 table) of a font, or returns null for a font that has none (or one
+    /// that FreeType would refuse).
+    /// </summary>
+    /// <param name="font">The font.</param>
+    /// <param name="advance">The advance width of a glyph in font units, at the location the face is used at.</param>
+    /// <param name="normalizedCoordinates">
+    /// The location of a variable font: one normalized coordinate in 16.16 for each axis of its <c>fvar</c> table (all zero at the defaults),
+    /// or null when the font has no axes. It decides what <c>blend</c> operators give in a CFF2 font, and means nothing to a CFF one.
+    /// </param>
+    public static CffFace? TryCreate(OpenTypeFontface font, Func<int, int> advance, int[]? normalizedCoordinates = null)
     {
         var tables = font.TableDictionary;
-        if (!tables.TryGetValue("CFF ", out var cff) || !tables.TryGetValue("head", out var head) || !tables.ContainsKey("hmtx"))
+        bool cff2 = tables.TryGetValue("CFF2", out var cff);
+        if (!cff2 && !tables.TryGetValue("CFF ", out cff))
+            return null;
+
+        if (!tables.TryGetValue("head", out var head) || !tables.ContainsKey("hmtx"))
             return null;
 
         byte[] data = font.FontSource.Bytes;
@@ -96,7 +109,7 @@ internal sealed class CffFace
 
         try
         {
-            return new CffFace(CffFont.Load(data, cff.Offset, unitsPerEm), unitsPerEm, advance);
+            return new CffFace(CffFont.Load(data, cff!.Offset, unitsPerEm, cff2, normalizedCoordinates), unitsPerEm, advance);
         }
         catch (HintingException)
         {

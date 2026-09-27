@@ -113,6 +113,9 @@ internal sealed class Cf2Stack
     /// <summary><c>cf2_stack_count</c>.</summary>
     public int Count => _top;
 
+    /// <summary>Whether an error has been recorded (the glyph is lost once one is: the interpreter looks at the error before it runs the next operator).</summary>
+    public bool Failed => _error.Value != 0;
+
     /// <summary><c>cf2_stack_pushInt</c>.</summary>
     public void PushInt(int val)
     {
@@ -193,6 +196,35 @@ internal sealed class Cf2Stack
             Cf2NumberType.Int => Cf2Fixed.FromInt(_buffer[idx].Value),
             _ => _buffer[idx].Value,
         };
+    }
+
+    /// <summary><c>cf2_stack_setReal</c>: provides random access to the stack.</summary>
+    public void SetReal(int idx, int val)
+    {
+        if ((uint)idx > (uint)_top)
+        {
+            _error.Set(Cf2Error.StackOverflow);
+            return;
+        }
+
+        // an index equal to the count is accepted, as FreeType accepts it, and is one past the values the stack holds
+        if (idx == _buffer.Length)
+            return;
+
+        _buffer[idx].Value = val;
+        _buffer[idx].Type = Cf2NumberType.Fixed;
+    }
+
+    /// <summary><c>cf2_stack_pop</c>: discards (pops) <paramref name="num"/> values from the stack.</summary>
+    public void Pop(uint num)
+    {
+        if (num > (uint)_top)
+        {
+            _error.Set(Cf2Error.StackUnderflow);
+            return;
+        }
+
+        _top -= (int)num;
     }
 
     /// <summary><c>cf2_stack_roll</c>.</summary>

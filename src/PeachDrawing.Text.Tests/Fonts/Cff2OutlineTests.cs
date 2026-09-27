@@ -65,7 +65,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         [Fact]
-        public void ACff2Glyph_AtASize_IsTheScaledDesignOutline_BecauseCff2IsNotGridFitted()
+        public void ACff2Glyph_AtASize_IsGridFittedAtItsLocation_AndAFontWithNoHintsIsOnlyScaled()
         {
             var instance = Load(BundledFonts.VariableCff2Test).WithAxes([new AxisSetting("wght", 700)]);
             instance.TryMapRune(new System.Text.Rune('B'), out var b);
@@ -73,9 +73,10 @@ namespace PeachDrawing.Text.Tests.Fonts
             Assert.True(instance.TryGetOutline(b, new OutlineRequest { PixelsPerEm = 20, GridFitting = GridFitting.Standard }, out var scaled));
             Assert.True(instance.TryGetOutline(b, out var design));
 
-            Assert.False(scaled.IsGridFitted);
+            // the font has no hints and no blue zones, so fitting it scales the outline at its location and rounds the points to 1/64 of a pixel
+            Assert.True(scaled.IsGridFitted);
             Assert.Equal(design.Contours.Count, scaled.Contours.Count);
-            Assert.Equal(design.Contours[0].Start.X * 20 / instance.Metrics.UnitsPerEm, scaled.Contours[0].Start.X, 9);
+            Assert.InRange(Math.Abs(design.Contours[0].Start.X * 20 / instance.Metrics.UnitsPerEm - scaled.Contours[0].Start.X), 0, 1 / 64.0);
         }
 
         [Fact]
