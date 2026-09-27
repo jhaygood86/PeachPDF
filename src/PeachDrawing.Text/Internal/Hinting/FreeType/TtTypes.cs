@@ -194,10 +194,42 @@ internal sealed class TtGlyphZone
         FirstPoint = other.FirstPoint,
     };
 
+    /// <summary>
+    /// Drops the arrays of a zone that has room for more than <paramref name="points"/> points, so that a thread's reusable zone does not keep the
+    /// megabytes a font that declares tens of thousands of twilight points once asked for; the next <see cref="CopyFrom"/> makes them again.
+    /// </summary>
+    public void TrimTo(int points)
+    {
+        if (OrgX.Length <= points && Contours.Length <= points)
+            return;
+
+        OrgX = OrgY = CurX = CurY = OrusX = OrusY = [];
+        Tags = [];
+        Contours = [];
+        NPoints = 0;
+        NContours = 0;
+    }
+
     /// <summary>Copies the contents of another zone into this one, making it an independent copy.</summary>
     public void CopyFrom(TtGlyphZone other)
     {
-        Allocate(other.NPoints, other.NContours);
+        // What is copied over is every entry there is, so the room does not have to be cleared first (Allocate does).
+        if (OrgX.Length < other.NPoints)
+        {
+            OrgX = new int[other.NPoints];
+            OrgY = new int[other.NPoints];
+            CurX = new int[other.NPoints];
+            CurY = new int[other.NPoints];
+            OrusX = new int[other.NPoints];
+            OrusY = new int[other.NPoints];
+            Tags = new byte[other.NPoints];
+        }
+
+        if (Contours.Length < other.NContours)
+            Contours = new ushort[other.NContours];
+
+        NPoints = other.NPoints;
+        NContours = other.NContours;
         Array.Copy(other.OrgX, OrgX, other.NPoints);
         Array.Copy(other.OrgY, OrgY, other.NPoints);
         Array.Copy(other.CurX, CurX, other.NPoints);

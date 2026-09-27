@@ -169,6 +169,9 @@ internal sealed class TtFace
     /// <summary>The normalized coordinates of the instance, in the range -1 to 1; null for a font that is not an instance.</summary>
     public double[]? Normalized { get; }
 
+    /// <summary>The normalized coordinates in 16.16 (<c>face->blend->normalizedcoords</c>), which the interpreter's <c>GETVARIATION</c> hands to a program; empty for a font that is not an instance. Made once for the face, not for every glyph.</summary>
+    public int[] BlendCoordinates { get; } = [];
+
     /// <summary>The advance of a glyph in font units at the instance's location, when that differs from the <c>hmtx</c> one (an <c>HVAR</c> table).</summary>
     public Func<int, int>? InstanceAdvance { get; }
 
@@ -345,6 +348,7 @@ internal sealed class TtFace
         {
             Gvar = gvar;
             Normalized = variation.Normalized;
+            BlendCoordinates = Array.ConvertAll(variation.Normalized, v => (int)Math.Round(v * 65536.0));
             InstanceAdvance = instanceAdvance;
         }
 

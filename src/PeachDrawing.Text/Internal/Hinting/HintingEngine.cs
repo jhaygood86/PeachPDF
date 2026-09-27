@@ -295,8 +295,8 @@ internal sealed class HintingEngine
 
         try
         {
-            TtHintedGlyph hinted = TtGlyphLoader.Load(size, glyph);
-            return new HintedGlyphResult(ToOutline(hinted, sizeKey.Ppem26Dot6), hinted.Advance / 64.0, hinted.IsHinted);
+            // the outline is made from the loader's own arrays, without a copy of them first
+            return TtGlyphLoader.Load(size, glyph, sizeKey.Ppem26Dot6, s_readTrueTypeGlyph);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -433,7 +433,17 @@ internal sealed class HintingEngine
         return outline;
     }
 
-    private static GlyphOutline ToOutline(TtHintedGlyph hinted, int ppem26Dot6)
+    private static readonly TtGlyphReader<int, HintedGlyphResult> s_readTrueTypeGlyph =
+        static (in TtGlyphView hinted, int ppem26Dot6) => new HintedGlyphResult(ToOutline(hinted, ppem26Dot6), hinted.Advance / 64.0, hinted.IsHinted);
+
+    // The points of the contour being made; a thread keeps one list from glyph to glyph. Nothing of it goes into the outline (BuildContour copies).
+    [ThreadStatic]
+    private static List<GlyphOutlineDecoder.RawPoint>? s_contourPoints;
+
+    // The most points the list is kept at: a contour of a real glyph has a few hundred.
+    private const int MaxRetainedContourPoints = 4096;
+
+    private static GlyphOutline ToOutline(in TtGlyphView hinted, int ppem26Dot6)
     {
         var outline = new GlyphOutline
         {
@@ -442,14 +452,21 @@ internal sealed class HintingEngine
             GridFittedAdvance = hinted.IsHinted ? hinted.Advance / 64.0 : null,
         };
 
-        var points = new List<GlyphOutlineDecoder.RawPoint>();
+        outline.ContourList.Capacity = hinted.ContourEnds.Length;
+
+        List<GlyphOutlineDecoder.RawPoint> points = s_contourPoints ?? new List<GlyphOutlineDecoder.RawPoint>(64);
+        s_contourPoints = null; // taken: a contour that throws leaves nothing half-used behind
+
+        ReadOnlySpan<int> xs = hinted.X;
+        ReadOnlySpan<int> ys = hinted.Y;
+        ReadOnlySpan<byte> tags = hinted.Tags;
         int start = 0;
 
         foreach (int end in hinted.ContourEnds)
         {
             points.Clear();
-            for (int i = start; i <= end && i < hinted.NPoints; i++)
-                points.Add(new GlyphOutlineDecoder.RawPoint(hinted.X[i] / 64.0, hinted.Y[i] / 64.0, (hinted.Tags[i] & FtTag.On) != 0));
+            for (int i = start; i <= end && i < xs.Length; i++)
+                points.Add(new GlyphOutlineDecoder.RawPoint(xs[i] / 64.0, ys[i] / 64.0, (tags[i] & FtTag.On) != 0));
 
             OutlineContour? contour = GlyphOutlineDecoder.BuildContour(points);
             if (contour is not null)
@@ -457,6 +474,9 @@ internal sealed class HintingEngine
 
             start = end + 1;
         }
+
+        if (points.Capacity <= MaxRetainedContourPoints)
+            s_contourPoints = points;
 
         return outline;
     }
