@@ -1340,9 +1340,12 @@ namespace PeachPDF.Svg
             // TextDecorationColor null for both "unset" and literal "currentColor") falls back to the
             // decorator's own solid fill - SVG has no separate tracked `color` property the way HTML
             // does, and the text's own fill is the closest available proxy for what a reader perceives
-            // as "this text's color".
+            // as "this text's color". Resolved through ResolveInMarker first (a no-op outside a marker)
+            // so a context-fill keyword on marker text isn't mistaken for "no solid color" and falls
+            // back to black instead of the shape it is on.
+            var resolvedFill = ResolveInMarker(decorator.Fill);
             var color = decorator.TextDecorationColor
-                ?? (decorator.Fill.Kind == SvgPaintKind.Solid ? decorator.Fill.Color : RColor.Black);
+                ?? (resolvedFill.Kind == SvgPaintKind.Solid ? resolvedFill.Color : RColor.Black);
             var actualColor = ApplyOpacity(color, opacity * decorator.Opacity * decorator.FillOpacity);
             const double thickness = 1;
             var isWavy = decorator.TextDecorationStyle == Keywords.Wavy;
@@ -1810,13 +1813,11 @@ namespace PeachPDF.Svg
             // whose only content is those types (previously unboundable) still gets an isolated composite
             // instead of falling back to a double-blend-prone per-shape alpha multiply.
             //
-            // Approximation (same as SvgGeometryBounds, which this reuses for objectBoundingBox
-            // gradients/masks): a descendant's own `transform` is NOT folded into the bounds, so a child
-            // carrying a large translate/scale that pushes its painted geometry outside the untransformed
-            // union can be clipped by the raster tile - a pre-existing renderer limitation that applies
-            // equally to the boundable-geometry path, mitigated (not eliminated) by the margin. Likewise a
-            // <use>-of-a-<use>-of-a-container isn't routed here (NeedsContainerOpacityGroup only unwraps one
-            // <use> level), so its target's children fall back to the per-shape multiply.
+            // A descendant's own `transform` IS folded into the bounds (UnionOpacityGroupBounds composes it the
+            // same way SvgGeometryBounds.UnionAll does), so a child carrying a translate/scale is still sized
+            // correctly, not just approximately. Remaining approximation: a <use>-of-a-<use>-of-a-container isn't
+            // routed here (NeedsContainerOpacityGroup only unwraps one <use> level), so its target's children
+            // fall back to the per-shape multiply.
             if (GetOpacityGroupBounds(g, element, viewport) is not { } bbox || bbox.Width <= 0 || bbox.Height <= 0)
             {
                 // Truly empty / zero-area content: nothing paints, so there is nothing to double-blend -
@@ -1888,6 +1889,12 @@ namespace PeachPDF.Svg
             {
                 if (GetOpacityGroupBounds(g, element, viewport) is not { } b)
                     continue;
+
+                // Same composition SvgGeometryBounds.UnionAll makes: a child's own transform has to be folded in
+                // before unioning, or a translated/scaled child is sized as if it sat at its own untransformed
+                // position, silently clipping it against the tile's margin (or, previously, the tile itself).
+                if (element.Transform is { } transform)
+                    b = SvgGeometryBounds.TransformBounds(b, transform);
 
                 result = result is { } r ? UnionRects(r, b) : b;
             }

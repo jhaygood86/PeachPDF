@@ -3,6 +3,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Raster;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
+using System.Linq;
 using System.Xml.Linq;
 
 namespace PeachPDF.Tests.Svg
@@ -334,6 +335,33 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void AGradientThroughAUse_IsMeasuredCorrectlyWhenTheTargetPaintsThroughATile()
+        {
+            // The use's target has its own opacity, so RenderElement paints it through RGraphics.CreateTile's
+            // isolated tile (RenderContainerOpacityGroup) rather than directly on the outer graphics - the same
+            // tile a mask or a <pattern> fill uses. Unless that tile's own CurrentTransform is seeded from the
+            // outer graphics' (RGraphics.CreateTile's contract), ContextBounds composes the context element's
+            // recorded frame against the wrong baseline and gets a materially different (nonsensical) box.
+            var surface = Paint($"""
+                <svg {Svg}>
+                  <defs>
+                    <linearGradient id="g"><stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/></linearGradient>
+                    <g id="grp" opacity="0.5"><rect width="40" height="40" fill="context-fill"/></g>
+                  </defs>
+                  <use xlink:href="#grp" x="10" y="30" fill="url(#g)"/>
+                </svg>
+                """);
+
+            // The rect's own center (document (10,30) + local (20,20)) - correctly measured, the box the gradient
+            // resolves against here already runs more than half way to blue; measured against the wrong baseline
+            // (an unseeded tile), it instead lands under half way, still mostly red. Alpha is the group's own
+            // opacity (0.5), not full - only the colour balance is the assertion here.
+            var (r, _, b, a) = At(surface, 30, 50);
+            Assert.True(a > 0);
+            Assert.True(b > r, $"expected the correctly-mapped box to already read past the midpoint at the rect's own center, got r={r} b={b}");
+        }
+
+        [Fact]
         public void ASolidUseFill_DoesNotNeedAnythingOfTheContextElement()
         {
             var document = Build($"""
@@ -385,6 +413,30 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void TextInAMarker_ResolvesContextFillForItsTextDecorationToo()
+        {
+            // Before the fix, DrawDecorationSpan read decorator.Fill directly (bypassing ResolveInMarker like the
+            // glyphs themselves used to), so an unresolved context-fill keyword never matched SvgPaintKind.Solid
+            // and the underline fell back to black instead of the shape's own (red) fill.
+            var document = Build($"""
+                <svg {Svg}>
+                  <defs>
+                    <marker id="m" markerWidth="20" markerHeight="20" refX="10" refY="18" markerUnits="userSpaceOnUse">
+                      <text x="0" y="10" font-size="10" fill="context-fill" text-decoration-line="underline">A</text>
+                    </marker>
+                  </defs>
+                  <path d="M10,50 L50,50" fill="#ff0000" marker-end="url(#m)"/>
+                </svg>
+                """);
+
+            var g = new TestRecordingGraphics();
+            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 100, 100));
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            Assert.Equal(RColor.FromArgb(255, 255, 0, 0), line.Color);
+        }
+
+        [Fact]
         public void AFilterInputOnAMarkerShape_ResolvesContextFillToThePaintOfTheShapeItIsOn()
         {
             // Before the fix, RendererFilterInputs.PaintOf read element.Fill/element.Stroke directly, so a marker
@@ -403,6 +455,30 @@ namespace PeachPDF.Tests.Svg
                 """);
 
             AssertColour(surface, 50, 50, Red);
+        }
+
+        [Fact]
+        public void AFilterInputOnAMarkerShape_WithAGradientContextFill_IsMappedThroughThePlacementTransform()
+        {
+            // Same geometry as AGradientOnTheShapeOfAMarker_IsMappedThroughThePlacementTransform, but the marker
+            // rect reads the gradient through a FillPaint filter input instead of painting it directly - proving
+            // RendererFilterInputs.PaintOf resolves a gradient/pattern context-fill (not just a solid one) and that
+            // ContextBounds still maps it correctly once the raster filter's own tile (RGraphics.BeginRasterSurface,
+            // seeded from the calling graphics unlike RGraphics.CreateTile) is in the picture.
+            var surface = Paint($"""
+                <svg {Svg}>
+                  <defs>
+                    <linearGradient id="g"><stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/></linearGradient>
+                    <filter id="f" color-interpolation-filters="sRGB"><feMerge><feMergeNode in="FillPaint"/></feMerge></filter>
+                    <marker id="m" markerWidth="20" markerHeight="20" refX="10" refY="10" markerUnits="userSpaceOnUse">
+                      <rect width="20" height="20" fill="context-fill" filter="url(#f)"/>
+                    </marker>
+                  </defs>
+                  <path d="M10,50 L90,50" fill="url(#g)" marker-end="url(#m)"/>
+                </svg>
+                """);
+
+            AssertColour(surface, 90, 50, Blue);
         }
     }
 }

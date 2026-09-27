@@ -26,8 +26,9 @@ and they resolve by SVG 2's rule of a context element.
 parser dropped the declaration before the SVG layer ever saw it, and the attribute form worked, which hid it. The CSS-OM `Or(keyword)` is one
 line.
 
-**Deliberately not done**, recorded in [the gap file](../accepted-gaps/svg-context-paint-gradients-in-markers-transforms-under-use-and-marker-text.md):
-gradients/patterns through a marker, a transform under a `use`, text in a marker.
+**Deliberately not done** at the time, recorded in a gap file since closed - see
+[the follow-up fix](2026-09-27-svg-context-paint-markers-use-transforms-text.md): gradients/patterns through a
+marker, a transform under a `use`, text in a marker.
 
 **Evidence.** `SvgContextPaintTests` paints through the raster graphics and reads pixels (a keyword that painted nothing or the wrong paint
 fails; distinct fill and stroke, two uses of one shape, nested uses, a keyword on the use itself, the seed, stylesheet and `style=` forms, markers on

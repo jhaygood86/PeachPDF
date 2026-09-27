@@ -66,8 +66,12 @@ namespace PeachPDF.Svg
             return result;
         }
 
-        /// <summary>The axis-aligned envelope of <paramref name="rect"/>'s four corners mapped through <paramref name="matrix"/>.</summary>
-        private static RRect TransformBounds(RRect rect, RMatrix matrix)
+        /// <summary>
+        /// The axis-aligned envelope of <paramref name="rect"/>'s four corners mapped through <paramref name="matrix"/>. Internal
+        /// (not just used by <see cref="UnionAll"/>) because <see cref="SvgRenderer"/>'s own parallel "union children's bounds"
+        /// pass for an opacity-group tile (<c>UnionOpacityGroupBounds</c>) needs the exact same child-transform composition.
+        /// </summary>
+        internal static RRect TransformBounds(RRect rect, RMatrix matrix)
         {
             double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
 
