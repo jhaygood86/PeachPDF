@@ -31,6 +31,7 @@ namespace PeachDrawing.Text.Layout
         private readonly bool[] _isGraphemeBoundary;
         private readonly int[] _nextOpportunity;
         private readonly Atom[] _atoms;
+        private readonly IReadOnlyDictionary<int, InlineBox>? _boxes;
         private readonly Typeface?[]? _fallbackFaces;
         private const int MaxShapedPieces = 8192;
 
@@ -43,9 +44,10 @@ namespace PeachDrawing.Text.Layout
         /// <summary>A piece of the text that is shaped as one: one style, one direction level and one script.</summary>
         internal readonly record struct Atom(int Start, int End, int Run, byte Level, string Script, RunStyle Style);
 
-        internal Paragraph(string text, (int, int, RunStyle)[] runs, ParagraphStyle style)
+        internal Paragraph(string text, (int, int, RunStyle)[] runs, ParagraphStyle style, IReadOnlyDictionary<int, InlineBox>? boxes = null)
         {
             Text = text;
+            _boxes = boxes is { Count: > 0 } ? boxes : null;
             Style = style;
             _runs = runs;
             _bidi = Bidi.Analyze(text, style.Direction);
@@ -65,13 +67,6 @@ namespace PeachDrawing.Text.Layout
                 }
             }
 
-            _nextOpportunity = new int[text.Length + 2];
-            _nextOpportunity[text.Length + 1] = text.Length + 1;
-            for (int i = text.Length; i >= 0; i--)
-            {
-                _nextOpportunity[i] = i >= 1 && Opportunities[i] != LineBreakOpportunity.Prohibited ? i : _nextOpportunity[i + 1];
-            }
-
             _isGraphemeBoundary = new bool[text.Length + 1];
             foreach (var boundary in Segmenter.FindGraphemeBoundaries(text))
             {
@@ -80,9 +75,49 @@ namespace PeachDrawing.Text.Layout
 
             _isGraphemeBoundary[0] = true;
             _isGraphemeBoundary[text.Length] = true;
+            AllowBreaksAroundBoxes();
+
+            _nextOpportunity = new int[text.Length + 2];
+            _nextOpportunity[text.Length + 1] = text.Length + 1;
+            for (int i = text.Length; i >= 0; i--)
+            {
+                _nextOpportunity[i] = i >= 1 && Opportunities[i] != LineBreakOpportunity.Prohibited ? i : _nextOpportunity[i + 1];
+            }
+
             _fallbackFaces = ResolveFallbackFaces();
             _atoms = BuildAtoms();
         }
+
+        /// <summary>
+        /// Makes a line breakable before and after every inline box (CSS Text 3 section 5.1: a soft wrap opportunity on both sides of an atomic inline, even next to a
+        /// character that would suppress one, such as a no-break space, a closing bracket or a full stop), except next to a joiner or word joiner, which keep it, and
+        /// before a space, which hangs.
+        /// </summary>
+        private void AllowBreaksAroundBoxes()
+        {
+            if (_boxes is null)
+            {
+                return;
+            }
+
+            foreach (int index in _boxes.Keys)
+            {
+                if (index > 0 && Opportunities[index] == LineBreakOpportunity.Prohibited && !SuppressesBreakAt(Text[index - 1]))
+                {
+                    Opportunities[index] = LineBreakOpportunity.Allowed;
+                }
+
+                int after = index + 1;
+                if (after < Text.Length && _isGraphemeBoundary[after] && Opportunities[after] == LineBreakOpportunity.Prohibited
+                    && !SuppressesBreakAt(Text[after]) && !IsHangingSpace(Text[after]) && Text[after] != (char)0x200B)
+                {
+                    Opportunities[after] = LineBreakOpportunity.Allowed;
+                }
+            }
+        }
+
+        /// <summary>The characters that keep a break from a box beside them: line terminators, the zero width joiner, the word joiner and the zero width no-break space.</summary>
+        private static bool SuppressesBreakAt(char c) => IsLineTerminator(c) || c is (char)0x200D or (char)0x2060 or (char)0xFEFF;
 
         /// <summary>The text of the paragraph.</summary>
         public string Text { get; }
@@ -187,7 +222,7 @@ namespace PeachDrawing.Text.Layout
                     Rune.DecodeFromUtf16(Text.AsSpan(i), out var first, out _);
                     // Spaces, controls and format characters (zero width space, joiners, bidi marks, the soft hyphen) draw nothing, so no
                     // face is asked for them: a stand-in would only change the line's height and cut the shaping around it.
-                    if (!IsLineTerminator(Text[i]) && !Rune.IsWhiteSpace(first) && !Rune.IsControl(first)
+                    if (!IsLineTerminator(Text[i]) && !IsBoxAt(i) && !Rune.IsWhiteSpace(first) && !Rune.IsControl(first)
                         && Rune.GetUnicodeCategory(first) != System.Globalization.UnicodeCategory.Format
                         && !style.Typeface.TryMapRune(first, out _)
                         && fallback(first) is { } face)
@@ -224,12 +259,13 @@ namespace PeachDrawing.Text.Layout
                 byte level = _bidi.Levels[i];
                 string script = _scripts[i];
                 var face = _fallbackFaces?[i];
-                bool tab = Text[i] == '\t';
+                bool tab = Text[i] == '\t' || IsBoxAt(i);
                 i++;
-                // A tab is an atom of its own: its width comes from the tab stops, not from a glyph.
+                // A tab is an atom of its own: its width comes from the tab stops, not from a glyph. So is an inline box.
                 while (!tab
                     && i < length
                     && Text[i] != '\t'
+                    && !IsBoxAt(i)
                     && !IsLineTerminator(Text[i])
                     && _runs[run].End > i
                     && _bidi.Levels[i] == level
@@ -660,6 +696,15 @@ namespace PeachDrawing.Text.Layout
             return made;
         }
 
+        /// <summary>Whether the character at <paramref name="index"/> stands for an inline box.</summary>
+        internal bool IsBoxAt(int index) => _boxes is not null && _boxes.ContainsKey(index);
+
+        /// <summary>Whether the atom is an inline box.</summary>
+        internal bool IsBox(in Atom atom) => _boxes is not null && _boxes.ContainsKey(atom.Start);
+
+        /// <summary>The inline box the character at <paramref name="index"/> stands for.</summary>
+        internal InlineBox BoxAt(int index) => _boxes![index];
+
         /// <summary>Whether the atom is one tab character.</summary>
         internal bool IsTab(in Atom atom) => atom.End == atom.Start + 1 && Text[atom.Start] == '\t';
 
@@ -711,7 +756,7 @@ namespace PeachDrawing.Text.Layout
                 int to = Math.Min(end, atom.End);
                 if (to > from)
                 {
-                    width += IsTab(atom) ? TabAdvance(atom.Style, pen + width) : WidthOf(ShapePiece(atom, from, to), atom.Style, from);
+                    width += IsBox(atom) ? BoxAt(atom.Start).Width : IsTab(atom) ? TabAdvance(atom.Style, pen + width) : WidthOf(ShapePiece(atom, from, to), atom.Style, from);
                 }
             }
 
@@ -731,6 +776,12 @@ namespace PeachDrawing.Text.Layout
             bool selected = isFirst || (indent.EachLine && followsForcedBreak);
             return (indent.Hanging ? !selected : selected) ? indent.Length : 0;
         }
+
+        /// <summary>
+        /// Starts laying the paragraph out one line at a time, for a caller that decides how much room each line has (floats, columns, pages): see <see cref="LineFlow"/>.
+        /// </summary>
+        /// <returns>The flow, which holds nothing but the paragraph and can be used from several threads.</returns>
+        public LineFlow CreateFlow() => new(this);
 
         /// <summary>
         /// Lays the paragraph out at a width.
@@ -853,6 +904,7 @@ namespace PeachDrawing.Text.Layout
         private readonly StringBuilder _text = new();
         private readonly List<(int Start, RunStyle Style)> _runs = [];
         private readonly Stack<RunStyle> _stack = new();
+        private readonly Dictionary<int, InlineBox> _boxes = [];
         private ParagraphStyle _style = new();
 
         /// <summary>
@@ -974,6 +1026,32 @@ namespace PeachDrawing.Text.Layout
             return this;
         }
 
+        /// <summary>Adds an inline box in the current run: it is one character of the paragraph's text (U+FFFC), sized as given.</summary>
+        /// <param name="box">The box.</param>
+        /// <returns>This builder.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">A size is negative, or a number is not finite or is more than 1,000,000,000 (in either direction, for the baseline and its shift).</exception>
+        public ParagraphBuilder AddInlineBox(InlineBox box)
+        {
+            const double Limit = 1e9;
+            if (!(box.Width >= 0 && box.Width <= Limit) || !(box.Height >= 0 && box.Height <= Limit))
+            {
+                throw new ArgumentOutOfRangeException(nameof(box), box, "The size of a box must be from zero to 1,000,000,000.");
+            }
+
+            if (box.Baseline is { } baseline && !(Math.Abs(baseline) <= Limit) || !(Math.Abs(box.BaselineShift) <= Limit))
+            {
+                throw new ArgumentOutOfRangeException(nameof(box), box, "The baseline and its shift must be at most 1,000,000,000 either way.");
+            }
+
+            if (!Enum.IsDefined(box.VerticalAlign))
+            {
+                throw new ArgumentOutOfRangeException(nameof(box), box.VerticalAlign, "The alignment is not one of the values.");
+            }
+
+            _boxes[_text.Length] = box;
+            return AddText("\uFFFC");
+        }
+
         /// <summary>Builds the paragraph from what has been added.</summary>
         /// <returns>The paragraph.</returns>
         public Paragraph Build()
@@ -991,7 +1069,7 @@ namespace PeachDrawing.Text.Layout
                 runs[i] = (_runs[i].Start, end, _runs[i].Style);
             }
 
-            return new Paragraph(text, runs, _style);
+            return new Paragraph(text, runs, _style, new Dictionary<int, InlineBox>(_boxes));
         }
     }
 }

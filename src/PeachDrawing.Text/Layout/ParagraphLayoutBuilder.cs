@@ -2,6 +2,7 @@ using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 
 namespace PeachDrawing.Text.Layout
 {
@@ -10,13 +11,16 @@ namespace PeachDrawing.Text.Layout
     {
         internal readonly record struct LineSpec(int Start, int End, LineEnd Kind, int CutAt = -1);
 
-        private readonly record struct Piece(Paragraph.Atom Atom, int From, int To, GlyphRun Glyphs, double Width, bool IsTab = false, bool IsGenerated = false);
+        private readonly record struct Piece(Paragraph.Atom Atom, int From, int To, GlyphRun Glyphs, double Width, bool IsTab = false, bool IsGenerated = false, bool IsBox = false);
 
         private readonly record struct Break(int Position, double Width, bool Hyphen);
 
+        /// <summary>A line whose breaks are decided and whose runs are shaped and put in order, before it is aligned and placed.</summary>
+        private sealed record MeasuredLine(LineSpec Spec, double Indent, List<Piece> Pieces, double Width, double Ascent, double Descent, double Height);
+
         internal static ParagraphLayout Build(Paragraph paragraph, double availableWidth)
         {
-            var built = new List<(LineSpec Spec, double Indent, List<Piece> Pieces, double Width, double Ascent, double Descent, double Height)>();
+            var built = new List<MeasuredLine>();
             double contentWidth = 0;
             int start = 0;
             int hyphenRun = 0;
@@ -35,10 +39,9 @@ namespace PeachDrawing.Text.Layout
                 truncated |= hidesText;
                 spec = Ellipsize(paragraph, spec, room, indent, hidesText);
 
-                var (pieces, width) = Assemble(paragraph, spec, indent);
-                var (ascent, descent, height) = VerticalExtent(paragraph, spec, pieces);
-                built.Add((spec, indent, pieces, width, ascent, descent, height));
-                contentWidth = Math.Max(contentWidth, width + indent);
+                var measured = MeasureLine(paragraph, spec, indent);
+                built.Add(measured);
+                contentWidth = Math.Max(contentWidth, measured.Width + indent);
                 if (spec.Kind == LineEnd.Last || lastAllowed)
                 {
                     break;
@@ -52,50 +55,95 @@ namespace PeachDrawing.Text.Layout
             double top = 0;
             for (int i = 0; i < built.Count; i++)
             {
-                var (spec, indent, pieces, width, ascent, descent, height) = built[i];
-                bool endsParagraphOrForced = spec.Kind is LineEnd.Last or LineEnd.Forced;
-                var align = ResolveAlign(paragraph, endsParagraphOrForced);
-
+                var measured = built[i];
                 // The indent is taken from the start side; what is left is where the line is aligned.
-                double areaLeft = paragraph.IsRightToLeft ? 0 : indent;
-                double areaWidth = extent - indent;
-
-                // Justification shares the room a line that is not the last has left between its opportunities, so that it fills the width.
-                double extra = 0;
-                bool[][]? expandAfter = null;
-                if (align == TextAlign.Justify && !double.IsInfinity(areaWidth) && areaWidth > width)
-                {
-                    int opportunities;
-                    (expandAfter, opportunities) = FindJustificationOpportunities(paragraph, pieces);
-                    if (opportunities > 0)
-                    {
-                        extra = (areaWidth - width) / opportunities;
-                        width = areaWidth;
-                    }
-                    else
-                    {
-                        expandAfter = null;
-                    }
-                }
-
-                double left = areaLeft + AlignedLeft(paragraph, align, areaWidth, width);
-                double baseline = top + ascent;
-                var runs = new List<PlacedRun>(pieces.Count);
-                double x = left;
-                for (int n = 0; n < pieces.Count; n++)
-                {
-                    var piece = pieces[n];
-                    var style = piece.Atom.Style;
-                    var (boundaries, advances, pieceWidth) = PlaceRun(paragraph, piece, style, extra, expandAfter?[n]);
-                    runs.Add(new PlacedRun(new TextRange(piece.From, piece.To), style, piece.Glyphs, piece.Atom.Level, x, baseline, pieceWidth, boundaries, advances, piece.IsGenerated));
-                    x += pieceWidth;
-                }
-
-                lines[i] = new LineBox(new TextRange(spec.Start, spec.End), ContentEndOf(paragraph, spec), runs, left, top, width, ascent, descent, height, spec.Kind, spec.CutAt >= 0);
-                top += height;
+                lines[i] = PlaceLine(paragraph, measured, paragraph.IsRightToLeft ? 0 : measured.Indent, extent - measured.Indent, top);
+                top += measured.Height;
             }
 
             return new ParagraphLayout(paragraph, lines, extent, contentWidth, top, truncated);
+        }
+
+        /// <summary>
+        /// Lays out the one line that starts at <paramref name="cursor"/> in <paramref name="space"/>, and finds where the next starts. It reads only the paragraph and its arguments and
+        /// keeps nothing, so calling it again with the same arguments gives the same line, whichever other lines were laid out in between.
+        /// </summary>
+        internal static LineBox LayFlowLine(Paragraph paragraph, in FlowCursor cursor, in LineSpace space, out FlowCursor next)
+        {
+            // A space that ends before it starts has no width (and a difference that overflows to minus infinity is not "no end").
+            double width = Math.Max(0, space.Right - space.Left);
+            double room = RoomFor(width, space.Indent);
+            var spec = FitLine(paragraph, cursor.Offset, room, space.Indent, cursor.HyphenatedLines, RoomFor(width, paragraph.IndentOf(false, false)));
+            spec = Ellipsize(paragraph, spec, room, space.Indent, hidesText: false);
+            var measured = MeasureLine(paragraph, spec, space.Indent);
+
+            next = spec.Kind == LineEnd.Last
+                ? FlowCursor.Finished(spec.End)
+                : new FlowCursor(spec.End, spec.Kind == LineEnd.Hyphenated ? cursor.HyphenatedLines + 1 : 0, false);
+            return PlaceLine(paragraph, measured, paragraph.IsRightToLeft ? space.Left : space.Left + space.Indent, width - space.Indent, space.Top);
+        }
+
+        private static MeasuredLine MeasureLine(Paragraph paragraph, LineSpec spec, double indent)
+        {
+            var (pieces, width) = Assemble(paragraph, spec, indent);
+            var (ascent, descent, height) = VerticalExtent(paragraph, spec, pieces);
+            return new MeasuredLine(spec, indent, pieces, width, ascent, descent, height);
+        }
+
+        /// <summary>Aligns a measured line in the area <paramref name="areaWidth"/> wide that starts at <paramref name="areaLeft"/>, and puts its runs in place with its top at <paramref name="top"/>.</summary>
+        private static LineBox PlaceLine(Paragraph paragraph, MeasuredLine measured, double areaLeft, double areaWidth, double top)
+        {
+            var (spec, _, pieces, width, ascent, descent, height) = measured;
+            bool endsParagraphOrForced = spec.Kind is LineEnd.Last or LineEnd.Forced;
+            var align = ResolveAlign(paragraph, endsParagraphOrForced);
+
+            // Justification shares the room a line that is not the last has left between its opportunities, so that it fills the width.
+            double extra = 0;
+            bool[][]? expandAfter = null;
+            if (align == TextAlign.Justify && !double.IsInfinity(areaWidth) && areaWidth > width)
+            {
+                int opportunities;
+                (expandAfter, opportunities) = FindJustificationOpportunities(paragraph, pieces);
+                if (opportunities > 0)
+                {
+                    extra = (areaWidth - width) / opportunities;
+                    width = areaWidth;
+                }
+                else
+                {
+                    expandAfter = null;
+                }
+            }
+
+            double left = areaLeft + AlignedLeft(paragraph, align, areaWidth, width);
+            double baseline = top + ascent;
+            var runs = new List<PlacedRun>(pieces.Count);
+            double x = left;
+            for (int n = 0; n < pieces.Count; n++)
+            {
+                var piece = pieces[n];
+                var style = piece.Atom.Style;
+                var (boundaries, advances, pieceWidth) = PlaceRun(paragraph, piece, style, extra, expandAfter?[n]);
+                InlineBox? box = null;
+                var boxBounds = default(RectangleF);
+                if (piece.IsBox)
+                {
+                    var placed = paragraph.BoxAt(piece.From);
+                    double boxTop = placed.VerticalAlign switch
+                    {
+                        VerticalAlign.Top => top,
+                        VerticalAlign.Bottom => top + height - placed.Height,
+                        _ => baseline - BoxExtent(placed, style).Above,
+                    };
+                    box = placed;
+                    boxBounds = new RectangleF((float)x, (float)boxTop, (float)placed.Width, (float)placed.Height);
+                }
+
+                runs.Add(new PlacedRun(new TextRange(piece.From, piece.To), style, piece.Glyphs, piece.Atom.Level, x, baseline, pieceWidth, boundaries, advances, piece.IsGenerated, box, boxBounds));
+                x += pieceWidth;
+            }
+
+            return new LineBox(new TextRange(spec.Start, spec.End), ContentEndOf(paragraph, spec), runs, left, top, width, ascent, descent, height, spec.Kind, spec.CutAt >= 0);
         }
 
         /// <summary>Where the drawn text of a line ends: where it was cut, or else before the spaces that hang at its end.</summary>
@@ -184,6 +232,12 @@ namespace PeachDrawing.Text.Layout
         private static double AlignedLeft(Paragraph paragraph, TextAlign align, double areaWidth, double lineWidth)
         {
             bool rtl = paragraph.IsRightToLeft;
+            if (lineWidth > areaWidth || double.IsInfinity(areaWidth))
+            {
+                // A line that does not fit starts at the start edge and overflows the other (CSS Text 3 text-align), and there is no far edge to align to in an area with no end.
+                return rtl && !double.IsInfinity(areaWidth) ? areaWidth - lineWidth : 0;
+            }
+
             if (align == TextAlign.Start)
             {
                 align = rtl ? TextAlign.Right : TextAlign.Left;
@@ -224,7 +278,7 @@ namespace PeachDrawing.Text.Layout
             {
                 var piece = pieces[n];
                 expand[n] = new bool[piece.Glyphs.Glyphs.Count];
-                if (piece.IsTab || piece.IsGenerated)
+                if (piece.IsTab || piece.IsGenerated || piece.IsBox)
                 {
                     clusters.Add((n, -1, -1));
                     continue;
@@ -597,6 +651,13 @@ namespace PeachDrawing.Text.Layout
                         continue;
                     }
 
+                    if (p.IsBox(atom))
+                    {
+                        // A box draws nothing here: it is room, in a run of its own with no glyphs, for the caller to draw the box in.
+                        inRun.Add(new Piece(atom, from, to, new GlyphRun(atom.Style.Typeface, []), p.BoxAt(atom.Start).Width, IsBox: true));
+                        continue;
+                    }
+
                     if (tabWidths is not null && tabWidths.TryGetValue(from, out double tabWidth))
                     {
                         // A tab draws nothing: it is room, in a run of its own with no glyphs.
@@ -678,6 +739,10 @@ namespace PeachDrawing.Text.Layout
                     widths[from] = advance;
                     pen += advance;
                 }
+                else if (p.IsBox(atom))
+                {
+                    pen += p.BoxAt(atom.Start).Width;
+                }
                 else
                 {
                     pen += p.WidthOf(p.ShapePiece(atom, from, to), atom.Style, from);
@@ -706,20 +771,82 @@ namespace PeachDrawing.Text.Layout
             }
             else
             {
+                // The text around a box counts too, as the strut of the box it sits in: a line of one box is as tall as its text would be.
                 foreach (var piece in pieces)
                 {
                     Include(piece.Atom.Style);
                 }
             }
 
+            double above, below;
             if (p.Style.LineHeight is { } multiple)
             {
                 double height = multiple * size;
                 double leading = (height - (ascent + descent)) / 2;
-                return (ascent + leading, descent + leading, height);
+                (above, below) = (ascent + leading, descent + leading);
+            }
+            else
+            {
+                (above, below) = (ascent + gap / 2, descent + gap / 2);
             }
 
-            return (ascent + gap / 2, descent + gap / 2, ascent + descent + gap);
+            // Boxes aligned to the text make the line taller where they stick out of it; those aligned to the line only make it as tall as they are.
+            double tallestTop = 0, tallestBottom = 0;
+            foreach (var piece in pieces)
+            {
+                if (!piece.IsBox)
+                {
+                    continue;
+                }
+
+                var box = p.BoxAt(piece.From);
+                switch (box.VerticalAlign)
+                {
+                    case VerticalAlign.Top:
+                        tallestTop = Math.Max(tallestTop, box.Height);
+                        break;
+                    case VerticalAlign.Bottom:
+                        tallestBottom = Math.Max(tallestBottom, box.Height);
+                        break;
+                    default:
+                        var extent = BoxExtent(box, piece.Atom.Style);
+                        above = Math.Max(above, extent.Above);
+                        below = Math.Max(below, extent.Below);
+                        break;
+                }
+            }
+
+            if (tallestTop > above + below)
+            {
+                below = tallestTop - above;
+            }
+
+            if (tallestBottom > above + below)
+            {
+                above = tallestBottom - below;
+            }
+
+            return (above, below, above + below);
+        }
+
+        /// <summary>How far a box aligned to the text around it (<paramref name="style"/>) reaches above the baseline of the line, and below it.</summary>
+        private static (double Above, double Below) BoxExtent(InlineBox box, RunStyle style)
+        {
+            var metrics = style.Typeface.Metrics;
+            double scale = style.Size / metrics.UnitsPerEm;
+            double textAscent = metrics.NormalLineAscent * scale;
+            double textDescent = metrics.NormalLineDescent * scale;
+            double xHeight = metrics.XHeight > 0 ? metrics.XHeight * scale : style.Size / 2;
+            double baseline = box.Baseline ?? box.Height;
+            var (above, below) = box.VerticalAlign switch
+            {
+                VerticalAlign.Middle => ((box.Height / 2) + (xHeight / 2), (box.Height / 2) - (xHeight / 2)),
+                VerticalAlign.TextTop => (textAscent, box.Height - textAscent),
+                VerticalAlign.TextBottom => (box.Height - textDescent, textDescent),
+                _ => (baseline, box.Height - baseline),
+            };
+
+            return (above + box.BaselineShift, below - box.BaselineShift);
         }
 
         // ---- caret positions inside a run ------------------------------------------------------------------------------------------
@@ -732,9 +859,9 @@ namespace PeachDrawing.Text.Layout
         {
             int length = piece.To - piece.From;
             var x = new double[length + 1];
-            if (piece.IsTab)
+            if (piece.IsTab || piece.IsBox)
             {
-                // The caret before a tab is at the edge it is entered from, the one after it at the other.
+                // The caret before a tab or a box is at the edge it is entered from, the one after it at the other.
                 bool tabRtl = (piece.Atom.Level & 1) == 1;
                 x[0] = tabRtl ? piece.Width : 0;
                 x[length] = tabRtl ? 0 : piece.Width;
