@@ -7,6 +7,10 @@ A glyph's SVG document is drawn by `SvgGlyphPainter` (on the PDF graphics and on
 - **A filter's painted region, a marker's content and text** in the extent that sizes the glyph's canvas (`SvgInkExtent`): the canvas is the
   em-based least canvas grown to hold the shapes, so a glyph whose filter region reaches beyond it is clipped there as before. The canvas
   is also never more than `SvgGlyphDocument.MaxCanvasReachEms` (8 ems) from the glyph origin in any direction.
+- **The ambient viewport is the canvas, not the em square.** OpenType SVG makes the initial viewport the em square; here it is the canvas, so a
+  percentage length (resolved against the least canvas while the tree is built), a `symbol` used with no width and height, and a filter's
+  default region are relative to the canvas, which is larger than the em square and, once grown for a glyph, larger than the least canvas. Real
+  glyph documents give sizes in font units, so it has not mattered.
 
 The document's canvas: OpenType SVG puts the glyph origin at (0, 0) in font units with y down, and does not clip to the viewport, so the
 document's own viewBox is replaced (by the least canvas while the tree is built, so percentages resolve, then by `CanvasFor`).

@@ -109,6 +109,44 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void AnArc_IsHeldByTheEllipseItBulgesInto()
+        {
+            // a half circle of radius 5000 from (0, 0) to (100, 0): its endpoints alone are a 100 x 0 line, but it bulges thousands of units
+            var box = Extent("<path d=\"M0 0 A5000 5000 0 0 1 100 0\" fill=\"none\"/>")!.Value;
+
+            Assert.True(box.Y <= -5000, $"top {box.Y}");
+            Assert.True(box.Y + box.Height >= 5000 - 1, $"bottom {box.Y + box.Height}");
+        }
+
+        [Fact]
+        public void AnArcTooSmallToSpanItsChord_IsHeldByTheRadiiItGrowsTo()
+        {
+            // radii of 1 cannot span 1000 units: they grow to 500, so the arc reaches about 500 to a side
+            var box = Extent("<path d=\"M0 0 A1 1 0 0 1 1000 0\" fill=\"none\"/>")!.Value;
+
+            Assert.True(box.Y <= -500, $"top {box.Y}");
+            Assert.True(box.Y + box.Height >= 499, $"bottom {box.Y + box.Height}");
+        }
+
+        [Fact]
+        public void AFlatArc_AddsNothing()
+        {
+            AssertBox(Extent("<path d=\"M10 10 A0 5 0 0 1 60 10\" fill=\"none\"/>"), 10, 10, 50, 0);
+        }
+
+        [Fact]
+        public void AGroupTransformAndAUseOffset_Compose()
+        {
+            AssertBox(Extent("<defs><rect id=\"r\" width=\"10\" height=\"10\"/></defs><g transform=\"scale(2)\"><use xlink:href=\"#r\" x=\"5\" y=\"7\"/></g>"), 10, 14, 20, 20);
+        }
+
+        [Fact]
+        public void ATransformThatOverflows_IsIgnored()
+        {
+            AssertBox(Extent("<rect width=\"10\" height=\"10\"/><g transform=\"scale(1e200)\"><rect x=\"-1e200\" width=\"2e200\" height=\"1\"/></g>"), 0, 0, 10, 10);
+        }
+
+        [Fact]
         public void AShapeWithNonFiniteGeometry_IsIgnored()
         {
             AssertBox(Extent("<rect width=\"10\" height=\"10\"/><rect width=\"1e999\" height=\"5\"/>"), 0, 0, 10, 10);

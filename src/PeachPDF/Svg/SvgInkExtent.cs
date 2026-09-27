@@ -16,6 +16,9 @@ namespace PeachPDF.Svg
     /// </remarks>
     internal static class SvgInkExtent
     {
+        /// <summary>How far, in half stroke widths, the corner of a square cap reaches.</summary>
+        private static readonly double SquareCapReach = Math.Sqrt(2);
+
         /// <summary>The box of everything <paramref name="document"/> draws, or <see langword="null"/> when it draws nothing with a known extent.</summary>
         internal static RRect? Of(SvgDocument document) => UnionAll(document.Children);
 
@@ -39,7 +42,10 @@ namespace PeachPDF.Svg
                 return null;
             }
 
-            return element.Transform is { } transform ? Transformed(box, transform) : box;
+            var mapped = element.Transform is { } transform ? Transformed(box, transform) : box;
+
+            // a transform can overflow what was finite
+            return IsFinite(mapped) ? mapped : null;
         }
 
         private static RRect? LocalBounds(SvgElement element)
@@ -62,9 +68,83 @@ namespace PeachPDF.Svg
                 case SvgTextElement:
                     return null;
 
+                case SvgPathElement path:
+                    return SvgGeometryBounds.GetBoundingBox(element) is { } outline ? Inflated(Union(outline, ArcAllowance(path.Segments)) ?? outline, element) : null;
+
                 default:
                     return SvgGeometryBounds.GetBoundingBox(element) is { } geometry ? Inflated(geometry, element) : null;
             }
+        }
+
+        /// <summary>
+        /// A box that holds what the arcs of a path can bulge to. <see cref="SvgGeometryBounds"/> counts only an arc's end point, but an arc stays
+        /// within its ellipse, so every point of it is within two of the (scaled up, if it is too small to span the chord) larger radius of its
+        /// end point.
+        /// </summary>
+        private static RRect? ArcAllowance(IReadOnlyList<PathSegment> segments)
+        {
+            RRect? result = null;
+            double currentX = 0, currentY = 0, startX = 0, startY = 0;
+
+            foreach (var segment in segments)
+            {
+                switch (segment.Kind)
+                {
+                    case PathSegmentKind.MoveTo:
+                        startX = currentX = segment.X;
+                        startY = currentY = segment.Y;
+                        break;
+
+                    case PathSegmentKind.ClosePath:
+                        currentX = startX;
+                        currentY = startY;
+                        break;
+
+                    case PathSegmentKind.ArcTo:
+                    {
+                        var reach = ArcReach(currentX, currentY, segment);
+                        if (double.IsFinite(reach) && reach > 0)
+                        {
+                            result = Union(result, new RRect(segment.X - reach, segment.Y - reach, 2 * reach, 2 * reach));
+                        }
+
+                        currentX = segment.X;
+                        currentY = segment.Y;
+                        break;
+                    }
+
+                    default:
+                        currentX = segment.X;
+                        currentY = segment.Y;
+                        break;
+                }
+            }
+
+            return result;
+        }
+
+        private static double ArcReach(double fromX, double fromY, PathSegment arc)
+        {
+            double rx = Math.Abs(arc.RadiusX), ry = Math.Abs(arc.RadiusY);
+            if (rx == 0 || ry == 0)
+            {
+                return 0;    // a straight line
+            }
+
+            // The radii of an arc too small to span its chord grow until they can (SVG 1.1 F.6.6).
+            var angle = arc.RotationAngle * Math.PI / 180;
+            double halfX = (fromX - arc.X) / 2, halfY = (fromY - arc.Y) / 2;
+            var x = Math.Cos(angle) * halfX + Math.Sin(angle) * halfY;
+            var y = -Math.Sin(angle) * halfX + Math.Cos(angle) * halfY;
+            var scale = x * x / (rx * rx) + y * y / (ry * ry);
+            if (scale > 1)
+            {
+                var grow = Math.Sqrt(scale);
+                rx *= grow;
+                ry *= grow;
+            }
+
+            return 2 * Math.Max(rx, ry);
         }
 
         private static RRect? UseBounds(SvgUseElement use, SvgElement target)
@@ -98,7 +178,7 @@ namespace PeachPDF.Svg
             var reach = element.StrokeLineJoin == RLineJoin.Miter ? Math.Max(1.0, element.StrokeMiterLimit) : 1.0;
             if (element.StrokeLineCap == RLineCap.Square)
             {
-                reach = Math.Max(reach, Math.Sqrt(2));
+                reach = Math.Max(reach, SquareCapReach);
             }
 
             var grow = element.StrokeWidth / 2 * reach;
@@ -107,17 +187,18 @@ namespace PeachPDF.Svg
 
         private static RRect Transformed(RRect box, RMatrix matrix)
         {
-            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
-            foreach (var (x, y) in new[] { (box.X, box.Y), (box.X + box.Width, box.Y), (box.X, box.Y + box.Height), (box.X + box.Width, box.Y + box.Height) })
-            {
-                var mappedX = x * matrix.M11 + y * matrix.M21 + matrix.OffsetX;
-                var mappedY = x * matrix.M12 + y * matrix.M22 + matrix.OffsetY;
-                minX = Math.Min(minX, mappedX);
-                maxX = Math.Max(maxX, mappedX);
-                minY = Math.Min(minY, mappedY);
-                maxY = Math.Max(maxY, mappedY);
-            }
+            double left = box.X, top = box.Y, right = box.X + box.Width, bottom = box.Y + box.Height;
 
+            // the four corners, mapped
+            double x1 = left * matrix.M11 + top * matrix.M21 + matrix.OffsetX, y1 = left * matrix.M12 + top * matrix.M22 + matrix.OffsetY;
+            double x2 = right * matrix.M11 + top * matrix.M21 + matrix.OffsetX, y2 = right * matrix.M12 + top * matrix.M22 + matrix.OffsetY;
+            double x3 = left * matrix.M11 + bottom * matrix.M21 + matrix.OffsetX, y3 = left * matrix.M12 + bottom * matrix.M22 + matrix.OffsetY;
+            double x4 = right * matrix.M11 + bottom * matrix.M21 + matrix.OffsetX, y4 = right * matrix.M12 + bottom * matrix.M22 + matrix.OffsetY;
+
+            var minX = Math.Min(Math.Min(x1, x2), Math.Min(x3, x4));
+            var maxX = Math.Max(Math.Max(x1, x2), Math.Max(x3, x4));
+            var minY = Math.Min(Math.Min(y1, y2), Math.Min(y3, y4));
+            var maxY = Math.Max(Math.Max(y1, y2), Math.Max(y3, y4));
             return new RRect(minX, minY, maxX - minX, maxY - minY);
         }
 

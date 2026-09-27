@@ -190,6 +190,13 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void ANonFiniteExtent_IsIgnored()
+        {
+            Assert.Equal(new RRect(-1000, -1500, 3000, 2000), SvgGlyphDocument.CanvasFor(new RRect(double.NegativeInfinity, 0, double.PositiveInfinity, 1), 1000));
+            Assert.Equal(new RRect(-1000, -1500, 3000, 2000), SvgGlyphDocument.CanvasFor(new RRect(double.NaN, 0, 5, 5), 1000));
+        }
+
+        [Fact]
         public void ADocumentWithNothingOfKnownExtent_KeepsTheLeastCanvas()
         {
             var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect width=\"0\" height=\"0\"/></g></svg>"));

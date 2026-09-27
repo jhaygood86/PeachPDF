@@ -10,6 +10,11 @@ box) to hold it, with a hundredth of an em of margin, and no further than `MaxCa
 result is written to `SvgDocument.ViewBox`, and the painter now reads the viewport from there instead of from the constants, so the form
 the PDF path caches (keyed by drawing identity and size) and the raster path's direct paint both use the grown canvas.
 
+**Two things the review found in the first cut.** `SvgGeometryBounds` counts only an arc's end point, so `M0 0 A5000 5000 0 0 1 100 0` was a
+100 x 0 box although it bulges thousands of units: `SvgInkExtent` adds an allowance (every point of an arc is within twice the larger,
+chord-scaled radius of its end point). And a `transform` can overflow a finite box to infinity, which made an infinite minus an infinite a NaN
+canvas: the transformed box is re-checked and `CanvasFor` ignores a non-finite extent.
+
 **Why "grow the least canvas" and not "the exact extent".** The extent is a box for the shapes, not a measurement of the ink, and it cannot
 see everything (a filter's painted region, marker content, text). A tight canvas from an underestimate would clip artwork that the fixed box
 used to keep; never going below the old box means nothing that rendered before can render less. The tree is still built against the least canvas

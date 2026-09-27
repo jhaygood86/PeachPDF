@@ -129,7 +129,7 @@ namespace PeachPDF.Svg
             double left = -CanvasLeftEms * unitsPerEm, top = -CanvasTopEms * unitsPerEm;
             double right = (CanvasWidthEms - CanvasLeftEms) * unitsPerEm, bottom = (CanvasHeightEms - CanvasTopEms) * unitsPerEm;
 
-            if (ink is { } box)
+            if (ink is { } box && double.IsFinite(box.X + box.Y + box.Width + box.Height))
             {
                 var margin = unitsPerEm / 100.0;
                 var reach = MaxCanvasReachEms * unitsPerEm;
