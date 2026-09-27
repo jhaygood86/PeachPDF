@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
 
 namespace PeachDrawing.Text.Internal.Text
 {
@@ -48,16 +47,11 @@ namespace PeachDrawing.Text.Internal.Text
         {
             var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            Assembly assembly = typeof(OpenTypeLanguageTags).Assembly;
-            string? resourceName = Array.Find(assembly.GetManifestResourceNames(), n => n.EndsWith("opentype-language-tags.txt", StringComparison.Ordinal));
-            if (resourceName is null)
+            using Stream? decompressed = TextDataResources.OpenBrotli("opentype-language-tags.txt.br");
+            if (decompressed is null)
                 return result;
 
-            using Stream? stream = assembly.GetManifestResourceStream(resourceName);
-            if (stream is null)
-                return result;
-
-            using var reader = new StreamReader(stream);
+            using var reader = new StreamReader(decompressed);
             string? line;
             while ((line = reader.ReadLine()) is not null)
             {

@@ -4,7 +4,7 @@
 		<AssemblyName>PeachDrawing.Text</AssemblyName>
 		<RootNamespace>PeachDrawing.Text</RootNamespace>
 		<PackageId>PeachDrawing.Text</PackageId>
-		<Description>Font loading and matching, OpenType shaping (including variable fonts, colour glyphs and SVG glyphs), bidirectional text, Unicode line breaking and segmentation, and paragraph layout for .NET, with no dependencies. The text engine PeachPDF renders HTML with.</Description>
+		<Description>Font loading and matching, OpenType shaping (including variable fonts, colour glyphs and SVG glyphs), bidirectional text, Unicode line breaking and segmentation, and paragraph layout for .NET, with no third-party dependencies. The text engine PeachPDF renders HTML with.</Description>
 		<PackageTags>fonts;opentype;truetype;woff;text;shaping;bidi;unicode;hyphenation;typography</PackageTags>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageIcon>peach.png</PackageIcon>
@@ -31,26 +31,13 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 	<ItemGroup>
-		<!-- Unicode and hyphenation data, read back by name through this assembly's own manifest resources. -->
-		<None Remove="Internal\Text\Resources\Patterns\*.br" />
-		<EmbeddedResource Include="Internal\Text\Resources\Patterns\*.br" />
-		<None Remove="Internal\Text\Resources\language-tags.txt" />
-		<EmbeddedResource Include="Internal\Text\Resources\language-tags.txt" />
-		<None Remove="Internal\Text\Resources\opentype-language-tags.txt" />
-		<EmbeddedResource Include="Internal\Text\Resources\opentype-language-tags.txt" />
-		<None Remove="Internal\Text\Resources\Bidi\*.br" />
-		<EmbeddedResource Include="Internal\Text\Resources\Bidi\*.br" />
-		<None Remove="Internal\Text\Resources\VerticalOrientation\*.br" />
-		<EmbeddedResource Include="Internal\Text\Resources\VerticalOrientation\*.br" />
-		<None Remove="Internal\Text\Resources\Script\*.br" />
-		<EmbeddedResource Include="Internal\Text\Resources\Script\*.br" />
-		<None Remove="Internal\Text\Resources\ArabicJoining\*.br" />
-		<EmbeddedResource Include="Internal\Text\Resources\ArabicJoining\*.br" />
-		<None Remove="Internal\Text\Resources\Use\*.br" />
-		<EmbeddedResource Include="Internal\Text\Resources\Use\*.br" />
-		<!-- Word lists for Thai, Lao, Khmer and Burmese line breaking: raw DEFLATE rather than Brotli, so a WebAssembly host can read them. -->
-		<None Remove="Internal\Text\Resources\Dictionaries\*.dict" />
-		<EmbeddedResource Include="Internal\Text\Resources\Dictionaries\*.dict" />
+		<!--
+			The Unicode, hyphenation and dictionary data this project reads at runtime lives in its own sibling package,
+			PeachDrawing.Text.Data (see that project's own file header, and
+			.claude/invariants/text-data-package-avoids-lib-tfm-triplication.md, for why): embedding it here directly would embed it
+			again in every one of this project's own target frameworks, inside the same nupkg.
+		-->
+		<ProjectReference Include="..\PeachDrawing.Text.Data\PeachDrawing.Text.Data.csproj" />
 	</ItemGroup>
 	<ItemGroup>
 		<!--

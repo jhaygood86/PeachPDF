@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.IO.Compression;
 
 namespace PeachDrawing.Text.Internal.Text.Segmentation
 {
@@ -9,13 +8,17 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
     {
         None = 0,
         Thai,
+        Lao,
         Khmer,
+        Burmese,
     }
 
     /// <summary>
-    /// The words of one script: a sorted list read from an embedded resource the first time text of the script needs it (see
-    /// <c>assets/unicode/generate_dictionary_breaking.py</c> for the source, the licences and the format). The resource is raw
-    /// DEFLATE, which every host can read: WebAssembly has no Brotli decoder.
+    /// The words of one script: a sorted list read from an embedded resource of <c>PeachDrawing.Text.Data</c> the first time text of
+    /// the script needs it (see <c>assets/unicode/generate_dictionary_breaking.py</c> for the source, the licences and the format).
+    /// The resource is Brotli-compressed, like the other Unicode data <c>PeachDrawing.Text.Data</c> carries; a host with no Brotli
+    /// decoder (WebAssembly, at the time of writing) gets an empty dictionary rather than a failed read, unless it registers one of
+    /// its own with <see cref="Compression.BrotliDecompression.SetDecompressor"/>.
     /// </summary>
     /// <remarks>
     /// The list is held as one character pool with the start of each word, in the sorted order it was written in. Finding every word
@@ -29,7 +32,9 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
         private const int MaxWordLength = 255;
 
         private static readonly Lazy<WordDictionary?> Thai = new(() => Load("thai"));
+        private static readonly Lazy<WordDictionary?> Lao = new(() => Load("lao"));
         private static readonly Lazy<WordDictionary?> Khmer = new(() => Load("khmer"));
+        private static readonly Lazy<WordDictionary?> Burmese = new(() => Load("burmese"));
 
         private readonly char[] _characters;
         private readonly int[] _starts;
@@ -51,7 +56,9 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
         internal static WordDictionary? For(ComplexScript script) => script switch
         {
             ComplexScript.Thai => Thai.Value,
+            ComplexScript.Lao => Lao.Value,
             ComplexScript.Khmer => Khmer.Value,
+            ComplexScript.Burmese => Burmese.Value,
             _ => null,
         };
 
@@ -121,31 +128,17 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
         {
             try
             {
-                var assembly = typeof(WordDictionary).Assembly;
-                string? name = null;
-                foreach (var candidate in assembly.GetManifestResourceNames())
+                using var decompressed = PeachDrawing.Text.Internal.Text.TextDataResources.OpenBrotli("." + script + ".dict.br");
+                if (decompressed is null)
                 {
-                    if (candidate.EndsWith("." + script + ".dict", StringComparison.Ordinal))
-                    {
-                        name = candidate;
-                        break;
-                    }
-                }
-
-                if (name is null)
-                {
+                    // Either the resource is missing, or this host cannot decompress Brotli and no custom decompressor was
+                    // registered (see Compression.BrotliDecompression) - the script falls back to rule LB1, as it did before this
+                    // dictionary existed.
                     return null;
                 }
 
-                using var resource = assembly.GetManifestResourceStream(name);
-                if (resource is null)
-                {
-                    return null;
-                }
-
-                using var inflated = new DeflateStream(resource, CompressionMode.Decompress);
                 using var buffer = new MemoryStream();
-                inflated.CopyTo(buffer);
+                decompressed.CopyTo(buffer);
                 return Parse(buffer.GetBuffer().AsSpan(0, (int)buffer.Length));
             }
             catch (Exception exception) when (exception is InvalidDataException or IOException or NotSupportedException or OutOfMemoryException)

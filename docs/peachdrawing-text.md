@@ -1,8 +1,9 @@
 # PeachDrawing.Text
 
 `PeachDrawing.Text` is the font and text engine PeachPDF renders HTML with, published as its own NuGet package so other
-.NET applications can use it without PeachPDF. It has no package dependencies, is trimmable and Native AOT compatible,
-and is versioned in lockstep with PeachPDF: the same version number for every release, and PeachPDF depends on it.
+.NET applications can use it without PeachPDF. It has no third-party dependencies (only its own sibling data package,
+`PeachDrawing.Text.Data`, described [below](#the-unicodehyphenationdictionary-data-and-its-brotli-decoder-seam)), is trimmable and
+Native AOT compatible, and is versioned in lockstep with PeachPDF: the same version number for every release, and PeachPDF depends on it.
 
 ```bash
 dotnet add package PeachDrawing.Text
@@ -534,18 +535,21 @@ question mark, end before a suffix and after a prefix of East Asian width (`％`
 keep with their digits. `Anywhere` allows a break after every grapheme cluster, whatever the
 character rules say, and keeps only hard line breaks.
 
-Thai and Khmer write no spaces between words, so no rule of the algorithm can find where a line may end (UAX #14 leaves those
-characters, its `SA` or Complex_Context class, to a dictionary). The library carries a word list for each, taken from ICU's
+Thai, Lao, Khmer and Burmese write no spaces between words, so no rule of the algorithm can find where a line may end (UAX #14 leaves
+those characters, its `SA` or Complex_Context class, to a dictionary). The library carries a word list for each, taken from ICU's
 break-iterator dictionaries, and by default `LineBreaker` allows a break between the words it finds, as browsers do. It chooses the
 words by looking a few words ahead for the choice that covers the text best, preferring the longer word when two choices cover it
 alike; a stretch that no word matches stays whole, cut off from the words around it; and it never breaks inside a syllable (no
-break before a dependent vowel, tone mark or other sign, after a leading vowel, or inside a Khmer subscript). The script decides, not
-`Language`, and `WordBreak`, `Strictness` and overflow wrapping apply on top of it. A word list is read the first time text of its
-script is analysed (about 0.3 MB of embedded data in all, stored with DEFLATE so that it also loads in WebAssembly, where there is no
-Brotli decoder), and is kept for the life of the process. A compound that the list has as one word stays whole even where a browser
-splits it. Set `LineBreakOptions.ComplexContext` to `ComplexContextBreaking.GeneralCategory` to have no opportunity inside a run of
-these scripts, which is what rule LB1 itself falls back to (a caller with its own dictionary wants that); the other Complex_Context
-scripts (Lao, Burmese, Tai Tham, Cham and the rest) have no word list yet and always get it.
+break before a dependent vowel, tone mark or other sign, after a leading vowel, inside a Khmer or Burmese subscript/stacked consonant,
+or before a Burmese asat that closes the syllable before it). The script decides, not `Language`, and `WordBreak`, `Strictness` and
+overflow wrapping apply on top of it. A word list is read the first time text of its script is analysed (about 0.44 MB of embedded
+data in all, in the `PeachDrawing.Text.Data` package this one depends on, Brotli-compressed like the rest of its Unicode data), and is
+kept for the life of the process. A compound that the list has as one word stays whole even where a browser splits it. Set
+`LineBreakOptions.ComplexContext` to `ComplexContextBreaking.GeneralCategory` to have no opportunity inside a run of these scripts,
+which is what rule LB1 itself falls back to (a caller with its own dictionary wants that); the other Complex_Context scripts (Tai
+Tham, Cham and the rest) have no word list and always get it. A host with no Brotli decoder of its own (WebAssembly, at the time of
+writing) gets no word list either, and every script falls back the same way, unless it registers one with
+`PeachDrawing.Text.Compression.BrotliDecompression.SetDecompressor` - see [Fonts](#fonts) below.
 
 `Segmenter` finds the boundaries of [UAX #29](https://www.unicode.org/reports/tr29/): `FindGraphemeBoundaries` (extended
 grapheme clusters: a letter with its accents, a Hangul syllable, an emoji sequence, a flag), `FindWordBoundaries` and
@@ -605,11 +609,23 @@ Both answer `null` for a script or language the built-in table does not cover.
 - `Emoji.Resolve` and `Emoji.ResolveAt` decide whether a character that has both a text and an emoji appearance is
   drawn as one or the other, from an `EmojiMode` (CSS `font-variant-emoji`) and any variation selector that follows.
 
+### The Unicode/hyphenation/dictionary data, and its Brotli decoder seam
+
+The tables above (Bidi, Script, vertical orientation, Arabic joining, the Indic Use tables), the hyphenation patterns and the
+Thai/Lao/Khmer/Burmese word lists ship Brotli-compressed, in a separate package, `PeachDrawing.Text.Data`, that `PeachDrawing.Text`
+depends on (see [Fonts](#fonts-fontset-families-and-matching) above for what "no third-party dependencies" means alongside this). A
+host whose Brotli decoder does not work - WebAssembly in a browser, at the time of writing, where `System.IO.Compression.BrotliStream`
+throws `PlatformNotSupportedException` - gets an empty table or an unhyphenated line instead of a failed render, exactly as before this
+data moved packages. `PeachDrawing.Text.Compression.BrotliDecompression.SetDecompressor` lets a host register a managed Brotli
+decoder of its own instead, to recover that data there; call it once, before using any feature backed by this data, since each table
+is read once and cached for the life of the process.
+
 ## Licences
 
-The package is BSD 3-Clause. It carries its third-party notices with it, in `THIRD-PARTY-LICENSES.md`: the font readers
-derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz code, the TrueType instruction interpreter and
+The engine (`PeachDrawing.Text`) is BSD 3-Clause. It carries its third-party notices with it, in `THIRD-PARTY-LICENSES.md`: the font
+readers derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz code, and the TrueType instruction interpreter and
 Adobe's CFF engine that do the [grid fitting](#grid-fitting-hinting) are ports of FreeType's (under the FreeType Project License,
 whose text ships in the package as `FTL.TXT`, with Adobe's patent licence grant for the CFF engine; an application that redistributes
-the package has to credit the FreeType Team in its documentation), and the data tables come from the
-Unicode Character Database, the `hyph-utf8` pattern collection and ICU's Thai and Khmer word lists. See [License](license.md) for the whole list.
+the package has to credit the FreeType Team in its documentation). The data tables - the Unicode Character Database, the `hyph-utf8`
+pattern collection and ICU's Thai, Lao, Khmer and Burmese word lists - live in `PeachDrawing.Text.Data` and carry their notices in
+that package's own `THIRD-PARTY-LICENSES.md`. See [License](license.md) for the whole list.

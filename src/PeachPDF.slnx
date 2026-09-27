@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="PeachDrawing.Text/PeachDrawing.Text.csproj" />
   <Project Path="PeachDrawing.Text.Benchmarks/PeachDrawing.Text.Benchmarks.csproj" />
+  <Project Path="PeachDrawing.Text.Data/PeachDrawing.Text.Data.csproj" />
   <Project Path="PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj" />
   <Project Path="PeachPDF.Cli/PeachPDF.Cli.csproj" />
   <Project Path="PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj" />

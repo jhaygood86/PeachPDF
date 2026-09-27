@@ -34,6 +34,8 @@ PeachDrawing.Text.AxisTags : static class
   field const String Slant
   field const String Weight
   field const String Width
+PeachDrawing.Text.Compression.BrotliDecompression : static class
+  method static Void SetDecompressor(Func<Stream, Stream> decompressor)
 PeachDrawing.Text.Export.ExportedFont : sealed class
   property Boolean HasCffOutlines { get; }
   property Boolean IsSubset { get; }

@@ -1,0 +1,92 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<Import Project="..\Version.props" />
+	<!--
+		The Unicode/hyphenation/dictionary data PeachDrawing.Text reads at runtime, split into its own single-target package so a
+		multi-targeted PeachDrawing.Text (net8.0;net10.0;net11.0) does not pay for the data three times: NuGet never merges a
+		resource across lib/<tfm> folders within one package, so embedding it directly in PeachDrawing.Text tripled it. netstandard2.0
+		is every target framework's floor, so one build of this project's assembly serves all three - overriding
+		src/Directory.Build.props's net8.0;net10.0(;net11.0) default. It carries no logic beyond a resource reader and the Brotli
+		decoder registry PeachDrawing.Text.Compression.BrotliDecompression forwards to (see PeachDrawing.Text.csproj's
+		ProjectReference below and .claude/invariants/text-data-package-avoids-lib-tfm-triplication.md), so it is trivially
+		AOT/trim-compatible on every consumer's target framework without needing one of its own.
+	-->
+	<PropertyGroup>
+		<TargetFrameworks></TargetFrameworks>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<!-- netstandard2.0 defaults to C# 7.3, which cannot parse src/Directory.Build.props's <Nullable>enable</Nullable> (CS8630). -->
+		<LangVersion>latest</LangVersion>
+		<AssemblyName>PeachDrawing.Text.Data</AssemblyName>
+		<RootNamespace>PeachDrawing.Text.Data</RootNamespace>
+		<PackageId>PeachDrawing.Text.Data</PackageId>
+		<Description>Unicode, hyphenation and dictionary data for PeachDrawing.Text (Bidi/Script/Use/VerticalOrientation/ArabicJoining tables, TeX hyphenation patterns, and Thai/Lao/Khmer/Burmese word lists for line breaking). An implementation-detail package of PeachDrawing.Text; not meant to be referenced directly.</Description>
+		<PackageTags>fonts;unicode;typography</PackageTags>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageIcon>peach.png</PackageIcon>
+		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/jhaygood86/PeachPDF.git</RepositoryUrl>
+		<PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+		<IncludeSymbols>true</IncludeSymbols>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+		<GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+		<GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+		<GenerateAssemblyTitleVersionAttribute>false</GenerateAssemblyTitleVersionAttribute>
+		<GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+		<RunCodeAnalysis>false</RunCodeAnalysis>
+		<!--
+			netstandard2.0 doesn't support IsTrimmable/EnableTrimAnalyzer/IsAotCompatible (NETSDK1210) - this project has nothing for
+			either analyzer to check anyway (no reflection beyond typeof().Assembly and GetManifestResourceStream/Names, both
+			trim/AOT-safe), so the consuming net8.0/net10.0/net11.0 projects' own analyzer passes are what actually matter.
+		-->
+		<!--
+			PeachPDF.Cli's AOT smoke test (`dotnet publish -p:PublishAot=true`) reaches this project's own restore/evaluation through
+			its ordinary ProjectReference from PeachDrawing.Text.csproj, the same way PublishAot reaches
+			PeachPDF.SourceGenerators.csproj through an Analyzer ProjectReference with ReferenceOutputAssembly="false" (see that
+			project's own comment) - Microsoft.NET.Publish.targets sets _RequiresILLinkPack=true whenever $(PublishAot)=='true'
+			regardless of target framework, which then trips NETSDK1207 (AOT unsupported for netstandard2.0) even though this
+			project is never itself published. Pre-setting it here short-circuits that computation.
+		-->
+		<_RequiresILLinkPack>false</_RequiresILLinkPack>
+	</PropertyGroup>
+	<ItemGroup>
+		<!--
+			This package exposes no public types: every member below is internal, reachable only from PeachDrawing.Text (which grants
+			it no further InternalsVisibleTo of its own - see PeachDrawing.Text.Compression.BrotliDecompression, the one public seam
+			a consumer actually calls).
+		-->
+		<InternalsVisibleTo Include="PeachDrawing.Text" />
+	</ItemGroup>
+	<ItemGroup>
+		<!-- Unicode and hyphenation data, read back by name through this assembly's own manifest resources. All Brotli-compressed. -->
+		<None Remove="Internal\Text\Resources\Patterns\*.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\Patterns\*.br" />
+		<None Remove="Internal\Text\Resources\language-tags.txt.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\language-tags.txt.br" />
+		<None Remove="Internal\Text\Resources\opentype-language-tags.txt.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\opentype-language-tags.txt.br" />
+		<None Remove="Internal\Text\Resources\Bidi\*.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\Bidi\*.br" />
+		<None Remove="Internal\Text\Resources\VerticalOrientation\*.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\VerticalOrientation\*.br" />
+		<None Remove="Internal\Text\Resources\Script\*.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\Script\*.br" />
+		<None Remove="Internal\Text\Resources\ArabicJoining\*.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\ArabicJoining\*.br" />
+		<None Remove="Internal\Text\Resources\Use\*.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\Use\*.br" />
+		<!-- Word lists for Thai, Lao, Khmer and Burmese line breaking. -->
+		<None Remove="Internal\Text\Resources\Dictionaries\*.dict.br" />
+		<EmbeddedResource Include="Internal\Text\Resources\Dictionaries\*.dict.br" />
+	</ItemGroup>
+	<ItemGroup>
+		<!-- The notices the licences of the data in this package require it to carry. -->
+		<None Include="README.md" Pack="true" PackagePath="\" />
+		<None Include="THIRD-PARTY-LICENSES.md" Pack="true" PackagePath="\" />
+		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
+	</ItemGroup>
+</Project>

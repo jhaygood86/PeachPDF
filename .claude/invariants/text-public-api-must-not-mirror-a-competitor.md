@@ -87,6 +87,12 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 | `LineBreaker.FindOpportunities`, `LineBreakOpportunity` (`Prohibited`, `Allowed`, `Mandatory`) | Where a line may or must end | UAX #14 "Unicode Line Breaking Algorithm"; the three values are the algorithm's no-break, break and mandatory-break marks |
 | `LineBreakOptions` (`WordBreak`, `Strictness`, `Language`, `ComplexContext`), `ComplexContextBreaking` (`Dictionary`, `GeneralCategory`), `WordBreakMode` (`Normal`, `BreakAll`, `KeepAll`), `LineBreakStrictness` (`Auto`, `Loose`, `Normal`, `Strict`, `Anywhere`) | The CSS tailorings, and the language that decides the ones CSS Text 3 limits to Chinese and Japanese text | CSS Text 3 `word-break` and `line-break` names and keywords; `Language` is a BCP 47 tag read by its primary subtag, the name and shape `ShapeSettings.Language` already has, and it rides on `ParagraphStyle.LineBreak` rather than a member of its own. `ComplexContext` is UAX #14's own name for the `SA` class (Complex_Context), and its two values name what resolves it: a `Dictionary` (the default, what browsers do) or, as LB1 falls back, the `GeneralCategory` of each character; it exists so the Unicode conformance suite, which expects LB1, can turn the dictionary off, and for a caller that segments with its own |
 
+### `PeachDrawing.Text.Compression`
+
+| Public name | Role | Origin of the name and shape |
+|---|---|---|
+| `BrotliDecompression.SetDecompressor` | Registers a managed Brotli decoder for a host where the BCL's own throws `PlatformNotSupportedException` (WebAssembly, at the time of writing) | Not a typography concept, so no meaningful collision surface with SixLabors.Fonts either way; the shape (a settable `Func<Stream, Stream>`, one-time static configuration) follows this repo's own existing precedent - `HyphenationEngine.LoadPatternSet`'s `openDecompressed` test seam, and the `GlobalFontSettings`/`FontSet.Installed` lazy-init idiom `PdfSharpCore` and `PeachDrawing.Text` already use elsewhere |
+
 ### `PeachDrawing.Text.Export`
 
 | Public name | Role | Origin of the name and shape |
