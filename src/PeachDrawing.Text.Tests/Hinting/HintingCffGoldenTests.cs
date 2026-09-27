@@ -98,7 +98,7 @@ namespace PeachDrawing.Text.Tests.Hinting
                 $"{fontFile} {mode} {run.Size / 64.0} ppem: {problems.Count} mismatch(es)\n" + string.Join("\n", problems.Take(12)));
         }
 
-        private static void Compare(List<string> problems, int glyph, GlyphGolden expected, CffHintedGlyph actual)
+        internal static void Compare(List<string> problems, int glyph, GlyphGolden expected, CffHintedGlyph actual)
         {
             if (actual.NPoints != expected.X.Length)
             {

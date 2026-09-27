@@ -11338,11 +11338,12 @@ var svgGlyphHtml =
     SvgGlyphCell("font-palette: --custom", "override-colors: 0 #7c3aed, 1 #f59e0b") +
     "</tr><tr>" +
     SvgGlyphCell("font-size: 20pt", "20pt: the same artwork at another size") +
+    SvgGlyphCell("filter: drop-shadow(4pt 4pt 3pt rgba(0,0,0,.45))", "filter: drop-shadow(): a raster region, still the real glyph") +
     "</tr></table>" +
     "</body></html>";
 await SaveShowcaseAsync("svg_opentype_glyphs", "Typography & Text", "SVG-in-OpenType glyphs",
     "Colour glyphs drawn from a font's SVG table: the SVG document of each glyph is rendered as vector content, its palette " +
-    "variables follow font-palette and its context-fill follows the text colour. Rendered against a small synthetic font.",
+    "variables follow font-palette and its context-fill follows the text colour, also inside a filtered (rasterized) element. Rendered against a small synthetic font.",
     svgGlyphHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // GSUB ligature substitution: font-variant-ligatures actually turns real GSUB liga/clig ligatures
@@ -12509,6 +12510,53 @@ await SaveShowcaseAsync("text_hinting_cff_stem_darkening", "Graphics & Effects",
         RasterizationDpi = 72,
         TextHinting = TextHinting.Standard,
         TextStemDarkening = true
+    });
+
+// A variable font with CFF2 outlines (HintingCff2Boxes, a small font of boxy letters made for this page): its charstrings' hints and its blue zones
+// are blended for the weight before they are applied, so the same stems and bars land on pixel edges at every weight.
+var cff2HintingFontUri = "data:font/otf;base64," +
+    Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "HintingCff2Boxes.otf")));
+
+string TextHintingCff2Html(string intro)
+{
+    var css = $$"""
+        <style>
+        @font-face { font-family: 'HintedBoxes'; src: url('{{cff2HintingFontUri}}') format('opentype'); font-weight: 300 900; }
+        @page { size: a4; margin: 15mm }
+        body { font: 9pt Arial, sans-serif; margin: 0 }
+        h1 { font-size: 15pt; margin: 0 0 0.3em }
+        p.intro { margin: 0 0 0.9em; color: #555; font-size: 8pt }
+        .raster { filter: grayscale(1); margin-bottom: 6px; font-family: 'HintedBoxes', Arial, sans-serif }
+        .cap { font-size: 6.5pt; color: #666; margin: 8px 0 2px }
+        </style>
+        """;
+    var html = new System.Text.StringBuilder("<!DOCTYPE html><html><head>" + css + "</head><body><h1>Text drawn into bitmaps</h1><p class=\"intro\">" + intro + "</p>");
+    foreach (var weight in new[] { 300, 400, 650, 900 })
+    {
+        foreach (var px in new[] { 9, 11, 13, 16 })
+        {
+            html.Append($"<div class=\"cap\">font-weight: {weight}, {px}px</div>");
+            html.Append($"<div class=\"raster\" style=\"font-size:{px}px; font-weight:{weight}\">HELLO TITLE FILL HOLE FLUTE hill nun</div>");
+        }
+    }
+
+    return html.Append("</body></html>").ToString();
+}
+
+await SaveShowcaseAsync("text_hinting_cff2_standard", "Graphics & Effects", "Hinted Raster Text (CFF2 Variable Font)",
+    "PdfGenerateConfig.TextHinting = Standard with a variable font whose outlines are CFF2: the hints and blue zones of its charstrings are blended for the weight of each line (300 to 900) before Adobe's CFF engine applies them, so the top, the bars and the baseline of the letters land on pixel edges at every weight, in the bitmaps this page rasterizes at 72 dpi.",
+    TextHintingCff2Html("The lines below are rasterized at 72 dpi, in a variable font with CFF2 outlines, at four weights, so the pixel grid is visible. Compare with the same page without hinting."),
+    textHintingRasterConfig);
+
+await SaveShowcaseAsync("text_hinting_cff2_none", "Graphics & Effects", "Raster Text Without Hinting (CFF2 Variable Font)",
+    "The same page as the hinted CFF2 raster text showcase with TextHinting left at its default, None: the outlines are only scaled at each weight, so bars and tops cut through pixels.",
+    TextHintingCff2Html("The lines below are rasterized at 72 dpi, in a variable font with CFF2 outlines, at four weights. Compare with the same page with hinting."),
+    new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PageOrientation = PageOrientation.Portrait,
+        ShrinkToFit = true,
+        RasterizationDpi = 72
     });
 
 // --- Raster shadows showcase (text-shadow, Gaussian box-shadow, silhouette drop-shadow) ---
