@@ -4,13 +4,13 @@ using System.Buffers;
 namespace PeachDrawing.Text.Internal.Text.Segmentation
 {
     /// <summary>
-    /// Finds where the words start in a run of Thai or Khmer, which write no spaces between them (UAX #14, Complex_Context).
+    /// Finds where the words start in a run of Thai, Lao, Khmer or Burmese, which write no spaces between them (UAX #14, Complex_Context).
     /// </summary>
     /// <remarks>
     /// <para>
     /// A run is cut into <em>clusters</em>, the pieces a word may begin or end at: the grapheme clusters of UAX #29, and further a dependent vowel, tone mark or other sign belongs
-    /// to the character before it, a leading vowel to the consonant after it, a Khmer subscript consonant to the one
-    /// it hangs from. A word never starts or ends inside a
+    /// to the character before it, a leading vowel to the consonant after it, a Khmer subscript or Burmese stacked consonant to the one
+    /// it hangs from, and a Burmese consonant that carries an asat closes the syllable before it. A word never starts or ends inside a
     /// cluster, and no break is ever placed there.
     /// </para>
     /// <para>
@@ -38,7 +38,9 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
         internal static ComplexScript ScriptOf(int codePoint) => codePoint switch
         {
             >= 0x0E01 and <= 0x0E5B => ComplexScript.Thai,
+            >= 0x0E81 and <= 0x0EDF => ComplexScript.Lao,
             >= 0x1780 and <= 0x17FF => ComplexScript.Khmer,
+            >= 0x1000 and <= 0x109F => ComplexScript.Burmese,
             _ => ComplexScript.None,
         };
 
@@ -262,6 +264,14 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
                 return false;
             }
 
+            // A Burmese consonant with an asat is the end of the syllable before it, unless the asat belongs to a kinzi (the asat and
+            // then a virama, which stack the consonant over the next one, and begin a syllable).
+            if (script == ComplexScript.Burmese && index + 1 < run.Length && run[index + 1] == 0x103A
+                && !(index + 2 < run.Length && run[index + 2] == 0x1039))
+            {
+                return false;
+            }
+
             return true;
         }
 
@@ -277,6 +287,8 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
             {
                 // paiyannoi, sara a, sara aa, sara am, lakkhangyao, maiyamok
                 ComplexScript.Thai => code is 0x0E2F or 0x0E30 or 0x0E32 or 0x0E33 or 0x0E45 or 0x0E46,
+                // ellipsis, sara a, sara aa, sara am, semivowel yo, ko la
+                ComplexScript.Lao => code is 0x0EAF or 0x0EB0 or 0x0EB2 or 0x0EB3 or 0x0EBD or 0x0EC6,
                 // lek too, avakrahasanya
                 ComplexScript.Khmer => code is 0x17D7 or 0x17DC,
                 _ => false,
@@ -287,7 +299,9 @@ namespace PeachDrawing.Text.Internal.Text.Segmentation
         private static bool CannotEndWord(ComplexScript script, int code) => script switch
         {
             ComplexScript.Thai => code is >= 0x0E40 and <= 0x0E44,
+            ComplexScript.Lao => code is >= 0x0EC0 and <= 0x0EC4,
             ComplexScript.Khmer => code == 0x17D2,
+            ComplexScript.Burmese => code == 0x1039,
             _ => false,
         };
     }

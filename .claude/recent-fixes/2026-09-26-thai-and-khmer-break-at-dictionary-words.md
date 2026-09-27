@@ -11,11 +11,11 @@ The task was Thai, Lao, Khmer and Burmese with a budget of well under 1 MB for t
 of DEFLATE resource (Thai 63,344, Lao 79,001, Khmer 220,510, Burmese 113,347; the source text is 4.4 MB), and **the nupkg carries one
 assembly per target framework (net8.0, net10.0, net11.0), so each resource is paid three times**: all four would have grown the package by
 about 1.4 MB, Thai and Khmer alone grew it **833,183 bytes** (4,209,275 to 5,042,458). Per the plan's own fallback, Thai and Khmer ship and
-Lao and Burmese wait, tracked in the accepted gap
-[line-breaking-has-no-dictionary-for-lao-and-burmese](../accepted-gaps/line-breaking-has-no-dictionary-for-lao-and-burmese.md). A DAWG was
-tried for the encoding and is *larger* once deflated (Khmer 332 KB against 220 KB); a columnar layout with a terminated suffix stream was the
-smallest (6% under a length column). The complete four-script change, notices and tests included, is on the branch
-`dictionary-line-breaking-all-four`.
+Lao and Burmese wait (Lao and Burmese have since shipped too, once the tripling this section describes went away with the package split -
+see `.claude/recent-fixes/2026-09-27-text-data-split-into-its-own-package-and-unified-to-brotli.md`; the accepted-gap file this paragraph
+used to link is deleted, the gap being closed). A DAWG was tried for the encoding and is *larger* once deflated (Khmer 332 KB against 220
+KB); a columnar layout with a terminated suffix stream was the smallest (6% under a length column). The complete four-script change,
+notices and tests included, is on the branch `dictionary-line-breaking-all-four`.
 
 ## Data
 
