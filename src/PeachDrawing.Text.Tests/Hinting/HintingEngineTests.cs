@@ -74,6 +74,41 @@ namespace PeachDrawing.Text.Tests.Hinting
         }
 
         [Fact]
+        public void AFontWithoutProgramsIsHintedTheSameWhateverFontTheThreadHintedBeforeIt()
+        {
+            // A thread keeps one execution context from font to font. The graphics state a size starts from is the context's own when the font has
+            // neither a font program nor a CVT program to set it, so a font whose CVT program switched hinting off (INSTCTRL, selector 1) used to switch
+            // it off for the next font without programs that this thread hinted: a flaky "hinting returned unfitted" that depended on the thread a test ran on.
+            var request = new OutlineRequest { PixelsPerEm = 12, GridFitting = GridFitting.Standard };
+
+            var switchedOff = TypefaceFixtures.FromBytes(HostileFonts.WithTable(HostileFonts.Original(), "prep", [0xB1, 1, 1, 0x8E]));
+            Assert.True(switchedOff.TryMapRune(new Rune('!'), out var switchedOffGlyph));
+            Assert.False(switchedOff.TryGetOutline(switchedOffGlyph, request, out var unfitted) && unfitted.IsGridFitted);
+
+            // HintingGasp.ttf has glyph instructions and neither fpgm nor prep, and its gasp table asks for grid-fitting at 12 ppem
+            var plain = TypefaceFixtures.FromFile(Path.Combine(AppContext.BaseDirectory, "HintingGasp.ttf"));
+            Assert.True(plain.TryMapRune(new Rune('A'), out var plainGlyph));
+            Assert.True(plain.TryGetOutline(plainGlyph, request, out var fitted) && fitted.IsGridFitted);
+        }
+
+        [Fact]
+        public void ASizeOfAFontWithoutProgramsStartsFromTheDefaultGraphicsStateWhateverRanBeforeIt()
+        {
+            var switchedOff = TypefaceFixtures.FromBytes(HostileFonts.WithTable(HostileFonts.Original(), "prep", [0xB1, 1, 1, 0x8E]));
+            var switchedOffFace = TtFace.TryCreate(switchedOff.Face.Fontface, switchedOff.Face.FamilyName, null, null)!;
+            Assert.True(TtSize.Create(switchedOffFace, 12 * 64, TtInterpreterVersion.V40, TtRenderMode.Normal).HintingDisabled);
+
+            var plain = HintingFixtures.Face("HintingGasp.ttf");
+            Assert.Empty(plain.FontProgram);
+            Assert.Empty(plain.CvtProgram);
+
+            var size = TtSize.Create(plain, 12 * 64, TtInterpreterVersion.V40, TtRenderMode.Normal);
+            Assert.False(size.HintingDisabled);
+            Assert.Equal(TtGraphicsState.Default.InstructControl, size.GraphicsState.InstructControl);
+            Assert.Equal(4, size.BackwardCompatibility);
+        }
+
+        [Fact]
         public void TheV40InterpreterStartsInBackwardCompatibilityAndTheOtherModesDoNot()
         {
             var face = HintingFixtures.Face("LiberationSans-Regular.woff");
