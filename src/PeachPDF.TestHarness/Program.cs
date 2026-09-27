@@ -11384,10 +11384,24 @@ var svgContextHtml =
     "<path d=\"M2,2 L20,11 L2,20 Z\" fill=\"context-stroke\"/><circle cx=\"6\" cy=\"11\" r=\"3\" fill=\"context-fill\"/></marker></defs>" +
     "<path d=\"M30,35 C120,5 200,65 250,35\" fill=\"#fde68a\" stroke=\"#b45309\" stroke-width=\"4\" marker-end=\"url(#head)\"/>" +
     "<path d=\"M290,95 C380,65 460,125 500,95\" fill=\"#bfdbfe\" stroke=\"#1d4ed8\" stroke-width=\"4\" marker-end=\"url(#head)\"/></svg>" +
+    "<p>A gradient or pattern context paint works the same way: a marker's own placement maps the paint server back into the shape's " +
+    "coordinate space, and a transform between what a <code>&lt;use&gt;</code> instantiates and the shape actually painting it is undone.</p>" +
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"520\" height=\"130\" viewBox=\"0 0 520 130\">" +
+    "<defs>" +
+    "<linearGradient id=\"arrowGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"#f59e0b\"/><stop offset=\"1\" stop-color=\"#7c2d12\"/></linearGradient>" +
+    "<marker id=\"gradHead\" markerWidth=\"22\" markerHeight=\"22\" refX=\"11\" refY=\"11\" markerUnits=\"userSpaceOnUse\" orient=\"auto\">" +
+    "<circle cx=\"11\" cy=\"11\" r=\"10\" fill=\"context-stroke\"/></marker>" +
+    "<linearGradient id=\"pairGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"#38bdf8\"/><stop offset=\"1\" stop-color=\"#0c4a6e\"/></linearGradient>" +
+    "<g id=\"pairShape\"><rect width=\"60\" height=\"90\" fill=\"#e2e8f0\"/>" +
+    "<g transform=\"translate(60,0)\"><rect width=\"60\" height=\"90\" fill=\"context-fill\"/></g></g>" +
+    "</defs>" +
+    "<path d=\"M30,65 C120,25 200,105 250,65\" fill=\"none\" stroke=\"url(#arrowGrad)\" stroke-width=\"6\" marker-end=\"url(#gradHead)\"/>" +
+    "<use xlink:href=\"#pairShape\" x=\"320\" y=\"20\" fill=\"url(#pairGrad)\"/></svg>" +
     "</body></html>";
 await SaveShowcaseAsync("svg_context_paint", "Graphics & Effects", "SVG context paint",
-    "SVG 2 context-fill and context-stroke: a shape defined once takes the fill and stroke of each <use> that instantiates it, and a marker " +
-    "draws with the fill and stroke of the shape it is placed on.",
+    "SVG 2 context-fill and context-stroke: a shape defined once takes the fill and stroke of each <use> that instantiates it, a marker " +
+    "draws with the fill and stroke of the shape it is placed on - including a gradient or pattern, mapped through the marker's own " +
+    "placement - and a use's context paint follows a transform between what it instantiates and the shape that actually paints it.",
     svgContextHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // GSUB ligature substitution: font-variant-ligatures actually turns real GSUB liga/clig ligatures

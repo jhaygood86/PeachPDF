@@ -201,7 +201,13 @@ internal sealed partial class RasterGraphics : RGraphics
         // The tile's pixel pitch is stretched by less than one pixel across its whole size so it covers
         // exactly `width` x `height`, and drawing it back at that size needs no resampling.
         var tile = new RasterSurface(pw, ph, 0, 0, pw / width, ph / height);
-        return (new RasterGraphics(_adapter, tile, _pixelsPerPoint), new RasterImage(tile, width, height));
+        var tileGraphics = new RasterGraphics(_adapter, tile, _pixelsPerPoint);
+        // See RGraphics.CreateTile's own doc remarks: seeding CurrentTransform (bookkeeping only - the
+        // tile's actual pixel geometry is governed by `tile`'s own grid/pitch above, untouched by this)
+        // lets a reader inside the tile relate its coordinate space back to whatever space content
+        // outside the tile is measured in, same as BeginRasterSurface already does below.
+        tileGraphics.SeedTransform(_layoutCtm);
+        return (tileGraphics, new RasterImage(tile, width, height));
     }
 
     // ---- nested raster regions --------------------------------------------------------------------------

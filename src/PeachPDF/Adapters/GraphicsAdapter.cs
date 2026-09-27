@@ -132,6 +132,11 @@ namespace PeachPDF.Adapters
 
         internal override RMatrix CurrentTransform => _accumulated;
 
+        /// <summary>Seeds <see cref="CurrentTransform"/> for a freshly created tile - see <see cref="RGraphics.CreateTile"/>'s
+        /// doc remarks for why. Bookkeeping only: the tile's own native PDF graphics state (<see cref="_g"/>) still starts at
+        /// its own identity, so this has no effect on what actually gets drawn into it.</summary>
+        internal void SeedTransform(RMatrix requester) => _accumulated = requester;
+
         internal override (double X, double Y) TransformScale
         {
             get
@@ -462,6 +467,12 @@ namespace PeachPDF.Adapters
             // Form XObject's content stream (see XGraphics.Dispose()). Without this, the tile's
             // drawing commands would never get flushed into the PDF at all.
             var tileGraphics = new GraphicsAdapter(_adapter, formGraphics, PixelsPerPoint, releaseGraphics: true);
+            // See CreateTile's own doc remarks: seeding CurrentTransform (bookkeeping only, see SeedTransform)
+            // lets a reader inside the tile (a gradient/pattern reaching it through context-fill/context-stroke,
+            // chiefly) relate the tile's coordinate space back to whatever space content outside it is measured
+            // in - the tile's own drawing commands are unaffected, since the form's native PDF graphics state
+            // (formGraphics, just created above) starts at its own identity regardless.
+            tileGraphics.SeedTransform(_accumulated);
             return (tileGraphics, new ImageAdapter(form));
         }
 
