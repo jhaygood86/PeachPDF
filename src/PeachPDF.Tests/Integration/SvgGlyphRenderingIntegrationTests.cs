@@ -64,6 +64,26 @@ body {{ font-family: 'SvgTest'; font-size: 40pt; }}
         }
 
         [Fact]
+        public async Task AUseInTheGlyph_IsTheContextOfItsShape_WithADistinctFillAndStroke()
+        {
+            var pdf = await RenderAsync("<p>F</p>", "p { color: rgb(128, 0, 128) }");
+
+            // The square takes the fill and the stroke the <use> gives it (two colours), and the disc, outside the <use>, the text's fill.
+            Assert.Matches(@"(?m)^1 0\.53\d* 0 rg", pdf);
+            Assert.Matches(@"(?m)^0 0\.26\d* 0\.8 RG", pdf);
+            Assert.Matches(@"(?m)^0\.50\d* 0 0\.50\d* rg", pdf);
+        }
+
+        [Fact]
+        public async Task ContextStroke_WithNoStrokeOnTheText_DrawsNothingForIt()
+        {
+            var pdf = await RenderAsync("<p>F</p>", "p { color: rgb(128, 0, 128) }");
+
+            // No stroke in the text colour: the frame that asked for the text's stroke is not drawn.
+            Assert.DoesNotMatch(@"(?m)^0\.50\d* 0 0\.50\d* RG", pdf);
+        }
+
+        [Fact]
         public async Task ARepeatedSvgGlyph_IsSharedAcrossPages()
         {
             var onePage = await RenderAsync("<p>A</p>");

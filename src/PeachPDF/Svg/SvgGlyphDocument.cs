@@ -19,7 +19,8 @@ namespace PeachPDF.Svg
     /// <summary>
     /// Turns the SVG document a font gives for a glyph (OpenType SVG, the <c>SVG </c> table) into an <see cref="SvgDocument"/> the SVG
     /// renderer can paint: the element that draws the glyph, with the palette colours the document asks for
-    /// (<c>var(--color0)</c>) filled in and the text colour standing for <c>context-fill</c>, <c>context-stroke</c> and <c>currentColor</c>.
+    /// (<c>var(--color0)</c>) filled in, the text colour standing for <c>currentColor</c> and the text's own fill and stroke paint seeding
+    /// <c>context-fill</c> and <c>context-stroke</c> (the SVG engine resolves them, through <c>use</c> and markers too).
     /// </summary>
     /// <remarks>
     /// The document comes from a font file and is untrusted: it is parsed without DTDs or an external resolver and with a size cap, no
@@ -43,7 +44,6 @@ namespace PeachPDF.Svg
 
         private static readonly Regex PaletteVariable = new(@"--color(\d+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private static readonly Regex GlyphId = new(@"^glyph\d+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-        private static readonly Regex ContextPaint = new(@"context-(fill|stroke)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
         /// <summary>Builds the drawing for <paramref name="svg"/>, or returns <see langword="null"/> when it cannot be.</summary>
         /// <param name="svg">The font's document for the glyph.</param>
@@ -79,7 +79,6 @@ namespace PeachPDF.Svg
                     return null;
                 }
 
-                MakeContextPaintTheTextColour(root);
                 MoveVariableAttributesToStyle(root);
                 SetTheCanvas(root, svg.UnitsPerEm);
                 DefinePaletteColours(root, palette, entryCount);
@@ -93,7 +92,11 @@ namespace PeachPDF.Svg
 
                 SvgCssStyling.CascadeCustomProperties(root, cssData, "print", registered);
                 var sourceNode = new XElementSvgSourceNode(root, root, cssData, "print", varContext);
-                return SvgTreeBuilder.Build(sourceNode, adapter, foreground);
+
+                // The text is the context element of a glyph document (what Firefox does, and what the OpenType SVG note on context paint
+                // describes): context-fill is the text's fill, which is its colour. The text has no stroke here (there is no text stroke in the
+                // HTML this draws for), so context-stroke is no paint, as it is for any text without one.
+                return SvgTreeBuilder.Build(sourceNode, adapter, foreground, contextFill: SvgPaint.Solid(foreground), contextStroke: SvgPaint.None);
             }
             catch (Exception ex) when (ex is XmlException or InvalidOperationException or ArgumentException or FormatException)
             {
@@ -173,27 +176,6 @@ namespace PeachPDF.Svg
                 if (moved.Length > 0)
                 {
                     element.SetAttributeValue("style", moved + ((string?)element.Attribute("style") ?? string.Empty));
-                }
-            }
-        }
-
-        /// <summary>The text colour is what <c>context-fill</c> and <c>context-stroke</c> stand for when a glyph is drawn as text.</summary>
-        private static void MakeContextPaintTheTextColour(XElement root)
-        {
-            foreach (var element in root.DescendantsAndSelf())
-            {
-                foreach (var attribute in element.Attributes().ToList())
-                {
-                    if (attribute.Name.Namespace == XNamespace.None && (PaintAttributes.Contains(attribute.Name.LocalName) || attribute.Name.LocalName == "style")
-                        && attribute.Value.Contains("context-", StringComparison.Ordinal))
-                    {
-                        attribute.Value = ContextPaint.Replace(attribute.Value, "currentColor");
-                    }
-                }
-
-                if (element.Name.LocalName == "style" && element.Value.Contains("context-", StringComparison.Ordinal))
-                {
-                    element.Value = ContextPaint.Replace(element.Value, "currentColor");
                 }
             }
         }
