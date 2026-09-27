@@ -17,8 +17,13 @@ using System.Collections.Generic;
 namespace PeachPDF.Svg
 {
     /// <summary>
-    /// Computes a shape's local-space bounding box - needed to resolve <c>objectBoundingBox</c>-unit
-    /// gradients/patterns/masks (fractions of the referencing shape's own geometry) at paint time.
+    /// Computes an element's local-space bounding box - needed to resolve <c>objectBoundingBox</c>-unit
+    /// gradients/patterns/masks (fractions of the referencing shape's own geometry) at paint time. The
+    /// box always excludes the element's <em>own</em> <see cref="SvgElement.Transform"/> (that is applied
+    /// externally, by whatever pushes the current transform before painting/measuring against it), but
+    /// for a group it includes every <em>descendant</em>'s own transform, composed all the way down -
+    /// a child's box (in the frame its own content paints in) is mapped through the child's transform
+    /// before being folded into the group's box (<see cref="UnionAll"/>/<see cref="TransformBounds"/>).
     /// </summary>
     internal static class SvgGeometryBounds
     {
@@ -49,11 +54,9 @@ namespace PeachPDF.Svg
                 if (bounds is not { } b)
                     continue;
 
-                // A child's own bbox is measured in its own (post-child-transform) frame - see the
-                // class remarks; composing it into the group's frame needs the child's transform
-                // applied before it is unioned in, or a transformed child silently contributes its
-                // untransformed geometry instead (SvgRenderer's context-paint-through-use fix relies
-                // on this being correct, not just "close enough").
+                // Compose the child's own transform in before unioning - see the class remarks. Skipping
+                // this silently contributed a transformed child's untransformed geometry instead, which
+                // SvgRenderer's context-paint-through-use fix relies on being correct, not "close enough".
                 if (element.Transform is { } transform)
                     b = TransformBounds(b, transform);
 
