@@ -965,15 +965,6 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 foreach (var (box, sinceSlot) in _emptySincePass)
                 {
-                    // A box the pass stopped inside is not done: its content resumes on the next pass, so
-                    // "nothing from here on" is false for it however empty this range was. It is empty only
-                    // when the pass placed nothing at all, which happens when a mover sent the pass back
-                    // to lay a box out again in the slot it has just left. The re-run can put the box back at
-                    // the same position, which discards no mark, so marking the chain here pruned every
-                    // later emission of that slot away (CommitGeometricallySettledObservations excludes the
-                    // chain for the same reason).
-                    if (_continuesInto.Contains((new FragmentKey(box, 0), sinceSlot))) continue;
-
                     var scopeOwner = ScopeOwnerOf(box);
                     box.RecordEmittedNothingAt(sinceSlot, scopeOwner, HistoryFor(scopeOwner).Count);
                 }
@@ -1505,7 +1496,14 @@ namespace PeachPDF.Html.Core.Fragmentation
                 _currentPassFromSlot = null;
             }
 
-            CommitRemainingObservations(reachesPastEverythingSoFar);
+            // A pass whose record resumes inside the range it has just emitted has not finished that range: a
+            // mover sent layout back to lay a box out again there, so what this walk found empty may be filled
+            // by the next pass, and a box laid out again at the same position discards no mark. Committing then
+            // marked html and body "emitted nothing" at a slot they were about to fill, and every later
+            // emission of it was pruned away. Such a pass is treated like a redo, and draws no conclusions.
+            var resumesInsideItsRange = outgoing is not null && outgoing.ResumeSlotIndex <= throughSlot;
+
+            CommitRemainingObservations(reachesPastEverythingSoFar && !resumesInsideItsRange);
         }
 
         /// <summary>

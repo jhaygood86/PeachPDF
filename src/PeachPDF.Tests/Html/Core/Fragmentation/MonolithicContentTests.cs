@@ -218,17 +218,18 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         }
 
         // A vertical box's logical height is its width, whose percentage base is the containing block's
-        // width, definite under a horizontal parent. Under a vertical parent block the box is monolithic
-        // anyway: that parent lays its children out at assigned positions that cannot carry a break.
+        // width, definite under a horizontal parent, so the percentage caps it there. Under a vertical parent
+        // block the box is monolithic anyway: that parent lays its children out at assigned positions that
+        // cannot carry a break. Either way the box stays whole.
         [Theory]
-        [InlineData("", true)]
-        [InlineData("writing-mode:vertical-rl", true)]
-        public async Task VerticalPercentageWidth_CapsTheBlockSizeOnlyAgainstADefiniteWidth(string parentCss, bool expected)
+        [InlineData("")]
+        [InlineData("writing-mode:vertical-rl")]
+        public async Task VerticalPercentageWidth_IsMonolithicUnderEitherParent(string parentCss)
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 $"<div style='{parentCss}'><div id='t' style='overflow:hidden;writing-mode:vertical-rl;width:50%'>text</div></div>"));
 
-            Assert.Equal(expected, MonolithicContent.IsMonolithic(LayoutHarness.FindById(root, "t")!));
+            Assert.True(MonolithicContent.IsMonolithic(LayoutHarness.FindById(root, "t")!));
         }
 
         // Layout applies a height or max-height only when it is a length, so a keyword is no cap.

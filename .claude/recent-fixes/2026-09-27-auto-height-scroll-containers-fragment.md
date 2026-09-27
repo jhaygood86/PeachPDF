@@ -142,10 +142,21 @@ and what followed it. The cause was in the fragment emitter, not the classifier:
   draft is 'null' with pruning and 'a draft' without it".
 
 A plain block never reached it: the child's margin collapses through it and the whole block moves instead.
-`CommitRemainingObservations` now skips a box on the outgoing chain (`_continuesInto`), as
-`CommitGeometricallySettledObservations` already did. `CardWhoseFirstChildsMarginReachesPastThePageFoot_DrawsEveryLineOnce`
-fails without it. On the review's heading sweep (82 documents, a 0.5pt spacer sweep) the PR head lost 302
-words that the merge-base draws, and none with the fix.
+`EmitPass` now commits no leftover observations when its outgoing record resumes inside the range it has
+just emitted, as it already did for a redo of an emitted range
+([the invariant](../invariants/fragmentation-a-pass-that-resumes-inside-its-own-range-commits-no-empty-marks.md)).
+`CardWhoseFirstChildsMarginReachesPastThePageFoot_DrawsEveryLineOnce` fails without it. On the review's
+heading sweep (82 documents, a 0.5pt spacer sweep) the PR head lost 302 words that the merge-base draws,
+and none with the fix.
+
+The first version of this fix instead skipped the marks of every box on the outgoing chain in
+`CommitRemainingObservations`. The third review found it changed 13 of 1,800 fuzz documents with no scroll
+container at all, 4 of them losing words the merge-base and Chrome draw: the other pruning shortcuts rely on
+the marks an ordinary pass writes, and on a float holding a `flow-root` box and a flex container, the flex
+item's last line was pruned away (`PlainDocumentWithAFloatHoldingAFlexContainer_DrawsEveryWord`, measured
+in Liberation Sans because Arial's metrics decide the line breaks). With the resume-inside-the-range rule,
+1 of the 1,782 rendered plain documents differs from the merge-base (f50101 recovers 54 words and loses none),
+and all four of the reviewer's regressions render byte-identical to the merge-base.
 
 ## User-visible side effect
 

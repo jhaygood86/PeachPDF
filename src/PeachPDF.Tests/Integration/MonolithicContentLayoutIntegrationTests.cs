@@ -279,6 +279,41 @@ namespace PeachPDF.Tests.Integration
             Assert.All(placed, w => Assert.InRange((w.Rect.Top + w.Rect.Bottom) / 2, Margin, PageHeight - Margin));
         }
 
+        // The fix above must not change a document with no scroll container. An earlier version skipped marking
+        // every box on the outgoing break chain instead of only declining to commit for a pass that resumes
+        // inside its own range; on this float, flow-root and flex nesting that changed what the emitter's
+        // pruning skipped, and the flex item's last line was drawn on no page.
+        // The line breaks decide it, so the fixture keeps the reduced fuzz document's own words and measures
+        // them in Liberation Sans, which has Arial's metrics.
+        [Fact]
+        public async Task PlainDocumentWithAFloatHoldingAFlexContainer_DrawsEveryWord()
+        {
+            const string font = "MonolithicPlainTestSans";
+            var html = "<!DOCTYPE html><html><head><style>@page { size: 300pt 160pt; margin: 20pt; }</style></head>" +
+                       $"<body style='margin:0;font-family:\"{font}\";font-size:10pt;line-height:12pt'>" +
+                       "<div>w735_1</div>" +
+                       "<div style='margin-top:10pt;padding:12pt;border:1pt solid #888;height:40pt'></div>" +
+                       "<p>w735_207</p>" +
+                       "<div style='padding:5pt;float:left;width:120pt'><ul><li>w735_261" +
+                       "<h3>w735_361 lorem w735_362 w735_363 w735_364 lorem w735_365 lorem</h3>" +
+                       "<div style='padding:12pt;border:1pt solid #888;display:flow-root'><div style='display:flex'>" +
+                       "w735_366 lorem w735_367 lorem w735_368 w735_369 lorem w735_370 lorem w735_371 lorem w735_372 lorem " +
+                       "w735_373<div>w735_408 lorem w735_409</div></div></div></li></ul></div>" +
+                       "<p>w735_498 w735_499 lorem w735_500 w735_501 lorem</p></body></html>";
+
+            var (_, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: 160, margin: Margin,
+                configureAdapter: adapter => BundledFonts.RegisterFont(adapter, BundledFonts.LiberationSans, font));
+
+            var drawn = container.FragmentTree!.Fragmentainers
+                .SelectMany(page => Flatten(page.Root).SelectMany(f => f.Words))
+                .Select(w => w.Word.Text)
+                .ToHashSet();
+
+            Assert.All(
+                System.Text.RegularExpressions.Regex.Matches(html, @"w735_\d+").Select(m => m.Value),
+                word => Assert.Contains(word, drawn));
+        }
+
         private const string CardFont = "MonolithicCardTestSans";
 
         // A wrapper that fragments has to carry the break through everything inside it, and some content

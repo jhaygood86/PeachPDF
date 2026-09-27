@@ -27,6 +27,9 @@ Everything else stays monolithic as before, whatever its height:
 A short auto-height card near the bottom of a page is now split across the break instead of moving whole.
 Add `break-inside: avoid` to keep the old result.
 
+A fix to the fragment emitter in the same change can also make a document with no scroll container draw
+content it used to lose at a page break (1 of 1,782 fuzz documents changed, recovering 54 words).
+
 **Why:** css-break-3 §2 only lets a UA treat `overflow: hidden` as monolithic when its logical height is
 non-auto with no max, and it only permits (never requires) the same for `auto`/`scroll`.
 
