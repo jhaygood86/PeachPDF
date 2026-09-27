@@ -116,15 +116,17 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Theory]
-        [InlineData("condensed", 3)]
-        [InlineData("expanded", 7)]
-        [InlineData("ultra-condensed", 1)]
-        [InlineData("ultra-expanded", 9)]
-        [InlineData("extra-condensed", 2)]
-        [InlineData("semi-condensed", 4)]
-        [InlineData("semi-expanded", 6)]
-        [InlineData("extra-expanded", 8)]
-        public async Task FontStretch_ResolvesToExpectedNumericScale(string keyword, int expected)
+        [InlineData("condensed", 75)]
+        [InlineData("expanded", 125)]
+        [InlineData("ultra-condensed", 50)]
+        [InlineData("ultra-expanded", 200)]
+        [InlineData("extra-condensed", 62.5)]
+        [InlineData("semi-condensed", 87.5)]
+        [InlineData("semi-expanded", 112.5)]
+        [InlineData("extra-expanded", 150)]
+        [InlineData("87.5%", 87.5)]
+        [InlineData("133%", 133)]
+        public async Task FontStretch_ResolvesToExpectedPercentage(string keyword, double expected)
         {
             var html = $"""
                 <!DOCTYPE html><html><body>
@@ -154,7 +156,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(el);
             Assert.Equal("condensed", el!.FontStretch.ToString());
-            Assert.Equal(3, el.ActualStretch);
+            Assert.Equal(75, el.ActualStretch);
         }
 
         [Fact]
@@ -165,7 +167,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(el);
             Assert.Equal("normal", el!.FontStretch.ToString());
-            Assert.Equal(5, el.ActualStretch);
+            Assert.Equal(100, el.ActualStretch);
         }
 
         // ── helpers ───────────────────────────────────────────────────────────

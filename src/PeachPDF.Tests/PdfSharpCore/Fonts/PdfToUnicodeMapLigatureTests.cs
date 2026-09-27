@@ -1,13 +1,11 @@
 using System.IO;
 using System.Text;
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 {
@@ -22,11 +20,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     /// </summary>
     public class PdfToUnicodeMapLigatureTests
     {
-        private static OpenTypeDescriptor Descriptor()
-        {
-            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
-            return new OpenTypeDescriptor("tounicode-test", "tounicode-test", face);
-        }
+        private static Typeface Descriptor() => TypefaceFixtures.Shared(BundledFonts.Ttf);
 
         [Fact]
         public void PrepareForSave_MergesCharacterAndLigatureSources()

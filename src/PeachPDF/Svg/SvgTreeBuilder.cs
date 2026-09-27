@@ -161,7 +161,9 @@ namespace PeachPDF.Svg
             string? MarkerEndRef,
             string Direction,
             WritingMode WritingMode,
-            TextOrientation TextOrientation)
+            TextOrientation TextOrientation,
+            SvgPaint ContextFill,
+            SvgPaint ContextStroke)
         {
             public static readonly InheritedPaint Initial = new(
                 Fill: SvgPaint.Solid(RColor.Black),
@@ -180,7 +182,9 @@ namespace PeachPDF.Svg
                 MarkerEndRef: null,
                 Direction: "ltr",
                 WritingMode: WritingMode.HorizontalTb,
-                TextOrientation: TextOrientation.Mixed);
+                TextOrientation: TextOrientation.Mixed,
+                ContextFill: SvgPaint.None,
+                ContextStroke: SvgPaint.None);
         }
 
         /// <summary>
@@ -198,7 +202,7 @@ namespace PeachPDF.Svg
         /// <c>em</c> in an SVG that never mentions one keeps meaning the CSS initial 16px.
         /// </summary>
         private readonly record struct FontContext(
-            string Family, double Size, bool Bold, bool Italic, int Stretch,
+            string Family, double Size, bool Bold, bool Italic, double Stretch,
             double LetterSpacing, double WordSpacing, TextTransform TextTransform,
             LigatureSet Ligatures, CapsMode CapsRequested,
             NumeralSet Numeric, EastAsianSet EastAsian,
@@ -227,11 +231,23 @@ namespace PeachPDF.Svg
         /// non-<c>data:</c> image references (or the caller didn't prefetch), in which case only
         /// <c>data:</c> URI hrefs resolve - the historical behavior.
         /// </param>
-        public static SvgDocument Build(ISvgSourceNode root, RAdapter adapter, RColor? contextColor = null, IReadOnlyDictionary<string, SvgImageResource>? prefetchedImages = null)
+        /// <param name="contextFill">
+        /// What <c>context-fill</c> stands for outside a <c>use</c> or a marker: the fill of the thing the document is drawn for (the text, for a
+        /// glyph document). Omitted, there is no context element and the keyword paints nothing (SVG 2, painting).
+        /// </param>
+        /// <param name="contextStroke">What <c>context-stroke</c> stands for there; see <paramref name="contextFill"/>.</param>
+        public static SvgDocument Build(ISvgSourceNode root, RAdapter adapter, RColor? contextColor = null, IReadOnlyDictionary<string, SvgImageResource>? prefetchedImages = null,
+            SvgPaint? contextFill = null, SvgPaint? contextStroke = null)
         {
-            var builder = new SvgTreeBuilder(adapter, contextColor ?? RColor.Black, prefetchedImages);
+            var builder = new SvgTreeBuilder(adapter, contextColor ?? RColor.Black, prefetchedImages)
+            {
+                _seed = InheritedPaint.Initial with { ContextFill = contextFill ?? SvgPaint.None, ContextStroke = contextStroke ?? SvgPaint.None },
+            };
             return builder.BuildDocument(root);
         }
+
+        /// <summary>The paint the root starts from: the initial values, and the context paint the caller gave the build.</summary>
+        private InheritedPaint _seed = InheritedPaint.Initial;
 
         /// <summary>
         /// Fetches every non-<c>data:</c> <c>&lt;image&gt;</c> href in <paramref name="root"/>'s tree
@@ -378,7 +394,10 @@ namespace PeachPDF.Svg
             root = null!;
             try
             {
-                var xdoc = System.Xml.Linq.XDocument.Parse(text);
+                // A document reached from another (an <image> with a data: URI) is as untrusted as the first: no DTD, so no entity expansion.
+                var settings = new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit, XmlResolver = null };
+                using var reader = System.Xml.XmlReader.Create(new System.IO.StringReader(text), settings);
+                var xdoc = System.Xml.Linq.XDocument.Load(reader);
                 if (xdoc.Root is null)
                     return false;
                 root = xdoc.Root;
@@ -447,7 +466,7 @@ namespace PeachPDF.Svg
             // Resolved before the definitions below: they inherit from the root through their ancestors.
             _lengthBasis = _rootBasis;
             _contextOnly = true;
-            var rootPaint = _rootPaint = ApplyCommon(new SvgGroupElement(), root, InheritedPaint.Initial);
+            var rootPaint = _rootPaint = ApplyCommon(new SvgGroupElement(), root, _seed);
             _contextOnly = false;
             _lengthBasis = null;
 
@@ -859,6 +878,10 @@ namespace PeachPDF.Svg
             // xlink:href="#circleWithNoFillOfItsOwn"/> paints the circle stroked red, not the
             // SVG-wide default black fill.
             var resolved = ApplyCommon(use, node, inherited);
+
+            // The <use> is the context element of what it instantiates: context-fill / context-stroke there are its fill and stroke (a gradient
+            // or pattern measured against the use, not against the shape that draws it).
+            resolved = resolved with { ContextFill = use.Fill.OfContextElement(use), ContextStroke = use.Stroke.OfContextElement(use) };
             // The <use>'s own font-* likewise become the inherited font context for the referenced
             // content (so <use font-size="30" href="#text"/> renders the referenced text at 30).
             var childFont = ComputeFontContext(node, fontContext);
@@ -1139,6 +1162,10 @@ namespace PeachPDF.Svg
                 || !SvgPropertyRegistry.TrySet(element, "stroke", strokeAttr, in ctx))
                 element.Stroke = inherited.Stroke;
 
+            // context-fill / context-stroke written on this element (an inherited value was resolved where it was written).
+            element.Fill = ResolveContextPaint(element.Fill, in inherited);
+            element.Stroke = ResolveContextPaint(element.Stroke, in inherited);
+
             // stroke-width/-miterlimit/-dashoffset/-dasharray fall back to the INHERITED value (not a
             // hardcoded default) on an invalid value, unlike the properties above - TrySet's return is
             // checked explicitly here.
@@ -1289,8 +1316,23 @@ namespace PeachPDF.Svg
                 element.MarkerEndRef,
                 direction,
                 writingMode,
-                textOrientation);
+                textOrientation,
+                inherited.ContextFill,
+                inherited.ContextStroke);
         }
+
+        /// <summary>
+        /// Replaces the <c>context-fill</c>/<c>context-stroke</c> keywords a <c>fill</c> or <c>stroke</c> was given with the paint of the context
+        /// element (SVG 2, painting: the <c>use</c> an element is instantiated by, or, for the content of a document drawn for a glyph, the
+        /// text). With no context element the keywords are no paint. A keyword that is still there afterwards is inside a marker, whose
+        /// context element is whatever shape it is drawn on: the renderer resolves it for each one.
+        /// </summary>
+        private static SvgPaint ResolveContextPaint(SvgPaint paint, in InheritedPaint context) => paint.Kind switch
+        {
+            SvgPaintKind.ContextFill => context.ContextFill,
+            SvgPaintKind.ContextStroke => context.ContextStroke,
+            _ => paint,
+        };
 
         /// <summary>
         /// Resolves one presentation-style property for <paramref name="node"/> with the same
@@ -1877,7 +1919,9 @@ namespace PeachPDF.Svg
                 OrientAngle = SvgValueParsers.ParseLength(orient) ?? 0,
             };
 
-            var (paint, font) = EnterDefinition(node, parentPaint, parentFont);
+            // The context element of a marker's content is the shape the marker is drawn on, which differs for every instance: the keywords stay
+            // in the tree and the renderer resolves them when it draws the marker. That holds for the <marker> element's own fill and stroke too.
+            var (paint, font) = EnterDefinition(node, parentPaint with { ContextFill = SvgPaint.ContextFill, ContextStroke = SvgPaint.ContextStroke }, parentFont);
 
             // A shape inside the marker that inherits `marker-end: url(#thisMarker)` from an ancestor would draw the
             // marker inside itself, without end - so drop just the inherited references to this marker. A reference

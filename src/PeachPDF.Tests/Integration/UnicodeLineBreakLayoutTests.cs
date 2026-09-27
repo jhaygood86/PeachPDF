@@ -55,6 +55,60 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(2, Lines(box));
         }
 
+        // ---- across the boundary between two inline elements: the same algorithm, over the words together ------------------------------
+
+        [Fact]
+        public async Task AcrossAnElementBoundary_MarkupAloneDoesNotAllowABreak()
+        {
+            Assert.Equal(1, Lines(await LayOut("width:20pt", "foo<b>bar</b>")));
+            Assert.Equal(1, Lines(await LayOut("width:20pt", "<i>and</i>/<b>or</b>")));
+        }
+
+        [Fact]
+        public async Task AcrossAnElementBoundary_WhiteSpaceAllowsABreak()
+        {
+            Assert.Equal(2, Lines(await LayOut("width:20pt", "<b>foo</b> <i>bar</i>")));
+        }
+
+        [Fact]
+        public async Task AcrossAnElementBoundary_AHyphenBreaksAfterItBetweenLetters_ButNotBeforeADigit()
+        {
+            Assert.Equal(2, Lines(await LayOut("width:20pt", "<b>well-</b><i>known</i>")));
+            Assert.Equal(1, Lines(await LayOut("width:20pt", "<b>abc-</b><i>123</i>")));
+        }
+
+        [Fact]
+        public async Task AcrossAnElementBoundary_KanaBreak_AndKeepAllKeepsThemTogether()
+        {
+            Assert.True(Lines(await LayOut("font-family:CJKTest; font-size:16pt; width:30pt", "<b>テキ</b><i>スト</i>", embedCjk: true)) > 1);
+            Assert.Equal(1, Lines(await LayOut("font-family:CJKTest; font-size:16pt; width:30pt; word-break:keep-all", "<b>テキ</b><i>スト</i>", embedCjk: true)));
+        }
+
+        [Fact]
+        public async Task AcrossAnElementBoundary_LineBreakAnywhereBreaksBetweenTheElementsToo()
+        {
+            Assert.True(Lines(await LayOut("width:20pt; line-break:anywhere", "<b>abc</b><i>def</i>")) > 1);
+        }
+
+        [Fact]
+        public async Task LineBreak_Anywhere_CutsAWordAtEveryCharacter_AndWrapsIt()
+        {
+            var box = await LayOut("width:40pt; line-break:anywhere", "abcdefghij");
+
+            Assert.Equal(10, WordTexts(box).Length);
+            Assert.True(Lines(box) > 1);
+            Assert.Equal(["abcdefghij"], WordTexts(await LayOut("width:40pt", "abcdefghij")));
+        }
+
+        [Fact]
+        public async Task LineBreak_IsInherited()
+        {
+            var html = LayoutHarness.Wrap("<div style='line-break:anywhere; width:40pt'><p id='p'>abcdefghij</p></div>");
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+
+            Assert.Equal(10, WordTexts(LayoutHarness.FindById(root, "p")!).Length);
+        }
+
         [Fact]
         public async Task Hyphen_AllowsABreakAfterItBetweenLetters_ButNotBeforeADigit()
         {

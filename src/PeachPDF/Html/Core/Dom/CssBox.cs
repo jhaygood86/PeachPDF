@@ -1215,11 +1215,11 @@ namespace PeachPDF.Html.Core.Dom
         /// ancestor's, else (at the root) <see cref="HtmlContainerInt.DocumentLanguage"/> - the
         /// HTML Living Standard's "language of a node" algorithm (a per-element, inherited concept),
         /// computed on demand rather than cached on the box so it always reflects
-        /// <see cref="HtmlContainerInt.DocumentLanguage"/>'s current value (which can still change
-        /// after this box's own tree position is fixed - see <c>PdfGenerator</c>'s config
-        /// <c>DefaultLanguage</c> fallback, applied after the document's own tree is first parsed).
-        /// Feeds both hyphenation (see <see cref="ParseToWords"/>) and GSUB per-language feature
-        /// selection (see <see cref="DerivedStyle.ActualTextShapingFeatures"/>).
+        /// <see cref="HtmlContainerInt.DocumentLanguage"/>'s current value (which is the document's
+        /// own <c>lang</c>, else <see cref="HtmlContainerInt.DefaultLanguage"/>, set when the tree is
+        /// parsed).
+        /// Feeds hyphenation and the language-dependent line breaking (see <see cref="ParseToWords"/>)
+        /// and GSUB per-language feature selection (see <see cref="DerivedStyle.ActualTextShapingFeatures"/>).
         /// </summary>
         internal string? Language
         {
@@ -1632,7 +1632,7 @@ namespace PeachPDF.Html.Core.Dom
 
             // Where a line may end inside this text, from the Unicode line breaking algorithm (UAX #14) with word-break applied. The
             // regional indicators before this box decide whether its first one completes a flag.
-            var breakOpportunities = UnicodeLineBreaks.Find(text, WordBreak.Value, CountPrecedingRegionalIndicators(this));
+            var breakOpportunities = UnicodeLineBreaks.Find(text, WordBreak.Value, CountPrecedingRegionalIndicators(this), LineBreak.Value, Language);
 
             while (startIdx < text.Length)
             {
@@ -9756,14 +9756,14 @@ namespace PeachPDF.Html.Core.Dom
         private void OnBlockAxisRelocated(double fromY, double toY) =>
             NotifyGeometryChanged(Math.Min(fromY, toY), 0);
 
-        internal RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
+        internal RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
-            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, weight, stretch, obliqueSkewSinus);
+            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, weight, stretch, obliqueSkewSinus, variations);
         }
 
-        internal RFont? GetCachedFontForCodepoint(string fontFamily, double fsize, RFontStyle st, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null, EmojiPresentation presentation = EmojiPresentation.NoPreference)
+        internal RFont? GetCachedFontForCodepoint(string fontFamily, double fsize, RFontStyle st, System.Text.Rune codepoint, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, EmojiPresentation presentation = EmojiPresentation.NoPreference, string? variations = null)
         {
-            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, codepoint, weight, stretch, obliqueSkewSinus, presentation);
+            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, codepoint, weight, stretch, obliqueSkewSinus, presentation, variations);
         }
 
         internal RColor GetActualColor(string colorStr)

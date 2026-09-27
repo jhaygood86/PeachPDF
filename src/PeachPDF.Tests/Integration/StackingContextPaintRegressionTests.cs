@@ -1,5 +1,4 @@
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Text;
 using System.Text;
 using PeachPDF;
 using PeachPDF.Adapters;

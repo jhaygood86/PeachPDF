@@ -143,7 +143,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// <summary>
         /// 
         /// </summary>
-        public int XMin
+        public virtual int XMin
         {
             get { return _xMin; }
             protected set { _xMin = value; }
@@ -153,7 +153,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// <summary>
         /// 
         /// </summary>
-        public int YMin
+        public virtual int YMin
         {
             get { return _yMin; }
             protected set { _yMin = value; }
@@ -163,7 +163,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// <summary>
         /// 
         /// </summary>
-        public int XMax
+        public virtual int XMax
         {
             get { return _xMax; }
             protected set { _xMax = value; }
@@ -173,7 +173,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// <summary>
         /// 
         /// </summary>
-        public int YMax
+        public virtual int YMax
         {
             get { return _yMax; }
             protected set { _yMax = value; }

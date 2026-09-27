@@ -458,3 +458,7 @@ FodyWeavers.xsd
 # Staged into the demo's wwwroot by its StageSharedFontAssets target; the source of truth is
 # assets/fonts/
 /src/PeachPDF.Demo.BlazorWasm/wwwroot/fonts/
+
+# Staged into the demo's wwwroot by its StageSharedLicenseAssets target; the sources of truth are
+# FTL.TXT beside the ported FreeType code, LICENSE and THIRD-PARTY-LICENSES.md
+/src/PeachPDF.Demo.BlazorWasm/wwwroot/licenses/

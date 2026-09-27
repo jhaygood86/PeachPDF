@@ -176,6 +176,12 @@ namespace PeachDrawing.Text.Internal.Fonts
         }
 
         /// <summary>
+        /// The weights, widths and oblique angles the resolved face declares that it covers, or <see langword="null"/> for a face
+        /// that covers exactly the one it is registered at. A variable face is set to the requested location kept inside them.
+        /// </summary>
+        internal FaceRanges? DeclaredRanges { get; init; }
+
+        /// <summary>
         /// The number of the font in a Truetype font collection file. The number of the first font is 0.
         /// NOT YET IMPLEMENTED. Must be zero.
         /// </summary>

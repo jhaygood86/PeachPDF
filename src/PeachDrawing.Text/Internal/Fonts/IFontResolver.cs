@@ -70,6 +70,15 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// <returns>Information about the physical font, or null if the request cannot be satisfied.</returns>
         FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic, int stretch);
 
+        /// <summary>
+        /// Converts a request for a face into a specific font, matching the width as a percentage of the normal width and letting a
+        /// face that declares a range of weights or widths cover every value inside it. The other overloads resolve through this one.
+        /// </summary>
+        /// <param name="familyName">Name of the font family.</param>
+        /// <param name="request">The weight, slant, width and (optionally) character wanted.</param>
+        /// <returns>Information about the physical font, or null if the request cannot be satisfied.</returns>
+        FontResolverInfo ResolveFace(string familyName, FaceRequest request);
+
         //FontResolverInfo ResolveTypeface(LoadedTypeface); TODO in PDFsharp 2.0
 
         /// <summary>

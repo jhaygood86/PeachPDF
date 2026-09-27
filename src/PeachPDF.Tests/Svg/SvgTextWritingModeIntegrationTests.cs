@@ -1,6 +1,4 @@
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Svg;
@@ -262,10 +260,10 @@ namespace PeachPDF.Tests.Svg
             // GlyphInfo.Py isn't exposed to this test the way CssRect.Top is to the HTML-side
             // equivalent.
             var plainBytes = File.ReadAllBytes(BundledFonts.Otf);
-            var numGlyphs = FontFileData.GetOrCreateFrom(plainBytes).Fontface.maxp.numGlyphs;
-            var vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, TableTagNames.VHea, SyntheticFontTables.BuildVhea(ascent: 900, descent: -200, numOfLongVerMetrics: numGlyphs));
-            vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(vorgBytes, TableTagNames.VMtx, SyntheticFontTables.BuildVmtxUniform(1000, numGlyphs));
-            vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(vorgBytes, TableTagNames.VOrg, SyntheticFontTables.BuildVorg(700));
+            var numGlyphs = (ushort)SyntheticFontTables.GlyphCount(plainBytes);
+            var vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, "vhea", SyntheticFontTables.BuildVhea(ascent: 900, descent: -200, numOfLongVerMetrics: numGlyphs));
+            vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(vorgBytes, "vmtx", SyntheticFontTables.BuildVmtxUniform(1000, numGlyphs));
+            vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(vorgBytes, "VORG", SyntheticFontTables.BuildVorg(700));
 
             await using (var vorgStream = new MemoryStream(vorgBytes))
                 await Adapter.AddFont(vorgStream, "OtfVorgTest");
@@ -294,7 +292,7 @@ namespace PeachPDF.Tests.Svg
             // byte-for-byte identically to the plain no-VORG case (issue #770's already-shipped
             // behavior), not merely "no crash."
             var plainBytes = File.ReadAllBytes(BundledFonts.Cjk);
-            var vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, TableTagNames.VOrg, SyntheticFontTables.BuildVorg(700));
+            var vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, "VORG", SyntheticFontTables.BuildVorg(700));
 
             await using (var vorgStream = new MemoryStream(vorgBytes))
                 await Adapter.AddFont(vorgStream, "CjkVorgIgnoredTest");
@@ -324,7 +322,7 @@ namespace PeachPDF.Tests.Svg
             // the same review pass found needed extending from HasVerticalMetrics alone to
             // "HasVerticalMetrics || HasVerticalOrigin" - without it, this glyph would paint unclipped.
             var plainBytes = File.ReadAllBytes(BundledFonts.Otf);
-            var vorgOnlyBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, TableTagNames.VOrg, SyntheticFontTables.BuildVorg(700));
+            var vorgOnlyBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, "VORG", SyntheticFontTables.BuildVorg(700));
 
             await using (var vorgStream = new MemoryStream(vorgOnlyBytes))
                 await Adapter.AddFont(vorgStream, "OtfVorgOnlyTest");

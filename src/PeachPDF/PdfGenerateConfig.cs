@@ -150,7 +150,8 @@ namespace PeachPDF
 
         /// <summary>
         /// A fallback language (e.g. <c>"en-US"</c>) used for language-dependent rendering — currently
-        /// <c>hyphens: auto</c> automatic hyphenation — only when the document itself declares none via
+        /// <c>hyphens: auto</c> automatic hyphenation and the Chinese and Japanese tailorings of
+        /// <c>line-break</c> — only when the document itself declares none via
         /// <c>&lt;html lang="..."&gt;</c>. A document's own <c>lang</c> attribute always takes priority
         /// over this setting when present. Per the CSS Text spec, automatic hyphenation requires knowing
         /// the text's language; PeachPDF never guesses one on its own, so a document with no <c>lang</c>
@@ -353,6 +354,31 @@ namespace PeachPDF
         /// 64 million pixels (about 256 MB of working memory for one region).
         /// </summary>
         public long MaxRasterPixels { get; set; } = 64_000_000;
+
+        /// <summary>
+        /// Whether the text PeachPDF draws into a bitmap (see <see cref="RasterizationDpi"/>) is fitted to the pixel grid by the font's own
+        /// hinting. Defaults to <see cref="PeachPDF.TextHinting.None"/>, so output does not change unless it is asked for.
+        /// </summary>
+        /// <remarks>
+        /// It helps text set small at a low <see cref="RasterizationDpi"/>, where pixels are big enough to see. It never affects the PDF's own
+        /// text, which is the embedded font. It is used for a piece of text only when that text is drawn without rotation, skew or
+        /// perspective (hinting is meaningless under them), and only for fonts with TrueType instructions or CFF outlines, and at sizes where
+        /// the font's own <c>gasp</c> table (if it has one) asks for grid-fitting; anything else is drawn unhinted.
+        /// Layout is never affected: measurements and line breaks use the unhinted metrics, so turning hinting on cannot move a line break.
+        /// </remarks>
+        public TextHinting TextHinting { get; set; } = TextHinting.None;
+
+        /// <summary>
+        /// Whether hinted text that PeachPDF draws into a bitmap is also made a little heavier at its stems, when its font has CFF outlines.
+        /// Defaults to <see langword="false"/>. It has an effect only where <see cref="TextHinting"/> is not <see cref="PeachPDF.TextHinting.None"/>.
+        /// </summary>
+        /// <remarks>
+        /// Thin stems of small text tend to look lighter than the designer intended once they are anti-aliased; this is the compensation of
+        /// Adobe's CFF engine for that, which FreeType calls stem darkening and also leaves off by default. It thickens the thinnest stems the most, and does
+        /// nothing for stems more than about two and a third pixels wide. It applies to fonts with CFF outlines only (a TrueType font is
+        /// unchanged), and never to the PDF's own vector text.
+        /// </remarks>
+        public bool TextStemDarkening { get; set; }
 
         /// <summary>
         /// What happens when a document that targets PDF/A-1 or PDF/X-1a/X-3 (all of which forbid transparency) uses something that needs it.

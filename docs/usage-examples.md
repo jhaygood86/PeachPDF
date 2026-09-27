@@ -348,7 +348,7 @@ Every mapping above — including a custom one set via `AddFontFamilyMapping` �
 Requesting a `font-weight`/`font-style`/`font-stretch` PeachPDF can't find an exact registered face for doesn't just fall back to Regular:
 
 - **Numeric weight** (`font-weight: 1`–`1000`) is matched to the *nearest* registered face for the family per CSS Fonts Level 4 §5.2 (the same algorithm real browsers use), not just an exact match or a coarse bold/not-bold split. `bolder`/`lighter` step relative to the parent element's own resolved weight, following the CSS2.1 §15.6 worked table.
-- **`font-stretch`** (the 9 CSS Fonts Level 3 keywords) is matched the same way when a family has multiple registered faces at different stretch values.
+- **`font-stretch`** (the 9 keywords, or a percentage such as `87.5%`) is matched the same way when a family has multiple registered faces at different stretch values.
 - When no real face is close enough to the request, PeachPDF **synthesizes** a faux-bold (fill+stroke render mode) or faux-italic/oblique (glyph shear) rather than rendering with zero visual distinction. `oblique <angle>` (e.g. `oblique 10deg`) drives the exact synthesized shear amount when declared; otherwise a fixed default angle is used.
 - An `@font-face` rule's own declared `font-weight`/`font-style`/`font-stretch` descriptors are authoritative for how that specific registered resource participates in this matching, independent of what the font file's own internal tables say — this is what makes multi-variant web-font families (separate `@font-face` rules per weight) resolve correctly.
 
@@ -820,6 +820,27 @@ Two related settings:
 A value outside 72 to 1200 throws an `ArgumentOutOfRangeException` when generation starts. On the command line the setting is `--raster-dpi`; see [the CLI reference](cli.md).
 
 Text inside a rasterized HTML element is drawn into the bitmap and also kept as invisible, positioned text over it, so it stays selectable and searchable. A document targeting PDF/A-1 or PDF/X-1a/X-3 is rejected if it uses one of these effects, unless it asks for [flattening](#flattening-transparency-for-pdfa-1-and-pdfx) — see [PDF/A-1 and transparency](#pdfa-1-and-transparency).
+
+### Sharper small text in bitmaps: `TextHinting`
+
+Text drawn into one of these bitmaps is, by default, the font's design scaled to the bitmap's pixels. At a low `RasterizationDpi` and a small size, that puts edges through the middle of pixels and softens the text. `TextHinting` asks for the font's own hinting to be run (the instructions of a TrueType font, the stem hints and blue zones of a font with CFF outlines), so stems, x-heights and baselines land on whole pixels:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    RasterizationDpi = 96,
+    TextHinting = TextHinting.Standard,   // None (the default), Standard or Monochrome
+};
+```
+
+- `Standard` fits glyphs vertically and keeps their horizontal design, which suits anti-aliased text. `Monochrome` fits both directions of a TrueType font, as for text drawn without anti-aliasing (a CFF font is fitted the same way in both modes: its hints are vertical). `None` changes nothing.
+- It affects **only the raster backend**. The PDF's own text is the embedded font, drawn by the viewer at whatever size it likes, and is never hinted; a document that has no rasterized regions is byte-for-byte the same with any value. Layout is never affected either: measurements and line breaks use the unhinted metrics, so turning hinting on cannot move a line.
+- A piece of text is hinted only when it is drawn without rotation, skew or perspective (its size on the bitmap is then a single number of pixels per em, which is what hinting works on), the font is a TrueType font with instructions or a font with CFF outlines, and its `gasp` table (if it has one) asks for grid-fitting at that size; any other text in the bitmap is drawn unhinted. A font whose hinting fails is treated the same way, so a broken font never breaks a page.
+- It matters most at 72 to 150 dpi. At 300 dpi and above, glyphs are large enough in pixels that the difference is hard to see.
+- `TextStemDarkening` (`false` by default) additionally makes the stems of a font with CFF outlines a little heavier, which offsets the way anti-aliasing thins the thinnest stems of small text. It has an effect only together with a `TextHinting` other than `None`, changes nothing for a TrueType font, and never touches the PDF's own vector text. Stems of more than about two and a third pixels (large text) are not changed.
+
+A value that is not one of the three throws an `ArgumentOutOfRangeException` when generation starts.
 
 ## Flattening transparency for PDF/A-1 and PDF/X
 

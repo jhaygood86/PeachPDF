@@ -186,27 +186,28 @@ namespace PeachPDF.Adapters
 
         public async Task AddFont(Stream stream, string? fontFamilyName)
         {
-            await AddFont(stream, fontFamilyName, weightOverride: null, isItalicOverride: null, stretchOverride: null);
+            await AddFont(stream, fontFamilyName, default);
         }
 
-        internal async Task AddFont(Stream stream, string? fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+        internal async Task AddFont(Stream stream, string? fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
 
-            AddFont(memoryStream.ToArray(), fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+            AddFont(memoryStream.ToArray(), fontFamilyName, descriptors, unicodeRanges);
         }
 
-        private void AddFont(ReadOnlyMemory<byte> data, string? fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride, IReadOnlyList<RuneInterval>? unicodeRanges)
+        private void AddFont(ReadOnlyMemory<byte> data, string? fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval>? unicodeRanges)
         {
             // The font set recognises WOFF/WOFF2/TrueType/OpenType by content and reads the family name from the
             // file when the caller gave none.
             var family = _fontSet.AddData(data, new AddOptions
             {
                 FamilyName = fontFamilyName,
-                Weight = weightOverride,
-                IsItalic = isItalicOverride,
-                Width = stretchOverride,
+                WeightRange = descriptors.Weight,
+                IsItalic = descriptors.IsItalic,
+                WidthRange = descriptors.Width,
+                ObliqueRange = descriptors.Oblique,
                 UnicodeRanges = unicodeRanges
             });
 
@@ -358,27 +359,57 @@ namespace PeachPDF.Adapters
             return new ImageAdapter(XImage.FromStream(() => memoryStream));
         }
 
-        protected override RFont CreateFontInt(string family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null)
+        protected override RFont CreateFontInt(string family, double size, RFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
         {
-            return MatchAndCreateFont(family, size, style, weight, stretch, obliqueSkewSinus);
+            return MatchAndCreateFont(family, size, style, weight, stretch, obliqueSkewSinus, variations);
         }
 
-        protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null)
+        protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null)
         {
-            return MatchAndCreateFont(((FontFamilyAdapter)family).Name, size, style, weight, stretch, obliqueSkewSinus);
+            return MatchAndCreateFont(((FontFamilyAdapter)family).Name, size, style, weight, stretch, obliqueSkewSinus, variations);
         }
 
-        private FontAdapter MatchAndCreateFont(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus)
+        private FontAdapter MatchAndCreateFont(string family, double size, RFontStyle style, double weight, double stretch, double? obliqueSkewSinus, string? variations)
         {
             var fontStyle = (XFontStyle)((int)style);
             var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
 
-            var match = _fontSet.MatchOrFallback(family, new TypefaceQuery(weight, stretch, isItalic));
+            var match = _fontSet.MatchOrFallback(family, QueryFor(weight, stretch, isItalic, null, size, obliqueSkewSinus, variations));
+            return CreateFontAdapter(size, fontStyle, match, obliqueSkewSinus);
+        }
+
+        /// <summary>
+        /// The query a face is matched with. The weight, the width as a percentage of the normal width and the oblique angle of the box
+        /// select the face among those of a family and set a variable face's weight, width and slant axes; the axis settings of
+        /// <c>font-variation-settings</c> and the automatic optical size (for a font of <paramref name="size"/> in layout units) come after
+        /// and win.
+        /// </summary>
+        private TypefaceQuery QueryFor(double weight, double stretch, bool isItalic, System.Text.Rune? mustCover, double size, double? obliqueSkewSinus, string? variations) =>
+            new(weight, TypefaceQuery.NormalWidth, isItalic, mustCover,
+                FontVariationSettingsResolver.ToAxes(variations, size / PixelsPerPoint / PeachPDF.CSS.Length.PointsPerPx),
+                stretch,
+                obliqueSkewSinus is { } sinus ? ObliqueAngleOf(sinus) : null);
+
+        /// <summary>
+        /// The angle in degrees of an oblique skew's sine. The angle a box asks for went through a single-precision radian and a sine to get
+        /// here, so it does not come back exact (10 degrees comes back as 10.000001), and it is compared with the exact ends of the ranges that
+        /// faces declare. It is rounded to four decimals, far finer than any angle an author writes.
+        /// </summary>
+        private static double ObliqueAngleOf(double sinus) => Math.Round(Math.Asin(Math.Clamp(sinus, -1, 1)) * 180 / Math.PI, 4);
+
+        private FontAdapter CreateFontAdapter(double size, XFontStyle fontStyle, TypefaceMatch match, double? obliqueSkewSinus)
+        {
+            // A face with a slant axis draws the oblique itself, so the renderer must not shear it as well.
+            if (obliqueSkewSinus is not null && match.Typeface.Axes.Any(a => a.Tag == AxisTags.Slant))
+            {
+                obliqueSkewSinus = null;
+            }
+
             var xFont = new XFont(size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), match, obliqueSkewSinus);
             return new FontAdapter(xFont, PixelsPerPoint);
         }
 
-        protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint)
+        protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, string? variations)
         {
             var fontStyle = (XFontStyle)((int)style);
             var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
@@ -386,16 +417,15 @@ namespace PeachPDF.Adapters
             // A null here tells the caller to try the next family in the stack: never build an XFont for a family
             // that can't render this codepoint.
             if (!_fontSet.TryFindFamily(family, out var typefaceFamily)
-                || !typefaceFamily.TryMatch(new TypefaceQuery(weight, stretch, isItalic, codepoint), out var match))
+                || !typefaceFamily.TryMatch(QueryFor(weight, stretch, isItalic, codepoint, size, obliqueSkewSinus, variations), out var match))
             {
                 return null;
             }
 
-            var xFont = new XFont(size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), match, obliqueSkewSinus);
-            return new FontAdapter(xFont, PixelsPerPoint);
+            return CreateFontAdapter(size, fontStyle, match, obliqueSkewSinus);
         }
 
-        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation)
+        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, double weight, double stretch, double? obliqueSkewSinus, System.Text.Rune codepoint, PeachDrawing.Text.Unicode.EmojiPresentation presentation, string? variations)
         {
             if (!_fontSet.TryFindCoveringFamily(codepoint, presentation, out var fallbackFamily))
                 return null;
@@ -405,11 +435,10 @@ namespace PeachPDF.Adapters
 
             try
             {
-                if (!fallbackFamily.TryMatch(new TypefaceQuery(weight, stretch, isItalic, codepoint), out var match))
+                if (!fallbackFamily.TryMatch(QueryFor(weight, stretch, isItalic, codepoint, size, obliqueSkewSinus, variations), out var match))
                     return null;
 
-                var xFont = new XFont(size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), match, obliqueSkewSinus);
-                return new FontAdapter(xFont, PixelsPerPoint);
+                return CreateFontAdapter(size, fontStyle, match, obliqueSkewSinus);
             }
             catch
             {
@@ -425,7 +454,7 @@ namespace PeachPDF.Adapters
 
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => _fontSet.HasExplicitRanges(family);
 
-        protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+        protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             // A missing format() hint is valid CSS (it's an optional hint, not a requirement) and must
             // still be attempted - real-world stylesheets (e.g. css4.pub's Icelandic dictionary page)
@@ -436,18 +465,18 @@ namespace PeachPDF.Adapters
             // should still be skipped.
             if (format is null or "truetype" or "woff" or "woff2" or "opentype")
             {
-                await AddFont(stream, fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+                await AddFont(stream, fontFamilyName, descriptors, unicodeRanges);
                 return true;
             }
 
             return false;
         }
 
-        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             if (!_fontSet.TryGetFontData(localFontFaceName, out var data)) return Task.FromResult(false);
 
-            AddFont(data, fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+            AddFont(data, fontFamilyName, descriptors, unicodeRanges);
 
             return Task.FromResult(true);
         }

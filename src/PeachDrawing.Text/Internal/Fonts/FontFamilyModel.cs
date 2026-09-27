@@ -14,7 +14,18 @@ namespace PeachDrawing.Text.Internal.Fonts
         bool Italic,
         int Stretch,
         IReadOnlyList<RuneInterval>? ExplicitRanges,
-        TtfFontDescription Description);
+        TtfFontDescription Description)
+    {
+        /// <summary>
+        /// The weights, widths and oblique angles this face covers when it declares more than a single weight and width: a range
+        /// from an <c>@font-face</c> descriptor, or the range of the axes of a variable font that was given none. <see langword="null"/>
+        /// for an ordinary face, which covers exactly <see cref="Weight"/> and <see cref="Stretch"/>.
+        /// </summary>
+        public FaceRanges? Declared { get; init; }
+
+        /// <summary>What this face covers: <see cref="Declared"/>, or the single weight and width it is registered at.</summary>
+        public FaceRanges Ranges => Declared ?? FaceRanges.Point(Weight, Stretch);
+    }
 
     internal class FontFamilyModel
     {

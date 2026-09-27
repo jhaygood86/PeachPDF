@@ -37,6 +37,26 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
+## FreeType (ported TrueType bytecode interpreter and CFF loader)
+
+Portions of this software are copyright © 1996-2026 The FreeType Project (https://freetype.org). All rights reserved.
+
+This software is based in part on the work of the FreeType Team.
+
+- **Location:** [`Internal/Hinting/FreeType/`](Internal/Hinting/FreeType/): the TrueType bytecode interpreter and glyph loader used for grid-fitting (hinting) outlines, ported to C# from FreeType 2.14.3 (`ttinterp`, `ttobjs`, `ttgload`, `ttpload`, `ttgxvar`, `ftcalc` and the part of `fttrigon` those need). Nothing derived from FreeType lives anywhere else in the package. Each ported file begins with the header of the FreeType file it derives from, unchanged, followed by a line saying it was ported to C# and modified.
+- **License file:** [`Internal/Hinting/FreeType/FTL.TXT`](Internal/Hinting/FreeType/FTL.TXT), the FreeType Project License exactly as distributed by FreeType (it ships in this package unaltered)
+- **Changes from the original:** recorded, per file, in [`Internal/Hinting/FreeType/PORTING-NOTES.md`](Internal/Hinting/FreeType/PORTING-NOTES.md), which also names the FreeType release ported (VER-2-14-3)
+- **License:** the FreeType Project License (FTL), a permissive BSD-style license with a credit clause. FreeType is dual-licensed under the FTL or the GNU GPL version 2; PeachDrawing.Text uses it under the FTL only. The FTL does not restrict the license of the rest of this package, and does not permit using the names of the FreeType authors or contributors to promote a product without their written permission.
+
+An application that redistributes this package in binary form has to say, in its documentation, that its software is based in part on the work of the FreeType Team. The credit line above is the text FreeType suggests for it.
+
+### Adobe's CFF engine (part of FreeType)
+
+- **Location:** the `Ps*.cs` files of [`Internal/Hinting/FreeType/`](Internal/Hinting/FreeType/), the C# port of the `psaux` module of FreeType 2.14.3 (`psarrst`, `psblues`, `psfixed`, `psfont`, `psft`, `pshints`, `psintrp`, `psstack`, `psglue`, `pserror`, `psread`), which Adobe Systems Incorporated contributed to FreeType. It grid-fits CFF (PostScript) outlines. The files that load a CFF font around it (`Cff*.cs`) derive from FreeType's own `cff` module.
+- **Copyright:** Copyright 2006-2014 Adobe Systems Incorporated (the years differ by file; each ported file begins with the header of the C file it derives from, unchanged).
+- **License:** the FreeType Project License (`FTL.TXT`, above), with an additional patent licence grant. The header says that the work is made available under the FreeType Project License, and that each contributor grants everyone who exercises the permissions of that licence a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable patent licence to make, have made, use, offer to sell, sell, import and otherwise transfer the work, for the patent claims the contributor can license that its contribution necessarily infringes; and that the patent licences a licensee holds terminate as of the date on which the licensee starts patent litigation against any entity alleging that the work or a contribution in it infringes a patent. Using, modifying or distributing the work means accepting the FreeType Project License and that grant.
+- **Changes from the original:** recorded, per file, in [`Internal/Hinting/FreeType/PORTING-NOTES.md`](Internal/Hinting/FreeType/PORTING-NOTES.md). Only the parts for CFF and CFF2 (variable CFF) fonts were ported; the parts for Type 1 fonts were not.
+
 ## Unicode Character Database (text-processing data tables)
 
 - **Location:** [`src/PeachDrawing.Text/Internal/Text/Resources/Bidi/`](Internal/Text/Resources/Bidi/) — `DerivedBidiClass.txt.br`, `BidiBrackets.txt.br`, `BidiMirroring.txt.br` (consumed by `PeachDrawing.Text.Internal.Text.Bidi.BidiClassTable`/`BidiBrackets`/`BidiMirroring`); [`src/PeachDrawing.Text/Internal/Text/Resources/VerticalOrientation/`](Internal/Text/Resources/VerticalOrientation/) — `VerticalOrientation.txt.br` (`PeachDrawing.Text.Internal.Text.VerticalOrientationTable`); [`src/PeachDrawing.Text/Internal/Text/Resources/Script/`](Internal/Text/Resources/Script/) — `Scripts.txt.br` (`PeachDrawing.Text.Internal.Text.ScriptTable`); [`src/PeachDrawing.Text/Internal/Text/Resources/ArabicJoining/`](Internal/Text/Resources/ArabicJoining/) — `DerivedJoiningType.txt.br` (`PeachDrawing.Text.Internal.Text.ArabicShapingTable`). All Brotli-compressed. The line and text segmentation tables (UAX #14 and #29) are generated C# source instead, [`src/PeachDrawing.Text/Internal/Text/Segmentation/SegmentationData.g.cs`](Internal/Text/Segmentation/SegmentationData.g.cs), consumed by `PeachDrawing.Text.Internal.Text.Segmentation`.
@@ -49,6 +69,73 @@ Each UCD source file carries this notice in its own header, reproduced here rath
 
 > © 2026 Unicode®, Inc. Unicode and the Unicode Logo are registered trademarks of Unicode, Inc. in the U.S. and other countries. For terms of use and license, see https://www.unicode.org/terms_of_use.html
 
+
+## ICU word lists (Thai and Khmer line breaking)
+
+- **Location:** [`src/PeachDrawing.Text/Internal/Text/Resources/Dictionaries/`](Internal/Text/Resources/Dictionaries/) — `thai.dict` and `khmer.dict`, one embedded resource per script, read by `PeachDrawing.Text.Internal.Text.Segmentation.WordDictionary` (raw DEFLATE, not Brotli). Each is the word list of the break-iterator dictionary of the same script in ICU (`thaidict.txt`, `khmerdict.txt`), normalized (NFC, without zero width joiners), deduplicated and stored as a sorted, prefix-compressed list. They let the line breaking algorithm allow a break between the words of scripts that are written without spaces.
+- **Upstream source:** [`icu4c/source/data/brkitr/dictionaries/`](https://github.com/unicode-org/icu/tree/release-78.3/icu4c/source/data/brkitr/dictionaries) of the ICU repository at the release tag `release-78.3`. The two files are not vendored: the generator downloads them from that tag and checks a SHA-256 for each.
+- **Generation script:** [`assets/unicode/generate_dictionary_breaking.py`](../../assets/unicode/generate_dictionary_breaking.py)
+- **Not used:** ICU's `cjdict.txt` (Chinese and Japanese break by the rules of the algorithm itself).
+
+The ICU repository's `LICENSE` file, at that tag, puts the Thai and Khmer lists under the Unicode License v3 (they are ICU data: the header of each names Unicode, Inc., IBM and, for the Thai list, Apple), reproduced below.
+
+### Thai and Khmer word lists: Unicode License v3
+
+```
+# Copyright (C) 2016 and later: Unicode, Inc. and others.
+# License & terms of use: http://www.unicode.org/copyright.html
+# Copyright (c) 2006-2015 International Business Machines Corporation,
+# Apple Inc., and others. All Rights Reserved.       (thaidict.txt)
+
+# Copyright (C) 2016 and later: Unicode, Inc. and others.
+# License & terms of use: http://www.unicode.org/copyright.html
+# Copyright (c) 2011-2015 International Business Machines Corporation
+# and others. All Rights Reserved.                   (khmerdict.txt)
+```
+
+```
+UNICODE LICENSE V3
+
+COPYRIGHT AND PERMISSION NOTICE
+
+Copyright © 2016-2025 Unicode, Inc.
+
+NOTICE TO USER: Carefully read the following legal agreement. BY
+DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING DATA FILES, AND/OR
+SOFTWARE, YOU UNEQUIVOCALLY ACCEPT, AND AGREE TO BE BOUND BY, ALL OF THE
+TERMS AND CONDITIONS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT
+DOWNLOAD, INSTALL, COPY, DISTRIBUTE OR USE THE DATA FILES OR SOFTWARE.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of data files and any associated documentation (the "Data Files") or
+software and any associated documentation (the "Software") to deal in the
+Data Files or Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, and/or sell
+copies of the Data Files or Software, and to permit persons to whom the
+Data Files or Software are furnished to do so, provided that either (a)
+this copyright and permission notice appear with all copies of the Data
+Files or Software, or (b) this copyright and permission notice appear in
+associated Documentation.
+
+THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+THIRD PARTY RIGHTS.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE
+BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES,
+OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA
+FILES OR SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder shall
+not be used in advertising or otherwise to promote the sale, use or other
+dealings in these Data Files or Software without prior written
+authorization of the copyright holder.
+
+SPDX-License-Identifier: Unicode-3.0
+```
 
 ## HarfBuzz (ported Arabic/Syriac joining state machine)
 

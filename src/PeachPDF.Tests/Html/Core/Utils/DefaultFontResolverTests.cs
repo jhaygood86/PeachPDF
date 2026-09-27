@@ -1,7 +1,6 @@
 using PeachPDF.Html.Core.Utils;
 using System.Linq;
 
-using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.Html.Core.Utils
 {

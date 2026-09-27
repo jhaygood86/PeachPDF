@@ -8,7 +8,6 @@ using System.Text;
 using System.Threading.Tasks;
 using Xunit;
 
-using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.Integration
 {

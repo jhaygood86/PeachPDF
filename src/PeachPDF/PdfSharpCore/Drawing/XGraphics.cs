@@ -1183,6 +1183,9 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// </summary>
         public bool InvisibleText { get; set; }
 
+        /// <summary>What draws the SVG documents of a font's glyphs (OpenType SVG) on this graphics, or <see langword="null"/> when nothing does.</summary>
+        internal ISvgGlyphPainter? SvgGlyphPainter { get; set; }
+
         public void DrawString(string s, XFont font, XBrush brush, XPoint point)
         {
             DrawString(s, font, brush, new XRect(point.X, point.Y, 0, 0), XStringFormats.Default);

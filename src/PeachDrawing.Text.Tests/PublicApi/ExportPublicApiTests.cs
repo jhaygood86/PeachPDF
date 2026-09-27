@@ -122,6 +122,12 @@ namespace PeachDrawing.Text.Tests.PublicApi
         }
 
         [Fact]
+        public void ContentHash_Is128BitsAsLowercaseHexadecimal()
+        {
+            Assert.Matches("^[0-9a-f]{32}$", Face(BundledFonts.Ttf).ContentHash);
+        }
+
+        [Fact]
         public void FullName_IsWhatTheFontNamesItself()
         {
             var face = Face(BundledFonts.Ttf);

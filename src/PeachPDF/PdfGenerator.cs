@@ -114,7 +114,7 @@ namespace PeachPDF
                     ranges.Add(new RuneInterval(range.Start, range.End));
             }
 
-            await _pdfSharpAdapter.AddFont(stream, null, weightOverride: null, isItalicOverride: null, stretchOverride: null, ranges);
+            await _pdfSharpAdapter.AddFont(stream, null, default, ranges);
         }
 
         /// <summary>
@@ -223,8 +223,16 @@ namespace PeachPDF
                     "PdfGenerateConfig.MaxRasterPixels must be at least 1.");
             }
 
+            if (!Enum.IsDefined(config.TextHinting))
+            {
+                throw new ArgumentOutOfRangeException(nameof(config), config.TextHinting,
+                    "PdfGenerateConfig.TextHinting is not a defined TextHinting value.");
+            }
+
             _pdfSharpAdapter.RasterizationDpi = config.RasterizationDpi;
             _pdfSharpAdapter.MaxRasterPixels = config.MaxRasterPixels;
+            _pdfSharpAdapter.TextHinting = config.TextHinting;
+            _pdfSharpAdapter.TextStemDarkening = config.TextStemDarkening;
         }
 
         /// <summary>
@@ -1305,20 +1313,19 @@ namespace PeachPDF
             container.HtmlContainerInt.PreferredColorScheme = config.PreferredColorScheme;
             container.HtmlContainerInt.IgnoreAuthorStyleSheets = config.IgnoreAuthorStyleSheets;
 
+            // Read while the DOM tree is generated, when every text box is cut into words: hyphens: auto and the
+            // language-dependent line-break tailorings need the language then, not after SetHtml returns.
+            container.HtmlContainerInt.DefaultLanguage = string.IsNullOrEmpty(config.DefaultLanguage) ? null : config.DefaultLanguage;
+
             // Parse-time @page relative units (% / em, base rule and the captured PageLengthContext
             // alike) resolve against PageSize as it stands during SetHtml — carry the physical sheet
             // in so a percentage margin resolves against the page-box width (css-page-3 §7.1), not a
             // stale band from a previous pass or the unset 0 default on the first pass.
             container.PageSize = orgPageSize;
 
+            // The document's own <html lang> always wins (DomParser); config.DefaultLanguage, set above, only fills
+            // in when the document declares none — PeachPDF itself never guesses a language on its own initiative.
             await container.SetHtml(html, cssData?.CssData);
-
-            // The document's own <html lang> always wins; config.DefaultLanguage only fills in when the
-            // document declares none — PeachPDF itself never guesses a language on its own initiative.
-            if (string.IsNullOrEmpty(container.HtmlContainerInt.DocumentLanguage) && !string.IsNullOrEmpty(config.DefaultLanguage))
-            {
-                container.HtmlContainerInt.DocumentLanguage = config.DefaultLanguage;
-            }
 
             // Just in case @page rules got applied. SetContent is now only ever called once per render
             // with the ORIGINAL orgPageSize parameter (DomParser.CascadeApplyPageStyles corrects

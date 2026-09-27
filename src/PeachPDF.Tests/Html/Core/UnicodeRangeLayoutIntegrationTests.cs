@@ -8,8 +8,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using PeachDrawing.Text;
 
-using PeachDrawing.Text.Internal.Fonts;
 
 namespace PeachPDF.Tests.Html.Core
 {
@@ -77,8 +77,8 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public async Task DisjointRanges_SplitWordAcrossTwoFaces_EachCharacterUsesItsDeclaringFont()
         {
-            var upperFamily = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture; // Source Sans 3
-            var lowerFamily = TtfFontDescription.LoadDescription(BundledFonts.Otf).FontFamilyInvariantCulture; // Source Code Pro
+            var upperFamily = TypefaceFixtures.FamilyNameOf(BundledFonts.Ttf); // Source Sans 3
+            var lowerFamily = TypefaceFixtures.FamilyNameOf(BundledFonts.Otf); // Source Code Pro
             Assert.NotEqual(upperFamily, lowerFamily);
 
             var html = $@"<!DOCTYPE html>
@@ -142,8 +142,8 @@ p {{ width: 400px; }}
             // range and must fall back to the second family - the browser "first available font that can
             // render this character" rule, exercised across the font-family stack (and the cmap-coverage
             // path for the rangeless fallback).
-            var primaryFamily = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture; // Source Sans 3
-            var fallbackFamily = TtfFontDescription.LoadDescription(BundledFonts.Otf).FontFamilyInvariantCulture; // Source Code Pro
+            var primaryFamily = TypefaceFixtures.FamilyNameOf(BundledFonts.Ttf); // Source Sans 3
+            var fallbackFamily = TypefaceFixtures.FamilyNameOf(BundledFonts.Otf); // Source Code Pro
 
             var html = $@"<!DOCTYPE html>
 <html><head><style>
@@ -169,7 +169,7 @@ p {{ width: 400px; }}
             // font. Per-codepoint matching must apply that mapping, otherwise a character outside the ranged
             // family's range would wrongly stay on the ranged family (its box default) instead of falling
             // back. We assert the out-of-range character does NOT resolve to the ranged family.
-            var rangedFamily = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture;
+            var rangedFamily = TypefaceFixtures.FamilyNameOf(BundledFonts.Ttf);
 
             var html = $@"<!DOCTYPE html>
 <html><head><style>

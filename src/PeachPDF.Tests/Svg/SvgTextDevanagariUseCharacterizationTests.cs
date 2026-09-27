@@ -1,17 +1,15 @@
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Adapters;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.Svg
 {
@@ -47,11 +45,7 @@ namespace PeachPDF.Tests.Svg
             return Assert.Single(g.DrawStringCalls);
         }
 
-        private static OpenTypeDescriptor Descriptor()
-        {
-            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Devanagari)).Fontface;
-            return new OpenTypeDescriptor("svg-devanagari-test", "svg-devanagari-test", face);
-        }
+        private static Typeface Descriptor() => TypefaceFixtures.Shared(BundledFonts.Devanagari);
 
         [Fact]
         public void ConjunctWithMatra_RealFontLigatesTheConjunctInsteadOfFourIndependentGlyphs()
@@ -60,8 +54,8 @@ namespace PeachPDF.Tests.Svg
             Assert.Equal(4, draw.Features!.Value.UseCategories!.Count);
 
             var descriptor = Descriptor();
-            var shaped = descriptor.Shape(draw.Text, draw.Features.Value);
-            var unshaped = descriptor.Shape(draw.Text, ShapeSettings.Default);
+            var shaped = descriptor.ShapeGlyphs(draw.Text, draw.Features.Value);
+            var unshaped = descriptor.ShapeGlyphs(draw.Text, ShapeSettings.Default);
 
             // ShapeSettings.Default never requests UseCategories, so GsubShaper.ApplyUseShaping
             // (nukt/ccmp/locl/akhn/rphf/half/rkrf/cjct/abvs/blws/pres/psts) never runs for it - it shapes
@@ -80,8 +74,8 @@ namespace PeachPDF.Tests.Svg
             var draw = RenderSingleCall($"""<text x="10" y="50" font-size="20">{Ka}{VowelSignI}</text>""");
 
             var descriptor = Descriptor();
-            var shaped = descriptor.Shape(draw.Text, draw.Features!.Value);
-            var logicalOrderOnly = descriptor.Shape(draw.Text, draw.Features.Value with
+            var shaped = descriptor.ShapeGlyphs(draw.Text, draw.Features!.Value);
+            var logicalOrderOnly = descriptor.ShapeGlyphs(draw.Text, draw.Features.Value with
             {
                 UseCategories = null,
             });
@@ -102,8 +96,8 @@ namespace PeachPDF.Tests.Svg
             Assert.Null(draw.Features!.Value.UseCategories);
 
             var descriptor = Descriptor();
-            var viaSvg = descriptor.Shape(draw.Text, draw.Features.Value).Select(sg => sg.GlyphIndex);
-            var plain = descriptor.Shape(draw.Text, ShapeSettings.Default).Select(sg => sg.GlyphIndex);
+            var viaSvg = descriptor.ShapeGlyphs(draw.Text, draw.Features.Value).Select(sg => sg.GlyphIndex);
+            var plain = descriptor.ShapeGlyphs(draw.Text, ShapeSettings.Default).Select(sg => sg.GlyphIndex);
 
             Assert.Equal(plain, viaSvg);
         }

@@ -17,7 +17,7 @@ namespace PeachPDF.Tests.Adapters
     /// Coordinates are the same user space <c>DrawString</c> paints in, with the baseline at the origin's
     /// y, so a band below the baseline means "under the text". Both bundled fonts are exercised: the
     /// TrueType one has <c>glyf</c> outlines to decode, and the OpenType one has CFF outlines decoded via
-    /// <see cref="PeachDrawing.Text.Internal.Fonts.OpenType.Type2CharstringInterpreter"/> (issue #1117) - a CID-keyed CFF
+    /// the engine's Type2 charstring interpreter (issue #1117) - a CID-keyed CFF
     /// or bitmap font remains the actual "no ink known" case, per the accepted-gap note this narrowed.
     /// </remarks>
     public class GraphicsAdapterInkCrossingsTests

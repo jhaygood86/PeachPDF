@@ -1,0 +1,9 @@
+HintingVariable.ttf, HintingVariableNoHvar.ttf, HintingVariableVertical.ttf, HintingVariableAvar2.ttf and the two golden files
+HintingVariable.golden.json.gz and HintingVariableVariants.golden.json.gz are synthetic test data made by
+generate_hinting_variable_fixtures.py in this directory: random polygons with random TrueType programs, random variation data
+(tuples, control values, advances, metrics, axis maps) and variation tables made wrong on purpose. They contain no third-party
+design and are dedicated to the public domain under CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/).
+
+The golden files hold coordinates, advances and digests that FreeType computed from those fonts and from the variable fonts bundled
+beside them (VariableTest.ttf and the others named in the script), and no font data. Each of those fonts keeps its own license notice
+beside it.

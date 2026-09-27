@@ -392,6 +392,12 @@ namespace PeachPDF.CSS
                 {Keywords.Normal, FontKerningMode.Normal},
                 {Keywords.None, FontKerningMode.None}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, FontOpticalSizingMode> FontOpticalSizingModes =
+            new Dictionary<string, FontOpticalSizingMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, FontOpticalSizingMode.Auto},
+                {Keywords.None, FontOpticalSizingMode.None}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, AutoKeyword> AutoKeywords =
             new Dictionary<string, AutoKeyword>(StringComparer.OrdinalIgnoreCase)
             {
@@ -1007,6 +1013,15 @@ namespace PeachPDF.CSS
                 {Keywords.Normal, WordBreak.Normal},
                 {Keywords.BreakAll, WordBreak.BreakAll},
                 {Keywords.KeepAll, WordBreak.KeepAll}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, LineBreak> LineBreaks =
+            new Dictionary<string, LineBreak>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, LineBreak.Auto},
+                {Keywords.Loose, LineBreak.Loose},
+                {Keywords.Normal, LineBreak.Normal},
+                {Keywords.Strict, LineBreak.Strict},
+                {Keywords.Anywhere, LineBreak.Anywhere}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, OverflowWrap> OverflowWraps =
             new Dictionary<string, OverflowWrap>(StringComparer.OrdinalIgnoreCase)

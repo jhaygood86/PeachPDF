@@ -8,7 +8,7 @@ namespace PeachPDF.CSS
 {
     internal static class ValueExtensions
     {
-        private static bool IsWeight(int value)
+        private static bool IsWeight(double value)
         {
             // CSS Fonts Level 4 font-weight grammar: <number [1,1000]>.
             return value is >= 1 and <= 1000;
@@ -132,6 +132,12 @@ namespace PeachPDF.CSS
                 return new Percent(token.Value);
 
             return null;
+        }
+
+        public static Percent? ToNonNegativePercent(this IReadOnlyList<Token> value)
+        {
+            var percent = value.ToPercent();
+            return percent is { Value: >= 0f } ? percent : null;
         }
 
         public static Percent? ToPercentOrFraction(this IReadOnlyList<Token> value)
@@ -307,10 +313,28 @@ namespace PeachPDF.CSS
             return element > 0 ? element : null;
         }
 
-        public static int? ToWeightInteger(this IReadOnlyList<Token> value)
+        /// <summary>
+        /// A <c>font-weight</c> number: any <c>&lt;number [1,1000]&gt;</c>, fractions included (CSS Fonts 4 section 3.2; <c>350.5</c> is a
+        /// weight). A <c>calc()</c> that is a plain number is folded to its value, as it is for an integer.
+        /// </summary>
+        public static double? ToWeightNumber(this IReadOnlyList<Token> value)
         {
-            var element = value.ToPositiveInteger();
-            return element.HasValue && IsWeight(element.Value) ? element : null;
+            var element = value.OnlyOrDefault();
+            double? number = null;
+
+            if (element is { Type: TokenType.Number } token
+                && double.TryParse(token.Data, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+            {
+                number = parsed;
+            }
+            else if (element is { Type: TokenType.Function } function && CalcParser.IsCalcFamily(function.Data))
+            {
+                var node = CalcParser.Parse(function);
+                if (node is not null && CalcTypeChecker.Check(node) == CalcCategory.Number)
+                    number = CalcEvaluator.Evaluate(node, new CalcContext(1, 0, 0));
+            }
+
+            return number is { } weight && IsWeight(weight) ? weight : null;
         }
 
         public static int? ToBinary(this IReadOnlyList<Token> value)

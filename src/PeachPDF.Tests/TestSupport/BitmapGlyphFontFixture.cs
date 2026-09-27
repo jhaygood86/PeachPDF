@@ -1,5 +1,4 @@
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
+using System;
 using System.Text;
 
 namespace PeachPDF.Tests.TestSupport
@@ -14,14 +13,10 @@ namespace PeachPDF.Tests.TestSupport
         internal sealed record Picture(int Ppem, int GlyphId, byte[] Png, int Width, int Height, int BearingX, int BearingY, int ImageFormat = 17, int IndexFormat = 0);
 
         /// <summary>The glyph id of <paramref name="ch"/> in <paramref name="fontBytes"/>.</summary>
-        internal static int GlyphId(byte[] fontBytes, char ch)
-        {
-            var face = FontFileData.GetOrCreateFrom(fontBytes).Fontface;
-            var descriptor = new OpenTypeDescriptor("bitmap-fixture", "bitmap-fixture", face);
-            return descriptor.CharCodeToGlyphIndex(new Rune(ch));
-        }
+        internal static int GlyphId(byte[] fontBytes, char ch) => TypefaceFixtures.FromBytes(fontBytes).GlyphOf(ch);
 
-        internal static int GlyphCount(byte[] fontBytes) => FontFileData.GetOrCreateFrom(fontBytes).Fontface.maxp.numGlyphs;
+        /// <summary>The number of glyphs in <paramref name="fontBytes"/>.</summary>
+        internal static int GlyphCount(byte[] fontBytes) => SyntheticFontTables.GlyphCount(fontBytes);
 
         /// <summary>The base font with <c>CBLC</c> and <c>CBDT</c> tables holding <paramref name="pictures"/> (index format 1, image formats 17/18, or 19 with index format 2).</summary>
         internal static byte[] WithCbdt(byte[] fontBytes, params Picture[] pictures)

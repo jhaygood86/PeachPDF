@@ -1,29 +1,26 @@
 using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Text.Internal.Fonts;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
-using PeachDrawing.Text.Internal.Text.Shaping.Arabic;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.Html.Core
 {
     /// <summary>
     /// Real-font characterization for Arabic-family cursive joining (issue #533) - unlike
-    /// <see cref="GsubArabicJoiningSyntheticTests"/>'s synthetic byte-blob GSUB tables, this drives
+    /// <c>GsubArabicJoiningSyntheticTests</c>'s synthetic byte-blob GSUB tables, this drives
     /// PeachPDF's actual OpenType reader/shaper against a real font (a "Noto Sans Arabic" subset - see
     /// <see cref="BundledFonts.Arabic"/>) and the real HTML layout pipeline
     /// (<see cref="CssBidiParagraphResolver"/> → <see cref="CssBox.AppendWordsFromText"/> →
-    /// <see cref="DerivedStyle.ActualTextShapingFeatures"/> → <see cref="GsubShaper.Shape"/>), so a
+    /// <see cref="DerivedStyle.ActualTextShapingFeatures"/> → <c>GsubShaper.Shape</c>), so a
     /// genuinely broken wiring anywhere in that chain (not just a bug in one isolated piece) would show
     /// up as a real substitution never happening - the same "prove it isn't a no-op" standard this
     /// repo's own paint/shaping-feature conventions ask for (see <c>ShapingCharacterizationTests</c>'s
@@ -42,14 +39,10 @@ namespace PeachPDF.Tests.Html.Core
         private const string Alef = "ا";
         private const string Lam = "ل";
 
-        private static OpenTypeDescriptor Descriptor()
-        {
-            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Arabic)).Fontface;
-            return new OpenTypeDescriptor("arabic-test", "arabic-test", face);
-        }
+        private static Typeface Descriptor() => TypefaceFixtures.Shared(BundledFonts.Arabic);
 
-        private static int[] ShapeGlyphIds(OpenTypeDescriptor descriptor, string text, IReadOnlyList<ArabicJoiningForm> forms) =>
-            descriptor.Shape(text, new ShapeSettings(ScriptTag: "arab", JoiningForms: forms))
+        private static int[] ShapeGlyphIds(Typeface descriptor, string text, IReadOnlyList<ArabicJoiningForm> forms) =>
+            descriptor.ShapeGlyphs(text, new ShapeSettings(ScriptTag: "arab", JoiningForms: forms))
                 .Select(g => g.GlyphIndex).ToArray();
 
         [Fact]
@@ -63,11 +56,11 @@ namespace PeachPDF.Tests.Html.Core
             // A single JoiningForms entry of None keeps the positional-substitution/cursive-attachment
             // machinery a no-op here, isolating this test to the mirror-remap step alone.
             var descriptor = Descriptor();
-            var shaped = descriptor.Shape("(", new ShapeSettings(
+            var shaped = descriptor.ShapeGlyphs("(", new ShapeSettings(
                 JoiningForms: [ArabicJoiningForm.None], ReverseForDisplay: true));
 
             Assert.Single(shaped);
-            var expectedMirroredGlyphIndex = descriptor.CharCodeToGlyphIndex(new System.Text.Rune(')'));
+            var expectedMirroredGlyphIndex = descriptor.GlyphOf(new System.Text.Rune(')'));
             Assert.NotEqual(0, expectedMirroredGlyphIndex);
             Assert.Equal(expectedMirroredGlyphIndex, shaped[0].GlyphIndex);
         }
@@ -92,7 +85,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void ThreeLetterWord_EveryPositionGetsItsOwnDistinctForm()
         {
-            // "بيت" (BEH YEH TEH) - ArabicJoiningShaper.Resolve already proved (unit-tested) this
+            // "بيت" (BEH YEH TEH) - ArabicJoining.Resolve already proved (unit-tested) this
             // resolves to [Init, Medi, Fina]. This font's own `ccmp` feature decomposes each of these
             // three dotted letters into a base glyph + a separate combining-mark glyph for the dot(s)
             // (confirmed directly via fontTools) BEFORE isol/init/medi/fina ever run - GsubShaper.Shape's
@@ -102,10 +95,10 @@ namespace PeachPDF.Tests.Html.Core
             // differs per position - the second (the dot mark) never changes with joining form.
             var descriptor = Descriptor();
             var word = Beh + Yeh + Teh;
-            var forms = ArabicJoiningShaper.Resolve([Beh[0], Yeh[0], Teh[0]]);
+            var forms = ArabicJoining.Resolve([Beh[0], Yeh[0], Teh[0]]);
 
-            var shaped = descriptor.Shape(word, new ShapeSettings(ScriptTag: "arab", JoiningForms: forms));
-            var isolatedForms = descriptor.Shape(word, new ShapeSettings(ScriptTag: "arab",
+            var shaped = descriptor.ShapeGlyphs(word, new ShapeSettings(ScriptTag: "arab", JoiningForms: forms));
+            var isolatedForms = descriptor.ShapeGlyphs(word, new ShapeSettings(ScriptTag: "arab",
                 JoiningForms: [ArabicJoiningForm.Isol, ArabicJoiningForm.Isol, ArabicJoiningForm.Isol]));
 
             // Each letter decomposes into exactly 2 glyphs (base + dot mark) under both requests.
@@ -134,9 +127,9 @@ namespace PeachPDF.Tests.Html.Core
             // GsubShaper.GetActiveLookupIndices' own remarks for what that broke in real emoji fonts.
             var descriptor = Descriptor();
 
-            var withoutForms = descriptor.Shape(Beh, ShapeSettings.Default);
-            var withForms = descriptor.Shape(Beh, new ShapeSettings(
-                ScriptTag: "arab", JoiningForms: ArabicJoiningShaper.Resolve([Beh[0]])));
+            var withoutForms = descriptor.ShapeGlyphs(Beh, ShapeSettings.Default);
+            var withForms = descriptor.ShapeGlyphs(Beh, new ShapeSettings(
+                ScriptTag: "arab", JoiningForms: ArabicJoining.Resolve([Beh[0]])));
 
             Assert.Equal(2, withoutForms.Count);
 
@@ -159,12 +152,12 @@ namespace PeachPDF.Tests.Html.Core
             // own remarks) is what lets this contextual rule ever match at all - the rlig lookup's own
             // coverage is keyed on the substituted glyph names, not the nominal ones.
             var descriptor = Descriptor();
-            var forms = ArabicJoiningShaper.Resolve([Lam[0], Alef[0]]);
+            var forms = ArabicJoining.Resolve([Lam[0], Alef[0]]);
 
-            var withRlig = descriptor.Shape(Lam + Alef, new ShapeSettings(
+            var withRlig = descriptor.ShapeGlyphs(Lam + Alef, new ShapeSettings(
                 Ligatures: LigatureSet.Default, ScriptTag: "arab", JoiningForms: forms))
                 .Select(g => g.GlyphIndex).ToArray();
-            var positionalOnly = descriptor.Shape(Lam + Alef, new ShapeSettings(
+            var positionalOnly = descriptor.ShapeGlyphs(Lam + Alef, new ShapeSettings(
                 Ligatures: LigatureSet.None, ScriptTag: "arab", JoiningForms: forms))
                 .Select(g => g.GlyphIndex).ToArray();
 
@@ -205,14 +198,14 @@ p {{ width: 400px; direction: ltr; }}
 
             // Exactly what painting itself asks for - see CssBox.ResolveWordShapingFeatures: shape
             // word.Text (still true logical order) with ReverseForDisplay requested.
-            var painted = descriptor.Shape(word.Text, new ShapeSettings(
+            var painted = descriptor.ShapeGlyphs(word.Text, new ShapeSettings(
                 Ligatures: LigatureSet.Default, ScriptTag: word.ScriptTag,
                 JoiningForms: word.EffectiveJoiningForms, ReverseForDisplay: word.DisplayOrderReversed));
 
             // The reference shape: true logical order, rlig applied, no reversal requested - what GSUB/
             // GPOS themselves produce before ReverseForDisplay's own final step runs.
-            var trueLogicalOrderWithRlig = descriptor.Shape(Lam + Alef, new ShapeSettings(
-                Ligatures: LigatureSet.Default, ScriptTag: "arab", JoiningForms: ArabicJoiningShaper.Resolve([Lam[0], Alef[0]])));
+            var trueLogicalOrderWithRlig = descriptor.ShapeGlyphs(Lam + Alef, new ShapeSettings(
+                Ligatures: LigatureSet.Default, ScriptTag: "arab", JoiningForms: ArabicJoining.Resolve([Lam[0], Alef[0]])));
 
             Assert.Equal(2, painted.Count);
             Assert.Equal(2, trueLogicalOrderWithRlig.Count);
@@ -255,7 +248,7 @@ p {{ width: 400px; }}
             Assert.True(word.DisplayOrderReversed);
 
             var descriptor = Descriptor();
-            var shaped = descriptor.Shape(word.Text!, new ShapeSettings(
+            var shaped = descriptor.ShapeGlyphs(word.Text!, new ShapeSettings(
                 Ligatures: LigatureSet.Default, ScriptTag: word.ScriptTag,
                 JoiningForms: word.EffectiveJoiningForms, ReverseForDisplay: word.DisplayOrderReversed));
 
@@ -266,7 +259,7 @@ p {{ width: 400px; }}
             for (var i = 0; i < shaped.Count; i++)
             {
                 absoluteX[i] = pen + shaped[i].XOffset;
-                pen += descriptor.GlyphIndexToWidth(shaped[i].GlyphIndex) + shaped[i].XAdvanceDelta;
+                pen += descriptor.AdvanceOf(shaped[i].GlyphIndex) + shaped[i].XAdvanceDelta;
             }
 
             // Every mark glyph (ClusterLength 0 - a ccmp-decomposed combining mark, e.g. this font's own
@@ -275,7 +268,7 @@ p {{ width: 400px; }}
             // separates "correctly attached" (single- to low-triple-digit design-unit deltas in this
             // font) from the pre-fix bug, which was off by roughly a whole base advance (up to ~1093
             // units for this font's widest "fina" swash - see the InlineData remarks above).
-            var halfEm = descriptor.UnitsPerEm / 2.0;
+            var halfEm = descriptor.Metrics.UnitsPerEm / 2.0;
             for (var i = 0; i < shaped.Count; i++)
             {
                 if (shaped[i].ClusterLength != 0)

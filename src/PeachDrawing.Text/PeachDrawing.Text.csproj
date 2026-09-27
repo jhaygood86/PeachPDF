@@ -4,7 +4,7 @@
 		<AssemblyName>PeachDrawing.Text</AssemblyName>
 		<RootNamespace>PeachDrawing.Text</RootNamespace>
 		<PackageId>PeachDrawing.Text</PackageId>
-		<Description>Font loading, OpenType shaping, bidirectional text and Unicode text primitives for .NET, with no dependencies. The text engine PeachPDF renders HTML with.</Description>
+		<Description>Font loading and matching, OpenType shaping (including variable fonts, colour glyphs and SVG glyphs), bidirectional text, Unicode line breaking and segmentation, and paragraph layout for .NET, with no dependencies. The text engine PeachPDF renders HTML with.</Description>
 		<PackageTags>fonts;opentype;truetype;woff;text;shaping;bidi;unicode;hyphenation;typography</PackageTags>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageIcon>peach.png</PackageIcon>
@@ -48,20 +48,24 @@
 		<EmbeddedResource Include="Internal\Text\Resources\ArabicJoining\*.br" />
 		<None Remove="Internal\Text\Resources\Use\*.br" />
 		<EmbeddedResource Include="Internal\Text\Resources\Use\*.br" />
+		<!-- Word lists for Thai, Lao, Khmer and Burmese line breaking: raw DEFLATE rather than Brotli, so a WebAssembly host can read them. -->
+		<None Remove="Internal\Text\Resources\Dictionaries\*.dict" />
+		<EmbeddedResource Include="Internal\Text\Resources\Dictionaries\*.dict" />
 	</ItemGroup>
 	<ItemGroup>
 		<!--
-			PeachPDF reads only this library's public API, and the compiler enforces it: there is no InternalsVisibleTo
-			for PeachPDF. What remains is a TEMPORARY bridge for the engine's own tests, which still live in
-			PeachPDF.Tests. It goes when they move to a test project of this library.
+			PeachPDF and PeachPDF.Tests read only this library's public API, and the compiler enforces it: the only
+			assembly granted InternalsVisibleTo is the engine's own test project.
 		-->
-		<InternalsVisibleTo Include="PeachPDF.Tests" />
 		<InternalsVisibleTo Include="PeachDrawing.Text.Tests" />
 	</ItemGroup>
 	<ItemGroup>
 		<!-- The notices the licences of the code and data in this package require it to carry. -->
 		<None Include="README.md" Pack="true" PackagePath="\" />
 		<None Include="THIRD-PARTY-LICENSES.md" Pack="true" PackagePath="\" />
+		<!-- The FreeType Project License, unaltered, and the record of what was changed from FreeType's files (FTL section 2). -->
+		<None Include="Internal\Hinting\FreeType\FTL.TXT" Pack="true" PackagePath="\" />
+		<None Include="Internal\Hinting\FreeType\PORTING-NOTES.md" Pack="true" PackagePath="\FreeType-PORTING-NOTES.md" />
 		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
 		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
 	</ItemGroup>

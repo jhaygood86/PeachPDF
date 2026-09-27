@@ -1,15 +1,13 @@
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text.Unicode;
 using System.IO;
 using System.Text;
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
-using PeachDrawing.Text.Internal.Text.Bidi;
 using Xunit;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 {
@@ -23,19 +21,15 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     /// for a mirrored pair like parentheses, where the extracted character isn't just out of order but
     /// the wrong character entirely. <c>logicalText</c> itself must be positionally aligned with the
     /// visual string passed alongside it (see <see cref="CMapInfo.AddShapedText"/>'s own remarks) - these
-    /// tests build it via <see cref="BidiMirrorResolver.ReverseRunes"/> from a stable source string, the
+    /// tests build it via <see cref="Bidi.Reverse"/> from a stable source string, the
     /// same way a real caller (<c>FragmentPainter.Text.cs</c>, <c>MarginBoxRenderer</c>) does.
     /// </summary>
     public class CMapInfoLogicalTextTests
     {
-        private static OpenTypeDescriptor Descriptor()
-        {
-            var face = FontFileData.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
-            return new OpenTypeDescriptor("logicaltext-test", "logicaltext-test", face);
-        }
+        private static Typeface Descriptor() => TypefaceFixtures.Shared(BundledFonts.Ttf);
 
-        private static int GlyphFor(OpenTypeDescriptor descriptor, char c) =>
-            descriptor.CharCodeToGlyphIndex(new Rune(c));
+        private static int GlyphFor(Typeface descriptor, char c) =>
+            descriptor.GlyphOf(new Rune(c));
 
         [Fact]
         public void AddShapedText_WithDifferingLogicalText_RemapsEachGlyphToItsTrueLogicalSource()
@@ -51,7 +45,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // only, no mirroring), exactly as a real caller builds it.
             const string source = "(AB)";
             const string visual = "(BA)";
-            var logicalText = BidiMirrorResolver.ReverseRunes(source);
+            var logicalText = Bidi.Reverse(source);
 
             cmapInfo.AddShapedText(visual, ShapeSettings.Default, logicalText);
 
@@ -77,13 +71,13 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // visual string, the way a plain symmetric "(ff)" would.
             const string source = "(off)";
             const string visual = "(ffo)"; // reverse("(off)") + mirror each char: ')f f o (' -> '( f f o )'
-            var logicalText = BidiMirrorResolver.ReverseRunes(source);
+            var logicalText = Bidi.Reverse(source);
 
             var descriptor = Descriptor();
             var cmapInfo = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
             cmapInfo.AddShapedText(visual, ShapeSettings.Default, logicalText);
 
-            var shaped = descriptor.Shape(visual, ShapeSettings.Default);
+            var shaped = descriptor.ShapeGlyphs(visual, ShapeSettings.Default);
             var ligatureGlyph = Assert.Single(shaped, g => g.ClusterLength > 1);
             Assert.Equal(2, ligatureGlyph.ClusterLength);
 

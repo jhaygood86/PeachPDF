@@ -113,6 +113,11 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         public const string Cff = "CFF ";
 
         /// <summary>
+        /// PostScript font program of a variable font (compact font format, version 2).
+        /// </summary>
+        public const string Cff2 = "CFF2";
+
+        /// <summary>
         /// Vertical Origin.
         /// </summary>
         public const string VOrg = "VORG";
@@ -142,6 +147,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
         /// <summary>Standard bitmap graphics (Apple's bitmap colour emoji format).</summary>
         public const string Sbix = "sbix";
+
+        /// <summary>SVG glyph documents (the tag has a trailing space).</summary>
+        public const string Svg = "SVG ";
 
         // --- Color Tables ---
 

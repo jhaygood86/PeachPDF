@@ -1,7 +1,6 @@
 using PeachDrawing.Text.Shaping;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
-using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;

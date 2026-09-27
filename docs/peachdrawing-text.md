@@ -11,8 +11,8 @@ dotnet add package PeachDrawing.Text
 > **Status: pre-1.0.** The library is being opened up area by area. Today the public surface is font loading and
 > matching (`FontSet` and the types around it), what a `Typeface` says about itself (metrics, glyph mapping and advances),
 > shaping, glyph outlines and colour glyphs, the `MATH` table, and the `PeachDrawing.Text.Unicode` namespace, all described
-> below. Font subsetting for embedding, described below, is public too. Paragraph layout is still internal to the package, so
-> PeachPDF is the only consumer of it, and it will be published in a later release. Until 1.0, the public API may change between releases.
+> below. Font subsetting for embedding, and paragraph layout (`PeachDrawing.Text.Layout`), described below, are public too.
+> Until 1.0, the public API may change between releases.
 
 ## What the engine does
 
@@ -22,9 +22,11 @@ dotnet add package PeachDrawing.Text
 - **Shaping:** GSUB and GPOS (ligatures, kerning, mark attachment, contextual lookups), Arabic and Syriac joining, the
   Universal Shaping Engine for Devanagari, Bengali, Gujarati and Tamil, default-ignorable handling, and `cmap` format 14
   variation sequences.
-- **Outlines and colour:** glyph outlines for `glyf` and CFF, COLR v0 and v1 with CPAL, and CBDT/CBLC and sbix bitmaps.
+- **Outlines and colour:** glyph outlines for `glyf`, CFF and CFF2, COLR v0 and v1 with CPAL, CBDT/CBLC and sbix bitmaps, and the SVG documents of the `SVG ` table.
+- **Variable fonts:** the axes of a font and reading it at a location (`Typeface.WithAxes`): TrueType and CFF2 outlines, advance widths and font-wide metrics follow the axes.
 - **Mathematics:** the `MATH` table: layout constants, per-glyph italics corrections and accent attachment, and the
   variants and assemblies of stretchy glyphs.
+- **Text layout:** a paragraph of styled text, laid out at any width into lines of placed glyph runs, with hit testing, carets and selection boxes.
 - **Unicode:** the Unicode Line Breaking Algorithm (UAX #14) and the grapheme cluster, word and sentence boundaries
   of UAX #29, all checked against the Unicode Consortium's conformance files; the Unicode Bidirectional Algorithm, script itemization, vertical orientation, emoji presentation, and
   TeX/Liang hyphenation for 73 languages.
@@ -56,8 +58,13 @@ if (brand.TryMatch(new TypefaceQuery(Weight: 600, IsItalic: true), out TypefaceM
 }
 ```
 
-`TryMatch` follows CSS Fonts 4 face matching: the slant first, then the width, then the weight, taking the nearest face
-when none is exact. A face is taken to cover the characters of its `unicode-range` if it has one, and the ones its
+`TryMatch` follows CSS Fonts 4 face matching: the width first, then the slant (upright, italic or oblique), then the
+weight, taking the nearest face when none is exact, so a request for condensed italic text gets the condensed face of a
+family whose condensed face is upright and whose italic face is of normal width, and the lean is faked. Among faces that
+declare an oblique range, the query's `ObliqueAngle` chooses the one that holds the angle or else the nearest; a face
+declared italic beats an oblique range for an italic request with no angle, and the other way round when an angle is
+given. The weight is a number, not a whole number: `350.5` is a weight, and a face whose range holds it is preferred to
+one that only holds 350. A face is taken to cover the characters of its `unicode-range` if it has one, and the ones its
 `cmap` maps otherwise. `Synthesis` says what the caller has to fake because the face falls short: bold when 600 or more
 was asked for and the face is lighter, italic when italic was asked for and the face is upright.
 
@@ -152,7 +159,7 @@ foreach (PlacedGlyph glyph in run.Glyphs)
 `Typeface.TryGetOutline` reads the shape of a glyph as data: a `GlyphOutline` of closed contours, each a start point and a list
 of segments that are straight lines or cubic curves, in design units with the y axis up. A glyph is filled by the nonzero
 winding rule, which is how it gets its counters. TrueType quadratic curves are raised to cubic ones, so a consumer has two kinds
-of segment to draw. Nothing is grid-fitted.
+of segment to draw. This form is never grid-fitted; for text drawn into pixels, see [Grid fitting (hinting)](#grid-fitting-hinting).
 
 ```csharp
 using PeachDrawing.Text.Outlines;
@@ -175,9 +182,159 @@ if (face.TryMapRune(new Rune('g'), out ushort glyph) && face.TryGetOutline(glyph
   A version 1 glyph is a paint graph: `GetColorPaint` returns the root `ColorPaint`, and the sealed types that derive from it are
   named as the `COLR` specification names its paint formats (`PaintSolid`, `PaintLinearGradient`, `PaintRadialGradient`,
   `PaintSweepGradient`, `PaintGlyph`, `PaintTransform`, `PaintComposite`, `PaintColrGlyph`, and `PaintColrLayers`, whose layers
-  are read with `GetColorLayerPaint`). Variable paints are read at the font's default instance.
+  are read with `GetColorLayerPaint`). At a location of a variable font (`WithAxes`) the paints are read there: the variable formats
+  (`PaintVarSolid`, the gradients, `PaintVarTransform` and the translate, scale, rotate and skew variants), their colour lines and the
+  clip boxes have the deltas of the font's `COLR` variation store added, so the nodes carry the numbers that apply at the location (an
+  opacity that a delta pushes outside 0 to 1 is kept inside it, and colour stops a delta moves out of order are put back in order). Nodes are
+  made for each location, and a caller needs to know nothing about variations. `TryGetColorClipBox` gives the rectangle that holds everything a
+  glyph paints (the font's `ClipList`), when the font has one for it. The angles of a sweep gradient are counter-clockwise from the
+  positive x axis, as the specification's half-turn bias is undone.
+- **Colour glyphs from SVG.** A font with an `SVG ` table reports `HasSvgGlyphs`, and `TryGetSvgGlyph` gives the SVG document that draws a glyph (gzip-compressed
+  documents are inflated, up to 4 MiB), the id of the element in it that is the glyph (`glyph` and the glyph's number), and the range of glyphs the document covers.
+  The library does not render SVG: a caller draws the document with the glyph's origin at (0, 0), y pointing down and one design unit as one unit, with the font's
+  palette colours for `var(--color0)` and the text's fill for `context-fill`. The document comes from the font file and is untrusted.
 - **Colour glyphs from pictures.** A font whose colour glyphs are bitmaps (`CBDT`/`CBLC` or `sbix`) reports
   `HasBitmapGlyphs`, and `TryGetBitmap` gives the picture of a glyph from the strike best suited to a size, with its bearings.
+
+### Grid fitting (hinting)
+
+A font can carry hints that move the points of a glyph, at one size, so that stems, x-heights and baselines land on whole pixels: a
+TrueType font as small programs, a font with CFF (PostScript) outlines as stem hints and blue zones in its charstrings. That makes small
+text drawn into a pixel raster sharper, and means nothing for vector output. An `OutlineRequest` asks for it: a size in pixels per em and
+a `GridFitting`.
+
+```csharp
+var request = new OutlineRequest { PixelsPerEm = 11, GridFitting = GridFitting.Standard };
+
+if (face.TryGetOutline(glyph, request, out GlyphOutline fitted))
+{
+    // fitted.IsGridFitted: the font's hints were applied. Coordinates are in pixels at 11 ppem, y up, origin at (0, 0).
+    // fitted.GridFittedAdvance: the advance after fitting, rounded to a whole number of pixels as the font's hinting leaves it
+    // (in Monochrome mode from the font's hdmx table where it has one for the size).
+}
+```
+
+- **The size is the size the font is fitted at.** It may be fractional, but a TrueType font whose `head` table asks for whole pixels per
+  em (nearly all do) is fitted at the nearest whole size, as in FreeType: asking for 11.4 gives an outline fitted at 11, which
+  `GlyphOutline.PixelsPerEm` reports. Every fractional size of such a font shares one cached fitting. A font with CFF outlines is fitted
+  at the size asked for.
+- **`GridFitting.None`** is the default and gives exactly the design-unit outline of the overload without a request.
+- **`GridFitting.Standard`** runs the font's instructions in the interpreter FreeType uses by default (its "v40" behaviour). It fits the
+  vertical direction only, so glyphs keep the horizontal positions and widths of the design, which is what anti-aliased text wants. It
+  applies the compatibility adjustments that modern fonts, built for that interpreter, rely on.
+- **`GridFitting.Monochrome`** runs them in the original interpreter (FreeType's "v35"), which fits both directions, as for text drawn
+  without anti-aliasing.
+- **Fonts with CFF outlines** are fitted by Adobe's CFF engine, the one FreeType uses: the horizontal and vertical stem hints of a glyph
+  and the blue zones of its font (the heights of the baseline, the x-height, the caps and the ascenders, with their overshoots) place
+  stems and flat edges on whole pixels, overshoots are suppressed at small sizes, and hints are substituted where the charstring says so.
+  It fits vertically only, so the two modes give one outline; a font whose `LanguageGroup` says it is ideographic gets the em box
+  alignment of ideographic fonts. The advance is the design advance rounded to a whole pixel. A variable font with CFF2 outlines is fitted
+  the same way at the location of the typeface (`WithAxes`): the operands of its hints, and the blue zones and stem widths of its
+  Private DICTs, are blended for the location before the hints are applied, so a weight or width moves the stems the way the font's
+  designer set out. The blending is done in FreeType's 16.16 arithmetic, and the outlines are FreeType's exactly (see the note on variable
+  fonts below).
+- **Stem darkening** (`OutlineRequest.StemDarkening`, off by default, as it is in FreeType) makes the stems of a CFF font's glyphs a little heavier
+  when it is grid-fitted, which offsets the way anti-aliasing thins the thinnest stems of small text. Adobe's engine decides the amount from how thick a
+  stem is on the pixel grid: the thinnest stems gain the most, and a stem of more than about two and a third pixels (that is, text at a large size) gains
+  nothing. It changes the points of the outline and not the advance, applies to fonts with CFF outlines only (a TrueType font gives the same outline
+  whatever the flag says), and is ignored for `GridFitting.None`. The fitted outlines of the two settings are cached apart.
+
+```csharp
+var request = new OutlineRequest { PixelsPerEm = 9, GridFitting = GridFitting.Standard, StemDarkening = true };
+```
+- **When a font cannot be fitted**, nothing throws: a TrueType font without `fpgm`/`prep`/glyph programs, a font that has neither
+  TrueType nor CFF outlines, a size the font's own programs (or, for CFF, the engine: 2000 ppem at most) refuse, or a glyph whose program
+  or charstring is broken, gives the scaled design outline with `IsGridFitted` false. A TrueType font may also switch its own glyph
+  instructions off at a size, and is then treated the same way. `TryGetGridFittedAdvance` gives the fitted advance directly, including
+  for glyphs that have no ink.
+- **Untrusted fonts are safe to hint.** The instruction interpreter bounds every table access, the number of instructions run, the loop
+  work of a program and the depth of composite glyphs; the CFF engine bounds the instructions of a charstring, the depth of subroutines,
+  the operand stack and the number of points; and a font that goes past a limit is answered with the unhinted outline. Hinted outlines
+  are cached per face, size and mode.
+- **Layout is not hinted.** `GetAdvance` and the metrics stay unhinted; fitting is a property of an outline drawn at one size, and a
+  caller that lays text out keeps the design advances so that layout does not change with the size of the device.
+- **Variable fonts** are hinted at the location of the typeface (`WithAxes`) as FreeType hints a variable font, in its own 16.16 arithmetic,
+  so the fitted points are FreeType's exactly. The normalized coordinates of a location are made from its design coordinates the way
+  FreeType makes them (the ranges of the axes and the `avar` table, version 2 included, in 16.16: not the 2.14 the variation tables are
+  written in, which the unhinted outlines of a variable font use). With TrueType outlines the points are moved by the `gvar` deltas first
+  (the scalar of each tuple, the sum of the deltas, the points a tuple leaves out interpolated as the `IUP` instruction would, and the
+  rounding of the sum are FreeType's) and then the instructions run, on the control values that the font's `cvar` table has moved for the
+  location. The advances follow `HVAR`, and the vertical ones `VVAR`, or the phantom points of `gvar` for a font that has none, and `MVAR`
+  moves the ranges of the `gasp` table (below) and the font's typographic ascender and descender. With CFF2 outlines the operands of the
+  hints and the Private DICTs are blended for the location (above). A variation table that is wrong is not an error: a glyph whose
+  variation data cannot be read is answered with the unhinted outline, and so is every glyph of a location FreeType would refuse to set
+  (a `cvar` or `gvar` table with a bad header, for example), and a glyph or a set of control values whose tables ask for an unreasonable
+  amount of work (more than 16 million deltas) is refused. Fitted outlines are cached per location.
+- **The font's `gasp` table decides which sizes are fitted.** A font that has one says, for each range of sizes, whether it wants
+  grid-fitting there (`GASP_GRIDFIT`); fonts often turn hinting off at the smallest sizes, where their programs do more harm than good,
+  and a request for fitting at such a size is answered as for a font that cannot be fitted: the scaled design outline with `IsGridFitted`
+  false, and no fitted advance. The size compared is the whole number of pixels per em the outline is fitted at (11.4 asked of a font that
+  wants whole sizes is 11). A size that no range reaches, a font with no `gasp` table, and a table of a version above 1 or one that is cut
+  short are treated as saying nothing, and the font is fitted. Only `GASP_GRIDFIT`, the flag for standard rasterization, is looked at, for
+  both modes; the flags for ClearType (`GASP_SYMMETRIC_GRIDFIT`, `GASP_SYMMETRIC_SMOOTHING`) are not, since nothing here draws with it.
+  At a location of a variable font the `MVAR` table moves the largest size of the first ten ranges (its `gsp0` to `gsp9` values), so which
+  sizes are fitted can change with the weight or the width. `LTSH` and `VDMX` are not read (FreeType does not use them to load a glyph
+  either). Pixels are square: one size serves both directions.
+
+The instruction interpreter and the CFF engine are ports of FreeType's (the CFF engine is the one Adobe contributed to FreeType), which
+is why the package carries the FreeType Project License notices and Adobe's (see [Licences](#licences)). They give the same fitted
+points as FreeType 2.14.3, in 26.6 fixed point, for every font the test suite checks them with, including fonts made of random
+programs and charstrings, and variable fonts at many locations of their design spaces, that FreeType is compared with point for point.
+
+## Variable fonts
+
+A variable font is one file that holds a whole design space: axes such as weight and width, and the outlines and metrics at every
+point in between. `Typeface.IsVariable` says whether a face is one, `Typeface.Axes` lists its axes (a `VariationAxis` with a tag, a
+range and a default; the tags the specification registers are in `AxisTags`), and `Typeface.NamedVariations` lists the named
+locations the font declares. `Typeface.WithAxes` returns the typeface at a location.
+
+```csharp
+if (face.IsVariable)
+{
+    Typeface bold = face.WithAxes([new AxisSetting(AxisTags.Weight, 700)]);
+    Typeface condensedBold = bold.WithAxes([new AxisSetting(AxisTags.Width, 80)]);   // builds on what bold has
+
+    ushort glyph = ...;
+    int advance = condensedBold.GetAdvance(glyph);                  // design units at that location
+    bool hasOutline = condensedBold.TryGetOutline(glyph, out GlyphOutline outline);
+}
+```
+
+- An axis you leave out keeps the value the typeface has, a tag the font has no axis for is ignored, and a value outside the axis's
+  range is clamped to it. A value is rounded to the nearest 1/64 of a unit, so values that close are one location. Asking for the
+  same location again gives an equal `Typeface`, and every axis at its default gives the font's own default typeface. A `NaN`
+  means the axis's default, axis tags are compared exactly (`wght`, not `WGHT`), and for a tag given twice the last one counts.
+- `IsBold`, `IsItalic` and the weight the family matching sees are the file's own, whatever the location is: a location changes how
+  the glyphs are drawn, not what the file declares.
+- A `TypefaceQuery` given to `TypefaceFamily.TryMatch` is answered with the face of a variable font at the location the query asks for:
+  its weight, width class and italic-ness set the `wght`, `wdth` and `ital` axes (or `slnt`, for a font that has a slant axis and no
+  italic one), the query's own `Axes` are applied after those, and nothing is left for the caller to fake bold or italic where an axis
+  did it. `Typeface.VariationKey` names the location, so a cache of things made from a typeface can tell two instances of one font apart.
+- A query can ask for a width as a percentage of the normal width (`TypefaceQuery.WidthPercent`, where the width class only has nine
+  places) and for an oblique angle (`ObliqueAngle`, 14 degrees when it is left out), which set the `wdth` and `slnt` axes.
+- A font added with a range (`AddOptions.WeightRange`, `WidthRange` and `ObliqueRange`, the `AxisRange` form of the `@font-face`
+  descriptors) is matched as covering every value in it: a request inside the range is exact, and one outside it is measured from the
+  nearest end. The axes of a variable face are then set to the request kept inside the range, and no bold or italic is left to fake that
+  the axes supply. A face oblique over a range that includes 0 also serves upright text. A variable font added with no range covers the
+  range of its own weight, width and slant axes.
+- Outlines (including composite glyphs), advance widths, the font-wide metrics of `Typeface.Metrics` and shaping advances follow the
+  location. So do the vertical advances (`GetVerticalAdvance`: `VVAR`, or the phantom points of `gvar` in a font without it) and, in a font
+  with a `VORG` table, the vertical origins (`GetVerticalOrigin`, through the vertical origin mapping of `VVAR`); the origin of a font
+  without `VORG` is the `vhea` ascent, which `MVAR` (`vasc`) varies. The font bounding box (`TypefaceMetrics.XMin` to `YMax`) is
+  worked out from the glyphs as they are drawn at the location, since no table says how it moves: for TrueType outlines the box of every
+  point of every glyph (off-curve points included, as a font's own glyph bounds are), for `CFF2` outlines the box of the curves, each
+  rounded to whole design units; a font with more glyphs to read than the engine's limits allow keeps `head`'s box. What a location
+  changes is what the `gvar`, `HVAR`, `VVAR`, `MVAR` and `avar` tables of a font with TrueType outlines say (`avar` version 2,
+  in which the value of an axis depends on the others, included), plus the deltas of the `GPOS` value records and anchors (kerning, single adjustments, mark and cursive attachment) that name the `GDEF`
+  item variation store, and the `FeatureVariations` of `GSUB` and `GPOS` (a feature that uses other lookups at a region of the design
+  space, such as `rvrn` glyph swaps at a weight).
+- A variable font with CFF2 outlines (a `CFF2` table) is read the same way: `TryGetOutline` runs the glyph's charstring with every
+  `blend` resolved at the location (the `vsindex` operator and the `vsindex` of each Font DICT's Private DICT choose the regions), so the
+  coordinates of an outline at a location between the masters are not whole numbers. The layout tables and the advances (`HVAR`) follow the
+  location as they do for TrueType outlines. CFF2 outlines are [grid-fitted](#grid-fitting-hinting) at the location, and a font with only
+  `COLR` colour glyphs over CFF2 outlines is not reported as a colour font, as for CFF.
+- `TypefaceExporter.ExportSubset` (see Embedding below) writes an instance as a static font, with the location's variations applied
+  to the outlines and metrics of the glyphs you ask for and no hinting instructions, because a PDF cannot embed a variable font.
 
 ## Mathematics: `PeachDrawing.Text.OpenType`
 
@@ -229,12 +386,117 @@ byte[] fontFile = subset.Data.ToArray();
 - A colour glyph that has no outline of its own (its shapes are its layers) is given a small outline, so a reader can still
   select the text it stands for.
 - A subset carries no name table, so it is meant to be embedded, not loaded back into a `FontSet`.
+- For a typeface from `WithAxes` the subset is a static font at that location: each glyph's points and component offsets have the
+  variations applied, the side bearings and advances of the glyphs are set to match, and the hinting tables are left out.
 - A font with CFF outlines is not cut down: it is returned whole, and `IsSubset` is `false`.
+- A variable font with CFF2 outlines is always written afresh, at its default location or at the one `WithAxes` gave: each glyph you
+  ask for is drawn at the location and written as a charstring of lines and curves over whole-number coordinates (no hints, no
+  subroutines), in a CID-keyed OpenType font with CFF outlines whose glyph indices are its CIDs. `HasCffOutlines` is `true` and
+  `IsSubset` is `true`; a glyph that was not asked for is an empty glyph in its place.
 - `keepCharacterMap` says whether the character map stays. A font whose text is encoded as glyph indices is smaller without it.
 
 What a font descriptor records about a face comes from the members you already have: `Typeface.Metrics` (with `IsSymbolic`,
 `IsFixedPitch`, `HasSerifs`, `IsItalicStyle` and `FirstCharIndex` for the descriptor flags), `Typeface.GetAdvance` for widths,
-`Typeface.FullName` for a base font name, and `Typeface.ContentHash` to key a cache of what you made from a face.
+`Typeface.FullName` for a base font name, and `Typeface.ContentHash` (a 128-bit hash of the font data, so two different fonts never share one) to key a cache of what you made from a face.
+
+## Laying out text: `PeachDrawing.Text.Layout`
+
+`ParagraphBuilder` collects text and styles, and `Build()` prepares a `Paragraph`: the text's direction (UAX #9), scripts, joining and line break
+opportunities (UAX #14) are worked out once, and the paragraph can then be laid out at any width. A `Paragraph` is immutable and can be
+laid out from several threads.
+
+```csharp
+var builder = new ParagraphBuilder(new RunStyle(typeface, 16))
+    .SetStyle(new ParagraphStyle { Align = TextAlign.Start, OverflowWrap = OverflowWrap.BreakWord });
+builder.AddText("Some ").PushRun(new RunStyle(bold, 24)).AddText("large").PopRun().AddText(" text.");
+Paragraph paragraph = builder.Build();
+
+ParagraphLayout layout = paragraph.Layout(availableWidth: 300);
+foreach (LineBox line in layout.Lines)
+{
+    foreach (PlacedRun run in line.Runs)          // left to right, in the order they are drawn
+    {
+        // run.Glyphs.Glyphs are in drawing order; run.X is the left edge and run.Baseline the baseline, in layout units.
+    }
+}
+```
+
+- **Lines.** A line breaks where UAX #14 allows and the next word does not fit. The space at a soft break hangs at the end of the line: it is in
+  `LineBox.Range` but not in `LineBox.Width`, and it has no run. A newline forces a break (`LineBox.End` says why every line ended), and text that
+  ends in one gets an empty last line to put a caret on. A word wider than a line overflows unless `ParagraphStyle.OverflowWrap` is
+  `BreakWord` or `Anywhere`, which move it to a line of its own first and then cut it between grapheme clusters. `ParagraphStyle.NoWrap`
+  breaks only at forced breaks, and a width of `double.PositiveInfinity` does the same.
+- **Direction.** Each line is reordered visually (rule L2), so `LineBox.Runs` is in the order to draw. A right-to-left run's glyphs are already in
+  drawing order and its mirrorable characters already mirrored.
+- **Alignment and height.** `TextAlign` is start, end, left, right or center. A line is as tall as its faces ask for (their ascent, descent and
+  line gap), or `LineHeight` times its largest size, with the leading shared above and below.
+- **Editing.** `PositionAt(point)` gives the boundary nearest a point, always between grapheme clusters; `CaretRect(position)` gives the caret,
+  where `TextAffinity` chooses the line at a soft break; `SelectionBoxes(range)` gives the rectangles to fill, one per visually contiguous stretch of
+  a line; `WordRangeAt` and `GraphemeRangeAt` give the UAX #29 units. `PlacedRun.GetCaretX` gives the caret's place inside one run, sharing a ligature's
+  width out equally between its characters.
+- **Content widths.** `MeasureContent()` gives the width of the widest unbreakable piece (with `OverflowWrap.Anywhere`, of the widest character) and of the
+  widest line when only forced breaks end one.
+- **`TextRuler.WidthOf`** measures one piece of text in one face without building a paragraph.
+
+- **Font fallback.** Text is set in the typeface of its run. When `RunStyle.Fallback` is set, it is asked (once for each user-perceived character the
+  face cannot draw, with the character's first code point) for a typeface to stand in, and the character and the marks that follow it are set in that
+  face at the run's size; without one, or where it answers `null`, the face's missing-glyph shape is drawn. `FontSet.CreateFallback(query)` makes one
+  from the families of a set, choosing the family whose coverage best fits the character's script.
+- **Spacing and justification.** `RunStyle.LetterSpacing` and `WordSpacing` add distance after every glyph and every space; both count in where lines
+  break and in the caret positions, and letter spacing turns off the optional ligatures of the text it is on. `TextAlign.Justify` shares the room a line
+  has left between its opportunities so that it fills the width, equally, in every line that is not the last (nor ends in a forced break);
+  `ParagraphStyle.TextJustify` says where the opportunities are: `Auto` (the spaces and the boundaries next to a Han, Hiragana, Katakana, Bopomofo or Yi
+  letter), `InterWord` (the spaces only), `InterCharacter` (every pair of adjacent characters, except joined cursive letters) or `None` (no justification).
+  A line with no opportunity is left as it is, a tab is a wall that nothing is added next to, and `ParagraphStyle.AlignLast` sets how the last line and
+  forced-break lines are aligned (the start, by default). `PlacedRun.GetGlyphAdvance` gives the pen movement after each glyph, spacing and justification
+  included, which is what a caller draws with.
+- **Indent and tab stops.** `ParagraphStyle.TextIndent` moves the start of a line in from the start edge (the left of a left-to-right paragraph, the right
+  of a right-to-left one): by default the first line only, with `EachLine` also the line after every forced break, and with `Hanging` every line
+  except those. The indent takes room from the line, which breaks earlier, and alignment and justification work in what is left; a negative indent moves
+  the text out of the paragraph. It is a length in layout units, so a caller with a percentage resolves it against its own width. A tab character
+  advances the pen to the next tab stop, at multiples of `ParagraphStyle.TabSize` from the start edge (`TabSize.FromSpaces`, counted in spaces of the
+  face the tab is in with their letter and word spacing, eight by default, or `TabSize.FromLength`). The stops are measured along the line in the order
+  the text is written, indent included; a tab at the end of a line hangs; a tab is a run of its own with no glyphs, so it draws nothing, and it is
+  not a justification opportunity. `ContentWidth` and `MeasureContent()` count the indent.
+
+- **Hyphenation.** `ParagraphStyle.Hyphens` is `Manual` by default: a soft hyphen (U+00AD) is a place a line may break, the line then ends with a hyphen
+  (`LineBox.End` is `Hyphenated`), and a soft hyphen the line does not end at draws nothing and takes no room. `None` makes soft hyphens no place to break,
+  and `Auto` also breaks words where the patterns of their language allow (`Hyphenator`; the language is the `ShapeSettings.Language` of the run the word is in, or the
+  `Language` of `ParagraphStyle.LineBreak`; a word with neither is left whole). A word is hyphenated when it would not fit, as far along as it goes, before
+  the emergency cut of `OverflowWrap` is tried. The hyphen is a generated run (`PlacedRun.IsGenerated`, an empty `Range`, drawn like any run) at the end of the line in the
+  paragraph's direction, U+2010 if the face has it and a hyphen-minus otherwise, or `ParagraphStyle.HyphenateCharacter`; it counts in the line's width. If the hyphen
+  would not fit after a soft hyphen the line ends at the last earlier place that has room for it. `HyphenateLimitChars` (word, before and after; 5, 2 and 2
+  by default), `HyphenateLimitLines` (hyphenated lines in a row), `HyphenateLimitZone` (room a line may leave before its last word is hyphenated) and
+  `HyphenateLimitLast` (`Always` keeps the last full line, the one before a rest that fits a line of its own, from ending with a hyphenation) restrict it. A
+  caret at a hyphenated break can be on either line as at any soft break, and lies before the hyphen. `MeasureContent()` counts hyphens, and with `Auto` its minimum
+  is the widest piece between two places a word may be hyphenated.
+
+- **Line limit and ellipsis.** `ParagraphStyle.MaxLines` lays the paragraph out in at most that many lines. When text is left over, the last line keeps as much of its text as
+  fits with `ParagraphStyle.Ellipsis` after it (U+2026, or three full stops if the face has no such character; an empty string means only cut), cut at a boundary between
+  characters that a reader sees as one and never after a space; `ParagraphLayout.IsTruncated` is set, and the last line is `LineEnd.Last` with `LineBox.IsTruncated`, a
+  `Range` that runs to the end of the text (the part after `ContentEnd` is hidden, like hanging space) and the ellipsis as a generated run at its end in the paragraph's
+  direction, in the style of the last character drawn. `TextOverflow.Ellipsis` cuts the same way any line that is wider than the width (a `NoWrap` line, or a word wider than
+  the paragraph) without ending the paragraph. A line limit is about lines, so one line that overflows its width is cut only when `TextOverflow` asks for it, and text that
+  ends in a newline does not count as text left out. Only the lines that are laid out are worked out, so a limit on a very long text costs what its lines cost.
+
+- **Inline boxes.** `ParagraphBuilder.AddInlineBox(new InlineBox(width, height, ...))` puts a box of a known size in the text like one character (an image, an inline block, a
+  formula the caller lays out itself). The paragraph's text holds a U+FFFC for it; a line may break before and after it and never inside it; and a box wider than the line
+  overflows on a line of its own. It is placed as a `PlacedRun` with no glyphs, one character in `Range`, the box's width, `PlacedRun.InlineBox` (with the `Tag` the caller gave) and
+  `PlacedRun.InlineBoxBounds`, the rectangle to draw it in. `Baseline` is the distance from the top of the box to the point that sits on the line's baseline (the bottom edge by
+  default, as for an image), `BaselineShift` raises or lowers it, and `VerticalAlign` chooses `Baseline`, `Middle`, `TextTop`, `TextBottom`, or `Top`/`Bottom` (which align to the line, and
+  make it as tall as the box, growing it away from the text). The line is as tall as the text around the box and the box together need, and text around a box counts as its strut, so a
+  line of one box is as tall as its text would be. Letter spacing does not apply to a box, a tab measures from the end of it, and it is a wall for justification: no room is added next to it.
+  Carets, selection and hit testing treat it as one character.
+
+- **One line at a time.** `Paragraph.CreateFlow()` gives a `LineFlow` for a caller that owns what the text flows around (floats, columns, pages): `TryNext(cursor, space, out line, out next)` lays out
+  the line that starts at a `FlowCursor` in a `LineSpace` (its left and right edges, its indent, and where its top is) and gives back the cursor of the next. `default(FlowCursor)`, or
+  `flow.Start`, is the start of the paragraph; `cursor.IsEnd` says the last line has been laid out. The call is a pure function of the paragraph, the cursor and the space: it never changes its
+  arguments and keeps nothing, so a caller that wants to undo a line (its height grew, a float now intrudes) calls it again with the cursor from before, and one flow can be used from several
+  threads. `flow.GetIndent(cursor)` gives the `text-indent` of the line, for a caller that follows the style. The lines are the same as `Layout` gives when every space is the full width and each
+  line is under the last (a test holds the two to that), except that `MaxLines` is the caller's to apply, tab stops start at the space's edge, the limit on hyphenating the last full line guesses the next line's room from this space's width, and
+  a right-to-left line is placed against the space's left edge, not a right edge the flow does not know, when the space has no end.
+
+Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 
@@ -264,10 +526,26 @@ for (int i = 1; i < text.Length; i++)
 `LineBreakOptions` applies the tailorings of CSS Text: `WordBreak` (a `WordBreakMode`: `Normal`, `BreakAll`, `KeepAll`) is `word-break`, and
 `Strictness` (`Auto`, `Loose`, `Normal`, `Strict`, `Anywhere`) is `line-break`. `Strict` is the algorithm's own default,
 in which a small kana or a wave dash may not start a line; `Auto` (which is `Normal`) also lets a wave dash and the katakana
-double hyphen start one, and `Loose` lets a line start with a small kana, an iteration mark, a middle dot, a question or
-exclamation mark of Japanese text or an ellipsis, and with a hyphen after an ideograph. `Anywhere` allows a break after every grapheme cluster, whatever the
-character rules say, and keeps only hard line breaks. Thai, Lao, Khmer and Burmese are broken as their letters, without a
-dictionary, so their lines have no opportunities where the script writes no spaces.
+double hyphen start one, and `Loose` lets a line start with a small kana, an iteration mark, and with a hyphen after an ideograph;
+between two ellipses it may break, but not before one. `Language` (a BCP 47 tag, or `null`) is what the rest depends on: the wave dash
+and the katakana double hyphen may start a line in `Normal` and `Loose` only where the language is Chinese or Japanese, and
+there `Loose` also lets a line start with a middle dot, the colon and semicolon of CJK text and a fullwidth or double exclamation or
+question mark, end before a suffix and after a prefix of East Asian width (`％`, `℃`, `￥`), which the number rules would otherwise
+keep with their digits. `Anywhere` allows a break after every grapheme cluster, whatever the
+character rules say, and keeps only hard line breaks.
+
+Thai and Khmer write no spaces between words, so no rule of the algorithm can find where a line may end (UAX #14 leaves those
+characters, its `SA` or Complex_Context class, to a dictionary). The library carries a word list for each, taken from ICU's
+break-iterator dictionaries, and by default `LineBreaker` allows a break between the words it finds, as browsers do. It chooses the
+words by looking a few words ahead for the choice that covers the text best, preferring the longer word when two choices cover it
+alike; a stretch that no word matches stays whole, cut off from the words around it; and it never breaks inside a syllable (no
+break before a dependent vowel, tone mark or other sign, after a leading vowel, or inside a Khmer subscript). The script decides, not
+`Language`, and `WordBreak`, `Strictness` and overflow wrapping apply on top of it. A word list is read the first time text of its
+script is analysed (about 0.3 MB of embedded data in all, stored with DEFLATE so that it also loads in WebAssembly, where there is no
+Brotli decoder), and is kept for the life of the process. A compound that the list has as one word stays whole even where a browser
+splits it. Set `LineBreakOptions.ComplexContext` to `ComplexContextBreaking.GeneralCategory` to have no opportunity inside a run of
+these scripts, which is what rule LB1 itself falls back to (a caller with its own dictionary wants that); the other Complex_Context
+scripts (Lao, Burmese, Tai Tham, Cham and the rest) have no word list yet and always get it.
 
 `Segmenter` finds the boundaries of [UAX #29](https://www.unicode.org/reports/tr29/): `FindGraphemeBoundaries` (extended
 grapheme clusters: a letter with its accents, a Hangul syllable, an emoji sequence, a flag), `FindWordBoundaries` and
@@ -330,5 +608,8 @@ Both answer `null` for a script or language the built-in table does not cover.
 ## Licences
 
 The package is BSD 3-Clause. It carries its third-party notices with it, in `THIRD-PARTY-LICENSES.md`: the font readers
-derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz code, and the data tables come from the
-Unicode Character Database and the `hyph-utf8` pattern collection. See [License](license.md) for the whole list.
+derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz code, the TrueType instruction interpreter and
+Adobe's CFF engine that do the [grid fitting](#grid-fitting-hinting) are ports of FreeType's (under the FreeType Project License,
+whose text ships in the package as `FTL.TXT`, with Adobe's patent licence grant for the CFF engine; an application that redistributes
+the package has to credit the FreeType Team in its documentation), and the data tables come from the
+Unicode Character Database, the `hyph-utf8` pattern collection and ICU's Thai and Khmer word lists. See [License](license.md) for the whole list.

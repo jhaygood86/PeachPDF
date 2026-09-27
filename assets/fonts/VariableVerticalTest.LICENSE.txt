@@ -1,0 +1,4 @@
+VariableVerticalTest.ttf, VariableVerticalTestNoVvar.ttf and VariableVerticalTest.golden.json are synthetic test data made by
+generate_variable_fixture.py in this directory: a handful of geometric glyphs on a weight and a width axis, with vertical metrics
+(vhea, vmtx, VVAR). They contain no third-party design and are dedicated to the public domain under CC0 1.0 Universal
+(https://creativecommons.org/publicdomain/zero/1.0/).

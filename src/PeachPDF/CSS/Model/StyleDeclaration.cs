@@ -1722,6 +1722,12 @@ namespace PeachPDF.CSS
             set => SetPropertyValue(PropertyNames.Width, value);
         }
 
+        public string LineBreak
+        {
+            get => GetPropertyValue(PropertyNames.LineBreak);
+            set => SetPropertyValue(PropertyNames.LineBreak, value);
+        }
+
         public string WordBreak
         {
             get => GetPropertyValue(PropertyNames.WordBreak);

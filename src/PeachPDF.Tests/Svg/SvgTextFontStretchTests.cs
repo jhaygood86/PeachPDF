@@ -52,6 +52,19 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void APercentage_ResolvesItsOwnCachedFont_NotTheKeywordNearestToIt()
+        {
+            var document = Build(
+                """<text x="10" y="50" font-size="20"><tspan font-stretch="87.5%">A</tspan><tspan font-stretch="semi-condensed">B</tspan><tspan font-stretch="88%">C</tspan></text>""");
+
+            var spans = TextRoot(document).Content.OfType<SvgTextSpan>().ToList();
+
+            // 87.5% is what semi-condensed stands for, so the two share a font; 88% is a different width and gets its own.
+            Assert.Same(spans[0].Run.Font, spans[1].Run.Font);
+            Assert.NotSame(spans[0].Run.Font, spans[2].Run.Font);
+        }
+
+        [Fact]
         public void InheritsFromAncestor_ToTspan()
         {
             var document = Build("""<text x="10" y="50" font-size="20" font-stretch="expanded"><tspan>Hi</tspan></text>""");

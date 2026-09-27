@@ -4,24 +4,22 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachDrawing.Text.Internal.Fonts;
-using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using PeachDrawing.Text;
 
 namespace PeachPDF.Tests.Html.Core
 {
     /// <summary>
     /// PeachPDF applies GSUB substitution (ligature/single/multiple/alternate, plus contextual/
-    /// chaining - Lookup Types 1-6, formats 1/2/3 - see <see cref="GsubShaper"/>), GPOS positioning
+    /// chaining - Lookup Types 1-6, formats 1/2/3 - see the engine's GSUB shaper), GPOS positioning
     /// (kerning and mark-to-base/mark-to-mark attachment - Lookup Types 1/2/4/6, see
-    /// <see cref="PeachDrawing.Text.Internal.Text.GposPositioner"/>), and a real UAX#9 Unicode Bidi Algorithm (see
-    /// <see cref="PeachDrawing.Text.Internal.Text.Bidi.BidiResolver"/>). Still no Arabic/Indic complex-script joining,
+    /// the engine's GPOS positioner), and a real UAX#9 Unicode Bidi Algorithm (see
+    /// <see cref="PeachDrawing.Text.Unicode.Bidi"/>). Still no Arabic/Indic complex-script joining,
     /// GSUB Lookup Type 8 (reverse chaining single substitution), or GPOS Types 3/5/7/8 (cursive
     /// attachment, mark-to-ligature, contextual positioning). See docs/html-css-support.md "Text
     /// shaping" for the reader-facing note and .claude/accepted-gaps/no-text-shaping.md for what's
@@ -29,11 +27,7 @@ namespace PeachPDF.Tests.Html.Core
     /// </summary>
     public class ShapingCharacterizationTests
     {
-        private static OpenTypeDescriptor Descriptor(string fontPath)
-        {
-            var face = FontFileData.GetOrCreateFrom(System.IO.File.ReadAllBytes(fontPath)).Fontface;
-            return new OpenTypeDescriptor("shaping-test", "shaping-test", face);
-        }
+        private static Typeface Descriptor(string fontPath) => TypefaceFixtures.Shared(fontPath);
 
         [Fact]
         public void GsubLigatureSubstitution_FfCollectsLigatureGlyph()
@@ -43,7 +37,7 @@ namespace PeachPDF.Tests.Html.Core
             // "fi"/"fl", so this deliberately doesn't use the precomposed U+FB01 "ﬁ" ligature the
             // old (pre-GSUB) version of this test referenced.
             var descriptor = Descriptor(BundledFonts.Ttf); // Source Sans 3
-            var f = descriptor.CharCodeToGlyphIndex(new Rune('f'));
+            var f = descriptor.GlyphOf(new Rune('f'));
 
             var cmap = new CMapInfo(TypefaceFixtures.FromFile(BundledFonts.Ttf));
             cmap.AddShapedText("ff", new ShapeSettings(LigatureSet.Default));
@@ -63,7 +57,7 @@ namespace PeachPDF.Tests.Html.Core
             // font-variant-ligatures: none (LigatureSet.None) must fully restore the pre-GSUB,
             // 1:1 codepoint-to-glyph behavior - this is what makes turning ligatures off actually work.
             var descriptor = Descriptor(BundledFonts.Ttf);
-            var shaped = descriptor.Shape("ff", new ShapeSettings(LigatureSet.None));
+            var shaped = descriptor.ShapeGlyphs("ff", new ShapeSettings(LigatureSet.None));
 
             Assert.Equal(2, shaped.Count);
         }
@@ -75,7 +69,7 @@ namespace PeachPDF.Tests.Html.Core
             // shaping must try ligatures in the font's own authored order (not merge greedily by
             // twos), so "fft" collects the single 3-glyph ligature, not "ff" + "t".
             var descriptor = Descriptor(BundledFonts.Ttf);
-            var shaped = descriptor.Shape("fft", new ShapeSettings(LigatureSet.Default));
+            var shaped = descriptor.ShapeGlyphs("fft", new ShapeSettings(LigatureSet.Default));
 
             Assert.Single(shaped);
             Assert.Equal(0, shaped[0].ClusterStart);

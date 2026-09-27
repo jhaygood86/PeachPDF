@@ -4,8 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-using PeachDrawing.Text.Internal.Fonts;
-
 namespace PeachPDF.Tests.TestSupport
 {
     /// <summary>
@@ -127,6 +125,14 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Cjk => Path.Combine(AppContext.BaseDirectory, "NotoSansJPSubset.ttf");
 
         /// <summary>
+        /// A hand-authored fixture (public domain, see LineBreakTest.LICENSE.txt) for line breaking tests: every character it covers
+        /// (ASCII, kana, and the CJK punctuation and number affixes CSS <c>line-break</c> tailors) is a square exactly one em wide, a
+        /// space half an em, so a line can be sized in whole ems and no character falls back to a machine-dependent system font.
+        /// Regenerate with <c>assets/fonts/generate_line_break_font.py</c>.
+        /// </summary>
+        internal static string LineBreak => Path.Combine(AppContext.BaseDirectory, "LineBreakTest.ttf");
+
+        /// <summary>
         /// A hand-authored COLR <b>version 0</b> test font (public domain, see
         /// ColorTestFonts.LICENSE.txt): layered outline color glyphs backed by a CPAL palette.
         /// 'A' is a red box under a green triangle, 'B' a blue circle; 'X'/'Y'/'Z' are the plain
@@ -181,6 +187,12 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Nabla => Path.Combine(AppContext.BaseDirectory, "NablaSubset.ttf");
 
         /// <summary>
+        /// A synthetic TrueType font (CC0, see HintingGasp.LICENSE.txt): the glyphs A and B are rectangles with a small hinting program, and its
+        /// <c>gasp</c> table asks for grid-fitting at 9 to 20 pixels per em and from 41 up, but not below 9 or from 21 to 40.
+        /// </summary>
+        internal static string Gasp => Path.Combine(AppContext.BaseDirectory, "HintingGasp.ttf");
+
+        /// <summary>
         /// The web-platform-tests GSUB conformance font (see gsubtest-lookup3.LICENSE.txt): every
         /// feature tag (smcp/c2sc/pcap/c2pc/etc.) is implemented as a real GSUB <b>Alternate
         /// Substitution</b> (Lookup Type 3) feature - the only publicly available font found with real
@@ -215,12 +227,104 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Recursive => Path.Combine(AppContext.BaseDirectory, "RecursiveSubset.ttf");
 
         /// <summary>
-        /// A real font file path: the first one the host OS reports, or the bundled TTF
-        /// if the host reports none.
+        /// A synthetic variable font (see VariableTest.LICENSE.txt, made by generate_variable_fixture.py) with a weight and a width axis
+        /// and the tables <c>fvar</c>, <c>avar</c>, <c>gvar</c>, <c>HVAR</c> and <c>MVAR</c>; <see cref="VariableTestGolden"/> holds what
+        /// fontTools' instancer makes of it at a grid of locations.
         /// </summary>
-        internal static string AnySupportedFontPath =>
-            FontResolver.SupportedFonts.FirstOrDefault() ?? Ttf;
+        internal static string VariableTest => Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf");
 
+        /// <summary>
+        /// A synthetic variable font (see VariableSlantTest.LICENSE.txt, made by generate_variable_slant_fixture.py) with a weight axis
+        /// (100 to 900), a width axis (75 to 125) and a slant axis (-15 to 0), whose glyphs are I, H and A: the stems thicken with the
+        /// weight, the glyphs widen with the width and lean with the slant.
+        /// </summary>
+        internal static string VariableSlantTest => Path.Combine(AppContext.BaseDirectory, "VariableSlantTest.ttf");
+
+        /// <summary>
+        /// A synthetic font with an <c>SVG </c> table (see SvgTest.LICENSE.txt, made by generate_svg_glyph_fixture.py): <c>A</c> an uncompressed
+        /// document that uses palette variables, <c>B</c> and <c>C</c> one compressed document (<c>B</c> fills with <c>context-fill</c>),
+        /// <c>D</c> a single-glyph document with no element for it and a byte order mark, <c>E</c> a gzip bomb.
+        /// </summary>
+        internal static string SvgTest => Path.Combine(AppContext.BaseDirectory, "SvgTest.ttf");
+
+        /// <summary>
+        /// A synthetic variable font whose <c>GSUB</c> has <c>FeatureVariations</c> (see VariableFeatureTest.LICENSE.txt): A becomes A.heavy from
+        /// weight 600, and B becomes B.heavy from weight 800.
+        /// </summary>
+        internal static string VariableFeatureTest => Path.Combine(AppContext.BaseDirectory, "VariableFeatureTest.ttf");
+
+        /// <summary><see cref="VariableTest"/> without its <c>HVAR</c> table, so advances come from the phantom points of <c>gvar</c>.</summary>
+        internal static string VariableTestNoHvar => Path.Combine(AppContext.BaseDirectory, "VariableTestNoHvar.ttf");
+
+        /// <summary>The reference values for <see cref="VariableTest"/>: outlines, advances and metrics at a grid of locations.</summary>
+        internal static string VariableTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableTest.golden.json");
+
+        /// <summary>
+        /// A synthetic variable font with CFF2 outlines (see VariableCff2Test.LICENSE.txt, made by generate_variable_fixture.py) on a weight and a
+        /// width axis: glyphs A to F, whose charstrings blend, call a local and a global subroutine, change <c>vsindex</c> and use a second Font
+        /// DICT; <see cref="VariableCff2TestGolden"/> holds what fontTools' instancer draws of it at a grid of locations.
+        /// </summary>
+        internal static string VariableCff2Test => Path.Combine(AppContext.BaseDirectory, "VariableCff2Test.otf");
+
+        /// <summary>The reference values for <see cref="VariableCff2Test"/>: outlines and advances at a grid of locations.</summary>
+        internal static string VariableCff2TestGolden => Path.Combine(AppContext.BaseDirectory, "VariableCff2Test.golden.json");
+
+        /// <summary>
+        /// A synthetic TrueType variable font with vertical metrics (see VariableVerticalTest.LICENSE.txt, made by generate_variable_fixture.py): the
+        /// advance heights follow the axes through <c>VVAR</c> and the phantom points of <c>gvar</c>, and <c>MVAR</c> varies the <c>vhea</c> ascent.
+        /// </summary>
+        internal static string VariableVerticalTest => Path.Combine(AppContext.BaseDirectory, "VariableVerticalTest.ttf");
+
+        /// <summary><see cref="VariableVerticalTest"/> without its <c>VVAR</c> table, so the vertical advance has to come from the phantom points of <c>gvar</c>.</summary>
+        internal static string VariableVerticalTestNoVvar => Path.Combine(AppContext.BaseDirectory, "VariableVerticalTestNoVvar.ttf");
+
+        /// <summary>The reference values for <see cref="VariableVerticalTest"/>: vertical advances, the <c>vhea</c> ascent and the font box at a grid of locations.</summary>
+        internal static string VariableVerticalTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableVerticalTest.golden.json");
+
+        /// <summary>
+        /// A synthetic variable font with CFF2 outlines and vertical metrics (see VariableCff2VerticalTest.LICENSE.txt): <c>VVAR</c> varies the advance
+        /// heights and, through its vertical origin mapping, the <c>VORG</c> origins.
+        /// </summary>
+        internal static string VariableCff2VerticalTest => Path.Combine(AppContext.BaseDirectory, "VariableCff2VerticalTest.otf");
+
+        /// <summary>The reference values for <see cref="VariableCff2VerticalTest"/>: vertical advances, vertical origins and the font box at a grid of locations.</summary>
+        internal static string VariableCff2VerticalTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableCff2VerticalTest.golden.json");
+
+        /// <summary>
+        /// <see cref="VariableTest"/> with an <c>avar</c> version 2 table (see VariableAvar2Test.LICENSE.txt): the width and the weight each move by an
+        /// amount that depends on the other axis; <see cref="VariableAvar2TestGolden"/> holds what fontTools' instancer draws at the locations that mapping leads to.
+        /// </summary>
+        internal static string VariableAvar2Test => Path.Combine(AppContext.BaseDirectory, "VariableAvar2Test.ttf");
+
+        /// <summary>The reference values for <see cref="VariableAvar2Test"/>: outlines, advances and the normalized coordinates fontTools maps each location to.</summary>
+        internal static string VariableAvar2TestGolden => Path.Combine(AppContext.BaseDirectory, "VariableAvar2Test.golden.json");
+
+        /// <summary>
+        /// A synthetic variable TrueType font with a <c>cvar</c> table (see VariableCvarTest.LICENSE.txt, made by generate_variable_cvar_fixture.py): glyph H's
+        /// instructions move its top edge to control value 0, and the six control values move with the weight and the width.
+        /// </summary>
+        internal static string VariableCvarTest => Path.Combine(AppContext.BaseDirectory, "VariableCvarTest.ttf");
+
+        /// <summary>The <c>cvt</c> table fontTools' instancer leaves for <see cref="VariableCvarTest"/> at a grid of locations.</summary>
+        internal static string VariableCvarTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableCvarTest.golden.json");
+
+        /// <summary>
+        /// A synthetic variable font whose <c>GPOS</c> varies with weight (see VariableLayoutTest.LICENSE.txt): kerning of A V and V A, a single
+        /// adjustment of W and a mark-to-base anchor, with <c>VariationIndex</c> device tables and a <c>GDEF</c> item variation store.
+        /// </summary>
+        internal static string VariableLayoutTest => Path.Combine(AppContext.BaseDirectory, "VariableLayoutTest.ttf");
+
+        /// <summary>What fontTools' instancer leaves in the <c>GPOS</c> of <see cref="VariableLayoutTest"/> at a grid of weights.</summary>
+        internal static string VariableLayoutTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableLayoutTest.golden.json");
+
+        /// <summary>
+        /// A synthetic variable colour font (see VariableColorTest.LICENSE.txt, made by generate_variable_color_fixture.py): one colour glyph for each of
+        /// the variable paint formats of COLR version 1 (glyphs A to N), with variable colour lines and clip boxes, on a weight and a width axis.
+        /// </summary>
+        internal static string VariableColorTest => Path.Combine(AppContext.BaseDirectory, "VariableColorTest.ttf");
+
+        /// <summary>The reference values for <see cref="VariableColorTest"/>: the numbers of every paint graph and the clip boxes at a grid of locations.</summary>
+        internal static string VariableColorTestGolden => Path.Combine(AppContext.BaseDirectory, "VariableColorTest.golden.json");
         /// <summary>
         /// An inline <c>@font-face</c> rule embedding <paramref name="fontPath"/> as a base64 data URL
         /// under <paramref name="familyName"/> - for an HTML-layer (<c>LayoutHarness</c>) test whose
@@ -233,21 +337,5 @@ namespace PeachPDF.Tests.TestSupport
         /// </summary>
         internal static string FontFaceRule(string fontPath, string familyName, string mimeType) =>
             $"@font-face {{ font-family: '{familyName}'; src: url('data:{mimeType};base64,{Convert.ToBase64String(File.ReadAllBytes(fontPath))}'); }}";
-
-        /// <summary>
-        /// Ensures <paramref name="resolver"/> can resolve at least one font family and
-        /// returns its name, using a system font if one was detected or registering the
-        /// bundled TTF as a custom font otherwise.
-        /// </summary>
-        internal static string GetOrRegisterKnownFamily(FontResolver resolver)
-        {
-            if (FontResolver.SupportedFonts.Length > 0)
-                return TtfFontDescription.LoadDescription(FontResolver.SupportedFonts[0]).FontFamilyInvariantCulture;
-
-            const string fallbackFamilyName = "__BundledTestFont__";
-            using var stream = File.OpenRead(Ttf);
-            resolver.AddFont(stream, fallbackFamilyName);
-            return fallbackFamilyName;
-        }
     }
 }

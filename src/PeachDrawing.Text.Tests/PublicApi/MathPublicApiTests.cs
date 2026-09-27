@@ -162,6 +162,22 @@ namespace PeachDrawing.Text.Tests.PublicApi
         }
 
         [Fact]
+        public void AnAssembly_CanBeDescribedByACaller()
+        {
+            var parts = new[]
+            {
+                new MathGlyphPart(7, 0, 100, 500, IsExtender: false),
+                new MathGlyphPart(8, 100, 100, 250, IsExtender: true),
+            };
+
+            var assembly = new MathGlyphAssembly(12.5, parts);
+
+            Assert.Equal(12.5, assembly.ItalicsCorrection);
+            Assert.Equal(parts, assembly.Parts);
+            Assert.Throws<ArgumentNullException>(() => new MathGlyphAssembly(0, null!));
+        }
+
+        [Fact]
         public void MathData_IsOneTableForAsLongAsTheFaceLives()
         {
             var math = Face(BundledFonts.Math);

@@ -21,6 +21,34 @@ public class LicenseInfoTests
     }
 
     [Fact]
+    public void Credits_CarriesTheFreeTypeCreditLineAndLicense()
+    {
+        var text = LicenseInfo.Credits;
+        Assert.Contains("The FreeType Project (https://freetype.org)", text);
+        Assert.Contains("based in part on the work of the FreeType Team", text);
+        Assert.Contains("The FreeType Project LICENSE", text);
+    }
+
+    [Fact]
+    public void Credits_CarriesTheAdobeNoticeOfTheCffEngine()
+    {
+        var text = LicenseInfo.Credits;
+        Assert.Contains("Adobe's CFF engine", text);
+        Assert.Contains("Adobe Systems Incorporated", text);
+        Assert.Contains("patent licence grant", text);
+    }
+
+    [Fact]
+    public void Credits_CarriesTheNoticesOfTheThaiAndKhmerWordLists()
+    {
+        var text = LicenseInfo.Credits;
+        Assert.Contains("ICU word lists", text);
+        Assert.Contains("UNICODE LICENSE V3", text);
+        Assert.Contains("Copyright (c) 2006-2015 International Business Machines Corporation", text);
+        Assert.Contains("Copyright (c) 2011-2015 International Business Machines Corporation", text);
+    }
+
+    [Fact]
     public async Task ShowLicense_PrintsLicenseAndExitsZero()
     {
         var (exit, output) = await RunCapturingStdout(["--show-license"]);

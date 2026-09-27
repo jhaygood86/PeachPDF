@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text.Shaping.Use;
 using Xunit;
 
 namespace PeachPDF.Tests.Html.Core

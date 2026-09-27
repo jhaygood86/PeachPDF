@@ -93,6 +93,8 @@ static PdfGenerateConfig ClonePdfAConfig(PdfGenerateConfig source, DateTimeOffse
     DownscaleQuality = source.DownscaleQuality,
     MaximumDownscaleMultiplier = source.MaximumDownscaleMultiplier,
     RasterizationDpi = source.RasterizationDpi,
+    TextHinting = source.TextHinting,
+    TextStemDarkening = source.TextStemDarkening,
     MaxRasterPixels = source.MaxRasterPixels,
     MarginTop = source.MarginTop,
     MarginBottom = source.MarginBottom,
@@ -5225,6 +5227,9 @@ var lineBreakingHtml = $$"""
     .card p { margin: 0; font-size: 12pt; line-height: 1.4; font-family: CJK }
     .keep-all { word-break: keep-all }
     .break-all { word-break: break-all }
+    .lb-loose { line-break: loose }
+    .lb-strict { line-break: strict }
+    .lb-anywhere { line-break: anywhere; font-family: Arial }
     .latin { width: 92pt; padding: 7pt; border: 1pt solid #bbb; background: #fff8dc; font-size: 10pt; line-height: 1.35 }
 </style></head><body>
 <h1>Unicode line breaking</h1>
@@ -5234,9 +5239,16 @@ var lineBreakingHtml = $$"""
   <div class="card"><h2>keep-all</h2><p class="keep-all">テキストキスト テストスキスト</p></div>
   <div class="card"><h2>break-all</h2><p class="break-all" style="font-family:Arial">Chargoggagoggmanchaugg 2024</p></div>
 </div>
+<p class="intro">line-break sets how strictly characters that should not start a line are kept off it: strict and normal keep a small kana (ッ) with the character before it, loose lets it start a line, and anywhere allows a break after every character.</p>
+<div class="row">
+  <div class="card"><h2>line-break: strict</h2><p class="lb-strict">テキストッテキストッテキストッテキ</p></div>
+  <div class="card"><h2>line-break: loose</h2><p class="lb-loose">テキストッテキストッテキストッテキ</p></div>
+  <div class="card"><h2>line-break: anywhere</h2><p class="lb-anywhere">Chargoggagoggmanchaugg 2024</p></div>
+</div>
 <h2 style="font-size:11pt;margin:0 0 5pt">Latin text</h2>
 <div class="row">
   <div class="latin">A well-known hyphen breaks after itself; abc-123 stays whole, and !important, and/or and 23/Jan/Feb are never split around the punctuation.</div>
+  <div class="latin">Across elements the same rules apply: foo<b>bar</b> stays whole, <b>well-</b><i>known</i> breaks after its hyphen, <b>abc-</b><i>123</i> does not, and <i>and</i>/<b>or</b> is never split.</div>
   <div class="latin">Text in (parentheses) and “quotes” does not break inside them, and 3.14, $5.00 and 1,000 are single tokens.</div>
 </div>
 </body></html>
@@ -5245,6 +5257,98 @@ var lineBreakingHtml = $$"""
 await SaveShowcaseAsync("unicode_line_breaking", "Typography & Text", "Unicode Line Breaking",
     "Where a line may end follows the Unicode line breaking algorithm (UAX #14): kana and ideographs break between characters, word-break:keep-all keeps them together, break-all also breaks Latin letters, and hyphens, slashes, numbers and punctuation get the algorithm's rules.",
     lineBreakingHtml, pdfConfig);
+
+// --- line-break: language-dependent tailorings showcase ---
+// Set in the line breaking test font (assets/fonts/LineBreakTest.LICENSE.txt): every character is a square one em wide, solid for letters and
+// digits and hollow for punctuation, so the only thing that differs between two cards is where the line ends. Each pair of cards holds the same
+// text in the same width under lang="ja" and lang="en".
+var lineBreakLanguageFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "LineBreakTest.ttf")));
+
+static string LineBreakLanguageRow(string title, string note, string style, string text, string widthEm, string[]? langs = null)
+{
+    var cards = string.Concat((langs ?? ["ja", "zh-Hant", "en"]).Select(lang =>
+        $"<div class=\"cell\"><div class=\"lang\">lang=\"{lang}\"</div><p class=\"card\" lang=\"{lang}\" style=\"width:{widthEm}em;{style}\">{text}</p></div>"));
+    return $"<div class=\"row\"><div class=\"label\"><h2>{title}</h2><p>{note}</p></div><div class=\"cells\">{cards}</div></div>";
+}
+
+var lineBreakLanguageHtml = $$"""
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    @font-face { font-family: 'LineBreakTest'; src: url('data:font/truetype;base64,{{lineBreakLanguageFontB64}}') format('truetype'); }
+    @page { size: A4; margin: 28pt }
+    body { font-family: Arial, sans-serif; color: #222 }
+    h1 { font-size: 18pt; margin: 0 0 5pt }
+    .intro { color: #555; font-size: 9pt; margin: 0 0 12pt; line-height: 1.35 }
+    .row { display: flex; gap: 12pt; margin-bottom: 12pt; padding-bottom: 10pt; border-bottom: 0.5pt solid #ddd }
+    .label { width: 150pt; flex: none }
+    .label h2 { font-size: 10pt; margin: 0 0 3pt; color: #1b4f8a }
+    .label p { font-size: 8pt; margin: 0; color: #555; line-height: 1.3 }
+    .cells { display: flex; gap: 10pt }
+    .cell { flex: none }
+    .lang { font-size: 7pt; color: #777; margin-bottom: 2pt; font-family: monospace }
+    .card { font: 15pt/1.4 LineBreakTest; margin: 0; padding: 3pt; background: #f4f9ff; border: 0.75pt solid #9db8d8; box-sizing: content-box; color: #1b4f8a }
+</style></head><body>
+<h1>line-break and the language of the text</h1>
+<p class="intro">Some of the breaks CSS Text 3 allows for line-break: normal and loose apply only where the writing system is Chinese or Japanese, so the language of the text (its lang attribute, or an ancestor's) decides them. Every character below is a square one em wide, solid for letters and digits and hollow for punctuation, so the only difference between two cards is where the line ends. The same text is set three times, in Japanese, Traditional Chinese and English.</p>
+{{LineBreakLanguageRow("normal: wave dash", "U+301C may start a line in Chinese and Japanese text. In English it stays with the character before it.", "line-break:normal", "あいう〜えお", "3.2")}}
+{{LineBreakLanguageRow("loose: centred punctuation", "The middle dot U+30FB, like the colon, the semicolon and the exclamation and question marks of CJK text, may start a line in loose Chinese and Japanese text.", "line-break:loose", "あいう・えお", "3.2")}}
+{{LineBreakLanguageRow("loose: after Latin text", "The fullwidth exclamation mark after a Latin word: Chinese and Japanese text may leave it on the next line, other text keeps it with the word.", "line-break:loose", "go wait！", "7")}}
+{{LineBreakLanguageRow("loose: suffix", "A fullwidth percent sign (U+FF05), degree Celsius and the like may start a line in loose Chinese and Japanese text, though they follow a number.", "line-break:loose", "あ10％", "3.2")}}
+{{LineBreakLanguageRow("loose: prefix", "A fullwidth yen (U+FFE5), dollar or numero sign may end a line in loose Chinese and Japanese text, before its number.", "line-break:loose", "あ￥100", "4.2")}}
+{{LineBreakLanguageRow("loose: ellipsis", "In no language does loose break between a Latin word and the ellipsis after it: the two dots of a double ellipsis may be split, the ellipsis from the word may not.", "line-break:loose", "go wait…", "7")}}
+{{LineBreakLanguageRow("small kana and iteration marks", "A small kana (here U+3043) may start a line in loose text of any language, as may an iteration mark and a hyphen after an ideograph.", "line-break:loose", "あいうぃえお", "3.2")}}
+</body></html>
+""";
+
+await SaveShowcaseAsync("line_break_language", "Typography & Text", "line-break and Language",
+    "The breaks CSS Text 3 allows for line-break: normal and loose only in Chinese and Japanese text follow the lang attribute: the wave dash and centred punctuation may start a line, and a suffix or prefix of East Asian width may be split from its number, while English text keeps them together.",
+    lineBreakLanguageHtml, pdfConfig);
+
+// --- Dictionary line breaking (Thai and Khmer) showcase ---
+// These scripts write no spaces between words, so where a line may end is found in a word list (ICU's dictionaries, in PeachDrawing.Text).
+// Thai is set in a subset of Noto Sans Thai (assets/fonts/NotoSansThaiSubset.LICENSE.txt) in columns of three widths, so the same paragraph
+// wraps at its words wherever the line ends; Thai and Khmer are also set in the line breaking test font, where every character is a square
+// one em wide, which makes the words themselves visible as blocks (and is the only rendering of Khmer: PeachPDF does not yet shape its
+// subscript consonants).
+static string DictionaryFontFace(string family, string file) =>
+    $"@font-face {{ font-family: '{family}'; src: url('data:font/truetype;base64,{Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, file)))}') format('truetype'); }}";
+
+var dictionaryBreakingThai = "ประเทศไทยเป็นประเทศที่ตั้งอยู่ในเอเชียตะวันออกเฉียงใต้ กรุงเทพมหานครเป็นเมืองหลวงและเมืองที่ใหญ่ที่สุดของประเทศ ประชากรส่วนใหญ่พูดภาษาไทยและนับถือศาสนาพุทธ";
+
+var dictionaryBreakingHtml = $$"""
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    {{DictionaryFontFace("SeaThai", "NotoSansThaiSubset.ttf")}}
+    {{DictionaryFontFace("LineBreakTest", "LineBreakTest.ttf")}}
+    @page { size: A4; margin: 28pt }
+    body { font-family: Arial, sans-serif; color: #222 }
+    h1 { font-size: 18pt; margin: 0 0 5pt }
+    .intro { color: #555; font-size: 9pt; margin: 0 0 12pt; line-height: 1.35 }
+    .row { display: flex; gap: 12pt; margin-bottom: 10pt; padding-bottom: 8pt; border-bottom: 0.5pt solid #ddd }
+    .cell { flex: none }
+    .cap { font-size: 7pt; color: #777; margin-bottom: 2pt; font-family: monospace }
+    .col { margin: 0; padding: 4pt; box-sizing: border-box; font: 11pt/1.55 SeaThai; background: #f4f9ff; border: 0.75pt solid #9db8d8; color: #1b4f8a }
+    .blocks { font: 12pt/1.5 LineBreakTest; width: 6.4em; margin: 0; padding: 3pt; background: #f4f9ff; border: 0.75pt solid #9db8d8; color: #1b4f8a }
+    .blockrow { display: flex; gap: 14pt; margin-top: 4pt }
+    .blockcell { flex: none; width: 90pt }
+</style></head><body>
+<h1>Dictionary line breaking: Thai and Khmer</h1>
+<p class="intro">These scripts put no spaces between words, so no rule can say where a line may end: PeachPDF looks the words up in a word list (ICU's dictionaries) and wraps between them, never inside a syllable. The same Thai paragraph is set in three widths: the words move to the next line whole, whatever the width. The lang attribute does not matter, the script does.</p>
+<div class="row">
+  <div class="cell" style="width:120pt"><div class="cap">120pt</div><p class="col" lang="th">{{dictionaryBreakingThai}}</p></div>
+  <div class="cell" style="width:170pt"><div class="cap">170pt</div><p class="col" lang="th">{{dictionaryBreakingThai}}</p></div>
+  <div class="cell" style="width:210pt"><div class="cap">210pt</div><p class="col" lang="th">{{dictionaryBreakingThai}}</p></div>
+</div>
+<h2 style="font-size:11pt;margin:0 0 3pt">The words as blocks: Thai and Khmer</h2>
+<p class="intro" style="margin-bottom:0">The same idea in the line breaking test font, where every character (a vowel sign or tone mark too) is a square one em wide, and each box holds six of them: a word that does not fit the rest of the line starts the next one, and a syllable is never cut. Khmer is shown this way only: its subscript consonants are not shaped yet.</p>
+<div class="blockrow">
+  <div class="blockcell"><div class="cap">Thai</div><p class="blocks">ฉันรักภาษาไทยมากกว่าหกสิบล้านคน</p></div>
+  <div class="blockcell"><div class="cap">Khmer</div><p class="blocks">ខ្ញុំស្រលាញ់ភាសាខ្មែរមានប្រជាជនច្រើន</p></div>
+</div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("dictionary_line_breaking", "Typography & Text", "Thai and Khmer Line Breaking",
+    "Scripts written without spaces wrap at the words a dictionary finds and never inside a syllable: a Thai paragraph in real Noto Sans glyphs at three widths, and Thai and Khmer as blocks in the line breaking test font, where the word boundaries are visible.",
+    dictionaryBreakingHtml, pdfConfig);
 
 // --- SVG vertical writing-mode text showcase ---
 
@@ -10982,6 +11086,404 @@ await SaveShowcaseAsync("font_palette", "Typography & Text", "CSS font-palette",
     "Rendered against a subset of Nabla, a real 7-palette COLR v1 font.",
     fontPaletteHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// Variable fonts: font-weight, font-stretch and font-variation-settings choose a location in one variable font's design space, and each
+// distinct location is embedded as its own static instance. Uses a small synthetic variable font (weight 100-900, width 75-125).
+var variableFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableTest.ttf")));
+string VariableCell(string style, string caption) =>
+    "<td>" +
+    $"<div class=\"vf\" style=\"{style}\">ABC</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+var variableFontHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'VF'; src: url('data:font/truetype;base64,{variableFontB64}') format('truetype'); }}" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table.vt { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.vt td { padding: 6px; vertical-align: top; text-align: center }" +
+    ".vf { font-family: 'VF'; font-size: 44pt; line-height: 1.1 }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>Variable fonts</h1>" +
+    "<p class=\"intro\">One font file holds a whole design space. <code>font-weight</code>, <code>font-stretch</code> and " +
+    "<code>font-variation-settings</code> pick a location in it, and the outlines, advance widths and font-wide metrics all follow. " +
+    "Nothing is faked: the weight comes from the font's <code>wght</code> axis, not from thickening a regular face. In the PDF each " +
+    "location is embedded as an ordinary static font, because PDF cannot embed a variable one.</p>" +
+    "<h2>font-weight</h2>" +
+    "<table class=\"vt\"><tr>" +
+    VariableCell("font-weight: 100", "font-weight: 100") +
+    VariableCell("font-weight: 400", "font-weight: 400") +
+    VariableCell("font-weight: 700", "font-weight: 700") +
+    VariableCell("font-weight: 900", "font-weight: 900") +
+    "</tr></table>" +
+    "<h2>font-stretch</h2>" +
+    "<table class=\"vt\"><tr>" +
+    VariableCell("font-stretch: semi-condensed", "font-stretch: semi-condensed (75%)") +
+    VariableCell("font-stretch: normal", "font-stretch: normal (100%)") +
+    VariableCell("font-stretch: semi-expanded", "font-stretch: semi-expanded (125%)") +
+    "</tr></table>" +
+    "<h2>font-variation-settings</h2>" +
+    "<p class=\"intro\">Any value on any axis, not only the ones the keywords reach, and it wins over <code>font-weight</code> and " +
+    "<code>font-stretch</code>:</p>" +
+    "<table class=\"vt\"><tr>" +
+    VariableCell("font-variation-settings: 'wght' 250", "'wght' 250") +
+    VariableCell("font-variation-settings: 'wght' 650, 'wdth' 110", "'wght' 650, 'wdth' 110") +
+    VariableCell("font-weight: 100; font-variation-settings: 'wght' 900", "font-weight: 100 overridden by 'wght' 900") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("variable_fonts", "Typography & Text", "Variable fonts",
+    "font-weight, font-stretch and font-variation-settings choosing locations in a variable font's design space: " +
+    "the glyph outlines, advances and metrics follow the axes, and each location is embedded in the PDF as a static instance. " +
+    "Rendered against a small synthetic variable font with weight and width axes.",
+    variableFontHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// Variable fonts with CFF2 outlines (variable CFF): the charstrings blend their operands at the location, and the PDF embeds each distinct
+// location as a static CFF font. Uses a small synthetic CFF2 font (weight 100-900, width 75-125) whose glyphs A to F exercise blends,
+// local and global subroutines and a second Font DICT.
+var cff2FontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableCff2Test.otf")));
+string Cff2Cell(string style, string caption) =>
+    "<td>" +
+    $"<div class=\"vf\" style=\"{style}\">ABCDEF</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+var variableCff2Html =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'VC'; src: url('data:font/otf;base64,{cff2FontB64}') format('opentype'); }}" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table.vt { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.vt td { padding: 6px; vertical-align: top; text-align: center }" +
+    ".vf { font-family: 'VC'; font-size: 30pt; line-height: 1.2; white-space: nowrap }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>Variable fonts with CFF2 outlines</h1>" +
+    "<p class=\"intro\">A variable OpenType font can draw its glyphs with CFF2 charstrings, whose operands carry deltas (<code>blend</code>) " +
+    "that are scaled by how far the requested location lies inside each region of the design space. The glyphs below are drawn from one " +
+    "such font at different weights and widths. In the PDF each location is embedded as a static CFF font, because PDF cannot embed a " +
+    "variable one.</p>" +
+    "<h2>font-weight</h2>" +
+    "<table class=\"vt\"><tr>" +
+    Cff2Cell("font-weight: 100", "font-weight: 100") +
+    Cff2Cell("font-weight: 400", "font-weight: 400") +
+    "</tr><tr>" +
+    Cff2Cell("font-weight: 700", "font-weight: 700") +
+    Cff2Cell("font-weight: 900", "font-weight: 900") +
+    "</tr></table>" +
+    "<h2>font-stretch</h2>" +
+    "<table class=\"vt\"><tr>" +
+    Cff2Cell("font-stretch: semi-condensed", "font-stretch: semi-condensed (75%)") +
+    Cff2Cell("font-stretch: semi-expanded", "font-stretch: semi-expanded (125%)") +
+    "</tr></table>" +
+    "<h2>font-variation-settings</h2>" +
+    "<table class=\"vt\"><tr>" +
+    Cff2Cell("font-variation-settings: 'wght' 250", "'wght' 250") +
+    Cff2Cell("font-variation-settings: 'wght' 650, 'wdth' 110", "'wght' 650, 'wdth' 110") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("variable_fonts_cff2", "Typography & Text", "Variable fonts with CFF2 outlines",
+    "A variable font with CFF2 (variable CFF) outlines at different weights, widths and font-variation-settings locations: the charstrings " +
+    "blend at the location, and each location is embedded in the PDF as a static CFF font. Rendered against a small synthetic font.",
+    variableCff2Html, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// Variable fonts, second part: an avar version 2 font whose axes move each other (the plain font next to it is the same design without the
+// cross-axis mapping), and vertical text set in a font whose advance heights follow the axes (VVAR and the phantom points of gvar).
+var avar2FontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableAvar2Test.ttf")));
+var verticalFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableVerticalTest.ttf")));
+string Avar2Cell(string family, string style, string caption) =>
+    "<td>" +
+    $"<div class=\"vf\" style=\"font-family: '{family}'; {style}\">ABAB</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+string VerticalCell(string style, string caption) =>
+    "<td style=\"height: 60mm\">" +
+    $"<div class=\"vv\" style=\"{style}\">ABCABC</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+var variableAvar2Html =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'Plain'; src: url('data:font/truetype;base64,{variableFontB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'Avar2'; src: url('data:font/truetype;base64,{avar2FontB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'Vertical'; src: url('data:font/truetype;base64,{verticalFontB64}') format('truetype'); }}" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table.vt { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.vt td { padding: 6px; vertical-align: top; text-align: center }" +
+    ".vf { font-size: 36pt; line-height: 1.1; white-space: nowrap }" +
+    ".vv { font-family: 'Vertical'; font-size: 30pt; writing-mode: vertical-rl; margin: 0 auto }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>Variable fonts: avar 2 and vertical metrics</h1>" +
+    "<p class=\"intro\">A version 2 <code>avar</code> table lets an axis move the others: in the second font, full weight also narrows " +
+    "the width and a narrow width also makes the weight heavier, so the same <code>font-weight</code> and <code>font-stretch</code> " +
+    "settings read differently than in the plain font of the same design.</p>" +
+    "<h2>font-weight: 900</h2>" +
+    "<table class=\"vt\"><tr>" +
+    Avar2Cell("Plain", "font-weight: 900", "plain font, font-weight: 900") +
+    Avar2Cell("Avar2", "font-weight: 900", "avar 2 font, font-weight: 900") +
+    "</tr></table>" +
+    "<h2>font-variation-settings: 'wght' 700, 'wdth' 120</h2>" +
+    "<table class=\"vt\"><tr>" +
+    Avar2Cell("Plain", "font-variation-settings: 'wght' 700, 'wdth' 120", "plain font") +
+    Avar2Cell("Avar2", "font-variation-settings: 'wght' 700, 'wdth' 120", "avar 2 font") +
+    "</tr></table>" +
+    "<h2>Vertical text</h2>" +
+    "<p class=\"intro\">In vertical text each glyph advances by its <em>vertical</em> advance, which follows the axes through " +
+    "<code>VVAR</code> (or, without it, the phantom points of <code>gvar</code>): the heavier the weight, the longer the column.</p>" +
+    "<table class=\"vt\"><tr>" +
+    VerticalCell("font-weight: 100", "font-weight: 100") +
+    VerticalCell("font-weight: 400", "font-weight: 400") +
+    VerticalCell("font-weight: 900", "font-weight: 900") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("variable_fonts_avar2_vertical", "Typography & Text", "Variable fonts: avar 2 and vertical metrics",
+    "An avar version 2 font, whose axes move each other, beside the same design without the cross-axis mapping, and vertical text whose " +
+    "glyph advances follow the axes through VVAR. Rendered against small synthetic variable fonts.",
+    variableAvar2Html, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// Variable-font ranges: an @font-face rule declares the weights, widths and oblique angles its face covers (font-weight: 100 900,
+// font-stretch: 75% 125%, font-style: oblique 0deg 14deg), and the weight, width and slant of the requesting box set the font's axes inside
+// that range. Uses a small synthetic variable font with weight (100-900), width (75-125) and slant (0 to 15 degrees) axes.
+var rangesFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableSlantTest.ttf")));
+string RangeFace(string family, string descriptors) =>
+    $"@font-face {{ font-family: '{family}'; src: url('data:font/truetype;base64,{rangesFontB64}') format('truetype'); {descriptors} }}";
+string RangeCell(string family, string style, string caption) =>
+    "<td>" +
+    $"<div class=\"rf\" style=\"font-family: '{family}'; {style}\">HIAH</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+var variableRangesHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    RangeFace("Free", "") +
+    RangeFace("Wt", "font-weight: 300 600;") +
+    RangeFace("Split", "font-weight: 100 300;") +
+    RangeFace("Split", "font-weight: 700 900;") +
+    RangeFace("Wd", "font-stretch: 90% 110%;") +
+    RangeFace("Ob", "font-style: oblique 0deg 10deg;") +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table.rt { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.rt td { padding: 6px; vertical-align: top; text-align: center }" +
+    ".rf { font-size: 38pt; line-height: 1.1 }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>@font-face ranges</h1>" +
+    "<p class=\"intro\">An <code>@font-face</code> rule can declare a range for <code>font-weight</code>, <code>font-stretch</code> and " +
+    "<code>font-style: oblique</code>. The face is used for every value inside its range, and the request sets the variable font's axes " +
+    "there, kept inside the range. A font with no descriptors covers the range of its own axes.</p>" +
+    "<h2>font-weight: 300 600 &mdash; the weight axis stays inside the range</h2>" +
+    "<table class=\"rt\"><tr>" +
+    RangeCell("Wt", "font-weight: 100", "requested 100, drawn at 300") +
+    RangeCell("Wt", "font-weight: 450", "requested 450, drawn at 450") +
+    RangeCell("Wt", "font-weight: 900", "requested 900, drawn at 600") +
+    RangeCell("Free", "font-weight: 900", "no descriptor: the axis reaches 900") +
+    "</tr></table>" +
+    "<h2>Two rules of one family: 100 300 and 700 900</h2>" +
+    "<table class=\"rt\"><tr>" +
+    RangeCell("Split", "font-weight: 200", "200 is in the first range") +
+    RangeCell("Split", "font-weight: 500", "500 is in neither: the nearer lighter range, at its upper end") +
+    RangeCell("Split", "font-weight: 800", "800 is in the second range") +
+    "</tr></table>" +
+    "<h2>font-stretch: 90% 110% &mdash; percentages and the range</h2>" +
+    "<table class=\"rt\"><tr>" +
+    RangeCell("Wd", "font-stretch: 75%", "75%, drawn at 90%") +
+    RangeCell("Wd", "font-stretch: 100%", "100%") +
+    RangeCell("Wd", "font-stretch: 105.5%", "105.5%") +
+    RangeCell("Wd", "font-stretch: 125%", "125%, drawn at 110%") +
+    "</tr></table>" +
+    "<h2>font-style: oblique 0deg 10deg &mdash; the slant axis stays inside the range</h2>" +
+    "<table class=\"rt\"><tr>" +
+    RangeCell("Ob", "font-style: normal", "normal: upright (0 is in the range)") +
+    RangeCell("Ob", "font-style: oblique 5deg", "oblique 5deg") +
+    RangeCell("Ob", "font-style: italic", "italic is 14deg, drawn at 10deg") +
+    RangeCell("Ob", "font-style: oblique 25deg", "oblique 25deg, drawn at 10deg") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("variable_font_ranges", "Typography & Text", "Variable font ranges",
+    "@font-face weight, width and oblique ranges for a variable font: the face covers its whole range in font matching, the weight, width " +
+    "and slant of the text set the font's axes inside the range, font-stretch takes percentages, and nothing is faked that an axis supplies. " +
+    "Rendered against a small synthetic variable font with weight, width and slant axes.",
+    variableRangesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// Variable colour fonts: the paints of a COLR version 1 colour glyph (opacities, gradient geometry and colours, transforms) follow the
+// location of a variable font, and the PDF paints the numbers that apply there. Uses a small synthetic colour font with one glyph for each
+// variable paint format, on a weight and a width axis.
+var variableColorFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "VariableColorTest.ttf")));
+string VariableColorRow(string style, string caption) =>
+    $"<div class=\"cap\">{caption}</div><div class=\"vc\" style=\"{style}\">ABCDEFGHIJKLMN</div>";
+var variableColorHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 12mm }" +
+    $"@font-face {{ font-family: 'VC'; src: url('data:font/truetype;base64,{variableColorFontB64}') format('truetype'); font-weight: 100 900; font-stretch: 75% 125%; }}" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    ".vc { font-family: 'VC'; font-size: 30pt; line-height: 1.3; white-space: nowrap }" +
+    ".cap { font-size: 7pt; color: #666; margin-top: 0.7em }" +
+    "</style></head><body>" +
+    "<h1>Variable colour fonts</h1>" +
+    "<p class=\"intro\">A colour font's paints can vary with the axes: a solid's opacity, the geometry and the colour stops of a gradient, and the " +
+    "translation, scale, rotation and skew that place a layer. Each row below is the same fourteen glyphs, one for each variable paint format of " +
+    "<code>COLR</code> version 1, at another location; the PDF paints the numbers that apply there as ordinary vector fills.</p>" +
+    VariableColorRow("font-weight: 100", "font-weight: 100") +
+    VariableColorRow("font-weight: 400", "font-weight: 400") +
+    VariableColorRow("font-weight: 600", "font-weight: 600") +
+    VariableColorRow("font-weight: 900", "font-weight: 900") +
+    VariableColorRow("font-weight: 400; font-stretch: 75%", "font-stretch: 75%") +
+    VariableColorRow("font-weight: 400; font-stretch: 125%", "font-stretch: 125%") +
+    "</body></html>";
+await SaveShowcaseAsync("variable_fonts_color", "Typography & Text", "Variable colour fonts",
+    "A COLR version 1 colour font whose paints vary with the font's axes: opacities, gradient geometry and colours, and transforms all " +
+    "follow the location, as font-weight and font-stretch move it. Rendered against a small synthetic colour font, one glyph per variable paint format.",
+    variableColorHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// Face matching order (CSS Fonts 4 section 5.2): a family's faces are narrowed by width first, then style, then weight; the requested oblique
+// angle chooses among faces that declare oblique ranges; and font-weight takes fractions. Uses Source Sans 3 (a condensed upright face) and
+// Source Code Pro (standing in for an italic face of normal width), plus the synthetic variable font with weight and slant axes.
+var orderSansB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.ttf")));
+var orderMonoB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceCodePro-Regular.otf")));
+string OrderFace(string family, string base64, string format, string descriptors) =>
+    $"@font-face {{ font-family: '{family}'; src: url('data:font/{format};base64,{base64}') format('{format}'); {descriptors} }}";
+string OrderCell(string family, string style, string caption) =>
+    "<td>" +
+    $"<div class=\"rf\" style=\"font-family: '{family}'; {style}\">Hig</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+var faceOrderHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    OrderFace("Order", orderSansB64, "truetype", "font-stretch: 75%; font-style: normal;") +
+    OrderFace("Order", orderMonoB64, "opentype", "font-stretch: 100%; font-style: italic;") +
+    RangeFace("Angle", "font-style: oblique 0deg 5deg;") +
+    RangeFace("Angle", "font-style: oblique 10deg 15deg;") +
+    RangeFace("Frac", "font-weight: 350.2 350.8;") +
+    RangeFace("Frac", "font-weight: 100 300;") +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table.rt { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.rt td { padding: 6px; vertical-align: top; text-align: center }" +
+    ".rf { font-size: 38pt; line-height: 1.1 }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>Face matching order</h1>" +
+    "<p class=\"intro\">A family's faces are narrowed by <code>font-stretch</code> first, then <code>font-style</code>, then " +
+    "<code>font-weight</code>. Among faces that declare oblique ranges, the requested angle chooses; <code>font-weight</code> takes fractions.</p>" +
+    "<h2>A condensed upright face and an italic face of normal width</h2>" +
+    "<table class=\"rt\"><tr>" +
+    OrderCell("Order", "font-stretch: condensed; font-style: italic", "condensed italic: the condensed face, lean faked") +
+    OrderCell("Order", "font-stretch: normal; font-style: italic", "normal italic: the italic face") +
+    OrderCell("Order", "font-stretch: condensed", "condensed: the condensed face") +
+    OrderCell("Order", "font-stretch: normal", "normal: only the italic face has the width") +
+    "</tr></table>" +
+    "<h2>Two oblique ranges: 0deg 5deg and 10deg 15deg</h2>" +
+    "<table class=\"rt\"><tr>" +
+    OrderCell("Angle", "font-style: oblique 3deg", "oblique 3deg: the first range, 3deg") +
+    OrderCell("Angle", "font-style: oblique 8deg", "oblique 8deg: below 11deg the range below is searched first, 5deg") +
+    OrderCell("Angle", "font-style: oblique 12deg", "oblique 12deg: the second range, 12deg") +
+    OrderCell("Angle", "font-style: oblique 25deg", "oblique 25deg: the second range, 15deg") +
+    "</tr></table>" +
+    "<h2>Fractional weights: 350.2 350.8 and 100 300</h2>" +
+    "<table class=\"rt\"><tr>" +
+    OrderCell("Frac", "font-weight: 350.5", "350.5 is in the first range, drawn at 350.5") +
+    OrderCell("Frac", "font-weight: 350", "350 is in neither: the nearest below, drawn at 300") +
+    OrderCell("Frac", "font-weight: 350.9", "350.9 is just above the first range: drawn at its upper end, 350.8") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("face_matching_order", "Typography & Text", "Face matching order",
+    "CSS Fonts 4 face matching: a family's faces are narrowed by width, then style, then weight, so a condensed italic request gets the condensed " +
+    "face; the requested oblique angle chooses among faces that declare oblique ranges; and font-weight takes fractions such as 350.5.",
+    faceOrderHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// SVG-in-OpenType colour glyphs: a font's `SVG ` table gives a glyph an SVG document, drawn as vectors. Uses a small synthetic font whose
+// documents use the font's CPAL palette (var(--color0)) and the text colour (context-fill).
+var svgGlyphFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SvgTest.ttf")));
+string SvgGlyphCell(string style, string caption, string text = "ABCD") =>
+    "<td>" +
+    $"<div class=\"sg\" style=\"{style}\">{text}</div>" +
+    $"<div class=\"css\">{caption}</div>" +
+    "</td>";
+var svgGlyphHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'SvgTest'; src: url('data:font/truetype;base64,{svgGlyphFontB64}') format('truetype'); }}" +
+    "@font-palette-values --second { font-family: 'SvgTest'; base-palette: 1; }" +
+    "@font-palette-values --custom { font-family: 'SvgTest'; base-palette: 0; override-colors: 0 #7c3aed, 1 #f59e0b; }" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    "table.sgt { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.sgt td { padding: 8px; vertical-align: top; text-align: center }" +
+    ".sg { font-family: 'SvgTest'; font-size: 40pt; line-height: 1.2; letter-spacing: 4pt }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>SVG-in-OpenType colour glyphs</h1>" +
+    "<p class=\"intro\">A font can give a glyph an SVG document in its <code>SVG&nbsp;</code> table. It is drawn as real vector content: " +
+    "the document's <code>var(--color0)</code> takes the font's palette (so <code>font-palette</code> works), and <code>context-fill</code> " +
+    "and <code>currentColor</code> take the text colour. A, B, C and D are four glyphs of one font; B and C share one document.</p>" +
+    "<table class=\"sgt\"><tr>" +
+    SvgGlyphCell("", "default palette, black text") +
+    SvgGlyphCell("color: #0b7a3b", "color: #0b7a3b (B follows the text colour)") +
+    "</tr><tr>" +
+    SvgGlyphCell("font-palette: --second", "font-palette: --second") +
+    SvgGlyphCell("font-palette: --custom", "override-colors: 0 #7c3aed, 1 #f59e0b") +
+    "</tr><tr>" +
+    SvgGlyphCell("font-size: 20pt", "20pt: the same artwork at another size") +
+    SvgGlyphCell("filter: drop-shadow(4pt 4pt 3pt rgba(0,0,0,.45))", "filter: drop-shadow(): a raster region, still the real glyph") +
+    "</tr><tr>" +
+    SvgGlyphCell("color: #7c3aed", "F: the square is context-fill orange with a context-stroke blue edge from its &lt;use&gt;; the disc is the text colour", "F") +
+    SvgGlyphCell("color: #0b7a3b; filter: drop-shadow(4pt 4pt 3pt rgba(0,0,0,.45))", "the same, in a raster region: both paints survive", "F") +
+    "</tr><tr>" +
+    SvgGlyphCell("", "G: a red block left of the origin and a green one two and a half ems to its right, beyond the em box: not clipped", "G") +
+    SvgGlyphCell("filter: drop-shadow(4pt 4pt 3pt rgba(0,0,0,.45))", "the same, in a raster region", "G") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("svg_opentype_glyphs", "Typography & Text", "SVG-in-OpenType glyphs",
+    "Colour glyphs drawn from a font's SVG table: the SVG document of each glyph is rendered as vector content, its palette " +
+    "variables follow font-palette, and context-fill and context-stroke follow the text and the <use> they are inside, also inside a " +
+    "filtered (rasterized) element; artwork that lies outside the em box is drawn, not clipped. Rendered against a small synthetic font.",
+    svgGlyphHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// SVG 2 context paint in the SVG engine itself: a shape written once says context-fill / context-stroke and each <use> gives it a fill and a
+// stroke, and a marker draws with the fill and stroke of the shape it sits on.
+var svgContextHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm } body { font: 9pt Arial, sans-serif; margin: 0 } h1 { font-size: 15pt; margin: 0 0 0.3em } " +
+    "p { color: #555; margin: 0 0 0.8em } svg { display: block; margin: 0 0 1em; border: 1px solid #ddd }" +
+    "</style></head><body>" +
+    "<h1>SVG context-fill and context-stroke</h1>" +
+    "<p>One badge shape is defined once, with <code>fill=\"context-fill\" stroke=\"context-stroke\"</code>. Each <code>&lt;use&gt;</code> below gives it its own fill and stroke.</p>" +
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"520\" height=\"130\" viewBox=\"0 0 520 130\">" +
+    "<defs><g id=\"badge\"><rect width=\"90\" height=\"90\" rx=\"18\" fill=\"context-fill\" stroke=\"context-stroke\" stroke-width=\"8\"/>" +
+    "<circle cx=\"45\" cy=\"45\" r=\"20\" fill=\"context-stroke\"/></g></defs>" +
+    "<use xlink:href=\"#badge\" x=\"20\" y=\"20\" fill=\"#f59e0b\" stroke=\"#7c2d12\"/>" +
+    "<use xlink:href=\"#badge\" x=\"150\" y=\"20\" fill=\"#38bdf8\" stroke=\"#0c4a6e\"/>" +
+    "<use xlink:href=\"#badge\" x=\"280\" y=\"20\" fill=\"#a3e635\" stroke=\"#365314\"/>" +
+    "<use xlink:href=\"#badge\" x=\"410\" y=\"20\" fill=\"#f472b6\" stroke=\"#831843\"/></svg>" +
+    "<p>A marker draws with the fill and stroke of the shape it is placed on: the same arrowhead on two paths.</p>" +
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"520\" height=\"130\" viewBox=\"0 0 520 130\">" +
+    "<defs><marker id=\"head\" markerWidth=\"22\" markerHeight=\"22\" refX=\"11\" refY=\"11\" markerUnits=\"userSpaceOnUse\" orient=\"auto\">" +
+    "<path d=\"M2,2 L20,11 L2,20 Z\" fill=\"context-stroke\"/><circle cx=\"6\" cy=\"11\" r=\"3\" fill=\"context-fill\"/></marker></defs>" +
+    "<path d=\"M30,35 C120,5 200,65 250,35\" fill=\"#fde68a\" stroke=\"#b45309\" stroke-width=\"4\" marker-end=\"url(#head)\"/>" +
+    "<path d=\"M290,95 C380,65 460,125 500,95\" fill=\"#bfdbfe\" stroke=\"#1d4ed8\" stroke-width=\"4\" marker-end=\"url(#head)\"/></svg>" +
+    "</body></html>";
+await SaveShowcaseAsync("svg_context_paint", "Graphics & Effects", "SVG context paint",
+    "SVG 2 context-fill and context-stroke: a shape defined once takes the fill and stroke of each <use> that instantiates it, and a marker " +
+    "draws with the fill and stroke of the shape it is placed on.",
+    svgContextHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // GSUB ligature substitution: font-variant-ligatures actually turns real GSUB liga/clig ligatures
 // on/off (not just a synthesized effect), and the same shaping applies to SVG <text> outlined for a
 // gradient fill. Source Sans 3's GSUB `liga` feature ligates "ff"/"ft"/"fft" (confirmed via
@@ -12055,6 +12557,145 @@ var cssFilterRasterHtml = "<!DOCTYPE html><html><head>" + FilterCss + "</head><b
 await SaveShowcaseAsync("css_filter_raster", "Graphics & Effects", "CSS Filter (Rasterized)",
     "filter: blur(), grayscale(), sepia(), saturate(), and hue-rotate() - rendered into a bitmap at the configured RasterizationDpi and embedded at exactly the element's own size, while the rest of the page stays vector.",
     cssFilterRasterHtml, pdfConfig);
+
+// --- Hinted raster text: the same page twice, with TextHinting off and on, at a resolution low enough for the grid to show ---
+
+// A bundled, hinted webfont, so the page renders the same on every machine.
+var hintingFontUri = "data:font/woff;base64," +
+    Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "LiberationSans-Regular.woff")));
+
+var textHintingCss = $$"""
+    <style>
+    @font-face { font-family: 'HintedSans'; src: url('{{hintingFontUri}}') format('woff'); }
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { margin: 0 0 0.9em; color: #555; font-size: 8pt }
+    .raster { filter: grayscale(1); margin-bottom: 8px; font-family: 'HintedSans', Arial, sans-serif }
+    .cap { font-size: 6.5pt; color: #666; margin: 10px 0 2px }
+    </style>
+    """;
+
+string TextHintingHtml(string intro, string? css = null)
+{
+    var html = new System.Text.StringBuilder("<!DOCTYPE html><html><head>" + (css ?? textHintingCss) + "</head><body><h1>Text drawn into bitmaps</h1><p class=\"intro\">" + intro + "</p>");
+    foreach (var px in new[] { 8, 9, 10, 11, 12, 13, 14, 16, 20 })
+    {
+        html.Append($"<div class=\"cap\">{px}px</div>");
+        html.Append($"<div class=\"raster\" style=\"font-size:{px}px\">Hamburgefonstiv: HEH illicit 0123456789 The quick brown fox jumps over the lazy dog</div>");
+    }
+
+    return html.Append("</body></html>").ToString();
+}
+
+var textHintingRasterConfig = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    PageOrientation = PageOrientation.Portrait,
+    ShrinkToFit = true,
+    RasterizationDpi = 72,
+    TextHinting = TextHinting.Standard
+};
+
+await SaveShowcaseAsync("text_hinting_standard", "Graphics & Effects", "Hinted Raster Text",
+    "PdfGenerateConfig.TextHinting = Standard: text that has to be drawn into a bitmap (here under filter: grayscale(1), at a deliberately low RasterizationDpi of 72) follows the font's own TrueType hinting, so stems and baselines land on pixel edges. The PDF's vector text is not affected.",
+    TextHintingHtml("The lines below are rasterized at 72 dpi, so the pixel grid is visible. Compare with the same page without hinting."),
+    textHintingRasterConfig);
+
+await SaveShowcaseAsync("text_hinting_none", "Graphics & Effects", "Raster Text Without Hinting",
+    "The same page as the hinted raster text showcase with TextHinting left at its default, None: outlines are only scaled, so edges cut through pixels and small text is softer.",
+    TextHintingHtml("The lines below are rasterized at 72 dpi, so the pixel grid is visible. Compare with the same page with hinting."),
+    new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PageOrientation = PageOrientation.Portrait,
+        ShrinkToFit = true,
+        RasterizationDpi = 72
+    });
+
+// The same with a font that has CFF (PostScript) outlines: its stem hints and blue zones are what fit the text, not TrueType instructions.
+var cffHintingFontUri = "data:font/otf;base64," +
+    Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceCodePro-Regular.otf")));
+var textHintingCffCss = textHintingCss
+    .Replace("'HintedSans'", "'HintedCode'")
+    .Replace(hintingFontUri, cffHintingFontUri)
+    .Replace("format('woff')", "format('opentype')");
+
+await SaveShowcaseAsync("text_hinting_cff_standard", "Graphics & Effects", "Hinted Raster Text (CFF Outlines)",
+    "PdfGenerateConfig.TextHinting = Standard with a font whose outlines are CFF (Source Code Pro, an OpenType font): the stem hints and blue zones of its charstrings, run by a port of Adobe's CFF engine, put stems, x-heights and baselines on pixel edges in the bitmaps this page rasterizes at 72 dpi.",
+    TextHintingHtml("The lines below are rasterized at 72 dpi, in a font with CFF outlines, so the pixel grid is visible. Compare with the same page without hinting.", textHintingCffCss),
+    textHintingRasterConfig);
+
+await SaveShowcaseAsync("text_hinting_cff_none", "Graphics & Effects", "Raster Text Without Hinting (CFF Outlines)",
+    "The same page as the hinted CFF raster text showcase with TextHinting left at its default, None: the outlines are only scaled, so edges cut through pixels.",
+    TextHintingHtml("The lines below are rasterized at 72 dpi, in a font with CFF outlines, so the pixel grid is visible. Compare with the same page with hinting.", textHintingCffCss),
+    new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PageOrientation = PageOrientation.Portrait,
+        ShrinkToFit = true,
+        RasterizationDpi = 72
+    });
+
+await SaveShowcaseAsync("text_hinting_cff_stem_darkening", "Graphics & Effects", "Stem-Darkened Raster Text (CFF Outlines)",
+    "PdfGenerateConfig.TextStemDarkening = true on top of TextHinting = Standard, with a font whose outlines are CFF: Adobe's stem darkening makes the thinnest stems a little heavier, which offsets the way anti-aliasing thins small text; stems of more than about two and a third pixels are left alone. Compare with the hinted CFF page without it.",
+    TextHintingHtml("The lines below are rasterized at 72 dpi, in a font with CFF outlines, hinted and with stem darkening on: the small sizes are visibly heavier than in the hinted page without it.", textHintingCffCss),
+    new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PageOrientation = PageOrientation.Portrait,
+        ShrinkToFit = true,
+        RasterizationDpi = 72,
+        TextHinting = TextHinting.Standard,
+        TextStemDarkening = true
+    });
+
+// A variable font with CFF2 outlines (HintingCff2Boxes, a small font of boxy letters made for this page): its charstrings' hints and its blue zones
+// are blended for the weight before they are applied, so the same stems and bars land on pixel edges at every weight.
+var cff2HintingFontUri = "data:font/otf;base64," +
+    Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "HintingCff2Boxes.otf")));
+
+string TextHintingCff2Html(string intro)
+{
+    var css = $$"""
+        <style>
+        @font-face { font-family: 'HintedBoxes'; src: url('{{cff2HintingFontUri}}') format('opentype'); font-weight: 300 900; }
+        @page { size: a4; margin: 15mm }
+        body { font: 9pt Arial, sans-serif; margin: 0 }
+        h1 { font-size: 15pt; margin: 0 0 0.3em }
+        p.intro { margin: 0 0 0.9em; color: #555; font-size: 8pt }
+        .raster { filter: grayscale(1); margin-bottom: 6px; font-family: 'HintedBoxes', Arial, sans-serif }
+        .cap { font-size: 6.5pt; color: #666; margin: 8px 0 2px }
+        </style>
+        """;
+    var html = new System.Text.StringBuilder("<!DOCTYPE html><html><head>" + css + "</head><body><h1>Text drawn into bitmaps</h1><p class=\"intro\">" + intro + "</p>");
+    foreach (var weight in new[] { 300, 400, 650, 900 })
+    {
+        foreach (var px in new[] { 9, 11, 13, 16 })
+        {
+            html.Append($"<div class=\"cap\">font-weight: {weight}, {px}px</div>");
+            html.Append($"<div class=\"raster\" style=\"font-size:{px}px; font-weight:{weight}\">HELLO TITLE FILL HOLE FLUTE hill nun</div>");
+        }
+    }
+
+    return html.Append("</body></html>").ToString();
+}
+
+await SaveShowcaseAsync("text_hinting_cff2_standard", "Graphics & Effects", "Hinted Raster Text (CFF2 Variable Font)",
+    "PdfGenerateConfig.TextHinting = Standard with a variable font whose outlines are CFF2: the hints and blue zones of its charstrings are blended for the weight of each line (300 to 900) before Adobe's CFF engine applies them, so the top, the bars and the baseline of the letters land on pixel edges at every weight, in the bitmaps this page rasterizes at 72 dpi.",
+    TextHintingCff2Html("The lines below are rasterized at 72 dpi, in a variable font with CFF2 outlines, at four weights, so the pixel grid is visible. Compare with the same page without hinting."),
+    textHintingRasterConfig);
+
+await SaveShowcaseAsync("text_hinting_cff2_none", "Graphics & Effects", "Raster Text Without Hinting (CFF2 Variable Font)",
+    "The same page as the hinted CFF2 raster text showcase with TextHinting left at its default, None: the outlines are only scaled at each weight, so bars and tops cut through pixels.",
+    TextHintingCff2Html("The lines below are rasterized at 72 dpi, in a variable font with CFF2 outlines, at four weights. Compare with the same page with hinting."),
+    new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PageOrientation = PageOrientation.Portrait,
+        ShrinkToFit = true,
+        RasterizationDpi = 72
+    });
 
 // --- Raster shadows showcase (text-shadow, Gaussian box-shadow, silhouette drop-shadow) ---
 

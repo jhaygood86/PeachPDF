@@ -54,6 +54,8 @@ internal sealed partial class RasterGraphics
         var contours = new FlatPath();
         var toDevice = UserToDevice;
         var tolerance = 0.1 / Math.Max(toDevice.MaxScale, 1e-9);
+        var hinting = HintingRequest(xFont, toDevice);
+        var svgOverrides = typeface.HasSvgGlyphs ? ToGlyphOverrides(fontPalette) : null;
 
         var penX = originX;
         foreach (var glyph in glyphs)
@@ -61,6 +63,16 @@ internal sealed partial class RasterGraphics
             if (typeface.HasBitmapGlyphs && typeface.TryGetBitmap((ushort)glyph.GlyphIndex, xFont.Size, out var bitmap))
             {
                 DrawBitmapGlyph(typeface, glyph.GlyphIndex, bitmap, xFont.Size, penX + glyph.XOffset * scale, baselineY - glyph.YOffset * scale);
+            }
+            else if (typeface.HasSvgGlyphs && TryDrawSvgGlyph(typeface, glyph.GlyphIndex, xFont.Size, color, fontPalette?.BasePaletteIndex ?? 0,
+                         svgOverrides, penX + glyph.XOffset * scale, baselineY - glyph.YOffset * scale))
+            {
+                // drawn from the glyph's own SVG document
+            }
+            else if (hinting is { } request && typeface.TryGetOutline((ushort)glyph.GlyphIndex, request, out var fitted))
+            {
+                AddPixelGlyph(contours, fitted, toDevice, penX + glyph.XOffset * scale, baselineY - glyph.YOffset * scale, skew, tolerance,
+                    request.GridFitting == GridFitting.Monochrome);
             }
             else if (typeface.TryGetOutline((ushort)glyph.GlyphIndex, out var outline))
             {
@@ -88,6 +100,37 @@ internal sealed partial class RasterGraphics
         DrawImage(image, new RRect(left * _pixelsPerPoint, top * _pixelsPerPoint, width * _pixelsPerPoint, height * _pixelsPerPoint));
     }
 
+    /// <summary>
+    /// Draws a glyph from its SVG document (OpenType SVG) at a glyph origin given in points, through the SVG renderer on this surface, so
+    /// what a filter, a shadow or a flattened region shows is the glyph a PDF page would show, in the font's palette colours. False when the
+    /// glyph has no document (or has a COLR paint, which comes first), or the document cannot be used: the caller draws the outline.
+    /// </summary>
+    private bool TryDrawSvgGlyph(Typeface typeface, int glyphId, double fontSize, RColor color, int paletteIndex,
+        IReadOnlyDictionary<int, XColor>? overrides, double originX, double baselineY)
+    {
+        if (typeface.GetColorPaint((ushort)glyphId) is not null || typeface.TryGetColorLayers((ushort)glyphId, out _) ||
+            !typeface.TryGetSvgGlyph((ushort)glyphId, out var svg))
+            return false;
+
+        _svgGlyphs ??= new SvgGlyphPainter(this, _adapter);
+        return _svgGlyphs.TryPaint(typeface, (ushort)glyphId, svg, fontSize, originX, baselineY,
+            XColor.FromArgb(color.A, color.R, color.G, color.B), paletteIndex, overrides);
+    }
+
+    private SvgGlyphPainter? _svgGlyphs;
+
+    private static Dictionary<int, XColor>? ToGlyphOverrides(RFontPalette? palette)
+    {
+        if (palette is not { Overrides.Count: > 0 })
+            return null;
+
+        var overrides = new Dictionary<int, XColor>(palette.Overrides.Count);
+        foreach (var (entry, colour) in palette.Overrides)
+            overrides[entry] = XColor.FromArgb(colour.A, colour.R, colour.G, colour.B);
+
+        return overrides;
+    }
+
     public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color)
     {
         var xFont = ((FontAdapter)font).Font;
@@ -100,14 +143,101 @@ internal sealed partial class RasterGraphics
         var toDevice = UserToDevice;
         var tolerance = 0.1 / Math.Max(toDevice.MaxScale, 1e-9);
         var contours = new FlatPath();
+        var hinting = HintingRequest(xFont, toDevice);
 
         foreach (var placement in glyphs)
         {
-            if (typeface.TryGetOutline((ushort)placement.GlyphIndex, out var outline))
+            if (hinting is { } request && typeface.TryGetOutline((ushort)placement.GlyphIndex, request, out var fitted))
+                AddPixelGlyph(contours, fitted, toDevice, placement.X / _pixelsPerPoint, placement.Y / _pixelsPerPoint, 0, tolerance,
+                    request.GridFitting == GridFitting.Monochrome);
+            else if (typeface.TryGetOutline((ushort)placement.GlyphIndex, out var outline))
                 AddGlyph(contours, outline, placement.X / _pixelsPerPoint, placement.Y / _pixelsPerPoint, scale, 0, tolerance);
         }
 
         FillGlyphs(contours, PaintSource.FromColor(Utils.Convert(color)), xFont, toDevice);
+    }
+
+    /// <summary>
+    /// What to ask the typeface for when text is to be hinted: the size in device pixels per em and the kind of hinting. Null when hinting
+    /// is off or means nothing here: hinting fits outlines to a pixel grid, so it needs the text to reach the pixels unrotated, unskewed and
+    /// scaled the same in both directions (a rotation or a different scale per axis would turn the fitted grid into something else).
+    /// </summary>
+    private OutlineRequest? HintingRequest(XFont font, in Affine toDevice)
+    {
+        var mode = _adapter.TextHinting;
+        if (mode == TextHinting.None)
+            return null;
+
+        // a pure scale and translation, the same scale in both directions, and no mirroring
+        var scaleX = toDevice.M11;
+        var scaleY = toDevice.M22;
+        if (toDevice.M12 != 0 || toDevice.M21 != 0 || !(scaleX > 0) || !(scaleY > 0) ||
+            Math.Abs(scaleX - scaleY) > 1e-6 * Math.Max(scaleX, scaleY))
+            return null;
+
+        return new OutlineRequest
+        {
+            PixelsPerEm = font.Size * scaleX,
+            GridFitting = mode == TextHinting.Monochrome ? GridFitting.Monochrome : GridFitting.Standard,
+            StemDarkening = _adapter.TextStemDarkening,
+        };
+    }
+
+    /// <summary>
+    /// Appends an outline in device pixels (a grid-fitted one, or a scaled one) to <paramref name="target"/>, in user space, with its origin
+    /// on the baseline at (<paramref name="x"/>, <paramref name="y"/>) in user space. A grid-fitted glyph has its origin moved to a
+    /// whole device pixel vertically, so the baseline the hinting was done for lies on a pixel edge; horizontally it stays where layout put
+    /// it, unless the outline was fitted in both directions (<paramref name="fitX"/>, monochrome hinting), when the origin is on a pixel
+    /// edge too, as the stems were fitted relative to it.
+    /// </summary>
+    private static void AddPixelGlyph(FlatPath target, GlyphOutline outline, in Affine toDevice, double x, double y, double skew, double tolerance,
+        bool fitX)
+    {
+        var (originX, originY) = toDevice.Apply(x, y);
+        if (outline.IsGridFitted)
+        {
+            originY = Math.Round(originY);
+            if (fitX)
+                originX = Math.Round(originX);
+        }
+
+        if (toDevice.Invert() is not { } toUser)
+            return;
+
+        // The outline is in device pixels with y up; the device has y down. Mapped back to user space so the caller's transform to the
+        // device puts every point exactly where it was fitted.
+        double X(OutlinePoint p) => originX + p.X + skew * p.Y;
+        double Y(OutlinePoint p) => originY - p.Y;
+
+        (double, double) ToUser(OutlinePoint p) => toUser.Apply(X(p), Y(p));
+
+        for (var ci = 0; ci < outline.Contours.Count; ci++)
+        {
+            var contour = outline.Contours[ci];
+            var (cx, cy) = ToUser(contour.Start);
+            target.MoveTo(cx, cy);
+
+            for (var si = 0; si < contour.Segments.Count; si++)
+            {
+                var segment = contour.Segments[si];
+                var (ex, ey) = ToUser(segment.End);
+                if (segment.IsCubic)
+                {
+                    var (c1x, c1y) = ToUser(segment.Control1);
+                    var (c2x, c2y) = ToUser(segment.Control2);
+                    target.CubicTo(cx, cy, c1x, c1y, c2x, c2y, ex, ey, tolerance);
+                }
+                else
+                {
+                    target.LineTo(ex, ey);
+                }
+
+                cx = ex;
+                cy = ey;
+            }
+
+            target.Close();
+        }
     }
 
     private static double ItalicSkew(XFont font)

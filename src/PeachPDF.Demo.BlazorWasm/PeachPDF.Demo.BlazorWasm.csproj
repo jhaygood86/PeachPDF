@@ -58,6 +58,20 @@
   </ItemGroup>
 
   <!--
+    The notices the code this page runs requires it to show, served from wwwroot/licenses the same way as the
+    fonts (declared and staged, both halves): the FreeType Project License, unaltered, for the TrueType
+    interpreter ported from FreeType, and the third-party notices of the two packages. The page's footer
+    carries the credit line the FTL asks for and links to these.
+  -->
+  <ItemGroup>
+    <SharedLicenseAsset Include="..\PeachDrawing.Text\Internal\Hinting\FreeType\FTL.TXT" />
+    <SharedLicenseAsset Include="..\..\LICENSE" />
+    <SharedLicenseAsset Include="..\..\THIRD-PARTY-LICENSES.md" />
+    <Content Remove="wwwroot\licenses\**" />
+    <Content Include="@(SharedLicenseAsset)" LinkBase="wwwroot\licenses" />
+  </ItemGroup>
+
+  <!--
     Bakes in what the page needs to say which build of PeachPDF it is running: the library's own
     PackageVersion, this commit, and whether the two agree - a release is tagged v{PackageVersion}, so a
     commit that is not that tag's commit is a prerelease of it. Both git calls tolerate failure, since the
@@ -102,6 +116,15 @@
           Outputs="@(SharedFontAsset->'$(MSBuildProjectDirectory)\wwwroot\fonts\%(Filename)%(Extension)')">
     <Copy SourceFiles="@(SharedFontAsset)"
           DestinationFolder="$(MSBuildProjectDirectory)\wwwroot\fonts"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="StageSharedLicenseAssets"
+          BeforeTargets="ResolveStaticWebAssetsInputs;BeforeBuild"
+          Inputs="@(SharedLicenseAsset)"
+          Outputs="@(SharedLicenseAsset->'$(MSBuildProjectDirectory)\wwwroot\licenses\%(Filename)%(Extension)')">
+    <Copy SourceFiles="@(SharedLicenseAsset)"
+          DestinationFolder="$(MSBuildProjectDirectory)\wwwroot\licenses"
           SkipUnchangedFiles="true" />
   </Target>
 

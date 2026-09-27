@@ -75,7 +75,7 @@ namespace PeachDrawing.Text
                 var familyName = options?.FamilyName ?? TtfFontDescription.LoadDescription(stream).FontFamilyInvariantCulture;
 
                 stream.Seek(0, SeekOrigin.Begin);
-                Resolver.AddFont(stream, familyName, options?.Weight, options?.IsItalic, options?.Width, options?.UnicodeRanges);
+                Resolver.AddFont(stream, familyName, DeclaredFaceOf(options), options?.UnicodeRanges);
 
                 Resolver.TryGetFamilyName(familyName, out var registered);
                 return new TypefaceFamily(this, registered);
@@ -181,7 +181,9 @@ namespace PeachDrawing.Text
         /// </remarks>
         /// <param name="familyName">The family name.</param>
         /// <param name="query">What is wanted; its <see cref="TypefaceQuery.MustCover"/> has to be <see langword="null"/>.</param>
-        /// <exception cref="ArgumentException">The query names a character to cover.</exception>
+        /// <exception cref="ArgumentException">
+        /// The query names a character to cover, or its weight, width percentage or oblique angle is not a finite number.
+        /// </exception>
         /// <exception cref="InvalidOperationException">
         /// The set holds no font at all, installed or added, or the face that matched is not a font this library can parse: a
         /// font is read in full when it is first matched and not when it is added.
@@ -189,6 +191,7 @@ namespace PeachDrawing.Text
         public TypefaceMatch MatchOrFallback(string familyName, in TypefaceQuery query)
         {
             ArgumentNullException.ThrowIfNull(familyName);
+            ValidateQuery(query);
 
             if (query.MustCover is not null)
             {
@@ -258,15 +261,75 @@ namespace PeachDrawing.Text
             return GenericFamilyTable.Resolve(generic, operatingSystemAnswer, OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), isAndroid, isAvailable);
         }
 
+        /// <summary>
+        /// Makes the fallback a paragraph asks for when the typeface of a run has no glyph for a character: the face, in the family of this set
+        /// that covers the character, that best matches <paramref name="query"/>.
+        /// </summary>
+        /// <remarks>
+        /// The family is chosen the way <see cref="TryFindCoveringFamily"/> does (among the added and the installed families, the one whose
+        /// coverage best fits the character's script), and the answer for a character does not change once it has been given. A caller that
+        /// wants a particular face for a script writes its own function instead.
+        /// </remarks>
+        /// <param name="query">What the fallback face should be like: its weight, width and slant (a variable face is set to them), usually the run's own.</param>
+        /// <returns>A function from a character to a typeface, <see langword="null"/> where no family covers it.</returns>
+        public Func<Rune, Typeface?> CreateFallback(in TypefaceQuery query)
+        {
+            var wanted = query;
+            return rune =>
+            {
+                if (TryFindCoveringFamily(rune, EmojiPresentation.NoPreference, out var family)
+                    && family.TryMatch(wanted with { MustCover = rune }, out var match))
+                {
+                    return match.Typeface;
+                }
+
+                return null;
+            };
+        }
+
+        /// <summary>What an <see cref="AddOptions"/> declares about a face; a range takes the place of the single value it extends.</summary>
+        private static FontResolver.DeclaredFace DeclaredFaceOf(AddOptions? options)
+        {
+            if (options is null)
+                return default;
+
+            return new FontResolver.DeclaredFace(
+                options.WeightRange ?? (options.Weight is { } weight ? new AxisRange(weight) : null),
+                options.IsItalic,
+                options.WidthRange ?? (options.Width is { } width ? new AxisRange(WidthClasses.ToPercent(width)) : null),
+                options.ObliqueRange);
+        }
+
+        /// <summary>Refuses the numbers of a query that no face can be matched against: a weight, width or angle that is NaN or infinite.</summary>
+        internal static void ValidateQuery(in TypefaceQuery query)
+        {
+            if (!double.IsFinite(query.Weight))
+                throw new ArgumentException("The weight of a query has to be a finite number.", nameof(query));
+
+            if (query.WidthPercent is { } width && !double.IsFinite(width))
+                throw new ArgumentException("The width percentage of a query has to be a finite number.", nameof(query));
+
+            if (query.ObliqueAngle is { } angle && !double.IsFinite(angle))
+                throw new ArgumentException("The oblique angle of a query has to be a finite number.", nameof(query));
+        }
+
         internal TypefaceMatch MatchCore(string familyName, in TypefaceQuery query)
         {
-            var options = new FontResolvingOptions(query.IsItalic ? FaceStyle.Italic : FaceStyle.Regular, query.Weight, query.Width)
-            {
-                Codepoint = query.MustCover
-            };
+            var options = query.WidthPercent is { } percent
+                ? FontResolvingOptions.ForWidthPercent(query.IsItalic ? FaceStyle.Italic : FaceStyle.Regular, query.Weight, percent)
+                : new FontResolvingOptions(query.IsItalic ? FaceStyle.Italic : FaceStyle.Regular, query.Weight, query.Width);
+            options.Codepoint = query.MustCover;
+            options.ObliqueAngle = query.ObliqueAngle;
 
             var face = LoadedTypeface.GetOrCreateFrom(familyName, options, Resolver);
-            return new TypefaceMatch(face.Public, face.StyleSimulations);
+            var typeface = face.Public;
+            var synthesis = face.StyleSimulations;
+            if (typeface.IsVariable)
+            {
+                (typeface, synthesis) = VariableMatching.Apply(typeface, synthesis, query, face.DeclaredRanges);
+            }
+
+            return new TypefaceMatch(typeface, synthesis);
         }
     }
 }

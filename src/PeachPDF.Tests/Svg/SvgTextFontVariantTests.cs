@@ -3,7 +3,6 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
-using PeachDrawing.Text.Internal.Text;
 using System.IO;
 using System.Threading.Tasks;
 using System.Xml.Linq;

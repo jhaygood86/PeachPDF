@@ -78,7 +78,7 @@ namespace PeachPDF.Html.Core.Parse
             // <html> element, so it must be located by tag name.
             var htmlBox = DomUtils.GetBoxByTagName(root, "html");
             var lang = htmlBox?.HtmlTag?.TryGetAttribute("lang", "");
-            htmlContainer.DocumentLanguage = string.IsNullOrEmpty(lang) ? null : lang;
+            htmlContainer.DocumentLanguage = string.IsNullOrEmpty(lang) ? htmlContainer.DefaultLanguage : lang;
 
             var metadata = ExtractMetadata(root);
 
@@ -488,9 +488,7 @@ namespace PeachPDF.Html.Core.Parse
                     // authoritative for how THIS specific resource participates in matching, independent
                     // of what the file's own internal tables say - resolve them once per rule and apply
                     // to every src candidate it declares.
-                    var weightOverride = FontFaceDescriptorResolver.ResolveWeight(fontRule.Weight);
-                    var isItalicOverride = FontFaceDescriptorResolver.ResolveIsItalic(fontRule.Style);
-                    var stretchOverride = FontFaceDescriptorResolver.ResolveStretch(fontRule.Stretch);
+                    var descriptors = FontFaceDescriptorResolver.Resolve(fontRule.Weight, fontRule.Style, fontRule.Stretch);
 
                     // The unicode-range descriptor restricts which codepoints this face is used for; null
                     // (absent/unparseable) means "use it for whatever the font's cmap covers".
@@ -505,12 +503,12 @@ namespace PeachPDF.Html.Core.Parse
 
                         if (fontFaceDefinition.Local is not null)
                         {
-                            isLoaded = await adapter.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+                            isLoaded = await adapter.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local, descriptors, unicodeRanges);
                         }
 
                         if (!isLoaded && fontFaceDefinition.Url is not null)
                         {
-                            isLoaded = await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+                            isLoaded = await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, descriptors, unicodeRanges);
                         }
 
                         if (isLoaded) break;
