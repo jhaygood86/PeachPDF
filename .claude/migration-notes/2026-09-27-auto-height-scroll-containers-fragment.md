@@ -29,13 +29,6 @@ Add `break-inside: avoid` to keep the old result.
 
 A fix to the fragment emitter in the same change can also make a document with no scroll container draw
 content it used to lose at a page break (1 of 1,782 fuzz documents changed, recovering 54 words).
-
-The same change moves a block whose top padding or border crosses the page foot, when the first thing
-inside it would start past the page. Before, the block stayed on the page it started on, its first child
-was placed a margin below the block's content top, and that child's first line was drawn at the next
-page's top, above the child's own box (its background and border sat lower than its text). Now the block
-moves whole to the next page, and its first child's text starts inside its box.
-
 **Why:** css-break-3 §2 only lets a UA treat `overflow: hidden` as monolithic when its logical height is
 non-auto with no max, and it only permits (never requires) the same for `auto`/`scroll`.
 
