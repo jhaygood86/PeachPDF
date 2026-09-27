@@ -1,7 +1,6 @@
 using PeachDrawing.Text.Internal.Hinting;
 using PeachDrawing.Text.Internal.Hinting.FreeType;
 using System.Buffers.Binary;
-using System.Diagnostics;
 
 namespace PeachDrawing.Text.Tests.Hinting
 {
@@ -157,11 +156,9 @@ namespace PeachDrawing.Text.Tests.Hinting
 
             var dict = Dict([.. parts]);
             long before = GC.GetAllocatedBytesForCurrentThread();
-            var watch = Stopwatch.StartNew();
 
-            Assert.Throws<HintingException>(() => CffParser.Run(dict, 0, dict.Length, CffParser.Kind.Cff2Private, null, new CffPrivate(), ContextOf(store)));
+            WorkBounds.Case(() => Assert.Throws<HintingException>(() => CffParser.Run(dict, 0, dict.Length, CffParser.Kind.Cff2Private, null, new CffPrivate(), ContextOf(store))));
 
-            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), $"took {watch.Elapsed.TotalSeconds:F1} s");
             Assert.True(GC.GetAllocatedBytesForCurrentThread() - before < 16 * 1024 * 1024, "allocated more than 16 MB");
         }
 
