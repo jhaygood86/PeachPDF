@@ -55,7 +55,7 @@ PeachPDF renders SVG — inline `<svg>` elements in HTML, standalone SVG (`<img 
 - **A marker** draws with the fill and stroke of the shape it is placed on, for every instance separately.
 - **Elsewhere** there is no context element and the keywords paint nothing, unless the document was built for something that supplies one: the SVG document of an [OpenType SVG glyph](html-css-support.md#fonts) is drawn for text, so `context-fill` is the text's fill (its colour) and `context-stroke` its stroke, which is none because PeachPDF's text has no stroke paint.
 
-Gradients and patterns pass through `<use>` (measured against the box of what the `<use>` instantiates); through a marker only a colour or `none` is carried, and a gradient or pattern on the marked shape paints nothing inside the marker.
+Gradients and patterns pass through `<use>` (measured against the box of what the `<use>` instantiates); through a marker only a colour or `none` is carried, and a gradient or pattern on the marked shape paints nothing inside the marker. A gradient or pattern through `<use>` is measured in the instantiated element's own coordinate system, so a `transform` between the `<use>` and the shape that paints with it is not accounted for, and `<text>` inside a marker does not resolve the keywords.
 
 ## Gradients
 

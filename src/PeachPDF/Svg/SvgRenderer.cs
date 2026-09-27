@@ -2367,8 +2367,8 @@ namespace PeachPDF.Svg
             // filling, and a straight two-point "path" encloses zero area either way), but issuing a
             // real fill call is still wasted content-stream bytes and not what a real SVG renderer does.
             // Inside a marker, context-fill / context-stroke are the paints of the shape the marker is drawn on.
-            var fill = Effective(element.Fill);
-            var stroke = Effective(element.Stroke);
+            var fill = ResolveInMarker(element.Fill);
+            var stroke = ResolveInMarker(element.Stroke);
 
             if (element is not SvgLineElement && fill.Kind != SvgPaintKind.None)
             {
@@ -2421,7 +2421,7 @@ namespace PeachPDF.Svg
             // This shape is the context element of what its markers draw. Its own paint may itself be a context keyword (a shape inside a
             // marker), which is resolved against the marker it is in, before this shape's markers take over.
             var outer = s_markerContext;
-            s_markerContext = new MarkerContext(ForMarker(Effective(element.Fill)), ForMarker(Effective(element.Stroke)));
+            s_markerContext = new MarkerContext(ForMarker(ResolveInMarker(element.Fill)), ForMarker(ResolveInMarker(element.Stroke)));
             try
             {
                 foreach (var vertex in vertices)
@@ -2439,7 +2439,7 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>The paints of the shape whose markers are being drawn: what <c>context-fill</c> and <c>context-stroke</c> mean inside them.</summary>
-        private sealed record MarkerContext(SvgPaint Fill, SvgPaint Stroke);
+        private readonly record struct MarkerContext(SvgPaint Fill, SvgPaint Stroke);
 
         [ThreadStatic]
         private static MarkerContext? s_markerContext;
@@ -2448,7 +2448,7 @@ namespace PeachPDF.Svg
         /// A paint with its context keywords replaced, when it is drawn inside a marker (the only place the tree builder leaves them, because the
         /// context element differs for every instance). With no marker being drawn there is no context element, so no paint.
         /// </summary>
-        private static SvgPaint Effective(SvgPaint paint) => paint.Kind switch
+        private static SvgPaint ResolveInMarker(SvgPaint paint) => paint.Kind switch
         {
             SvgPaintKind.ContextFill => s_markerContext?.Fill ?? SvgPaint.None,
             SvgPaintKind.ContextStroke => s_markerContext?.Stroke ?? SvgPaint.None,

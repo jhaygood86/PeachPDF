@@ -11,7 +11,7 @@ and they resolve by SVG 2's rule of a context element.
   `ContextFill`/`ContextStroke`, `BuildUse` sets them to the use's own resolved fill and stroke, and `ApplyCommon` substitutes a keyword the
   moment it resolves an element's paint (an inherited paint was already substituted where it was written, so a child inherits the paint, not
   the keyword). A marker definition is built *once* for every shape it is placed on, so there the keyword stays in the tree
-  (`InheritedPaint`'s context is the sentinel kind) and `SvgRenderer.Effective` resolves it at paint time from `s_markerContext`, which
+  (`InheritedPaint`'s context is the sentinel kind) and `SvgRenderer.ResolveInMarker` resolves it at paint time from `s_markerContext`, which
   `PaintMarkers` sets to the marked shape's own (already-resolved) paints and restores around the loop, so markers on shapes in markers nest.
   Everything else gets the *seed*: `SvgTreeBuilder.Build(..., contextFill, contextStroke)`, default none (no context element paints nothing).
 - **A glyph document is built with the text as its seed**: fill = the text colour, stroke = none. That is the text paint model, not an

@@ -85,7 +85,8 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void ContextStroke_IsNoPaint_BecauseTheTextHasNoStroke()
         {
-            var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect width=\"10\" height=\"10\" fill=\"none\" stroke=\"context-stroke\" stroke-width=\"3\"/></g></svg>"));
+            // With plain inheritance the group's red stroke would win.
+            var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\" stroke=\"#ff0000\"><rect width=\"10\" height=\"10\" fill=\"none\" stroke=\"context-stroke\" stroke-width=\"3\"/></g></svg>"));
 
             Assert.Equal(SvgPaintKind.None, Only(doc!).Stroke.Kind);
         }

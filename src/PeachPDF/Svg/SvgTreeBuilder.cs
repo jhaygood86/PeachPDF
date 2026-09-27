@@ -1919,7 +1919,9 @@ namespace PeachPDF.Svg
                 OrientAngle = SvgValueParsers.ParseLength(orient) ?? 0,
             };
 
-            var (paint, font) = EnterDefinition(node, parentPaint, parentFont);
+            // The context element of a marker's content is the shape the marker is drawn on, which differs for every instance: the keywords stay
+            // in the tree and the renderer resolves them when it draws the marker. That holds for the <marker> element's own fill and stroke too.
+            var (paint, font) = EnterDefinition(node, parentPaint with { ContextFill = SvgPaint.ContextFill, ContextStroke = SvgPaint.ContextStroke }, parentFont);
 
             // A shape inside the marker that inherits `marker-end: url(#thisMarker)` from an ancestor would draw the
             // marker inside itself, without end - so drop just the inherited references to this marker. A reference
@@ -1930,11 +1932,6 @@ namespace PeachPDF.Svg
                 MarkerStartRef = paint.MarkerStartRef == markerId ? null : paint.MarkerStartRef,
                 MarkerMidRef = paint.MarkerMidRef == markerId ? null : paint.MarkerMidRef,
                 MarkerEndRef = paint.MarkerEndRef == markerId ? null : paint.MarkerEndRef,
-
-                // The context element of a marker's content is the shape the marker is drawn on, which differs for every instance: the keywords
-                // stay in the tree and the renderer resolves them when it draws the marker.
-                ContextFill = SvgPaint.ContextFill,
-                ContextStroke = SvgPaint.ContextStroke,
             };
             marker.Children.AddRange(BuildDefinitionChildren(node, paint, font));
 

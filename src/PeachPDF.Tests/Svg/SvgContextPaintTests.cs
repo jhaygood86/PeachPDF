@@ -185,7 +185,39 @@ namespace PeachPDF.Tests.Svg
                 """);
 
             AssertColour(surface, 50, 50, Green);     // the marker's interior: the path's fill
-            AssertColour(surface, 43, 50, Blue);      // its edge: the path's stroke
+            AssertColour(surface, 43, 45, Blue);      // its edge, away from the path's own stroke: the path's stroke
+        }
+
+        [Fact]
+        public void AnElementBetweenTheUseAndTheKeyword_DoesNotBreakTheContext()
+        {
+            // With plain inheritance the blue group would win; the context element is the use, whatever lies between.
+            var surface = Paint($"""
+                <svg {Svg}>
+                  <defs><g id="g" fill="#0000ff" stroke="#00ff00"><rect width="40" height="40" fill="context-fill" stroke="context-stroke" stroke-width="10"/></g></defs>
+                  <use xlink:href="#g" x="30" y="30" fill="#ff0000" stroke="#ffff00"/>
+                </svg>
+                """);
+
+            AssertColour(surface, 50, 50, Red);
+            AssertColour(surface, 32, 50, (255, 255, 0));
+        }
+
+        [Fact]
+        public void AKeywordOnTheMarkerElementItself_IsResolvedForEachInstance()
+        {
+            var surface = Paint($"""
+                <svg {Svg}>
+                  <defs>
+                    <marker id="m" markerWidth="16" markerHeight="16" refX="8" refY="8" markerUnits="userSpaceOnUse" fill="context-stroke">
+                      <rect width="16" height="16"/>
+                    </marker>
+                  </defs>
+                  <path d="M10,50 L50,50" fill="#00ff00" stroke="#0000ff" stroke-width="2" marker-end="url(#m)"/>
+                </svg>
+                """);
+
+            AssertColour(surface, 50, 50, Blue);
         }
 
         [Fact]
