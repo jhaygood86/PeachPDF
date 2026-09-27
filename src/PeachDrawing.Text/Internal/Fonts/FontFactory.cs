@@ -168,7 +168,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             return null;
         }
 
-        public static bool TryGetFontSourceByKey(ulong key, out FontFileData fontSource)
+        public static bool TryGetFontSourceByKey(FontContentHash key, out FontFileData fontSource)
         {
             try
             {
@@ -232,27 +232,10 @@ namespace PeachDrawing.Text.Internal.Fonts
                 FontFileData existingFontSource;
                 if (FontSourcesByKey.TryGetValue(fontSource.Key, out existingFontSource))
                 {
-#if DEBUG
-                    // Fonts have same length and check sum. Now check byte by byte identity.
-                    int length = fontSource.Bytes.Length;
-                    for (int idx = 0; idx < length; idx++)
-                    {
-                        if (existingFontSource.Bytes[idx] != fontSource.Bytes[idx])
-                        {
-                            //Debug.Assert(false,"Two fonts with identical checksum found.");
-                            break;
-                            //goto FontsAreNotIdentical;
-                        }
-                    }
+                    // The key is a collision-resistant hash of the bytes (see FontContentHash), so the same key is the same font.
+                    Debug.Assert(existingFontSource.Bytes.AsSpan().SequenceEqual(fontSource.Bytes), "Two different fonts have the same content hash.");
                     Debug.Assert(existingFontSource.Fontface != null);
-#endif
                     return existingFontSource;
-
-                    //FontsAreNotIdentical:
-                    //// Incredible rare case: Two different fonts have the same size and check sum.
-                    //// Give the new one a new key until it do not clash with an existing one.
-                    //while (FontSourcesByKey.ContainsKey(fontSource.Key))
-                    //    fontSource.IncrementKey();
                 }
 
                 OpenTypeFontface fontface = fontSource.Fontface;
@@ -262,7 +245,7 @@ namespace PeachDrawing.Text.Internal.Fonts
                     fontSource.Fontface = new OpenTypeFontface(fontSource);
                 }
                 FontSourcesByKey.Add(fontSource.Key, fontSource);
-                // FontSourcesByKey (the content checksum) is the true identity; FontSourcesByName is only a
+                // FontSourcesByKey (the content hash) is the true identity; FontSourcesByName is only a
                 // convenience by-name lookup. Two DIFFERENT font files can share one internal name (a
                 // common webfont-subset pattern), so the first writer keeps the name slot and later
                 // distinct-byte sources stay addressable by their key - using the indexer instead of Add so
@@ -300,6 +283,6 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// <summary>
         /// Maps font source key to font source.
         /// </summary>
-        static readonly Dictionary<ulong, FontFileData> FontSourcesByKey = new Dictionary<ulong, FontFileData>();
+        static readonly Dictionary<FontContentHash, FontFileData> FontSourcesByKey = new Dictionary<FontContentHash, FontFileData>();
     }
 }

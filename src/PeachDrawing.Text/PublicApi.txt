@@ -714,12 +714,12 @@ PeachDrawing.Text.Typeface : sealed class
   property IReadOnlyList<NamedVariation> NamedVariations { get; }
   property IReadOnlyList<VariationAxis> Axes { get; }
   property MathTable MathData { get; }
+  property String ContentHash { get; }
   property String FamilyName { get; }
   property String FullName { get; }
   property String StyleName { get; }
   property String VariationKey { get; }
   property TypefaceMetrics Metrics { get; }
-  property UInt64 ContentHash { get; }
 PeachDrawing.Text.TypefaceFamily : sealed class
   method Boolean TryMatch(in TypefaceQuery query, out TypefaceMatch match)
   property String Name { get; }

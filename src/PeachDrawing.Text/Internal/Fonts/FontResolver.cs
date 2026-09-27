@@ -33,7 +33,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         // means every FontResolver instance after the first to need a given face (e.g. a per-codepoint
         // fallback face like an emoji/CJK font, resolved fresh by every test's own short-lived instance)
         // reuses the same byte[] instead of re-reading a potentially multi-megabyte file from disk. This
-        // also makes FontFileData.GetOrCreateFrom's own buffer-identity checksum memo (see FontFileData.cs)
+        // also makes FontFileData.GetOrCreateFrom's own buffer-identity hash memo (see FontFileData.cs)
         // actually hit for system fonts, not just custom ones - see .claude/recent-fixes for the measured
         // effect.
         private static readonly ConcurrentDictionary<(string Path, int FaceIndex), byte[]> _systemFontBytesCache = new();
@@ -311,13 +311,14 @@ namespace PeachDrawing.Text.Internal.Fonts
             // can share one internal name (a common webfont-subset pattern - e.g. every "Roboto" subset
             // file reports "Roboto"); those must not collide in _CustomFonts (the second would overwrite
             // the first's bytes). So when a *different* byte set is already registered under this internal
-            // name, disambiguate with a content checksum. Browsers identify a font resource by its bytes,
+            // name, disambiguate with a content hash (collision-resistant: a font made to share another's checksum would
+            // otherwise take its slot). Browsers identify a font resource by its bytes,
             // never by the file's self-reported name - this makes the byte store do the same.
             var internalName = fontFileInfo.FontDescription.FontNameInvariantCulture;
             var faceName = internalName;
             if (_CustomFonts.TryGetValue(internalName, out var existingBytes) && !existingBytes.AsSpan().SequenceEqual(fontBytes))
             {
-                faceName = $"{internalName}#{FontFileData.CalcChecksum(fontBytes):x}";
+                faceName = $"{internalName}#{FontFileData.GetOrComputeHash(fontBytes)}";
             }
 
             // The STORED description's own Weight/Style/Stretch must reflect the override too, not just

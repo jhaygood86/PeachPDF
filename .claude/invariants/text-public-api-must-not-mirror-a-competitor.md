@@ -93,7 +93,7 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 |---|---|---|
 | `TypefaceExporter.ExportSubset` (`typeface`, `glyphs`, `keepCharacterMap`) | Cuts a face down to some glyphs | "Export" and "subset" are the plain words for it; the shape follows what a PDF writer needs (glyph indices in, font file out) |
 | `ExportedFont` (`Data`, `HasCffOutlines`, `IsSubset`) | The font file and what it holds | Ours |
-| `Typeface.FullName`, `Typeface.ContentHash` | The `name` table's full name (ID 4), and a checksum of the data | OpenType `name` table; "content hash" is the ordinary term |
+| `Typeface.FullName`, `Typeface.ContentHash` | The `name` table's full name (ID 4), and a hash of the data (a string of 32 hexadecimal digits: the first 128 bits of its SHA-256, so it is an identity a document cannot make collide) | OpenType `name` table; "content hash" is the ordinary term |
 | `TypefaceMetrics.IsSymbolic`, `IsFixedPitch`, `HasSerifs`, `IsItalicStyle`, `FirstCharIndex` | Flags a font descriptor records | OpenType `cmap`, `post`, `OS/2` (`sFamilyClass`, `fsSelection`, `usFirstCharIndex`) |
 
 ### `PeachDrawing.Text.Shaping`

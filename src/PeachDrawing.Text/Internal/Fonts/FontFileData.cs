@@ -54,63 +54,35 @@ namespace PeachDrawing.Text.Internal.Fonts
         // Signature of a true type collection font.
         const uint ttcf = 0x66637474;
 
-        FontFileData(byte[] bytes, ulong key)
+        FontFileData(byte[] bytes, FontContentHash key)
         {
             _fontName = null;
             _bytes = bytes;
             _key = key;
         }
 
-        // CalcChecksum is an O(n) scan of the whole buffer - memoizing it by buffer identity
+        // Hashing is an O(n) pass over the whole buffer - memoizing it by buffer identity
         // means a font whose bytes we've already seen (the common case: FontFactory's own FontSourcesByKey
         // cache below is process-wide, and FontResolver.GetFont now returns a stable byte[] per system
-        // font path too - see FontResolver.cs) never pays that scan again just to recompute the very key
+        // font path too - see FontResolver.cs) never pays that pass again just to recompute the very key
         // that would have found the existing cache entry. ConditionalWeakTable so a byte[] this process
-        // stops referencing elsewhere doesn't keep its checksum alive forever.
-        private static readonly ConditionalWeakTable<byte[], object> _checksumCache = new();
+        // stops referencing elsewhere doesn't keep its hash alive forever.
+        private static readonly ConditionalWeakTable<byte[], object> _hashCache = new();
 
         /// <summary>
-        /// Calculates an Adler32 checksum combined with the buffer length
-        /// in a 64 bit unsigned integer.
+        /// The content hash of <paramref name="bytes"/>, computed once per buffer (by reference) and remembered for as long as the
+        /// buffer lives.
         /// </summary>
-        public static ulong CalcChecksum(byte[] buffer)
+        public static FontContentHash GetOrComputeHash(byte[] bytes)
         {
-            if (buffer == null)
-                throw new ArgumentNullException("buffer");
+            ArgumentNullException.ThrowIfNull(bytes);
 
-            const uint prime = 65521; // largest prime smaller than 65536
-            uint s1 = 0;
-            uint s2 = 0;
-            int length = buffer.Length;
-            int offset = 0;
-            while (length > 0)
-            {
-                int n = 3800;
-                if (n > length)
-                    n = length;
-                length -= n;
-                while (--n >= 0)
-                {
-                    s1 += buffer[offset++];
-                    s2 = s2 + s1;
-                }
-                s1 %= prime;
-                s2 %= prime;
-            }
-            ulong ul1 = (ulong)s2 << 16;
-            ul1 = ul1 | s1;
-            ulong ul2 = (ulong)buffer.Length;
-            return (ul1 << 32) | ul2;
-        }
+            if (_hashCache.TryGetValue(bytes, out var boxed))
+                return (FontContentHash)boxed;
 
-        private static ulong GetOrComputeChecksum(byte[] bytes)
-        {
-            if (_checksumCache.TryGetValue(bytes, out var boxed))
-                return (ulong)boxed;
-
-            var key = CalcChecksum(bytes);
-            _checksumCache.AddOrUpdate(bytes, key);
-            return key;
+            var hash = FontContentHash.Compute(bytes);
+            _hashCache.AddOrUpdate(bytes, hash);
+            return hash;
         }
 
         /// <summary>
@@ -119,7 +91,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// </summary>
         public static FontFileData GetOrCreateFrom(byte[] bytes)
         {
-            ulong key = GetOrComputeChecksum(bytes);
+            FontContentHash key = GetOrComputeHash(bytes);
             FontFileData fontSource;
             if (!FontFactory.TryGetFontSourceByKey(key, out fontSource))
             {
@@ -131,7 +103,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         }
         public static FontFileData CreateCompiledFont(byte[] bytes)
         {
-            FontFileData fontSource = new FontFileData(bytes, 0);
+            FontFileData fontSource = new FontFileData(bytes, default);
             return fontSource;
         }
 
@@ -152,23 +124,22 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// <summary>
         /// Gets the key that uniquely identifies this font source.
         /// </summary>
-        internal ulong Key
+        internal FontContentHash Key
         {
             get
             {
-                if (_key == 0)
-                    _key = CalcChecksum(Bytes);
+                if (_key.IsEmpty)
+                    // Only a compiled font (CreateCompiledFont) gets here, and it stands outside the cache: its bytes may be
+                    // changed by whoever made it, so its hash is not remembered by buffer the way the cached fonts' are.
+                    _key = FontContentHash.Compute(Bytes);
                 return _key;
             }
         }
-        ulong _key;
+        FontContentHash _key;
 
-        public void IncrementKey()
-        {
-            // HACK: Depends on implementation of CalcChecksum.
-            // Increment check sum and keep length untouched.
-            _key += 1ul << 32;
-        }
+        /// <summary>The <see cref="Key"/> as text (32 lowercase hexadecimal digits), made once.</summary>
+        internal string KeyText => _keyText ??= Key.ToString();
+        string _keyText;
 
         /// <summary>
         /// Gets the name of the font's name table.
@@ -190,7 +161,7 @@ namespace PeachDrawing.Text.Internal.Fonts
 
         public override int GetHashCode()
         {
-            return (int)((Key >> 32) ^ Key);
+            return Key.GetHashCode();
         }
 
         public override bool Equals(object? obj)
@@ -208,8 +179,8 @@ namespace PeachDrawing.Text.Internal.Fonts
         internal string DebuggerDisplay
         // ReShar per restore UnusedMember.Local
         {
-            // The key is converted to a value a human can remember during debugging.
-            get { return String.Format(CultureInfo.InvariantCulture, "FontFileData: '{0}', keyhash={1}", FontName, Key % 99991 /* largest prime number less than 100000 */); }
+            // The first digits of the key are enough for a human to tell fonts apart during debugging.
+            get { return String.Format(CultureInfo.InvariantCulture, "FontFileData: '{0}', keyhash={1}", FontName, KeyText.Substring(0, 8)); }
         }
     }
 }
