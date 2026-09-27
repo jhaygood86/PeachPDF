@@ -227,6 +227,11 @@ internal sealed class TtSize
 
             GraphicsState = TtGraphicsState.Default;
 
+            // TT_Load_Context: the context starts from the size's graphics state. A thread's context outlives the size it last served, and a font with
+            // no font program and no CVT program runs nothing that would set it, so what SaveContext copies below would otherwise be the last
+            // font's (a CVT program that switched hinting off then switched it off for every such font the thread hinted afterwards).
+            exec.GS = GraphicsState;
+
             exec.Twilight = TtGlyphZone.AliasOf(Twilight);
             exec.Cvt = Cvt;
             exec.Storage = Storage;
@@ -313,6 +318,7 @@ internal sealed class TtSize
     {
         // set default GS, twilight points, and storage before CV program can modify them
         GraphicsState = TtGraphicsState.Default;
+        exec.GS = GraphicsState; // see InitBytecode: what the font program left is not what the CVT program starts from either
 
         // all twilight points are originally zero
         Array.Clear(Twilight.OrgX, 0, Twilight.NPoints);
