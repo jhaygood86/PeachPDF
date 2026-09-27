@@ -189,7 +189,7 @@ internal sealed class TtSize
             exec.Version = Version;
             exec.NumGlyphs = face.NumGlyphs;
             exec.HasBlend = face.Normalized is not null;
-            exec.BlendCoordinates = face.Normalized is { } normalized ? normalized.Select(v => (int)Math.Round(v * 65536.0)).ToArray() : [];
+            exec.BlendCoordinates = face.BlendCoordinates;
 
             exec.MaxFDefs = face.MaxFunctionDefs;
             exec.MaxIDefs = face.MaxInstructionDefs;

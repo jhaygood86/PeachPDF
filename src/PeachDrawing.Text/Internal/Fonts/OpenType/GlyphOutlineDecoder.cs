@@ -583,28 +583,40 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 }
             }
 
+            // The points to walk: all of them once more round, from the one after the first on-curve point and ending on it; or, when there is no
+            // on-curve point, all of them and then the one that is made for the start, the midpoint of the last and the first.
             OutlinePoint startPoint;
-            var sequence = new List<RawPoint>(n + 1);
+            int total;
             if (firstOn < 0)
             {
                 startPoint = Midpoint(points[0], points[n - 1]);
-                for (int i = 0; i < n; i++)
-                    sequence.Add(points[i]);
-                sequence.Add(new RawPoint(startPoint.X, startPoint.Y, true));
+                total = n + 1;
             }
             else
             {
                 startPoint = new OutlinePoint(points[firstOn].X, points[firstOn].Y);
-                for (int i = 1; i <= n; i++)
-                    sequence.Add(points[(firstOn + i) % n]);
+                total = n;
             }
 
-            var contour = new OutlineContour(startPoint);
+            RawPoint At(int k) => firstOn < 0
+                ? (k < n ? points[k] : new RawPoint(startPoint.X, startPoint.Y, true))
+                : points[(firstOn + 1 + k) % n];
+
+            // a segment ends at each on-curve point, and at each off-curve point that follows another (where the implied on-curve point is)
+            int segments = 0;
+            for (int k = 0; k < total; k++)
+            {
+                if (At(k).OnCurve || (k > 0 && !At(k - 1).OnCurve))
+                    segments++;
+            }
+
+            var contour = new OutlineContour(startPoint, segments);
             OutlinePoint current = startPoint;
             RawPoint? pendingControl = null;
 
-            foreach (RawPoint p in sequence)
+            for (int k = 0; k < total; k++)
             {
+                RawPoint p = At(k);
                 if (p.OnCurve)
                 {
                     var end = new OutlinePoint(p.X, p.Y);
