@@ -2,7 +2,6 @@ using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachDrawing.Text.Internal.Fonts.OpenType.Variations;
 using PeachDrawing.Text.Outlines;
 using PeachPDF.Tests.TestSupport;
-using System.Diagnostics;
 using static PeachDrawing.Text.Tests.Fonts.SyntheticCff2;
 
 namespace PeachDrawing.Text.Tests.Fonts
@@ -308,9 +307,7 @@ namespace PeachDrawing.Text.Tests.Fonts
 
             var table = Read([Cs(0, 0, Op.RMoveTo, -107, Op.CallGSubr, 1, 1, Op.RLineTo)], subrs);
 
-            var watch = Stopwatch.StartNew();
-            Assert.False(TryDraw(table, 0, 0, out _));
-            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), watch.Elapsed.ToString());
+            WorkBounds.Case(() => Assert.False(TryDraw(table, 0, 0, out _)));
         }
 
         [Fact]
@@ -459,11 +456,9 @@ namespace PeachDrawing.Text.Tests.Fonts
             int global = 5 + topDictLength;
             bytes[global] = bytes[global + 1] = bytes[global + 2] = bytes[global + 3] = 0xFF;
 
-            var stopwatch = Stopwatch.StartNew();
-            var table = new Cff2Table(bytes, 0, bytes.Length);
+            var table = WorkBounds.Case(() => new Cff2Table(bytes, 0, bytes.Length));
 
             Assert.False(table.IsSupported);
-            Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5));
         }
 
         [Fact]
@@ -657,25 +652,29 @@ namespace PeachDrawing.Text.Tests.Fonts
         public void FlippingAnyByteOfTheFixturesCff2Table_NeverThrows()
         {
             var (font, offset, length) = FixtureTable();
-            var watch = Stopwatch.StartNew();
             int supported = 0;
 
+            // (the bound is on each case, not on the sweep: see WorkBounds)
             for (int at = 0; at < length; at++)
             {
                 foreach (byte mask in new byte[] { 0xFF, 0x80, 0x01 })
                 {
                     var copy = font.ToArray();
                     copy[offset + at] ^= mask;
-                    ReadAndDrawEverything(copy, offset, length);
-                    if (new Cff2Table(copy, offset, length).IsSupported)
+                    if (WorkBounds.Case(() =>
+                    {
+                        ReadAndDrawEverything(copy, offset, length);
+                        return new Cff2Table(copy, offset, length).IsSupported;
+                    }, $"byte {at} ^ {mask:X2}"))
+                    {
                         supported++;
+                    }
                 }
             }
 
             // Most single-byte changes still leave a table that reads (a coordinate is different, an operator is not), so the fuzz is
             // exercising the interpreter and not only the reader's refusals.
             Assert.True(supported > length, $"{supported} of {length * 3} damaged copies were still readable");
-            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(60), watch.Elapsed.ToString());
         }
 
         [Fact]

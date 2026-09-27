@@ -2,7 +2,6 @@ using PeachDrawing.Text.Internal.Hinting;
 using PeachDrawing.Text.Internal.Hinting.FreeType;
 using PeachDrawing.Text.Outlines;
 using System.Buffers.Binary;
-using System.Diagnostics;
 
 namespace PeachDrawing.Text.Tests.Hinting
 {
@@ -23,13 +22,6 @@ namespace PeachDrawing.Text.Tests.Hinting
                 ?? throw new InvalidOperationException("The font has no TrueType outlines.");
         }
 
-        private static void AssertBounded(TimeSpan limit, Action action)
-        {
-            var watch = Stopwatch.StartNew();
-            action();
-            Assert.True(watch.Elapsed < limit, $"took {watch.Elapsed.TotalSeconds:F2} s, the limit is {limit.TotalSeconds:F0} s");
-        }
-
         // fpgm/prep programs
         private static readonly byte[] JumpToTheStartForever = [.. HostileFonts.PushWord(-3), 0x1C]; // PUSHW -3, JMPR: back to the PUSHW
 
@@ -39,7 +31,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             var font = HostileFonts.WithTable(HostileFonts.Original(), "prep", JumpToTheStartForever);
             var face = FaceOf(font);
 
-            AssertBounded(TimeSpan.FromSeconds(5), () =>
+            WorkBounds.Case(() =>
                 Assert.Throws<HintingException>(() => TtSize.Create(face, Size, TtInterpreterVersion.V40, TtRenderMode.Normal)));
         }
 
@@ -49,7 +41,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             var font = HostileFonts.WithTable(HostileFonts.Original(), "fpgm", JumpToTheStartForever);
             var face = FaceOf(font);
 
-            AssertBounded(TimeSpan.FromSeconds(5), () =>
+            WorkBounds.Case(() =>
                 Assert.Throws<HintingException>(() => TtSize.Create(face, Size, TtInterpreterVersion.V40, TtRenderMode.Normal)));
         }
 
@@ -62,7 +54,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             var font = HostileFonts.WithTable(HostileFonts.WithTable(HostileFonts.Original(), "fpgm", fpgm), "prep", prep);
             var face = FaceOf(font);
 
-            AssertBounded(TimeSpan.FromSeconds(5), () =>
+            WorkBounds.Case(() =>
                 Assert.Throws<HintingException>(() => TtSize.Create(face, Size, TtInterpreterVersion.V40, TtRenderMode.Normal)));
         }
 
@@ -74,7 +66,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             byte[] prep = [.. HostileFonts.PushWord(32767), .. HostileFonts.PushWord(0), 0x2A];
             var face = FaceOf(HostileFonts.WithTable(HostileFonts.WithTable(HostileFonts.Original(), "fpgm", fpgm), "prep", prep));
 
-            AssertBounded(TimeSpan.FromSeconds(5), () =>
+            WorkBounds.Case(() =>
                 Assert.Throws<HintingException>(() => TtSize.Create(face, Size, TtInterpreterVersion.V40, TtRenderMode.Normal)));
         }
 
@@ -109,7 +101,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             var font = HostileFonts.WithTable(HostileFonts.WithTable(HostileFonts.WithTable(original, "maxp", maxp), "fpgm", fpgm.ToArray()), "prep", prep);
             var face = FaceOf(font);
 
-            AssertBounded(TimeSpan.FromSeconds(10), () =>
+            WorkBounds.Case(() =>
                 Assert.Throws<HintingException>(() => TtSize.Create(face, Size, TtInterpreterVersion.V40, TtRenderMode.Normal)));
         }
 
@@ -137,7 +129,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             }
 
             var face = FaceOf(HostileFonts.WithTable(HostileFonts.Original(), "prep", prep.ToArray()));
-            AssertBounded(TimeSpan.FromSeconds(5), () =>
+            WorkBounds.Case(() =>
                 Assert.Throws<HintingException>(() => TtSize.Create(face, Size, TtInterpreterVersion.V40, TtRenderMode.Normal)));
         }
 
@@ -176,7 +168,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             var font = HostileFonts.WithTable(HostileFonts.WithTable(HostileFonts.WithTable(original, "head", head), "loca", loca), "glyf", glyph.ToArray());
             var face = FaceOf(font);
 
-            AssertBounded(TimeSpan.FromSeconds(10), () =>
+            WorkBounds.Case(() =>
             {
                 var size = TtSize.Create(face, Size, TtInterpreterVersion.V35, TtRenderMode.Mono);
                 var loaded = TtGlyphLoader.Load(size, 1);
@@ -213,7 +205,7 @@ namespace PeachDrawing.Text.Tests.Hinting
 
             var face = FaceOf(font);
             var size = TtSize.Create(face, Size, TtInterpreterVersion.V40, TtRenderMode.Normal);
-            AssertBounded(TimeSpan.FromSeconds(5), () => Assert.Throws<HintingException>(() => TtGlyphLoader.Load(size, composite)));
+            WorkBounds.Case(() => Assert.Throws<HintingException>(() => TtGlyphLoader.Load(size, composite)));
         }
 
         /// <summary>
@@ -266,11 +258,11 @@ namespace PeachDrawing.Text.Tests.Hinting
             var face = FaceOf(font);
             var size = TtSize.Create(face, Size, TtInterpreterVersion.V40, TtRenderMode.Normal);
 
-            AssertBounded(TimeSpan.FromSeconds(5), () => Assert.Throws<HintingException>(() => TtGlyphLoader.Load(size, 1)));
+            WorkBounds.Case(() => Assert.Throws<HintingException>(() => TtGlyphLoader.Load(size, 1)));
 
             // the same font asked for its plain outline, and through the public API at a size
             var typeface = PeachPDF.Tests.TestSupport.TypefaceFixtures.FromBytes(font);
-            AssertBounded(TimeSpan.FromSeconds(5), () =>
+            WorkBounds.Case(() =>
             {
                 typeface.TryGetOutline(1, out _);
                 Assert.False(typeface.TryGetOutline(1, new OutlineRequest { PixelsPerEm = 12, GridFitting = GridFitting.Standard }, out var outline) && outline.IsGridFitted);
@@ -297,24 +289,25 @@ namespace PeachDrawing.Text.Tests.Hinting
             int hinted = 0, unhinted = 0;
             long unexpectedBefore = HintingEngine.UnexpectedFailures;
 
-            AssertBounded(TimeSpan.FromSeconds(120), () =>
+            // (the bound is on each case, not on the sweep: see WorkBounds)
+            for (int iteration = 0; iteration < 250; iteration++)
             {
-                for (int iteration = 0; iteration < 250; iteration++)
+                var font = (byte[])original.Clone();
+                string table = tables[random.Next(tables.Length)];
+                if (table == "maxp")
                 {
-                    var font = (byte[])original.Clone();
-                    string table = tables[random.Next(tables.Length)];
-                    if (table == "maxp")
-                    {
-                        // only the fields hinting reads: twilight points, storage, function and instruction definitions, stack
-                        var (_, offset, _) = HostileFonts.Tables(font).Single(t => t.Tag == "maxp");
-                        for (int i = 0; i < 4; i++)
-                            BinaryPrimitives.WriteUInt16BigEndian(font.AsSpan(offset + 16 + 2 * random.Next(5)), (ushort)random.Next(0x10000));
-                    }
-                    else
-                    {
-                        HostileFonts.Scramble(font, table, random, 1 + random.Next(60));
-                    }
+                    // only the fields hinting reads: twilight points, storage, function and instruction definitions, stack
+                    var (_, offset, _) = HostileFonts.Tables(font).Single(t => t.Tag == "maxp");
+                    for (int i = 0; i < 4; i++)
+                        BinaryPrimitives.WriteUInt16BigEndian(font.AsSpan(offset + 16 + 2 * random.Next(5)), (ushort)random.Next(0x10000));
+                }
+                else
+                {
+                    HostileFonts.Scramble(font, table, random, 1 + random.Next(60));
+                }
 
+                WorkBounds.Case(() =>
+                {
                     Typeface typeface;
                     try
                     {
@@ -322,7 +315,7 @@ namespace PeachDrawing.Text.Tests.Hinting
                     }
                     catch (TypefaceFormatException)
                     {
-                        continue;
+                        return;
                     }
 
                     foreach (var mode in new[] { GridFitting.Standard, GridFitting.Monochrome })
@@ -340,9 +333,8 @@ namespace PeachDrawing.Text.Tests.Hinting
                             }
                         }
                     }
-                }
-            });
-
+                }, $"damaged {table}, round {iteration}");
+            }
             // the fuzz did both: hinted glyphs and glyphs that fell back
             Assert.True(hinted > 100, $"only {hinted} hinted outlines");
             Assert.True(unhinted > 10, $"only {unhinted} fallbacks");
@@ -358,16 +350,20 @@ namespace PeachDrawing.Text.Tests.Hinting
             var random = new Random(99);
             int failures = 0;
 
-            AssertBounded(TimeSpan.FromSeconds(120), () =>
+            // (the bound is on each case, not on the sweep: see WorkBounds)
+            for (int iteration = 0; iteration < 120; iteration++)
             {
-                for (int iteration = 0; iteration < 120; iteration++)
+                var font = HostileFonts.WithTable(HostileFonts.WithTable(original, "fpgm", RandomProgram(random, 300)), "prep", RandomProgram(random, 300));
+                var face = FaceOf(font);
+                int ppem = Size + 64 * random.Next(30);
+                var version = random.Next(2) == 0 ? TtInterpreterVersion.V40 : TtInterpreterVersion.V35;
+                var mode = random.Next(2) == 0 ? TtRenderMode.Normal : TtRenderMode.Mono;
+
+                WorkBounds.Case(() =>
                 {
-                    var font = HostileFonts.WithTable(HostileFonts.WithTable(original, "fpgm", RandomProgram(random, 300)), "prep", RandomProgram(random, 300));
-                    var face = FaceOf(font);
                     try
                     {
-                        var size = TtSize.Create(face, Size + 64 * random.Next(30), random.Next(2) == 0 ? TtInterpreterVersion.V40 : TtInterpreterVersion.V35,
-                            random.Next(2) == 0 ? TtRenderMode.Normal : TtRenderMode.Mono);
+                        var size = TtSize.Create(face, ppem, version, mode);
                         for (int g = 1; g <= 40; g++)
                             TtGlyphLoader.Load(size, g);
                     }
@@ -375,9 +371,8 @@ namespace PeachDrawing.Text.Tests.Hinting
                     {
                         failures++;
                     }
-                }
-            });
-
+                }, $"random programs, round {iteration}");
+            }
             Assert.True(failures > 20);
         }
 

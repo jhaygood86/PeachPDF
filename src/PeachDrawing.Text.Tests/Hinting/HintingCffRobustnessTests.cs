@@ -3,7 +3,6 @@ using PeachDrawing.Text.Internal.Hinting.FreeType;
 using PeachDrawing.Text.Outlines;
 using PeachPDF.Tests.TestSupport;
 using System.Buffers.Binary;
-using System.Diagnostics;
 
 namespace PeachDrawing.Text.Tests.Hinting
 {
@@ -23,17 +22,17 @@ namespace PeachDrawing.Text.Tests.Hinting
             var font = TypefaceFixtures.FromBytes(Fixture("HintingCffHostile.otf"));
             long before = HintingEngine.UnexpectedFailures;
 
-            var watch = Stopwatch.StartNew();
             int refused = 0, fitted = 0;
             for (ushort g = 0; g < 18; g++)
             {
-                if (font.TryGetOutline(g, Request(16), out var outline) && outline.IsGridFitted)
+                ushort glyph = g;
+                bool wasFitted = WorkBounds.Case(() => font.TryGetOutline(glyph, Request(16), out var outline) && outline.IsGridFitted, $"glyph {glyph}");
+                if (wasFitted)
                     fitted++;
                 else
                     refused++;
             }
 
-            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(20), $"took {watch.Elapsed.TotalSeconds:F1} s");
             Assert.True(refused > 5, $"{refused} glyphs fell back");
             Assert.True(fitted > 3, $"{fitted} glyphs were fitted");
             Assert.Equal(before, HintingEngine.UnexpectedFailures);
@@ -46,9 +45,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             var face = HintingCffFixtures.Face("HintingCffHostile.otf");
             var size = new CffSize(face, 16 * 64);
 
-            var watch = Stopwatch.StartNew();
-            Assert.Throws<HintingException>(() => CffGlyphLoader.Load(size, 4));
-            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(15), $"took {watch.Elapsed.TotalSeconds:F1} s");
+            WorkBounds.Case(() => Assert.Throws<HintingException>(() => CffGlyphLoader.Load(size, 4)));
         }
 
         [Fact]
@@ -58,7 +55,6 @@ namespace PeachDrawing.Text.Tests.Hinting
             long unexpectedBefore = HintingEngine.UnexpectedFailures;
             int fitted = 0, fallbacks = 0;
 
-            var watch = Stopwatch.StartNew();
             foreach (var file in new[] { "HintingCff.otf", "HintingCffCid.otf" })
             {
                 var original = Fixture(file);
@@ -67,32 +63,34 @@ namespace PeachDrawing.Text.Tests.Hinting
                     var font = (byte[])original.Clone();
                     HostileFonts.Scramble(font, "CFF ", random, 1 + random.Next(80));
 
-                    Typeface typeface;
-                    try
+                    // (the bound is on each case, not on the sweep: see WorkBounds)
+                    WorkBounds.Case(() =>
                     {
-                        typeface = TypefaceFixtures.FromBytes(font);
-                    }
-                    catch (TypefaceFormatException)
-                    {
-                        continue;
-                    }
-
-                    foreach (double ppem in new[] { 9.0, 12.5, 40 })
-                    {
-                        for (int k = 0; k < 6; k++)
+                        Typeface typeface;
+                        try
                         {
-                            var glyph = (ushort)(1 + random.Next(140));
-                            bool found = typeface.TryGetOutline(glyph, Request(ppem), out var outline);
-                            if (found && outline.IsGridFitted)
-                                fitted++;
-                            else
-                                fallbacks++;
+                            typeface = TypefaceFixtures.FromBytes(font);
                         }
-                    }
+                        catch (TypefaceFormatException)
+                        {
+                            return;
+                        }
+
+                        foreach (double ppem in new[] { 9.0, 12.5, 40 })
+                        {
+                            for (int k = 0; k < 6; k++)
+                            {
+                                var glyph = (ushort)(1 + random.Next(140));
+                                bool found = typeface.TryGetOutline(glyph, Request(ppem), out var outline);
+                                if (found && outline.IsGridFitted)
+                                    fitted++;
+                                else
+                                    fallbacks++;
+                            }
+                        }
+                    }, $"{file} damage {iteration}");
                 }
             }
-
-            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(120), $"took {watch.Elapsed.TotalSeconds:F1} s");
             Assert.True(fitted > 200, $"only {fitted} fitted outlines");
             Assert.True(fallbacks > 50, $"only {fallbacks} fallbacks");
             Assert.Equal(unexpectedBefore, HintingEngine.UnexpectedFailures);
