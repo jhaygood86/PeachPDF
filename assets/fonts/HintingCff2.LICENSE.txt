@@ -1,0 +1,8 @@
+HintingCff2.otf, HintingCff2Single.otf, HintingCff2NoAxes.otf, HintingCff2Boxes.otf, HintingCff2.golden.json.gz and
+HintingCff2Variants.golden.json.gz are synthetic test data made by generate_hinting_cff2_fixtures.py and generate_hinting_cff2_boxes.py
+(with hinting_cff2_builder.py and hinting_cff2_variants.py) in this directory: fonts with CFF2 (variable CFF) outlines whose glyphs are random
+Type 2 charstrings or rectangles, and small fonts whose tables are wrong in one deliberate way. They contain no third-party design and are
+dedicated to the public domain under CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/).
+
+The golden data (HintingCff2.golden.json.gz) also holds coordinates that FreeType computed from the outlines and hints of the bundled font
+VariableCff2Test.otf, and no font data. That font keeps its own license notice beside it (VariableCff2Test.LICENSE.txt).

@@ -228,7 +228,11 @@ if (face.TryGetOutline(glyph, request, out GlyphOutline fitted))
   and the blue zones of its font (the heights of the baseline, the x-height, the caps and the ascenders, with their overshoots) place
   stems and flat edges on whole pixels, overshoots are suppressed at small sizes, and hints are substituted where the charstring says so.
   It fits vertically only, so the two modes give one outline; a font whose `LanguageGroup` says it is ideographic gets the em box
-  alignment of ideographic fonts. The advance is the design advance rounded to a whole pixel. CFF2 (variable CFF) fonts are not fitted.
+  alignment of ideographic fonts. The advance is the design advance rounded to a whole pixel. A variable font with CFF2 outlines is fitted
+  the same way at the location of the typeface (`WithAxes`): the operands of its hints, and the blue zones and stem widths of its
+  Private DICTs, are blended for the location before the hints are applied, so a weight or width moves the stems the way the font's
+  designer set out. The blending is done in FreeType's 16.16 arithmetic, and the outlines are its outlines exactly when the location is
+  one FreeType has too (see the note on variable fonts below).
 - **Stem darkening** (`OutlineRequest.StemDarkening`, off by default, as it is in FreeType) makes the stems of a CFF font's glyphs a little heavier
   when it is grid-fitted, which offsets the way anti-aliasing thins the thinnest stems of small text. Adobe's engine decides the amount from how thick a
   stem is on the pixel grid: the thinnest stems gain the most, and a stem of more than about two and a third pixels (that is, text at a large size) gains
@@ -249,9 +253,14 @@ var request = new OutlineRequest { PixelsPerEm = 9, GridFitting = GridFitting.St
   are cached per face, size and mode.
 - **Layout is not hinted.** `GetAdvance` and the metrics stay unhinted; fitting is a property of an outline drawn at one size, and a
   caller that lays text out keeps the design advances so that layout does not change with the size of the device.
-- **Variable fonts** are hinted at the instance's location by moving the points with the `gvar` deltas first and then running the
-  instructions. The result is a good approximation, not what FreeType produces bit for bit, and `cvar` (which changes control values by
-  location) is not applied.
+- **Variable fonts** with TrueType outlines are hinted at the instance's location by moving the points with the `gvar` deltas first and
+  then running the instructions, and the font's `cvar` table (which changes the control values the instructions measure with by location)
+  is applied to them first. The result is a good approximation, not what FreeType produces bit for bit: the deltas are added in 26.6 with
+  rounding where FreeType uses 16.16 fixed point. Variable fonts with CFF2 outlines are fitted as FreeType fits them, blends included: the
+  normalized coordinates of a location are those of the `fvar` and `avar` tables rounded to 2.14 (as the variation tables themselves are
+  written), where FreeType keeps them in 16.16, so the two agree where the design coordinate is a dyadic fraction of the axis and can differ
+  elsewhere by up to about 3 parts in 100,000 of each blended delta; the glyph advances are those of `HVAR` at the location. Fitted outlines
+  are cached per location.
 - **The font's `gasp` table decides which sizes are fitted.** A font that has one says, for each range of sizes, whether it wants
   grid-fitting there (`GASP_GRIDFIT`); fonts often turn hinting off at the smallest sizes, where their programs do more harm than good,
   and a request for fitting at such a size is answered as for a font that cannot be fitted: the scaled design outline with `IsGridFitted`
@@ -316,8 +325,8 @@ if (face.IsVariable)
 - A variable font with CFF2 outlines (a `CFF2` table) is read the same way: `TryGetOutline` runs the glyph's charstring with every
   `blend` resolved at the location (the `vsindex` operator and the `vsindex` of each Font DICT's Private DICT choose the regions), so the
   coordinates of an outline at a location between the masters are not whole numbers. The layout tables and the advances (`HVAR`) follow the
-  location as they do for TrueType outlines. CFF2 outlines are not grid-fitted, and a font with only `COLR` colour glyphs over CFF2
-  outlines is not reported as a colour font, as for CFF.
+  location as they do for TrueType outlines. CFF2 outlines are [grid-fitted](#grid-fitting-hinting) at the location, and a font with only
+  `COLR` colour glyphs over CFF2 outlines is not reported as a colour font, as for CFF.
 - `TypefaceExporter.ExportSubset` (see Embedding below) writes an instance as a static font, with the location's variations applied
   to the outlines and metrics of the glyphs you ask for and no hinting instructions, because a PDF cannot embed a variable font.
 

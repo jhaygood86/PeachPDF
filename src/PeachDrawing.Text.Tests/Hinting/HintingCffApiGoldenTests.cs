@@ -75,7 +75,7 @@ namespace PeachDrawing.Text.Tests.Hinting
         }
 
         /// <summary>Walks the points FreeType made against the contours of the outline: a line takes one point, a cubic curve three.</summary>
-        private static void CompareGlyph(List<string> problems, ushort glyph, GlyphGolden expected, GlyphOutline outline)
+        internal static void CompareGlyph(List<string> problems, ushort glyph, GlyphGolden expected, GlyphOutline outline)
         {
             long Fixed(double value) => (long)Math.Round(value * 64);
 

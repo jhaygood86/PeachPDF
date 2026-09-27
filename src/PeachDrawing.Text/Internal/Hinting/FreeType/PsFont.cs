@@ -166,6 +166,24 @@ internal sealed class Cf2Font
     /// <summary>Computed zone data.</summary>
     public Cf2Blues Blues = new();
 
+    /// <summary>Whether the glyph is in a CFF2 font: no width, no <c>endchar</c>, and the <c>vsindex</c> and <c>blend</c> operators (<c>isCFF2</c>).</summary>
+    public bool IsCff2;
+
+    /// <summary>The size of the operand stack of a CFF2 charstring (<c>maxstack</c> of the Top DICT).</summary>
+    public uint MaxStack;
+
+    /// <summary>The cached blend vector of the charstring (<c>blend</c>), which the <c>blend</c> operators build from <see cref="Vsindex"/> and <see cref="Ndv"/>.</summary>
+    public CffBlend Blend = new();
+
+    /// <summary>The data set of the variation store the <c>blend</c> operators use now (<c>vsindex</c>); the Private DICT's, until a charstring says otherwise.</summary>
+    public uint Vsindex;
+
+    /// <summary>The number of coordinates of the normalized vector, zero for the default location (<c>lenNDV</c>).</summary>
+    public int LenNdv;
+
+    /// <summary>The normalized vector, in 16.16 (<c>NDV</c>).</summary>
+    public int[]? Ndv;
+
     // Compute a stem darkening amount in character space.
     private static void ComputeDarkening(int emRatio, int ppem, int stemWidth, out int darkenAmount, int boldenAmount, bool stemDarkened, int[] darkenParams)
     {
@@ -314,6 +332,30 @@ internal sealed class Cf2Font
         Error.Value = 0;
 
         CffSubFont subFont = Decoder.CurrentSubfont;
+
+        IsCff2 = Decoder.Cff.IsCff2;
+        MaxStack = Decoder.Cff.TopFont.FontDict.MaxStack;
+
+        // check for variation vectors
+        if (Decoder.Cff.HasVariations)
+        {
+            // (FreeType reads the Private DICT again here when the location is not the one it was read for; the font has done that: see
+            // CffFont.ApplyVariation)
+
+            // copy from subfont
+            Blend.VStore = Decoder.Cff.VStore;
+            Blend.HasFont = true;
+
+            // clear state of charstring blend
+            Blend.UsedBV = false;
+
+            // initialize value for charstring
+            Vsindex = subFont.Private.VsIndex;
+
+            // store vector inputs for blends in charstring
+            Ndv = Decoder.Cff.Ndv;
+            LenNdv = Ndv?.Length ?? 0;
+        }
 
         // recompute cached data: nothing is cached here, so all of it is computed
         int ppem = Cf2Fixed.FromInt(Decoder.PpemY);

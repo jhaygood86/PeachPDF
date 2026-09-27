@@ -263,7 +263,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
         }
 
         /// <summary>How close the location is to the tuple's peak: 1 at it, 0 at the edge of its region and outside.</summary>
-        private static double TupleScalar(double[] peak, double[]? start, double[]? end, ReadOnlySpan<double> coordinates)
+        internal static double TupleScalar(double[] peak, double[]? start, double[]? end, ReadOnlySpan<double> coordinates)
         {
             double scalar = 1;
             for (int a = 0; a < peak.Length; a++)
@@ -301,7 +301,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
         }
 
         /// <summary>Reads packed point numbers; the result is meaningless when <paramref name="all"/> is <see langword="true"/> (every point).</summary>
-        private static int[] ReadPointNumbers(ReadOnlySpan<byte> data, ref int at, out bool all)
+        internal static int[] ReadPointNumbers(ReadOnlySpan<byte> data, ref int at, out bool all)
         {
             int count = data[at++];
             if (count == 0)
@@ -337,7 +337,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
         }
 
         /// <summary>Reads <paramref name="count"/> packed deltas.</summary>
-        private static int[] ReadDeltas(ReadOnlySpan<byte> data, ref int at, int count)
+        internal static int[] ReadDeltas(ReadOnlySpan<byte> data, ref int at, int count)
         {
             var deltas = new int[count];
             int filled = 0;

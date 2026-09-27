@@ -45,6 +45,38 @@ namespace PeachDrawing.Text.Tests.Hinting
         }
 
         [Fact]
+        public void AValueCanBeSetAndSeveralPoppedAtOnce_AndTheirLimitsAreErrors()
+        {
+            // cf2_stack_setReal and cf2_stack_pop, which a blend uses
+            var (stack, error) = Make(4);
+            stack.PushInt(1);
+            stack.PushInt(2);
+            stack.PushInt(3);
+
+            stack.SetReal(1, 0x28000);
+            Assert.Equal(0x28000, stack.GetReal(1));
+            Assert.False(stack.Failed);
+
+            stack.Pop(2);
+            Assert.Equal(1, stack.Count);
+
+            // an index equal to the count is one past the values and is accepted, and past that is an error
+            stack.SetReal(1, 5);
+            Assert.False(stack.Failed);
+            stack.SetReal(3, 5);
+            Assert.Equal(Cf2Error.StackOverflow, error.Value);
+
+            var (small, smallError) = Make(1);
+            small.PushInt(1);
+            small.SetReal(1, 7); // one past a full stack: nothing to write to
+            Assert.False(small.Failed);
+
+            small.Pop(2);
+            Assert.Equal(Cf2Error.StackUnderflow, smallError.Value);
+            Assert.Equal(1, small.Count);
+        }
+
+        [Fact]
         public void PoppingAnEmptyStackIsAnUnderflowThatReadsAsZero()
         {
             var (stack, error) = Make();

@@ -59,6 +59,11 @@ internal sealed class HintingEngine
     private readonly VariationCoordinates? _variation;
     private readonly Func<int, int> _instanceAdvance;
 
+    // What tells the location this engine fits at from another in the caches (null at the defaults). An engine serves one location (a typeface at
+    // another has an engine of its own), so the caches could do without it; it is in their keys so that what one location gave is never taken
+    // for another's if an engine is ever shared.
+    private readonly string? _variationKey;
+
     private readonly object _faceLock = new();
     private TtFace? _face;
     private bool _faceRead; // written last, with release semantics, so a reader that sees it true sees _face
@@ -79,6 +84,28 @@ internal sealed class HintingEngine
         _familyName = familyName;
         _variation = variation;
         _instanceAdvance = instanceAdvance;
+        _variationKey = variation?.Key;
+    }
+
+    /// <summary>
+    /// The normalized coordinates, in 16.16, FreeType has for a variable font: one for each axis of the font (zero at the defaults), which is
+    /// how it keeps a font that has an <c>fvar</c> table even when nothing was set; null for a font that has none.
+    /// </summary>
+    private int[]? NormalizedCoordinates()
+    {
+        int axes = _font.Variations?.Axes.Length ?? 0;
+        if (axes == 0)
+            return null;
+
+        var result = new int[axes];
+        if (_variation is { } variation)
+        {
+            // the coordinates are multiples of 1/16384 (2.14), so this is exact
+            for (int i = 0; i < axes && i < variation.Normalized.Length; i++)
+                result[i] = (int)Math.Round(variation.Normalized[i] * 65536);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -128,7 +155,7 @@ internal sealed class HintingEngine
             {
                 try
                 {
-                    _cffFace = CffFace.TryCreate(_font, _instanceAdvance);
+                    _cffFace = CffFace.TryCreate(_font, _instanceAdvance, NormalizedCoordinates());
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
@@ -188,7 +215,7 @@ internal sealed class HintingEngine
             stemDarkening = false;
         }
 
-        var sizeKey = new SizeKey(ppem26Dot6, mode, stemDarkening);
+        var sizeKey = new SizeKey(ppem26Dot6, mode, stemDarkening, _variationKey);
         var key = new GlyphKey(sizeKey, glyph);
 
         if (_glyphs.TryGet(key, out HintedGlyphResult? cached))
@@ -415,7 +442,7 @@ internal sealed class HintingEngine
             Interlocked.Increment(ref s_unexpectedFailures);
     }
 
-    private readonly record struct SizeKey(int Ppem26Dot6, GridFitting Mode, bool StemDarkening);
+    private readonly record struct SizeKey(int Ppem26Dot6, GridFitting Mode, bool StemDarkening, string? Variation);
 
     private readonly record struct GlyphKey(SizeKey Size, int Glyph);
 }
