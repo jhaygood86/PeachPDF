@@ -20,4 +20,4 @@
 
 Evidence: 570 tests in `PeachDrawing.Text.Tests` (40 for layout, including Arabic joining, Devanagari syllables, RTL carets and hit tests), 95%
 line coverage of `Layout/`, and a read-only review whose findings are fixed above. See
-[the omissions](../accepted-gaps/text-layout-api-first-slice-omissions.md).
+[the limits](../accepted-gaps/text-layout-api-limits.md) and [why PeachPDF does not use it](../accepted-gaps/peachpdf-does-not-use-the-text-layout-api.md).

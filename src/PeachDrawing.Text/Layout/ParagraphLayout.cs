@@ -20,8 +20,10 @@ namespace PeachDrawing.Text.Layout
 
         private readonly double[] _advances;
 
-        internal PlacedRun(TextRange range, RunStyle style, GlyphRun glyphs, byte level, double x, double baseline, double width, double[] boundaryX, double[] advances, bool isGenerated = false)
+        internal PlacedRun(TextRange range, RunStyle style, GlyphRun glyphs, byte level, double x, double baseline, double width, double[] boundaryX, double[] advances, bool isGenerated = false, InlineBox? inlineBox = null, RectangleF inlineBoxBounds = default)
         {
+            InlineBox = inlineBox;
+            InlineBoxBounds = inlineBoxBounds;
             IsGenerated = isGenerated;
             _advances = advances;
             Range = range;
@@ -42,6 +44,15 @@ namespace PeachDrawing.Text.Layout
         /// <see cref="Range"/> is empty, and a caret at the place it is generated is before it (after it, for a right-to-left paragraph). It is drawn like any other run.
         /// </summary>
         public bool IsGenerated { get; }
+
+        /// <summary>
+        /// The inline box the run stands for (see <see cref="ParagraphBuilder.AddInlineBox"/>), or <see langword="null"/> for a run of text. Such a run has one character
+        /// of the text (a U+FFFC), no glyphs, and the box's width; the caller draws the box in <see cref="InlineBoxBounds"/>.
+        /// </summary>
+        public InlineBox? InlineBox { get; }
+
+        /// <summary>Where the run's inline box is, in the layout's coordinates: at <see cref="X"/>, sized as given and placed on the line as its alignment says; empty for a run of text.</summary>
+        public RectangleF InlineBoxBounds { get; }
 
         /// <summary>The face and size the run is set in.</summary>
         public RunStyle Style { get; }

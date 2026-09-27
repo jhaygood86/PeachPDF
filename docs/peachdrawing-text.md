@@ -182,7 +182,13 @@ if (face.TryMapRune(new Rune('g'), out ushort glyph) && face.TryGetOutline(glyph
   A version 1 glyph is a paint graph: `GetColorPaint` returns the root `ColorPaint`, and the sealed types that derive from it are
   named as the `COLR` specification names its paint formats (`PaintSolid`, `PaintLinearGradient`, `PaintRadialGradient`,
   `PaintSweepGradient`, `PaintGlyph`, `PaintTransform`, `PaintComposite`, `PaintColrGlyph`, and `PaintColrLayers`, whose layers
-  are read with `GetColorLayerPaint`). Variable paints are read at the font's default instance.
+  are read with `GetColorLayerPaint`). At a location of a variable font (`WithAxes`) the paints are read there: the variable formats
+  (`PaintVarSolid`, the gradients, `PaintVarTransform` and the translate, scale, rotate and skew variants), their colour lines and the
+  clip boxes have the deltas of the font's `COLR` variation store added, so the nodes carry the numbers that apply at the location (an
+  opacity that a delta pushes outside 0 to 1 is kept inside it, and colour stops a delta moves out of order are put back in order). Nodes are
+  made for each location, and a caller needs to know nothing about variations. `TryGetColorClipBox` gives the rectangle that holds everything a
+  glyph paints (the font's `ClipList`), when the font has one for it. The angles of a sweep gradient are counter-clockwise from the
+  positive x axis, as the specification's half-turn bias is undone.
 - **Colour glyphs from SVG.** A font with an `SVG ` table reports `HasSvgGlyphs`, and `TryGetSvgGlyph` gives the SVG document that draws a glyph (gzip-compressed
   documents are inflated, up to 4 MiB), the id of the element in it that is the glyph (`glyph` and the glyph's number), and the range of glyphs the document covers.
   The library does not render SVG: a caller draws the document with the glyph's origin at (0, 0), y pointing down and one design unit as one unit, with the font's
@@ -466,7 +472,24 @@ foreach (LineBox line in layout.Lines)
   the paragraph) without ending the paragraph. A line limit is about lines, so one line that overflows its width is cut only when `TextOverflow` asks for it, and text that
   ends in a newline does not count as text left out. Only the lines that are laid out are worked out, so a limit on a very long text costs what its lines cost.
 
-Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph. Inline boxes are not part of the layout yet.
+- **Inline boxes.** `ParagraphBuilder.AddInlineBox(new InlineBox(width, height, ...))` puts a box of a known size in the text like one character (an image, an inline block, a
+  formula the caller lays out itself). The paragraph's text holds a U+FFFC for it; a line may break before and after it and never inside it; and a box wider than the line
+  overflows on a line of its own. It is placed as a `PlacedRun` with no glyphs, one character in `Range`, the box's width, `PlacedRun.InlineBox` (with the `Tag` the caller gave) and
+  `PlacedRun.InlineBoxBounds`, the rectangle to draw it in. `Baseline` is the distance from the top of the box to the point that sits on the line's baseline (the bottom edge by
+  default, as for an image), `BaselineShift` raises or lowers it, and `VerticalAlign` chooses `Baseline`, `Middle`, `TextTop`, `TextBottom`, or `Top`/`Bottom` (which align to the line, and
+  make it as tall as the box, growing it away from the text). The line is as tall as the text around the box and the box together need, and text around a box counts as its strut, so a
+  line of one box is as tall as its text would be. Letter spacing does not apply to a box, a tab measures from the end of it, and it is a wall for justification: no room is added next to it.
+  Carets, selection and hit testing treat it as one character.
+
+- **One line at a time.** `Paragraph.CreateFlow()` gives a `LineFlow` for a caller that owns what the text flows around (floats, columns, pages): `TryNext(cursor, space, out line, out next)` lays out
+  the line that starts at a `FlowCursor` in a `LineSpace` (its left and right edges, its indent, and where its top is) and gives back the cursor of the next. `default(FlowCursor)`, or
+  `flow.Start`, is the start of the paragraph; `cursor.IsEnd` says the last line has been laid out. The call is a pure function of the paragraph, the cursor and the space: it never changes its
+  arguments and keeps nothing, so a caller that wants to undo a line (its height grew, a float now intrudes) calls it again with the cursor from before, and one flow can be used from several
+  threads. `flow.GetIndent(cursor)` gives the `text-indent` of the line, for a caller that follows the style. The lines are the same as `Layout` gives when every space is the full width and each
+  line is under the last (a test holds the two to that), except that `MaxLines` is the caller's to apply, tab stops start at the space's edge, the limit on hyphenating the last full line guesses the next line's room from this space's width, and
+  a right-to-left line is placed against the space's left edge, not a right edge the flow does not know, when the space has no end.
+
+Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 
