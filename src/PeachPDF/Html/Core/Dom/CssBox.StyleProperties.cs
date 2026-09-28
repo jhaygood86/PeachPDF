@@ -455,13 +455,15 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// <see cref="ActualTextShapingFeatures"/>, overridden with <paramref name="word"/>'s own
         /// <see cref="CssRectWord.ScriptTag"/>/<see cref="CssRectWord.EffectiveJoiningForms"/>/
-        /// <see cref="CssRectWord.EffectiveUseCategories"/> when it carries any of them -
+        /// <see cref="CssRectWord.EffectiveUseCategories"/>/<see cref="CssRectWord.EffectiveKhmerCategories"/>
+        /// when it carries any of them -
         /// <see cref="ActualTextShapingFeatures"/> is a box-level (not per-word) cached value, but
-        /// script tag/joining forms/USE categories are resolved per word (see <see cref="CssBox.CharScripts"/>/
-        /// <see cref="CssBox.JoiningForms"/>/<see cref="CssBox.UseCategories"/>), so every measure/paint
+        /// script tag/joining forms/USE/Khmer categories are resolved per word (see <see cref="CssBox.CharScripts"/>/
+        /// <see cref="CssBox.JoiningForms"/>/<see cref="CssBox.UseCategories"/>/<see cref="CssBox.KhmerCategories"/>),
+        /// so every measure/paint
         /// call site that shapes one specific word's own text needs this instead of the plain box-level
         /// property. A no-op (returns the unmodified box-level value) for the overwhelming common case
-        /// of a word with none of the three - only evaluates <see cref="ActualTextShapingFeatures"/>
+        /// of a word with none of the four - only evaluates <see cref="ActualTextShapingFeatures"/>
         /// once either way, so this costs nothing beyond the existing cached-property read. When the
         /// word also carries joining forms, this also copies
         /// its own <see cref="CssRectWord.DisplayOrderReversed"/> into <see cref="ShapeSettings.ReverseForDisplay"/>
@@ -479,17 +481,29 @@ namespace PeachPDF.Html.Core.Dom
                     ScriptTag: var scriptTag,
                     EffectiveJoiningForms: var joiningForms,
                     EffectiveUseCategories: var useCategories,
+                    EffectiveKhmerCategories: var khmerCategories,
                 } rectWord
-                || (scriptTag is null && joiningForms is null && useCategories is null))
+                || (scriptTag is null && joiningForms is null && useCategories is null && khmerCategories is null))
             {
                 return features;
             }
 
+            // At most one of JoiningForms/UseCategories/KhmerCategories is ever forwarded, in that
+            // precedence order - mirroring Paragraph.ShapePiece's own if/else-if discipline exactly.
+            // CssBox.AppendWordsFromText has no dedicated script-boundary word split (see its own
+            // remarks - e.g. Katakana directly followed by Latin stays one CssRectWord), so a word that
+            // glues a USE-shaped script directly against Khmer with no separating boundary can resolve
+            // BOTH EffectiveUseCategories and EffectiveKhmerCategories non-null on the very same word.
+            // Forwarding both into one ShapeSettings would run ApplyUseShaping then ApplyKhmerShaping
+            // back-to-back over the same glyph list - and ApplyUseShaping's own conjunct-formation stage
+            // can shrink glyphs.Count before ApplyKhmerShaping ever runs, silently misaligning its own
+            // (position-keyed, not ClusterStart-keyed) category snapshot against the wrong glyphs.
             return features with
             {
                 ScriptTag = scriptTag,
                 JoiningForms = joiningForms,
-                UseCategories = useCategories,
+                UseCategories = joiningForms is null ? useCategories : null,
+                KhmerCategories = joiningForms is null && useCategories is null ? khmerCategories : null,
                 ReverseForDisplay = joiningForms is not null && rectWord.DisplayOrderReversed,
             };
         }

@@ -197,4 +197,52 @@ above for the full text (identical here). Everything else in `src/PeachDrawing.T
 project's own license) written to consume the ported algorithm — not itself derived from HarfBuzz, so
 it carries no HarfBuzz notice.
 
+## HarfBuzz (ported Khmer shaper)
+
+- **Location:** [`src/PeachDrawing.Text/Internal/Text/Shaping/Khmer/KhmerSyllableScanner.cs`](Internal/Text/Shaping/Khmer/KhmerSyllableScanner.cs) (a hand-written scanner implementing the same grammar as the ported `.rl` source below, standing in for HarfBuzz's own Ragel-generated state machine, the same reason `UseSyllableScanner.cs` above is hand-written) and [`src/PeachDrawing.Text/Internal/Text/Shaping/Khmer/KhmerReorderer.cs`](Internal/Text/Shaping/Khmer/KhmerReorderer.cs) (`ReorderSyllable`, a line-by-line port of `reorder_consonant_syllable`/`reorder_syllable_khmer`)
+- **Upstream source:** [HarfBuzz](https://github.com/harfbuzz/harfbuzz) — the syllable grammar from `src/hb-ot-shaper-khmer-machine.rl`, the reorder algorithm from `src/hb-ot-shaper-khmer.cc` (`reorder_consonant_syllable`/`reorder_syllable_khmer`), both retrieved 2026-09-27 from commit `409c467b8259ad5fcc3fdcc477a1796fec256853` of the `main` branch (see [`PORTING-NOTES.md`](Internal/Text/Shaping/Khmer/PORTING-NOTES.md) alongside these files)
+- **License:** the "Old MIT" license HarfBuzz is licensed under project-wide (see HarfBuzz's own [`COPYING`](https://github.com/harfbuzz/harfbuzz/blob/main/COPYING)) — functionally MIT-equivalent, reproduced below
+
+Both upstream files carry the same header notice, reproduced in each ported file:
+
+```
+Copyright © 2011,2012  Google, Inc.
+
+ This is part of HarfBuzz, a text shaping library.
+
+Permission is hereby granted, without written agreement and without
+license or royalty fees, to use, copy, modify, and distribute this
+software and its documentation for any purpose, provided that the
+above copyright notice and the following two paragraphs appear in
+all copies of this software.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE TO ANY PARTY FOR
+DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES
+ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN
+IF THE COPYRIGHT HOLDER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH
+DAMAGE.
+
+THE COPYRIGHT HOLDER SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING,
+BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS FOR A PARTICULAR PURPOSE.  THE SOFTWARE PROVIDED HEREUNDER IS
+ON AN "AS IS" BASIS, AND THE COPYRIGHT HOLDER HAS NO OBLIGATION TO
+PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+
+Google Author(s): Behdad Esfahbod
+```
+
+`KhmerCategoryClassifier.cs` ports the category-derivation *algorithm* from HarfBuzz's build-time
+generator script (`src/gen-indic-table.py`, same upstream project/license) rather than any single
+runtime `.cc`/`.hh` file — that script's own `category_map`/`category_overrides`/`position_map`
+tables and its Khmer-block matra-to-position-category rewrite are what this class's own
+category-derivation logic is ported from (see that class's own remarks and `PORTING-NOTES.md`).
+`gen-indic-table.py` carries no individual per-file header (true of most build-time/tooling scripts
+under `src/`), so it falls under HarfBuzz's own project-wide notice from `COPYING`, naming every
+contributor `COPYING` lists rather than one individual file's own (narrower) header; see the cursive
+attachment section above for the full text (identical here). Everything else in
+`src/PeachDrawing.Text/Internal/Text/Shaping/Khmer/` (`KhmerSyllableType.cs`, `KhmerSyllable.cs`, and
+`src/PeachDrawing.Text/Unicode/KhmerCategory.cs`) is original PeachPDF code (BSD 3-Clause, the
+project's own license) written to consume the ported algorithm — not itself derived from HarfBuzz, so
+it carries no HarfBuzz notice.
+
 

@@ -21,8 +21,8 @@ dotnet add package PeachDrawing.Text
   discovery on Windows, macOS, Linux (through fontconfig) and Android; CSS Fonts 4 face matching by weight, width and
   style; `unicode-range` and glyph-coverage fallback.
 - **Shaping:** GSUB and GPOS (ligatures, kerning, mark attachment, contextual lookups), Arabic and Syriac joining, the
-  Universal Shaping Engine for Devanagari, Bengali, Gujarati and Tamil, default-ignorable handling, and `cmap` format 14
-  variation sequences.
+  Universal Shaping Engine for Devanagari, Bengali, Gujarati and Tamil, Khmer's own separate coeng/subjoined-consonant
+  shaping, default-ignorable handling, and `cmap` format 14 variation sequences.
 - **Outlines and colour:** glyph outlines for `glyf`, CFF and CFF2, COLR v0 and v1 with CPAL, CBDT/CBLC and sbix bitmaps, and the SVG documents of the `SVG ` table.
 - **Variable fonts:** the axes of a font and reading it at a location (`Typeface.WithAxes`): TrueType and CFF2 outlines, advance widths and font-wide metrics follow the axes.
 - **Mathematics:** the `MATH` table: layout constants, per-glyph italics corrections and accent attachment, and the

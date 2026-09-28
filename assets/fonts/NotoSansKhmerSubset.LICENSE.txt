@@ -1,0 +1,18 @@
+NotoSansKhmerSubset.ttf is a subset (the consonants KA/RO/SA/NO/MO, COENG, four dependent vowel
+signs (E/I/U/AA, one per reorder-relevant position), the independent vowel QA, SIGN TOANDAKHIAT
+(the Xgroup category), SIGN REAHMUK (the Ygroup category), SIGN ROBAT (the Robatic category), KHAN,
+two digits, common punctuation, digits, space, and the basic Latin alphabet) of the "Noto Sans
+Khmer" font, Copyright 2022 The Noto Project Authors (https://github.com/notofonts/khmer), licensed
+under the SIL Open Font License, Version 1.1 (OFL-1.1). Instantiated to a single static (Regular
+weight, normal width) instance from the upstream variable font before subsetting.
+
+The font is bundled solely as a showcase/test asset so Khmer's coeng/subjoined-consonant shaping
+(issue #1493) - GSUB locl/ccmp/pref/blwf/abvf/pstf/pres/abvs/blws/psts substitution and the
+resulting glyph reorder (coeng+RO repositioning before the base, pre-base vowel-sign movement) -
+renders with real, readable Khmer glyphs and can be verified by rasterizing actual output, rather
+than only unit-tested against synthetic byte-blob GSUB tables. Only the glyphs the showcase/tests
+actually use are retained, with every GSUB/GPOS layout feature kept intact; the glyph outlines
+themselves are unmodified.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://fonts.google.com/noto/specimen/Noto+Sans+Khmer

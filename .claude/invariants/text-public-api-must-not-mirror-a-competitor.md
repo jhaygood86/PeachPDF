@@ -109,13 +109,19 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 | `Shaper` (`Shape`, `GetFeatureTags`) | Text to glyphs in one face | HarfBuzz's `hb_shape`; `GetFeatureTags` is ours |
 | `GlyphRun` (`Typeface`, `Glyphs`, `Advance`) | The glyphs of one shaped run and the pen distance along them | DirectWrite and CoreText "glyph run". The advance is unrounded design units, ours |
 | `PlacedGlyph` (`GlyphIndex`, `ClusterStart`, `ClusterLength`, `XAdvanceDelta`, `YAdvanceDelta`, `XOffset`, `YOffset`, `LigatureComponentClusterStarts`, `AttachedToIndex`, `IsHiddenIgnorable`) | One shaped glyph, where it came from and how it is nudged | HarfBuzz's glyph info and position (`x_advance`, `y_offset`, cluster); the OpenType `GPOS` vocabulary |
-| `ShapeSettings` (`Ligatures`, `Caps`, `Numeric`, `EastAsian`, `Position`, `ExplicitFeatures`, `Kerning`, `Language`, `ScriptTag`, `JoiningForms`, `UseCategories`, `ReverseForDisplay`, `EmojiMode`) | Everything asked of the shaper for one run | CSS Fonts 4 `font-variant-*`, `font-feature-settings`, `font-kerning` and `lang`. The typed groups exist because they carry precedence rules a tag list cannot |
+| `ShapeSettings` (`Ligatures`, `Caps`, `Numeric`, `EastAsian`, `Position`, `ExplicitFeatures`, `Kerning`, `Language`, `ScriptTag`, `JoiningForms`, `UseCategories`, `ReverseForDisplay`, `EmojiMode`, `KhmerCategories`) | Everything asked of the shaper for one run | CSS Fonts 4 `font-variant-*`, `font-feature-settings`, `font-kerning` and `lang`. The typed groups exist because they carry precedence rules a tag list cannot. `KhmerCategories` is appended last (after the settings that predate it) so a caller constructing a value positionally keeps its meaning |
 | `LigatureSet`, `CapsMode`, `NumeralSet`, `EastAsianSet`, `SubSuperMode` | The typed groups | The keyword sets of the CSS `font-variant-*` properties they mirror |
 | `FeatureSetting` (`Tag`, `Value`) | A feature asked for by tag | CSS `font-feature-settings` entries |
 
 The `Unicode` namespace gains `ArabicJoining` (`TypeOf`, `Resolve`) with `ArabicJoiningType` and `ArabicJoiningForm`, and
 `UniversalShaping` (`Classify`) with `UseCategory`: the `Joining_Type` property and its OpenType positional feature tags (`isol`,
-`fina`, `medi`, `init`), and the Universal Shaping Engine's category alphabet.
+`fina`, `medi`, `init`), and the Universal Shaping Engine's category alphabet. It also gains `KhmerShaping` (`Classify`) with
+`KhmerCategory`: HarfBuzz's own (pre-Universal-Shaping-Engine) Khmer shaping category alphabet, named and shaped separately
+from `UniversalShaping`/`UseCategory` because Khmer is a genuinely different shaping model in HarfBuzz itself, not a member
+of the USE family (see `KhmerCategory`'s own doc comment, and this repo's own `no-text-shaping.md` accepted-gap note, for
+why). `KhmerCategory`'s member names (`C`, `V`, `H`, `Ra`, `VAbv`/`VBlw`/`VPre`/`VPst`, `Robatic`, `Xgroup`, `Ygroup`,
+`Placeholder`, `DottedCircle`, `ZWJ`, `ZWNJ`) are HarfBuzz's own Khmer-shaper category names (`hb-ot-shaper-khmer-machine.rl`'s
+`K_Cat` values), the same "spec/upstream vocabulary, not invented" rule `UseCategory`'s own members already follow.
 
 ### `PeachDrawing.Text.Unicode`
 

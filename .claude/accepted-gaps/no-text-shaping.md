@@ -33,9 +33,16 @@ classifier/syllable grammar/two-pass glyph reorder
 font's `nukt`/`ccmp`/`locl`/`akhn`/`rphf`/`rkrf`/`abvf`/`blwf`/`half`/`pstf`/`vatu`/`cjct`/`abvs`/`blws`/
 `haln`/`pres`/`psts` features and repositions reph/pre-base matras in the resulting glyph list (verified
 byte-for-byte against real HarfBuzz's own output for a real font per script, `uharfbuzz`, and against
-two PDF renderers - see this feature's own recent-fixes entries); and a real UAX#9 Unicode Bidi
+two PDF renderers - see this feature's own recent-fixes entries); Khmer's own separate coeng/subjoined-
+consonant shaping - HarfBuzz's older, pre-USE "Indic" shaper rather than a fifth USE-family script (see
+the dedicated bullet below), a ported category classifier/syllable grammar/single-pass glyph reorder
+(`PeachDrawing.Text.Internal.Text.Shaping.Khmer.KhmerCategoryClassifier`/`KhmerSyllableScanner`/
+`KhmerReorderer`) that requests a font's `locl`/`ccmp`/`pref`/`blwf`/`abvf`/`pstf`/`pres`/`abvs`/`blws`/
+`psts` features and reorders a coeng+RO pair and a pre-base vowel sign to each syllable's own start
+(verified byte-for-byte against real HarfBuzz's own output for a real font, `uharfbuzz`, and against two
+PDF renderers); and a real UAX#9 Unicode Bidi
 Algorithm (see `PeachPDF.Text.Bidi.BidiResolver`). Arabic-family joining and Devanagari USE shaping (not
-Bengali/Gujarati/Tamil - see the SVG-specific remaining gaps below) also apply to SVG `<text>`/`<tspan>`
+Bengali/Gujarati/Tamil/Khmer - see the SVG-specific remaining gaps below) also apply to SVG `<text>`/`<tspan>`
 content, resolved over each `<text>` element's own flattened character stream via
 `SvgRenderer.ResolveComplexScriptRuns` (a maximal run of mutually-joining/same-syllable characters
 shapes, measures, and - for a right-to-left run - display-reverses as one atomic unit, the same
@@ -88,6 +95,53 @@ per-word treatment HTML text gets).
   classifier/scanner code. Extending to a script family beyond these four (Gurmukhi, Kannada, Malayalam,
   Oriya, Telugu, and the rest) means widening `UseCategoryClassifier`/`UseCategory`/
   `UseSyllableScanner`'s grammar further, not a new mechanism.
+- **Khmer's own coeng/subjoined-consonant shaping is a separate model from the Universal Shaping
+  Engine above, not a fifth USE-family script.** HarfBuzz itself still shapes Khmer with its older,
+  pre-USE "Indic" shaper (`hb-ot-shaper-khmer.cc`/`hb-ot-shaper-khmer-machine.rl`), sharing only its
+  raw `Indic_Syllabic_Category`/`Indic_Positional_Category` input data with the USE engine - a
+  genuinely different category alphabet (`KhmerCategory` - `C`/`V`/`H`/`Ra`/`VAbv`/`VBlw`/`VPre`/
+  `VPst`/`Robatic`/`Xgroup`/`Ygroup`/`Placeholder`/`DottedCircle`/`ZWJ`/`ZWNJ`), syllable grammar
+  (`KhmerCategoryClassifier`/`KhmerSyllableScanner`), and a single left-to-right reorder loop
+  (`KhmerReorderer`, ported from `reorder_consonant_syllable`) rather than USE's own two independent
+  passes - see `KhmerReorderer`'s own remarks on why that single-loop ordering matters (a pre-base
+  vowel reached after an already-front-moved coeng+RO pair lands ahead of it, not behind it).
+  `GsubShaper`'s own Khmer stage also runs its reorder *before* the font's `locl`/`ccmp`/basic
+  features, the opposite order from the USE stage's own `ApplyUseShaping` - confirmed both by reading
+  HarfBuzz's own `collect_features_khmer` staging and empirically, shaping KA+COENG+RO+a pre-base
+  vowel sign through real HarfBuzz for a real font. A handful of remaining gaps, all narrower than
+  the four-script USE gaps above:
+  - **HarfBuzz's own `decompose_khmer`/`compose_khmer` normalization is not ported at all** - five
+    Khmer dependent vowel signs (`U+17BE`, `U+17BF`, `U+17C0`, `U+17C4`, `U+17C5`) have no Unicode
+    canonical decomposition, so real HarfBuzz decomposes each into a `U+17C1`-family piece plus
+    itself at shaping-normalization time (and never recomposes them, since `compose_khmer` always
+    refuses to recompose when the first part is a combining mark, which it always is here) -
+    confirmed empirically against a real font, which shapes KA+`U+17BE` into 3 glyphs through real
+    HarfBuzz, not the 1 or 2 a font's own direct `cmap` coverage of `U+17BE` alone would suggest.
+    This port has no general Unicode shaping-time normalization pass at all (not Khmer-specific - no
+    USE or Arabic-family port here decomposes/recomposes at shaping time either), so these five
+    codepoints classify and shape as their own single nominal glyph instead - a font whose glyph
+    program actually expects the decomposed two-piece sequence renders differently for these five
+    signs specifically; a font with its own direct coverage of the composed codepoint (the common
+    case) is unaffected either way, since the composed glyph is what ends up on the page regardless.
+  - **`cfar` (used to disambiguate specific COENG+RO-adjacent sequences in some Microsoft Khmer
+    fonts) is never requested.** HarfBuzz's own comment describes it as resolving one narrow,
+    font-specific ambiguity ("This allows distinguishing... U+1784,U+17D2,U+179A,U+17D2,U+1782 [vs]
+    U+1784,U+17D2,U+1782,U+17D2,U+179A"); no bundled test font defines it (Noto Sans Khmer does not),
+    and applying `pref`/`blwf`/`abvf`/`pstf` globally rather than per-syllable-masked already
+    reproduces real HarfBuzz's own output for every case this port's own characterization tests
+    cover.
+  - **No dotted-circle glyph is inserted for a broken cluster** (malformed Khmer text with no leading
+    base consonant, e.g. a bare coeng) - matching this port's own pre-existing scope for the four USE
+    scripts, which insert no dotted circle either. Text still shapes and renders; it simply lacks the
+    visual "something is missing here" indicator a full reference shaper inserts.
+  - **`locl`/`ccmp`/the basic features (`pref`/`blwf`/`abvf`/`pstf`) apply globally, not masked to
+    each syllable's own span** - the same documented v1 simplification (and the same reasoning: a
+    font's own coverage/context tables only match the sequences they're authored for) already
+    established for the Universal Shaping Engine's equivalent stages above.
+  - **Not wired into SVG `<text>`/`<tspan>` at all** - `SvgRenderer.ResolveComplexScriptRuns` only
+    recognizes Arabic-family joining and Devanagari USE shaping (see the SVG-specific remaining gaps
+    below); Khmer SVG text still renders as isolated nominal glyphs in logical order, exactly as it
+    did before this feature existed.
 - **`UseSyllableScanner`'s CGJ/ZWNJ handling is narrower than HarfBuzz's own.** A Combining Grapheme
   Joiner/variation-selector codepoint that isn't already given its own dedicated `Indic_Syllabic_Category`
   value (unlike ZWJ, which is) isn't recognized as transparent at all (this classifier omits the
@@ -183,8 +237,15 @@ all four scripts), and per-script real-font characterization test pairs -
 `TamilUseShapingCharacterizationTests`/`TamilUseCharacterizationTests` (each cross-checked
 glyph-for-glyph against real HarfBuzz's own output via `uharfbuzz` for that script's own bundled
 font), plus `MixedUseShapedScriptsCharacterizationTests` (a paragraph mixing two different USE-shaped
-scripts, and one mixing a USE-shaped script with plain Latin text); SVG's own wiring (Arabic-family
-joining and Devanagari USE only, per the remaining-gaps bullets above) is covered by
+scripts, one mixing a USE-shaped script with plain Latin text, and one mixing a USE-shaped script with
+Khmer specifically, proving the two categories/allocations stay independent); Khmer's own separate
+shaping model is covered the same way - `KhmerCategoryClassifierTests`, `KhmerSyllableScannerTests`,
+`KhmerReordererTests` (each testing its own pure logic in isolation) and the real-font characterization
+pair `KhmerUseShapingCharacterizationTests`/`KhmerUseCharacterizationTests` (named to match the other
+scripts' pair despite Khmer not being USE-shaped - see `KhmerCategory`'s own remarks - cross-checked
+glyph-for-glyph against real HarfBuzz's own output via `uharfbuzz` for its own bundled font); SVG's own
+wiring (Arabic-family joining and Devanagari USE only, per the remaining-gaps bullets above) is covered
+by
 `SvgTextArabicJoiningTests`/`SvgTextDevanagariUseTests` (mock-recorded `ShapeSettings` reaching
 `RGraphics.DrawString`) and
 `SvgTextArabicJoiningCharacterizationTests`/`SvgTextDevanagariUseCharacterizationTests` (the exact

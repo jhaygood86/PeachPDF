@@ -116,6 +116,21 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Tamil => Path.Combine(AppContext.BaseDirectory, "NotoSansTamilSubset.ttf");
 
         /// <summary>
+        /// A subset of "Noto Sans Khmer" (see NotoSansKhmerSubset.LICENSE.txt): KA/RO/SA/NO plus the
+        /// consonants the <c>dictionary_line_breaking</c> showcase's own Khmer sentence needs, COENG,
+        /// four dependent vowel signs (one per reorder-relevant position - E/AE for VPre, I for VAbv, U
+        /// for VBlw, AA for VPst), an independent vowel (QA), a Robatic sign (ROBAT), and Xgroup/Ygroup
+        /// signs (NIKAHIT/BANTOC/TOANDAKHIAT, REAHMUK), plus common punctuation/digits/basic Latin, with
+        /// every GSUB/GPOS layout feature preserved - a real font whose <c>locl</c>/<c>ccmp</c>/
+        /// <c>pref</c>/<c>blwf</c>/<c>abvf</c>/<c>pstf</c>/<c>pres</c>/<c>abvs</c>/<c>blws</c>/<c>psts</c>
+        /// data can prove Khmer's own (pre-Universal-Shaping-Engine) coeng/subjoined-consonant shaping
+        /// (issue #1493) actually renders a coeng+RO pair reordered before the base and a coeng+other
+        /// consonant subjoined in place, not just that synthetic byte-blob GSUB tables dispatch
+        /// correctly.
+        /// </summary>
+        internal static string Khmer => Path.Combine(AppContext.BaseDirectory, "NotoSansKhmerSubset.ttf");
+
+        /// <summary>
         /// A subset of "Noto Sans JP" (see NotoSansJPSubset.LICENSE.txt): a handful of CJK ideographs
         /// plus the full basic-Latin alphabet/digits/punctuation, all in one face - a real font covering
         /// both scripts <see cref="Ttf"/> (Source Sans 3, Latin-only) does not, so tests can embed this
