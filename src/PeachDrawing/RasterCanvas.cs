@@ -419,7 +419,7 @@ public sealed partial class RasterCanvas : Canvas
     }
 
     /// <summary>The dash lengths in user units, matching what <c>PdfGraphicsState.RealizePen</c> writes.</summary>
-    private static double[]? ResolveDashes(Pen pen, double width)
+    internal static double[]? ResolveDashes(Pen pen, double width)
     {
         // Presets are multiples of the pen's own width; a zero width never dashes.
         var w = pen.Width;

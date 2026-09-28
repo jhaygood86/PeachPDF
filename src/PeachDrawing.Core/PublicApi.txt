@@ -257,6 +257,13 @@ PeachDrawing.Core.Geometry.PathMeasure : sealed class
   property Double Area { get; }
   property Double Length { get; }
   property Rect Bounds { get; }
+PeachDrawing.Core.Geometry.PathOperation : enum Int32
+  Difference = 2
+  Intersect = 1
+  Union = 0
+  Xor = 3
+PeachDrawing.Core.Geometry.PathOperations : static class
+  method static Void Combine(GraphicsPath first, GraphicsPath second, PathOperation operation, GraphicsPath destination)
 PeachDrawing.Core.Geometry.PathSample : struct
   ctor(Double X, Double Y, Double TangentDegrees)
   method Void Deconstruct(out Double X, out Double Y, out Double TangentDegrees)

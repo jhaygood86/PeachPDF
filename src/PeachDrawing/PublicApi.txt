@@ -62,6 +62,8 @@ PeachDrawing.Homography : struct
   property Double M32 { get; }
   property Double M33 { get; }
   property static Homography Identity { get; }
+PeachDrawing.PathStroker : static class
+  method static Void Stroke(GraphicsPath path, Pen pen, GraphicsPath destination, Double tolerance = 0.1)
 PeachDrawing.RasterCanvas : sealed class
   ctor(RenderContext adapter, RasterSurface surface, Double pixelsPerPoint)
   method PixelBuffer ToPixelBuffer()
