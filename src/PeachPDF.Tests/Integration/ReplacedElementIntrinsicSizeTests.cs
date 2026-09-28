@@ -61,7 +61,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task CssWidthPt_OnImage_ResolvesAtIdentity()
         {
-            // Point-sized replaced elements resolve through the same shared conversion (identity
+            // PaintPoint-sized replaced elements resolve through the same shared conversion (identity
             // for pt) — all absolute units are honored, not just px.
             var (root, _) = await BuildAndLayout(Wrap($"<img id='img' style='width:72pt' src=\"{Svg96X48}\" />"));
             var img = FindById(root, "img")!;

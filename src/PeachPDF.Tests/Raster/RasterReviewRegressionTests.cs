@@ -1,9 +1,8 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.CSS;
-using PeachPDF.Raster;
+using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Numerics;
 using System.Text.RegularExpressions;
@@ -15,10 +14,10 @@ namespace PeachPDF.Tests.Raster
     {
         private static readonly PdfSharpAdapter Adapter = new();
 
-        private static RasterGraphics NewGraphics(int width, int height) =>
+        private static RasterCanvas NewGraphics(int width, int height) =>
             new(Adapter, new RasterSurface(width, height, 0, 0, 1, 1), 1);
 
-        private static byte[] Pixel(RasterGraphics g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
+        private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 
         [Theory]
         [InlineData(false, new byte[] { 0, 0, 0, 255 })]
@@ -32,7 +31,7 @@ namespace PeachPDF.Tests.Raster
             p[4] = 255;
             p[7] = 255;
 
-            var image = RasterEmbedder.ToXImage(surface, asCmyk: true, richBlack: richBlack);
+            var image = RasterEmbedding.ToXImage(surface, asCmyk: true, richBlack: richBlack);
             var cmyk = image.CmykRaster!.Value.Data;
 
             Assert.Equal(expectedBlack, cmyk[..4]);
@@ -62,8 +61,8 @@ namespace PeachPDF.Tests.Raster
             // conic-gradient(from -20deg, red, blue): the turn starts at 340 degrees.
             var start = -20 * Math.PI / 180;
             var g = NewGraphics(40, 40);
-            var brush = g.GetConicGradientBrush(new RPoint(20, 20), 20,
-                [RColor.FromArgb(255, 255, 0, 0), RColor.FromArgb(255, 0, 0, 255)], [start, start + 2 * Math.PI]);
+            var brush = g.GetConicGradientBrush(new PaintPoint(20, 20), 20,
+                [PaintColor.FromArgb(255, 255, 0, 0), PaintColor.FromArgb(255, 0, 0, 255)], [start, start + 2 * Math.PI]);
 
             g.DrawRectangle(brush, 0, 0, 40, 40);
 
@@ -174,7 +173,7 @@ namespace PeachPDF.Tests.Raster
         public void TileCreation_HonoursTheConfiguredPixelBudget()
         {
             var adapter = new PdfSharpAdapter { MaxRasterPixels = 1000 };
-            var g = new RasterGraphics(adapter, new RasterSurface(10, 10, 0, 0, 1, 1), 1);
+            var g = new RasterCanvas(adapter, new RasterSurface(10, 10, 0, 0, 1, 1), 1);
 
             Assert.Null(g.CreateTile(100, 100));
             Assert.NotNull(g.CreateTile(10, 10));

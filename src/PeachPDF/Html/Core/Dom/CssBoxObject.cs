@@ -1,5 +1,4 @@
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Svg;
@@ -31,7 +30,7 @@ namespace PeachPDF.Html.Core.Dom
         {
         }
 
-        internal override async ValueTask MeasureWordsSize(RGraphics g)
+        internal override async ValueTask MeasureWordsSize(Canvas g)
         {
             if (_wordsSizeMeasured)
                 return;

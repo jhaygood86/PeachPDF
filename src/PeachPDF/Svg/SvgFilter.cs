@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -110,7 +110,7 @@ namespace PeachPDF.Svg
     /// <summary><c>feFlood</c> - fills the whole filter region with a flat color, ignoring <see cref="FilterPrimitive.In"/> (it has no real input; the SVG spec allows one to be specified but it's never consulted).</summary>
     internal sealed class FeFlood : FilterPrimitive
     {
-        public required RColor Color { get; init; }
+        public required PaintColor PaintColor { get; init; }
         public required double Opacity { get; init; }
     }
 
@@ -151,7 +151,7 @@ namespace PeachPDF.Svg
     internal sealed class FeBlend : FilterPrimitive
     {
         public string? In2 { get; init; }
-        public required RBlendMode Mode { get; init; }
+        public required PaintBlendMode Mode { get; init; }
     }
 
     /// <summary>
@@ -211,14 +211,14 @@ namespace PeachPDF.Svg
         public override bool RequiresRaster => true;
     }
 
-    /// <summary><c>feDropShadow</c>: the input blurred, offset, flooded with <see cref="Color"/> and merged under the input.</summary>
+    /// <summary><c>feDropShadow</c>: the input blurred, offset, flooded with <see cref="PaintColor"/> and merged under the input.</summary>
     internal sealed class FeDropShadow : FilterPrimitive
     {
         public required double Dx { get; init; }
         public required double Dy { get; init; }
         public required double StdDeviationX { get; init; }
         public required double StdDeviationY { get; init; }
-        public required RColor Color { get; init; }
+        public required PaintColor PaintColor { get; init; }
         public required double Opacity { get; init; }
 
         public override bool RequiresRaster => true;
@@ -314,7 +314,7 @@ namespace PeachPDF.Svg
         /// <summary><c>diffuseConstant</c> or <c>specularConstant</c>.</summary>
         public required double Constant { get; init; }
         public required double SpecularExponent { get; init; }
-        public required RColor LightingColor { get; init; }
+        public required PaintColor LightingColor { get; init; }
         public required LightSource Light { get; init; }
 
         public override bool RequiresRaster => true;

@@ -30,7 +30,7 @@
 #nullable disable warnings
 
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
@@ -1184,7 +1184,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         public bool InvisibleText { get; set; }
 
         /// <summary>What draws the SVG documents of a font's glyphs (OpenType SVG) on this graphics, or <see langword="null"/> when nothing does.</summary>
-        internal ISvgGlyphPainter? SvgGlyphPainter { get; set; }
+        internal PeachDrawing.Abstractions.ISvgGlyphPainter? SvgGlyphPainter { get; set; }
 
         public void DrawString(string s, XFont font, XBrush brush, XPoint point)
         {
@@ -1228,7 +1228,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string. <paramref name="logicalText"/> is the true logical-order
         /// (pre-bidi-mirroring) source <paramref name="text"/> was derived from, when the two differ -
-        /// see <see cref="PeachPDF.Html.Adapters.RGraphics"/>'s own equivalent overload for why this
+        /// see <see cref="PeachDrawing.Abstractions.Canvas"/>'s own equivalent overload for why this
         /// exists (ToUnicode CMap fidelity for a reversed/mirrored RTL word).
         /// </summary>
         public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
@@ -1255,7 +1255,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
 
         /// <summary>
         /// Draws each glyph in <paramref name="glyphs"/> at its own explicit position, addressed
-        /// directly by font glyph index - see <see cref="PeachPDF.Html.Adapters.RGraphics.DrawGlyphs"/>'s
+        /// directly by font glyph index - see <see cref="PeachDrawing.Abstractions.Canvas.DrawGlyphs"/>'s
         /// own remarks for why this exists alongside the ordinary character-based <c>DrawString</c>.
         /// </summary>
         public void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, XBrush brush)

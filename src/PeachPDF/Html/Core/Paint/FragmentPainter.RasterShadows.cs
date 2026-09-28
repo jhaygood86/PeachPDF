@@ -1,8 +1,7 @@
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.Raster;
-using PeachPDF.Raster.Filters;
+using PeachDrawing;
+using PeachDrawing.Filters;
 
 namespace PeachPDF.Html.Core.Paint
 {
@@ -25,15 +24,15 @@ namespace PeachPDF.Html.Core.Paint
         /// </para>
         /// </remarks>
         /// <returns>false, having painted nothing, when <paramref name="g"/> cannot rasterize - the caller then uses the vector approximation.</returns>
-        private static bool TryPaintBlurredOutsetShadow(RGraphics g, CssBox box, RRect borderBox, RRect shadowRect,
-            BorderRadii shadowRadii, double blur, RColor color)
+        private static bool TryPaintBlurredOutsetShadow(Canvas g, CssBox box, Rect borderBox, Rect shadowRect,
+            BorderRadii shadowRadii, double blur, PaintColor color)
         {
             var margin = 1.5 * blur;
             var bounds = Intersect(Inflate(shadowRect, margin), Inflate(g.GetClip(), margin));
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return true;
 
-            using var scope = g.BeginRasterSurface(bounds);
+            using var scope = g.BeginRasterSurface(bounds) as RasterSurfaceScope;
             if (scope is null)
                 return false;
 
@@ -79,15 +78,15 @@ namespace PeachPDF.Html.Core.Paint
         /// (<paramref name="paddingRadii"/>, reduced by the spread), which the four-rectangle vector approximation cannot.
         /// </remarks>
         /// <returns>false, having painted nothing, when <paramref name="g"/> cannot rasterize.</returns>
-        private static bool TryPaintBlurredInsetShadow(RGraphics g, RRect paddingBox, BorderRadii paddingRadii,
-            RRect inner, double blur, double spread, RColor color)
+        private static bool TryPaintBlurredInsetShadow(Canvas g, Rect paddingBox, BorderRadii paddingRadii,
+            Rect inner, double blur, double spread, PaintColor color)
         {
             var margin = 1.5 * blur;
             var bounds = Intersect(Inflate(paddingBox, margin), Inflate(g.GetClip(), margin));
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return true;
 
-            using var scope = g.BeginRasterSurface(bounds);
+            using var scope = g.BeginRasterSurface(bounds) as RasterSurfaceScope;
             if (scope is null)
                 return false;
 
@@ -121,7 +120,7 @@ namespace PeachPDF.Html.Core.Paint
                 }
             }
 
-            ring.FillMode = RFillMode.EvenOdd;
+            ring.FillMode = FillMode.EvenOdd;
             using (var brush = rg.GetSolidBrush(color))
                 rg.DrawPath(brush, ring);
 

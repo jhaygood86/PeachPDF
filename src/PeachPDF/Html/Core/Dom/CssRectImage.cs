@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -30,7 +30,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets the image this words represents (if one exists)
         /// </summary>
-        public override RImage? Image { get; set; }
+        public override Image? Image { get; set; }
 
         /// <summary>
         /// Gets if the word represents an image.

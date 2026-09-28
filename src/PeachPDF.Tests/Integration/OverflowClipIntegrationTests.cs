@@ -1,6 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore;
@@ -243,8 +243,8 @@ body { margin: 0; }
             var recording = new RecordingGraphics(new PdfSharpAdapter());
             FragmentPaintHarness.PaintPage(container, recording);
 
-            var activeClips = new List<RRect>();
-            List<RRect>? clipsAtFill = null;
+            var activeClips = new List<Rect>();
+            List<Rect>? clipsAtFill = null;
             foreach (var op in recording.Log)
             {
                 switch (op.Kind)

@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 using PeachPDF.Svg;
 using System;
 using System.IO;
@@ -21,14 +21,14 @@ namespace PeachPDF
         private readonly byte[]? _bytes;
         private readonly string? _filePath;
 
-        // Cached by the RAdapter that produced it (tied to a specific document generation) - a second
+        // Cached by the RenderContext that produced it (tied to a specific document generation) - a second
         // Resolve call with the SAME adapter (placements within one document build, the common, well-
         // scoped case this class exists for) reuses it for free; a different adapter (this instance reused
         // across a separate CreateDocument/AddPages call) re-resolves rather than risking a PDF resource
         // that assumes single-document ownership - see this repo's own PdfSharpCore fork, whose form/image
         // XObjects are written against one specific PdfDocument.
-        private RAdapter? _resolvedByAdapter;
-        private RImage? _resolvedImage;
+        private RenderContext? _resolvedByAdapter;
+        private Image? _resolvedImage;
         private SvgDocument? _resolvedSvgDocument;
 
         private PdfImage(byte[]? bytes, string? filePath)
@@ -61,14 +61,14 @@ namespace PeachPDF
         }
 
         /// <summary>
-        /// Decodes this image's source into an <see cref="RImage"/> (raster) or <see cref="SvgDocument"/>
+        /// Decodes this image's source into an <see cref="Image"/> (raster) or <see cref="SvgDocument"/>
         /// (SVG), caching the result against <paramref name="adapter"/> so a second placement of this same
         /// <see cref="PdfImage"/> with the same adapter decodes nothing. A file path is read (and, unlike
         /// bytes already in memory, format-sniffed by its own <c>.svg</c> extension rather than content)
         /// lazily, here, on first resolution - not at <see cref="FromFile"/> call time, since no adapter
         /// exists yet to decode with then.
         /// </summary>
-        internal (RImage? Image, SvgDocument? SvgDocument) Resolve(RAdapter adapter)
+        internal (Image? Image, SvgDocument? SvgDocument) Resolve(RenderContext adapter)
         {
             if (_resolvedByAdapter == adapter)
             {

@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
@@ -50,7 +49,7 @@ namespace PeachPDF.Tests.Integration
         /// behaviour that came with that is covered by <see cref="TableCellBreakTokenTests"/>.
         /// </summary>
         private static async Task RunEngine(
-            RGraphics g, HtmlContainerInt container, CssBox table, BreakToken? resume)
+            Canvas g, HtmlContainerInt container, CssBox table, BreakToken? resume)
         {
             var previous = container.DetachFragmentainer();
 
@@ -65,7 +64,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         private static async Task WithALaidOutTable(
-            string markup, Func<CssBox, HtmlContainerInt, RGraphics, Task> continuePass) =>
+            string markup, Func<CssBox, HtmlContainerInt, Canvas, Task> continuePass) =>
             await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(markup), pageHeight: PageHeight, margin: Margin,
                 after: (root, container, g) => continuePass(TableOf(root), container, g));
@@ -118,7 +117,7 @@ namespace PeachPDF.Tests.Integration
             /// <summary>The record this cell hands back, kept so a test can assert it travelled.</summary>
             internal BreakToken Record { get; }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
+            protected override ValueTask PerformLayoutImp(Canvas g, CssBox frame, bool framePlacesChild)
             {
                 SetPendingBreakToken(Record);
                 return default;
@@ -146,7 +145,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.True(rows[0].ActualBottom > rows[0].Location.Y, "row 0 was not placed");
             Assert.All(new[] { rows[2], rows[3] },
-                row => Assert.All(row.Boxes, cell => Assert.Equal(RPoint.Empty, cell.Location)));
+                row => Assert.All(row.Boxes, cell => Assert.Equal(PaintPoint.Empty, cell.Location)));
         }
 
         /// <summary>
@@ -160,7 +159,7 @@ namespace PeachPDF.Tests.Integration
                 LayoutHarness.Wrap(RowsTable(4)), pageHeight: PageHeight, margin: Margin);
 
             Assert.All(BodyRowsOf(TableOf(root)),
-                row => Assert.All(row.Boxes, cell => Assert.NotEqual(RPoint.Empty, cell.Location)));
+                row => Assert.All(row.Boxes, cell => Assert.NotEqual(PaintPoint.Empty, cell.Location)));
         }
 
         /// <summary>
@@ -596,7 +595,7 @@ namespace PeachPDF.Tests.Integration
                 Display = CssProperty<DisplayMode>.FromValue(Keywords.TableCell, DisplayMode.TableCell);
             }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>
+            protected override ValueTask PerformLayoutImp(Canvas g, CssBox frame, bool framePlacesChild) =>
                 throw new InvalidOperationException("layout failed part-way through the row loop");
         }
 
@@ -1010,7 +1009,7 @@ namespace PeachPDF.Tests.Integration
                 _depth = depth;
             }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
+            protected override ValueTask PerformLayoutImp(Canvas g, CssBox frame, bool framePlacesChild)
             {
                 ActualBottom = Location.Y + _depth;
                 Height = $"{_depth}px";
@@ -1060,13 +1059,13 @@ namespace PeachPDF.Tests.Integration
             /// <summary>Where this cell's layout left that content.</summary>
             internal double PlacedContentTop { get; private set; }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
+            protected override ValueTask PerformLayoutImp(Canvas g, CssBox frame, bool framePlacesChild)
             {
                 // What a real stopped flow leaves: content 200pt deep, and a box still holding the top it
                 // was placed at.
                 if (!_placed || !_keepsItsContentAfterTheFirstLayout)
                 {
-                    OverflowingContent.Location = new RPoint(Location.X, Location.Y);
+                    OverflowingContent.Location = new PaintPoint(Location.X, Location.Y);
                     PlacedContentTop = OverflowingContent.Location.Y;
                     _placed = true;
                 }

@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using System.Threading.Tasks;
@@ -236,7 +236,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter)
             {
-                PageSize = new RSize(configuredWidth, configuredHeight)
+                PageSize = new Size(configuredWidth, configuredHeight)
             };
             await container.SetHtml(html, null);
             return container;

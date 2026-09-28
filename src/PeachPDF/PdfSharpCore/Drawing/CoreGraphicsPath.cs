@@ -320,7 +320,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// Returns a new path holding this path's own contours, each flattened to line segments and
         /// clipped to the axis-aligned rectangle [<paramref name="left"/>, <paramref name="top"/>] -
         /// [<paramref name="right"/>, <paramref name="bottom"/>] via Sutherland-Hodgman against the
-        /// rectangle's own four half-planes. See <c>RGraphicsPath.ClipToRect</c> (the public entry
+        /// rectangle's own four half-planes. See <c>GraphicsPath.ClipToRect</c> (the public entry
         /// point this backs) for why a rectangle-only clip is sufficient here and why Sutherland-Hodgman
         /// - normally associated with convex *subject* polygons - is exact regardless of this path's own
         /// winding or convexity: clipping against a convex window never introduces a self-intersection a

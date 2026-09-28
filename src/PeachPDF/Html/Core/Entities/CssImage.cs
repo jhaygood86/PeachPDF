@@ -1,5 +1,5 @@
 using PeachPDF;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Svg;
 using System;
@@ -17,7 +17,7 @@ namespace PeachPDF.Html.Core.Entities
         {
             private ImageLoadHandler? _handler;
 
-            public RImage? Image => _handler?.Image;
+            public Image? Image => _handler?.Image;
 
             public SvgDocument? SvgDocument => _handler?.SvgDocument;
 

@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using System;
@@ -32,7 +32,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="g"></param>
         /// <param name="box"></param>
         /// <returns></returns>
-        public static double WhiteSpace(RGraphics g, CssBox box)
+        public static double WhiteSpace(Canvas g, CssBox box)
         {
             var w = box.ActualFont.GetWhitespaceWidth(g);
 

@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Threading.Tasks;
@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Html.Core
     /// </summary>
     public class HtmlContainerIntResolvedImageCacheTests
     {
-        private sealed class DisposeTrackingImage : RImage
+        private sealed class DisposeTrackingImage : Image
         {
             public bool Disposed { get; private set; }
             public override double Width => 1;
@@ -23,7 +23,7 @@ namespace PeachPDF.Tests.Html.Core
             public override void Dispose() => Disposed = true;
         }
 
-        private sealed class ThrowingImage : RImage
+        private sealed class ThrowingImage : Image
         {
             public override double Width => 1;
             public override double Height => 1;
@@ -68,7 +68,7 @@ namespace PeachPDF.Tests.Html.Core
         {
             // Dispose(bool)'s cached-image loop swallows a throwing Dispose() (matching the pre-existing
             // swallow-all around Root's own disposal) and always clears the dictionary in its finally, so
-            // one broken RImage can't leak every other cached resource for this render.
+            // one broken Image can't leak every other cached resource for this render.
             var (_, container) = await LayoutHarness.LayoutAsync("<html><body></body></html>");
 
             container.CacheResolvedImageResource("https://example.test/a.png", new ThrowingImage(), null);

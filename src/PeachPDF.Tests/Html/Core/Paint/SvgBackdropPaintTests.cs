@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Raster;
+using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Html.Core.Paint
@@ -10,10 +10,10 @@ namespace PeachPDF.Tests.Html.Core.Paint
     /// </summary>
     public class SvgBackdropPaintTests
     {
-        private static RasterGraphics NewPage(int width, int height) =>
+        private static RasterCanvas NewPage(int width, int height) =>
             new(new PdfSharpAdapter(), new RasterSurface(width, height, 0, 0, 1, 1), 1);
 
-        private static byte[] Pixel(RasterGraphics g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
+        private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 
         // A blue div at x 0..40pt holding an SVG 60pt wide, whose one rectangle is filtered to show the backdrop 30pt to its right.
         private static string Page(string svgStyle = "", string offset = "dx=\"-40\"") => $"""

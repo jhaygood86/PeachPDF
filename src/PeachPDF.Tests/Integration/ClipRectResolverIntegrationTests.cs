@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -11,10 +11,10 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Layer-B tests for <see cref="CssClipRectResolver.TryBuildClipRect"/>: resolves a validated legacy
-    /// <c>clip</c> value against a known reference box and asserts the produced <see cref="RRect"/>.
+    /// <c>clip</c> value against a known reference box and asserts the produced <see cref="Rect"/>.
     /// Unlike <see cref="ClipPathResolverIntegrationTests"/>, there is no <c>PixelsPerPoint</c>-division
-    /// category of test here - the resolved <see cref="RRect"/> is undivided raw layout-space, and
-    /// <c>RGraphics.PushClip(RRect)</c> (unlike its <c>PushClip(RGraphicsPath)</c> overload) already
+    /// category of test here - the resolved <see cref="Rect"/> is undivided raw layout-space, and
+    /// <c>Canvas.PushClip(Rect)</c> (unlike its <c>PushClip(GraphicsPath)</c> overload) already
     /// divides by <c>PixelsPerPoint</c> itself, so this resolver has no division of its own to verify.
     /// </summary>
     public class ClipRectResolverIntegrationTests
@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Rect_CommaSeparated_ResolvesOffsetsFromTopAndLeftEdges()
         {
             var box = await BuildBoxAsync();
-            var reference = new RRect(100, 200, 300, 400);
+            var reference = new Rect(100, 200, 300, 400);
 
             // top/bottom are offsets from the top edge (200); right/left are offsets from the left edge (100).
             var built = CssClipRectResolver.TryBuildClipRect("rect(10pt, 250pt, 300pt, 40pt)", reference, box, out var rect);
@@ -56,7 +56,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Rect_SpaceSeparated_ResolvesTheSameAsCommaSeparated()
         {
             var box = await BuildBoxAsync();
-            var reference = new RRect(100, 200, 300, 400);
+            var reference = new Rect(100, 200, 300, 400);
 
             var built = CssClipRectResolver.TryBuildClipRect("rect(10pt 250pt 300pt 40pt)", reference, box, out var rect);
 
@@ -71,7 +71,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Rect_AutoOnSomeEdges_ResolvesToTheBoxsOwnEdgeThere()
         {
             var box = await BuildBoxAsync();
-            var reference = new RRect(100, 200, 300, 400);
+            var reference = new Rect(100, 200, 300, 400);
 
             var built = CssClipRectResolver.TryBuildClipRect("rect(auto, 250pt, auto, 40pt)", reference, box, out var rect);
 
@@ -91,10 +91,10 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await BuildBoxAsync();
 
-            var built = CssClipRectResolver.TryBuildClipRect(value, new RRect(0, 0, 100, 100), box, out var rect);
+            var built = CssClipRectResolver.TryBuildClipRect(value, new Rect(0, 0, 100, 100), box, out var rect);
 
             Assert.False(built);
-            Assert.Equal(default(RRect), rect);
+            Assert.Equal(default(Rect), rect);
         }
     }
 }

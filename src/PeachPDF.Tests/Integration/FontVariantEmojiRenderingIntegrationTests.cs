@@ -9,7 +9,7 @@ using PeachDrawing.Text;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// Paint-level proof that the emoji/text presentation choice reaches the PDF: a colour glyph (Noto Color
+    /// Paint-level proof that the emoji/text presentation choice reaches the PDF: a colour glyph (Noto PaintColor
     /// Emoji) is drawn as vector artwork carrying a per-occurrence <c>/ActualText</c>, while the outline glyph
     /// (Source Sans 3) is an ordinary text show with none. Both fonts cover U+2764, so only the requested
     /// presentation can decide - and the layout-level tests alone would not notice a resolved font that then

@@ -175,12 +175,12 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, root, g);
 
-            var red = PeachPDF.Html.Adapters.Entities.RColor.FromArgb(255, 0, 0);
+            var red = PeachDrawing.Abstractions.PaintColor.FromArgb(255, 0, 0);
             Assert.Contains(g.Log, entry => entry switch
             {
-                TestRecordingGraphics.DrawRectCall r => r.Color == red,
-                TestRecordingGraphics.DrawPathCall p => p.Color == red,
-                TestRecordingGraphics.DrawPolygonCall poly => poly.Color == red,
+                TestRecordingGraphics.DrawRectCall r => r.PaintColor == red,
+                TestRecordingGraphics.DrawPathCall p => p.PaintColor == red,
+                TestRecordingGraphics.DrawPolygonCall poly => poly.PaintColor == red,
                 _ => false
             });
         }

@@ -10,8 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
@@ -45,7 +44,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Assigns the word its width and height
         /// </summary>
         /// <param name="g">the device to use</param>
-        internal override async ValueTask MeasureWordsSize(RGraphics g)
+        internal override async ValueTask MeasureWordsSize(Canvas g)
         {
             if (!_wordsSizeMeasured)
             {
@@ -102,7 +101,7 @@ namespace PeachPDF.Html.Core.Dom
         /// deliberately not reusing the painter's own rect, which is local to whichever fragmentainer
         /// is being painted and would have to be mapped back out again.
         /// </summary>
-        internal (SvgDocument Document, RRect Rect)? GetLinkSource()
+        internal (SvgDocument Document, Rect Rect)? GetLinkSource()
         {
             EnsureDocument();
 

@@ -1,9 +1,9 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
-using PeachPDF.Raster;
-using PeachPDF.Raster.Filters;
+using PeachDrawing;
+using PeachDrawing.Filters;
 using System;
 using System.Collections.Generic;
 

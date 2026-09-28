@@ -1,18 +1,17 @@
 using PeachDrawing.Text.Unicode;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 
 namespace PeachPDF.Html.Core.Utils
 {
     /// <summary>
-    /// Resolves a (possibly comma-separated) CSS font-family list to a real <see cref="RFont"/>, trying
-    /// each candidate family in order via <see cref="RAdapter.GetFont"/> until one resolves. Shared by
+    /// Resolves a (possibly comma-separated) CSS font-family list to a real <see cref="Font"/>, trying
+    /// each candidate family in order via <see cref="RenderContext.GetFont"/> until one resolves. Shared by
     /// <c>CssBox.GetCachedFont</c> (in-flow content) and <c>MarginBoxRenderer.BuildFont</c> (@page margin
     /// boxes) so the font-stack-fallback algorithm exists in exactly one place.
     /// </summary>
     internal static class FontFamilyResolver
     {
-        internal static RFont? Resolve(RAdapter adapter, string fontFamilyList, double fsize, RFontStyle style, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
+        internal static Font? Resolve(RenderContext adapter, string fontFamilyList, double fsize, PaintFontStyle style, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
             var families = fontFamilyList.Split(',');
 
@@ -21,7 +20,7 @@ namespace PeachPDF.Html.Core.Utils
                 return adapter.GetFont(fontFamilyList, fsize, style, weight, stretch, obliqueSkewSinus, variations);
             }
 
-            RFont? selectedFont = null;
+            Font? selectedFont = null;
 
             foreach (var family in families)
             {
@@ -44,21 +43,21 @@ namespace PeachPDF.Html.Core.Utils
         /// and actually contains a glyph for it - the browser "first available font that can render this
         /// character" rule. When nothing in the declared stack covers it, falls through to a last-resort
         /// system-fallback search (CSS Fonts 4 §5's final step) across every OTHER font this adapter
-        /// knows about - see <see cref="RAdapter.GetSystemFallbackFontForCodepoint"/>. Returns null only
+        /// knows about - see <see cref="RenderContext.GetSystemFallbackFontForCodepoint"/>. Returns null only
         /// when that also finds nothing (the caller then falls back to the box's own default font, which
         /// ultimately renders <c>.notdef</c>). The coverage filter on each candidate is a fast pre-narrow;
-        /// the <see cref="RFont.HasGlyph"/> check is authoritative (it guards the rare cmap over-report).
+        /// the <see cref="Font.HasGlyph"/> check is authoritative (it guards the rare cmap over-report).
         /// <paramref name="presentation"/> is the emoji/text presentation the character was asked to be
         /// drawn in - see <see cref="Emoji.Resolve"/>.
         /// </summary>
-        internal static RFont? Resolve(RAdapter adapter, string fontFamilyList, double fsize, RFontStyle style, System.Text.Rune codepoint, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, PeachDrawing.Text.Unicode.EmojiPresentation presentation = PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, string? variations = null)
+        internal static Font? Resolve(RenderContext adapter, string fontFamilyList, double fsize, PaintFontStyle style, System.Text.Rune codepoint, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, PeachDrawing.Text.Unicode.EmojiPresentation presentation = PeachDrawing.Text.Unicode.EmojiPresentation.NoPreference, string? variations = null)
         {
             // With a presentation request (CSS font-variant-emoji, or an explicit U+FE0E/U+FE0F), CSS Fonts 4
             // §5.3's cluster matching order applies: a family whose font supports the requested sequence
             // wins; failing that, system fallback is asked for a font that does; and only when no font
             // supports it is the variation selector ignored and the first font that merely covers the
             // character used. A covering font that does not match is therefore remembered, not returned.
-            RFont? firstCoveringFont = null;
+            Font? firstCoveringFont = null;
 
             foreach (var family in fontFamilyList.Split(','))
             {

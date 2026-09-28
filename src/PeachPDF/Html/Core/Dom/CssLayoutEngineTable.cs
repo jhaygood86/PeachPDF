@@ -13,8 +13,7 @@
 using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Fragments;
@@ -38,7 +37,7 @@ namespace PeachPDF.Html.Core.Dom
         private readonly CssBox _tableBox;
 
         /// <summary>The active layout graphics context, used by lazy intrinsic text measurement.</summary>
-        private readonly RGraphics _graphics;
+        private readonly Canvas _graphics;
 
         // ─── Writing-mode axis mapping ──────────────────────────────────────────
         //
@@ -377,7 +376,7 @@ namespace PeachPDF.Html.Core.Dom
         /// how this table resumes on the current fragmentainer pass, or null when it is being laid out
         /// from the start.
         /// </param>
-        private CssLayoutEngineTable(RGraphics graphics, CssBox tableBox, BreakToken? resume)
+        private CssLayoutEngineTable(Canvas graphics, CssBox tableBox, BreakToken? resume)
         {
             _graphics = graphics;
             _tableBox = tableBox;
@@ -478,7 +477,7 @@ namespace PeachPDF.Html.Core.Dom
         /// being laid out from the start. A continuation inherits what the table already settled rather
         /// than settling it again — see <see cref="TableSetup"/>.
         /// </param>
-        public static async ValueTask PerformLayout(RGraphics g, CssBox tableBox, BreakToken? resume)
+        public static async ValueTask PerformLayout(Canvas g, CssBox tableBox, BreakToken? resume)
         {
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(tableBox);
@@ -610,7 +609,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Analyzes the Table and assigns values to this CssTable object.
         /// To be called from the constructor
         /// </summary>
-        private async ValueTask Layout(RGraphics g)
+        private async ValueTask Layout(Canvas g)
         {
             await MeasureWords(_tableBox, g);
 
@@ -1194,7 +1193,7 @@ namespace PeachPDF.Html.Core.Dom
                     segments.Add(new CollapsedBorderSegment(_isVertical,
                         ColumnBoundaryRect(
                             colAxisCenter.Value, rowAxisCenter - half, rowAxisCenter + half, inlineBorder.Width),
-                        inlineBorder.Style, inlineBorder.Width, inlineBorder.Color));
+                        inlineBorder.Style, inlineBorder.Width, inlineBorder.PaintColor));
                 }
 
                 void EmitPiece(int from, int to)
@@ -1215,7 +1214,7 @@ namespace PeachPDF.Html.Core.Dom
                     // vertical table (rows stack along physical X there) - see RowBoundaryRect's own remarks.
                     segments.Add(new CollapsedBorderSegment(!_isVertical,
                         RowBoundaryRect(rowAxisCenter, runStart, runEnd, border.Width),
-                        border.Style, border.Width, border.Color));
+                        border.Style, border.Width, border.PaintColor));
                 }
 
                 // Whether this run has to be cut back clear of the joint at inline-axis line
@@ -1313,7 +1312,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     segments.Add(new CollapsedBorderSegment(_isVertical,
                         ColumnBoundaryRect(colAxisCenter, runStart, runEnd, border.Width),
-                        border.Style, border.Width, border.Color));
+                        border.Style, border.Width, border.PaintColor));
                 }
 
                 // Whether this run has to be cut back clear of the joint at block-axis line
@@ -1368,13 +1367,13 @@ namespace PeachPDF.Html.Core.Dom
         /// overload below normalizes its own row-axis pair regardless, since <see cref="GetGridLineY"/>
         /// runs <i>decreasing</i> with grid-line index for a <c>vertical-rl</c> table (row 0 sits at the
         /// physical-max edge there) - a bare <c>end - start</c> would otherwise hand a negative
-        /// width/height to <see cref="RRect"/>, whose own <c>IsEmpty</c>/painting consumers assume
+        /// width/height to <see cref="Rect"/>, whose own <c>IsEmpty</c>/painting consumers assume
         /// non-negative extents.
         /// </remarks>
-        private RRect RowBoundaryRect(double rowAxisCenter, double colAxisStart, double colAxisEnd, double width) =>
+        private Rect RowBoundaryRect(double rowAxisCenter, double colAxisStart, double colAxisEnd, double width) =>
             _isVertical
-                ? new RRect(rowAxisCenter - width / 2, colAxisStart, width, colAxisEnd - colAxisStart)
-                : new RRect(colAxisStart, rowAxisCenter - width / 2, colAxisEnd - colAxisStart, width);
+                ? new Rect(rowAxisCenter - width / 2, colAxisStart, width, colAxisEnd - colAxisStart)
+                : new Rect(colAxisStart, rowAxisCenter - width / 2, colAxisEnd - colAxisStart, width);
 
         /// <summary>
         /// The physical rect a column-axis (inline-axis) grid-line segment paints as: a wide, thin stripe
@@ -1386,14 +1385,14 @@ namespace PeachPDF.Html.Core.Dom
         /// order itself - see <see cref="RowBoundaryRect"/>'s own remarks for why a vertical-rl table can
         /// hand these in decreasing physical order.
         /// </summary>
-        private RRect ColumnBoundaryRect(double colAxisCenter, double rowAxisStart, double rowAxisEnd, double width)
+        private Rect ColumnBoundaryRect(double colAxisCenter, double rowAxisStart, double rowAxisEnd, double width)
         {
             var rowAxisMin = Math.Min(rowAxisStart, rowAxisEnd);
             var rowAxisExtent = Math.Abs(rowAxisEnd - rowAxisStart);
 
             return _isVertical
-                ? new RRect(rowAxisMin, colAxisCenter - width / 2, rowAxisExtent, width)
-                : new RRect(colAxisCenter - width / 2, rowAxisMin, width, rowAxisExtent);
+                ? new Rect(rowAxisMin, colAxisCenter - width / 2, rowAxisExtent, width)
+                : new Rect(colAxisCenter - width / 2, rowAxisMin, width, rowAxisExtent);
         }
 
         /// <summary>
@@ -1641,7 +1640,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var resolved = i < count ? resolvedAt(i) : CollapsedBorder.None;
                 var continuesRun = runStart >= 0 && resolved.IsPainted &&
-                    resolved.Style == current.Style && resolved.Width == current.Width && resolved.Color == current.Color;
+                    resolved.Style == current.Style && resolved.Width == current.Width && resolved.PaintColor == current.PaintColor;
 
                 if (continuesRun) continue;
 
@@ -3191,7 +3190,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var proxy = new CssProxyBox(_tableBox, _headerBox, _headerIndex);
             var columnAxisStart = Math.Max((_isVertical ? _tableBox.ClientTop : _tableBox.ClientLeft) + StartXSpacing(), 0);
-            proxy.Location = _isVertical ? new RPoint(yPosition, columnAxisStart) : new RPoint(columnAxisStart, yPosition);
+            proxy.Location = _isVertical ? new PaintPoint(yPosition, columnAxisStart) : new PaintPoint(columnAxisStart, yPosition);
             return proxy;
         }
 
@@ -3206,7 +3205,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var proxy = new CssProxyBox(_tableBox, _footerBox, _footerIndex);
             var columnAxisStart = Math.Max((_isVertical ? _tableBox.ClientTop : _tableBox.ClientLeft) + StartXSpacing(), 0);
-            proxy.Location = _isVertical ? new RPoint(yPosition, columnAxisStart) : new RPoint(columnAxisStart, yPosition);
+            proxy.Location = _isVertical ? new PaintPoint(yPosition, columnAxisStart) : new PaintPoint(columnAxisStart, yPosition);
             return proxy;
         }
 
@@ -3261,7 +3260,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns><paramref name="rowAxisCursor"/> unchanged when <paramref name="captions"/> is empty,
         /// otherwise the row-axis position after the last caption's own trailing margin.</returns>
         private async ValueTask<double> LayoutCaptionGroup(
-            RGraphics g, IReadOnlyList<CssBox> captions, double columnAxisStart, double rowAxisCursor, double columnAxisExtent)
+            Canvas g, IReadOnlyList<CssBox> captions, double columnAxisStart, double rowAxisCursor, double columnAxisExtent)
         {
             var currentPos = rowAxisCursor;
 
@@ -3270,8 +3269,8 @@ namespace PeachPDF.Html.Core.Dom
                 currentPos += _isVertical ? caption.ActualMarginLeft : caption.ActualMarginTop;
 
                 caption.Location = _isVertical
-                    ? new RPoint(currentPos, columnAxisStart)
-                    : new RPoint(columnAxisStart, currentPos);
+                    ? new PaintPoint(currentPos, columnAxisStart)
+                    : new PaintPoint(columnAxisStart, currentPos);
 
                 if (_isVertical)
                 {
@@ -3422,7 +3421,7 @@ namespace PeachPDF.Html.Core.Dom
                     ? _topCaptions[^1].ActualRight + _topCaptions[^1].ActualMarginRight
                     : _tableBox.Location.X;
 
-                decorationBox.Location = new RPoint(gridBorderBoxTop, _tableBox.Location.Y);
+                decorationBox.Location = new PaintPoint(gridBorderBoxTop, _tableBox.Location.Y);
                 decorationBox.ActualRight = gridBorderBoxBottom;
                 decorationBox.ActualBottom = _tableBox.ActualBottom;
             }
@@ -3432,7 +3431,7 @@ namespace PeachPDF.Html.Core.Dom
                     ? _topCaptions[^1].ActualBottom + _topCaptions[^1].ActualMarginBottom
                     : _tableBox.Location.Y;
 
-                decorationBox.Location = new RPoint(_tableBox.Location.X, gridBorderBoxTop);
+                decorationBox.Location = new PaintPoint(_tableBox.Location.X, gridBorderBoxTop);
                 decorationBox.ActualRight = _tableBox.ActualRight;
                 decorationBox.ActualBottom = gridBorderBoxBottom;
             }
@@ -3444,7 +3443,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Layout the cells by the calculated table layout
         /// </summary>
         /// <param name="g"></param>
-        private async ValueTask LayoutCells(RGraphics g)
+        private async ValueTask LayoutCells(Canvas g)
         {
             // Column-axis start: always physical-min-forward (no rtl support - see the axis-mapping
             // fields' own remarks), so ClientTop for a vertical table (columns run along physical Y),
@@ -3623,7 +3622,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </param>
         /// <param name="footerRoom">the height the repeated footer holds at the band's foot, or zero</param>
         private async ValueTask LayoutBodyRowInsideTheRepeatedGroups(
-            RGraphics g, CssBox row, double startX, TableRowCursor cursor,
+            Canvas g, CssBox row, double startX, TableRowCursor cursor,
             int slot, double headerRoom, double footerRoom)
         {
             // Null on an unpaginated or measurement pass, where nothing resumes and CreateLineBoxes reads
@@ -3673,7 +3672,7 @@ namespace PeachPDF.Html.Core.Dom
         /// once to measure it, recording both in <see cref="_setup"/> so a resumed pass inherits them
         /// rather than doing either again.
         /// </summary>
-        private async ValueTask DetachAndMeasureRepeatedRowGroups(RGraphics g, TableRowCursor cursor, double startX)
+        private async ValueTask DetachAndMeasureRepeatedRowGroups(Canvas g, TableRowCursor cursor, double startX)
         {
             // Step 1: Remove header/footer from document tree
             RemoveHeaderFooterFromTree();
@@ -3755,7 +3754,7 @@ namespace PeachPDF.Html.Core.Dom
                         //
                         // headerCursor.MaxBottom is the row axis - see AssignRowActualBounds for why it (not
                         // Boxes.Max) is the safe source for that field on a vertical table.
-                        row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
+                        row.Location = new PaintPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
                         AssignRowActualBounds(row, headerCursor.MaxBottom);
 
                         CloseRowSpanCellsEndingOnRow(
@@ -3769,7 +3768,7 @@ namespace PeachPDF.Html.Core.Dom
                     cursor.MaxRight = headerCursor.MaxRight;
 
                     // Set header box dimensions
-                    _headerBox.Location = _isVertical ? new RPoint(cursor.CurrentY, startX) : new RPoint(startX, cursor.CurrentY);
+                    _headerBox.Location = _isVertical ? new PaintPoint(cursor.CurrentY, startX) : new PaintPoint(startX, cursor.CurrentY);
                     if (_isVertical)
                     {
                         _headerBox.ActualBottom = cursor.MaxRight;
@@ -3824,7 +3823,7 @@ namespace PeachPDF.Html.Core.Dom
                         footerRowIndex++;
 
                         // See the identical fix in the header-rows loop above for why this is needed.
-                        row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
+                        row.Location = new PaintPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
                         AssignRowActualBounds(row, footerCursor.MaxBottom);
 
                         CloseRowSpanCellsEndingOnRow(
@@ -3845,7 +3844,7 @@ namespace PeachPDF.Html.Core.Dom
                     // fixed content anywhere) then silently treated as never visible - the footer never
                     // painted on any page. Mirrors the identical `_headerBox.ActualRight = maxRight`
                     // assignment above. See GitHub issue #124.
-                    _footerBox.Location = _isVertical ? new RPoint(0, startX) : new RPoint(startX, 0);
+                    _footerBox.Location = _isVertical ? new PaintPoint(0, startX) : new PaintPoint(startX, 0);
                     if (_isVertical)
                     {
                         _footerBox.ActualBottom = cursor.MaxRight;
@@ -3998,7 +3997,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="GrowForClosingRowSpanCells"/> if any needed it.
         /// </summary>
         private static void CloseRowSpanCellsEndingOnRow(
-            RGraphics g, int rowIndex, Dictionary<int, List<CssBox>> spanningCellsEndingOnRow, double rowAxisExtent,
+            Canvas g, int rowIndex, Dictionary<int, List<CssBox>> spanningCellsEndingOnRow, double rowAxisExtent,
             bool isVertical)
         {
             if (!spanningCellsEndingOnRow.TryGetValue(rowIndex, out var endingHere)) return;
@@ -4091,7 +4090,7 @@ namespace PeachPDF.Html.Core.Dom
         /// the table's own dimensions.
         /// </summary>
         private async ValueTask LayoutBodyRows(
-            RGraphics g, TableRowCursor cursor, double startX, double startY,
+            Canvas g, TableRowCursor cursor, double startX, double startY,
             HtmlContainerInt? container, double pageHeight)
         {
             // The two whole-table pre-checks below move the table's own Location, so both are once per
@@ -4370,7 +4369,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 cursor.CurrentY = cursor.MaxBottom + VerticalSpacingAt(HeaderRowCountInGrid + i + 1);
 
-                row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
+                row.Location = new PaintPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
                 AssignRowActualBounds(row, cursor.MaxBottom, slicedRowBottom);
 
                 // A cell of this row ran out of fragmentainer before it ran out of content, so the rows
@@ -4883,7 +4882,7 @@ namespace PeachPDF.Html.Core.Dom
                 var right = GetColumnLineX(j);
                 if (left is { } l && right is { } r)
                 {
-                    box.Location = new RPoint(l, top);
+                    box.Location = new PaintPoint(l, top);
                     box.ActualRight = r;
                     box.ActualBottom = bottom;
                 }
@@ -4909,7 +4908,7 @@ namespace PeachPDF.Html.Core.Dom
                 var right = GetColumnLineX(lastIndex + 1);
                 if (left is { } l && right is { } r)
                 {
-                    box.Location = new RPoint(l, top);
+                    box.Location = new PaintPoint(l, top);
                     box.ActualRight = r;
                     box.ActualBottom = bottom;
                 }
@@ -4942,7 +4941,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (rows.Count == 0)
                     continue;
 
-                box.Location = new RPoint(rows.Min(r => r.Location.X), rows.Min(r => r.Location.Y));
+                box.Location = new PaintPoint(rows.Min(r => r.Location.X), rows.Min(r => r.Location.Y));
                 box.ActualRight = rows.Max(r => r.ActualRight);
                 box.ActualBottom = rows.Max(r => r.ActualBottom);
             }
@@ -5291,7 +5290,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="cursor">this pass's row cursor</param>
         /// <param name="slot">the band being filled, which the break closes</param>
         private async ValueTask<int> TakeBreakBeforeRow(
-            RGraphics g, HtmlContainerInt container, TableRowCursor cursor, int slot)
+            Canvas g, HtmlContainerInt container, TableRowCursor cursor, int slot)
         {
             // Start with the last body-row bottom; may be extended by the footer below.
             var pageBreakBottomY = cursor.MaxBottom;
@@ -5379,7 +5378,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="container">the container whose page grid the bands come from, or null</param>
         /// <param name="cursor">this pass's row cursor, sitting under the table's last row</param>
         private async ValueTask MoveTheClosingFooterOffABoundaryItWouldStraddle(
-            RGraphics g, HtmlContainerInt? container, TableRowCursor cursor)
+            Canvas g, HtmlContainerInt? container, TableRowCursor cursor)
         {
             if (_footerRepeats) return;
             if (container is null || !container.HasRealPageGrid) return;
@@ -5667,7 +5666,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="container">the container whose page grid the bands come from, null on a measurement run</param>
         /// <param name="cursor">this pass's row cursor; only its widest edge is advanced</param>
         private async ValueTask RepeatTheGroupsOnEveryBandTheTableSpans(
-            RGraphics g, HtmlContainerInt? container, TableRowCursor cursor)
+            Canvas g, HtmlContainerInt? container, TableRowCursor cursor)
         {
             if (container is not { HasRealPageGrid: true }) return;
             if (container.CurrentFragmentainer is not { HasOwnBand: false }) return;
@@ -5867,7 +5866,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 container.RecordFragmentDisplacement(
                     row, band.Slot, band.DrawShift,
-                    new RRect(left - margin, band.ContentTop, right - left + 2 * margin, band.Depth));
+                    new Rect(left - margin, band.ContentTop, right - left + 2 * margin, band.Depth));
             }
 
             // The cursor carries where the row really ends on the page - gaps included - because that is
@@ -5911,7 +5910,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="row">the row whose cells are being placed</param>
         /// <param name="startX">the table's own content left edge, where each row's first cell starts</param>
         /// <param name="cursor">where the row loop has got to; read and advanced</param>
-        private async ValueTask LayoutBodyRow(RGraphics g, CssBox row, double startX, TableRowCursor cursor)
+        private async ValueTask LayoutBodyRow(Canvas g, CssBox row, double startX, TableRowCursor cursor)
         {
             // Issue #166's "leaks past the table's own subtree" symptom: a <tr> is never itself given a
             // PerformLayout/PerformLayoutPrologue call (only its cells are, in the loop below) - only
@@ -6028,10 +6027,10 @@ namespace PeachPDF.Html.Core.Dom
                     || _tableBox.HtmlContainer?.CurrentFragmentainer is { HasOwnBand: true })
                 {
                     // currentX is always the column axis (physical Y for a vertical table), currentY
-                    // always the row axis (physical X) - swapped into the correct RPoint slot here, the
+                    // always the row axis (physical X) - swapped into the correct PaintPoint slot here, the
                     // one place logical and physical coordinates actually meet. See the axis-mapping
                     // fields' own remarks for why this assumes forward growth even for vertical-rl.
-                    cell.Location = _isVertical ? new RPoint(currentY, currentX) : new RPoint(currentX, currentY);
+                    cell.Location = _isVertical ? new PaintPoint(currentY, currentX) : new PaintPoint(currentX, currentY);
                 }
 
                 // width is the cell's column-axis extent (from _columnWidths[], physical Y for a vertical
@@ -6310,7 +6309,7 @@ namespace PeachPDF.Html.Core.Dom
                 foreach (var (cell, left, cellWidth) in finishedCells)
                 {
                     htmlContainer.RecordContinuationShell(
-                        cell, cursor.SlotIndex, new RRect(left, currentY, cellWidth, rowMaxBottom - currentY));
+                        cell, cursor.SlotIndex, new Rect(left, currentY, cellWidth, rowMaxBottom - currentY));
                 }
             }
         }
@@ -6466,7 +6465,7 @@ namespace PeachPDF.Html.Core.Dom
         /// stands in for, so this internal check is the only thing protecting that route from a genuinely
         /// finished cell's geometry.
         /// </param>
-        private void CloseSpanningCell(RGraphics g, CssBox cell, TableRowCursor cursor, double rowMaxBottom,
+        private void CloseSpanningCell(Canvas g, CssBox cell, TableRowCursor cursor, double rowMaxBottom,
             bool skipFinishedGuard = false)
         {
             // The same cell arrives twice on a row that reaches it both as a CssSpacingBox's ExtendedBox
@@ -6636,7 +6635,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (height > 0)
                 {
-                    container.RecordContinuationShell(cell, s, new RRect(left, top, width, height));
+                    container.RecordContinuationShell(cell, s, new Rect(left, top, width, height));
                 }
             }
         }
@@ -6732,7 +6731,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="box">the box to measure</param>
         /// <param name="g">Device to use</param>
-        private static async ValueTask MeasureWords(CssBox box, RGraphics g)
+        private static async ValueTask MeasureWords(CssBox box, Canvas g)
         {
             foreach (var childBox in box.Boxes)
             {

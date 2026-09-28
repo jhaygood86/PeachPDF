@@ -1,5 +1,6 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Svg;
+using System.Numerics;
 
 namespace PeachPDF.Tests.Svg
 {
@@ -21,8 +22,8 @@ namespace PeachPDF.Tests.Svg
             Assert.Equal(0, m.M12);
             Assert.Equal(0, m.M21);
             Assert.Equal(-1, m.M22);
-            Assert.Equal(0, m.OffsetX);
-            Assert.Equal(800, m.OffsetY, 3);
+            Assert.Equal(0, m.M31);
+            Assert.Equal(800, m.M32, 3);
         }
 
         [Fact]
@@ -43,8 +44,8 @@ namespace PeachPDF.Tests.Svg
             var m = matrix!.Value;
             Assert.Equal(1, m.M11);
             Assert.Equal(1, m.M22);
-            Assert.Equal(10, m.OffsetX);
-            Assert.Equal(20, m.OffsetY);
+            Assert.Equal(10, m.M31);
+            Assert.Equal(20, m.M32);
         }
 
         [Fact]
@@ -81,8 +82,8 @@ namespace PeachPDF.Tests.Svg
             Assert.NotNull(matrix);
             var m = matrix!.Value;
 
-            var x = 1 * m.M11 + 0 * m.M21 + m.OffsetX;
-            var y = 1 * m.M12 + 0 * m.M22 + m.OffsetY;
+            var x = 1 * m.M11 + 0 * m.M21 + m.M31;
+            var y = 1 * m.M12 + 0 * m.M22 + m.M32;
 
             Assert.Equal(12, x, 6);
             Assert.Equal(0, y, 6);
@@ -103,8 +104,8 @@ namespace PeachPDF.Tests.Svg
             var m = matrix!.Value;
             Assert.Equal(1, m.M11);
             Assert.Equal(1, m.M22);
-            Assert.Equal(5, m.OffsetX);
-            Assert.Equal(5, m.OffsetY);
+            Assert.Equal(5, m.M31);
+            Assert.Equal(5, m.M32);
         }
 
         [Fact]
@@ -115,8 +116,8 @@ namespace PeachPDF.Tests.Svg
             Assert.Null(SvgTransformParser.Parse("   "));
         }
 
-        private static (double X, double Y) Apply(RMatrix m, double x, double y) =>
-            (x * m.M11 + y * m.M21 + m.OffsetX, x * m.M12 + y * m.M22 + m.OffsetY);
+        private static (double X, double Y) Apply(Matrix3x2 m, double x, double y) =>
+            (x * m.M11 + y * m.M21 + m.M31, x * m.M12 + y * m.M22 + m.M32);
 
         [Fact]
         public void Parse_RotateAboutOrigin_MatchesSpecMatrixForm()
@@ -132,8 +133,8 @@ namespace PeachPDF.Tests.Svg
             Assert.Equal(1, m.M12, 5);
             Assert.Equal(-1, m.M21, 5);
             Assert.Equal(0, m.M22, 5);
-            Assert.Equal(0, m.OffsetX, 5);
-            Assert.Equal(0, m.OffsetY, 5);
+            Assert.Equal(0, m.M31, 5);
+            Assert.Equal(0, m.M32, 5);
         }
 
         [Fact]

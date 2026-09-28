@@ -12,10 +12,10 @@
 
 using PeachDrawing.Text.Shaping;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 namespace PeachPDF.Svg
 {
@@ -32,7 +32,7 @@ namespace PeachPDF.Svg
         public string? Id { get; set; }
 
         /// <summary>Default per SVG spec: fill defaults to solid black.</summary>
-        public SvgPaint Fill { get; set; } = SvgPaint.Solid(RColor.Black);
+        public SvgPaint Fill { get; set; } = SvgPaint.Solid(PaintColor.Black);
 
         /// <summary>Default per SVG spec: stroke defaults to none.</summary>
         public SvgPaint Stroke { get; set; } = SvgPaint.None;
@@ -52,13 +52,13 @@ namespace PeachPDF.Svg
         public double StrokeOpacity { get; set; } = 1;
 
         /// <summary>Inherited. Governs how a self-intersecting fill's interior is determined.</summary>
-        public RFillMode FillRule { get; set; } = RFillMode.Nonzero;
+        public FillMode FillRule { get; set; } = FillMode.Nonzero;
 
         /// <summary>Inherited. Default per SVG spec.</summary>
-        public RLineCap StrokeLineCap { get; set; } = RLineCap.Butt;
+        public LineCap StrokeLineCap { get; set; } = LineCap.Butt;
 
         /// <summary>Inherited. Default per SVG spec.</summary>
-        public RLineJoin StrokeLineJoin { get; set; } = RLineJoin.Miter;
+        public LineJoin StrokeLineJoin { get; set; } = LineJoin.Miter;
 
         /// <summary>Inherited. Empty means a solid (non-dashed) stroke.</summary>
         public double[] StrokeDashArray { get; set; } = [];
@@ -80,7 +80,7 @@ namespace PeachPDF.Svg
         /// </summary>
         public string? FilterRef { get; set; }
 
-        public RMatrix? Transform { get; set; }
+        public Matrix3x2? Transform { get; set; }
 
         /// <summary>Inherited. Id of a <c>&lt;marker&gt;</c> def (see <see cref="SvgDocument.Markers"/>), or null for none. Only consulted for shapes markers can attach to - see <see cref="SvgMarkerGeometry"/>.</summary>
         public string? MarkerStartRef { get; set; }
@@ -144,7 +144,7 @@ namespace PeachPDF.Svg
     /// in <see cref="XList"/>/<see cref="YList"/>/<see cref="DxList"/>/<see cref="DyList"/>/<see cref="RotateList"/>;
     /// they address this run's own characters (a value list on an ancestor also carries into a nested
     /// run's characters, innermost-wins). A solid <see cref="SvgElement.Fill"/> without positioning/rotation
-    /// paints via the fast selectable <see cref="Html.Adapters.RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?)"/> path; positioned/
+    /// paints via the fast selectable <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?)"/> path; positioned/
     /// rotated glyphs, a gradient/pattern fill, or any <see cref="SvgElement.Stroke"/> outline each glyph.
     /// When <see cref="PathData"/> is set (a <c>&lt;textPath&gt;</c>), the run's glyphs lay along that path.
     /// </summary>
@@ -224,10 +224,10 @@ namespace PeachPDF.Svg
 
         /// <summary>Resolved <c>text-decoration-color</c> - null means <c>currentColor</c> (paint with
         /// the run's own resolved fill-adjacent context color at paint time).</summary>
-        public RColor? TextDecorationColor { get; set; }
+        public PaintColor? TextDecorationColor { get; set; }
 
         /// <summary>Null when the resolved font family (and the library-wide default fallback) couldn't be found - the run then renders nothing rather than throwing, unlike ordinary HTML text.</summary>
-        public RFont? Font { get; set; }
+        public Font? Font { get; set; }
 
         /// <summary>This run's own text and child runs, interleaved in document order.</summary>
         public List<SvgTextContentItem> Content { get; } = [];
@@ -261,7 +261,7 @@ namespace PeachPDF.Svg
 
     internal sealed class SvgPolygonElement : SvgElement
     {
-        public RPoint[] Points { get; set; } = [];
+        public PaintPoint[] Points { get; set; } = [];
     }
 
     /// <summary>
@@ -273,7 +273,7 @@ namespace PeachPDF.Svg
     /// </summary>
     internal sealed class SvgPolylineElement : SvgElement
     {
-        public RPoint[] Points { get; set; } = [];
+        public PaintPoint[] Points { get; set; } = [];
     }
 
     internal sealed class SvgRectElement : SvgElement
@@ -322,7 +322,7 @@ namespace PeachPDF.Svg
         public double Width { get; set; }
         public double Height { get; set; }
         public SvgPreserveAspectRatio PreserveAspectRatio { get; set; } = SvgPreserveAspectRatio.Default;
-        public RImage? Image { get; set; }
+        public Image? Image { get; set; }
         public SvgDocument? NestedDocument { get; set; }
     }
 
@@ -352,7 +352,7 @@ namespace PeachPDF.Svg
         public double Y { get; set; }
         public double Width { get; set; }
         public double Height { get; set; }
-        public RRect? ViewBox { get; set; }
+        public Rect? ViewBox { get; set; }
         public SvgPreserveAspectRatio PreserveAspectRatio { get; set; } = SvgPreserveAspectRatio.Default;
         public List<SvgElement> Children { get; } = [];
     }
@@ -365,7 +365,7 @@ namespace PeachPDF.Svg
     /// </summary>
     internal sealed class SvgSymbolElement : SvgElement
     {
-        public RRect? ViewBox { get; set; }
+        public Rect? ViewBox { get; set; }
         public SvgPreserveAspectRatio PreserveAspectRatio { get; set; } = SvgPreserveAspectRatio.Default;
         public List<SvgElement> Children { get; } = [];
     }
@@ -385,7 +385,7 @@ namespace PeachPDF.Svg
         public double MarkerWidth { get; set; } = 3;
         public double MarkerHeight { get; set; } = 3;
 
-        public RRect? ViewBox { get; set; }
+        public Rect? ViewBox { get; set; }
         public SvgPreserveAspectRatio PreserveAspectRatio { get; set; } = SvgPreserveAspectRatio.Default;
 
         /// <summary>True for <c>orient="auto"</c> or <c>"auto-start-reverse"</c> - rotate to match the attachment vertex's tangent direction, rather than a fixed <see cref="OrientAngle"/>.</summary>

@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
@@ -39,14 +39,14 @@ namespace PeachPDF.Tests.Integration
 
             var firstClip = Assert.IsType<TestRecordingGraphics.PushClipCall>(recording.Log[0]);
             Assert.Equal(container.PageBoxRect, firstClip.Rect);
-            Assert.Equal(new RRect(MarginLeftPx, MarginTopPx, BandWidth + MarginRightPx, BandHeight), firstClip.Rect);
+            Assert.Equal(new Rect(MarginLeftPx, MarginTopPx, BandWidth + MarginRightPx, BandHeight), firstClip.Rect);
         }
 
         [Fact]
         public async Task PerformPaint_PageClipOverride_IsPushedInsteadOfPageBoxRect()
         {
             var container = await BuildLayoutAsync(SimpleCoverHtml);
-            var fullBleedWindow = new RRect(MarginLeftPx, MarginTopPx, SheetWidth, BandHeight);
+            var fullBleedWindow = new Rect(MarginLeftPx, MarginTopPx, SheetWidth, BandHeight);
 
             var recording = await PaintPageAsync(container, page: 0, clipOverride: fullBleedWindow);
 
@@ -63,7 +63,7 @@ namespace PeachPDF.Tests.Integration
             // the slot's own band (here the base band — this harness paginated on it) so page 2's
             // content never leaks onto page 1, whatever width the override reclaims.
             var container = await BuildLayoutAsync(TwoPageCoverHtml);
-            var fullBleedWindow = new RRect(MarginLeftPx, MarginTopPx, SheetWidth, BandHeight);
+            var fullBleedWindow = new Rect(MarginLeftPx, MarginTopPx, SheetWidth, BandHeight);
 
             var page1 = await PaintPageAsync(container, page: 0, clipOverride: fullBleedWindow);
             Assert.Contains(page1.DrawStringCalls, c => c.Text.Contains("CoverMarker"));
@@ -87,7 +87,7 @@ namespace PeachPDF.Tests.Integration
             var defaultWindow = await PaintPageAsync(container, page: 0, clipOverride: null);
             Assert.DoesNotContain(defaultWindow.DrawStringCalls, c => c.Text.Contains("EdgeMarker"));
 
-            var fullBleedWindow = new RRect(MarginLeftPx, MarginTopPx, SheetWidth, BandHeight);
+            var fullBleedWindow = new Rect(MarginLeftPx, MarginTopPx, SheetWidth, BandHeight);
             var widened = await PaintPageAsync(container, page: 0, clipOverride: fullBleedWindow);
             Assert.Contains(widened.DrawStringCalls, c => c.Text.Contains("EdgeMarker"));
             Assert.Contains(widened.DrawStringCalls, c => c.Text.Contains("CoverMarker"));
@@ -134,9 +134,9 @@ namespace PeachPDF.Tests.Integration
             container.MarginTop = MarginTopPx;
             container.MarginRight = MarginRightPx;
             container.MarginBottom = MarginBottomPx;
-            container.PageSize = new RSize(BandWidth, BandHeight);
-            container.Location = new RPoint(MarginLeftPx, MarginTopPx);
-            container.MaxSize = new RSize(BandWidth, 0);
+            container.PageSize = new Size(BandWidth, BandHeight);
+            container.Location = new PaintPoint(MarginLeftPx, MarginTopPx);
+            container.MaxSize = new Size(BandWidth, 0);
 
             var measure = XGraphics.CreateMeasureContext(new XSize(BandWidth, BandHeight), XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
@@ -147,7 +147,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         private static async Task<TestRecordingGraphics> PaintPageAsync(
-            HtmlContainerInt container, int page, RRect? clipOverride)
+            HtmlContainerInt container, int page, Rect? clipOverride)
         {
             var recording = new TestRecordingGraphics();
             container.PageClipOverride = clipOverride;

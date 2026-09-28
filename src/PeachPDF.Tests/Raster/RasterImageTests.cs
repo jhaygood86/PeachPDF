@@ -1,9 +1,8 @@
 using PeachImage;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Raster;
+using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Raster
@@ -13,13 +12,13 @@ namespace PeachPDF.Tests.Raster
     {
         private static readonly PdfSharpAdapter Adapter = new();
 
-        private static RasterGraphics NewGraphics(int width, int height)
+        private static RasterCanvas NewGraphics(int width, int height)
         {
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            return new RasterGraphics(Adapter, surface, 1);
+            return new RasterCanvas(Adapter, surface, 1);
         }
 
-        private static byte[] Pixel(RasterGraphics g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
+        private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 
         private static ImageAdapter Load(byte[] bytes) => new(XImage.FromStream(() => new MemoryStream(bytes)));
 
@@ -39,7 +38,7 @@ namespace PeachPDF.Tests.Raster
             var image = Load(QuadrantPng());
             image.Interpolate = false;
 
-            g.DrawImage(image, new RRect(0, 0, 20, 20));
+            g.DrawImage(image, new Rect(0, 0, 20, 20));
 
             // Nearest-neighbour: each source pixel becomes a crisp 10 x 10 block.
             Assert.Equal(new byte[] { 255, 0, 0, 255 }, Pixel(g, 4, 4));
@@ -56,7 +55,7 @@ namespace PeachPDF.Tests.Raster
             var image = Load(QuadrantPng());
             image.Interpolate = true;
 
-            g.DrawImage(image, new RRect(0, 0, 20, 20));
+            g.DrawImage(image, new Rect(0, 0, 20, 20));
 
             var edge = Pixel(g, 10, 4);
             Assert.InRange(edge[0], 60, 200);
@@ -71,7 +70,7 @@ namespace PeachPDF.Tests.Raster
             image.Interpolate = false;
 
             // Only the right-hand column (green over white), drawn to fill the destination.
-            g.DrawImage(image, new RRect(0, 0, 10, 10), new RRect(1, 0, 1, 2));
+            g.DrawImage(image, new Rect(0, 0, 10, 10), new Rect(1, 0, 1, 2));
 
             Assert.Equal(new byte[] { 0, 255, 0, 255 }, Pixel(g, 5, 2));
             Assert.Equal(new byte[] { 255, 255, 255, 255 }, Pixel(g, 5, 8));
@@ -81,10 +80,10 @@ namespace PeachPDF.Tests.Raster
         public void TransparentPixels_LeaveTheBackdropShowing()
         {
             var g = NewGraphics(4, 4);
-            g.DrawRectangle(g.GetSolidBrush(RColor.FromArgb(255, 0, 0, 255)), 0, 0, 4, 4);
+            g.DrawRectangle(g.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 255)), 0, 0, 4, 4);
             var image = Load(RasterPngFixture.MakeSolidRgbaPngBytes(4, 4, 255, 0, 0, 0));
 
-            g.DrawImage(image, new RRect(0, 0, 4, 4));
+            g.DrawImage(image, new Rect(0, 0, 4, 4));
 
             Assert.Equal(new byte[] { 0, 0, 255, 255 }, Pixel(g, 2, 2));
         }
@@ -94,7 +93,7 @@ namespace PeachPDF.Tests.Raster
         {
             var g = NewGraphics(4, 4);
 
-            g.DrawImage(Load(RasterPngFixture.MakeIndexedPngBytes(4, 4, (_, _) => (10, 200, 30))), new RRect(0, 0, 4, 4));
+            g.DrawImage(Load(RasterPngFixture.MakeIndexedPngBytes(4, 4, (_, _) => (10, 200, 30))), new Rect(0, 0, 4, 4));
 
             Assert.Equal(new byte[] { 10, 200, 30, 255 }, Pixel(g, 2, 2));
         }
@@ -104,7 +103,7 @@ namespace PeachPDF.Tests.Raster
         {
             var g = NewGraphics(4, 4);
 
-            g.DrawImage(Load(RasterPngFixture.MakeInterlacedPngBytes(4, 4, 50, 60, 70)), new RRect(0, 0, 4, 4));
+            g.DrawImage(Load(RasterPngFixture.MakeInterlacedPngBytes(4, 4, 50, 60, 70)), new Rect(0, 0, 4, 4));
 
             Assert.Equal(new byte[] { 50, 60, 70, 255 }, Pixel(g, 2, 2));
         }
@@ -114,7 +113,7 @@ namespace PeachPDF.Tests.Raster
         {
             var g = NewGraphics(8, 8);
 
-            g.DrawImage(Load(RasterPngFixture.MakeTrnsPngBytesWithTransparentRegion(8, 8, 200, 0, 0, (0, 0, 0))), new RRect(0, 0, 8, 8));
+            g.DrawImage(Load(RasterPngFixture.MakeTrnsPngBytesWithTransparentRegion(8, 8, 200, 0, 0, (0, 0, 0))), new Rect(0, 0, 8, 8));
 
             var pixels = Enumerable.Range(0, 8).SelectMany(y => Enumerable.Range(0, 8).Select(x => Pixel(g, x, y)[3])).ToList();
             Assert.Contains((byte)0, pixels);
@@ -125,23 +124,23 @@ namespace PeachPDF.Tests.Raster
         public void GifImages_Decode_WithAndWithoutTransparency()
         {
             var opaque = NewGraphics(6, 6);
-            opaque.DrawImage(Load(RasterGifFixture.MakeSmallPaletteGifBytes(6, 6)), new RRect(0, 0, 6, 6));
+            opaque.DrawImage(Load(RasterGifFixture.MakeSmallPaletteGifBytes(6, 6)), new Rect(0, 0, 6, 6));
             Assert.Equal(255, Pixel(opaque, 3, 3)[3]);
 
             var transparent = NewGraphics(6, 6);
-            transparent.DrawImage(Load(RasterGifFixture.MakeTransparentGifBytes(6, 6)), new RRect(0, 0, 6, 6));
+            transparent.DrawImage(Load(RasterGifFixture.MakeTransparentGifBytes(6, 6)), new Rect(0, 0, 6, 6));
             var alphas = Enumerable.Range(0, 6).SelectMany(y => Enumerable.Range(0, 6).Select(x => Pixel(transparent, x, y)[3])).ToList();
             Assert.Contains((byte)0, alphas);
 
             var interlaced = NewGraphics(6, 6);
-            interlaced.DrawImage(Load(RasterGifFixture.MakeInterlacedGifBytes(6, 6)), new RRect(0, 0, 6, 6));
+            interlaced.DrawImage(Load(RasterGifFixture.MakeInterlacedGifBytes(6, 6)), new Rect(0, 0, 6, 6));
             Assert.Equal(255, Pixel(interlaced, 3, 3)[3]);
         }
 
         [Fact]
         public void BmpAndJpeg_TheGenericDecodedSources_Draw()
         {
-            using var rgb = Image.Create(4, 4, PixelFormat.Rgba32);
+            using var rgb = PeachImage.Image.Create(4, 4, PixelFormat.Rgba32);
             var span = rgb.GetPixelSpan();
             for (var i = 0; i < span.Length; i += 4)
             {
@@ -154,13 +153,13 @@ namespace PeachPDF.Tests.Raster
             using var bmp = new MemoryStream();
             rgb.Save(bmp, "bmp", new PeachImage.Formats.Bmp.BmpEncoderOptions());
             var g = NewGraphics(4, 4);
-            g.DrawImage(Load(bmp.ToArray()), new RRect(0, 0, 4, 4));
+            g.DrawImage(Load(bmp.ToArray()), new Rect(0, 0, 4, 4));
             Assert.Equal(new byte[] { 20, 120, 220, 255 }, Pixel(g, 2, 2));
 
             using var jpeg = new MemoryStream();
             rgb.Save(jpeg, "jpeg", new PeachImage.Formats.Jpeg.JpegEncoderOptions { Quality = 95 });
             var h = NewGraphics(4, 4);
-            h.DrawImage(Load(jpeg.ToArray()), new RRect(0, 0, 4, 4));
+            h.DrawImage(Load(jpeg.ToArray()), new Rect(0, 0, 4, 4));
             var p = Pixel(h, 2, 2);
             Assert.InRange(p[0], 12, 30);
             Assert.InRange(p[2], 210, 230);
@@ -171,7 +170,7 @@ namespace PeachPDF.Tests.Raster
         {
             var g = NewGraphics(4, 4);
 
-            g.DrawImage(Load(CmykJpegFixture.NoIccBytes), new RRect(0, 0, 4, 4));
+            g.DrawImage(Load(CmykJpegFixture.NoIccBytes), new Rect(0, 0, 4, 4));
 
             // Opaque: the PDF keeps the CMYK, the bitmap gets a colour-unmanaged RGB rendition of it.
             Assert.Equal(255, Pixel(g, 2, 2)[3]);
@@ -183,7 +182,7 @@ namespace PeachPDF.Tests.Raster
             var g = NewGraphics(4, 4);
 
             // C=0, M=255, Y=255, K=0: full magenta and yellow, the naive conversion of which is red.
-            g.DrawImage(Load(CmykTiffFixture.Build(2, 2, 0, 255, 255, 0)), new RRect(0, 0, 4, 4));
+            g.DrawImage(Load(CmykTiffFixture.Build(2, 2, 0, 255, 255, 0)), new Rect(0, 0, 4, 4));
 
             var p = Pixel(g, 2, 2);
             Assert.True(p[0] > 240 && p[1] < 15 && p[2] < 15, $"{p[0]},{p[1]},{p[2]}");
@@ -191,7 +190,7 @@ namespace PeachPDF.Tests.Raster
 
             // K=255 alone is black whatever the other inks are.
             var black = NewGraphics(4, 4);
-            black.DrawImage(Load(CmykTiffFixture.Build(2, 2, 0, 0, 0, 255)), new RRect(0, 0, 4, 4));
+            black.DrawImage(Load(CmykTiffFixture.Build(2, 2, 0, 0, 0, 255)), new Rect(0, 0, 4, 4));
             Assert.Equal(new byte[] { 0, 0, 0, 255 }, Pixel(black, 2, 2));
         }
 
@@ -201,7 +200,7 @@ namespace PeachPDF.Tests.Raster
             var g = NewGraphics(8, 8);
             var checker = Load(RasterPngFixture.MakeRgbaPngBytes(64, 64, (x, y) => (x + y) % 2 == 0 ? ((byte)255, (byte)255, (byte)255, (byte)255) : ((byte)0, (byte)0, (byte)0, (byte)255)));
 
-            g.DrawImage(checker, new RRect(0, 0, 8, 8));
+            g.DrawImage(checker, new Rect(0, 0, 8, 8));
 
             var p = Pixel(g, 4, 4);
             Assert.InRange(p[0], 100, 156);
@@ -212,7 +211,13 @@ namespace PeachPDF.Tests.Raster
         {
             var image = Load(QuadrantPng());
 
-            Assert.Same(ImageBitmaps.Get(image.Image), ImageBitmaps.Get(image.Image));
+            var first = ImageDecodeCache.Get(image.Image);
+            var second = ImageDecodeCache.Get(image.Image);
+
+            Assert.NotNull(first);
+            Assert.True(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(first!.Value.PremultipliedRgba, out var firstSegment));
+            Assert.True(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(second!.Value.PremultipliedRgba, out var secondSegment));
+            Assert.Same(firstSegment.Array, secondSegment.Array);
         }
 
         [Fact]
@@ -222,8 +227,8 @@ namespace PeachPDF.Tests.Raster
             var (tileGraphics, tile) = g.CreateTile(4, 4)!.Value;
             tileGraphics.Dispose();
 
-            g.DrawImage(tile, new RRect(0, 0, 0, 0));
-            g.DrawImage(tile, new RRect(0, 0, 4, 4), new RRect(0, 0, 0, 0));
+            g.DrawImage(tile, new Rect(0, 0, 0, 0));
+            g.DrawImage(tile, new Rect(0, 0, 4, 4), new Rect(0, 0, 0, 0));
 
             Assert.Equal(0, Pixel(g, 2, 2)[3]);
         }

@@ -11,8 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using System.Collections.Generic;
@@ -29,7 +28,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         /// <param name="color">the color to check</param>
         /// <returns>true - visible, false - not visible</returns>
-        public static bool IsColorVisible(RColor color)
+        public static bool IsColorVisible(PaintColor color)
         {
             return color.A > 0;
         }
@@ -50,7 +49,7 @@ namespace PeachPDF.Html.Core.Utils
         /// the clipping ancestor's rounded-corner curve, or null when it has no <c>border-radius</c>
         /// </param>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
-        public static int ClipGraphicsByOverflow(RGraphics g, RRect? overflowClip, OverflowClipCurve? curve)
+        public static int ClipGraphicsByOverflow(Canvas g, Rect? overflowClip, OverflowClipCurve? curve)
         {
             if (overflowClip is not { } clip) return 0;
 
@@ -75,7 +74,7 @@ namespace PeachPDF.Html.Core.Utils
         /// live box only ever carries whichever page positioned it last.
         /// </summary>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
-        private static int TryPushOverflowClip(RGraphics g, BoxFragment ancestor)
+        private static int TryPushOverflowClip(Canvas g, BoxFragment ancestor)
         {
             var overflowBox = ancestor.Box;
             if (overflowBox.Overflow.Value != Overflow.Hidden) return 0;
@@ -106,7 +105,7 @@ namespace PeachPDF.Html.Core.Utils
         /// two don't each carry their own copy of the same "build the path, push it, count it" sequence.
         /// </summary>
         /// <returns>1 if a clip was pushed, 0 if <paramref name="radii"/> has no rounded corner</returns>
-        private static int PushRoundedClipIfRounded(RGraphics g, RRect rect, BorderRadii radii)
+        private static int PushRoundedClipIfRounded(Canvas g, Rect rect, BorderRadii radii)
         {
             if (!radii.IsRounded) return 0;
 
@@ -128,7 +127,7 @@ namespace PeachPDF.Html.Core.Utils
         /// holding a <see cref="Fragments.BoxGeometrySnapshot"/> can resolve the box at the position that
         /// snapshot recorded — the same box can be shown at several places in one document.
         /// </param>
-        internal static RRect PaddingEdgeOf(CssBox box, RRect borderBox) => RRect.FromLTRB(
+        internal static Rect PaddingEdgeOf(CssBox box, Rect borderBox) => Rect.FromLTRB(
             borderBox.Left + box.ActualBorderLeftWidth,
             borderBox.Top + box.ActualBorderTopWidth,
             borderBox.Right - box.ActualBorderRightWidth,
@@ -158,7 +157,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="box">the hoisted box being painted</param>
         /// <param name="ancestors">the ancestor fragments it was hoisted past, outer to inner</param>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
-        public static int PushAncestorOverflowClips(RGraphics g, CssBox box, IReadOnlyList<BoxFragment> ancestors)
+        public static int PushAncestorOverflowClips(Canvas g, CssBox box, IReadOnlyList<BoxFragment> ancestors)
         {
             var pushed = 0;
             foreach (var ancestor in ancestors)
@@ -184,21 +183,21 @@ namespace PeachPDF.Html.Core.Utils
         /// <remarks>
         /// <paramref name="rect"/> and every radius are in the caller's layout-space units (the same
         /// <c>PixelsPerInch</c>-inflated space as <see cref="Dom.CssBox"/> geometry) — unlike every other
-        /// <see cref="RGraphics"/> draw primitive (<c>DrawLine</c>, <c>DrawRectangle</c>,
-        /// <c>PushClip(RRect)</c>), neither <c>RGraphics.PushClip(RGraphicsPath)</c> nor <c>DrawPath</c>
-        /// ever divides a path's coordinates by <see cref="RGraphics.PixelsPerPoint"/> before handing them
+        /// <see cref="Canvas"/> draw primitive (<c>DrawLine</c>, <c>DrawRectangle</c>,
+        /// <c>PushClip(Rect)</c>), neither <c>Canvas.PushClip(GraphicsPath)</c> nor <c>DrawPath</c>
+        /// ever divides a path's coordinates by <see cref="Canvas.PixelsPerPoint"/> before handing them
         /// to the backend (that division is left to whichever ambient <c>PushTransform</c> is active for
-        /// SVG/glyph-outline paths, the other consumers of an <see cref="RGraphicsPath"/> — see
+        /// SVG/glyph-outline paths, the other consumers of an <see cref="GraphicsPath"/> — see
         /// <c>Adapters.GraphicsPathAdapter.Transform</c>'s own comment). A box-geometry path has no such
-        /// ambient transform, so this method divides by <see cref="RGraphics.PixelsPerPoint"/> itself,
+        /// ambient transform, so this method divides by <see cref="Canvas.PixelsPerPoint"/> itself,
         /// once, before building the path (issue #812).
         /// </remarks>
-        public static RGraphicsPath GetRoundRect(RGraphics g, RRect rect,
+        public static GraphicsPath GetRoundRect(Canvas g, Rect rect,
             double nwX, double nwY, double neX, double neY,
             double seX, double seY, double swX, double swY)
         {
             var ppp = g.PixelsPerPoint;
-            rect = new RRect(rect.Left / ppp, rect.Top / ppp, rect.Width / ppp, rect.Height / ppp);
+            rect = new Rect(rect.Left / ppp, rect.Top / ppp, rect.Width / ppp, rect.Height / ppp);
             nwX /= ppp; nwY /= ppp; neX /= ppp; neY /= ppp;
             seX /= ppp; seY /= ppp; swX /= ppp; swY /= ppp;
 
@@ -208,22 +207,22 @@ namespace PeachPDF.Html.Core.Utils
             path.Start(rect.Left + nwX, rect.Top);
             path.LineTo(rect.Right - neX, rect.Top);
             if (neX > 0 || neY > 0)
-                path.ArcTo(rect.Right, rect.Top + neY, neX, neY, RGraphicsPath.Corner.TopRight);
+                path.ArcTo(rect.Right, rect.Top + neY, neX, neY, GraphicsPath.Corner.TopRight);
 
             // Right edge.
             path.LineTo(rect.Right, rect.Bottom - seY);
             if (seX > 0 || seY > 0)
-                path.ArcTo(rect.Right - seX, rect.Bottom, seX, seY, RGraphicsPath.Corner.BottomRight);
+                path.ArcTo(rect.Right - seX, rect.Bottom, seX, seY, GraphicsPath.Corner.BottomRight);
 
             // Bottom edge.
             path.LineTo(rect.Left + swX, rect.Bottom);
             if (swX > 0 || swY > 0)
-                path.ArcTo(rect.Left, rect.Bottom - swY, swX, swY, RGraphicsPath.Corner.BottomLeft);
+                path.ArcTo(rect.Left, rect.Bottom - swY, swX, swY, GraphicsPath.Corner.BottomLeft);
 
             // Left edge.
             path.LineTo(rect.Left, rect.Top + nwY);
             if (nwX > 0 || nwY > 0)
-                path.ArcTo(rect.Left + nwX, rect.Top, nwX, nwY, RGraphicsPath.Corner.TopLeft);
+                path.ArcTo(rect.Left + nwX, rect.Top, nwX, nwY, GraphicsPath.Corner.TopLeft);
 
             path.CloseFigure();
             return path;

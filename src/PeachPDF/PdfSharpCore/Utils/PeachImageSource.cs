@@ -4,7 +4,7 @@ using PeachImage.Formats.Bmp;
 using PeachImage.Formats.Gif;
 using PeachImage.Formats.Jpeg;
 using PeachImage.Formats.Png;
-using PeachPDF.Raster;
+using PeachPDF.Adapters;
 using System;
 using System.Collections.Generic;
 using System.IO;

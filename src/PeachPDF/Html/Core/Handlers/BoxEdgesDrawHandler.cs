@@ -1,10 +1,10 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace PeachPDF.Html.Core.Handlers
 {
@@ -18,7 +18,7 @@ namespace PeachPDF.Html.Core.Handlers
         private const double Epsilon = 1e-6;
 
         internal readonly record struct Edge(
-            double Width, LineStyle Style, RColor Color, bool IsPhysical, bool IsPainted)
+            double Width, LineStyle Style, PaintColor PaintColor, bool IsPhysical, bool IsPainted)
         {
             internal bool IsActive =>
                 IsPhysical && IsPainted && Width > 0 && Style is not (LineStyle.None or LineStyle.Hidden);
@@ -36,7 +36,7 @@ namespace PeachPDF.Html.Core.Handlers
             };
 
             internal static EdgeSet Uniform(
-                double width, LineStyle style, RColor color,
+                double width, LineStyle style, PaintColor color,
                 bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge) =>
                 new(
                     new Edge(width, style, color, hasTopEdge, hasTopEdge),
@@ -53,7 +53,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// color, and width.
         /// </summary>
         internal static void DrawBoxEdges(
-            RGraphics g, RRect outerRect, LineStyle style, RColor color, double width,
+            Canvas g, Rect outerRect, LineStyle style, PaintColor color, double width,
             bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge,
             BorderRadii? outerRadii = null)
         {
@@ -70,7 +70,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// and outlines; differences between those CSS features have already been reduced to values.
         /// </summary>
         internal static void DrawBoxEdges(
-            RGraphics g, RRect outerRect, EdgeSet edges, BorderRadii? outerRadii = null,
+            Canvas g, Rect outerRect, EdgeSet edges, BorderRadii? outerRadii = null,
             bool avoidGeometryAntialias = false)
         {
             if (outerRect is not { Width: > 0, Height: > 0 }) return;
@@ -84,29 +84,29 @@ namespace PeachPDF.Html.Core.Handlers
                 return;
             }
 
-            HashSet<RColor>? groupedColors = null;
+            HashSet<PaintColor>? groupedColors = null;
             foreach (var side in EdgePaintOrder)
             {
                 var edge = edges.Get(side);
                 if (!edge.IsActive) continue;
 
                 if (edge.Style is (LineStyle.Dotted or LineStyle.Dashed) &&
-                    edge.Color.A < byte.MaxValue)
+                    edge.PaintColor.A < byte.MaxValue)
                 {
-                    if (!(groupedColors ??= new HashSet<RColor>()).Add(edge.Color)) continue;
+                    if (!(groupedColors ??= new HashSet<PaintColor>()).Add(edge.PaintColor)) continue;
 
                     var group = new List<Border>();
                     foreach (var candidate in EdgePaintOrder)
                     {
                         var other = edges.Get(candidate);
                         if (other.IsActive && other.Style is (LineStyle.Dotted or LineStyle.Dashed) &&
-                            other.Color == edge.Color)
+                            other.PaintColor == edge.PaintColor)
                             group.Add(candidate);
                     }
 
                     if (group.Count > 1)
                     {
-                        PatternedStrokeOpacity.Paint(g, outerRect, edge.Color, (target, opaque) =>
+                        PatternedStrokeOpacity.Paint(g, outerRect, edge.PaintColor, (target, opaque) =>
                         {
                             foreach (var member in group)
                                 DrawGeneralPatternedSide(target, member, outerRect, edges, opaque);
@@ -125,7 +125,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// seam along their shared mitre even though that diagonal has no color change.
         /// </summary>
         private static bool TryDrawSeamlessBevel(
-            RGraphics g, RRect rect, EdgeSet edges, BorderRadii? outerRadii)
+            Canvas g, Rect rect, EdgeSet edges, BorderRadii? outerRadii)
         {
             if (outerRadii is { IsRounded: true }) return false;
 
@@ -135,8 +135,8 @@ namespace PeachPDF.Html.Core.Handlers
                 !edges.Bottom.IsActive || !edges.Left.IsActive ||
                 edges.Right.Style != first.Style || edges.Bottom.Style != first.Style ||
                 edges.Left.Style != first.Style ||
-                edges.Right.Color != first.Color || edges.Bottom.Color != first.Color ||
-                edges.Left.Color != first.Color)
+                edges.Right.PaintColor != first.PaintColor || edges.Bottom.PaintColor != first.PaintColor ||
+                edges.Left.PaintColor != first.PaintColor)
                 return false;
 
             if (first.Style is LineStyle.Inset or LineStyle.Outset)
@@ -155,11 +155,11 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static void DrawSeamlessBevelLayer(
-            RGraphics g, RRect rect, EdgeSet edges,
+            Canvas g, Rect rect, EdgeSet edges,
             double from, double to, bool inset)
         {
-            var topLeftColor = BorderBevelColors.ForSide(edges.Top.Color, Border.Top, inset);
-            var bottomRightColor = BorderBevelColors.ForSide(edges.Bottom.Color, Border.Bottom, inset);
+            var topLeftColor = BorderBevelColors.ForSide(edges.Top.PaintColor, Border.Top, inset);
+            var bottomRightColor = BorderBevelColors.ForSide(edges.Bottom.PaintColor, Border.Bottom, inset);
 
             if (topLeftColor == bottomRightColor)
             {
@@ -181,7 +181,7 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static void DrawConnectedBand(
-            RGraphics g, RColor color, IReadOnlyList<RPoint> points)
+            Canvas g, PaintColor color, IReadOnlyList<PaintPoint> points)
         {
             var scale = 1 / g.PixelsPerPoint;
             using var path = g.GetGraphicsPath();
@@ -193,11 +193,11 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static bool TryDrawUniformBoxEdges(
-            RGraphics g, RRect outerRect, EdgeSet edges, BorderRadii? outerRadii)
+            Canvas g, Rect outerRect, EdgeSet edges, BorderRadii? outerRadii)
         {
             var first = edges.Top;
             if (edges.Right.Style != first.Style || edges.Bottom.Style != first.Style || edges.Left.Style != first.Style ||
-                edges.Right.Color != first.Color || edges.Bottom.Color != first.Color || edges.Left.Color != first.Color ||
+                edges.Right.PaintColor != first.PaintColor || edges.Bottom.PaintColor != first.PaintColor || edges.Left.PaintColor != first.PaintColor ||
                 first.Width <= 0 || edges.Right.Width <= 0 || edges.Bottom.Width <= 0 || edges.Left.Width <= 0)
                 return false;
 
@@ -214,7 +214,7 @@ namespace PeachPDF.Html.Core.Handlers
             if (outerRadii is { IsRounded: true } radii)
             {
                 if (!widthsAreUniform || !complete) return false;
-                DrawRoundedBoxEdges(g, outerRect, radii, first.Style, first.Color, first.Width);
+                DrawRoundedBoxEdges(g, outerRect, radii, first.Style, first.PaintColor, first.Width);
                 return true;
             }
 
@@ -223,11 +223,11 @@ namespace PeachPDF.Html.Core.Handlers
                 // The four square-cornered strokes share their corner squares. Alpha belongs on
                 // the completed pattern, not on each stroke (including its antialiased edge pixels).
                 if (first.Style is (LineStyle.Dotted or LineStyle.Dashed) &&
-                    first.Color.A < byte.MaxValue)
+                    first.PaintColor.A < byte.MaxValue)
                     return false;
 
                 DrawUniformWidthBoxEdges(
-                    g, outerRect, first.Style, first.Color, first.Width,
+                    g, outerRect, first.Style, first.PaintColor, first.Width,
                     edges.Left.IsActive, edges.Right.IsActive,
                     edges.Top.IsActive, edges.Bottom.IsActive);
                 return true;
@@ -235,7 +235,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             if (!complete || first.Style is not (LineStyle.Solid or LineStyle.Double)) return false;
 
-            var brush = g.GetSolidBrush(first.Color);
+            var brush = g.GetSolidBrush(first.PaintColor);
             if (first.Style == LineStyle.Solid)
             {
                 DrawRing(g, outerRect, edges, 0, 1, brush);
@@ -250,7 +250,7 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static void DrawUniformWidthBoxEdges(
-            RGraphics g, RRect outerRect, LineStyle style, RColor color, double width,
+            Canvas g, Rect outerRect, LineStyle style, PaintColor color, double width,
             bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
         {
             if (width <= 0 || style is LineStyle.None or LineStyle.Hidden) return;
@@ -306,7 +306,7 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static void DrawGeneralRoundedBoxEdges(
-            RGraphics g, RRect rect, BorderRadii radii, EdgeSet edges,
+            Canvas g, Rect rect, BorderRadii radii, EdgeSet edges,
             bool avoidGeometryAntialias)
         {
             var physical = new EdgeSides(
@@ -351,11 +351,11 @@ namespace PeachPDF.Html.Core.Handlers
         /// path so abutting pieces composite once and cannot leave an antialiasing seam.
         /// </summary>
         private static void DrawRoundedFilledLayer(
-            RGraphics g, RRect rect, BorderRadii radii, EdgeSet edges,
+            Canvas g, Rect rect, BorderRadii radii, EdgeSet edges,
             EdgeSides physical, EdgeSides active, EdgeWidths widths, bool innerLayer)
         {
             var angles = CornerAngles.From(widths);
-            List<(RColor Color, RGraphicsPath Path)>? groups = null;
+            List<(PaintColor PaintColor, GraphicsPath Path)>? groups = null;
 
             try
             {
@@ -371,7 +371,7 @@ namespace PeachPDF.Html.Core.Handlers
                     {
                         for (var i = 0; i < groups.Count; i++)
                         {
-                            if (groups[i].Color == color)
+                            if (groups[i].PaintColor == color)
                             {
                                 groupIndex = i;
                                 break;
@@ -379,7 +379,7 @@ namespace PeachPDF.Html.Core.Handlers
                         }
                     }
 
-                    groups ??= new List<(RColor, RGraphicsPath)>(4);
+                    groups ??= new List<(PaintColor, GraphicsPath)>(4);
                     if (groupIndex < 0)
                     {
                         groupIndex = groups.Count;
@@ -409,7 +409,7 @@ namespace PeachPDF.Html.Core.Handlers
 
         private static bool TryGetRoundedFillBand(
             Edge edge, Border side, bool innerLayer,
-            out double from, out double to, out RColor color)
+            out double from, out double to, out PaintColor color)
         {
             switch (edge.Style)
             {
@@ -417,7 +417,7 @@ namespace PeachPDF.Html.Core.Handlers
                     if (innerLayer) break;
                     from = 0;
                     to = 1;
-                    color = edge.Color;
+                    color = edge.PaintColor;
                     return true;
 
                 case LineStyle.Inset or LineStyle.Outset:
@@ -425,30 +425,30 @@ namespace PeachPDF.Html.Core.Handlers
                     from = 0;
                     to = 1;
                     color = BorderBevelColors.ForSide(
-                        edge.Color, side, inset: edge.Style == LineStyle.Inset);
+                        edge.PaintColor, side, inset: edge.Style == LineStyle.Inset);
                     return true;
 
                 case LineStyle.Double:
                     from = innerLayer ? 2 / 3d : 0;
                     to = innerLayer ? 1 : 1 / 3d;
-                    color = edge.Color;
+                    color = edge.PaintColor;
                     return true;
 
                 case LineStyle.Groove or LineStyle.Ridge:
                     from = innerLayer ? 0.5 : 0;
                     to = innerLayer ? 1 : 0.5;
                     var isInset = innerLayer != (edge.Style == LineStyle.Groove);
-                    color = BorderBevelColors.ForSide(edge.Color, side, isInset);
+                    color = BorderBevelColors.ForSide(edge.PaintColor, side, isInset);
                     return true;
             }
 
             from = to = 0;
-            color = RColor.Empty;
+            color = PaintColor.Empty;
             return false;
         }
 
         private static void DrawGeneralRoundedPatternedSide(
-            RGraphics g, RRect rect, BorderRadii radii, EdgeSet edges,
+            Canvas g, Rect rect, BorderRadii radii, EdgeSet edges,
             EdgeSides physical, EdgeSides active, EdgeWidths widths, Border side)
         {
             var edge = edges.Get(side);
@@ -470,7 +470,7 @@ namespace PeachPDF.Html.Core.Handlers
             try
             {
                 var pen = GetRoundedPatternPen(
-                    g, edge.Style, edge.Color, edge.Width, pathLength, closed);
+                    g, edge.Style, edge.PaintColor, edge.Width, pathLength, closed);
                 g.DrawPath(pen, path);
             }
             finally
@@ -480,14 +480,14 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static RoundedContour CreateRoundedContour(
-            RRect rect, BorderRadii radii, EdgeWidths widths,
+            Rect rect, BorderRadii radii, EdgeWidths widths,
             double fraction, double pixelsPerPoint)
         {
             var leftInset = widths.Left * fraction;
             var topInset = widths.Top * fraction;
             var rightInset = widths.Right * fraction;
             var bottomInset = widths.Bottom * fraction;
-            var contourRect = RRect.FromLTRB(
+            var contourRect = Rect.FromLTRB(
                 (rect.Left + leftInset) / pixelsPerPoint,
                 (rect.Top + topInset) / pixelsPerPoint,
                 (rect.Right - rightInset) / pixelsPerPoint,
@@ -527,7 +527,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// intentional per-side colors meet without flattening either contour.
         /// </summary>
         private static void DrawRoundedBoxEdges(
-            RGraphics g, RRect rect, BorderRadii radii, LineStyle style, RColor color, double width)
+            Canvas g, Rect rect, BorderRadii radii, LineStyle style, PaintColor color, double width)
         {
             switch (style)
             {
@@ -584,7 +584,7 @@ namespace PeachPDF.Html.Core.Handlers
         private static readonly Border[] BottomRightSides = [Border.Bottom, Border.Right];
 
         private static void DrawRoundedSideBand(
-            RGraphics g, Border[] sides, RRect rect, BorderRadii radii, RColor color,
+            Canvas g, Border[] sides, Rect rect, BorderRadii radii, PaintColor color,
             double width, double from, double to)
         {
             var outer = CreateRoundedContour(rect, radii, width, from, g.PixelsPerPoint);
@@ -604,7 +604,7 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static RoundedContour CreateRoundedContour(
-            RRect rect, BorderRadii radii, double width, double fraction, double pixelsPerPoint) =>
+            Rect rect, BorderRadii radii, double width, double fraction, double pixelsPerPoint) =>
             CreateRoundedContour(
                 rect, radii, new EdgeWidths(width, width, width, width), fraction, pixelsPerPoint);
 
@@ -612,7 +612,7 @@ namespace PeachPDF.Html.Core.Handlers
             required > 0 ? Math.Max(0, available) / required : 1;
 
         private static void AddRoundedBandSide(
-            RGraphicsPath path, Border side, RoundedContour outer, RoundedContour inner,
+            GraphicsPath path, Border side, RoundedContour outer, RoundedContour inner,
             EdgeSides physical, EdgeSides active, CornerAngles angles)
         {
             const double QuarterTurn = Math.PI / 2;
@@ -628,8 +628,8 @@ namespace PeachPDF.Html.Core.Handlers
                     var endAngle = active.Right ? angles.TopRight : FullTurn;
                     if (physical.Left)
                     {
-                        AddMove(path, outer, RGraphicsPath.Corner.TopLeft, startAngle);
-                        AddCornerArc(path, outer, RGraphicsPath.Corner.TopLeft, startAngle, ThreeQuarterTurn);
+                        AddMove(path, outer, GraphicsPath.Corner.TopLeft, startAngle);
+                        AddCornerArc(path, outer, GraphicsPath.Corner.TopLeft, startAngle, ThreeQuarterTurn);
                     }
                     else
                     {
@@ -638,10 +638,10 @@ namespace PeachPDF.Html.Core.Handlers
 
                     if (physical.Right)
                     {
-                        LineTo(path, outer, RGraphicsPath.Corner.TopRight, ThreeQuarterTurn);
-                        AddCornerArc(path, outer, RGraphicsPath.Corner.TopRight, ThreeQuarterTurn, endAngle);
-                        LineTo(path, inner, RGraphicsPath.Corner.TopRight, endAngle);
-                        AddCornerArc(path, inner, RGraphicsPath.Corner.TopRight, endAngle, ThreeQuarterTurn);
+                        LineTo(path, outer, GraphicsPath.Corner.TopRight, ThreeQuarterTurn);
+                        AddCornerArc(path, outer, GraphicsPath.Corner.TopRight, ThreeQuarterTurn, endAngle);
+                        LineTo(path, inner, GraphicsPath.Corner.TopRight, endAngle);
+                        AddCornerArc(path, inner, GraphicsPath.Corner.TopRight, endAngle, ThreeQuarterTurn);
                     }
                     else
                     {
@@ -651,8 +651,8 @@ namespace PeachPDF.Html.Core.Handlers
 
                     if (physical.Left)
                     {
-                        LineTo(path, inner, RGraphicsPath.Corner.TopLeft, ThreeQuarterTurn);
-                        AddCornerArc(path, inner, RGraphicsPath.Corner.TopLeft, ThreeQuarterTurn, startAngle);
+                        LineTo(path, inner, GraphicsPath.Corner.TopLeft, ThreeQuarterTurn);
+                        AddCornerArc(path, inner, GraphicsPath.Corner.TopLeft, ThreeQuarterTurn, startAngle);
                     }
                     else
                     {
@@ -667,8 +667,8 @@ namespace PeachPDF.Html.Core.Handlers
                     var endAngle = active.Bottom ? angles.BottomRight : QuarterTurn;
                     if (physical.Top)
                     {
-                        AddMove(path, outer, RGraphicsPath.Corner.TopRight, startAngle);
-                        AddCornerArc(path, outer, RGraphicsPath.Corner.TopRight, startAngle, FullTurn);
+                        AddMove(path, outer, GraphicsPath.Corner.TopRight, startAngle);
+                        AddCornerArc(path, outer, GraphicsPath.Corner.TopRight, startAngle, FullTurn);
                     }
                     else
                     {
@@ -677,10 +677,10 @@ namespace PeachPDF.Html.Core.Handlers
 
                     if (physical.Bottom)
                     {
-                        LineTo(path, outer, RGraphicsPath.Corner.BottomRight, 0);
-                        AddCornerArc(path, outer, RGraphicsPath.Corner.BottomRight, 0, endAngle);
-                        LineTo(path, inner, RGraphicsPath.Corner.BottomRight, endAngle);
-                        AddCornerArc(path, inner, RGraphicsPath.Corner.BottomRight, endAngle, 0);
+                        LineTo(path, outer, GraphicsPath.Corner.BottomRight, 0);
+                        AddCornerArc(path, outer, GraphicsPath.Corner.BottomRight, 0, endAngle);
+                        LineTo(path, inner, GraphicsPath.Corner.BottomRight, endAngle);
+                        AddCornerArc(path, inner, GraphicsPath.Corner.BottomRight, endAngle, 0);
                     }
                     else
                     {
@@ -690,8 +690,8 @@ namespace PeachPDF.Html.Core.Handlers
 
                     if (physical.Top)
                     {
-                        LineTo(path, inner, RGraphicsPath.Corner.TopRight, FullTurn);
-                        AddCornerArc(path, inner, RGraphicsPath.Corner.TopRight, FullTurn, startAngle);
+                        LineTo(path, inner, GraphicsPath.Corner.TopRight, FullTurn);
+                        AddCornerArc(path, inner, GraphicsPath.Corner.TopRight, FullTurn, startAngle);
                     }
                     else
                     {
@@ -706,8 +706,8 @@ namespace PeachPDF.Html.Core.Handlers
                     var endAngle = active.Left ? angles.BottomLeft : HalfTurn;
                     if (physical.Right)
                     {
-                        AddMove(path, outer, RGraphicsPath.Corner.BottomRight, startAngle);
-                        AddCornerArc(path, outer, RGraphicsPath.Corner.BottomRight, startAngle, QuarterTurn);
+                        AddMove(path, outer, GraphicsPath.Corner.BottomRight, startAngle);
+                        AddCornerArc(path, outer, GraphicsPath.Corner.BottomRight, startAngle, QuarterTurn);
                     }
                     else
                     {
@@ -716,10 +716,10 @@ namespace PeachPDF.Html.Core.Handlers
 
                     if (physical.Left)
                     {
-                        LineTo(path, outer, RGraphicsPath.Corner.BottomLeft, QuarterTurn);
-                        AddCornerArc(path, outer, RGraphicsPath.Corner.BottomLeft, QuarterTurn, endAngle);
-                        LineTo(path, inner, RGraphicsPath.Corner.BottomLeft, endAngle);
-                        AddCornerArc(path, inner, RGraphicsPath.Corner.BottomLeft, endAngle, QuarterTurn);
+                        LineTo(path, outer, GraphicsPath.Corner.BottomLeft, QuarterTurn);
+                        AddCornerArc(path, outer, GraphicsPath.Corner.BottomLeft, QuarterTurn, endAngle);
+                        LineTo(path, inner, GraphicsPath.Corner.BottomLeft, endAngle);
+                        AddCornerArc(path, inner, GraphicsPath.Corner.BottomLeft, endAngle, QuarterTurn);
                     }
                     else
                     {
@@ -729,8 +729,8 @@ namespace PeachPDF.Html.Core.Handlers
 
                     if (physical.Right)
                     {
-                        LineTo(path, inner, RGraphicsPath.Corner.BottomRight, QuarterTurn);
-                        AddCornerArc(path, inner, RGraphicsPath.Corner.BottomRight, QuarterTurn, startAngle);
+                        LineTo(path, inner, GraphicsPath.Corner.BottomRight, QuarterTurn);
+                        AddCornerArc(path, inner, GraphicsPath.Corner.BottomRight, QuarterTurn, startAngle);
                     }
                     else
                     {
@@ -745,8 +745,8 @@ namespace PeachPDF.Html.Core.Handlers
                     var endAngle = active.Top ? angles.TopLeft : ThreeQuarterTurn;
                     if (physical.Bottom)
                     {
-                        AddMove(path, outer, RGraphicsPath.Corner.BottomLeft, startAngle);
-                        AddCornerArc(path, outer, RGraphicsPath.Corner.BottomLeft, startAngle, HalfTurn);
+                        AddMove(path, outer, GraphicsPath.Corner.BottomLeft, startAngle);
+                        AddCornerArc(path, outer, GraphicsPath.Corner.BottomLeft, startAngle, HalfTurn);
                     }
                     else
                     {
@@ -755,10 +755,10 @@ namespace PeachPDF.Html.Core.Handlers
 
                     if (physical.Top)
                     {
-                        LineTo(path, outer, RGraphicsPath.Corner.TopLeft, HalfTurn);
-                        AddCornerArc(path, outer, RGraphicsPath.Corner.TopLeft, HalfTurn, endAngle);
-                        LineTo(path, inner, RGraphicsPath.Corner.TopLeft, endAngle);
-                        AddCornerArc(path, inner, RGraphicsPath.Corner.TopLeft, endAngle, HalfTurn);
+                        LineTo(path, outer, GraphicsPath.Corner.TopLeft, HalfTurn);
+                        AddCornerArc(path, outer, GraphicsPath.Corner.TopLeft, HalfTurn, endAngle);
+                        LineTo(path, inner, GraphicsPath.Corner.TopLeft, endAngle);
+                        AddCornerArc(path, inner, GraphicsPath.Corner.TopLeft, endAngle, HalfTurn);
                     }
                     else
                     {
@@ -768,8 +768,8 @@ namespace PeachPDF.Html.Core.Handlers
 
                     if (physical.Bottom)
                     {
-                        LineTo(path, inner, RGraphicsPath.Corner.BottomLeft, HalfTurn);
-                        AddCornerArc(path, inner, RGraphicsPath.Corner.BottomLeft, HalfTurn, startAngle);
+                        LineTo(path, inner, GraphicsPath.Corner.BottomLeft, HalfTurn);
+                        AddCornerArc(path, inner, GraphicsPath.Corner.BottomLeft, HalfTurn, startAngle);
                     }
                     else
                     {
@@ -786,7 +786,7 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static double AddRoundedSideCenterline(
-            RGraphicsPath path, Border side, RoundedContour center,
+            GraphicsPath path, Border side, RoundedContour center,
             EdgeSides physical, EdgeSides active, CornerAngles angles)
         {
             const double QuarterTurn = Math.PI / 2;
@@ -794,19 +794,19 @@ namespace PeachPDF.Html.Core.Handlers
             const double ThreeQuarterTurn = 3 * Math.PI / 2;
             const double FullTurn = 2 * Math.PI;
 
-            var current = default(RPoint);
+            var current = default(PaintPoint);
             var length = 0d;
 
-            void Move(RPoint point)
+            void Move(PaintPoint point)
             {
                 path.AddMove(point.X, point.Y);
                 current = point;
             }
 
-            void MoveCorner(RGraphicsPath.Corner corner, double angle) =>
+            void MoveCorner(GraphicsPath.Corner corner, double angle) =>
                 Move(PointOnCorner(center, corner, angle));
 
-            void Line(RPoint point)
+            void Line(PaintPoint point)
             {
                 var dx = point.X - current.X;
                 var dy = point.Y - current.Y;
@@ -815,10 +815,10 @@ namespace PeachPDF.Html.Core.Handlers
                 current = point;
             }
 
-            void LineCorner(RGraphicsPath.Corner corner, double angle) =>
+            void LineCorner(GraphicsPath.Corner corner, double angle) =>
                 Line(PointOnCorner(center, corner, angle));
 
-            void Arc(RGraphicsPath.Corner corner, double startAngle, double endAngle)
+            void Arc(GraphicsPath.Corner corner, double startAngle, double endAngle)
             {
                 AddCornerArc(path, center, corner, startAngle, endAngle);
                 var (_, _, radiusX, radiusY) = CornerGeometry(center, corner);
@@ -832,23 +832,23 @@ namespace PeachPDF.Html.Core.Handlers
                     if (physical.Left)
                     {
                         var startAngle = active.Left ? angles.TopLeft : HalfTurn;
-                        MoveCorner(RGraphicsPath.Corner.TopLeft, startAngle);
-                        Arc(RGraphicsPath.Corner.TopLeft, startAngle, ThreeQuarterTurn);
+                        MoveCorner(GraphicsPath.Corner.TopLeft, startAngle);
+                        Arc(GraphicsPath.Corner.TopLeft, startAngle, ThreeQuarterTurn);
                     }
                     else
                     {
-                        Move(new RPoint(center.Rect.Left, center.Rect.Top));
+                        Move(new PaintPoint(center.Rect.Left, center.Rect.Top));
                     }
 
                     if (physical.Right)
                     {
                         var endAngle = active.Right ? angles.TopRight : FullTurn;
-                        LineCorner(RGraphicsPath.Corner.TopRight, ThreeQuarterTurn);
-                        Arc(RGraphicsPath.Corner.TopRight, ThreeQuarterTurn, endAngle);
+                        LineCorner(GraphicsPath.Corner.TopRight, ThreeQuarterTurn);
+                        Arc(GraphicsPath.Corner.TopRight, ThreeQuarterTurn, endAngle);
                     }
                     else
                     {
-                        Line(new RPoint(center.Rect.Right, center.Rect.Top));
+                        Line(new PaintPoint(center.Rect.Right, center.Rect.Top));
                     }
                     break;
 
@@ -856,23 +856,23 @@ namespace PeachPDF.Html.Core.Handlers
                     if (physical.Top)
                     {
                         var startAngle = active.Top ? angles.TopRight : ThreeQuarterTurn;
-                        MoveCorner(RGraphicsPath.Corner.TopRight, startAngle);
-                        Arc(RGraphicsPath.Corner.TopRight, startAngle, FullTurn);
+                        MoveCorner(GraphicsPath.Corner.TopRight, startAngle);
+                        Arc(GraphicsPath.Corner.TopRight, startAngle, FullTurn);
                     }
                     else
                     {
-                        Move(new RPoint(center.Rect.Right, center.Rect.Top));
+                        Move(new PaintPoint(center.Rect.Right, center.Rect.Top));
                     }
 
                     if (physical.Bottom)
                     {
                         var endAngle = active.Bottom ? angles.BottomRight : QuarterTurn;
-                        LineCorner(RGraphicsPath.Corner.BottomRight, 0);
-                        Arc(RGraphicsPath.Corner.BottomRight, 0, endAngle);
+                        LineCorner(GraphicsPath.Corner.BottomRight, 0);
+                        Arc(GraphicsPath.Corner.BottomRight, 0, endAngle);
                     }
                     else
                     {
-                        Line(new RPoint(center.Rect.Right, center.Rect.Bottom));
+                        Line(new PaintPoint(center.Rect.Right, center.Rect.Bottom));
                     }
                     break;
 
@@ -880,23 +880,23 @@ namespace PeachPDF.Html.Core.Handlers
                     if (physical.Left)
                     {
                         var startAngle = active.Left ? angles.BottomLeft : HalfTurn;
-                        MoveCorner(RGraphicsPath.Corner.BottomLeft, startAngle);
-                        Arc(RGraphicsPath.Corner.BottomLeft, startAngle, QuarterTurn);
+                        MoveCorner(GraphicsPath.Corner.BottomLeft, startAngle);
+                        Arc(GraphicsPath.Corner.BottomLeft, startAngle, QuarterTurn);
                     }
                     else
                     {
-                        Move(new RPoint(center.Rect.Left, center.Rect.Bottom));
+                        Move(new PaintPoint(center.Rect.Left, center.Rect.Bottom));
                     }
 
                     if (physical.Right)
                     {
                         var endAngle = active.Right ? angles.BottomRight : 0;
-                        LineCorner(RGraphicsPath.Corner.BottomRight, QuarterTurn);
-                        Arc(RGraphicsPath.Corner.BottomRight, QuarterTurn, endAngle);
+                        LineCorner(GraphicsPath.Corner.BottomRight, QuarterTurn);
+                        Arc(GraphicsPath.Corner.BottomRight, QuarterTurn, endAngle);
                     }
                     else
                     {
-                        Line(new RPoint(center.Rect.Right, center.Rect.Bottom));
+                        Line(new PaintPoint(center.Rect.Right, center.Rect.Bottom));
                     }
                     break;
 
@@ -904,23 +904,23 @@ namespace PeachPDF.Html.Core.Handlers
                     if (physical.Top)
                     {
                         var startAngle = active.Top ? angles.TopLeft : ThreeQuarterTurn;
-                        MoveCorner(RGraphicsPath.Corner.TopLeft, startAngle);
-                        Arc(RGraphicsPath.Corner.TopLeft, startAngle, HalfTurn);
+                        MoveCorner(GraphicsPath.Corner.TopLeft, startAngle);
+                        Arc(GraphicsPath.Corner.TopLeft, startAngle, HalfTurn);
                     }
                     else
                     {
-                        Move(new RPoint(center.Rect.Left, center.Rect.Top));
+                        Move(new PaintPoint(center.Rect.Left, center.Rect.Top));
                     }
 
                     if (physical.Bottom)
                     {
                         var endAngle = active.Bottom ? angles.BottomLeft : QuarterTurn;
-                        LineCorner(RGraphicsPath.Corner.BottomLeft, HalfTurn);
-                        Arc(RGraphicsPath.Corner.BottomLeft, HalfTurn, endAngle);
+                        LineCorner(GraphicsPath.Corner.BottomLeft, HalfTurn);
+                        Arc(GraphicsPath.Corner.BottomLeft, HalfTurn, endAngle);
                     }
                     else
                     {
-                        Line(new RPoint(center.Rect.Left, center.Rect.Bottom));
+                        Line(new PaintPoint(center.Rect.Left, center.Rect.Bottom));
                     }
                     break;
 
@@ -931,22 +931,22 @@ namespace PeachPDF.Html.Core.Handlers
             return length;
         }
 
-        private static double AddRoundedContourCenterline(RGraphicsPath path, RoundedContour center)
+        private static double AddRoundedContourCenterline(GraphicsPath path, RoundedContour center)
         {
             const double QuarterTurn = Math.PI / 2;
             const double HalfTurn = Math.PI;
             const double ThreeQuarterTurn = 3 * Math.PI / 2;
             const double FullTurn = 2 * Math.PI;
 
-            AddMove(path, center, RGraphicsPath.Corner.TopLeft, ThreeQuarterTurn);
-            LineTo(path, center, RGraphicsPath.Corner.TopRight, ThreeQuarterTurn);
-            AddCornerArc(path, center, RGraphicsPath.Corner.TopRight, ThreeQuarterTurn, FullTurn);
-            LineTo(path, center, RGraphicsPath.Corner.BottomRight, 0);
-            AddCornerArc(path, center, RGraphicsPath.Corner.BottomRight, 0, QuarterTurn);
-            LineTo(path, center, RGraphicsPath.Corner.BottomLeft, QuarterTurn);
-            AddCornerArc(path, center, RGraphicsPath.Corner.BottomLeft, QuarterTurn, HalfTurn);
-            LineTo(path, center, RGraphicsPath.Corner.TopLeft, HalfTurn);
-            AddCornerArc(path, center, RGraphicsPath.Corner.TopLeft, HalfTurn, ThreeQuarterTurn);
+            AddMove(path, center, GraphicsPath.Corner.TopLeft, ThreeQuarterTurn);
+            LineTo(path, center, GraphicsPath.Corner.TopRight, ThreeQuarterTurn);
+            AddCornerArc(path, center, GraphicsPath.Corner.TopRight, ThreeQuarterTurn, FullTurn);
+            LineTo(path, center, GraphicsPath.Corner.BottomRight, 0);
+            AddCornerArc(path, center, GraphicsPath.Corner.BottomRight, 0, QuarterTurn);
+            LineTo(path, center, GraphicsPath.Corner.BottomLeft, QuarterTurn);
+            AddCornerArc(path, center, GraphicsPath.Corner.BottomLeft, QuarterTurn, HalfTurn);
+            LineTo(path, center, GraphicsPath.Corner.TopLeft, HalfTurn);
+            AddCornerArc(path, center, GraphicsPath.Corner.TopLeft, HalfTurn, ThreeQuarterTurn);
             path.CloseFigure();
 
             var straightLength =
@@ -963,21 +963,21 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static void AddMove(
-            RGraphicsPath path, RoundedContour contour, RGraphicsPath.Corner corner, double angle)
+            GraphicsPath path, RoundedContour contour, GraphicsPath.Corner corner, double angle)
         {
             var point = PointOnCorner(contour, corner, angle);
             path.AddMove(point.X, point.Y);
         }
 
         private static void LineTo(
-            RGraphicsPath path, RoundedContour contour, RGraphicsPath.Corner corner, double angle)
+            GraphicsPath path, RoundedContour contour, GraphicsPath.Corner corner, double angle)
         {
             var point = PointOnCorner(contour, corner, angle);
             path.LineTo(point.X, point.Y);
         }
 
         private static void AddCornerArc(
-            RGraphicsPath path, RoundedContour contour, RGraphicsPath.Corner corner,
+            GraphicsPath path, RoundedContour contour, GraphicsPath.Corner corner,
             double startAngle, double endAngle)
         {
             var (_, _, radiusX, radiusY) = CornerGeometry(contour, corner);
@@ -999,34 +999,34 @@ namespace PeachPDF.Html.Core.Handlers
                 end.Y);
         }
 
-        private static RPoint PointOnCorner(
-            RoundedContour contour, RGraphicsPath.Corner corner, double angle)
+        private static PaintPoint PointOnCorner(
+            RoundedContour contour, GraphicsPath.Corner corner, double angle)
         {
             var (centerX, centerY, radiusX, radiusY) = CornerGeometry(contour, corner);
             return radiusX <= 0 || radiusY <= 0
-                ? new RPoint(centerX, centerY)
-                : new RPoint(
+                ? new PaintPoint(centerX, centerY)
+                : new PaintPoint(
                     centerX + radiusX * Math.Cos(angle),
                     centerY + radiusY * Math.Sin(angle));
         }
 
         private static (double CenterX, double CenterY, double RadiusX, double RadiusY) CornerGeometry(
-            RoundedContour contour, RGraphicsPath.Corner corner) =>
+            RoundedContour contour, GraphicsPath.Corner corner) =>
             corner switch
             {
-                RGraphicsPath.Corner.TopLeft =>
+                GraphicsPath.Corner.TopLeft =>
                     (contour.Rect.Left + contour.TLX, contour.Rect.Top + contour.TLY, contour.TLX, contour.TLY),
-                RGraphicsPath.Corner.TopRight =>
+                GraphicsPath.Corner.TopRight =>
                     (contour.Rect.Right - contour.TRX, contour.Rect.Top + contour.TRY, contour.TRX, contour.TRY),
-                RGraphicsPath.Corner.BottomRight =>
+                GraphicsPath.Corner.BottomRight =>
                     (contour.Rect.Right - contour.BRX, contour.Rect.Bottom - contour.BRY, contour.BRX, contour.BRY),
-                RGraphicsPath.Corner.BottomLeft =>
+                GraphicsPath.Corner.BottomLeft =>
                     (contour.Rect.Left + contour.BLX, contour.Rect.Bottom - contour.BLY, contour.BLX, contour.BLY),
                 _ => throw new ArgumentOutOfRangeException(nameof(corner))
             };
 
         private readonly record struct RoundedContour(
-            RRect Rect,
+            Rect Rect,
             double TLX, double TLY,
             double TRX, double TRY,
             double BRX, double BRY,
@@ -1060,12 +1060,12 @@ namespace PeachPDF.Html.Core.Handlers
             }
         }
 
-        private static RPen GetRoundedPatternPen(
-            RGraphics g, LineStyle style, RColor color, double width, double pathLength, bool closed)
+        private static Pen GetRoundedPatternPen(
+            Canvas g, LineStyle style, PaintColor color, double width, double pathLength, bool closed)
         {
             var pen = g.GetPen(color);
             pen.Width = width / g.PixelsPerPoint;
-            pen.LineJoin = RLineJoin.Miter;
+            pen.LineJoin = LineJoin.Miter;
 
             var dotted = style == LineStyle.Dotted;
             var fitted = closed
@@ -1073,19 +1073,19 @@ namespace PeachPDF.Html.Core.Handlers
                 : StyledStrokeFitting.Fit(dotted, pen.Width, pathLength);
             if (fitted is not { } pattern)
             {
-                pen.LineCap = RLineCap.Butt;
-                pen.DashStyle = RDashStyle.Solid;
+                pen.LineCap = LineCap.Butt;
+                pen.DashStyle = DashStyle.Solid;
             }
             else if (dotted)
             {
-                pen.LineCap = RLineCap.Round;
+                pen.LineCap = LineCap.Round;
                 pen.SetDashPattern(
                     [0, pattern.Period],
                     closed ? 0 : pattern.Period - pen.Width / 2);
             }
             else
             {
-                pen.LineCap = RLineCap.Butt;
+                pen.LineCap = LineCap.Butt;
                 pen.SetDashPattern([pattern.DashLength, pattern.GapLength], 0);
             }
 
@@ -1093,10 +1093,10 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static void DrawRoundedStroke(
-            RGraphics g, RRect rect, BorderRadii radii, LineStyle style, RColor color,
+            Canvas g, Rect rect, BorderRadii radii, LineStyle style, PaintColor color,
             double strokeWidth, double inset)
         {
-            var centerRect = RRect.FromLTRB(
+            var centerRect = Rect.FromLTRB(
                 rect.Left + inset, rect.Top + inset,
                 rect.Right - inset, rect.Bottom - inset);
             if (centerRect is not { Width: > 0, Height: > 0 } || strokeWidth <= 0) return;
@@ -1108,12 +1108,12 @@ namespace PeachPDF.Html.Core.Handlers
 
             var pen = g.GetPen(color);
             pen.Width = strokeWidth / g.PixelsPerPoint;
-            pen.LineJoin = RLineJoin.Miter;
+            pen.LineJoin = LineJoin.Miter;
 
             if (style == LineStyle.Solid)
             {
-                pen.LineCap = RLineCap.Butt;
-                pen.DashStyle = RDashStyle.Solid;
+                pen.LineCap = LineCap.Butt;
+                pen.DashStyle = DashStyle.Solid;
             }
             else
             {
@@ -1130,12 +1130,12 @@ namespace PeachPDF.Html.Core.Handlers
                 var dotted = style == LineStyle.Dotted;
                 if (StyledStrokeFitting.FitClosed(dotted, strokeWidth, perimeter) is not { } pattern)
                 {
-                    pen.LineCap = RLineCap.Butt;
-                    pen.DashStyle = RDashStyle.Solid;
+                    pen.LineCap = LineCap.Butt;
+                    pen.DashStyle = DashStyle.Solid;
                 }
                 else
                 {
-                    pen.LineCap = dotted ? RLineCap.Round : RLineCap.Butt;
+                    pen.LineCap = dotted ? LineCap.Round : LineCap.Butt;
                     pen.SetDashPattern(
                         dotted
                             ? [0, pattern.Period / g.PixelsPerPoint]
@@ -1151,7 +1151,7 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static void DrawGeneralSide(
-            RGraphics g, Border side, RRect rect, EdgeSet edges)
+            Canvas g, Border side, Rect rect, EdgeSet edges)
         {
             var edge = edges.Get(side);
             if (edge.Style is LineStyle.Dotted or LineStyle.Dashed)
@@ -1168,34 +1168,34 @@ namespace PeachPDF.Html.Core.Handlers
 
             var color = edge.Style switch
             {
-                LineStyle.Inset => BorderBevelColors.ForSide(edge.Color, side, inset: true),
-                LineStyle.Outset => BorderBevelColors.ForSide(edge.Color, side, inset: false),
-                _ => edge.Color
+                LineStyle.Inset => BorderBevelColors.ForSide(edge.PaintColor, side, inset: true),
+                LineStyle.Outset => BorderBevelColors.ForSide(edge.PaintColor, side, inset: false),
+                _ => edge.PaintColor
             };
             DrawGeneralBand(g, side, rect, edges, 0, 1, color);
         }
 
         private static void DrawGeneralDoubleOrBevelSide(
-            RGraphics g, Border side, RRect rect, EdgeSet edges)
+            Canvas g, Border side, Rect rect, EdgeSet edges)
         {
             var edge = edges.Get(side);
             double outerEnd;
             double innerStart;
-            RColor outerColor;
-            RColor innerColor;
+            PaintColor outerColor;
+            PaintColor innerColor;
 
             if (edge.Style == LineStyle.Double)
             {
                 outerEnd = 1 / 3d;
                 innerStart = 2 / 3d;
-                outerColor = innerColor = edge.Color;
+                outerColor = innerColor = edge.PaintColor;
             }
             else
             {
                 outerEnd = innerStart = 0.5;
                 var outerIsInset = edge.Style == LineStyle.Groove;
-                outerColor = BorderBevelColors.ForSide(edge.Color, side, outerIsInset);
-                innerColor = BorderBevelColors.ForSide(edge.Color, side, !outerIsInset);
+                outerColor = BorderBevelColors.ForSide(edge.PaintColor, side, outerIsInset);
+                innerColor = BorderBevelColors.ForSide(edge.PaintColor, side, !outerIsInset);
             }
 
             DrawGeneralBand(g, side, rect, edges, 0, outerEnd, outerColor);
@@ -1203,12 +1203,12 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static void DrawGeneralBand(
-            RGraphics g, Border side, RRect rect, EdgeSet edges,
-            double from, double to, RColor color) =>
+            Canvas g, Border side, Rect rect, EdgeSet edges,
+            double from, double to, PaintColor color) =>
             g.DrawPolygon(g.GetSolidBrush(color), GetGeneralBandPoints(side, rect, edges, from, to));
 
-        private static RPoint[] GetGeneralBandPoints(
-            Border side, RRect rect, EdgeSet edges, double from, double to)
+        private static PaintPoint[] GetGeneralBandPoints(
+            Border side, Rect rect, EdgeSet edges, double from, double to)
         {
             var edge = edges.Get(side);
             var left = edges.Left.IsPhysical ? edges.Left.Width : 0;
@@ -1220,43 +1220,43 @@ namespace PeachPDF.Html.Core.Handlers
             {
                 Border.Top =>
                 [
-                    new RPoint(rect.Left + from * left, rect.Top + from * edge.Width),
-                    new RPoint(rect.Right - from * right, rect.Top + from * edge.Width),
-                    new RPoint(rect.Right - to * right, rect.Top + to * edge.Width),
-                    new RPoint(rect.Left + to * left, rect.Top + to * edge.Width)
+                    new PaintPoint(rect.Left + from * left, rect.Top + from * edge.Width),
+                    new PaintPoint(rect.Right - from * right, rect.Top + from * edge.Width),
+                    new PaintPoint(rect.Right - to * right, rect.Top + to * edge.Width),
+                    new PaintPoint(rect.Left + to * left, rect.Top + to * edge.Width)
                 ],
                 Border.Right =>
                 [
-                    new RPoint(rect.Right - from * edge.Width, rect.Top + from * top),
-                    new RPoint(rect.Right - from * edge.Width, rect.Bottom - from * bottom),
-                    new RPoint(rect.Right - to * edge.Width, rect.Bottom - to * bottom),
-                    new RPoint(rect.Right - to * edge.Width, rect.Top + to * top)
+                    new PaintPoint(rect.Right - from * edge.Width, rect.Top + from * top),
+                    new PaintPoint(rect.Right - from * edge.Width, rect.Bottom - from * bottom),
+                    new PaintPoint(rect.Right - to * edge.Width, rect.Bottom - to * bottom),
+                    new PaintPoint(rect.Right - to * edge.Width, rect.Top + to * top)
                 ],
                 Border.Bottom =>
                 [
-                    new RPoint(rect.Left + from * left, rect.Bottom - from * edge.Width),
-                    new RPoint(rect.Right - from * right, rect.Bottom - from * edge.Width),
-                    new RPoint(rect.Right - to * right, rect.Bottom - to * edge.Width),
-                    new RPoint(rect.Left + to * left, rect.Bottom - to * edge.Width)
+                    new PaintPoint(rect.Left + from * left, rect.Bottom - from * edge.Width),
+                    new PaintPoint(rect.Right - from * right, rect.Bottom - from * edge.Width),
+                    new PaintPoint(rect.Right - to * right, rect.Bottom - to * edge.Width),
+                    new PaintPoint(rect.Left + to * left, rect.Bottom - to * edge.Width)
                 ],
                 Border.Left =>
                 [
-                    new RPoint(rect.Left + from * edge.Width, rect.Top + from * top),
-                    new RPoint(rect.Left + from * edge.Width, rect.Bottom - from * bottom),
-                    new RPoint(rect.Left + to * edge.Width, rect.Bottom - to * bottom),
-                    new RPoint(rect.Left + to * edge.Width, rect.Top + to * top)
+                    new PaintPoint(rect.Left + from * edge.Width, rect.Top + from * top),
+                    new PaintPoint(rect.Left + from * edge.Width, rect.Bottom - from * bottom),
+                    new PaintPoint(rect.Left + to * edge.Width, rect.Bottom - to * bottom),
+                    new PaintPoint(rect.Left + to * edge.Width, rect.Top + to * top)
                 ],
                 _ => throw new ArgumentOutOfRangeException(nameof(side))
             };
         }
 
         private static void DrawGeneralPatternedSide(
-            RGraphics g, Border side, RRect rect, EdgeSet edges, RColor? strokeColor = null)
+            Canvas g, Border side, Rect rect, EdgeSet edges, PaintColor? strokeColor = null)
         {
             var edge = edges.Get(side);
-            var pen = g.GetPen(strokeColor ?? edge.Color);
+            var pen = g.GetPen(strokeColor ?? edge.PaintColor);
             pen.Width = edge.Width / g.PixelsPerPoint;
-            pen.LineJoin = RLineJoin.Miter;
+            pen.LineJoin = LineJoin.Miter;
 
             var horizontal = side is Border.Top or Border.Bottom;
             var acrossAxis = side switch
@@ -1279,8 +1279,8 @@ namespace PeachPDF.Html.Core.Handlers
             }
             else
             {
-                pen.LineCap = RLineCap.Butt;
-                pen.DashStyle = RDashStyle.Solid;
+                pen.LineCap = LineCap.Butt;
+                pen.DashStyle = DashStyle.Solid;
             }
 
             var (startAdjacent, endAdjacent) = side switch
@@ -1321,23 +1321,23 @@ namespace PeachPDF.Html.Core.Handlers
 
         private static bool NeedsPatternCornerClip(Edge edge, Edge adjacent) =>
             adjacent.IsActive &&
-            (adjacent.Style != edge.Style || adjacent.Color != edge.Color ||
+            (adjacent.Style != edge.Style || adjacent.PaintColor != edge.PaintColor ||
              Math.Abs(adjacent.Width - edge.Width) > Epsilon);
 
-        private static RGraphicsPath CreatePatternCornerClip(
-            RGraphics g, Border side, RRect rect, EdgeSet edges, double width,
+        private static GraphicsPath CreatePatternCornerClip(
+            Canvas g, Border side, Rect rect, EdgeSet edges, double width,
             bool clipStart, bool clipEnd)
         {
             var points = GetGeneralBandPoints(side, rect, edges, 0, 1);
             var edgeDirection = side is Border.Top or Border.Bottom
-                ? new RPoint(1, 0)
-                : new RPoint(0, 1);
+                ? new PaintPoint(1, 0)
+                : new PaintPoint(0, 1);
             var outerDirection = side switch
             {
-                Border.Top => new RPoint(0, -1),
-                Border.Right => new RPoint(1, 0),
-                Border.Bottom => new RPoint(0, 1),
-                Border.Left => new RPoint(-1, 0),
+                Border.Top => new PaintPoint(0, -1),
+                Border.Right => new PaintPoint(1, 0),
+                Border.Bottom => new PaintPoint(0, 1),
+                Border.Left => new PaintPoint(-1, 0),
                 _ => throw new ArgumentOutOfRangeException(nameof(side))
             };
 
@@ -1369,20 +1369,20 @@ namespace PeachPDF.Html.Core.Handlers
 
             var clip = g.GetGraphicsPath();
             var ppp = g.PixelsPerPoint;
-            unscaled.Transform(new RMatrix(1 / ppp, 0, 0, 1 / ppp, 0, 0));
+            unscaled.Transform(new Matrix3x2((float)(1 / ppp), 0, 0, (float)(1 / ppp), 0, 0));
             clip.AddPath(unscaled);
             return clip;
         }
 
-        private static RPoint Offset(RPoint point, RPoint direction, double distance) =>
+        private static PaintPoint Offset(PaintPoint point, PaintPoint direction, double distance) =>
             new(point.X + direction.X * distance, point.Y + direction.Y * distance);
 
         private static void DrawPatternedSide(
-            RGraphics g, Border side, RRect rect, LineStyle style, RColor color, double width)
+            Canvas g, Border side, Rect rect, LineStyle style, PaintColor color, double width)
         {
             var pen = g.GetPen(color);
             pen.Width = width / g.PixelsPerPoint;
-            pen.LineJoin = RLineJoin.Miter;
+            pen.LineJoin = LineJoin.Miter;
 
             var horizontal = side is Border.Top or Border.Bottom;
             var acrossAxis = side switch
@@ -1404,8 +1404,8 @@ namespace PeachPDF.Html.Core.Handlers
             }
             else
             {
-                pen.LineCap = RLineCap.Butt;
-                pen.DashStyle = RDashStyle.Solid;
+                pen.LineCap = LineCap.Butt;
+                pen.DashStyle = DashStyle.Solid;
             }
 
             if (horizontal)
@@ -1415,14 +1415,14 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private static void DrawRing(
-            RGraphics g, RRect rect, double width, double from, double to, RBrush brush) =>
+            Canvas g, Rect rect, double width, double from, double to, Brush brush) =>
             DrawRectangularRing(
                 g, brush,
                 GetBandRectangle(rect, width, from),
                 GetBandRectangle(rect, width, to));
 
         private static void DrawRing(
-            RGraphics g, RRect rect, EdgeSet edges, double from, double to, RBrush brush) =>
+            Canvas g, Rect rect, EdgeSet edges, double from, double to, Brush brush) =>
             DrawRectangularRing(
                 g, brush,
                 GetBandRectangle(rect, edges, from),
@@ -1433,20 +1433,20 @@ namespace PeachPDF.Html.Core.Handlers
         /// seams and double-painted translucent corners from four abutting side polygons.
         /// </summary>
         private static void DrawRectangularRing(
-            RGraphics g, RBrush brush, RRect outer, RRect inner)
+            Canvas g, Brush brush, Rect outer, Rect inner)
         {
             // Paths bypass the adapter's coordinate scaling, unlike polygons and lines, so normalize
             // layout-space coordinates here (issue #812).
             var pixelsPerPoint = g.PixelsPerPoint;
             using var path = g.GetGraphicsPath();
-            path.FillMode = RFillMode.EvenOdd;
+            path.FillMode = FillMode.EvenOdd;
             AddRectangle(path, outer, pixelsPerPoint);
             AddRectangle(path, inner, pixelsPerPoint);
             g.DrawPath(brush, path);
         }
 
         private static void AddRectangle(
-            RGraphicsPath path, RRect rect, double pixelsPerPoint)
+            GraphicsPath path, Rect rect, double pixelsPerPoint)
         {
             var left = rect.Left / pixelsPerPoint;
             var top = rect.Top / pixelsPerPoint;
@@ -1460,15 +1460,15 @@ namespace PeachPDF.Html.Core.Handlers
             path.CloseFigure();
         }
 
-        private static RRect GetBandRectangle(RRect rect, double width, double fraction) =>
-            RRect.FromLTRB(
+        private static Rect GetBandRectangle(Rect rect, double width, double fraction) =>
+            Rect.FromLTRB(
                 rect.Left + fraction * width,
                 rect.Top + fraction * width,
                 rect.Right - fraction * width,
                 rect.Bottom - fraction * width);
 
-        private static RRect GetBandRectangle(RRect rect, EdgeSet edges, double fraction) =>
-            RRect.FromLTRB(
+        private static Rect GetBandRectangle(Rect rect, EdgeSet edges, double fraction) =>
+            Rect.FromLTRB(
                 rect.Left + fraction * edges.Left.Width,
                 rect.Top + fraction * edges.Top.Width,
                 rect.Right - fraction * edges.Right.Width,

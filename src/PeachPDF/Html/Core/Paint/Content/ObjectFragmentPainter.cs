@@ -1,5 +1,4 @@
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 
 namespace PeachPDF.Html.Core.Paint.Content
@@ -15,7 +14,7 @@ namespace PeachPDF.Html.Core.Paint.Content
 
         protected override CssRect? ContentWord(CssBox box) => ((CssBoxObject)box).ReplacedWord;
 
-        protected override void DrawContent(RGraphics g, CssBox box, RRect rect)
+        protected override void DrawContent(Canvas g, CssBox box, Rect rect)
         {
             var obj = (CssBoxObject)box;
 

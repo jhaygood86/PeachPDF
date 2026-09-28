@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
@@ -558,7 +558,7 @@ namespace PeachPDF.Tests.Integration
             /// <summary>The record this cell hands back, kept so the test can assert it travelled.</summary>
             internal BreakToken Record { get; }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
+            protected override ValueTask PerformLayoutImp(Canvas g, CssBox frame, bool framePlacesChild)
             {
                 SetPendingBreakToken(Record);
                 return default;

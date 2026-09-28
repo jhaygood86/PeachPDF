@@ -11,8 +11,7 @@
 // "The Art of War"
 
 using PeachDrawing.Text.Unicode;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Utils;
 using System.Collections.Generic;
@@ -35,7 +34,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Rectangle
         /// </summary>
-        private RRect _rect;
+        private Rect _rect;
 
         #endregion
 
@@ -77,7 +76,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets or sets the bounds of the rectangle
         /// </summary>
-        public RRect Rectangle
+        public Rect Rectangle
         {
             get => _rect;
             set => _rect = value;
@@ -268,7 +267,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets the image this words represents (if one exists)
         /// </summary>
-        public virtual RImage? Image
+        public virtual Image? Image
         {
             get => null;
             // ReSharper disable ValueParameterNotUsed

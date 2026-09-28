@@ -5,7 +5,7 @@
 // resolved math font's OpenType MATH table (MathTable.cs) when it has one, scaled by
 // sizePt / unitsPerEm * g.PixelsPerPoint - the exact formula FontAdapter itself already uses for
 // vertical metrics (see FontAdapter.ScaleDesignUnits), so MathBox geometry lands in the same working
-// unit space as everything else RGraphics measures/draws in. A font with no MATH table falls back to
+// unit space as everything else Canvas measures/draws in. A font with no MATH table falls back to
 // fixed, TeX-book-derived approximate ratios (MathML Core's own documented fallback strategy for
 // exactly this case) rather than refusing to lay the formula out at all.
 //
@@ -28,14 +28,13 @@ using PeachDrawing.Text.OpenType;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 
 namespace PeachPDF.MathML
 {
     internal static class MathLayoutEngine
     {
-        public static MathBox Layout(MathDocument document, RGraphics g)
+        public static MathBox Layout(MathDocument document, Canvas g)
         {
             var referenceFont = document.ResolveFont(Math.Max(document.Root.FontSizePt, 1));
             var metrics = new MathMetrics(
@@ -170,7 +169,7 @@ namespace PeachPDF.MathML
                 Ascent = ascent,
                 Descent = descent,
                 Children = children,
-                Color = owner.Color,
+                PaintColor = owner.PaintColor,
             };
         }
 
@@ -219,7 +218,7 @@ namespace PeachPDF.MathML
                 PaintKind = MathPaintKind.Text,
                 Text = text,
                 Font = font,
-                Color = token.Color,
+                PaintColor = token.PaintColor,
             };
         }
 
@@ -265,7 +264,7 @@ namespace PeachPDF.MathML
                 PaintKind = MathPaintKind.Glyphs,
                 Font = font,
                 Glyphs = PositionStretchedGlyphs(chosen, half - axis, scale),
-                Color = token.Color,
+                PaintColor = token.PaintColor,
             };
         }
 
@@ -384,7 +383,7 @@ namespace PeachPDF.MathML
                 RuleY = -axis - ruleThickness / 2,
                 RuleWidth = width,
                 RuleHeight = ruleThickness,
-                Color = frac.Color,
+                PaintColor = frac.PaintColor,
             };
         }
 
@@ -427,7 +426,7 @@ namespace PeachPDF.MathML
                         PaintKind = MathPaintKind.Glyphs,
                         Font = signFont,
                         Glyphs = PositionStretchedGlyphs(signVariant, descent, signScale),
-                        Color = rad.Color,
+                        PaintColor = rad.PaintColor,
                     };
                 }
             }
@@ -465,7 +464,7 @@ namespace PeachPDF.MathML
                 RuleY = -ascent + extraAscender,
                 RuleWidth = radicand.InlineSize,
                 RuleHeight = ruleThickness,
-                Color = rad.Color,
+                PaintColor = rad.PaintColor,
             };
         }
 
@@ -520,7 +519,7 @@ namespace PeachPDF.MathML
                 Ascent = ascent,
                 Descent = descent,
                 Children = children,
-                Color = script.Color,
+                PaintColor = script.PaintColor,
             };
         }
 
@@ -566,7 +565,7 @@ namespace PeachPDF.MathML
                 children[i] = c with { X = centeredX };
             }
 
-            return new MathBox { InlineSize = width, Ascent = ascent, Descent = descent, Children = children, Color = uo.Color };
+            return new MathBox { InlineSize = width, Ascent = ascent, Descent = descent, Children = children, PaintColor = uo.PaintColor };
         }
 
         // ---- mmultiscripts -----------------------------------------------------------------------------
@@ -611,7 +610,7 @@ namespace PeachPDF.MathML
             foreach (var pair in ms.PostScripts)
                 PlacePair(pair, ref x);
 
-            return new MathBox { InlineSize = x, Ascent = ascent, Descent = descent, Children = children, Color = ms.Color };
+            return new MathBox { InlineSize = x, Ascent = ascent, Descent = descent, Children = children, PaintColor = ms.PaintColor };
         }
 
         // ---- mtable ------------------------------------------------------------------------------------
@@ -663,7 +662,7 @@ namespace PeachPDF.MathML
                 Ascent = Math.Max(0, totalAscent),
                 Descent = Math.Max(0, totalDescent),
                 Children = children,
-                Color = table.Color,
+                PaintColor = table.PaintColor,
             };
         }
 
@@ -678,7 +677,7 @@ namespace PeachPDF.MathML
                 Ascent = metrics.Length(space.Height, sizePt),
                 Descent = metrics.Length(space.Depth, sizePt),
                 Children = [],
-                Color = space.Color,
+                PaintColor = space.PaintColor,
             };
         }
 
@@ -694,7 +693,7 @@ namespace PeachPDF.MathML
                 Ascent = content.Ascent,
                 Descent = content.Descent,
                 Children = [],
-                Color = phantom.Color,
+                PaintColor = phantom.PaintColor,
             };
         }
 
@@ -735,7 +734,7 @@ namespace PeachPDF.MathML
                 // The inner box's own alphabetic baseline shifts away from this box's baseline, towards
                 // line-over (up), by voffset - PeachPDF's Y-down convention negates that.
                 Children = [new MathPositionedBox(inner, lspace, -voffset)],
-                Color = padded.Color,
+                PaintColor = padded.PaintColor,
             };
         }
     }

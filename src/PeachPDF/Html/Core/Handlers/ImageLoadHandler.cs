@@ -12,7 +12,7 @@
 
 using MimeKit;
 using PeachPDF;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
@@ -87,7 +87,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// the image instance of the loaded image
         /// </summary>
-        public RImage? Image { get; private set; }
+        public Image? Image { get; private set; }
 
         /// <summary>
         /// the parsed SVG scene graph, set instead of <see cref="Image"/> when the source was detected
@@ -188,7 +188,7 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// Parses an SVG image eagerly (unlike raster images, which <see cref="RAdapter.ImageFromStream"/>
+        /// Parses an SVG image eagerly (unlike raster images, which <see cref="RenderContext.ImageFromStream"/>
         /// reads lazily) into <see cref="SvgDocument"/>, via a standalone XML parse
         /// (<see cref="XElementSvgSourceNode"/>) rather than the HTML tokenizer, since a fetched SVG
         /// resource is expected to be a standalone, well-formed XML document.

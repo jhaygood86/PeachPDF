@@ -1,7 +1,6 @@
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Raster;
-using PeachPDF.Raster.Filters;
+using PeachDrawing;
+using PeachDrawing.Abstractions;
+using PeachDrawing.Filters;
 using System;
 using System.Collections.Generic;
 
@@ -36,7 +35,7 @@ namespace PeachPDF.Svg
         /// <summary>The inputs that are painted through a nested raster scope rather than computed.</summary>
         private enum PaintedInput { Paint, Image, Backdrop }
 
-        public static void Render(RGraphics g, SvgFilter filter, SvgElement element, RRect? viewportBounds, Action<RGraphics> paintSourceGraphic, SvgFilterInputs? inputs = null)
+        public static void Render(Canvas g, SvgFilter filter, SvgElement element, Rect? viewportBounds, Action<Canvas> paintSourceGraphic, SvgFilterInputs? inputs = null)
         {
             var bbox = SvgFilterEvaluator.ElementBounds(element, viewportBounds);
             var (x, y, width, height) = SvgFilterEvaluator.ResolveFilterRect(filter, bbox);
@@ -44,13 +43,13 @@ namespace PeachPDF.Svg
                 return;
 
             // No raster context (a measure-only pass) - the same graceful bail-out the tile-based evaluation makes.
-            using var scope = g.BeginRasterSurface(new RRect(x, y, width, height));
+            using var scope = g.BeginRasterSurface(new Rect(x, y, width, height)) as RasterSurfaceScope;
             if (scope is null)
                 return;
 
             paintSourceGraphic(scope.Graphics);
 
-            var result = Evaluate(g, filter, bbox, scope.Surface, new RRect(x, y, width, height), inputs);
+            var result = Evaluate(g, filter, bbox, scope.Surface, new Rect(x, y, width, height), inputs);
             if (result is null)
                 return;
 
@@ -60,7 +59,7 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Runs the primitive graph and returns the final result in sRGB, or null when the graph produced nothing. The caller owns the returned surface.</summary>
-        private static RasterSurface? Evaluate(RGraphics g, SvgFilter filter, RRect? bbox, RasterSurface sourcePixels, RRect region, SvgFilterInputs? inputs)
+        private static RasterSurface? Evaluate(Canvas g, SvgFilter filter, Rect? bbox, RasterSurface sourcePixels, Rect region, SvgFilterInputs? inputs)
         {
             var owned = new List<RasterSurface>();
 
@@ -111,9 +110,9 @@ namespace PeachPDF.Svg
             }
 
             // A same-sized sRGB surface painted through a nested raster scope over the filter region, or null when none could be made.
-            RasterSurface? PaintedSurface(RRect area, PaintedInput kind, bool stroke, FeImage? feImage, double offsetX, double offsetY)
+            RasterSurface? PaintedSurface(Rect area, PaintedInput kind, bool stroke, FeImage? feImage, double offsetX, double offsetY)
             {
-                var scope = g.BeginRasterSurface(region);
+                var scope = g.BeginRasterSurface(region) as RasterSurfaceScope;
                 if (scope is null)
                     return null;
 
@@ -152,7 +151,7 @@ namespace PeachPDF.Svg
 
                 var blank = Track(FilterOps.Blank(sourcePixels));
                 if (paint.Kind == SvgPaintKind.Solid)
-                    FilterOps.Fill(blank, paint.Color, 1.0);
+                    FilterOps.Fill(blank, paint.PaintColor, 1.0);
 
                 return new Image(blank, false, full, standardInput: true);
             }
@@ -225,7 +224,7 @@ namespace PeachPDF.Svg
                 return union ?? full;
             }
 
-            double Point(double value, double bboxOrigin, double bboxSize) =>
+            double PaintPoint(double value, double bboxOrigin, double bboxSize) =>
                 filter.PrimitiveUnitsUserSpaceOnUse || bbox is null ? value : bboxOrigin + value * bboxSize;
 
             double Size(double value, double bboxSize) =>
@@ -246,13 +245,13 @@ namespace PeachPDF.Svg
                 double ux = 0, uy = 0;
                 if (sub.X is { } x)
                 {
-                    ux = Point(x, bbox?.X ?? 0, bbox?.Width ?? 0);
+                    ux = PaintPoint(x, bbox?.X ?? 0, bbox?.Width ?? 0);
                     left = (int)Math.Floor(Math.Clamp(ux * sx - sourcePixels.GridX, -1e9, 1e9) + 1e-6);
                 }
 
                 if (sub.Y is { } y)
                 {
-                    uy = Point(y, bbox?.Y ?? 0, bbox?.Height ?? 0);
+                    uy = PaintPoint(y, bbox?.Y ?? 0, bbox?.Height ?? 0);
                     top = (int)Math.Floor(Math.Clamp(uy * sy - sourcePixels.GridY, -1e9, 1e9) + 1e-6);
                 }
 
@@ -282,7 +281,7 @@ namespace PeachPDF.Svg
                 switch (primitive)
                 {
                     case FeFlood flood:
-                        FilterOps.Fill(output, linear ? FilterOps.ConvertColor(flood.Color, true) : flood.Color, flood.Opacity);
+                        FilterOps.Fill(output, linear ? FilterOps.ConvertColor(flood.PaintColor, true) : flood.PaintColor, flood.Opacity);
                         break;
 
                     case FeOffset offset:
@@ -297,9 +296,9 @@ namespace PeachPDF.Svg
                     case FeImage feImage:
                     {
                         // The subregion in user space, which the image is fitted into; a referenced element is translated by the subregion's x/y.
-                        var area = new RRect((subregion.Left + sourcePixels.GridX) / sx, (subregion.Top + sourcePixels.GridY) / sy, subregion.Width / sx, subregion.Height / sy);
-                        var offsetX = feImage.Subregion?.X is { } fx ? Point(fx, bbox?.X ?? 0, bbox?.Width ?? 0) : 0;
-                        var offsetY = feImage.Subregion?.Y is { } fy ? Point(fy, bbox?.Y ?? 0, bbox?.Height ?? 0) : 0;
+                        var area = new Rect((subregion.Left + sourcePixels.GridX) / sx, (subregion.Top + sourcePixels.GridY) / sy, subregion.Width / sx, subregion.Height / sy);
+                        var offsetX = feImage.Subregion?.X is { } fx ? PaintPoint(fx, bbox?.X ?? 0, bbox?.Width ?? 0) : 0;
+                        var offsetY = feImage.Subregion?.Y is { } fy ? PaintPoint(fy, bbox?.Y ?? 0, bbox?.Height ?? 0) : 0;
 
                         if (inputs is not null && (feImage.Image is not null || feImage.Target is not null) && !subregion.IsEmpty &&
                             PaintedSurface(area, PaintedInput.Image, false, feImage, offsetX, offsetY) is { } painted)
@@ -368,8 +367,8 @@ namespace PeachPDF.Svg
                         var input = InSpace(Resolve(transfer.In), linear);
                         var functions = transfer.Functions ?? LinearFunctions(transfer.Matrix);
                         FilterOps.ComponentTransfer(input.Surface, output,
-                            FilterOps.BuildTransferLut(functions[0]), FilterOps.BuildTransferLut(functions[1]),
-                            FilterOps.BuildTransferLut(functions[2]), FilterOps.BuildTransferLut(functions[3]));
+                            SvgFilterOps.BuildTransferLut(functions[0]), SvgFilterOps.BuildTransferLut(functions[1]),
+                            SvgFilterOps.BuildTransferLut(functions[2]), SvgFilterOps.BuildTransferLut(functions[3]));
                         break;
                     }
 
@@ -389,7 +388,7 @@ namespace PeachPDF.Svg
                     {
                         var input = InSpace(Resolve(shadow.In), linear);
                         input.Surface.Pixels.CopyTo(output.Pixels);
-                        var color = linear ? FilterOps.ConvertColor(shadow.Color, true) : shadow.Color;
+                        var color = linear ? FilterOps.ConvertColor(shadow.PaintColor, true) : shadow.PaintColor;
                         var opacity = Math.Clamp(shadow.Opacity * color.A / 255.0, 0.0, 1.0);
                         var shadowAlpha = (byte)Math.Round(opacity * 255.0);
                         // DropShadow.Apply takes a premultiplied colour.
@@ -414,7 +413,7 @@ namespace PeachPDF.Svg
                     }
 
                     case FeConvolveMatrix convolve:
-                        FilterOps.ConvolveMatrix(InSpace(Resolve(convolve.In), linear).Surface, output, convolve);
+                        SvgFilterOps.ConvolveMatrix(InSpace(Resolve(convolve.In), linear).Surface, output, convolve);
                         break;
 
                     case FeTurbulence turbulence:

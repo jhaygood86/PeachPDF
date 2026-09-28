@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -56,8 +55,8 @@ namespace PeachPDF.Html.Core.Handlers
         /// <c>outline-offset</c>. Only used to grow <paramref name="radii"/>.
         /// </param>
         internal static void DrawRegionOutline(
-            RGraphics g, IReadOnlyList<RectilinearRegion.Contour> contours,
-            LineStyle style, RColor color, double width, BorderRadii? radii, double offset)
+            Canvas g, IReadOnlyList<RectilinearRegion.Contour> contours,
+            LineStyle style, PaintColor color, double width, BorderRadii? radii, double offset)
         {
             if (contours.Count == 0 || width <= 0) return;
 
@@ -96,7 +95,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// contours inset by <paramref name="toInset"/>.
         /// </summary>
         private static void FillBand(
-            RGraphics g, RBrush brush, IReadOnlyList<RectilinearRegion.Contour> contours,
+            Canvas g, Brush brush, IReadOnlyList<RectilinearRegion.Contour> contours,
             double fromInset, double toInset, double width, BorderRadii? radii, double offset)
         {
             using var path = BuildBandPath(g, contours, fromInset, toInset, width, radii, offset);
@@ -108,8 +107,8 @@ namespace PeachPDF.Html.Core.Handlers
         /// caller owns - so a caller painting the same band several times under different clips builds
         /// its geometry once instead of once per fill.
         /// </summary>
-        private static RGraphicsPath BuildBandPath(
-            RGraphics g, IReadOnlyList<RectilinearRegion.Contour> contours,
+        private static GraphicsPath BuildBandPath(
+            Canvas g, IReadOnlyList<RectilinearRegion.Contour> contours,
             double fromInset, double toInset, double width, BorderRadii? radii, double offset)
         {
             // Paths bypass the adapter's coordinate scaling, unlike polygons and lines, so normalize
@@ -117,7 +116,7 @@ namespace PeachPDF.Html.Core.Handlers
             var pixelsPerPoint = g.PixelsPerPoint;
 
             var path = g.GetGraphicsPath();
-            path.FillMode = RFillMode.Nonzero;
+            path.FillMode = FillMode.Nonzero;
 
             foreach (var contour in contours)
             {
@@ -140,7 +139,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// and a concave one's grows, both starting from the box's own radius at its border edge.
         /// </remarks>
         private static void AddContour(
-            RGraphicsPath path, RectilinearRegion.Contour contour,
+            GraphicsPath path, RectilinearRegion.Contour contour,
             double inset, double width, BorderRadii? radii, double offset,
             double pixelsPerPoint, bool reverse)
         {
@@ -165,7 +164,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <paramref name="inset"/>, each paired with how far its arc reaches back along the two edges
         /// meeting there.
         /// </summary>
-        private static (IReadOnlyList<RPoint> Points, Corner[] Corners) BuildContourCorners(
+        private static (IReadOnlyList<PaintPoint> Points, Corner[] Corners) BuildContourCorners(
             RectilinearRegion.Contour contour,
             double inset, double width, BorderRadii? radii, double offset)
         {
@@ -201,7 +200,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// Classifies the corner at <paramref name="current"/> and records which of the box's four
         /// radii applies to it.
         /// </summary>
-        private static Corner DescribeCorner(RPoint previous, RPoint current, RPoint next)
+        private static Corner DescribeCorner(PaintPoint previous, PaintPoint current, PaintPoint next)
         {
             var inX = Math.Sign(current.X - previous.X);
             var inY = Math.Sign(current.Y - previous.Y);
@@ -219,12 +218,12 @@ namespace PeachPDF.Html.Core.Handlers
             var towardCenterY = outY - inY;
 
             return new Corner(
-                new RPoint(inX, inY),
-                new RPoint(outX, outY),
+                new PaintPoint(inX, inY),
+                new PaintPoint(outX, outY),
                 isConvex,
                 towardCenterX > 0
-                    ? towardCenterY > 0 ? RGraphicsPath.Corner.TopLeft : RGraphicsPath.Corner.BottomLeft
-                    : towardCenterY > 0 ? RGraphicsPath.Corner.TopRight : RGraphicsPath.Corner.BottomRight,
+                    ? towardCenterY > 0 ? GraphicsPath.Corner.TopLeft : GraphicsPath.Corner.BottomLeft
+                    : towardCenterY > 0 ? GraphicsPath.Corner.TopRight : GraphicsPath.Corner.BottomRight,
                 0, 0);
         }
 
@@ -232,7 +231,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// Shrinks any pair of radii that would otherwise overrun the edge between them, scaling both
         /// by the same factor so the corners stay in proportion (CSS Backgrounds and Borders 3 §4.5).
         /// </summary>
-        private static void FitRadiiToEdges(IReadOnlyList<RPoint> points, Corner[] corners)
+        private static void FitRadiiToEdges(IReadOnlyList<PaintPoint> points, Corner[] corners)
         {
             var count = points.Count;
 
@@ -250,7 +249,7 @@ namespace PeachPDF.Html.Core.Handlers
             }
         }
 
-        private static List<PathSegment> BuildSegments(IReadOnlyList<RPoint> points, Corner[] corners)
+        private static List<PathSegment> BuildSegments(IReadOnlyList<PaintPoint> points, Corner[] corners)
         {
             const double ArcControlDistance = 0.5522847498307933; // 4/3 * tan(45 degrees / 2)
 
@@ -262,10 +261,10 @@ namespace PeachPDF.Html.Core.Handlers
                 var corner = corners[i];
                 var current = points[i];
 
-                var arcStart = new RPoint(
+                var arcStart = new PaintPoint(
                     current.X - corner.ArrivingRadius * corner.In.X,
                     current.Y - corner.ArrivingRadius * corner.In.Y);
-                var arcEnd = new RPoint(
+                var arcEnd = new PaintPoint(
                     current.X + corner.LeavingRadius * corner.Out.X,
                     current.Y + corner.LeavingRadius * corner.Out.Y);
 
@@ -280,10 +279,10 @@ namespace PeachPDF.Html.Core.Handlers
                 {
                     segments.Add(PathSegment.Curve(
                         arcStart,
-                        new RPoint(
+                        new PaintPoint(
                             arcStart.X + ArcControlDistance * corner.ArrivingRadius * corner.In.X,
                             arcStart.Y + ArcControlDistance * corner.ArrivingRadius * corner.In.Y),
-                        new RPoint(
+                        new PaintPoint(
                             arcEnd.X - ArcControlDistance * corner.LeavingRadius * corner.Out.X,
                             arcEnd.Y - ArcControlDistance * corner.LeavingRadius * corner.Out.Y),
                         arcEnd));
@@ -316,11 +315,11 @@ namespace PeachPDF.Html.Core.Handlers
         /// contour walked backwards would classify every corner the wrong way.
         /// </remarks>
         private static void EmitSegments(
-            RGraphicsPath path, List<PathSegment> segments, double pixelsPerPoint, bool reverse)
+            GraphicsPath path, List<PathSegment> segments, double pixelsPerPoint, bool reverse)
         {
             if (segments.Count == 0) return;
 
-            RPoint Scale(RPoint point) => new(point.X / pixelsPerPoint, point.Y / pixelsPerPoint);
+            PaintPoint Scale(PaintPoint point) => new(point.X / pixelsPerPoint, point.Y / pixelsPerPoint);
 
             if (reverse)
             {
@@ -369,7 +368,7 @@ namespace PeachPDF.Html.Core.Handlers
             path.CloseFigure();
         }
 
-        private static double Distance(RPoint a, RPoint b) =>
+        private static double Distance(PaintPoint a, PaintPoint b) =>
             Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
 
         /// <summary>
@@ -377,7 +376,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// how far back along each of those two edges its arc reaches.
         /// </summary>
         private readonly record struct Corner(
-            RPoint In, RPoint Out, bool IsConvex, RGraphicsPath.Corner Which,
+            PaintPoint In, PaintPoint Out, bool IsConvex, GraphicsPath.Corner Which,
             double ArrivingRadius, double LeavingRadius)
         {
             /// <summary>
@@ -401,9 +400,9 @@ namespace PeachPDF.Html.Core.Handlers
 
                 var (radiusX, radiusY) = Which switch
                 {
-                    RGraphicsPath.Corner.TopLeft => (declared.TLX, declared.TLY),
-                    RGraphicsPath.Corner.TopRight => (declared.TRX, declared.TRY),
-                    RGraphicsPath.Corner.BottomRight => (declared.BRX, declared.BRY),
+                    GraphicsPath.Corner.TopLeft => (declared.TLX, declared.TLY),
+                    GraphicsPath.Corner.TopRight => (declared.TRX, declared.TRY),
+                    GraphicsPath.Corner.BottomRight => (declared.BRX, declared.BRY),
                     _ => (declared.BLX, declared.BLY)
                 };
 
@@ -428,12 +427,12 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         private readonly record struct PathSegment(
-            RPoint Start, RPoint Control1, RPoint Control2, RPoint End, bool IsCurve)
+            PaintPoint Start, PaintPoint Control1, PaintPoint Control2, PaintPoint End, bool IsCurve)
         {
-            internal static PathSegment Line(RPoint start, RPoint end) =>
+            internal static PathSegment Line(PaintPoint start, PaintPoint end) =>
                 new(start, start, end, end, false);
 
-            internal static PathSegment Curve(RPoint start, RPoint c1, RPoint c2, RPoint end) =>
+            internal static PathSegment Curve(PaintPoint start, PaintPoint c1, PaintPoint c2, PaintPoint end) =>
                 new(start, c1, c2, end, true);
         }
 

@@ -9,7 +9,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Verifies the <c>clip-path</c> paint hook in <see cref="CssBox.Paint"/>: a basic-shape clip is pushed
-    /// (as an <see cref="PeachPDF.Html.Adapters.RGraphicsPath"/>) before the element paints and popped after,
+    /// (as an <see cref="PeachDrawing.Abstractions.GraphicsPath"/>) before the element paints and popped after,
     /// bracketing the whole element rendering, with the geometry resolved against the border-box. Uses the
     /// recording graphics adapter so we assert the actual clip call sequence and resolved coordinates, not
     /// just that painting completed.
@@ -26,7 +26,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, el, g);
 
-            // Exactly one clip pushed (an RGraphicsPath) and one popped.
+            // Exactly one clip pushed (an GraphicsPath) and one popped.
             Assert.Single(g.ClipPaths);
             var pushIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.PushClipCall);
             var popIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.PopClipCall);

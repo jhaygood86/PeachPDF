@@ -3,8 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
@@ -23,7 +22,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     {
         private const byte StartOfSubpath = 0; // CoreGraphicsPath.PathPointTypeStart
 
-        private static async Task<(GraphicsAdapter Graphics, RFont Font)> Setup(string fontPath, double size)
+        private static async Task<(GraphicsAdapter Graphics, Font Font)> Setup(string fontPath, double size)
         {
             var family = TypefaceFixtures.FamilyNameOf(fontPath);
             // Keep the adapter's PixelsPerPoint equal to the GraphicsAdapter's (as the real pipeline
@@ -34,13 +33,13 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             var measure = XGraphics.CreateMeasureContext(new XSize(600, 600), XGraphicsUnit.Point, XPageDirection.Downwards);
             var graphics = new GraphicsAdapter(adapter, measure, 1.0);
-            var font = adapter.GetFont(family, size, RFontStyle.Regular)!;
+            var font = adapter.GetFont(family, size, PaintFontStyle.Regular)!;
             return (graphics, font);
         }
 
-        private static XPoint[] Points(RGraphicsPath path) => ((GraphicsPathAdapter)path).GraphicsPath._corePath.PathPoints;
+        private static XPoint[] Points(GraphicsPath path) => ((GraphicsPathAdapter)path).GraphicsPath._corePath.PathPoints;
 
-        private static int SubpathCount(RGraphicsPath path)
+        private static int SubpathCount(GraphicsPath path)
             => ((GraphicsPathAdapter)path).GraphicsPath._corePath.PathTypes.Count(t => t == StartOfSubpath);
 
         [Fact]
@@ -50,10 +49,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             // 'l' is a single stroke (one contour), 'o' is a ring plus its counter (two contours) - so
             // the run's outline has exactly three disjoint subpaths.
-            var outline = g.GetTextOutline("lo", font, new RPoint(0, 100));
+            var outline = g.GetTextOutline("lo", font, new PaintPoint(0, 100));
 
             Assert.NotNull(outline);
-            Assert.Equal(RFillMode.Nonzero, outline!.FillMode);
+            Assert.Equal(FillMode.Nonzero, outline!.FillMode);
             Assert.Equal(3, SubpathCount(outline));
             outline.Dispose();
         }
@@ -67,7 +66,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // font-size 100 -> top near y=30) and, having no descender, never drops meaningfully
             // below it. If the design-unit Y weren't flipped, the glyph would instead extend far
             // *below* the baseline (toward y=170).
-            var outline = g.GetTextOutline("l", font, new RPoint(0, 100))!;
+            var outline = g.GetTextOutline("l", font, new PaintPoint(0, 100))!;
             var ys = Points(outline).Select(p => p.Y).ToArray();
 
             Assert.True(ys.Min() < 40, $"expected a tall ascender well above the baseline, top y={ys.Min()}");
@@ -82,7 +81,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             double RightEdge(string text, double letterSpacing = 0)
             {
-                var outline = g.GetTextOutline(text, font, new RPoint(0, 100), letterSpacing)!;
+                var outline = g.GetTextOutline(text, font, new PaintPoint(0, 100), letterSpacing)!;
                 var maxX = Points(outline).Max(p => p.X);
                 outline.Dispose();
                 return maxX;
@@ -105,7 +104,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             // The space glyph has an advance but no contours: no geometry is produced, so the run
             // outlines to null (there is nothing to fill or stroke).
-            Assert.Null(g.GetTextOutline("   ", font, new RPoint(0, 100)));
+            Assert.Null(g.GetTextOutline("   ", font, new PaintPoint(0, 100)));
         }
 
         [Fact]
@@ -117,10 +116,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // subpaths, same shape of assertion as the glyf-backed run above.
             var (g, font) = await Setup(BundledFonts.Otf, 100);
 
-            var outline = g.GetTextOutline("lo", font, new RPoint(0, 100));
+            var outline = g.GetTextOutline("lo", font, new PaintPoint(0, 100));
 
             Assert.NotNull(outline);
-            Assert.Equal(RFillMode.Nonzero, outline!.FillMode);
+            Assert.Equal(FillMode.Nonzero, outline!.FillMode);
             Assert.Equal(3, SubpathCount(outline));
             outline.Dispose();
         }
@@ -130,7 +129,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         {
             var (g, font) = await Setup(BundledFonts.Otf, 100);
 
-            var outline = g.GetTextOutline("l", font, new RPoint(0, 100))!;
+            var outline = g.GetTextOutline("l", font, new PaintPoint(0, 100))!;
             var ys = Points(outline).Select(p => p.Y).ToArray();
 
             Assert.True(ys.Min() < 40, $"expected a tall ascender well above the baseline, top y={ys.Min()}");
@@ -145,7 +144,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             double RightEdge(string text, double letterSpacing = 0)
             {
-                var outline = g.GetTextOutline(text, font, new RPoint(0, 100), letterSpacing)!;
+                var outline = g.GetTextOutline(text, font, new PaintPoint(0, 100), letterSpacing)!;
                 var maxX = Points(outline).Max(p => p.X);
                 outline.Dispose();
                 return maxX;
@@ -168,7 +167,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         {
             var (g, font) = await Setup(BundledFonts.Otf, 100);
 
-            Assert.Null(g.GetTextOutline("   ", font, new RPoint(0, 100)));
+            Assert.Null(g.GetTextOutline("   ", font, new PaintPoint(0, 100)));
         }
 
         [Fact]
@@ -179,8 +178,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // what drawing two separate 'f' outlines would produce.
             var (g, font) = await Setup(BundledFonts.Ttf, 100);
 
-            var unligated = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, new ShapeSettings(LigatureSet.None))!;
-            var ligated = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, new ShapeSettings(LigatureSet.Default))!;
+            var unligated = g.GetTextOutline("ff", font, new PaintPoint(0, 100), letterSpacing: 0, new ShapeSettings(LigatureSet.None))!;
+            var ligated = g.GetTextOutline("ff", font, new PaintPoint(0, 100), letterSpacing: 0, new ShapeSettings(LigatureSet.Default))!;
 
             Assert.Equal(2, SubpathCount(unligated));
             Assert.Equal(1, SubpathCount(ligated));
@@ -198,7 +197,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             double RightEdge(LigatureSet features)
             {
-                var outline = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, new ShapeSettings(features))!;
+                var outline = g.GetTextOutline("ff", font, new PaintPoint(0, 100), letterSpacing: 0, new ShapeSettings(features))!;
                 var maxX = Points(outline).Max(p => p.X);
                 outline.Dispose();
                 return maxX;

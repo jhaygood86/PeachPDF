@@ -13,7 +13,7 @@
 using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
@@ -233,7 +233,7 @@ namespace PeachPDF.Html.Core.Parse
         /// normally.
         /// </para>
         /// </summary>
-        internal static void ApplyDeclarativeStylesheet(CssBox root, CssData cssData, MediaQueryContext media, RAdapter adapter, List<CssBox> displayContentsShells)
+        internal static void ApplyDeclarativeStylesheet(CssBox root, CssData cssData, MediaQueryContext media, RenderContext adapter, List<CssBox> displayContentsShells)
         {
             var valueParser = new CssValueParser(adapter);
             ApplyDeclarativeStylesheetToBox(valueParser, root, cssData, media, displayContentsShells);
@@ -423,7 +423,7 @@ namespace PeachPDF.Html.Core.Parse
         /// tree walk can find any more and the caller has to hand on to the container that will own the
         /// document (<see cref="HtmlContainerInt.DisplayContentsShells"/>).
         /// </returns>
-        internal async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> GenerateFragmentCssTree(string html, RAdapter adapter, CssData cssData)
+        internal async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> GenerateFragmentCssTree(string html, RenderContext adapter, CssData cssData)
         {
             var root = HtmlParser.ParseDocument(html);
             var cssValueParser = new CssValueParser(adapter);
@@ -472,7 +472,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <see cref="HtmlContainerInt.SetDeclarativeRoot"/> to register fonts from a document-level stylesheet
         /// attached to a declarative document (<see cref="Layout.IDocumentBuilder.Stylesheet"/>).
         /// </summary>
-        internal static async Task CascadeApplyStyleFonts(CssData cssData, RAdapter adapter)
+        internal static async Task CascadeApplyStyleFonts(CssData cssData, RenderContext adapter)
         {
             foreach (var stylesheet in cssData.Stylesheets)
             {
@@ -633,7 +633,7 @@ namespace PeachPDF.Html.Core.Parse
             // HundredPercentPt for `%` - actually change between the two calls, becoming correct.
             //
             // PeachPDF.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint) reconstructs the
-            // caller-configured page size (an XSize, true points) from PageSize (an RSize,
+            // caller-configured page size (an XSize, true points) from PageSize (an Size,
             // PixelsPerPoint-scaled internal pixel space, per HtmlContainerInt.PageSize's own doc
             // comment) - nothing between PdfGenerator.SetContent assigning it and this point mutates it,
             // so this is the same comparison PdfGenerator.AddPdfPages used to make one layer up, just

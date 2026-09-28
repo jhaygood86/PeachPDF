@@ -97,7 +97,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         {
             const string frmt2 = Config.SignificantFigures2;
             const string format = Config.SignificantFigures3;
-            XColor color = pen.Color;
+            XColor color = pen.PaintColor;
             bool overPrint = pen.Overprint;
             color = ColorSpaceHelper.EnsureColorMode(colorMode, color);
             color = PdfColorConversionGuard.ApplyConversion(_renderer.Owner, color);
@@ -226,7 +226,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
 
             // A pen that strokes with a brush (e.g. an SVG stroke="url(#gradient)") carries no
-            // meaningful pen.Color: the brush constructor leaves it at the default transparent black,
+            // meaningful pen.PaintColor: the brush constructor leaves it at the default transparent black,
             // so color.A is 0. The brush itself supplies the stroke's color, and any real transparency
             // rides the brush's own soft-mask ExtGState (see RealizeBrush), so the constant stroke
             // alpha must stay fully opaque. Driving /CA from color.A here would emit /CA 0 and make the
@@ -280,7 +280,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             XSolidBrush solidBrush = brush as XSolidBrush;
             if (solidBrush != null)
             {
-                XColor color = solidBrush.Color;
+                XColor color = solidBrush.PaintColor;
                 bool overPrint = solidBrush.Overprint;
 
                 if (renderingMode == 0)

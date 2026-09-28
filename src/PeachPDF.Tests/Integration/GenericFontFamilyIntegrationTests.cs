@@ -1,6 +1,6 @@
 using PeachDrawing.Text;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Integration
             if (!OperatingSystem.IsWindows()) return;
 
             var adapter = new PdfSharpAdapter();
-            var font = adapter.GetFont("monospace", 12, RFontStyle.Regular) as FontAdapter;
+            var font = adapter.GetFont("monospace", 12, PaintFontStyle.Regular) as FontAdapter;
 
             Assert.NotNull(font);
             Assert.Equal("Consolas", font!.Font.Name);
@@ -65,7 +65,7 @@ namespace PeachPDF.Tests.Integration
             if (adapter.IsFontExists("Latin Modern Math"))
                 return;
 
-            var font = adapter.GetFont("math", 12, RFontStyle.Regular) as FontAdapter;
+            var font = adapter.GetFont("math", 12, PaintFontStyle.Regular) as FontAdapter;
 
             Assert.NotNull(font);
             Assert.Equal("Cambria Math", font!.Font.Name);

@@ -1,6 +1,6 @@
 using PeachPDF.CSS;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class ObjectFitResolverTests
     {
-        private static readonly RRect Box = new(10, 20, 100, 100);
+        private static readonly Rect Box = new(10, 20, 100, 100);
         private const double IntrinsicWidth = 200, IntrinsicHeight = 100; // 2:1, in points
 
         [Fact]

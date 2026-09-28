@@ -4,12 +4,12 @@ using Xunit;
 namespace PeachPDF.Tests.Html.Adapters
 {
     /// <summary>
-    /// <see cref="PeachPDF.Html.Adapters.RFont"/>'s vertical-metrics query surface (issues #770/#775) is
-    /// virtual with defaults that reproduce the pre-#770 approximation exactly, so any <see cref="PeachPDF.Html.Adapters.RFont"/>
+    /// <see cref="PeachDrawing.Abstractions.Font"/>'s vertical-metrics query surface (issues #770/#775) is
+    /// virtual with defaults that reproduce the pre-#770 approximation exactly, so any <see cref="PeachDrawing.Abstractions.Font"/>
     /// that doesn't override them (only <see cref="PeachPDF.Adapters.FontAdapter"/>, the product's one
     /// concrete implementation, does) stays behaviorally unchanged. <see cref="TestFont"/> is exactly
     /// such a font - this exercises the base defaults directly, mirroring the CPAL palette section's own
-    /// "every non-color font reports no palettes" defaults immediately above them in <c>RFont</c>.
+    /// "every non-color font reports no palettes" defaults immediately above them in <c>Font</c>.
     /// </summary>
     public class RFontVerticalMetricsDefaultsTests
     {
@@ -27,7 +27,7 @@ namespace PeachPDF.Tests.Html.Adapters
         }
 
         /// <summary>
-        /// <see cref="PeachPDF.Html.Adapters.RFont.NormalLineHeight"/> (issue #956) follows the identical
+        /// <see cref="PeachDrawing.Abstractions.Font.NormalLineHeight"/> (issue #956) follows the identical
         /// pattern: virtual, with a default that reproduces the pre-#956 flat 1.2x-font-size approximation
         /// exactly, so only <see cref="PeachPDF.Adapters.FontAdapter"/> resolves it from real font metrics.
         /// </summary>
@@ -48,7 +48,7 @@ namespace PeachPDF.Tests.Html.Adapters
         }
 
         /// <summary>
-        /// <see cref="PeachPDF.Html.Adapters.RFont.GetGlyphAdvanceWidthDesignUnits"/> follows the same
+        /// <see cref="PeachDrawing.Abstractions.Font.GetGlyphAdvanceWidthDesignUnits"/> follows the same
         /// pattern as the MATH-table query surface it sits alongside (<c>GetGlyphIndex</c>,
         /// <c>FontUnitsPerEm</c>): a font with no real <c>hmtx</c> data to consult (no descriptor) has
         /// nothing sensible to return, so the default is 0 - <c>MathLayoutEngine</c>'s stretchy-glyph

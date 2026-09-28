@@ -13,8 +13,7 @@
 using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
@@ -283,7 +282,7 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// Init.
         /// </summary>
-        public HtmlContainerInt(RAdapter adapter)
+        public HtmlContainerInt(RenderContext adapter)
         {
             ArgumentNullException.ThrowIfNull(adapter);
 
@@ -303,7 +302,7 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// 
         /// </summary>
-        internal RAdapter Adapter { get; }
+        internal RenderContext Adapter { get; }
 
         /// <summary>
         /// parser for CSS data
@@ -789,7 +788,7 @@ namespace PeachPDF.Html.Core
         /// The top-left most location of the rendered html.<br/>
         /// This will offset the top-left corner of the rendered html.
         /// </summary>
-        public RPoint Location { get; set; }
+        public PaintPoint Location { get; set; }
 
         /// <summary>
         /// The max width and height of the rendered html.<br/>
@@ -798,12 +797,12 @@ namespace PeachPDF.Html.Core
         /// <see cref="ActualSize"/> can be exceed the max size by layout restrictions (unwrapable line, set image size, etc.).<br/>
         /// Set zero for unlimited (width\height separately).<br/>
         /// </summary>
-        public RSize MaxSize { get; set; }
+        public Size MaxSize { get; set; }
 
         /// <summary>
         /// The actual size of the rendered html (after layout)
         /// </summary>
-        public RSize ActualSize { get; set; }
+        public Size ActualSize { get; set; }
 
         /// <summary>
         /// Whether any box in the current document has <c>float: left/right</c>. Computed once per
@@ -901,7 +900,7 @@ namespace PeachPDF.Html.Core
         /// </summary>
         internal bool HasStackingHoistCandidates { get; private set; }
 
-        public RSize PageSize { get; set; }
+        public Size PageSize { get; set; }
 
         /// <summary>
         /// Page size (width × height) in PDF points derived from the CSS @page { size: ... } rule.
@@ -1021,15 +1020,15 @@ namespace PeachPDF.Html.Core
         /// only fetched and decoded once. Deliberately NOT cleared by <see cref="Clear"/>: the container-
         /// query convergence loop disposes and rebuilds <see cref="Root"/> wholesale between passes within
         /// one render (see <see cref="SetHtml"/>), and a rebuilt box tree's fresh handlers should still hit
-        /// this cache rather than re-decoding. Owns the cached <see cref="RImage"/> instances - disposed
+        /// this cache rather than re-decoding. Owns the cached <see cref="Image"/> instances - disposed
         /// only in <see cref="Dispose(bool)"/>, once, at the true end of this render.
         /// </summary>
-        private readonly Dictionary<string, (RImage? Image, SvgDocument? SvgDocument)> _resolvedImageResources = new();
+        private readonly Dictionary<string, (Image? Image, SvgDocument? SvgDocument)> _resolvedImageResources = new();
 
         /// <summary>
         /// Looks up a previously resolved image/SVG resource by its resolved absolute source URI.
         /// </summary>
-        internal bool TryGetResolvedImageResource(string absoluteUri, out (RImage? Image, SvgDocument? SvgDocument) resource)
+        internal bool TryGetResolvedImageResource(string absoluteUri, out (Image? Image, SvgDocument? SvgDocument) resource)
             => _resolvedImageResources.TryGetValue(absoluteUri, out resource);
 
         /// <summary>
@@ -1039,7 +1038,7 @@ namespace PeachPDF.Html.Core
         /// reaches here on a hit, so this never actually overwrites a live entry today - but disposes one
         /// if it ever does, rather than silently orphaning it undisposed until this render's teardown.
         /// </summary>
-        internal void CacheResolvedImageResource(string absoluteUri, RImage? image, SvgDocument? svgDocument)
+        internal void CacheResolvedImageResource(string absoluteUri, Image? image, SvgDocument? svgDocument)
         {
             if (_resolvedImageResources.TryGetValue(absoluteUri, out var existing) && !ReferenceEquals(existing.Image, image))
             {
@@ -1061,7 +1060,7 @@ namespace PeachPDF.Html.Core
 
         /// <summary>
         /// The URI relative references in this document resolve against: its own <c>&lt;base href&gt;</c>
-        /// when it declares a usable one, else <see cref="RAdapter.BaseUri"/>. The single place that rule
+        /// when it declares a usable one, else <see cref="RenderContext.BaseUri"/>. The single place that rule
         /// lives - <see cref="CommonUtils.ResolveAgainstDocumentBase"/> (images, stylesheets),
         /// <c>HtmlContainer.ResolveHref</c> (links, bookmark targets) and
         /// <c>PdfGenerator.HandleRunningElementLinks</c> all read it from here.
@@ -1072,7 +1071,7 @@ namespace PeachPDF.Html.Core
         /// once per reference rather than once per document: a link inside a css-gcpm-3 running element is
         /// re-resolved on every page its element was selected onto. Rendering a 188-page report with one
         /// such link spent 5 525 506 box visits in that walk; it now spends 79 849, worth about 5% of the
-        /// whole render. The <see cref="RAdapter.BaseUri"/> fallback is deliberately re-read on each
+        /// whole render. The <see cref="RenderContext.BaseUri"/> fallback is deliberately re-read on each
         /// access rather than frozen into the memo - it is a cheap property on the adapter, not a walk,
         /// and a document that declares no base should keep answering whatever the adapter currently says.
         /// </para>
@@ -1189,7 +1188,7 @@ namespace PeachPDF.Html.Core
             Clear();
             if (string.IsNullOrEmpty(htmlSource)) return;
 
-            CssData = baseCssData ?? await Adapter.GetDefaultCssData();
+            CssData = baseCssData ?? await DefaultCssDataCache.GetAsync(Adapter);
 
             DomParser parser = new(CssParser);
             (Root, CssData, DocumentMetadata) = await parser.GenerateCssTree(htmlSource, this, CssData, containerSizes);
@@ -1343,7 +1342,7 @@ namespace PeachPDF.Html.Core
             // Mirrors SetHtml's own "use the caller's CssData directly" idiom (no clone) - there is nothing
             // appended to it on this path (no <style>/<link> discovery step exists for a declarative tree),
             // so there is nothing a clone would need to protect the caller's PeachPdfCssContent instance from.
-            CssData = stylesheet?.CssData ?? await Adapter.GetDefaultCssData();
+            CssData = stylesheet?.CssData ?? await DefaultCssDataCache.GetAsync(Adapter);
 
             if (stylesheet is not null)
             {
@@ -1392,7 +1391,7 @@ namespace PeachPDF.Html.Core
         /// <see cref="HtmlContainer.GetLinks(List{CssBox}?)"/>, which is where the public,
         /// bookmark-agnostic <see cref="HtmlContainer.GetLinks()"/> contract lives.
         /// </summary>
-        internal List<LinkElementData<RRect>> GetLinks(List<CssBox>? bookmarkBoxes)
+        internal List<LinkElementData<Rect>> GetLinks(List<CssBox>? bookmarkBoxes)
         {
             var linkBoxes = new List<CssBox>();
             if (bookmarkBoxes is null)
@@ -1400,10 +1399,10 @@ namespace PeachPDF.Html.Core
             else
                 DomUtils.GetAllLinkAndBookmarkBoxes(Root, linkBoxes, bookmarkBoxes);
 
-            var linkElements = new List<LinkElementData<RRect>>();
+            var linkElements = new List<LinkElementData<Rect>>();
             foreach (var box in linkBoxes)
             {
-                linkElements.Add(new LinkElementData<RRect>(box.GetAttribute("id"), box.GetAttribute("href"), CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds), box));
+                linkElements.Add(new LinkElementData<Rect>(box.GetAttribute("id"), box.GetAttribute("href"), CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds), box));
             }
 
             // The elements the walk above cannot reach. A link on a display:contents <a> is still a link
@@ -1420,7 +1419,7 @@ namespace PeachPDF.Html.Core
                     {
                         if (child.ParentBox is null || child.DerivedStyle.ActualDisplay == Keywords.None) continue;
 
-                        linkElements.Add(new LinkElementData<RRect>(shell.GetAttribute("id"), shell.GetAttribute("href"), CommonUtils.GetFirstValueOrDefault(child.Rectangles, child.Bounds), shell));
+                        linkElements.Add(new LinkElementData<Rect>(shell.GetAttribute("id"), shell.GetAttribute("href"), CommonUtils.GetFirstValueOrDefault(child.Rectangles, child.Bounds), shell));
                     }
                 }
 
@@ -1430,12 +1429,12 @@ namespace PeachPDF.Html.Core
                 }
             }
 
-            var svgLinks = new List<(RRect Rect, string Href)>();
+            var svgLinks = new List<(Rect Rect, string Href)>();
             DomUtils.GetAllSvgLinks(Root, svgLinks);
 
             foreach (var (rect, href) in svgLinks)
             {
-                linkElements.Add(new LinkElementData<RRect>(string.Empty, href, rect));
+                linkElements.Add(new LinkElementData<Rect>(string.Empty, href, rect));
             }
 
             return linkElements;
@@ -1448,7 +1447,7 @@ namespace PeachPDF.Html.Core
         /// </summary>
         /// <param name="elementId">the id of the element to get its rectangle</param>
         /// <returns>the rectangle of the element or null if not found</returns>
-        public RRect? GetElementRectangle(string elementId)
+        public Rect? GetElementRectangle(string elementId)
         {
             ArgChecker.AssertArgNotNullOrEmpty(elementId, "elementId");
 
@@ -1545,7 +1544,7 @@ namespace PeachPDF.Html.Core
         /// container anywhere - the overwhelming majority - pays for exactly one extra tree walk
         /// (<see cref="HasSizeContainers"/>) beyond what layout already cost before this feature existed.
         /// </summary>
-        public async ValueTask PerformLayout(RGraphics g)
+        public async ValueTask PerformLayout(Canvas g)
         {
             ArgumentNullException.ThrowIfNull(g);
 
@@ -1626,9 +1625,9 @@ namespace PeachPDF.Html.Core
                 ? PageGeometry.GetPage(0).BandWidth
                 : fallback;
 
-        private async ValueTask PerformLayoutOnePass(RGraphics g)
+        private async ValueTask PerformLayoutOnePass(Canvas g)
         {
-            ActualSize = RSize.Empty;
+            ActualSize = Size.Empty;
             FloatScanCalls = 0;
             FloatScanBoxVisits = 0;
             BuildDraftCalls = 0;
@@ -1668,7 +1667,7 @@ namespace PeachPDF.Html.Core
                 await canvasShell.EnsureAuxiliaryImagesLoadedAsync();
 
             // if width is not restricted we set it to large value to get the actual later
-            Root.Size = new RSize(IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : PageSize.Width), 0);
+            Root.Size = new Size(IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : PageSize.Width), 0);
             Root.Location = Location;
 
             await LayoutDocument(g);
@@ -1676,8 +1675,8 @@ namespace PeachPDF.Html.Core
             if (MaxSize.Width <= 0.1)
             {
                 // in case the width is not restricted we need to double layout, first will find the width so second can layout by it (center alignment)
-                Root.Size = new RSize((int)Math.Ceiling(ActualSize.Width), 0);
-                ActualSize = RSize.Empty;
+                Root.Size = new Size((int)Math.Ceiling(ActualSize.Width), 0);
+                ActualSize = Size.Empty;
                 await LayoutDocument(g);
             }
 
@@ -1748,9 +1747,9 @@ namespace PeachPDF.Html.Core
 
                     if (!changed || pass == maxFootnotePasses - 1) break;
 
-                    Root.Size = new RSize(footnoteRootWidth, 0);
+                    Root.Size = new Size(footnoteRootWidth, 0);
                     Root.Location = Location;
-                    ActualSize = RSize.Empty;
+                    ActualSize = Size.Empty;
                     await LayoutDocument(g);
                 }
             }
@@ -1805,9 +1804,9 @@ namespace PeachPDF.Html.Core
                     // this pass's own LayoutDocument call (CssLayoutEngine.ApplyLeaderFill) gives them a
                     // real width. Skipping it whenever text happened to match would leave those particular
                     // boxes' leaders permanently zero-width.
-                    Root.Size = new RSize(targetPageRootWidth, 0);
+                    Root.Size = new Size(targetPageRootWidth, 0);
                     Root.Location = Location;
-                    ActualSize = RSize.Empty;
+                    ActualSize = Size.Empty;
                     await LayoutDocument(g);
                     ReapplyPseudoElementContent(Root);
 
@@ -1945,7 +1944,7 @@ namespace PeachPDF.Html.Core
         /// structurally rather than trying to detect it after the fact.
         /// </para>
         /// </remarks>
-        private async ValueTask<FragmentTree> TryApplyDimensionChangingPageCorrection(RGraphics g, FragmentTree tree)
+        private async ValueTask<FragmentTree> TryApplyDimensionChangingPageCorrection(Canvas g, FragmentTree tree)
         {
             if (tree.Fragmentainers.Count == 0 || PageRules.Count == 0 || HasFootnotes)
                 return tree;
@@ -2042,7 +2041,7 @@ namespace PeachPDF.Html.Core
         /// call specifically so a speculative/fallback pass never bypasses <see cref="UseVariableInlineMeasure"/>'s
         /// own bounded convergence loop - see that method's own remarks.
         /// </summary>
-        private async ValueTask<FragmentTree> RunLayoutPassForPageCorrection(RGraphics g, double rootWidth)
+        private async ValueTask<FragmentTree> RunLayoutPassForPageCorrection(Canvas g, double rootWidth)
         {
             await RunLayoutToSettledMeasure(g, rootWidth);
 
@@ -2089,16 +2088,16 @@ namespace PeachPDF.Html.Core
         /// which pass set <c>_pageWidthsSettled</c>.
         /// </para>
         /// </remarks>
-        private async ValueTask RunLayoutToSettledMeasure(RGraphics g, double rootWidth)
+        private async ValueTask RunLayoutToSettledMeasure(Canvas g, double rootWidth)
         {
             if (UseVariableInlineMeasure)
             {
                 var previous = PageAssignmentSignature();
                 for (var i = 0; i < 3; i++)
                 {
-                    Root!.Size = new RSize(rootWidth, 0);
+                    Root!.Size = new Size(rootWidth, 0);
                     Root.Location = Location;
-                    ActualSize = RSize.Empty;
+                    ActualSize = Size.Empty;
                     await LayoutDocument(g);
 
                     var current = PageAssignmentSignature();
@@ -2113,9 +2112,9 @@ namespace PeachPDF.Html.Core
                 _pageWidthsSettled = true;
             }
 
-            Root!.Size = new RSize(rootWidth, 0);
+            Root!.Size = new Size(rootWidth, 0);
             Root.Location = Location;
-            ActualSize = RSize.Empty;
+            ActualSize = Size.Empty;
             await LayoutDocument(g);
         }
 
@@ -2141,7 +2140,7 @@ namespace PeachPDF.Html.Core
         /// still reads the corrected <c>Geometry</c> from (1), just via <c>PdfGenerator</c> rather than
         /// through this method's own margin-box loop.
         /// </summary>
-        private async ValueTask<FragmentTree> LayoutMarginBoxes(RGraphics g, FragmentTree tree)
+        private async ValueTask<FragmentTree> LayoutMarginBoxes(Canvas g, FragmentTree tree)
         {
             // PageRules.Count == 0 is a safe skip for (1) too: with no @page rule at all, geometry
             // can never vary by page number, so there is nothing ResolveForMaterializedPage could ever
@@ -2208,7 +2207,7 @@ namespace PeachPDF.Html.Core
                             MarginBoxRenderer.MarginAreaHeight(boxName, sheetSizePt, geom.MarginTopPt, geom.MarginBottomPt));
                         if (rectPt.Width <= 0 || rectPt.Height <= 0) continue;
 
-                        var pixelRect = new RRect(rectPt.X * ppp, rectPt.Y * ppp, rectPt.Width * ppp, rectPt.Height * ppp);
+                        var pixelRect = new Rect(rectPt.X * ppp, rectPt.Y * ppp, rectPt.Width * ppp, rectPt.Height * ppp);
 
                         // Scoped to this one call so counter(page)/counter(pages) inside the
                         // running element resolve against the page it is being laid out for. Cleared in a
@@ -2291,7 +2290,7 @@ namespace PeachPDF.Html.Core
                     // Every coordinate here was stated by the resolve pass rather than recomputed, so the
                     // divider can never be drawn at a different Y than the band that was reserved - it
                     // depends on the bodies' own natural height, which is not recoverable at this point.
-                    var dividerRect = new RRect(
+                    var dividerRect = new Rect(
                         area.AreaLeft, area.DividerTop - localOriginY, area.AreaWidth, area.DividerThickness);
 
                     var bodies = area.Calls.Select(call => MarginBoxContentFragmentBuilder.Build(call.Body)).ToList();
@@ -2388,7 +2387,7 @@ namespace PeachPDF.Html.Core
         /// document's registrations accumulate <i>across</i> its fragmentainers, and only a whole new
         /// layout invalidates them.
         /// </remarks>
-        private async ValueTask LayoutDocument(RGraphics g)
+        private async ValueTask LayoutDocument(Canvas g)
         {
             LayoutGeneration++;
             FragmentainerPasses = 0;
@@ -2609,7 +2608,7 @@ namespace PeachPDF.Html.Core
         /// </para>
         /// </remarks>
         private async ValueTask LayoutTheRemainderMonolithically(
-            RGraphics g, FragmentEmitter emitter, BreakToken token, int slot)
+            Canvas g, FragmentEmitter emitter, BreakToken token, int slot)
         {
             LastResortRelayouts++;
 
@@ -3155,7 +3154,7 @@ namespace PeachPDF.Html.Core
         /// <param name="box">the box whose continuation this is</param>
         /// <param name="slot">the slot layout believed it was filling, for the sweep below</param>
         /// <param name="rect">the box's border box there, in document space</param>
-        internal void RecordContinuationShell(CssBox box, int slot, RRect rect) =>
+        internal void RecordContinuationShell(CssBox box, int slot, Rect rect) =>
             _emitter?.RecordContinuationShell(box, slot, rect);
 
         /// <summary>
@@ -3177,7 +3176,7 @@ namespace PeachPDF.Html.Core
         /// <param name="slot">the fragmentainer this displacement applies to</param>
         /// <param name="shift">how far lower the box draws there</param>
         /// <param name="band">the content band the fragment is confined to, in document space</param>
-        internal void RecordFragmentDisplacement(CssBox box, int slot, double shift, RRect band) =>
+        internal void RecordFragmentDisplacement(CssBox box, int slot, double shift, Rect band) =>
             _emitter?.RecordFragmentDisplacement(box, slot, shift, band);
 
         /// <summary>
@@ -3595,7 +3594,7 @@ namespace PeachPDF.Html.Core
         /// alongside the bodies' own natural (content) height.
         /// </summary>
         private async ValueTask<(double TotalHeight, double NaturalContentHeight)> StackFootnoteBodies(
-            RGraphics g, FootnoteAreaGroup area, FootnoteAreaRule areaRule)
+            Canvas g, FootnoteAreaGroup area, FootnoteAreaRule areaRule)
         {
             var y = 0d;
             var rowStarted = false;
@@ -3615,7 +3614,7 @@ namespace PeachPDF.Html.Core
                         // Safe to lay the same box out twice within one generation (see
                         // RunningElementLayout.LayoutRunningElementFor's own remarks on
                         // ResetRectanglesRecursively - this is exactly the reuse it documents).
-                        var measureRect = new RRect(area.AreaLeft, 0, area.AreaWidth, 100_000);
+                        var measureRect = new Rect(area.AreaLeft, 0, area.AreaWidth, 100_000);
                         await FootnoteBodyLayout.LayoutFootnoteBodyFor(g, call.Body, measureRect, this);
 
                         if (call.Body.LineBoxes.Count == 1 && call.Body.LineBoxes[0].Words.Count > 0)
@@ -3660,7 +3659,7 @@ namespace PeachPDF.Html.Core
                     // could push to Infinity): a footnote body never fragments in this codebase (an
                     // accepted gap - see docs), so its natural, single-pass content height is exactly
                     // what's reserved, however tall that turns out to be.
-                    var bodyRect = new RRect(area.AreaLeft + rowX, y, bodyWidth, 100_000);
+                    var bodyRect = new Rect(area.AreaLeft + rowX, y, bodyWidth, 100_000);
                     await FootnoteBodyLayout.LayoutFootnoteBodyFor(g, call.Body, bodyRect, this);
 
                     rowHeight = Math.Max(rowHeight, call.Body.ActualBottom - call.Body.Location.Y);
@@ -3832,7 +3831,7 @@ namespace PeachPDF.Html.Core
         /// slot's reserved height changed since the previous call, for <see cref="PerformLayout"/>'s
         /// footnote convergence loop to check.
         /// </summary>
-        private async ValueTask<bool> ResolveFootnotesForThisAttempt(RGraphics g)
+        private async ValueTask<bool> ResolveFootnotesForThisAttempt(Canvas g)
         {
             var previous = FootnoteAreaHeightsBySlot;
             var previousByColumn = FootnoteAreaHeightsByColumn;
@@ -4542,14 +4541,14 @@ namespace PeachPDF.Html.Core
         /// the CONTENT clip - the page area inside the margins (css-page-3's own term for it), not a fixed
         /// box's own wider containing block (the page box, margins included, per CSS2.1 §10.1): a
         /// <c>position: fixed</c> box's own paint reaches past this via
-        /// <c>RGraphics.SuspendClipping</c>, which always unwinds the whole clip stack down to the single
+        /// <c>Canvas.SuspendClipping</c>, which always unwinds the whole clip stack down to the single
         /// unconditionally-infinite clip <see cref="PeachPDF.Adapters.GraphicsAdapter"/>'s constructor
         /// establishes before this is ever pushed - so this is the only page-level clip that needs to
-        /// exist, provided it is pushed through <c>RGraphics.PushClip</c> and not intersected directly on
+        /// exist, provided it is pushed through <c>Canvas.PushClip</c> and not intersected directly on
         /// the raw graphics object (see <c>FragmentPainter.Paint</c>'s own remarks, and issue #880).
         /// <see cref="PerformPaint"/> falls back to <see cref="PageBoxRect"/> when unset.
         /// </summary>
-        internal RRect? PageClipOverride { get; set; }
+        internal Rect? PageClipOverride { get; set; }
 
         /// <summary>
         /// Words this render DREW and then truncated with a clip - see <see cref="PeachPDF.ClipReport"/>.
@@ -4570,10 +4569,10 @@ namespace PeachPDF.Html.Core
         /// pushes as the top-level page clip, also used as the background positioning area for a
         /// <c>background-attachment: fixed</c> layer (CSS Backgrounds 3 §3.9).
         /// </summary>
-        internal RRect PageBoxRect => MaxSize.Height > 0
-            ? new RRect(Location.X, Location.Y, Math.Min(MaxSize.Width, PageSize.Width),
+        internal Rect PageBoxRect => MaxSize.Height > 0
+            ? new Rect(Location.X, Location.Y, Math.Min(MaxSize.Width, PageSize.Width),
                 Math.Min(MaxSize.Height, PageSize.Height))
-            : new RRect(MarginLeft, MarginTop, PageSize.Width + MarginRight, PageSize.Height);
+            : new Rect(MarginLeft, MarginTop, PageSize.Width + MarginRight, PageSize.Height);
 
         /// <summary>
         /// The zero-based pagination-slot index containing document Y-coordinate <paramref name="y"/>,
@@ -4723,7 +4722,7 @@ namespace PeachPDF.Html.Core
         /// page-size/orientation document, e.g. a landscape page for a wide table) - either changes the
         /// page's own content-box width the same way, so both gate the same reflow. When false,
         /// <see cref="PageContentRightOf"/> returns the base measure and
-        /// <see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/> runs its exact historical single-width arithmetic —
+        /// <see cref="CssLayoutEngine.GetBoxWidth(Canvas, CssBox, double?)"/> runs its exact historical single-width arithmetic —
         /// zero change for the overwhelmingly common case.
         /// </summary>
         internal bool UseVariableInlineMeasure =>
@@ -4880,7 +4879,7 @@ namespace PeachPDF.Html.Core
         /// </summary>
         /// <param name="g">the device to use</param>
         /// <param name="fragmentainer">the page to paint</param>
-        public void PerformPaint(RGraphics g, FragmentainerFragment fragmentainer)
+        public void PerformPaint(Canvas g, FragmentainerFragment fragmentainer)
         {
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(fragmentainer);

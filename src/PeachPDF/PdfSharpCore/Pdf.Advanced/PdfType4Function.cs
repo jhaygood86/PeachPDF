@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Globalization;

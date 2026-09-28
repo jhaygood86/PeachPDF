@@ -1,6 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 
@@ -23,8 +23,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var container = new CssBox(null, null)
             {
                 HtmlContainer = new HtmlContainerInt(new PdfSharpAdapter()),
-                Location = new RPoint(0, 0),
-                Size = new RSize(400, 200),
+                Location = new PaintPoint(0, 0),
+                Size = new Size(400, 200),
                 ContainerType = CssProperty<ContainerType>.FromValue("size", ContainerType.Size),
                 WritingMode = CssProperty<WritingMode>.FromValue("horizontal-tb", WritingMode.HorizontalTb)
             };
@@ -44,8 +44,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var container = new CssBox(null, null)
             {
                 HtmlContainer = new HtmlContainerInt(new PdfSharpAdapter()),
-                Location = new RPoint(0, 0),
-                Size = new RSize(400, 200),
+                Location = new PaintPoint(0, 0),
+                Size = new Size(400, 200),
                 ContainerType = CssProperty<ContainerType>.FromValue("size", ContainerType.Size),
                 WritingMode = CssProperty<WritingMode>.FromValue("vertical-rl", WritingMode.VerticalRl)
             };
@@ -71,8 +71,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var container = new CssBox(null, null)
             {
                 HtmlContainer = new HtmlContainerInt(new PdfSharpAdapter()),
-                Location = new RPoint(0, 0),
-                Size = new RSize(400, 200),
+                Location = new PaintPoint(0, 0),
+                Size = new Size(400, 200),
                 ContainerType = CssProperty<ContainerType>.FromValue("inline-size", ContainerType.InlineSize),
                 WritingMode = CssProperty<WritingMode>.FromValue("vertical-rl", WritingMode.VerticalRl)
             };
@@ -98,8 +98,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var container = new CssBox(null, null)
             {
                 HtmlContainer = new HtmlContainerInt(new PdfSharpAdapter()),
-                Location = new RPoint(0, 0),
-                Size = new RSize(400, 0), // width settled; height NOT yet settled (still its default)
+                Location = new PaintPoint(0, 0),
+                Size = new Size(400, 0), // width settled; height NOT yet settled (still its default)
                 Height = "200px",
                 ContainerType = CssProperty<ContainerType>.FromValue("size", ContainerType.Size),
                 WritingMode = CssProperty<WritingMode>.FromValue("horizontal-tb", WritingMode.HorizontalTb)
@@ -121,8 +121,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var container = new CssBox(null, null)
             {
                 HtmlContainer = new HtmlContainerInt(new PdfSharpAdapter()),
-                Location = new RPoint(0, 0),
-                Size = new RSize(400, 0),
+                Location = new PaintPoint(0, 0),
+                Size = new Size(400, 0),
                 Height = "100px",
                 MinHeight = "300px",
                 ContainerType = CssProperty<ContainerType>.FromValue("size", ContainerType.Size),
@@ -145,8 +145,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var container = new CssBox(null, null)
             {
                 HtmlContainer = new HtmlContainerInt(new PdfSharpAdapter()),
-                Location = new RPoint(0, 0),
-                Size = new RSize(400, 0),
+                Location = new PaintPoint(0, 0),
+                Size = new Size(400, 0),
                 Height = "300px",
                 MaxHeight = "100px",
                 ContainerType = CssProperty<ContainerType>.FromValue("size", ContainerType.Size),
@@ -179,7 +179,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var adapter = new PdfSharpAdapter();
             var container = new HtmlContainerInt(adapter)
             {
-                PageSize = new RSize(800, 600),
+                PageSize = new Size(800, 600),
                 RootWritingMode = WritingMode.HorizontalTb
             };
             var box = new CssBox(null, null) { HtmlContainer = container };
@@ -198,7 +198,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var adapter = new PdfSharpAdapter();
             var container = new HtmlContainerInt(adapter)
             {
-                PageSize = new RSize(800, 600),
+                PageSize = new Size(800, 600),
                 RootWritingMode = WritingMode.VerticalRl
             };
             var box = new CssBox(null, null) { HtmlContainer = container };

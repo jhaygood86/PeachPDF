@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 using PeachPDF.PdfSharpCore.Drawing;
 
 namespace PeachPDF.Tests.Adapters

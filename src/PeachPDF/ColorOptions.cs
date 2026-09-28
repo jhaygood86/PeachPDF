@@ -13,7 +13,7 @@ namespace PeachPDF
     /// naive RGB&lt;-&gt;CMYK formula is used anywhere. A color's source profile is always well-defined: an
     /// RGB-authored color's source is the ICC-published sRGB profile PeachPDF already bundles for PDF/A
     /// (CSS colors are sRGB by definition outside of <c>device-cmyk()</c>); a <c>device-cmyk()</c>-authored
-    /// color is uncalibrated ink by definition (CSS Color 5 §6) and has no source profile unless
+    /// color is uncalibrated ink by definition (CSS PaintColor 5 §6) and has no source profile unless
     /// <see cref="FallbackCmykProfile"/> supplies one, so without that set, a <c>device-cmyk()</c> color is
     /// left exactly as authored even under a conversion mode - there is nothing to convert *from*.
     /// </remarks>

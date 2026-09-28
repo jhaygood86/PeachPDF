@@ -1,3 +1,4 @@
+using PeachDrawing.Abstractions;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Utils;

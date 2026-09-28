@@ -10,16 +10,16 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace PeachPDF.Svg
 {
     /// <summary>
-    /// Evaluates a <see cref="SvgFilter"/>'s primitive graph against real PDF tiles (<see cref="RImage"/>s
-    /// from <see cref="RGraphics.CreateTile"/>) - never rasterizing. The overall shape generalizes
+    /// Evaluates a <see cref="SvgFilter"/>'s primitive graph against real PDF tiles (<see cref="Image"/>s
+    /// from <see cref="Canvas.CreateTile"/>) - never rasterizing. The overall shape generalizes
     /// <c>SvgRenderer.RenderMaskedElementContent</c>/<c>BuildMaskTile</c>'s own "resolve rect, CreateTile,
     /// paint content into it, composite" pattern from one mask tile to a whole ordered primitive list:
     /// render the element's own content into a <c>SourceGraphic</c> tile, walk each primitive producing
@@ -27,8 +27,8 @@ namespace PeachPDF.Svg
     /// </summary>
     internal static class SvgFilterEvaluator
     {
-        /// <inheritdoc cref="Render(RGraphics, SvgFilter, SvgElement, RRect?, Action{RGraphics}, SvgFilterInputs?)"/>
-        public static void Render(RGraphics g, SvgFilter filter, SvgElement element, Action<RGraphics> paintSourceGraphic) =>
+        /// <inheritdoc cref="Render(Canvas, SvgFilter, SvgElement, Rect?, Action{Canvas}, SvgFilterInputs?)"/>
+        public static void Render(Canvas g, SvgFilter filter, SvgElement element, Action<Canvas> paintSourceGraphic) =>
             Render(g, filter, element, null, paintSourceGraphic);
 
         /// <summary>
@@ -48,7 +48,7 @@ namespace PeachPDF.Svg
         /// <param name="viewportBounds">Stands in for the element's bounding box when that cannot be measured (see <see cref="ElementBounds"/>); null keeps the region as authored.</param>
         /// <param name="paintSourceGraphic">Paints the element's ordinary content (the <c>SourceGraphic</c>).</param>
         /// <param name="inputs">What a raster evaluation needs beyond the source graphic (<c>FillPaint</c>, <c>feImage</c>, the backdrop); null when the caller has none, which leaves those inputs transparent.</param>
-        public static void Render(RGraphics g, SvgFilter filter, SvgElement element, RRect? viewportBounds, Action<RGraphics> paintSourceGraphic, SvgFilterInputs? inputs = null)
+        public static void Render(Canvas g, SvgFilter filter, SvgElement element, Rect? viewportBounds, Action<Canvas> paintSourceGraphic, SvgFilterInputs? inputs = null)
         {
             if (filter.RequiresRaster)
             {
@@ -67,7 +67,7 @@ namespace PeachPDF.Svg
 
             var pushedOffset = x != 0 || y != 0;
             if (pushedOffset)
-                source.Graphics.PushTransform(new RMatrix(1, 0, 0, 1, -x, -y));
+                source.Graphics.PushTransform(new Matrix3x2(1, 0, 0, 1, (float)-x, (float)-y));
 
             paintSourceGraphic(source.Graphics);
 
@@ -77,16 +77,16 @@ namespace PeachPDF.Svg
             source.Graphics.Dispose();
 
             var sourceGraphic = source.Image;
-            RImage? sourceAlpha = null;
+            Image? sourceAlpha = null;
 
             // "SourceGraphic"/"SourceAlpha" are reserved names (SVG Filter Effects §12.1) that also live
             // in this same dictionary - a named `result` a filter author happens to spell the same way
             // simply overwrites the reserved entry, matching how a real SVG UA resolves this ambiguity
             // (the later, author-defined one wins for any subsequent `in` reference).
-            var named = new Dictionary<string, RImage>(StringComparer.Ordinal) { ["SourceGraphic"] = sourceGraphic };
+            var named = new Dictionary<string, Image>(StringComparer.Ordinal) { ["SourceGraphic"] = sourceGraphic };
             var last = sourceGraphic;
 
-            RImage Resolve(string? name)
+            Image Resolve(string? name)
             {
                 if (name is null)
                     return last; // "previous result" rule - `last` starts at SourceGraphic, covering "first primitive" too
@@ -114,10 +114,10 @@ namespace PeachPDF.Svg
                 last = output;
             }
 
-            g.DrawImage(last, new RRect(x, y, width, height));
+            g.DrawImage(last, new Rect(x, y, width, height));
         }
 
-        private static RImage? EvaluatePrimitive(RGraphics g, FilterPrimitive primitive, Func<string?, RImage> resolve, SvgFilter filter, RRect? bbox, double width, double height)
+        private static Image? EvaluatePrimitive(Canvas g, FilterPrimitive primitive, Func<string?, Image> resolve, SvgFilter filter, Rect? bbox, double width, double height)
         {
             switch (primitive)
             {
@@ -157,25 +157,25 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Builds a solid-black tile masked by <paramref name="sourceGraphic"/>'s own ALPHA (not luminosity) - the reserved <c>SourceAlpha</c> input, materialized lazily on first reference.</summary>
-        private static RImage? BuildSourceAlpha(RGraphics g, RImage sourceGraphic, double width, double height)
+        private static Image? BuildSourceAlpha(Canvas g, Image sourceGraphic, double width, double height)
         {
             var blackTile = g.CreateTile(width, height);
             if (blackTile is not { } black)
                 return null;
 
-            black.Graphics.DrawRectangle(black.Graphics.GetSolidBrush(RColor.Black), 0, 0, width, height);
+            black.Graphics.DrawRectangle(black.Graphics.GetSolidBrush(PaintColor.Black), 0, 0, width, height);
             black.Graphics.Dispose();
 
             var tile = g.CreateTile(width, height);
             if (tile is not { } t)
                 return null;
 
-            t.Graphics.DrawImageAlphaMasked(black.Image, sourceGraphic, new RRect(0, 0, width, height));
+            t.Graphics.DrawImageAlphaMasked(black.Image, sourceGraphic, new Rect(0, 0, width, height));
             t.Graphics.Dispose();
             return t.Image;
         }
 
-        private static RImage? EvaluateFeFlood(RGraphics g, FeFlood feFlood, double width, double height)
+        private static Image? EvaluateFeFlood(Canvas g, FeFlood feFlood, double width, double height)
         {
             var tile = g.CreateTile(width, height);
             if (tile is not { } t)
@@ -185,15 +185,15 @@ namespace PeachPDF.Svg
             // uses for a gradient stop's stop-color/stop-opacity pair - flood-color/flood-opacity is the
             // same two-attribute-into-one-RGBA shape.
             var color = feFlood.Opacity >= 1.0
-                ? feFlood.Color
-                : RColor.FromArgb((int)Math.Round(feFlood.Color.A * feFlood.Opacity), feFlood.Color.R, feFlood.Color.G, feFlood.Color.B);
+                ? feFlood.PaintColor
+                : PaintColor.FromArgb((int)Math.Round(feFlood.PaintColor.A * feFlood.Opacity), feFlood.PaintColor.R, feFlood.PaintColor.G, feFlood.PaintColor.B);
 
             t.Graphics.DrawRectangle(t.Graphics.GetSolidBrush(color), 0, 0, width, height);
             t.Graphics.Dispose();
             return t.Image;
         }
 
-        private static RImage? EvaluateFeOffset(RGraphics g, RImage input, FeOffset feOffset, SvgFilter filter, RRect? bbox, double width, double height)
+        private static Image? EvaluateFeOffset(Canvas g, Image input, FeOffset feOffset, SvgFilter filter, Rect? bbox, double width, double height)
         {
             var tile = g.CreateTile(width, height);
             if (tile is not { } t)
@@ -207,12 +207,12 @@ namespace PeachPDF.Svg
                 dy *= b.Height;
             }
 
-            t.Graphics.DrawImage(input, new RRect(dx, dy, width, height));
+            t.Graphics.DrawImage(input, new Rect(dx, dy, width, height));
             t.Graphics.Dispose();
             return t.Image;
         }
 
-        private static RImage? EvaluateFeMerge(RGraphics g, FeMerge feMerge, Func<string?, RImage> resolve, double width, double height)
+        private static Image? EvaluateFeMerge(Canvas g, FeMerge feMerge, Func<string?, Image> resolve, double width, double height)
         {
             var tile = g.CreateTile(width, height);
             if (tile is not { } t)
@@ -221,7 +221,7 @@ namespace PeachPDF.Svg
             // Ordinary sequential src-over painting IS the merge - PDF's default alpha compositing
             // layers each input in order, no dedicated "merge" primitive needed.
             foreach (var inputName in feMerge.Inputs)
-                t.Graphics.DrawImage(resolve(inputName), new RRect(0, 0, width, height));
+                t.Graphics.DrawImage(resolve(inputName), new Rect(0, 0, width, height));
 
             t.Graphics.Dispose();
             return t.Image;
@@ -239,13 +239,13 @@ namespace PeachPDF.Svg
         /// once per-primitive subregions are implemented, at which point this is the one primitive that
         /// needs revisiting.
         /// </summary>
-        private static RImage? EvaluateFeTile(RGraphics g, RImage input, double width, double height)
+        private static Image? EvaluateFeTile(Canvas g, Image input, double width, double height)
         {
             var tile = g.CreateTile(width, height);
             if (tile is not { } t)
                 return null;
 
-            t.Graphics.DrawImage(input, new RRect(0, 0, width, height));
+            t.Graphics.DrawImage(input, new Rect(0, 0, width, height));
             t.Graphics.Dispose();
             return t.Image;
         }
@@ -273,13 +273,13 @@ namespace PeachPDF.Svg
         /// weight is at.</description></item>
         /// </list>
         /// </summary>
-        private static RImage? EvaluateFeComposite(RGraphics g, RImage inputA, RImage inputB, string op, double width, double height)
+        private static Image? EvaluateFeComposite(Canvas g, Image inputA, Image inputB, string op, double width, double height)
         {
             var tile = g.CreateTile(width, height);
             if (tile is not { } t)
                 return null;
 
-            var rect = new RRect(0, 0, width, height);
+            var rect = new Rect(0, 0, width, height);
 
             switch (op)
             {
@@ -311,43 +311,43 @@ namespace PeachPDF.Svg
             return t.Image;
         }
 
-        private static RImage? EvaluateFeBlend(RGraphics g, RImage top, RImage bottom, RBlendMode mode, double width, double height)
+        private static Image? EvaluateFeBlend(Canvas g, Image top, Image bottom, PaintBlendMode mode, double width, double height)
         {
             var tile = g.CreateTile(width, height);
             if (tile is not { } t)
                 return null;
 
-            t.Graphics.DrawImageBlendedOver(top, bottom, new RRect(0, 0, width, height), mode);
+            t.Graphics.DrawImageBlendedOver(top, bottom, new Rect(0, 0, width, height), mode);
             t.Graphics.Dispose();
             return t.Image;
         }
 
-        private static RImage? EvaluateColorMatrix(RGraphics g, RImage input, ColorMatrix matrix, double width, double height)
+        private static Image? EvaluateColorMatrix(Canvas g, Image input, ColorMatrix matrix, double width, double height)
         {
             var tile = g.CreateTile(width, height);
             if (tile is not { } t)
                 return null;
 
-            t.Graphics.DrawImageWithColorMatrix(input, new RRect(0, 0, width, height), matrix);
+            t.Graphics.DrawImageWithColorMatrix(input, new Rect(0, 0, width, height), matrix);
             t.Graphics.Dispose();
             return t.Image;
         }
 
         /// <summary><c>feColorMatrix type="luminanceToAlpha"</c>: a solid-black fill whose per-pixel VISIBILITY is <paramref name="input"/>'s own luminosity - exactly PDF's existing <c>/Luminosity</c> soft mask, no new primitive needed.</summary>
-        private static RImage? EvaluateLuminanceToAlpha(RGraphics g, RImage input, double width, double height)
+        private static Image? EvaluateLuminanceToAlpha(Canvas g, Image input, double width, double height)
         {
             var blackTile = g.CreateTile(width, height);
             if (blackTile is not { } black)
                 return null;
 
-            black.Graphics.DrawRectangle(black.Graphics.GetSolidBrush(RColor.Black), 0, 0, width, height);
+            black.Graphics.DrawRectangle(black.Graphics.GetSolidBrush(PaintColor.Black), 0, 0, width, height);
             black.Graphics.Dispose();
 
             var tile = g.CreateTile(width, height);
             if (tile is not { } t)
                 return null;
 
-            t.Graphics.DrawImageMasked(black.Image, input, new RRect(0, 0, width, height));
+            t.Graphics.DrawImageMasked(black.Image, input, new Rect(0, 0, width, height));
             t.Graphics.Dispose();
             return t.Image;
         }
@@ -358,10 +358,10 @@ namespace PeachPDF.Svg
         /// laid out): an <c>objectBoundingBox</c> filter region of a text-only element would otherwise collapse to a
         /// sliver at the origin and hide the element entirely.
         /// </summary>
-        internal static RRect? ElementBounds(SvgElement element, RRect? viewportBounds) =>
+        internal static Rect? ElementBounds(SvgElement element, Rect? viewportBounds) =>
             SvgGeometryBounds.GetBoundingBox(element) ?? viewportBounds;
 
-        internal static (double X, double Y, double Width, double Height) ResolveFilterRect(SvgFilter filter, RRect? bbox)
+        internal static (double X, double Y, double Width, double Height) ResolveFilterRect(SvgFilter filter, Rect? bbox)
         {
             if (filter.FilterUnitsUserSpaceOnUse)
                 return (filter.X, filter.Y, filter.Width, filter.Height);

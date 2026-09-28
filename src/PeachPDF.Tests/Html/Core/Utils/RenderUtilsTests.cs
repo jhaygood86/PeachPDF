@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
 
@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var g = new RecordingGraphics(new PdfSharpAdapter());
 
-            using var path = (RecordingGraphicsPath)RenderUtils.GetRoundRect(g, new RRect(0, 0, 100, 40),
+            using var path = (RecordingGraphicsPath)RenderUtils.GetRoundRect(g, new Rect(0, 0, 100, 40),
                 10, 10, 10, 10, 10, 10, 10, 10);
 
             Assert.True(path.Closed);
@@ -21,7 +21,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         /// <summary>
         /// Issue #812 (reopened): <c>GetRoundRect</c> is fed raw layout-space (<c>PixelsPerInch</c>-inflated)
         /// coordinates - the same space <c>CssBox</c> geometry lives in - but neither
-        /// <c>RGraphics.PushClip(RGraphicsPath)</c> nor <c>DrawPath</c> ever divides a path's coordinates
+        /// <c>Canvas.PushClip(GraphicsPath)</c> nor <c>DrawPath</c> ever divides a path's coordinates
         /// by <c>PixelsPerPoint</c> before handing them to the backend, unlike every other draw primitive.
         /// At a non-default <c>PixelsPerInch</c> (<c>PixelsPerPoint != 1.0</c>), a rounded-rect path built
         /// from un-divided coordinates renders too large and mis-positioned relative to everything else on
@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var g = new RecordingGraphics(new PdfSharpAdapter()) { PixelsPerPointOverride = 2.0 };
 
-            using var path = (RecordingGraphicsPath)RenderUtils.GetRoundRect(g, new RRect(0, 0, 200, 80),
+            using var path = (RecordingGraphicsPath)RenderUtils.GetRoundRect(g, new Rect(0, 0, 200, 80),
                 20, 20, 20, 20, 20, 20, 20, 20);
 
             Assert.All(path.Arcs, arc =>
@@ -59,13 +59,13 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var gDefault = new RecordingGraphics(new PdfSharpAdapter()) { PixelsPerPointOverride = 1.0 };
             using var pathDefault = (RecordingGraphicsPath)RenderUtils.GetRoundRect(gDefault,
-                new RRect(10, 20, 100, 40), 10, 10, 10, 10, 10, 10, 10, 10);
+                new Rect(10, 20, 100, 40), 10, 10, 10, 10, 10, 10, 10, 10);
 
             // Simulates the real internal-space inflation a box would have at PixelsPerInch=144
             // (PixelsPerPoint=2.0): every coordinate pre-multiplied by 2 before reaching GetRoundRect.
             var gScaled = new RecordingGraphics(new PdfSharpAdapter()) { PixelsPerPointOverride = 2.0 };
             using var pathScaled = (RecordingGraphicsPath)RenderUtils.GetRoundRect(gScaled,
-                new RRect(20, 40, 200, 80), 20, 20, 20, 20, 20, 20, 20, 20);
+                new Rect(20, 40, 200, 80), 20, 20, 20, 20, 20, 20, 20, 20);
 
             Assert.Equal(pathDefault.Arcs, pathScaled.Arcs);
             Assert.Equal(pathDefault.Points, pathScaled.Points);

@@ -53,7 +53,7 @@ namespace PeachPDF.Tests.Integration
                 FragmentPaintHarness.PaintPage(container, g, page);
 
                 var backgroundIndex = g.Log.FindIndex(c =>
-                    c is TestRecordingGraphics.DrawRectCall r && r.Color is { R: 238, G: 238, B: 238, A: 255 });
+                    c is TestRecordingGraphics.DrawRectCall r && r.PaintColor is { R: 238, G: 238, B: 238, A: 255 });
                 var headerIndex = g.Log.FindIndex(c =>
                     c is TestRecordingGraphics.DrawStringCall s && s.Text.Contains("HEADERMARKER"));
                 var footerIndex = g.Log.FindIndex(c =>

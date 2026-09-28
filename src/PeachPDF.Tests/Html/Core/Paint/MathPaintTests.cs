@@ -9,7 +9,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
 {
     /// <summary>
     /// Paint-order coverage for MathML (per CLAUDE.md's painting-changes testing convention: assert
-    /// the actual sequence of <c>RGraphics</c> calls, not just that painting completes or that some
+    /// the actual sequence of <c>Canvas</c> calls, not just that painting completes or that some
     /// token shows up in the final PDF).
     /// </summary>
     public class MathPaintTests
@@ -59,7 +59,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
             var recording = new RecordingGraphics(adapter);
             FragmentPaintHarness.PaintPage(container, recording);
 
-            // A stretched fence paints via the raw-glyph-index primitive (RGraphics.DrawGlyphs), not
+            // A stretched fence paints via the raw-glyph-index primitive (Canvas.DrawGlyphs), not
             // DrawString - see MathLayoutEngine.StretchToken/MathRenderer.
             Assert.Contains(recording.Log, op => op.Kind == PaintOpKind.DrawGlyphs);
         }

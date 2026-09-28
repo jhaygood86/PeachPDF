@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -19,7 +19,7 @@ namespace PeachPDF.Tests.Integration
     ///
     /// Painting is realized via the PDF <c>Tc</c> character-spacing operator (see
     /// <c>PdfGraphicsState.RealizeFont</c>/<c>XGraphicsPdfRenderer.DrawString</c>) rather than drawing
-    /// character-by-character, so a letter-spaced run still reaches <see cref="RGraphics.DrawString"/>
+    /// character-by-character, so a letter-spaced run still reaches <see cref="Canvas.DrawString"/>
     /// as a single call - the paint-level test below asserts exactly that (one call, carrying the
     /// resolved spacing value), not N per-character calls.
     /// </summary>

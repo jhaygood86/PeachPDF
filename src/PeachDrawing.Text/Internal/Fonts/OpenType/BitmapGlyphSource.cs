@@ -3,7 +3,7 @@
 // Reader for the OpenType bitmap colour glyph tables: Google's CBDT/CBLC (Noto Color Emoji's bitmap build)
 // and Apple's sbix (Apple Color Emoji). Both store one PNG (sbix: also JPEG) per glyph per size ("strike").
 // Only the picture and where it sits relative to the glyph origin are read here; drawing is up to the
-// caller (ColorGlyphPainter for PDF, RasterGraphics for bitmaps).
+// caller (ColorGlyphPainter for PDF, RasterCanvas for bitmaps).
 //
 // https://learn.microsoft.com/en-us/typography/opentype/spec/cbdt
 // https://learn.microsoft.com/en-us/typography/opentype/spec/cblc

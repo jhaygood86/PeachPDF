@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -23,7 +23,7 @@ namespace PeachPDF.Tests.Integration
         private const double PageWidth = 300;
         private const double Margin = 20;
 
-        private static async Task<(TestRecordingGraphics G, RRect PageClip)> PaintAsync(string body)
+        private static async Task<(TestRecordingGraphics G, Rect PageClip)> PaintAsync(string body)
         {
             var (_, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(body), pageWidth: PageWidth, pageHeight: 200, margin: Margin);
@@ -46,9 +46,9 @@ namespace PeachPDF.Tests.Integration
 
                 // The marker really does hang past the content edge - the fixture would prove nothing if it
                 // did not - and the clip has been widened to take it in.
-                Assert.True(call.Point.X < Margin, $"'{number}' (X={call.Point.X}) should hang into the margin");
-                Assert.True(call.Point.X >= pageClip.Left - 0.001,
-                    $"'{number}' (X={call.Point.X}) is left of the page clip ({pageClip.Left}) and would be cut off");
+                Assert.True(call.PaintPoint.X < Margin, $"'{number}' (X={call.PaintPoint.X}) should hang into the margin");
+                Assert.True(call.PaintPoint.X >= pageClip.Left - 0.001,
+                    $"'{number}' (X={call.PaintPoint.X}) is left of the page clip ({pageClip.Left}) and would be cut off");
             }
         }
 
@@ -74,8 +74,8 @@ namespace PeachPDF.Tests.Integration
 
             var call = Assert.Single(g.DrawStringCalls, c => c.Text.Trim() == "1.");
 
-            Assert.True(call.Point.X < Margin);
-            Assert.True(call.Point.X >= pageClip.Left - 0.001);
+            Assert.True(call.PaintPoint.X < Margin);
+            Assert.True(call.PaintPoint.X >= pageClip.Left - 0.001);
         }
 
         [Fact]
@@ -111,7 +111,7 @@ namespace PeachPDF.Tests.Integration
             var call = Assert.Single(g.DrawStringCalls, c => c.Text.Trim() == "1.");
 
             // A clip narrower than the page clip was pushed for the div, and it starts right of the marker.
-            Assert.Contains(pushes.Skip(1), r => r.Left > call.Point.X);
+            Assert.Contains(pushes.Skip(1), r => r.Left > call.PaintPoint.X);
         }
 
         [Fact]

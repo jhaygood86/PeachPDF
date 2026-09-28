@@ -1,7 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -69,7 +68,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// cell mid content — and touches nothing else.
         /// </para>
         /// </remarks>
-        internal static async ValueTask CommitLayout(RGraphics g, CssBox box, BreakToken? resume)
+        internal static async ValueTask CommitLayout(Canvas g, CssBox box, BreakToken? resume)
         {
             if (resume is null)
             {
@@ -122,7 +121,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// runs at the item's real, final position, so breaking questions asked during it are
         /// meaningful.
         /// </summary>
-        private static async ValueTask LayoutBlockifiedAtFinalPosition(RGraphics g, CssBox box)
+        private static async ValueTask LayoutBlockifiedAtFinalPosition(Canvas g, CssBox box)
         {
             CssProperty<DisplayMode>? savedDisplay = null;
             if (box.IsInline)
@@ -159,12 +158,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// fragmentainer (a multicolumn column boundary, most concretely) since the token naming them was
         /// published — see each engine's own <c>ResumeCommitPass</c>.
         /// </remarks>
-        internal static void RepositionForResume(IEnumerable<CssBox> boxes, RPoint delta)
+        internal static void RepositionForResume(IEnumerable<CssBox> boxes, PaintPoint delta)
         {
             if (delta.X == 0 && delta.Y == 0) return;
 
             foreach (var box in boxes)
-                box.Location = new RPoint(box.Location.X + delta.X, box.Location.Y + delta.Y);
+                box.Location = new PaintPoint(box.Location.X + delta.X, box.Location.Y + delta.Y);
         }
     }
 }

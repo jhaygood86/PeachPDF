@@ -1,11 +1,10 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Raster;
-using PeachPDF.Raster.Filters;
+using PeachDrawing;
+using PeachDrawing.Filters;
 using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
@@ -44,7 +43,7 @@ namespace PeachPDF.Html.Core.Paint
         /// Paints <paramref name="fragment"/>'s backdrop-filter, if it has one and it can be done, at the position its background is about to
         /// be painted (so it sits behind the background, borders and content).
         /// </summary>
-        private void PaintBackdropFilter(RGraphics g, BoxFragment fragment, BoxDecorationGeometry geometry)
+        private void PaintBackdropFilter(Canvas g, BoxFragment fragment, BoxDecorationGeometry geometry)
         {
             var box = fragment.Box;
             var functions = box.ActualBackdropFilterFunctions;
@@ -74,7 +73,7 @@ namespace PeachPDF.Html.Core.Paint
                     applied.Add(function);
             }
 
-            using var scope = g.BeginRasterSurface(region);
+            using var scope = g.BeginRasterSurface(region) as RasterSurfaceScope;
             if (scope is null)
                 return;
 
@@ -89,7 +88,7 @@ namespace PeachPDF.Html.Core.Paint
             // The bitmap covers the border box snapped outward to whole pixels, and the element's corners may be rounded: clip to the real
             // shape so the filtered backdrop does not spill past the box.
             var builder = box.HtmlContainer?.StructureTagBuilder;
-            RGraphicsPath? shape = null;
+            GraphicsPath? shape = null;
             g.PushClip(borderBox);
             try
             {
@@ -119,12 +118,12 @@ namespace PeachPDF.Html.Core.Paint
         /// The repaint stops where the fragment begins, or, for <paramref name="stopBeforeContent"/>, after its own background and borders
         /// but before its content (a replaced element's content is what asked for its backdrop). False when the fragment was never reached.
         /// </summary>
-        private bool RepaintBackdrop(RGraphics graphics, RasterSurface surface, BoxFragment fragment, CssBox? rootBox, BoxFragment rootFragment, bool stopBeforeContent)
+        private bool RepaintBackdrop(Canvas graphics, RasterSurface surface, BoxFragment fragment, CssBox? rootBox, BoxFragment rootFragment, bool stopBeforeContent)
         {
             // The page is paper: opaque white behind everything the document paints. A nested backdrop root starts transparent instead.
             if (rootBox is null)
             {
-                FilterOps.Fill(surface, RColor.FromArgb(255, 255, 255, 255), 1.0);
+                FilterOps.Fill(surface, PaintColor.FromArgb(255, 255, 255, 255), 1.0);
                 if (container.CanvasBackgroundBox is { } canvas)
                     PaintCanvasBackground(graphics, canvas, container.PageBoxRect);
             }
@@ -166,12 +165,12 @@ namespace PeachPDF.Html.Core.Paint
 
         private sealed class SvgPageBackdrop(FragmentPainter painter, BoxFragment fragment) : ISvgPageBackdrop
         {
-            public bool Paint(RGraphics g) => painter.PaintSvgPageBackdrop(g, fragment);
+            public bool Paint(Canvas g) => painter.PaintSvgPageBackdrop(g, fragment);
         }
 
-        private bool PaintSvgPageBackdrop(RGraphics g, BoxFragment svgFragment)
+        private bool PaintSvgPageBackdrop(Canvas g, BoxFragment svgFragment)
         {
-            if (g is not RasterGraphics raster || _pageRoot is null || _backdropDepth >= MaxBackdropDepth)
+            if (g is not RasterCanvas raster || _pageRoot is null || _backdropDepth >= MaxBackdropDepth)
                 return false;
 
             // A transformed ancestor does not matter here: the page is repainted in its own (device) frame and the bitmap covers the SVG's

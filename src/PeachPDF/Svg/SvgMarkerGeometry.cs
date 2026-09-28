@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System;
 using System.Collections.Generic;
 
@@ -126,7 +126,7 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Shared by <c>&lt;polyline&gt;</c> (<paramref name="closed"/>=false) and <c>&lt;polygon&gt;</c> (true, wrapping the last segment back to the first point).</summary>
-        public static List<MarkerVertex> ComputeForPoints(RPoint[] points, bool closed)
+        public static List<MarkerVertex> ComputeForPoints(PaintPoint[] points, bool closed)
         {
             if (points.Length == 0)
                 return [];

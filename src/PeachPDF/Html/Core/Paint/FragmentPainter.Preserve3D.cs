@@ -1,10 +1,9 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Raster;
+using PeachDrawing;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -59,7 +58,7 @@ namespace PeachPDF.Html.Core.Paint
             public DepthPlane Depth;
 
             /// <summary>What the plane paints, in its own untransformed page coordinates; only meaningful when <see cref="HasSource"/>.</summary>
-            public RRect Source;
+            public Rect Source;
 
             /// <summary>Whether there is anything of this plane to draw: it is not turned away, has content and is at least partly in front of the viewer.</summary>
             public bool HasSource;
@@ -107,7 +106,7 @@ namespace PeachPDF.Html.Core.Paint
         /// false, having painted nothing, when <paramref name="root"/> does not start such a context or <paramref name="g"/> cannot rasterize: the
         /// caller then paints it one element at a time, as it always did.
         /// </returns>
-        private bool TryPaintContext3D(RGraphics g, BoxFragment root)
+        private bool TryPaintContext3D(Canvas g, BoxFragment root)
         {
             if (!DomUtils.EstablishesPreserve3d(root.Box))
                 return false;
@@ -231,7 +230,7 @@ namespace PeachPDF.Html.Core.Paint
         /// Paints every plane of <paramref name="planes"/> into a shared bitmap through a depth test and draws it, then supplies their text.
         /// </summary>
         /// <returns>false, having painted nothing, when <paramref name="g"/> cannot rasterize.</returns>
-        private bool ComposeContext(RGraphics g, Span<Plane> planes)
+        private bool ComposeContext(Canvas g, Span<Plane> planes)
         {
             // Where every plane lands, and what part of the picture that is.
             double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
@@ -273,11 +272,11 @@ namespace PeachPDF.Html.Core.Paint
             if (!any)
                 return true; // everything is turned away or behind the viewer: nothing is drawn
 
-            var destination = Intersect(new RRect(minX, minY, maxX - minX, maxY - minY), g.GetClip());
+            var destination = Intersect(new Rect(minX, minY, maxX - minX, maxY - minY), g.GetClip());
             if (destination.Width <= 0 || destination.Height <= 0)
                 return true;
 
-            using var destinationScope = g.BeginRasterSurface(destination);
+            using var destinationScope = g.BeginRasterSurface(destination) as RasterSurfaceScope;
             if (destinationScope is null)
                 return false;
 
@@ -295,7 +294,7 @@ namespace PeachPDF.Html.Core.Paint
                     // A plane brought closer than its flat size is drawn larger than its bitmap: give it as many more pixels as the warp
                     // enlarges it by, so it does not blur.
                     var dpi = container.Adapter.RasterizationDpi * Magnification(plane.Map, plane.Source);
-                    using var sourceScope = g.BeginRasterSurface(plane.Source, dpi);
+                    using var sourceScope = g.BeginRasterSurface(plane.Source, dpi) as RasterSurfaceScope;
                     if (sourceScope is null)
                     {
                         plane.HasSource = false;

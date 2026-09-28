@@ -1,9 +1,9 @@
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 namespace PeachPDF.Tests.TestSupport
 {
@@ -23,43 +23,43 @@ namespace PeachPDF.Tests.TestSupport
     }
 
     /// <summary>One paint call, in the order it happened - the single ordered log <see cref="RecordingGraphics.Log"/> keeps, per this repo's own preference (CLAUDE.md's testing conventions) for one ordered log over parallel per-call-type counts/lists when order across different call types matters. <see cref="Matrix"/> is set only for <see cref="PaintOpKind.PushTransform"/>, <see cref="Text"/> (and optionally <see cref="LogicalText"/>) only for <see cref="PaintOpKind.DrawString"/>.</summary>
-    internal readonly record struct PaintOp(PaintOpKind Kind, RRect Bounds, RMatrix? Matrix = null, string? Text = null, string? LogicalText = null);
+    internal readonly record struct PaintOp(PaintOpKind Kind, Rect Bounds, Matrix3x2? Matrix = null, string? Text = null, string? LogicalText = null);
 
     /// <summary>
-    /// Minimal <see cref="RGraphics"/> implementation that records paint calls so tests can verify paint
+    /// Minimal <see cref="Canvas"/> implementation that records paint calls so tests can verify paint
     /// order/behavior without a full PDF rendering stack. Shared across test files (originally private to
     /// <c>CssLayoutEngineTablePageBreakTests</c>) - extend this one rather than adding a parallel copy.
     /// </summary>
-    internal sealed class RecordingGraphics : RGraphics
+    internal sealed class RecordingGraphics : Canvas
     {
         /// <summary>Every fill/stroke/clip operation, in the order it was made.</summary>
         public List<PaintOp> Log { get; } = [];
 
         /// <summary>All rects passed to PushClip during this paint pass.</summary>
-        public List<RRect> PushedClips { get; } = [];
+        public List<Rect> PushedClips { get; } = [];
 
         /// <summary>
-        /// Every rounded-path clip pushed via <see cref="PushClip(RGraphicsPath)"/>, in order - lets a
+        /// Every rounded-path clip pushed via <see cref="PushClip(GraphicsPath)"/>, in order - lets a
         /// test inspect the actual corner radii a clip curve was built with (see
         /// <see cref="RecordingGraphicsPath.Arcs"/>), not just that a path clip happened.
         /// </summary>
         public List<RecordingGraphicsPath> PushedClipPaths { get; } = [];
 
         /// <summary>
-        /// Every path filled via <see cref="DrawPath(RBrush, RGraphicsPath)"/>, in order - the rounded
+        /// Every path filled via <see cref="DrawPath(Brush, GraphicsPath)"/>, in order - the rounded
         /// curve a <c>background-clip: padding-box</c>/<c>content-box</c> fill was clipped to.
         /// </summary>
         public List<RecordingGraphicsPath> DrawnPaths { get; } = [];
 
         /// <summary>
-        /// Every path stroked via <see cref="DrawPath(RPen, RGraphicsPath)"/>, in order. Uniform rounded
+        /// Every path stroked via <see cref="DrawPath(Pen, GraphicsPath)"/>, in order. Uniform rounded
         /// outlines and patterned sides take this route; filled non-uniform border bands are recorded by
         /// <see cref="DrawnPaths"/>.
         /// </summary>
         public List<RecordingGraphicsPath> StrokedPaths { get; } = [];
 
         /// <summary>
-        /// The <see cref="RPen.Width"/> of each stroke in <see cref="StrokedPaths"/>, aligned by index -
+        /// The <see cref="Pen.Width"/> of each stroke in <see cref="StrokedPaths"/>, aligned by index -
         /// issue #851: <c>BordersDrawHandler.GetPen</c> set a rounded border stroke's pen width from a
         /// raw, un-divided layout-space value, unlike the path's own (correctly divided) coordinates.
         /// </summary>
@@ -84,23 +84,23 @@ namespace PeachPDF.Tests.TestSupport
         /// font. Answered by <see cref="GetTextOutlineOverride"/> when set; null (this mock's original,
         /// still-default behavior for every consumer that never sets the override) otherwise.
         /// </summary>
-        public List<(string Text, RPoint BaselineOrigin)> GetTextOutlineCalls { get; } = [];
+        public List<(string Text, PaintPoint BaselineOrigin)> GetTextOutlineCalls { get; } = [];
 
         /// <summary>
         /// When set, answers <see cref="GetTextOutline"/> instead of the default <c>null</c> - e.g.
         /// returning a small stand-in <see cref="RecordingGraphicsPath"/> per call to simulate a font
         /// with decodable outlines, or <c>null</c> to simulate a CID-keyed CFF/bitmap font's fallback.
         /// </summary>
-        public Func<string, RFont, RPoint, double, ShapeSettings?, RGraphicsPath?>? GetTextOutlineOverride { get; set; }
+        public Func<string, Font, PaintPoint, double, ShapeSettings?, GraphicsPath?>? GetTextOutlineOverride { get; set; }
 
-        /// <summary>Every destination rect passed to <see cref="DrawImage(RImage, RRect, RRect)"/>/
-        /// <see cref="DrawImage(RImage, RRect)"/>, in order - e.g. to confirm a
+        /// <summary>Every destination rect passed to <see cref="DrawImage(Image, Rect, Rect)"/>/
+        /// <see cref="DrawImage(Image, Rect)"/>, in order - e.g. to confirm a
         /// <c>background-attachment: fixed</c> layer's positioning area actually reached the image draw.</summary>
-        public List<RRect> DrawnImageRects { get; } = [];
+        public List<Rect> DrawnImageRects { get; } = [];
 
         /// <summary>
         /// Settable so a test can exercise a non-default <c>PixelsPerPoint</c> (issue #814) without a
-        /// full <c>GraphicsAdapter</c>/PDF stack - defaults to the base <see cref="RGraphics.PixelsPerPoint"/>
+        /// full <c>GraphicsAdapter</c>/PDF stack - defaults to the base <see cref="Canvas.PixelsPerPoint"/>
         /// no-op of <c>1.0</c>. A field-backed override (rather than an auto-property) since the base
         /// virtual member is get-only.
         /// </summary>
@@ -108,17 +108,17 @@ namespace PeachPDF.Tests.TestSupport
 
         public override double PixelsPerPoint => PixelsPerPointOverride;
 
-        public RecordingGraphics(RAdapter adapter)
-            : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
+        public RecordingGraphics(RenderContext adapter)
+            : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-        public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2)
+        public override void DrawLine(Pen pen, double x1, double y1, double x2, double y2)
         {
             if (Math.Abs(y1 - y2) < 0.5)
                 HorizontalLines.Add(y1);
 
             var left = Math.Min(x1, x2);
             var top = Math.Min(y1, y2);
-            Log.Add(new PaintOp(PaintOpKind.Line, new RRect(left, top, Math.Abs(x2 - x1), Math.Abs(y2 - y1))));
+            Log.Add(new PaintOp(PaintOpKind.Line, new Rect(left, top, Math.Abs(x2 - x1), Math.Abs(y2 - y1))));
         }
 
         /// <summary>
@@ -127,7 +127,7 @@ namespace PeachPDF.Tests.TestSupport
         /// stripe; record its vertical center the same way DrawLine's y1/y2 would, so callers don't
         /// need to know which draw method a given border style happens to use.
         /// </summary>
-        public override void DrawPolygon(RBrush brush, RPoint[] points)
+        public override void DrawPolygon(Brush brush, PaintPoint[] points)
         {
             if (points.Length == 0) return;
 
@@ -139,10 +139,10 @@ namespace PeachPDF.Tests.TestSupport
             if (maxX - minX > maxY - minY)
                 HorizontalLines.Add((minY + maxY) / 2);
 
-            Log.Add(new PaintOp(PaintOpKind.Polygon, new RRect(minX, minY, maxX - minX, maxY - minY)));
+            Log.Add(new PaintOp(PaintOpKind.Polygon, new Rect(minX, minY, maxX - minX, maxY - minY)));
         }
 
-        public override void PushClip(RRect rect)
+        public override void PushClip(Rect rect)
         {
             _clipStack.Push(rect);
             PushedClips.Add(rect);
@@ -166,7 +166,7 @@ namespace PeachPDF.Tests.TestSupport
         /// push/pop like any other clip, so PushCount/PopCount balance and Log preserves push order
         /// (rect clip, then path clip) for a caller asserting on it.
         /// </summary>
-        public override void PushClip(RGraphicsPath path)
+        public override void PushClip(GraphicsPath path)
         {
             _clipStack.Push(_clipStack.Peek());
             PushCount++;
@@ -174,83 +174,83 @@ namespace PeachPDF.Tests.TestSupport
             Log.Add(new PaintOp(PaintOpKind.PushClipPath, default));
         }
 
-        public override void PushClipExclude(RRect rect) { }
+        public override void PushClipExclude(Rect rect) { }
 
-        public override void PushTransform(RMatrix matrix) =>
+        public override void PushTransform(Matrix3x2 matrix) =>
             Log.Add(new PaintOp(PaintOpKind.PushTransform, default, Matrix: matrix));
 
         public override void PopTransform() => Log.Add(new PaintOp(PaintOpKind.PopTransform, default));
 
-        public override void PushBlendMode(RBlendMode mode) { }
+        public override void PushBlendMode(PaintBlendMode mode) { }
         public override void PopBlendMode() { }
         public override object SetAntiAliasSmoothingMode() => new object();
         public override void ReturnPreviousSmoothingMode(object? prevMode) { }
         /// <summary>
-        /// Overrides the default fixed <c>(0, 12)</c> <see cref="MeasureString(string, RFont, ShapeSettings?)"/>
+        /// Overrides the default fixed <c>(0, 12)</c> <see cref="MeasureString(string, Font, ShapeSettings?)"/>
         /// result when set - a test whose subject genuinely depends on relative string widths (e.g.
         /// text-overflow's own "does this word/substring still fit" comparisons) can supply a
         /// deterministic, length-sensitive measurement instead of the fixed default every other
         /// consumer of this mock relies on staying zero. Null (the default) preserves the original
         /// behavior exactly.
         /// </summary>
-        public Func<string, RFont, ShapeSettings?, RSize>? MeasureStringOverride { get; set; }
+        public Func<string, Font, ShapeSettings?, Size>? MeasureStringOverride { get; set; }
 
-        public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null) =>
-            MeasureStringOverride?.Invoke(str, font, features) ?? new RSize(0, 12);
-        public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null) => str?.Length ?? 0;
-        public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth) { charFit = str?.Length ?? 0; charFitWidth = 0; }
+        public override Size MeasureString(string str, Font font, ShapeSettings? features = null) =>
+            MeasureStringOverride?.Invoke(str, font, features) ?? new Size(0, 12);
+        public override int CountShapedGlyphs(string str, Font font, ShapeSettings? features = null) => str?.Length ?? 0;
+        public override void MeasureString(string str, Font font, double maxWidth, out int charFit, out double charFitWidth) { charFit = str?.Length ?? 0; charFitWidth = 0; }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null) =>
+        public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null) =>
             DrawString(str, font, color, point, size, letterSpacing, fontPalette, features, logicalText: null);
 
-        /// <summary>See <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, ShapeSettings?, string?)"/>'s
+        /// <summary>See <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?, string?)"/>'s
         /// own remarks for <paramref name="logicalText"/> - a test asserting on it reads
         /// <see cref="Log"/>'s <see cref="PaintOp.LogicalText"/> field, not <see cref="DrawnStrings"/>
         /// (which stays a plain (Text, Y) pair for every existing consumer, unaffected by this
         /// overload's mere existence).</summary>
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, ShapeSettings? features, string? logicalText)
+        public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing, FontPalette? fontPalette, ShapeSettings? features, string? logicalText)
         {
             DrawnStrings.Add((str, point.Y));
-            Log.Add(new PaintOp(PaintOpKind.DrawString, new RRect(point.X, point.Y, size.Width, size.Height), Text: str, LogicalText: logicalText));
+            Log.Add(new PaintOp(PaintOpKind.DrawString, new Rect(point.X, point.Y, size.Width, size.Height), Text: str, LogicalText: logicalText));
         }
 
-        public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color)
+        public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color)
         {
             foreach (var glyph in glyphs)
-                Log.Add(new PaintOp(PaintOpKind.DrawGlyphs, new RRect(glyph.X, glyph.Y, 0, 0)));
+                Log.Add(new PaintOp(PaintOpKind.DrawGlyphs, new Rect(glyph.X, glyph.Y, 0, 0)));
         }
 
-        public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }
+        public override void DrawRectangle(Pen pen, double x, double y, double width, double height) { }
 
-        public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) =>
-            Log.Add(new PaintOp(PaintOpKind.FillRect, new RRect(x, y, width, height)));
+        public override void DrawRectangle(Brush brush, double x, double y, double width, double height) =>
+            Log.Add(new PaintOp(PaintOpKind.FillRect, new Rect(x, y, width, height)));
 
-        public override void DrawImage(RImage image, RRect destRect, RRect srcRect) => DrawnImageRects.Add(destRect);
-        public override void DrawImage(RImage image, RRect destRect) => DrawnImageRects.Add(destRect);
-        public override void DrawPath(RPen pen, RGraphicsPath path)
+        public override void DrawImage(Image image, Rect destRect, Rect srcRect) => DrawnImageRects.Add(destRect);
+        public override void DrawImage(Image image, Rect destRect) => DrawnImageRects.Add(destRect);
+        public override void DrawPath(Pen pen, GraphicsPath path)
         {
             if (path is not RecordingGraphicsPath recordingPath) return;
             StrokedPaths.Add(recordingPath);
             StrokedPenWidths.Add(pen.Width);
         }
 
-        public override void DrawPath(RBrush brush, RGraphicsPath path)
+        public override void DrawPath(Brush brush, GraphicsPath path)
         {
             if (path is RecordingGraphicsPath recordingPath) DrawnPaths.Add(recordingPath);
         }
-        public override RGraphicsPath GetGraphicsPath() => new RecordingGraphicsPath();
+        public override GraphicsPath GetGraphicsPath() => new RecordingGraphicsPath();
 
-        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null)
+        public override GraphicsPath? GetTextOutline(string str, Font font, PaintPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null)
         {
             GetTextOutlineCalls.Add((str, baselineOrigin));
             return GetTextOutlineOverride?.Invoke(str, font, baselineOrigin, letterSpacing, features);
         }
-        public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
-        public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
-        public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal) { }
-        public override void DrawImageWithColorMatrix(RImage image, RRect destRect, ColorMatrix matrix) { }
-        public override void DrawImageAlphaMasked(RImage image, RImage maskImage, RRect destRect, bool invert = false) { }
-        public override void DrawImageBlendedOver(RImage top, RImage bottom, RRect destRect, RBlendMode blendMode) { }
+        public override (Canvas Graphics, Image Image)? CreateTile(double width, double height) => null;
+        public override void DrawImageMasked(Image image, Image maskImage, Rect destRect) { }
+        public override void DrawImageWithOpacity(Image image, Rect destRect, double opacity, PaintBlendMode blendMode = PaintBlendMode.Normal) { }
+        public override void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix) { }
+        public override void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, bool invert = false) { }
+        public override void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode) { }
         public override void BeginMarkedContent(string structureType, int mcid) { }
         public override void EndMarkedContent() { }
         public override void BeginArtifact() { }
@@ -259,7 +259,7 @@ namespace PeachPDF.Tests.TestSupport
         public override void Dispose() { }
     }
 
-    internal sealed class RecordingGraphicsPath : RGraphicsPath
+    internal sealed class RecordingGraphicsPath : GraphicsPath
     {
         /// <summary>Whether <see cref="CloseFigure"/> was called - lets a test verify a path-building
         /// method (e.g. <c>RenderUtils.GetRoundRect</c>) explicitly closes its subpath rather than
@@ -302,17 +302,17 @@ namespace PeachPDF.Tests.TestSupport
 
         /// <summary>
         /// Actually applies <paramref name="matrix"/> to every recorded point, in the same convention
-        /// <see cref="RMatrix"/> documents (<c>x' = x*M11 + y*M21 + OffsetX</c>, <c>y' = x*M12 + y*M22 +
-        /// OffsetY</c>) - not a no-op, so a test built on this mock can tell a real transform (e.g. a
+        /// <see cref="Matrix3x2"/> documents (<c>x' = x*M11 + y*M21 + M31</c>, <c>y' = x*M12 + y*M22 +
+        /// M32</c>) - not a no-op, so a test built on this mock can tell a real transform (e.g. a
         /// rotated vertical-writing-mode glyph run's outline, <c>background-clip: text</c> issue #1123)
         /// from one that silently never ran.
         /// </summary>
-        public override void Transform(RMatrix matrix)
+        public override void Transform(Matrix3x2 matrix)
         {
             for (var i = 0; i < Points.Count; i++)
             {
                 var (x, y) = Points[i];
-                Points[i] = (x * matrix.M11 + y * matrix.M21 + matrix.OffsetX, x * matrix.M12 + y * matrix.M22 + matrix.OffsetY);
+                Points[i] = (x * matrix.M11 + y * matrix.M21 + matrix.M31, x * matrix.M12 + y * matrix.M22 + matrix.M32);
             }
         }
 
@@ -320,12 +320,12 @@ namespace PeachPDF.Tests.TestSupport
         /// <c>GraphicsPathAdapter.AddPath</c>'s union semantics (see its own remarks) closely enough
         /// for a test to observe that a multi-shape clip (rounded corners, or a
         /// <c>background-clip: text</c> glyph-outline union) actually combined every shape.</summary>
-        public override void AddPath(RGraphicsPath path)
+        public override void AddPath(GraphicsPath path)
         {
             UnionedPathCount++;
             if (path is RecordingGraphicsPath other) Points.AddRange(other.Points);
         }
-        public override RFillMode FillMode { get; set; }
+        public override FillMode FillMode { get; set; }
 
         /// <summary>
         /// Genuinely clips this recorded (single-contour, per this double's own <c>FakeOutline</c>-style
@@ -335,7 +335,7 @@ namespace PeachPDF.Tests.TestSupport
         /// (e.g. that an upright glyph's clip-path union never exceeds its own reserved cell) is
         /// exercising the actual clip algorithm, not a test-only stand-in for it.
         /// </summary>
-        public override RGraphicsPath ClipToRect(RRect rect)
+        public override GraphicsPath ClipToRect(Rect rect)
         {
             var polygon = Points.Select(p => new PeachPDF.PdfSharpCore.Drawing.XPoint(p.X, p.Y)).ToList();
             var clipped = PeachPDF.PdfSharpCore.Drawing.SutherlandHodgman.ClipToRect(polygon, rect.Left, rect.Top, rect.Right, rect.Bottom);

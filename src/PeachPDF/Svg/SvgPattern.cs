@@ -10,8 +10,9 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace PeachPDF.Svg
 {
@@ -44,9 +45,9 @@ namespace PeachPDF.Svg
         /// </summary>
         public bool PatternContentUnitsUserSpaceOnUse { get; init; } = true;
 
-        public RMatrix? PatternTransform { get; init; }
+        public Matrix3x2? PatternTransform { get; init; }
 
-        public RRect? ViewBox { get; init; }
+        public Rect? ViewBox { get; init; }
         public SvgPreserveAspectRatio PreserveAspectRatio { get; init; } = SvgPreserveAspectRatio.Default;
 
         public List<SvgElement> Children { get; init; } = [];

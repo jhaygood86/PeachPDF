@@ -127,7 +127,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             23 => "Multiply",
             24 => "Hue",
             25 => "Saturation",
-            26 => "Color",
+            26 => "PaintColor",
             27 => "Luminosity",
             _ => null, // SRC_OVER and the non-expressible Porter-Duff modes -> source-over
         };
@@ -247,7 +247,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             const int periods = 2; // each side
             int total = 2 * periods + 1;
 
-            var samples = new List<(double T, XColor Color)>();
+            var samples = new List<(double T, XColor PaintColor)>();
             for (int p = -periods; p <= periods; p++)
             {
                 bool mirror = extend == ColorExtend.Reflect && ((p % 2 + 2) % 2 == 1);
@@ -274,7 +274,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 if (pos <= last)
                     pos = last + 1e-6; // keep strictly increasing for the stitching function
                 last = pos;
-                newColors[i] = samples[i].Color;
+                newColors[i] = samples[i].PaintColor;
                 newPositions[i] = pos;
             }
             colors = newColors;

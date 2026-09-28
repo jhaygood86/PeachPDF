@@ -1,12 +1,11 @@
 using System.Collections.Generic;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 
 namespace PeachPDF.MathML
 {
     /// <summary>One glyph placed at an explicit offset within a <see cref="MathBox"/>'s own coordinate
     /// space - used for a stretchy operator's assembled/variant glyphs (drawn via
-    /// <c>RGraphics.DrawGlyphs</c>), never for ordinary token text (drawn via <c>RGraphics.DrawString</c>
+    /// <c>Canvas.DrawGlyphs</c>), never for ordinary token text (drawn via <c>Canvas.DrawString</c>
     /// from <see cref="MathBox.Text"/> instead, which lets ordinary Unicode shaping run normally).</summary>
     internal readonly record struct MathPositionedGlyph(int GlyphIndex, double X, double Y);
 
@@ -48,13 +47,13 @@ namespace PeachPDF.MathML
 
         public MathPaintKind PaintKind { get; init; } = MathPaintKind.None;
 
-        /// <summary><see cref="MathPaintKind.Text"/> only: the run to draw via <c>RGraphics.DrawString</c>,
+        /// <summary><see cref="MathPaintKind.Text"/> only: the run to draw via <c>Canvas.DrawString</c>,
         /// at this box's own origin baseline.</summary>
         public string? Text { get; init; }
 
         /// <summary><see cref="MathPaintKind.Text"/>/<see cref="MathPaintKind.Glyphs"/> only: the font
         /// to draw with.</summary>
-        public RFont? Font { get; init; }
+        public Font? Font { get; init; }
 
         /// <summary><see cref="MathPaintKind.Rule"/> only: a filled rectangle (a fraction bar, radical
         /// vinculum, or similar) - <see cref="RuleX"/>/<see cref="RuleY"/> relative to this box's own
@@ -68,6 +67,6 @@ namespace PeachPDF.MathML
         /// operator's assembled parts, or a single substituted size-variant glyph).</summary>
         public IReadOnlyList<MathPositionedGlyph>? Glyphs { get; init; }
 
-        public required RColor Color { get; init; }
+        public required PaintColor PaintColor { get; init; }
     }
 }

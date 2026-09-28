@@ -1,8 +1,7 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.Raster;
+using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Html.Core.Paint
@@ -31,13 +30,13 @@ namespace PeachPDF.Tests.Html.Core.Paint
             Assert.Contains(recording.Log, op => op.Kind == PaintOpKind.FillRect);
         }
 
-        private static RasterGraphics NewPage(int width, int height, PdfSharpAdapter adapter)
+        private static RasterCanvas NewPage(int width, int height, PdfSharpAdapter adapter)
         {
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            return new RasterGraphics(adapter, surface, 1);
+            return new RasterCanvas(adapter, surface, 1);
         }
 
-        private static byte[] Pixel(RasterGraphics g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
+        private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 
         [Fact]
         public async Task Grayscale_TurnsTheRedBoxGrey_WhenPaintedIntoARasterPage()

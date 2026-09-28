@@ -1,8 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 
 namespace PeachPDF.MathML
 {
@@ -33,10 +32,10 @@ namespace PeachPDF.MathML
 
         public string GetTextContent() => string.Concat(_box.Boxes.Select(b => b.Text ?? string.Empty));
 
-        public RColor Color => _box.ActualColor;
+        public PaintColor PaintColor => _box.ActualColor;
 
         public double FontSizePt => _box.ActualFont.Size;
 
-        public RFont GetFontAtSize(double sizePt) => _box.GetActualFontAtSize(sizePt);
+        public Font GetFontAtSize(double sizePt) => _box.GetActualFontAtSize(sizePt);
     }
 }

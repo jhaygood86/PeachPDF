@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void Union_OfASingleRectangle_IsThatRectangleClockwise()
         {
-            var contours = RectilinearRegion.Union([new RRect(10, 20, 30, 40)]);
+            var contours = RectilinearRegion.Union([new Rect(10, 20, 30, 40)]);
 
             var contour = Assert.Single(contours);
             Assert.True(contour.IsOuter);
@@ -24,9 +24,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var contours = RectilinearRegion.Union(
             [
-                new RRect(0, 0, 100, 10),
-                new RRect(0, 30, 100, 10),
-                new RRect(0, 60, 100, 10)
+                new Rect(0, 0, 100, 10),
+                new Rect(0, 30, 100, 10),
+                new Rect(0, 60, 100, 10)
             ]);
 
             Assert.Equal(3, contours.Count);
@@ -41,9 +41,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
             // consecutive lines touch, so the whole run bounds a single shape.
             var contours = RectilinearRegion.Union(
             [
-                new RRect(20, 0, 80, 20),
-                new RRect(0, 20, 100, 20),
-                new RRect(0, 40, 50, 20)
+                new Rect(20, 0, 80, 20),
+                new Rect(0, 20, 100, 20),
+                new Rect(0, 40, 50, 20)
             ]);
 
             var contour = Assert.Single(contours);
@@ -59,8 +59,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var contours = RectilinearRegion.Union(
             [
-                new RRect(0, 0, 50, 20),
-                new RRect(50, 0, 50, 20)
+                new Rect(0, 0, 50, 20),
+                new Rect(50, 0, 50, 20)
             ]);
 
             var contour = Assert.Single(contours);
@@ -73,10 +73,10 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var contours = RectilinearRegion.Union(
             [
-                new RRect(0, 0, 30, 90),
-                new RRect(60, 0, 30, 90),
-                new RRect(0, 0, 90, 30),
-                new RRect(0, 60, 90, 30)
+                new Rect(0, 0, 30, 90),
+                new Rect(60, 0, 30, 90),
+                new Rect(0, 0, 90, 30),
+                new Rect(0, 60, 90, 30)
             ]);
 
             Assert.Equal(2, contours.Count);
@@ -93,8 +93,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var contours = RectilinearRegion.Union(
             [
-                new RRect(0, 0, 100, 100),
-                new RRect(20, 20, 10, 10)
+                new Rect(0, 0, 100, 100),
+                new Rect(20, 20, 10, 10)
             ]);
 
             var contour = Assert.Single(contours);
@@ -107,8 +107,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var contours = RectilinearRegion.Union(
             [
-                new RRect(0, 0, 20, 20),
-                new RRect(20, 20, 20, 20)
+                new Rect(0, 0, 20, 20),
+                new Rect(20, 20, 20, 20)
             ]);
 
             Assert.Equal(2, contours.Count);
@@ -121,9 +121,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var contours = RectilinearRegion.Union(
             [
-                new RRect(0, 0, 40, 40),
-                new RRect(80, 0, 0, 40),
-                new RRect(0, 80, 40, 0)
+                new Rect(0, 0, 40, 40),
+                new Rect(80, 0, 0, 40),
+                new Rect(0, 80, 40, 0)
             ]);
 
             var contour = Assert.Single(contours);
@@ -134,7 +134,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         public void Union_OfNoRectangles_IsEmpty()
         {
             Assert.Empty(RectilinearRegion.Union([]));
-            Assert.Empty(RectilinearRegion.Union([new RRect(5, 5, 0, 0)]));
+            Assert.Empty(RectilinearRegion.Union([new Rect(5, 5, 0, 0)]));
         }
 
         [Fact]
@@ -146,8 +146,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
             // and each rectangle must still resolve to the merged grid line it was folded into.
             var contours = RectilinearRegion.Union(
             [
-                new RRect(0, 0, 50, 20),
-                new RRect(50.0000000000001, 0, 50, 20.0000000000001)
+                new Rect(0, 0, 50, 20),
+                new Rect(50.0000000000001, 0, 50, 20.0000000000001)
             ]);
 
             var contour = Assert.Single(contours);
@@ -157,7 +157,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void Shrink_MovesEveryEdgeOfARectangleInward()
         {
-            var contour = Assert.Single(RectilinearRegion.Union([new RRect(0, 0, 100, 60)]));
+            var contour = Assert.Single(RectilinearRegion.Union([new Rect(0, 0, 100, 60)]));
 
             var shrunk = RectilinearRegion.Shrink(contour, 10);
 
@@ -170,8 +170,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var contour = Assert.Single(RectilinearRegion.Union(
             [
-                new RRect(0, 0, 100, 20),
-                new RRect(0, 20, 60, 20)
+                new Rect(0, 0, 100, 20),
+                new Rect(0, 20, 60, 20)
             ]));
 
             var shrunk = RectilinearRegion.Shrink(contour, 5);
@@ -190,10 +190,10 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var contours = RectilinearRegion.Union(
             [
-                new RRect(0, 0, 30, 90),
-                new RRect(60, 0, 30, 90),
-                new RRect(0, 0, 90, 30),
-                new RRect(0, 60, 90, 30)
+                new Rect(0, 0, 30, 90),
+                new Rect(60, 0, 30, 90),
+                new Rect(0, 0, 90, 30),
+                new Rect(0, 60, 90, 30)
             ]);
 
             var hole = Assert.Single(contours, contour => !contour.IsOuter);
@@ -209,9 +209,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var contour = Assert.Single(RectilinearRegion.Union(
             [
-                new RRect(0, 0, 40, 100),
-                new RRect(60, 0, 40, 100),
-                new RRect(0, 0, 100, 10)
+                new Rect(0, 0, 40, 100),
+                new Rect(60, 0, 40, 100),
+                new Rect(0, 0, 100, 10)
             ]));
 
             var shrunk = RectilinearRegion.Shrink(contour, 20);
@@ -233,8 +233,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var contour = Assert.Single(RectilinearRegion.Union(
             [
-                new RRect(0, 0, 100, 20),
-                new RRect(0, 20, 60, 20)
+                new Rect(0, 0, 100, 20),
+                new Rect(0, 20, 60, 20)
             ]));
 
             Assert.False(RectilinearRegion.IsRectangle(contour));
@@ -256,7 +256,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             }
         }
 
-        private static int IndexOf(IReadOnlyList<RPoint> points, (double X, double Y) target)
+        private static int IndexOf(IReadOnlyList<PaintPoint> points, (double X, double Y) target)
         {
             for (var i = 0; i < points.Count; i++)
             {

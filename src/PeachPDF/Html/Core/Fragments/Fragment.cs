@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using System.Collections.Generic;
 
@@ -25,7 +25,7 @@ namespace PeachPDF.Html.Core.Fragments
     /// </para>
     /// </remarks>
     /// <param name="Rect">the fragment's own rectangle, in fragmentainer-local coordinates</param>
-    internal abstract record Fragment(RRect Rect);
+    internal abstract record Fragment(Rect Rect);
 
     /// <summary>
     /// What one decoration rectangle needs in order to honour <c>box-decoration-break</c>
@@ -74,8 +74,8 @@ namespace PeachPDF.Html.Core.Fragments
     /// </param>
     /// <param name="HasBottomEdge">whether this rectangle's bottom edge is the box's own, not a break</param>
     internal sealed record SliceGeometry(
-        RRect UnbrokenStrip,
-        RRect FragmentRect,
+        Rect UnbrokenStrip,
+        Rect FragmentRect,
         bool HasLeftEdge,
         bool HasRightEdge,
         bool HasTopEdge = true,
@@ -96,7 +96,7 @@ namespace PeachPDF.Html.Core.Fragments
     /// <c>box-decoration-break</c> (§6.2). Only the builder can compute it: it needs every rectangle the
     /// box produced across every fragmentainer, and paint only ever sees one fragmentainer's survivors.
     /// </param>
-    internal sealed record LineFragment(RRect Rect, CssLineBox? Line, SliceGeometry Slice) : Fragment(Rect);
+    internal sealed record LineFragment(Rect Rect, CssLineBox? Line, SliceGeometry Slice) : Fragment(Rect);
 
     /// <summary>
     /// One laid-out word (or inline replaced run) positioned inside a fragmentainer. Words are
@@ -106,7 +106,7 @@ namespace PeachPDF.Html.Core.Fragments
     /// </summary>
     /// <param name="Rect">the word's rectangle, in fragmentainer-local coordinates</param>
     /// <param name="Word">the word this fragment positions; the source of its text, font, and style</param>
-    internal sealed record TextFragment(RRect Rect, CssRect Word) : Fragment(Rect);
+    internal sealed record TextFragment(Rect Rect, CssRect Word) : Fragment(Rect);
 
     /// <summary>
     /// The portion of one <see cref="CssBox"/> that lives in one fragmentainer — the "box fragment"
@@ -185,11 +185,11 @@ namespace PeachPDF.Html.Core.Fragments
     /// so composes correctly with the (possibly narrower) rectangular clip regardless.
     /// </param>
     internal sealed record BoxFragment(
-        RRect Rect,
+        Rect Rect,
         CssBox Box,
         int FragmentainerIndex,
         double OriginY,
-        RRect WholeBoxRect,
+        Rect WholeBoxRect,
         bool IsFixed,
         bool IsFirstFragment,
         bool IsLastFragment,
@@ -197,7 +197,7 @@ namespace PeachPDF.Html.Core.Fragments
         IReadOnlyList<LineFragment> Lines,
         IReadOnlyList<TextFragment> Words,
         IReadOnlyList<BoxFragment> Children,
-        RRect? OverflowClip,
+        Rect? OverflowClip,
         OverflowClipCurve? OverflowClipCurve = null) : Fragment(Rect)
     {
         /// <summary>
@@ -205,13 +205,13 @@ namespace PeachPDF.Html.Core.Fragments
         /// inline SVG, an <c>&lt;iframe&gt;</c>) paints its background and border over. Falls back to
         /// <see cref="Fragment.Rect"/> for a fragment that exists only to carry descendants.
         /// </summary>
-        internal RRect PrimaryRect => Lines.Count > 0 ? Lines[0].Rect : Rect;
+        internal Rect PrimaryRect => Lines.Count > 0 ? Lines[0].Rect : Rect;
 
         /// <summary>
         /// This fragment's rectangle for <paramref name="word"/>. Replaced boxes hold a single word
         /// whose rectangle — not the box's own — positions the replaced content.
         /// </summary>
-        internal bool TryGetWordRect(CssRect word, out RRect rect)
+        internal bool TryGetWordRect(CssRect word, out Rect rect)
         {
             foreach (var candidate in Words)
             {
@@ -222,7 +222,7 @@ namespace PeachPDF.Html.Core.Fragments
                 }
             }
 
-            rect = RRect.Empty;
+            rect = Rect.Empty;
             return false;
         }
     }
@@ -237,7 +237,7 @@ namespace PeachPDF.Html.Core.Fragments
     /// </summary>
     /// <param name="Rect">the clipping ancestor's own (unconfined) padding-edge rectangle, in this fragment's local space</param>
     /// <param name="Radii">that ancestor's overlap-reduced corner radii for <paramref name="Rect"/>, from <see cref="CssBox.ComputeRadii"/></param>
-    internal sealed record OverflowClipCurve(RRect Rect, BorderRadii Radii);
+    internal sealed record OverflowClipCurve(Rect Rect, BorderRadii Radii);
 
     /// <summary>
     /// One fragmentainer — for PeachPDF, one materialized PDF page. Per
@@ -280,7 +280,7 @@ namespace PeachPDF.Html.Core.Fragments
     /// column's own area rather than the page's - and can hold both kinds at once.
     /// </param>
     internal sealed record FragmentainerFragment(
-        RRect Rect,
+        Rect Rect,
         int SlotIndex,
         PageBandGeometry Geometry,
         double LocalOriginY,
@@ -326,7 +326,7 @@ namespace PeachPDF.Html.Core.Fragments
     /// line style itself is not carried through.</param>
     /// <param name="Scope">Which fragmentation context this area belongs to - descriptive only.</param>
     internal sealed record FootnoteAreaFragment(
-        RRect DividerRect,
+        Rect DividerRect,
         IReadOnlyList<BoxFragment> Bodies,
         string? DividerColor = null,
         FootnoteAreaScope Scope = FootnoteAreaScope.Page) : Fragment(DividerRect);

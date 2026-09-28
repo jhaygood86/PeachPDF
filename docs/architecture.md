@@ -24,7 +24,7 @@ Layout (CssLayoutEngine)
 Fragmentation (FragmentTree)
     │
     ▼
-Painting (RGraphics)
+Painting (Canvas)
     │
     ▼
 PDF Rendering (PdfSharpCore fork)
@@ -185,7 +185,7 @@ Text inside a box is held in a `Words` list of `CssRect` objects:
 - `CssRectWord` — a single word or whitespace run. Its dimensions are set during word measurement.
 - `CssRectImage` — an inline-replaced image whose dimensions are set by `CssLayoutEngine.MeasureImageSize`.
 
-Words are collected into `CssLineBox` instances during layout. After layout, each box records its per-line paint rectangles in a `Dictionary<CssLineBox, RRect> Rectangles` map so the painting phase knows exactly where each fragment of the box appears on each line.
+Words are collected into `CssLineBox` instances during layout. After layout, each box records its per-line paint rectangles in a `Dictionary<CssLineBox, Rect> Rectangles` map so the painting phase knows exactly where each fragment of the box appears on each line.
 
 ### Specialised subtypes
 
@@ -331,7 +331,7 @@ Layout computes the position and size of every box. It runs in two sub-passes: w
 
 ### Word measurement
 
-`CssLayoutEngine.MeasureWords` does a depth-first walk of the tree and calls `CssBox.MeasureWordsSize` on each box. This calls `RGraphics.MeasureString` to ask the PDF graphics context for the pixel width of each word using the box's resolved font. Image sizes are resolved by `MeasureImageSize`, which respects `width`, `height`, `min-width`, `max-width`, `min-height`, `max-height`, and aspect-ratio constraints.
+`CssLayoutEngine.MeasureWords` does a depth-first walk of the tree and calls `CssBox.MeasureWordsSize` on each box. This calls `Canvas.MeasureString` to ask the PDF graphics context for the pixel width of each word using the box's resolved font. Image sizes are resolved by `MeasureImageSize`, which respects `width`, `height`, `min-width`, `max-width`, `min-height`, `max-height`, and aspect-ratio constraints.
 
 ### Box sizing constraints (min/max-width, min/max-height)
 
@@ -383,7 +383,7 @@ Block boxes are stacked vertically, with margin collapsing implementing all five
 `hyphens: auto` is implemented as real pattern-based automatic hyphenation — Frank Liang's classic TeX algorithm — rather than a dictionary or a heuristic. It lives in the text engine (the `PeachDrawing.Text` package, not `Html.Core.Dom`) because the algorithm itself is general text processing with no layout-engine dependency; only its two call sites are layout code:
 
 - **Candidate generation** — `CssBox.ParseToWords` reads `HtmlContainerInt.DocumentLanguage` (populated from `<html lang="...">`, with `PdfGenerateConfig.DefaultLanguage` as a fallback for documents that declare none) and, only for `hyphens: auto` text, calls `HyphenationEngine.FindHyphenationPoints(word, language)`. The returned break-point indices are stored on the word's `CssRectWord.HyphenationCandidates` — computed once per word, not on every line-break attempt.
-- **Break selection** — `CssLayoutEngine.TryHyphenateWord`, called from the line-breaking loop only when a word would otherwise overflow the line, picks the widest candidate break (measuring the prefix + a literal `-` glyph via `RGraphics.MeasureString`) that still fits the remaining line width, splitting the word into a `prefix`/`suffix` `CssRectWord` pair. If no candidate fits, the word wraps whole rather than forcing an ill-fitting split.
+- **Break selection** — `CssLayoutEngine.TryHyphenateWord`, called from the line-breaking loop only when a word would otherwise overflow the line, picks the widest candidate break (measuring the prefix + a literal `-` glyph via `Canvas.MeasureString`) that still fits the remaining line width, splitting the word into a `prefix`/`suffix` `CssRectWord` pair. If no candidate fits, the word wraps whole rather than forcing an ill-fitting split.
 
 **Pattern data.** ~70 languages' pattern sets are sourced from CTAN's `hyph-utf8` package (see [tools/Update-HyphenationPatterns.ps1](https://github.com/jhaygood86/PeachPDF/blob/main/tools/Update-HyphenationPatterns.ps1) for the reproducible download/build pipeline) and embedded as Brotli-compressed resources under `Text/Resources/Patterns/`, one file per language. Only permissively licensed pattern sets (MIT/LPPL/BSD-style/public-domain) are included; languages whose upstream pattern file is GPL/LGPL-licensed or carries no stated license are intentionally excluded — see [HTML/CSS Support: `hyphens`](html-css-support.md) for the full exclusion list. Each language is decompressed and parsed lazily on first use and then cached for the process's lifetime (`ConcurrentDictionary<string, LanguagePatternSet?>`), so a document using one language never pays to load the other ~70.
 
@@ -403,7 +403,7 @@ Floated boxes are removed from normal flow. `CssLayoutEngine.FloatBox` positions
 
 **Key type:** `CssLayoutEngineFlex` ([Html/Core/Dom/CssLayoutEngineFlex.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssLayoutEngineFlex.cs))
 
-Boxes with `display: flex` or `inline-flex` are laid out by a dedicated engine implementing CSS Flexbox Level 1, entered from `CssBox.PerformLayoutImp` in place of the normal block/inline formatting context. It runs as a sequence of phases per the spec: collect and order items (respecting `order`), measure each item's hypothetical main size from `flex-basis`/`width`/`height` or its content size, wrap items into lines (`flex-wrap`), resolve flexible lengths via `flex-grow`/`flex-shrink` clamped to `min`/`max-width`/`height`, size and align lines on the cross axis (`align-content`), position items on the main axis (`justify-content`, with `auto` margins absorbing free space first), and align items on the cross axis (`align-items`/`align-self`). Flex items are blockified before measurement per spec §9.2. `align-items`/`align-self: baseline` aligns items by their first font baseline — each item's baseline is found by descending into its first in-flow child (in document order) for the first line box, using `RFont.Ascent` for the offset from that box's top — and only applies for row-direction flex; column-direction flex has no vertical baseline concept and falls back to `flex-start`, as does an item with no discoverable line-box content.
+Boxes with `display: flex` or `inline-flex` are laid out by a dedicated engine implementing CSS Flexbox Level 1, entered from `CssBox.PerformLayoutImp` in place of the normal block/inline formatting context. It runs as a sequence of phases per the spec: collect and order items (respecting `order`), measure each item's hypothetical main size from `flex-basis`/`width`/`height` or its content size, wrap items into lines (`flex-wrap`), resolve flexible lengths via `flex-grow`/`flex-shrink` clamped to `min`/`max-width`/`height`, size and align lines on the cross axis (`align-content`), position items on the main axis (`justify-content`, with `auto` margins absorbing free space first), and align items on the cross axis (`align-items`/`align-self`). Flex items are blockified before measurement per spec §9.2. `align-items`/`align-self: baseline` aligns items by their first font baseline — each item's baseline is found by descending into its first in-flow child (in document order) for the first line box, using `Font.Ascent` for the offset from that box's top — and only applies for row-direction flex; column-direction flex has no vertical baseline concept and falls back to `flex-start`, as does an item with no discoverable line-box content.
 
 ### Grid layout
 
@@ -528,21 +528,21 @@ A fragment's *rectangles* were the last thing still derived from the box's singl
 
 ## 7. Painting
 
-**Key types:** `FragmentPainter` ([Html/Core/Paint/FragmentPainter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Paint/FragmentPainter.cs)), `IFragmentContentPainter` ([Html/Core/Paint/Content/IFragmentContentPainter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Paint/Content/IFragmentContentPainter.cs)), `StackingOrder` ([Html/Core/Paint/StackingOrder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Paint/StackingOrder.cs)), `RGraphics` ([Html/Adapters/RGraphics.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Adapters/RGraphics.cs)), `BordersDrawHandler` ([Html/Core/Handlers/BordersDrawHandler.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/BordersDrawHandler.cs)), `CssImagePainter` ([Html/Core/Handlers/CssImagePainter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/CssImagePainter.cs)), `CssImage` ([Html/Core/Entities/CssImage.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Entities/CssImage.cs)), `BackgroundImageDrawHandler` ([Html/Core/Handlers/BackgroundImageDrawHandler.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/BackgroundImageDrawHandler.cs))
+**Key types:** `FragmentPainter` ([Html/Core/Paint/FragmentPainter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Paint/FragmentPainter.cs)), `IFragmentContentPainter` ([Html/Core/Paint/Content/IFragmentContentPainter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Paint/Content/IFragmentContentPainter.cs)), `StackingOrder` ([Html/Core/Paint/StackingOrder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Paint/StackingOrder.cs)), `Canvas` ([PeachDrawing.Abstractions/Canvas.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.Abstractions/Canvas.cs)), `BordersDrawHandler` ([Html/Core/Handlers/BordersDrawHandler.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/BordersDrawHandler.cs)), `CssImagePainter` ([Html/Core/Handlers/CssImagePainter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/CssImagePainter.cs)), `CssImage` ([Html/Core/Entities/CssImage.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Entities/CssImage.cs)), `BackgroundImageDrawHandler` ([Html/Core/Handlers/BackgroundImageDrawHandler.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/BackgroundImageDrawHandler.cs))
 
 ### Graphics abstraction
 
-The rendering engine uses an abstract `RGraphics` base class so that all painting logic is independent of the underlying output backend. The PDF-specific implementation forwards every call to PdfSharpCore's `XGraphics`. The abstract surface exposes:
+The rendering engine uses an abstract `Canvas` base class so that all painting logic is independent of the underlying output backend. The PDF-specific implementation forwards every call to PdfSharpCore's `XGraphics`. The abstract surface exposes:
 
 | Method | Purpose |
 |---|---|
 | `MeasureString` | Query text dimensions (used during layout too) |
 | `DrawString` | Render a text run with a given font, colour, and RTL flag |
 | `DrawLine` | Draw a straight line segment (used for borders) |
-| `DrawRectangle(RPen,…)` | Stroke a rectangle outline |
-| `DrawRectangle(RBrush,…)` | Fill a rectangle (backgrounds, solid borders) |
+| `DrawRectangle(Pen,…)` | Stroke a rectangle outline |
+| `DrawRectangle(Brush,…)` | Fill a rectangle (backgrounds, solid borders) |
 | `DrawImage` | Blit a decoded image at a destination rectangle |
-| `DrawPath` | Stroke or fill an arbitrary `RGraphicsPath` (rounded corners, dashed borders) |
+| `DrawPath` | Stroke or fill an arbitrary `GraphicsPath` (rounded corners, dashed borders) |
 | `DrawPolygon` | Fill a polygon (used for border mitre joints) |
 | `PushClip` / `PopClip` | Manage a clip-rectangle stack for `overflow: hidden` and page margins |
 | `SuspendClipping` / `ResumeClipping` | Temporarily remove all clips for `position: fixed` elements |
@@ -552,9 +552,9 @@ Brush and pen objects are created through the adapter (`GetSolidBrush`, `GetPen`
 
 ### The raster backend
 
-PDF cannot express every effect as vector content — a blur, for instance, needs per-pixel convolution. For those, PeachPDF has a second `RGraphics` implementation, `RasterGraphics` ([Raster/RasterGraphics.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Raster/RasterGraphics.cs)), that paints into a premultiplied RGBA bitmap instead of a PDF content stream. It is deliberately a *subordinate* of a PDF render rather than a parallel pipeline: layout and text measurement still run through the PDF adapter, so metrics cannot drift, and the raster backend is asked for only when a subtree needs pixels.
+PDF cannot express every effect as vector content — a blur, for instance, needs per-pixel convolution. For those, PeachPDF has a second `Canvas` implementation, `RasterGraphics` ([Raster/RasterGraphics.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Raster/RasterGraphics.cs)), that paints into a premultiplied RGBA bitmap instead of a PDF content stream. It is deliberately a *subordinate* of a PDF render rather than a parallel pipeline: layout and text measurement still run through the PDF adapter, so metrics cannot drift, and the raster backend is asked for only when a subtree needs pixels.
 
-The seam is two members on `RGraphics`. `BeginRasterSurface(bounds)` returns a child graphics whose coordinate system is the requesting graphics' own, so the ordinary paint code draws into it without any translation; `DrawRaster(surface)` hands the finished bitmap back, and `GraphicsAdapter` encodes it as a PNG and embeds it through the same pass-through path any PNG takes. Both are virtual with inert defaults, so a graphics that cannot rasterize (a measure-only pass, a test double) returns null and the caller falls back to whatever it did before. `FragmentPainter.PaintRasterized` is the first caller: it paints an element's fragment subtree into a surface, runs the element's `filter` list over the pixels, and draws the result.
+The seam is two members on `Canvas`. `BeginRasterSurface(bounds)` returns a child graphics whose coordinate system is the requesting graphics' own, so the ordinary paint code draws into it without any translation; `DrawRaster(surface)` hands the finished bitmap back, and `GraphicsAdapter` encodes it as a PNG and embeds it through the same pass-through path any PNG takes. Both are virtual with inert defaults, so a graphics that cannot rasterize (a measure-only pass, a test double) returns null and the caller falls back to whatever it did before. `FragmentPainter.PaintRasterized` is the first caller: it paints an element's fragment subtree into a surface, runs the element's `filter` list over the pixels, and draws the result.
 
 Because it runs in the same assembly as the PDF adapter, `RasterGraphics` reads the adapter's pens, brushes, fonts and paths directly (they are plain data) rather than duplicating them, and it follows `GraphicsAdapter`'s unit conventions exactly: rectangles, lines, images and strings arrive in layout units and are divided by `PixelsPerPoint`, while paths, pen widths and gradient geometry are already in user space.
 
@@ -589,13 +589,13 @@ Each box fragment is painted as follows:
 
 1. **Background colour** — fills the box's border area with `background-color`.
 2. **Background images, gradients, and list markers** — All CSS image values (whether used as a `background-image` layer or a `list-style-image` marker) are represented as a `CssImage` discriminated union and painted through the single entry point `CssImagePainter.Paint`. The host supplies the destination rectangle and position/repeat settings; `CssImagePainter` dispatches by image type:
-   - **URL images** — delegated to `BackgroundImageDrawHandler.DrawBackgroundImage`, which handles all four `background-repeat` modes (`no-repeat`, `repeat-x`, `repeat-y`, `repeat`) and `background-position` placement. The decoded `RImage` is exposed by `CssImage.Url` via its embedded `ImageLoadHandler`, but owned by the render's `HtmlContainerInt` (see "Image loading and decoding" below) — a `background-image` sharing a source with a plain `<img>` or an `<object>` draws the same instance. When the URL source is an SVG, `CssImage.Url` instead exposes the parsed `SvgDocument`; `CssImagePainter` gets a document-local cached `RGraphics.CreateTile` Form XObject sized to the resolved `background-size` (using the SVG's own intrinsic width/height/ratio, like a raster image's), then hands that tile to `BackgroundImageDrawHandler` so it positions/repeats exactly like a decoded raster image — real vector content, never rasterized. Repainting the same SVG at the same size reuses the form.
+   - **URL images** — delegated to `BackgroundImageDrawHandler.DrawBackgroundImage`, which handles all four `background-repeat` modes (`no-repeat`, `repeat-x`, `repeat-y`, `repeat`) and `background-position` placement. The decoded `Image` is exposed by `CssImage.Url` via its embedded `ImageLoadHandler`, but owned by the render's `HtmlContainerInt` (see "Image loading and decoding" below) — a `background-image` sharing a source with a plain `<img>` or an `<object>` draws the same instance. When the URL source is an SVG, `CssImage.Url` instead exposes the parsed `SvgDocument`; `CssImagePainter` gets a document-local cached `Canvas.CreateTile` Form XObject sized to the resolved `background-size` (using the SVG's own intrinsic width/height/ratio, like a raster image's), then hands that tile to `BackgroundImageDrawHandler` so it positions/repeats exactly like a decoded raster image — real vector content, never rasterized. Repainting the same SVG at the same size reuses the form.
    - **Linear gradients** — `GetLinearGradientBrush` with arbitrary colour stops and angles, including `repeating-linear-gradient`.
    - **Radial gradients** — `GetRadialGradientBrush` with elliptical shape, size keywords (`closest-side`, `farthest-corner`, etc.), and repeating variants.
    - **Conic gradients** — `GetConicGradientBrush` with per-stop angle positions.
 
    List marker images are loaded during word measurement (the same `EnsureLoadedAsync` call used by background layers) and painted by the `::marker` box's own content painter immediately after the child-box paint, using a font-height-sized square positioned to the left of the list item.
-3. **Borders** — `BordersDrawHandler.DrawBoxBorders` draws each side independently, respecting `border-style` (solid, dashed, dotted, double, groove, ridge, inset, outset), `border-width`, and `border-color`. Rounded corners are rendered as `RGraphicsPath` arcs. For inline elements that span multiple line boxes, left and right borders are only drawn on the first and last fragment respectively.
+3. **Borders** — `BordersDrawHandler.DrawBoxBorders` draws each side independently, respecting `border-style` (solid, dashed, dotted, double, groove, ridge, inset, outset), `border-width`, and `border-color`. Rounded corners are rendered as `GraphicsPath` arcs. For inline elements that span multiple line boxes, left and right borders are only drawn on the first and last fragment respectively.
 4. **Inline content** — for each `CssLineBox` the box participates in, its `CssRect` words are drawn in order. `CssRectWord` instances emit a `DrawString` call; `CssRectImage` instances emit a `DrawImage` call. Text decoration (underline, overline, line-through) is drawn as lines immediately after the text.
 
 #### Stacking order (CSS2.1 Appendix E) and Acid2
@@ -616,7 +616,7 @@ Images are loaded on demand by `ImageLoadHandler`. Supported sources include fil
 
 `ImageLoadHandler` is an implementation detail of `CssImage.Url`: each URL image owns its handler and exposes `EnsureLoadedAsync(HtmlContainerInt)` for lazy loading and `Dispose()` for cleanup. Callers (background layer loops, list marker painting) interact only with `CssImage` and never touch `ImageLoadHandler` directly.
 
-A successfully resolved image or SVG document is cached on the render's `HtmlContainerInt`, keyed by the resolved absolute source URI, so a source referenced by more than one `<img>`/`<object>`/`background-image`/`list-style-image`/`content: url()` is fetched and decoded only once - this is the cache the paragraph above refers to. The `RImage`/`SvgDocument` outlives any single `ImageLoadHandler`; disposing a handler only releases its own fetch stream, never the resolved resource, which the container disposes once at the end of the render.
+A successfully resolved image or SVG document is cached on the render's `HtmlContainerInt`, keyed by the resolved absolute source URI, so a source referenced by more than one `<img>`/`<object>`/`background-image`/`list-style-image`/`content: url()` is fetched and decoded only once - this is the cache the paragraph above refers to. The `Image`/`SvgDocument` outlives any single `ImageLoadHandler`; disposing a handler only releases its own fetch stream, never the resolved resource, which the container disposes once at the end of the render.
 
 ---
 
@@ -630,7 +630,7 @@ The final phase writes the PDF file. PeachPDF embeds a custom fork of [PdfSharpC
 
 ### Adapter bridge
 
-The adapters in [src/PeachPDF/Adapters/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/Adapters/) implement the abstract types that the rendering engine uses (`RGraphics`, `RBrush`, `RPen`, `RFont`, `RFontFamily`, `RImage`, `RGraphicsPath`, `XTextureBrush`). They translate every `RGraphics` drawing call into the corresponding `XGraphics` call in PdfSharpCore, keeping the core rendering logic completely decoupled from the PDF format.
+The abstract types the rendering engine draws through (`Canvas`, `RenderContext`, `Brush`, `Pen`, `Font`, `FontFamily`, `Image`, `GraphicsPath`, and the paint-ready value types) live in their own package, `PeachDrawing.Abstractions` (see [docs/peachdrawing-abstractions.md](peachdrawing-abstractions.md)) — nothing in that surface names a PDF-specific type. The adapters in [src/PeachPDF/Adapters/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/Adapters/) (`GraphicsAdapter`, `PdfSharpAdapter`, `FontAdapter`, `FontFamilyAdapter`, `ImageAdapter`, `GraphicsPathAdapter`, plus `XTextureBrush`) implement those abstract types for PDF specifically. They translate every `Canvas` drawing call into the corresponding `XGraphics` call in PdfSharpCore, keeping the core rendering logic completely decoupled from the PDF format.
 
 ### Font pipeline
 
@@ -652,7 +652,7 @@ A font family is a `FontFamilyModel` ([Fonts/FontFamilyModel.cs](https://github.
 
 #### Per-character font matching
 
-Cross-family fallback needs the whole authored `font-family` stack, which the ordinary cascade collapses to the first existing family. PeachPDF retains it as `CssBox.FontFamilyList`. During word building, `CssBox.AddWord` ([Html/Core/Dom/CssBox.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssBox.cs)) splits a word into per-face fragments **only when needed** — a fast-path scan (`NeedsPerCodepointFont`, using `RFont.HasGlyph`) checks whether the primary font already covers every codepoint in the word, and ordinary fully-covered text stays a single word at zero added cost. When a split is required, each fragment resolves to the first family in the stack that both covers its codepoints and has a glyph for them; this split composes with the small-caps split rather than duplicating it. See [Per-character font matching](html-css-support.md#per-character-font-matching-and-coverage-fallback) for the user-facing behavior.
+Cross-family fallback needs the whole authored `font-family` stack, which the ordinary cascade collapses to the first existing family. PeachPDF retains it as `CssBox.FontFamilyList`. During word building, `CssBox.AddWord` ([Html/Core/Dom/CssBox.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssBox.cs)) splits a word into per-face fragments **only when needed** — a fast-path scan (`NeedsPerCodepointFont`, using `Font.HasGlyph`) checks whether the primary font already covers every codepoint in the word, and ordinary fully-covered text stays a single word at zero added cost. When a split is required, each fragment resolves to the first family in the stack that both covers its codepoints and has a glyph for them; this split composes with the small-caps split rather than duplicating it. See [Per-character font matching](html-css-support.md#per-character-font-matching-and-coverage-fallback) for the user-facing behavior.
 
 #### Content-addressed font identity
 
@@ -753,7 +753,7 @@ Both paths build an `SvgDocument` scene graph once. Inline `<svg>` caches it for
 
 ### Build phase — `SvgTreeBuilder`
 
-`SvgTreeBuilder.Build(ISvgSourceNode root, RAdapter adapter, RColor? contextColor)` runs synchronously in two passes:
+`SvgTreeBuilder.Build(ISvgSourceNode root, RenderContext adapter, PaintColor? contextColor)` runs synchronously in two passes:
 
 1. **`CollectDefinitions`** — a single walk of the whole tree that registers every id-bearing node (`Dictionary<string, ISvgSourceNode>`) and fully resolves self-contained definitions (gradients, markers, patterns, masks, `<style>` text) up front. This exists because SVG allows forward references — a `<use>` or `fill="url(#id)"` can reference an id defined later in document order.
 2. **Recursive tree build** — `BuildElement`/`BuildGroup`/`BuildPath`/etc. walk the tree again, this time constructing the immutable `SvgElement` scene graph, resolving `url(#id)` references against the now-complete registry from pass 1.
@@ -764,9 +764,9 @@ The result is an `SvgDocument`: a `ViewBox`/`Width`/`Height`/`PreserveAspectRati
 
 ### Paint phase — `SvgRenderer`
 
-`SvgRenderer.RenderInto(RGraphics g, SvgDocument document, RRect viewportRect)` is the single paint entry point shared by the inline-SVG and `<img src="x.svg">` content painters. It clips to the target rectangle, computes the viewBox→viewport transform (`ComputeViewportTransform`, supporting all 9 `preserveAspectRatio` alignment keywords plus `meet`/`slice`/`none`), pushes that transform, and recursively paints every scene-graph element.
+`SvgRenderer.RenderInto(Canvas g, SvgDocument document, Rect viewportRect)` is the single paint entry point shared by the inline-SVG and `<img src="x.svg">` content painters. It clips to the target rectangle, computes the viewBox→viewport transform (`ComputeViewportTransform`, supporting all 9 `preserveAspectRatio` alignment keywords plus `meet`/`slice`/`none`), pushes that transform, and recursively paints every scene-graph element.
 
-Critically, `SvgRenderer` issues nothing but ordinary `RGraphics` calls (`GetGraphicsPath`, `DrawPath`, `GetSolidBrush`, `GetLinearGradientBrush`, `PushClip`, `PushTransform`, `DrawString`, …) — the same abstraction §6's HTML/CSS painting uses. There is no SVG-specific graphics API; an SVG `<path>` becomes an `RGraphicsPath` built from bezier/arc/line segments exactly the way a CSS `border-radius` corner does, and an SVG gradient becomes an `RBrush` from the same `GetLinearGradientBrush`/`GetRadialGradientBrush` calls background-image gradients use. This is what keeps SVG output genuinely vector: every drawing call flows through the same `XGraphics`-backed adapter as the rest of the document (§7).
+Critically, `SvgRenderer` issues nothing but ordinary `Canvas` calls (`GetGraphicsPath`, `DrawPath`, `GetSolidBrush`, `GetLinearGradientBrush`, `PushClip`, `PushTransform`, `DrawString`, …) — the same abstraction §6's HTML/CSS painting uses. There is no SVG-specific graphics API; an SVG `<path>` becomes an `GraphicsPath` built from bezier/arc/line segments exactly the way a CSS `border-radius` corner does, and an SVG gradient becomes an `Brush` from the same `GetLinearGradientBrush`/`GetRadialGradientBrush` calls background-image gradients use. This is what keeps SVG output genuinely vector: every drawing call flows through the same `XGraphics`-backed adapter as the rest of the document (§7).
 
 PDF's native shading types have no tiling/repeat concept of their own, so `spreadMethod="repeat"`/`"reflect"` (`SvgRenderer.ExpandLinearSpread`/`ExpandRadialSpread`) pre-tile the gradient's own stop list — projecting the filled shape's bounding box onto the gradient axis (or radius) to find how many cycles are needed to cover it, then replicating the stops per cycle, mirroring alternate cycles for `reflect` — before the brush is ever built. This mirrors, but doesn't share code with, how CSS's `repeating-linear-gradient()`/`repeating-radial-gradient()` (`CssImagePainter.ExpandRepeatingStops`) solve the identical underlying problem: CSS's gradient axis is already sized to the background box before tiling starts, while SVG's `x1`/`y1`/`x2`/`y2` (or `r`) define only one author-chosen cycle, and SVG additionally needs `reflect`, which CSS repeating-gradients don't have.
 
@@ -774,15 +774,15 @@ The viewport-transform helper is reused, not reimplemented, for every SVG constr
 
 ### PDF primitive reuse for pattern/mask
 
-`<pattern>` and `<mask>` needed genuinely new PDF-writing capability, supplied by extending the `RGraphics`/`RAdapter` abstraction rather than adding SVG-specific PDF code:
+`<pattern>` and `<mask>` needed genuinely new PDF-writing capability, supplied by extending the `Canvas`/`RenderContext` abstraction rather than adding SVG-specific PDF code:
 
-- `RGraphics.CreateTile(width, height)` creates an `XForm`/`PdfFormXObject` pair — a real PDF Form XObject — and returns a fresh `RGraphics` that paints into it. A pattern's content, a mask's content, and (for a masked element) the element's own content are each rendered once into a tile this way.
-- **Pattern fill** clips to the filled shape's geometry, then draws that one tile `RImage` repeatedly (`DrawImage`) across the shape's bounding box. Every repeat references the same underlying vector Form XObject content — never a rasterized bitmap — but this is not a native PDF `/PatternType 1` tiling pattern object; it's a simpler, lower-risk approximation that stays fully vector.
-- **Mask** (`SvgRenderer.RenderMaskedElementContent`) renders the masked element's own content into one tile and the `<mask>`'s content into a second, identically-sized tile, then composites them via `RGraphics.DrawImageMasked(content, mask, destRect)` — a single atomic placement (`XGraphicsPdfRenderer.DrawImageMasked`, [PdfSharpCore/Drawing.Pdf/XGraphicsPdfRenderer.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/PdfSharpCore/Drawing.Pdf/XGraphicsPdfRenderer.cs)) that emits the PDF `/SMask` `gs` operator inside the *same* `q ... cm ... Do ... Q` block used to place the content, reusing `DrawImage`'s already-correct destRect placement math rather than relying on whatever CTM happens to be ambient at some earlier point in the content stream. This atomicity is load-bearing, not stylistic: a `CreateTile` form's content is Y-flipped relative to *its own* small height, not the page's, so a mask activated via a bare, separately-timed `gs` (an earlier implementation) silently lands in the wrong part of the page the moment the page has any margin, scroll offset, or layout position — evaluating as fully transparent everywhere. Both the mask's `/G` form and the masked content's own form must additionally carry their own `/Group << /S /Transparency ... >>` transparency-group dictionary for the soft mask to take effect in spec-conformant readers (Chrome/Edge/Acrobat, all PDFium- or Acrobat-derived) — MuPDF is unusually lenient and applies an `/SMask` even to non-group content, which made this gap easy to miss under a single-renderer check. See [Supported SVG Features](supported-svg-features.md) and the `PdfSoftMask`/`PdfExtGState` PDF object types for the rest of the construct.
+- `Canvas.CreateTile(width, height)` creates an `XForm`/`PdfFormXObject` pair — a real PDF Form XObject — and returns a fresh `Canvas` that paints into it. A pattern's content, a mask's content, and (for a masked element) the element's own content are each rendered once into a tile this way.
+- **Pattern fill** clips to the filled shape's geometry, then draws that one tile `Image` repeatedly (`DrawImage`) across the shape's bounding box. Every repeat references the same underlying vector Form XObject content — never a rasterized bitmap — but this is not a native PDF `/PatternType 1` tiling pattern object; it's a simpler, lower-risk approximation that stays fully vector.
+- **Mask** (`SvgRenderer.RenderMaskedElementContent`) renders the masked element's own content into one tile and the `<mask>`'s content into a second, identically-sized tile, then composites them via `Canvas.DrawImageMasked(content, mask, destRect)` — a single atomic placement (`XGraphicsPdfRenderer.DrawImageMasked`, [PdfSharpCore/Drawing.Pdf/XGraphicsPdfRenderer.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/PdfSharpCore/Drawing.Pdf/XGraphicsPdfRenderer.cs)) that emits the PDF `/SMask` `gs` operator inside the *same* `q ... cm ... Do ... Q` block used to place the content, reusing `DrawImage`'s already-correct destRect placement math rather than relying on whatever CTM happens to be ambient at some earlier point in the content stream. This atomicity is load-bearing, not stylistic: a `CreateTile` form's content is Y-flipped relative to *its own* small height, not the page's, so a mask activated via a bare, separately-timed `gs` (an earlier implementation) silently lands in the wrong part of the page the moment the page has any margin, scroll offset, or layout position — evaluating as fully transparent everywhere. Both the mask's `/G` form and the masked content's own form must additionally carry their own `/Group << /S /Transparency ... >>` transparency-group dictionary for the soft mask to take effect in spec-conformant readers (Chrome/Edge/Acrobat, all PDFium- or Acrobat-derived) — MuPDF is unusually lenient and applies an `/SMask` even to non-group content, which made this gap easy to miss under a single-renderer check. See [Supported SVG Features](supported-svg-features.md) and the `PdfSoftMask`/`PdfExtGState` PDF object types for the rest of the construct.
 
 ### Link annotations
 
-An `<a>` element becomes a real PDF link annotation, reusing the same annotation-registration pipeline plain HTML `<a>` elements already use rather than a parallel SVG-specific one. Because painting runs once per *output page* during pagination, link discovery is a deliberately separate, paint-independent tree walk — `SvgRenderer.CollectLinks` composes transforms and bounding boxes only, issuing no `RGraphics` calls — so a link is registered exactly once regardless of how many pages the containing box is painted on. `DomUtils.GetAllSvgLinks` finds every `CssBoxSvg`/`CssBoxImage` in the box tree and calls `CollectLinks` on each; `HtmlContainerInt.GetLinks()` merges the results into the same list ordinary HTML `<a>` links populate.
+An `<a>` element becomes a real PDF link annotation, reusing the same annotation-registration pipeline plain HTML `<a>` elements already use rather than a parallel SVG-specific one. Because painting runs once per *output page* during pagination, link discovery is a deliberately separate, paint-independent tree walk — `SvgRenderer.CollectLinks` composes transforms and bounding boxes only, issuing no `Canvas` calls — so a link is registered exactly once regardless of how many pages the containing box is painted on. `DomUtils.GetAllSvgLinks` finds every `CssBoxSvg`/`CssBoxImage` in the box tree and calls `CollectLinks` on each; `HtmlContainerInt.GetLinks()` merges the results into the same list ordinary HTML `<a>` links populate.
 
 ### Coverage
 
@@ -827,7 +827,7 @@ with the SVG precedent and so unit tests can build a tree from a lightweight fak
 
 ### Build phase — `MathTreeBuilder`
 
-`MathTreeBuilder.Build(IMathSourceNode mathRoot, RAdapter adapter)` is a single recursive pass — unlike
+`MathTreeBuilder.Build(IMathSourceNode mathRoot, RenderContext adapter)` is a single recursive pass — unlike
 `SvgTreeBuilder`, no id-collection pre-pass is needed, since MathML has no forward-reference id system
 like SVG's `url(#id)`. It produces a `MathDocument`: a `MathNode` presentation tree (`MathRowNode`,
 `MathTokenNode`, `MathFractionNode`, `MathRadicalNode`, `MathScriptNode`, `MathUnderOverNode`,
@@ -843,14 +843,14 @@ of synthesized fence/separator `mo` tokens, `maction` builds only its selected (
 
 ### Layout phase — `MathLayoutEngine`
 
-`MathLayoutEngine.Layout(MathDocument document, RGraphics g)` implements
+`MathLayoutEngine.Layout(MathDocument document, Canvas g)` implements
 [MathML Core](https://w3c.github.io/mathml-core/)'s layout algorithm — the W3C/browser-vendor
 specification that gives MathML 3's presentation markup a concrete box model, since MathML 3 itself
 leaves layout implementation-defined. Every structural measurement (fraction rule thickness, radical
 gaps, script shift/scale, stack spacing) comes from the resolved math font's OpenType `MATH` table
 constants (`MathTable.cs`'s `MathConstantsTable`), scaled by `sizePt / unitsPerEm * g.PixelsPerPoint` —
 the same formula `FontAdapter.ScaleDesignUnits` already uses for vertical metrics, so `MathBox` geometry
-lands in the same working unit space as everything else `RGraphics` measures/draws in. A font with no
+lands in the same working unit space as everything else `Canvas` measures/draws in. A font with no
 `MATH` table (`MathMetrics`'s fallback path) uses fixed, TeX-book-derived approximate ratios instead of
 refusing to lay the formula out — MathML Core's own documented strategy for this case. Inter-element
 spacing/stretchiness/large-operator defaults for an `mo` with no explicit attribute come from
@@ -860,7 +860,7 @@ from the spec's compact (Content, Form) → category classification rather than 
 The result is a `MathBox` tree: computed inline size/ascent/descent per node, with positioned children
 (`MathPositionedBox`) and, for a leaf, the paint data needed to draw it (`MathPaintKind.Text` for
 ordinary token glyphs via `DrawString`, `.Rule` for a fraction bar/radical vinculum via a filled
-rectangle, `.Glyphs` for a stretchy operator's glyph(s) via the raw-glyph-index `RGraphics.DrawGlyphs`
+rectangle, `.Glyphs` for a stretchy operator's glyph(s) via the raw-glyph-index `Canvas.DrawGlyphs`
 primitive below — either a single `MathVariants` pre-sized variant, or, when none is tall/wide enough, a
 full MathML Core §5.3.2 `GlyphAssembly` construction: `MathGlyphAssemblyShaper` repeats the construction's
 extender part(s) and distributes connector overlap to reach the target size, the same algorithm real
@@ -874,10 +874,10 @@ smaller-than-natural box or leave extra space in a larger one.
 
 ### Paint phase — `MathRenderer`
 
-`MathRenderer.RenderInto(RGraphics g, MathBox root, RRect destination)` walks the positioned `MathBox`
-tree issuing ordinary `RGraphics` calls — the same abstraction §6's HTML/CSS painting and SVG's
+`MathRenderer.RenderInto(Canvas g, MathBox root, Rect destination)` walks the positioned `MathBox`
+tree issuing ordinary `Canvas` calls — the same abstraction §6's HTML/CSS painting and SVG's
 `SvgRenderer` both use. A stretchy operator's assembled/variant glyphs are addressed directly by font
-glyph index via `RGraphics.DrawGlyphs` (`GlyphPlacement`), a new primitive alongside the existing
+glyph index via `Canvas.DrawGlyphs` (`GlyphPlacement`), a new primitive alongside the existing
 character-based `DrawString`: unlike ordinary text, a `MATH`-table size-variant glyph frequently has no
 Unicode codepoint of its own to shape through cmap, so it has to be drawn by raw glyph id instead.
 `XGraphicsPdfRenderer.DrawGlyphsAtPositions` implements it by generalizing the existing (previously

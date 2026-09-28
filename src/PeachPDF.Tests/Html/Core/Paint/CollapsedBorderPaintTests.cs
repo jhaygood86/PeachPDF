@@ -67,7 +67,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
                 "later row's background erases the earlier row's border.");
         }
 
-        private static bool Overlaps(PeachPDF.Html.Adapters.Entities.RRect bounds, double y) =>
+        private static bool Overlaps(PeachDrawing.Abstractions.Rect bounds, double y) =>
             y >= bounds.Y - 1 && y <= bounds.Y + bounds.Height + 1;
     }
 }

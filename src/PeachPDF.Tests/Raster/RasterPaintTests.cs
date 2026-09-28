@@ -1,27 +1,22 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Raster;
+using PeachDrawing.Abstractions;
+using PeachDrawing;
+using System.Numerics;
 
 namespace PeachPDF.Tests.Raster
 {
-    /// <summary>Gradients, pen styles, clips and images drawn through <see cref="RasterGraphics"/>.</summary>
+    /// <summary>Gradients, pen styles, clips and images drawn through <see cref="RasterCanvas"/>.</summary>
     public class RasterPaintTests
     {
         private static readonly PdfSharpAdapter Adapter = new();
 
-        private static RasterGraphics NewGraphics(int width, int height)
+        private static RasterCanvas NewGraphics(int width, int height)
         {
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            return new RasterGraphics(Adapter, surface, 1);
+            return new RasterCanvas(Adapter, surface, 1);
         }
 
-        private static byte[] Pixel(RasterGraphics g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
-
-        private static XColor Red => XColor.FromArgb(255, 255, 0, 0);
-
-        private static XColor Blue => XColor.FromArgb(255, 0, 0, 255);
+        private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 
         // ---- linear gradients, the four rectangle modes ----
 
@@ -33,7 +28,7 @@ namespace PeachPDF.Tests.Raster
         public void RectangleGradient_RunsInTheDirectionOfItsMode(double angle, bool redOnLeft, bool redOnRight)
         {
             var g = NewGraphics(20, 20);
-            var brush = g.GetLinearGradientBrush(new RRect(0, 0, 20, 20), RColor.FromArgb(255, 255, 0, 0), RColor.FromArgb(255, 0, 0, 255), angle);
+            var brush = g.GetLinearGradientBrush(new Rect(0, 0, 20, 20), PaintColor.FromArgb(255, 255, 0, 0), PaintColor.FromArgb(255, 0, 0, 255), angle);
 
             g.DrawRectangle(brush, 0, 0, 20, 20);
 
@@ -53,8 +48,8 @@ namespace PeachPDF.Tests.Raster
         public void RepeatingLinearGradient_RepeatsItsColourStops()
         {
             var g = NewGraphics(40, 1);
-            var brush = g.GetLinearGradientBrush(new RPoint(0, 0), new RPoint(10, 0),
-                [(RColor.FromArgb(255, 255, 0, 0), 0.0), (RColor.FromArgb(255, 0, 0, 255), 1.0)], isRepeating: true);
+            var brush = g.GetLinearGradientBrush(new PaintPoint(0, 0), new PaintPoint(10, 0),
+                [(PaintColor.FromArgb(255, 255, 0, 0), 0.0), (PaintColor.FromArgb(255, 0, 0, 255), 1.0)], isRepeating: true);
 
             g.DrawRectangle(brush, 0, 0, 40, 1);
 
@@ -69,8 +64,8 @@ namespace PeachPDF.Tests.Raster
         public void GradientWithTransparentStops_IsPremultiplied()
         {
             var g = NewGraphics(10, 1);
-            var brush = g.GetLinearGradientBrush(new RPoint(0, 0), new RPoint(10, 0),
-                [(RColor.FromArgb(0, 255, 0, 0), 0.0), (RColor.FromArgb(255, 255, 0, 0), 1.0)]);
+            var brush = g.GetLinearGradientBrush(new PaintPoint(0, 0), new PaintPoint(10, 0),
+                [(PaintColor.FromArgb(0, 255, 0, 0), 0.0), (PaintColor.FromArgb(255, 255, 0, 0), 1.0)]);
 
             g.DrawRectangle(brush, 0, 0, 10, 1);
 
@@ -85,28 +80,18 @@ namespace PeachPDF.Tests.Raster
         public void SingleStopGradient_IsThatColourEverywhere()
         {
             var g = NewGraphics(4, 1);
-            var brush = new BrushAdapter(new XLinearGradientBrush(new XPoint(0, 0), new XPoint(4, 0), [Red], [0.0]));
+            var brush = g.GetLinearGradientBrush(new PaintPoint(0, 0), new PaintPoint(4, 0), [(PaintColor.FromArgb(255, 255, 0, 0), 0.0)]);
 
             g.DrawRectangle(brush, 0, 0, 4, 1);
 
             Assert.Equal(new byte[] { 255, 0, 0, 255 }, Pixel(g, 2, 0));
         }
 
-        [Fact]
-        public void GradientBrushTransform_MovesTheGradient()
-        {
-            var g = NewGraphics(20, 1);
-            var xBrush = new XLinearGradientBrush(new XPoint(0, 0), new XPoint(10, 0), [Red, Blue], [0.0, 1.0]);
-            xBrush.TranslateTransform(10, 0);
-
-            g.DrawRectangle(new BrushAdapter(xBrush), 0, 0, 20, 1);
-
-            // Translated by 10: the red end now sits at x = 10 and the middle of the ramp at x = 15
-            // (untranslated, the ramp would already be finished by x = 10).
-            Assert.True(Pixel(g, 10, 0)[0] > 200);
-            Assert.InRange(Pixel(g, 15, 0)[0], 100, 160);
-            Assert.True(Pixel(g, 19, 0)[2] > 200);
-        }
+        // A gradient brush's own transform (XBaseGradientBrush.Matrix) had no production caller - SVG's
+        // gradientTransform is applied by pre-transforming the gradient's geometry points before the
+        // brush is even built (SvgRenderer.ApplyMatrix), not via a brush-level matrix - so it was dropped
+        // from the self-describing LinearGradientBrush/RadialGradientBrush/ConicGradientBrush shapes
+        // (see Brush's own remarks). The test that exercised it directly is retired along with it.
 
         // ---- radial ----
 
@@ -114,9 +99,9 @@ namespace PeachPDF.Tests.Raster
         public void RadialGradient_WithAFocalPoint_ShiftsTheBrightestPoint()
         {
             var g = NewGraphics(40, 40);
-            var brush = g.GetRadialGradientBrush(new RPoint(20, 20), 18, 18,
-                [(RColor.FromArgb(255, 255, 255, 255), 0.0), (RColor.FromArgb(255, 0, 0, 0), 1.0)],
-                focalCenter: new RPoint(10, 20));
+            var brush = g.GetRadialGradientBrush(new PaintPoint(20, 20), 18, 18,
+                [(PaintColor.FromArgb(255, 255, 255, 255), 0.0), (PaintColor.FromArgb(255, 0, 0, 0), 1.0)],
+                focalCenter: new PaintPoint(10, 20));
 
             g.DrawRectangle(brush, 0, 0, 40, 40);
 
@@ -127,8 +112,8 @@ namespace PeachPDF.Tests.Raster
         public void RepeatingRadialGradient_RepeatsOutward()
         {
             var g = NewGraphics(60, 60);
-            var brush = g.GetRadialGradientBrush(new RPoint(30, 30), 10, 10,
-                [(RColor.FromArgb(255, 255, 255, 255), 0.0), (RColor.FromArgb(255, 0, 0, 0), 1.0)], isRepeating: true);
+            var brush = g.GetRadialGradientBrush(new PaintPoint(30, 30), 10, 10,
+                [(PaintColor.FromArgb(255, 255, 255, 255), 0.0), (PaintColor.FromArgb(255, 0, 0, 0), 1.0)], isRepeating: true);
 
             g.DrawRectangle(brush, 0, 0, 60, 60);
 
@@ -140,31 +125,24 @@ namespace PeachPDF.Tests.Raster
         public void EllipticalRadialGradient_IsWiderThanItIsTall()
         {
             var g = NewGraphics(60, 40);
-            var brush = g.GetRadialGradientBrush(new RPoint(30, 20), 28, 12,
-                [(RColor.FromArgb(255, 255, 255, 255), 0.0), (RColor.FromArgb(255, 0, 0, 0), 1.0)]);
+            var brush = g.GetRadialGradientBrush(new PaintPoint(30, 20), 28, 12,
+                [(PaintColor.FromArgb(255, 255, 255, 255), 0.0), (PaintColor.FromArgb(255, 0, 0, 0), 1.0)]);
 
             g.DrawRectangle(brush, 0, 0, 60, 40);
 
             Assert.True(Pixel(g, 30 + 10, 20)[0] > Pixel(g, 30, 20 + 10)[0]);
         }
 
-        [Fact]
-        public void TwoCircleRadialBrush_WithoutStops_InterpolatesFromInnerToOuterRadius()
-        {
-            var g = NewGraphics(40, 40);
-            var xBrush = new XRadialGradientBrush(new XPoint(20, 20), 5, 18, Red, Blue);
-
-            g.DrawRectangle(new BrushAdapter(xBrush), 0, 0, 40, 40);
-
-            Assert.True(Pixel(g, 20, 20)[0] > 200);
-            Assert.True(Pixel(g, 20 + 17, 20)[2] > 150);
-        }
+        // The two-colour, inner/outer-radius XRadialGradientBrush constructor (no stop list) has no
+        // production caller either - RenderContext.GetRadialGradientBrush always builds the stops-based shape
+        // - so RadialGradientBrush doesn't model an inner radius, and the test exercising that
+        // constructor directly is retired along with it (see PaintSource.RadialPaint.Create's own remarks).
 
         // ---- pens ----
 
-        private static RPen Pen(RasterGraphics g, double width, RLineCap cap = RLineCap.Butt, RLineJoin join = RLineJoin.Miter, RDashStyle dash = RDashStyle.Solid)
+        private static Pen Pen(RasterCanvas g, double width, LineCap cap = LineCap.Butt, LineJoin join = LineJoin.Miter, DashStyle dash = DashStyle.Solid)
         {
-            var pen = g.GetPen(RColor.FromArgb(255, 0, 0, 0));
+            var pen = g.GetPen(PaintColor.FromArgb(255, 0, 0, 0));
             pen.Width = width;
             pen.LineCap = cap;
             pen.LineJoin = join;
@@ -179,7 +157,7 @@ namespace PeachPDF.Tests.Raster
         [InlineData("DashDotDot")]
         public void PresetDashStyles_LeaveGaps(string styleName)
         {
-            var style = Enum.Parse<RDashStyle>(styleName);
+            var style = Enum.Parse<DashStyle>(styleName);
             var g = NewGraphics(120, 10);
 
             g.DrawLine(Pen(g, 2, dash: style), 0, 5, 120, 5);
@@ -216,7 +194,7 @@ namespace PeachPDF.Tests.Raster
         [InlineData("Square")]
         public void LineCaps_ExtendBeyondTheEndpoints(string capName)
         {
-            var cap = Enum.Parse<RLineCap>(capName);
+            var cap = Enum.Parse<LineCap>(capName);
             var g = NewGraphics(30, 20);
 
             g.DrawLine(Pen(g, 8, cap), 10, 10, 20, 10);
@@ -231,7 +209,7 @@ namespace PeachPDF.Tests.Raster
         [InlineData("Bevel")]
         public void PathStroke_JoinsBendsWithoutGaps(string joinName)
         {
-            var join = Enum.Parse<RLineJoin>(joinName);
+            var join = Enum.Parse<LineJoin>(joinName);
             var g = NewGraphics(30, 30);
             var path = g.GetGraphicsPath();
             path.Start(5, 25);
@@ -249,8 +227,8 @@ namespace PeachPDF.Tests.Raster
         public void PenWithAGradientBrush_StrokesWithTheGradient()
         {
             var g = NewGraphics(40, 10);
-            var brush = g.GetLinearGradientBrush(new RPoint(0, 0), new RPoint(40, 0),
-                [(RColor.FromArgb(255, 255, 0, 0), 0.0), (RColor.FromArgb(255, 0, 0, 255), 1.0)]);
+            var brush = g.GetLinearGradientBrush(new PaintPoint(0, 0), new PaintPoint(40, 0),
+                [(PaintColor.FromArgb(255, 255, 0, 0), 0.0), (PaintColor.FromArgb(255, 0, 0, 255), 1.0)]);
             var pen = g.GetPen(brush);
             pen.Width = 4;
 
@@ -280,8 +258,8 @@ namespace PeachPDF.Tests.Raster
             var g = NewGraphics(40, 40);
             var a = Math.PI / 4;
 
-            g.PushTransform(new RMatrix(Math.Cos(a), Math.Sin(a), -Math.Sin(a), Math.Cos(a), 20, 5));
-            g.DrawRectangle(g.GetSolidBrush(RColor.FromArgb(255, 0, 0, 0)), 0, 0, 10, 10);
+            g.PushTransform(new Matrix3x2((float)Math.Cos(a), (float)Math.Sin(a), (float)-Math.Sin(a), (float)Math.Cos(a), 20, 5));
+            g.DrawRectangle(g.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 0)), 0, 0, 10, 10);
             g.PopTransform();
 
             // A square turned 45 degrees is a diamond: its top corner is at (20, 5) and it is centred on (20, 5 + 7.07).
@@ -294,18 +272,18 @@ namespace PeachPDF.Tests.Raster
         {
             var g = NewGraphics(40, 40);
 
-            g.PushTransform(new RMatrix(0.7071, 0.7071, -0.7071, 0.7071, 20, 0));
-            g.PushClip(new RRect(0, 0, 20, 20));
+            g.PushTransform(new Matrix3x2(0.7071f, 0.7071f, -0.7071f, 0.7071f, 20, 0));
+            g.PushClip(new Rect(0, 0, 20, 20));
             g.PopTransform();
-            g.DrawRectangle(g.GetSolidBrush(RColor.FromArgb(255, 0, 0, 0)), 0, 0, 40, 40);
+            g.DrawRectangle(g.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 0)), 0, 0, 40, 40);
             g.PopClip();
 
             Assert.True(Pixel(g, 20, 14)[3] > 200);
             Assert.Equal(0, Pixel(g, 2, 2)[3]);
 
             var h = NewGraphics(10, 10);
-            h.PushClip(new RRect(1.5, 1.5, 4, 4));
-            h.DrawRectangle(h.GetSolidBrush(RColor.FromArgb(255, 0, 0, 0)), 0, 0, 10, 10);
+            h.PushClip(new Rect(1.5, 1.5, 4, 4));
+            h.DrawRectangle(h.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 0)), 0, 0, 10, 10);
             h.PopClip();
             Assert.InRange(Pixel(h, 1, 3)[3], 100, 156);
         }
@@ -322,8 +300,8 @@ namespace PeachPDF.Tests.Raster
             path.CloseFigure();
 
             g.PushClip(path);
-            g.PushClip(new RRect(5, 5, 6, 6));
-            g.DrawRectangle(g.GetSolidBrush(RColor.FromArgb(255, 0, 0, 0)), 0, 0, 20, 20);
+            g.PushClip(new Rect(5, 5, 6, 6));
+            g.DrawRectangle(g.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 0)), 0, 0, 20, 20);
             g.PopClip();
             g.PopClip();
 
@@ -337,8 +315,8 @@ namespace PeachPDF.Tests.Raster
         {
             var g = NewGraphics(10, 10);
 
-            g.PushClip(new RRect(50, 50, 5, 5));
-            g.DrawRectangle(g.GetSolidBrush(RColor.FromArgb(255, 0, 0, 0)), 0, 0, 10, 10);
+            g.PushClip(new Rect(50, 50, 5, 5));
+            g.DrawRectangle(g.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 0)), 0, 0, 10, 10);
             g.PopClip();
 
             Assert.Equal(0, Pixel(g, 5, 5)[3]);
@@ -348,12 +326,12 @@ namespace PeachPDF.Tests.Raster
         public void SuspendedClipping_DrawsAtTheFullSurfaceUntilResumed()
         {
             var g = NewGraphics(10, 10);
-            g.PushClip(new RRect(0, 0, 2, 2));
+            g.PushClip(new Rect(0, 0, 2, 2));
 
             g.SuspendClipping();
-            g.DrawRectangle(g.GetSolidBrush(RColor.FromArgb(255, 0, 0, 0)), 5, 5, 2, 2);
+            g.DrawRectangle(g.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 0)), 5, 5, 2, 2);
             g.ResumeClipping();
-            g.DrawRectangle(g.GetSolidBrush(RColor.FromArgb(255, 0, 0, 0)), 8, 8, 2, 2);
+            g.DrawRectangle(g.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 0)), 8, 8, 2, 2);
 
             Assert.Equal(255, Pixel(g, 5, 5)[3]);
             Assert.Equal(0, Pixel(g, 8, 8)[3]);
@@ -365,9 +343,9 @@ namespace PeachPDF.Tests.Raster
             var g = NewGraphics(10, 10);
             var previous = g.SetAntiAliasSmoothingMode();
 
-            g.DrawPolygon(g.GetSolidBrush(RColor.FromArgb(255, 0, 0, 0)), [new RPoint(0, 0), new RPoint(10, 0), new RPoint(0, 10)]);
+            g.DrawPolygon(g.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 0)), [new PaintPoint(0, 0), new PaintPoint(10, 0), new PaintPoint(0, 10)]);
             g.ReturnPreviousSmoothingMode(previous);
-            g.DrawPolygon(g.GetSolidBrush(RColor.FromArgb(255, 0, 0, 0)), []);
+            g.DrawPolygon(g.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 0)), []);
 
             Assert.Equal(255, Pixel(g, 1, 1)[3]);
             Assert.Equal(0, Pixel(g, 9, 9)[3]);
@@ -377,14 +355,14 @@ namespace PeachPDF.Tests.Raster
         public void BlendModeStack_RestoresThePreviousMode()
         {
             var g = NewGraphics(2, 2);
-            g.DrawRectangle(g.GetSolidBrush(RColor.FromArgb(255, 255, 255, 0)), 0, 0, 2, 2);
+            g.DrawRectangle(g.GetSolidBrush(PaintColor.FromArgb(255, 255, 255, 0)), 0, 0, 2, 2);
 
-            g.PushBlendMode(RBlendMode.Multiply);
-            g.PushBlendMode(RBlendMode.Screen);
+            g.PushBlendMode(PaintBlendMode.Multiply);
+            g.PushBlendMode(PaintBlendMode.Screen);
             g.PopBlendMode();
             g.PopBlendMode();
             g.PopBlendMode();
-            g.DrawRectangle(g.GetSolidBrush(RColor.FromArgb(255, 0, 0, 255)), 0, 0, 2, 2);
+            g.DrawRectangle(g.GetSolidBrush(PaintColor.FromArgb(255, 0, 0, 255)), 0, 0, 2, 2);
 
             Assert.Equal(new byte[] { 0, 0, 255, 255 }, Pixel(g, 0, 0));
         }
@@ -400,7 +378,7 @@ namespace PeachPDF.Tests.Raster
             g.EndMarkedContent();
             g.BeginVariableText();
             g.EndVariableText();
-            g.PushClipExclude(new RRect(0, 0, 1, 1));
+            g.PushClipExclude(new Rect(0, 0, 1, 1));
             g.PopTransform();
             g.Dispose();
 

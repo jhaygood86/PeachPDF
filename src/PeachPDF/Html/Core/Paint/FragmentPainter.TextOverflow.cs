@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
@@ -18,7 +17,7 @@ namespace PeachPDF.Html.Core.Paint
     internal sealed partial class FragmentPainter
     {
         /// <summary>One word's kept substring and where to paint it, once a line's truncation point is found.</summary>
-        private readonly record struct WordTruncation(string KeptText, RRect KeptRect, RSize KeptSize, double EllipsisAnchor);
+        private readonly record struct WordTruncation(string KeptText, Rect KeptRect, Size KeptSize, double EllipsisAnchor);
 
         /// <param name="g">the device to draw into</param>
         /// <param name="box">the box whose own words are being painted - the source of font/color/text style</param>
@@ -43,7 +42,7 @@ namespace PeachPDF.Html.Core.Paint
         /// either fit entirely (nothing recorded) or are the one that finds and paints the cut (recorded
         /// after); every later box then sees the line already recorded and paints nothing further on it.
         /// </remarks>
-        private void PaintWordsWithEllipsis(RGraphics g, CssBox box, CssBox containingBlock, BoxFragment fragment)
+        private void PaintWordsWithEllipsis(Canvas g, CssBox box, CssBox containingBlock, BoxFragment fragment)
         {
             var isVertical = containingBlock.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr;
             var isRtl = containingBlock.Direction.Value == DirectionMode.Rtl;
@@ -144,14 +143,14 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>A word's own edge furthest along the line's start-to-end walk - its end coordinate (right/bottom) walking forward (LTR), its start coordinate (left/top) walking in reverse (RTL).</summary>
-        private static double LeadingEdge(RRect rect, bool isVertical, bool isRtl)
+        private static double LeadingEdge(Rect rect, bool isVertical, bool isRtl)
         {
             if (!isVertical) return isRtl ? rect.Left : rect.Right;
             return isRtl ? rect.Top : rect.Bottom;
         }
 
         /// <summary>A word's own edge nearest the line's start - the mirror of <see cref="LeadingEdge"/>, and the anchor a truncated word's own kept run grows from.</summary>
-        private static double TrailingEdge(RRect rect, bool isVertical, bool isRtl)
+        private static double TrailingEdge(Rect rect, bool isVertical, bool isRtl)
         {
             if (!isVertical) return isRtl ? rect.Right : rect.Left;
             return isRtl ? rect.Bottom : rect.Top;
@@ -172,7 +171,7 @@ namespace PeachPDF.Html.Core.Paint
         // this path truncates itself is drawn elsewhere (FitTruncatedWord/DrawEllipsis) and is
         // deliberately NOT recorded - `text-overflow: ellipsis` is truncation the author asked for
         // and the reader can see, which is the opposite of the silent loss the report exists for.
-        private bool PaintLineWithEllipsis(RGraphics g, CssBox box, List<TextFragment> lineWords, bool isVertical, bool isRtl, double boundary, double lineStart)
+        private bool PaintLineWithEllipsis(Canvas g, CssBox box, List<TextFragment> lineWords, bool isVertical, bool isRtl, double boundary, double lineStart)
         {
             var lastLeading = LeadingEdge(lineWords[^1].Rect, isVertical, isRtl);
             if (!(Forward(lastLeading, isRtl) > Forward(boundary, isRtl)))
@@ -233,7 +232,7 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>Mirrors <c>PaintWordSequence</c>'s own issue-#113 visibility check for a draw call that bypasses it (a truncation's kept run/ellipsis glyph, drawn directly through <see cref="FragmentPainter.DrawWordGlyphs"/>).</summary>
-        private static bool IsVisible(RGraphics g, RRect rect)
+        private static bool IsVisible(Canvas g, Rect rect)
         {
             var clip = g.GetClip();
             clip.Intersect(rect);
@@ -248,7 +247,7 @@ namespace PeachPDF.Html.Core.Paint
         /// head) - while still leaving room for a trailing ellipsis. Returns null if not even one
         /// character fits, so the caller falls back to dropping the whole word.
         /// </summary>
-        private static WordTruncation? FitTruncatedWord(RGraphics g, CssBox box, TextFragment wf, bool isVertical, bool isRtl, double boundaryF)
+        private static WordTruncation? FitTruncatedWord(Canvas g, CssBox box, TextFragment wf, bool isVertical, bool isRtl, double boundaryF)
         {
             var word = wf.Word;
             if (word.IsLineBreak) return null;
@@ -312,7 +311,7 @@ namespace PeachPDF.Html.Core.Paint
 
             var keptText = isRtl ? text[^kept..] : text[..kept];
             var (keptRect, ellipsisAnchor) = PlaceTruncatedRun(wf.Rect, isVertical, isRtl, keptExtent);
-            var keptSize = isVertical ? new RSize(wf.Rect.Width, keptExtent) : new RSize(keptExtent, wf.Rect.Height);
+            var keptSize = isVertical ? new Size(wf.Rect.Width, keptExtent) : new Size(keptExtent, wf.Rect.Height);
 
             return new WordTruncation(keptText, keptRect, keptSize, ellipsisAnchor);
         }
@@ -323,26 +322,26 @@ namespace PeachPDF.Html.Core.Paint
         /// prefix, its end for a kept suffix) is unchanged from the original word's rect; only its
         /// far edge moves in by however much was dropped.
         /// </summary>
-        private static (RRect KeptRect, double EllipsisAnchor) PlaceTruncatedRun(RRect original, bool isVertical, bool isRtl, double keptExtent)
+        private static (Rect KeptRect, double EllipsisAnchor) PlaceTruncatedRun(Rect original, bool isVertical, bool isRtl, double keptExtent)
         {
             if (!isVertical)
             {
                 if (!isRtl)
                 {
-                    return (new RRect(original.X, original.Y, keptExtent, original.Height), original.X + keptExtent);
+                    return (new Rect(original.X, original.Y, keptExtent, original.Height), original.X + keptExtent);
                 }
 
                 var startX = original.Right - keptExtent;
-                return (new RRect(startX, original.Y, keptExtent, original.Height), startX);
+                return (new Rect(startX, original.Y, keptExtent, original.Height), startX);
             }
 
             if (!isRtl)
             {
-                return (new RRect(original.X, original.Y, original.Width, keptExtent), original.Y + keptExtent);
+                return (new Rect(original.X, original.Y, original.Width, keptExtent), original.Y + keptExtent);
             }
 
             var startY = original.Bottom - keptExtent;
-            return (new RRect(original.X, startY, original.Width, keptExtent), startY);
+            return (new Rect(original.X, startY, original.Width, keptExtent), startY);
         }
 
         /// <summary>
@@ -351,26 +350,26 @@ namespace PeachPDF.Html.Core.Paint
         /// is where the ellipsis starts (LTR) or ends (RTL, since it sits before - at lower coordinate
         /// than - whatever it follows in the walk direction).
         /// </summary>
-        private static void DrawEllipsis(RGraphics g, CssBox box, CssRect referenceWord, bool isVertical, bool isRtl, double anchor, RRect referenceRect)
+        private static void DrawEllipsis(Canvas g, CssBox box, CssRect referenceWord, bool isVertical, bool isRtl, double anchor, Rect referenceRect)
         {
             var styleSource = referenceWord.FirstLineStyle ?? box;
             var isUpright = isVertical && ResolveIsUpright(box, referenceWord);
             var ellipsisFont = ResolveEllipsisFont(styleSource, referenceWord.FontSizeScale);
             var extent = MeasureRunExtent(g, "…", ellipsisFont, styleSource, isUpright);
 
-            RRect rect;
+            Rect rect;
             if (!isVertical)
             {
                 var startX = isRtl ? anchor - extent : anchor;
-                rect = new RRect(startX, referenceRect.Y, extent, referenceRect.Height);
+                rect = new Rect(startX, referenceRect.Y, extent, referenceRect.Height);
             }
             else
             {
                 var startY = isRtl ? anchor - extent : anchor;
-                rect = new RRect(referenceRect.X, startY, referenceRect.Width, extent);
+                rect = new Rect(referenceRect.X, startY, referenceRect.Width, extent);
             }
 
-            if (IsVisible(g, rect)) DrawWordGlyphs(g, box, referenceWord, rect, "…", new RSize(extent, referenceRect.Height), ellipsisFont);
+            if (IsVisible(g, rect)) DrawWordGlyphs(g, box, referenceWord, rect, "…", new Size(extent, referenceRect.Height), ellipsisFont);
         }
 
         /// <summary>
@@ -378,7 +377,7 @@ namespace PeachPDF.Html.Core.Paint
         /// own authored <c>font-family</c> fallback stack - never assumed to be whatever font a
         /// neighboring word's own (possibly narrower, script-specific) codepoints happened to resolve to.
         /// </summary>
-        private static RFont ResolveEllipsisFont(CssBox styleSource, double fontSizeScale)
+        private static Font ResolveEllipsisFont(CssBox styleSource, double fontSizeScale)
         {
             Rune.DecodeFromUtf16("…", out var rune, out _);
             return styleSource.ActualFontForCodepoint(rune, fontSizeScale);
@@ -400,7 +399,7 @@ namespace PeachPDF.Html.Core.Paint
         /// mirroring <see cref="FragmentPainter.PaintUprightVerticalRun"/>'s own per-character metric
         /// choice.
         /// </summary>
-        private static double MeasureRunExtent(RGraphics g, string text, RFont font, CssBox styleSource, bool isVerticalUpright)
+        private static double MeasureRunExtent(Canvas g, string text, Font font, CssBox styleSource, bool isVerticalUpright)
         {
             if (!isVerticalUpright)
             {
@@ -433,7 +432,7 @@ namespace PeachPDF.Html.Core.Paint
         /// no larger than the difference between the box's own font and an unusually differently-sized
         /// nested run's, which is immaterial next to the walk it's gating.
         /// </summary>
-        private static double ApproximateEllipsisExtent(RGraphics g, CssBox box, bool isVertical)
+        private static double ApproximateEllipsisExtent(Canvas g, CssBox box, bool isVertical)
         {
             var font = ResolveEllipsisFont(box, 1.0);
             if (!isVertical) return g.MeasureString("…", font, box.ActualTextShapingFeatures).Width;

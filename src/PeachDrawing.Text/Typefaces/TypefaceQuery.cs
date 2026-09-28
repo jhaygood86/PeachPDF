@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -65,5 +66,30 @@ namespace PeachDrawing.Text
 
         /// <summary>The normal width class, 5.</summary>
         public const int NormalWidth = 5;
+
+        /// <summary>
+        /// Builds a query from the primitive values a font-creation API typically starts with (a numeric
+        /// weight, a width percentage, an italic flag, an optional character to cover, an already-resolved
+        /// set of variable-font axes, and the sine of a requested oblique angle rather than the angle
+        /// itself) - the one piece of query-building glue every backend that creates fonts from these needs,
+        /// factored out so it is written once rather than once per backend.
+        /// </summary>
+        /// <param name="weight">The weight wanted, from 1 to 1000; 400 is normal and 700 is bold.</param>
+        /// <param name="widthPercent">The width wanted as a percentage of the normal width (CSS <c>font-stretch: 87.5%</c>); 100 is normal.</param>
+        /// <param name="isItalic">Whether an italic (or oblique) face is wanted.</param>
+        /// <param name="mustCover">A character the face has to be able to draw, or null for none.</param>
+        /// <param name="axes">Values for the axes of a variable face, already resolved from whatever syntax the caller's own font-variation-settings encoding uses, or null for none.</param>
+        /// <param name="obliqueSkewSinus">
+        /// The sine of a declared oblique angle (the form a font-facing rendering abstraction typically
+        /// carries it in), or null for the default angle. Converted to degrees here (rounded to four decimals,
+        /// far finer than any angle an author writes) because the angle a caller asks for went through a
+        /// single-precision radian and a sine to get to <paramref name="obliqueSkewSinus"/>, so it does not
+        /// come back exact, and <see cref="ObliqueAngle"/> is compared with the exact ends of the ranges
+        /// that faces declare.
+        /// </param>
+        public static TypefaceQuery From(double weight, double widthPercent, bool isItalic, Rune? mustCover,
+            IReadOnlyList<AxisSetting>? axes, double? obliqueSkewSinus) =>
+            new(weight, NormalWidth, isItalic, mustCover, axes, widthPercent,
+                obliqueSkewSinus is { } sinus ? Math.Round(Math.Asin(Math.Clamp(sinus, -1, 1)) * 180 / Math.PI, 4) : null);
     }
 }

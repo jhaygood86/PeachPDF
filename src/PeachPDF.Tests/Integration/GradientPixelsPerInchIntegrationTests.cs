@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Integration
     /// (<c>radial-gradient(20px at ..., ...)</c>) and an absolute- or em-unit gradient stop position
     /// (<c>red 0, blue 30px, green</c> / <c>blue 2em</c>) used to resolve via the bare
     /// <c>Length.ToPixel()</c> or a hard-coded <c>emPx</c>, with no knowledge of <c>PixelsPerPoint</c>
-    /// (<c>RGraphics.PixelsPerPoint</c>, ultimately <c>PdfGenerateConfig.PixelsPerInch / 72</c>) - so all
+    /// (<c>Canvas.PixelsPerPoint</c>, ultimately <c>PdfGenerateConfig.PixelsPerInch / 72</c>) - so all
     /// three shrank relative to the (correctly DPI-scaled) box they paint into whenever
     /// <c>PixelsPerInch</c> was not the library's default of 72. Each fixture here is rendered at two
     /// different <c>PixelsPerInch</c> values and asserts the PDF's resolved gradient geometry is identical

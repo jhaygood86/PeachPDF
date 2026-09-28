@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -24,7 +24,7 @@ namespace PeachPDF.Svg
     /// </summary>
     internal static class SvgTransformParser
     {
-        public static RMatrix? Parse(string? value)
+        public static Matrix3x2? Parse(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))
                 return null;
@@ -49,7 +49,7 @@ namespace PeachPDF.Svg
             if (!hasAny)
                 return null;
 
-            return new RMatrix(combined.M11, combined.M12, combined.M21, combined.M22, combined.M41, combined.M42);
+            return new Matrix3x2(combined.M11, combined.M12, combined.M21, combined.M22, combined.M41, combined.M42);
         }
 
         private static bool TryReadFunction(string s, ref int pos, out string name, out List<double> args)

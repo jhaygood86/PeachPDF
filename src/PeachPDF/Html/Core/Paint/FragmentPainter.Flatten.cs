@@ -1,9 +1,10 @@
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Raster.Filters;
+using PeachDrawing;
+using PeachDrawing.Filters;
 using System;
 
 namespace PeachPDF.Html.Core.Paint
@@ -39,7 +40,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>Set on a flatten repaint painter: the fragment after which painting stops.</summary>
         private BoxFragment? _stopAfter;
 
-        private bool TryFlatten(RGraphics g, BoxFragment fragment, FilterEffectResolver.Resolved filter)
+        private bool TryFlatten(Canvas g, BoxFragment fragment, FilterEffectResolver.Resolved filter)
         {
             if (!g.FlattensTransparency || _pageRoot is null || _stopAt is not null || _stopAfter is not null || g.IsOffscreenTile)
                 return false;
@@ -71,17 +72,16 @@ namespace PeachPDF.Html.Core.Paint
             filter.OpacityMultiplier < 1.0 ||
             box.ActualBackdropFilterFunctions.Count > 0;
 
-        private bool OwnPaintNeedsTransparency(RGraphics g, BoxFragment fragment)
+        private bool OwnPaintNeedsTransparency(Canvas g, BoxFragment fragment)
         {
-            var probe = g.CreateTransparencyProbe();
-            if (probe is null)
+            if (g.CreateTransparencyProbe() is not TransparencyProbe probe)
                 return false;
 
             return probe.Requires(scratch =>
                 new FragmentPainter(container) { _ownOnly = true, _taggingSuppressed = true }.PaintContent(scratch, fragment));
         }
 
-        private bool FlattenSubtree(RGraphics g, BoxFragment fragment)
+        private bool FlattenSubtree(Canvas g, BoxFragment fragment)
         {
             if (SubtreeExtent(fragment) is not { } extent)
                 return false;
@@ -94,12 +94,12 @@ namespace PeachPDF.Html.Core.Paint
                 return true;
             }
 
-            using var scope = g.BeginRasterSurface(bounds);
+            using var scope = g.BeginRasterSurface(bounds) as RasterSurfaceScope;
             if (scope is null)
                 return false;
 
             // Paper, then the page's canvas, then everything painted up to and including this box.
-            FilterOps.Fill(scope.Surface, RColor.FromArgb(255, 255, 255, 255), 1.0);
+            FilterOps.Fill(scope.Surface, PaintColor.FromArgb(255, 255, 255, 255), 1.0);
             if (container.CanvasBackgroundBox is { } canvas)
                 PaintCanvasBackground(scope.Graphics, canvas, container.PageBoxRect);
 

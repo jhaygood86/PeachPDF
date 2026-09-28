@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -176,9 +176,9 @@ namespace PeachPDF.Tests.Integration
         /// is not a single <c>DrawLine</c> stroke at all (a stroked path instead), unlike every style here.
         /// </summary>
         [Theory]
-        [InlineData("dotted", nameof(RDashStyle.Dot))]
-        [InlineData("dashed", nameof(RDashStyle.Dash))]
-        [InlineData("solid", nameof(RDashStyle.Solid))]
+        [InlineData("dotted", nameof(DashStyle.Dot))]
+        [InlineData("dashed", nameof(DashStyle.Dash))]
+        [InlineData("solid", nameof(DashStyle.Solid))]
         public async Task OtherStyles_AreStillASingleStroke(string style, string expected)
         {
             var strokes = await StrokesOf($"<span id='s' style='text-decoration:underline {style}'>total</span>");
@@ -195,7 +195,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>As <see cref="StrokesOf"/>, plus the decorated box's own laid-out rectangle.</summary>
-        private static async Task<(List<TestRecordingGraphics.DrawLineCall> Strokes, RRect Rect)> StrokesAndRectOf(string body)
+        private static async Task<(List<TestRecordingGraphics.DrawLineCall> Strokes, Rect Rect)> StrokesAndRectOf(string body)
         {
             var (root, container) = await BuildAndLayout(
                 $"<!DOCTYPE html><html><body style='margin:0'>{body}</body></html>");

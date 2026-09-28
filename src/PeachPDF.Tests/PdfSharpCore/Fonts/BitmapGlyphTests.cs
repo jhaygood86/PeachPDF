@@ -1,9 +1,8 @@
 using PeachDrawing.Text;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Raster;
+using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Text.RegularExpressions;
 
@@ -177,10 +176,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
                 return BitmapGlyphFontFixture.WithCbdt(bytes, new BitmapGlyphFontFixture.Picture(20, a, Png(16, 16, 255, 0, 0), 16, 16, 0, 16));
             });
             var surface = new RasterSurface(80, 60, 0, 0, 1, 1);
-            var g = new RasterGraphics(adapter, surface, 1);
-            var f = adapter.GetFont(family, 20, RFontStyle.Regular)!;
+            var g = new RasterCanvas(adapter, surface, 1);
+            var f = adapter.GetFont(family, 20, PaintFontStyle.Regular)!;
 
-            g.DrawString("A", f, RColor.FromArgb(255, 0, 0, 0), new RPoint(10, 10), g.MeasureString("A", f));
+            g.DrawString("A", f, PaintColor.FromArgb(255, 0, 0, 0), new PaintPoint(10, 10), g.MeasureString("A", f));
 
             // A 16 x 16 strike pixel red square at 20 ppem and 20pt: 16 x 16 device pixels, its lower edge on the baseline; no black outline ink.
             var red = 0;
