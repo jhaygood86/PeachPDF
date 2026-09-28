@@ -115,6 +115,9 @@ PeachDrawing.RasterCanvas : sealed class
   property Double PixelsPerPoint { get; }
   property Matrix3x2 CurrentTransform { get; }
   property RasterSurface Surface { get; }
+PeachDrawing.RasterLayerEffects : static class
+  method static ValueTuple<Double, Double> GetInkMargin(IReadOnlyList<LayerEffect> effects)
+  method static Void Apply(RasterSurface surface, IReadOnlyList<LayerEffect> effects)
 PeachDrawing.RasterRenderContext : sealed class
   ctor()
   method RasterCanvas CreateCanvas(Int32 widthPx, Int32 heightPx, Double dpi = 96)

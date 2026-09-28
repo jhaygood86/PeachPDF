@@ -279,6 +279,9 @@ namespace PeachDrawing.Core
             var clip = GetClip();
             var region = options.Bounds ?? new Rect(0, 0, clip.Right, clip.Bottom);
 
+            if (options.Effects is { Count: > 0 } effects)
+                return BeginEffectLayer(options, region, effects);
+
             if (CreateTile(region.Width, region.Height) is not { } tile)
                 return null;
 
@@ -310,6 +313,61 @@ namespace PeachDrawing.Core
 
                 DrawImageWithOpacity(image, region, options.Opacity, options.BlendMode);
             });
+        }
+
+        /// <summary>Whether this canvas can apply <see cref="LayerEffect"/>s in <see cref="BeginLayer"/>. False unless a subclass overrides it along with <see cref="ApplyLayerEffects"/>.</summary>
+        protected virtual bool SupportsLayerEffects => false;
+
+        /// <summary>
+        /// Applies <paramref name="effects"/>, in order, to the pixels of a finished layer. Called by <see cref="BeginLayer"/> only when
+        /// <see cref="SupportsLayerEffects"/> is true. The surface holds premultiplied pixels; its pixel pitch relative to this canvas's
+        /// units is <see cref="RasterSurface.PixelsPerUnitX"/> and <see cref="RasterSurface.PixelsPerUnitY"/>.
+        /// </summary>
+        /// <param name="surface">the layer's pixels, changed in place</param>
+        /// <param name="effects">the effects to apply</param>
+        protected virtual void ApplyLayerEffects(RasterSurface surface, IReadOnlyList<LayerEffect> effects)
+        {
+        }
+
+        private CanvasLayer? BeginEffectLayer(LayerOptions options, Rect region, IReadOnlyList<LayerEffect> effects)
+        {
+            if (!SupportsLayerEffects || BeginRasterSurface(region) is not { } raster)
+                return null;
+
+            // A colour matrix on the layer applies before its effects, as it does when there are none.
+            var ordered = options.ColorMatrix is { } matrix
+                ? new List<LayerEffect>(effects.Count + 1) { new ColorMatrixEffect(matrix) }
+                : new List<LayerEffect>(effects.Count);
+            ordered.AddRange(effects);
+
+            return new CanvasLayer(raster.Graphics, () =>
+            {
+                raster.Graphics.Dispose();
+                ApplyLayerEffects(raster.Surface, ordered);
+                if (options.Opacity < 1.0)
+                    ScaleSurfaceAlpha(raster.Surface, Math.Clamp(options.Opacity, 0.0, 1.0));
+
+                if (options.BlendMode == PaintBlendMode.Normal)
+                {
+                    DrawRaster(raster.Surface);
+                }
+                else
+                {
+                    PushBlendMode(options.BlendMode);
+                    DrawRaster(raster.Surface);
+                    PopBlendMode();
+                }
+
+                raster.Surface.Dispose();
+            });
+        }
+
+        /// <summary>Multiplies every premultiplied channel by <paramref name="factor"/>, which fades the whole surface.</summary>
+        private static void ScaleSurfaceAlpha(RasterSurface surface, double factor)
+        {
+            var pixels = surface.Pixels;
+            for (var i = 0; i < pixels.Length; i++)
+                pixels[i] = (byte)Math.Round(pixels[i] * factor);
         }
 
         /// <summary>

@@ -86,11 +86,12 @@ namespace PeachPDF.Html.Core.Paint
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return true;
 
-            using var scope = g.BeginRasterSurface(bounds);
-            if (scope is null)
+            // The blur radius is twice the standard deviation (CSS Backgrounds 3 §7.2).
+            using var layer = g.BeginLayer(new LayerOptions(Bounds: bounds, Effects: [new BlurEffect(blur / 2)]));
+            if (layer is null)
                 return false;
 
-            var rg = scope.Graphics;
+            var rg = layer.Canvas;
 
             // Shadow-coloured region: a rectangle larger than the bitmap, with the lit hole punched out (even-odd).
             var everything = Inflate(bounds, margin + 1);
@@ -124,10 +125,6 @@ namespace PeachPDF.Html.Core.Paint
             using (var brush = rg.GetSolidBrush(color))
                 rg.DrawPath(brush, ring);
 
-            var sigma = blur / 2;
-            GaussianBlur.Apply(scope.Surface, sigma * scope.Surface.PixelsPerUnitX, sigma * scope.Surface.PixelsPerUnitY);
-
-            g.DrawRaster(scope.Surface);
             return true;
         }
     }

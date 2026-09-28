@@ -98,6 +98,13 @@ public sealed partial class RasterCanvas : Canvas
     /// <inheritdoc/>
     public override bool PrefersRasterGroups => true;
 
+    /// <inheritdoc/>
+    protected override bool SupportsLayerEffects => true;
+
+    /// <inheritdoc/>
+    protected override void ApplyLayerEffects(RasterSurface surface, IReadOnlyList<LayerEffect> effects) =>
+        RasterLayerEffects.Apply(surface, effects);
+
     /// <summary>User space (points) to surface pixels under the current transform.</summary>
     private Affine UserToDevice => Affine.Then(_ctm, new Affine(_sx, 0, 0, _sy, -_surface.GridX, -_surface.GridY));
 

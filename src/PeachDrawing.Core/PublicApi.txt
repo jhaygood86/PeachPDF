@@ -1,3 +1,15 @@
+PeachDrawing.Core.BlurEffect : sealed class
+  ctor(Double SigmaX, Double SigmaY)
+  ctor(Double sigma)
+  method Void Deconstruct(out Double SigmaX, out Double SigmaY)
+  method virtual BlurEffect <Clone>$()
+  method virtual Boolean Equals(BlurEffect other)
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double SigmaX { get; init; }
+  property Double SigmaY { get; init; }
 PeachDrawing.Core.Brush : abstract class
   method virtual Void Dispose()
 PeachDrawing.Core.Canvas : abstract class
@@ -152,6 +164,16 @@ PeachDrawing.Core.ColorMatrix : struct
   property Boolean IsChannelIndependent { get; }
   property Matrix4x4 Linear { get; }
   property Vector4 Offset { get; }
+PeachDrawing.Core.ColorMatrixEffect : sealed class
+  ctor(ColorMatrix Matrix)
+  method Void Deconstruct(out ColorMatrix Matrix)
+  method virtual Boolean Equals(ColorMatrixEffect other)
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual ColorMatrixEffect <Clone>$()
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property ColorMatrix Matrix { get; init; }
 PeachDrawing.Core.ConicGradientBrush : sealed class
   ctor(PaintPoint center, Double outerRadius, IReadOnlyList<GradientStop> stops, IReadOnlyList<Double> anglesRadians)
   property Double OuterRadius { get; }
@@ -176,6 +198,20 @@ PeachDrawing.Core.DashStyle : enum Int32
   DashDotDot = 4
   Dot = 2
   Solid = 0
+PeachDrawing.Core.DropShadowEffect : sealed class
+  ctor(Double OffsetX, Double OffsetY, Double SigmaX, Double SigmaY, PaintColor Color)
+  method Void Deconstruct(out Double OffsetX, out Double OffsetY, out Double SigmaX, out Double SigmaY, out PaintColor Color)
+  method virtual Boolean Equals(DropShadowEffect other)
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual DropShadowEffect <Clone>$()
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double OffsetX { get; init; }
+  property Double OffsetY { get; init; }
+  property Double SigmaX { get; init; }
+  property Double SigmaY { get; init; }
+  property PaintColor Color { get; init; }
 PeachDrawing.Core.EllipticalArc : static class
   method static Boolean TryGetCenterParameterization(Double x1, Double y1, Double x2, Double y2, Double radiusX, Double radiusY, Double rotationRadians, Boolean isLargeArc, Boolean sweepClockwise, out EllipticalArcCenter arc)
 PeachDrawing.Core.EllipticalArcCenter : struct
@@ -367,15 +403,22 @@ PeachDrawing.Core.IntRect : struct
   property Int32 Top { get; init; }
   property Int32 Width { get; }
   property static IntRect Empty { get; }
+PeachDrawing.Core.LayerEffect : abstract class
+  method abstract LayerEffect <Clone>$()
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
 PeachDrawing.Core.LayerOptions : struct
-  ctor(Double Opacity = 1, PaintBlendMode BlendMode = Normal, ColorMatrix? ColorMatrix = null, Rect? Bounds = null)
-  method Void Deconstruct(out Double Opacity, out PaintBlendMode BlendMode, out ColorMatrix? ColorMatrix, out Rect? Bounds)
+  ctor(Double Opacity = 1, PaintBlendMode BlendMode = Normal, ColorMatrix? ColorMatrix = null, Rect? Bounds = null, IReadOnlyList<LayerEffect> Effects = null)
+  method Void Deconstruct(out Double Opacity, out PaintBlendMode BlendMode, out ColorMatrix? ColorMatrix, out Rect? Bounds, out IReadOnlyList<LayerEffect> Effects)
   method virtual Boolean Equals(LayerOptions other)
   method virtual Boolean Equals(Object obj)
   method virtual Int32 GetHashCode()
   method virtual String ToString()
   property ColorMatrix? ColorMatrix { get; init; }
   property Double Opacity { get; init; }
+  property IReadOnlyList<LayerEffect> Effects { get; init; }
   property PaintBlendMode BlendMode { get; init; }
   property Rect? Bounds { get; init; }
 PeachDrawing.Core.LineCap : enum Int32

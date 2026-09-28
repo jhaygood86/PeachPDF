@@ -116,3 +116,92 @@ public class LayerTests
         }
     }
 }
+
+public class LayerEffectTests
+{
+    private static (RasterRenderContext Context, RasterCanvas Canvas) NewCanvas(int size = 60)
+    {
+        var context = new RasterRenderContext();
+        var canvas = context.CreateCanvas(size, size);
+        canvas.DrawRectangle(context.GetSolidBrush(PaintColor.White), 0, 0, size, size);
+        return (context, canvas);
+    }
+
+    private static int Red(RasterCanvas canvas, int x, int y)
+    {
+        var buffer = canvas.ToPixelBuffer();
+        return buffer.PremultipliedRgba.Span[(y * buffer.Width + x) * 4];
+    }
+
+    [Fact]
+    public void BlurEffect_SpreadsInkPastTheShapesEdge()
+    {
+        var (context, canvas) = NewCanvas();
+        using (canvas)
+        {
+            using (var layer = canvas.BeginLayer(new LayerOptions(Bounds: new Rect(5, 5, 50, 50), Effects: [new BlurEffect(3)])))
+            {
+                Assert.NotNull(layer);
+                layer.Canvas.DrawRectangle(context.GetSolidBrush(PaintColor.Black), 20, 20, 20, 20);
+            }
+
+            // Well inside stays black, just outside the edge is a grey the un-blurred shape would leave white, far outside is untouched.
+            Assert.True(Red(canvas, 30, 30) < 20);
+            var nearEdge = Red(canvas, 18, 30);
+            Assert.InRange(nearEdge, 30, 235);
+            Assert.Equal(255, Red(canvas, 8, 8));
+        }
+    }
+
+    [Fact]
+    public void DropShadowEffect_DrawsAnOffsetCopyBeneathTheContent()
+    {
+        var (context, canvas) = NewCanvas();
+        using (canvas)
+        {
+            var shadow = new DropShadowEffect(8, 8, 0.5, 0.5, PaintColor.FromArgb(255, 0, 0, 0));
+            using (var layer = canvas.BeginLayer(new LayerOptions(Bounds: new Rect(0, 0, 60, 60), Effects: [shadow])))
+            {
+                Assert.NotNull(layer);
+                layer.Canvas.DrawRectangle(context.GetSolidBrush(PaintColor.FromArgb(255, 255, 0, 0)), 10, 10, 20, 20);
+            }
+
+            Assert.Equal(255, Red(canvas, 20, 20));      // the red square itself
+            Assert.True(Red(canvas, 34, 34) < 30);      // its shadow, below and to the right
+            Assert.Equal(255, Red(canvas, 50, 8));
+        }
+    }
+
+    [Fact]
+    public void Effects_TogetherWithOpacity_FadeTheResult()
+    {
+        var (context, canvas) = NewCanvas();
+        using (canvas)
+        {
+            using (var layer = canvas.BeginLayer(new LayerOptions(0.5, Bounds: new Rect(0, 0, 60, 60), Effects: [new BlurEffect(0.5)])))
+            {
+                Assert.NotNull(layer);
+                layer.Canvas.DrawRectangle(context.GetSolidBrush(PaintColor.Black), 10, 10, 40, 40);
+            }
+
+            Assert.InRange(Red(canvas, 30, 30), 115, 140);
+        }
+    }
+
+    [Fact]
+    public void GetInkMargin_GrowsWithBlurAndShadowOffset()
+    {
+        var margin = RasterLayerEffects.GetInkMargin([new BlurEffect(2, 4), new DropShadowEffect(3, -5, 1, 1, PaintColor.Black)]);
+
+        Assert.Equal(6 + 3 + 3, margin.X);
+        Assert.Equal(12 + 5 + 3, margin.Y);
+        Assert.Equal((0, 0), RasterLayerEffects.GetInkMargin([]));
+    }
+
+    [Fact]
+    public void RasterLayerEffects_ValidatesItsArguments()
+    {
+        Assert.Throws<ArgumentNullException>(() => RasterLayerEffects.GetInkMargin(null!));
+        Assert.Throws<ArgumentNullException>(() => RasterLayerEffects.Apply(null!, []));
+    }
+}

@@ -479,6 +479,11 @@ namespace PeachPDF.Adapters
             return (tileGraphics, new ImageAdapter(form));
         }
 
+        protected override bool SupportsLayerEffects => true;
+
+        protected override void ApplyLayerEffects(RasterSurface surface, IReadOnlyList<LayerEffect> effects) =>
+            RasterLayerEffects.Apply(surface, effects);
+
         public override RasterRegion? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null) =>
             RasterSurfaceFactory.Create(_adapter, PixelsPerPoint, layoutBounds, dpiOverride ?? _adapter.RasterizationDpi, _adapter.MaxRasterPixels, TransformScale, _accumulated);
 
