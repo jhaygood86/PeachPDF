@@ -44,6 +44,34 @@ namespace PeachPDF.Svg
         private static RRect? Offset(RRect? rect, double dx, double dy) =>
             rect is { } r ? new RRect(r.X + dx, r.Y + dy, r.Width, r.Height) : null;
 
+        /// <summary>
+        /// The box <see cref="SvgRenderer"/>'s context-paint mechanism (<c>ContextBounds</c>) measures a <c>&lt;use&gt;</c>'s
+        /// <paramref name="target"/> against, when it is a <see cref="SvgSymbolElement"/> or <see cref="SvgNestedSvgElement"/> -
+        /// element types <see cref="GetBoundingBox"/> itself deliberately keeps returning null for (every other
+        /// <c>objectBoundingBox</c> gradient/mask/clip-path/filter-region consumer that measures one of these elements
+        /// directly - not through a <c>&lt;use&gt;</c>'s context-paint path - still needs that null: unlike a plain shape or
+        /// group, a symbol/nested-svg target establishes its own viewBox-to-viewport mapping, and the box <em>those</em>
+        /// consumers would need is the mapped, "established viewport rect" one - not this method's raw, pre-mapping union -
+        /// which would need the referencing <c>&lt;use&gt;</c>'s own sizing to compute and so can't be produced from the
+        /// target element alone).
+        /// </summary>
+        /// <remarks>
+        /// Returns the union of <paramref name="target"/>'s own children (<see cref="UnionAll"/>) - the same, pre-mapping
+        /// frame those children's coordinates are defined in (a <c>&lt;symbol&gt;</c>/nested <c>&lt;svg&gt;</c> has no
+        /// geometry of its own beyond them). This is exactly the frame <see cref="SvgRenderer"/>'s recorded context frame
+        /// for the two symbol/nested-svg <c>RenderElementSwitch</c> arms maps <em>out of</em> (that frame composes the
+        /// same viewBox-to-viewport matrix <c>RenderViewport</c> itself pushes before painting those children, with the
+        /// ambient transform active where the <c>&lt;use&gt;</c> renders it) - mirroring how the plain-element arm's
+        /// recorded frame composes <c>target.Transform</c> with the ambient to match <see cref="GetBoundingBox"/>'s own
+        /// (also pre-<c>Transform</c>) convention for every other target type.
+        /// </remarks>
+        internal static RRect? GetUseTargetBoundingBox(SvgElement target) => target switch
+        {
+            SvgSymbolElement symbol => UnionAll(symbol.Children),
+            SvgNestedSvgElement nestedSvg => UnionAll(nestedSvg.Children),
+            _ => GetBoundingBox(target),
+        };
+
         private static RRect? UnionAll(IEnumerable<SvgElement> elements)
         {
             RRect? result = null;

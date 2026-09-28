@@ -362,6 +362,62 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void AGradientThroughAUse_OfASymbol_IsMeasuredAgainstTheSymbolsWholeContent()
+        {
+            // The symbol's viewBox is "0 0 20 20"; the use sizes it to 40x40 (a 2x scale) at (10,10) - established
+            // viewport device x:10..50, y:10..50. rect1 (viewBox x 0..10) is green; rect2 (viewBox x 10..20, the
+            // right half, fill="context-fill") maps to device x 30..50. The gradient runs left-to-right across the
+            // *whole* symbol content (device x 10..50): rect2's own left edge (viewBox x=10, device x=30) sits
+            // exactly half way (t=0.5) - a balanced, mid-gradient colour, not pure red.
+            //
+            // Before the fix, SvgGeometryBounds.GetBoundingBox had no case for <symbol>, so ContextBounds fell back
+            // to rect2's own (much narrower, viewBox-only) box - measuring the gradient across just rect2's own
+            // 10-wide span instead of the symbol's full 20-wide content, landing near-pure red at this same point.
+            var surface = Paint($"""
+                <svg {Svg}>
+                  <defs>
+                    <linearGradient id="g"><stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/></linearGradient>
+                    <symbol id="s" viewBox="0 0 20 20">
+                      <rect width="10" height="20" fill="#00ff00"/>
+                      <rect x="10" width="10" height="20" fill="context-fill"/>
+                    </symbol>
+                  </defs>
+                  <use xlink:href="#s" x="10" y="10" width="40" height="40" fill="url(#g)"/>
+                </svg>
+                """);
+
+            var (r, _, b, a) = At(surface, 31, 30);
+            Assert.Equal(255, a);
+            Assert.InRange(r, 100, 160);
+            Assert.InRange(b, 100, 160);
+        }
+
+        [Fact]
+        public void AGradientThroughAUse_OfANestedSvg_IsMeasuredAgainstItsWholeContent()
+        {
+            // Same geometry as the <symbol> case above, but the use targets a nested <svg> definition instead - a
+            // second element type SvgGeometryBounds.GetBoundingBox had no case for, with its own separate
+            // RenderElementSwitch/RenderViewport arm to record the context frame for.
+            var surface = Paint($"""
+                <svg {Svg}>
+                  <defs>
+                    <linearGradient id="g"><stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/></linearGradient>
+                    <svg id="s" viewBox="0 0 20 20" width="20" height="20">
+                      <rect width="10" height="20" fill="#00ff00"/>
+                      <rect x="10" width="10" height="20" fill="context-fill"/>
+                    </svg>
+                  </defs>
+                  <use xlink:href="#s" x="10" y="10" width="40" height="40" fill="url(#g)"/>
+                </svg>
+                """);
+
+            var (r, _, b, a) = At(surface, 31, 30);
+            Assert.Equal(255, a);
+            Assert.InRange(r, 100, 160);
+            Assert.InRange(b, 100, 160);
+        }
+
+        [Fact]
         public void ASolidUseFill_DoesNotNeedAnythingOfTheContextElement()
         {
             var document = Build($"""
