@@ -1340,9 +1340,12 @@ namespace PeachPDF.Svg
             // TextDecorationColor null for both "unset" and literal "currentColor") falls back to the
             // decorator's own solid fill - SVG has no separate tracked `color` property the way HTML
             // does, and the text's own fill is the closest available proxy for what a reader perceives
-            // as "this text's color".
+            // as "this text's color". Resolved through ResolveInMarker first (a no-op outside a marker)
+            // so a context-fill keyword on marker text isn't mistaken for "no solid color" and falls
+            // back to black instead of the shape it is on.
+            var resolvedFill = ResolveInMarker(decorator.Fill);
             var color = decorator.TextDecorationColor
-                ?? (decorator.Fill.Kind == SvgPaintKind.Solid ? decorator.Fill.Color : RColor.Black);
+                ?? (resolvedFill.Kind == SvgPaintKind.Solid ? resolvedFill.Color : RColor.Black);
             var actualColor = ApplyOpacity(color, opacity * decorator.Opacity * decorator.FillOpacity);
             const double thickness = 1;
             var isWavy = decorator.TextDecorationStyle == Keywords.Wavy;
@@ -1473,16 +1476,21 @@ namespace PeachPDF.Svg
         private static void PaintTextGlyphs(RGraphics g, SvgDocument document, SvgTextElement run, string text, RFont font, double drawX, double drawY, RSize size, double opacity,
             double letterSpacing = 0, ShapeSettings? features = null, string? logicalText = null)
         {
-            var hasStroke = run.Stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
-            var needsOutline = run.Fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
+            // Inside a marker, context-fill / context-stroke are the paints of the shape the marker is drawn on - same as a shape's own
+            // fill/stroke (PaintShape). Outside a marker this is a no-op (the tree builder already resolved these through `use`).
+            var fill = ResolveInMarker(run.Fill);
+            var stroke = ResolveInMarker(run.Stroke);
+
+            var hasStroke = stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
+            var needsOutline = fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
 
             if (!needsOutline)
             {
                 // Fast path: solid fill (or no fill at all) with no stroke.
-                if (run.Fill.Kind != SvgPaintKind.Solid)
+                if (fill.Kind != SvgPaintKind.Solid)
                     return;
 
-                var solid = ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity);
+                var solid = ApplyOpacity(fill.Color, opacity * run.FillOpacity);
                 g.DrawString(text, font, solid, new RPoint(drawX, drawY), size, letterSpacing, fontPalette: null, features: features, logicalText: logicalText);
                 return;
             }
@@ -1498,8 +1506,8 @@ namespace PeachPDF.Svg
             {
                 // CFF/bitmap font: no glyf outlines. Best-effort solid fill; a gradient/pattern/stroke
                 // simply can't be honored here (documented gap).
-                if (run.Fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(text, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(drawX, drawY), size, letterSpacing, fontPalette: null, features: features, logicalText: logicalText);
+                if (fill.Kind == SvgPaintKind.Solid)
+                    g.DrawString(text, font, ApplyOpacity(fill.Color, opacity * run.FillOpacity), new RPoint(drawX, drawY), size, letterSpacing, fontPalette: null, features: features, logicalText: logicalText);
                 return;
             }
 
@@ -1511,16 +1519,18 @@ namespace PeachPDF.Svg
             var spacedWidth = size.Width + (letterSpacing != 0 ? g.CountShapedGlyphs(text, font, features) * letterSpacing : 0);
             var textBounds = new RRect(drawX, drawY, spacedWidth, size.Height);
 
-            // Fill then stroke, matching SVG paint order.
-            if (run.Fill.Kind != SvgPaintKind.None)
+            // Fill then stroke, matching SVG paint order. A gradient/pattern that came through context-fill/context-stroke is measured
+            // against the context element (ContextBounds), not this measured glyph box - same rule PaintShape follows.
+            if (fill.Kind != SvgPaintKind.None)
             {
-                if (run.Fill.Kind == SvgPaintKind.PatternRef)
+                var fillBounds = ContextBounds(g, fill) ?? textBounds;
+                if (fill.Kind == SvgPaintKind.PatternRef)
                 {
-                    PaintPatternFill(g, document, run, outline, opacity * run.FillOpacity, textBounds);
+                    PaintPatternFill(g, document, run, outline, opacity * run.FillOpacity, fillBounds, fill);
                 }
                 else
                 {
-                    var brush = ResolvePaintBrush(g, document, run, run.Fill, opacity * run.FillOpacity, textBounds);
+                    var brush = ResolvePaintBrush(g, document, run, fill, opacity * run.FillOpacity, fillBounds);
                     if (brush is not null)
                         g.DrawPath(brush, outline);
                 }
@@ -1528,7 +1538,8 @@ namespace PeachPDF.Svg
 
             if (hasStroke)
             {
-                var pen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, textBounds);
+                var strokeBounds = ContextBounds(g, stroke) ?? textBounds;
+                var pen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, strokeBounds, stroke);
                 if (pen is not null)
                     g.DrawPath(pen, outline);
             }
@@ -1623,51 +1634,57 @@ namespace PeachPDF.Svg
                     new RMatrix(Math.Cos(glyphRad), Math.Sin(glyphRad), -Math.Sin(glyphRad), Math.Cos(glyphRad), 0, 0),
                     new RMatrix(1, 0, 0, 1, offsetX, offsetY));
 
-                var hasStroke = gi.Run.Stroke.Kind != SvgPaintKind.None && gi.Run.StrokeWidth > 0;
-                var needsOutline = gi.Run.Fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
-
                 g.PushTransform(frame);
-                PaintGlyphAlongPath(g, document, gi.Run, gi.Font, gi.Glyph, advance, opacity * gi.Opacity, needsOutline, hasStroke, gi.LogicalGlyph);
+                PaintGlyphAlongPath(g, document, gi.Run, gi.Font, gi.Glyph, advance, opacity * gi.Opacity, gi.LogicalGlyph);
                 g.PopTransform();
             }
         }
 
         /// <summary>Paints one glyph of a <c>&lt;textPath&gt;</c> at the current (already rotated/translated) frame, centered on the local origin. <paramref name="logicalGlyph"/> is <paramref name="glyph"/>'s true logical-order source when bidi-mirrored it (see <c>PeachDrawing.Text.Internal.Fonts.CMapInfo.AddShapedText</c>'s own remarks) - null (the common case) otherwise.</summary>
-        private static void PaintGlyphAlongPath(RGraphics g, SvgDocument document, SvgTextElement run, RFont font, string glyph, double advance, double opacity, bool needsOutline, bool hasStroke, string? logicalGlyph = null)
+        private static void PaintGlyphAlongPath(RGraphics g, SvgDocument document, SvgTextElement run, RFont font, string glyph, double advance, double opacity, string? logicalGlyph = null)
         {
+            // Inside a marker, context-fill / context-stroke are the paints of the shape the marker is drawn on - see PaintTextGlyphs.
+            var fill = ResolveInMarker(run.Fill);
+            var stroke = ResolveInMarker(run.Stroke);
+
+            var hasStroke = stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
+            var needsOutline = fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
+
             var leftX = -advance / 2;
             var glyphSize = g.MeasureString(glyph, font, run.ShapingFeatures);
 
             if (!needsOutline)
             {
-                if (run.Fill.Kind != SvgPaintKind.Solid)
+                if (fill.Kind != SvgPaintKind.Solid)
                     return;
 
-                g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: null, features: run.ShapingFeatures, logicalText: logicalGlyph);
+                g.DrawString(glyph, font, ApplyOpacity(fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: null, features: run.ShapingFeatures, logicalText: logicalGlyph);
                 return;
             }
 
             var outline = g.GetTextOutline(glyph, font, new RPoint(leftX, 0), features: run.ShapingFeatures);
             if (outline is null)
             {
-                if (run.Fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: null, features: run.ShapingFeatures, logicalText: logicalGlyph);
+                if (fill.Kind == SvgPaintKind.Solid)
+                    g.DrawString(glyph, font, ApplyOpacity(fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: null, features: run.ShapingFeatures, logicalText: logicalGlyph);
                 return;
             }
 
             // objectBoundingBox gradient/pattern on a textPath glyph uses the glyph's own local box (an
             // envelope approximation, since the run's straight bbox is meaningless in the rotated frame).
+            // A gradient/pattern that came through context-fill/context-stroke instead measures against the context element.
             var bounds = new RRect(leftX, -font.Ascent, glyphSize.Width, glyphSize.Height);
 
-            if (run.Fill.Kind != SvgPaintKind.None)
+            if (fill.Kind != SvgPaintKind.None)
             {
-                if (run.Fill.Kind == SvgPaintKind.PatternRef)
+                var fillBounds = ContextBounds(g, fill) ?? bounds;
+                if (fill.Kind == SvgPaintKind.PatternRef)
                 {
-                    PaintPatternFill(g, document, run, outline, opacity * run.FillOpacity, bounds);
+                    PaintPatternFill(g, document, run, outline, opacity * run.FillOpacity, fillBounds, fill);
                 }
                 else
                 {
-                    var brush = ResolvePaintBrush(g, document, run, run.Fill, opacity * run.FillOpacity, bounds);
+                    var brush = ResolvePaintBrush(g, document, run, fill, opacity * run.FillOpacity, fillBounds);
                     if (brush is not null)
                         g.DrawPath(brush, outline);
                 }
@@ -1675,7 +1692,8 @@ namespace PeachPDF.Svg
 
             if (hasStroke)
             {
-                var strokePen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, bounds);
+                var strokeBounds = ContextBounds(g, stroke) ?? bounds;
+                var strokePen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, strokeBounds, stroke);
                 if (strokePen is not null)
                     g.DrawPath(strokePen, outline);
             }
@@ -1795,13 +1813,11 @@ namespace PeachPDF.Svg
             // whose only content is those types (previously unboundable) still gets an isolated composite
             // instead of falling back to a double-blend-prone per-shape alpha multiply.
             //
-            // Approximation (same as SvgGeometryBounds, which this reuses for objectBoundingBox
-            // gradients/masks): a descendant's own `transform` is NOT folded into the bounds, so a child
-            // carrying a large translate/scale that pushes its painted geometry outside the untransformed
-            // union can be clipped by the raster tile - a pre-existing renderer limitation that applies
-            // equally to the boundable-geometry path, mitigated (not eliminated) by the margin. Likewise a
-            // <use>-of-a-<use>-of-a-container isn't routed here (NeedsContainerOpacityGroup only unwraps one
-            // <use> level), so its target's children fall back to the per-shape multiply.
+            // A descendant's own `transform` IS folded into the bounds (UnionOpacityGroupBounds composes it the
+            // same way SvgGeometryBounds.UnionAll does), so a child carrying a translate/scale is still sized
+            // correctly, not just approximately. Remaining approximation: a <use>-of-a-<use>-of-a-container isn't
+            // routed here (NeedsContainerOpacityGroup only unwraps one <use> level), so its target's children
+            // fall back to the per-shape multiply.
             if (GetOpacityGroupBounds(g, element, viewport) is not { } bbox || bbox.Width <= 0 || bbox.Height <= 0)
             {
                 // Truly empty / zero-area content: nothing paints, so there is nothing to double-blend -
@@ -1873,6 +1889,12 @@ namespace PeachPDF.Svg
             {
                 if (GetOpacityGroupBounds(g, element, viewport) is not { } b)
                     continue;
+
+                // Same composition SvgGeometryBounds.UnionAll makes: a child's own transform has to be folded in
+                // before unioning, or a translated/scaled child is sized as if it sat at its own untransformed
+                // position, silently clipping it against the tile's margin (or, previously, the tile itself).
+                if (element.Transform is { } transform)
+                    b = SvgGeometryBounds.TransformBounds(b, transform);
 
                 result = result is { } r ? UnionRects(r, b) : b;
             }
@@ -2045,14 +2067,17 @@ namespace PeachPDF.Svg
         /// <summary>The painted inputs of one raster filter evaluation, drawn with this renderer's own paint code.</summary>
         private sealed class RendererFilterInputs(RGraphics owner, SvgDocument document, SvgElement element, (double Width, double Height) viewport) : SvgFilterInputs
         {
-            public override SvgPaint PaintOf(bool stroke) => stroke ? element.Stroke : element.Fill;
+            // Inside a marker, context-fill / context-stroke (a filter's FillPaint/StrokePaint input on a marker shape) are the paints of
+            // the shape the marker is drawn on - same resolution PaintShape/PaintTextGlyphs use; a no-op outside a marker.
+            public override SvgPaint PaintOf(bool stroke) => ResolveInMarker(stroke ? element.Stroke : element.Fill);
 
             public override void PaintPaint(RGraphics g, bool stroke, RRect region)
             {
                 var paint = PaintOf(stroke);
 
-                // The paint is the element's own, so an objectBoundingBox gradient or pattern is measured against the element, not the region.
-                var bounds = SvgFilterEvaluator.ElementBounds(element, new RRect(0, 0, viewport.Width, viewport.Height));
+                // The paint is the element's own, so an objectBoundingBox gradient or pattern is measured against the element, not the
+                // region - unless it came through context-fill/context-stroke, which measures against the context element instead.
+                var bounds = ContextBounds(g, paint) ?? SvgFilterEvaluator.ElementBounds(element, new RRect(0, 0, viewport.Width, viewport.Height));
                 var rect = new SvgRectElement { X = region.X, Y = region.Y, Width = region.Width, Height = region.Height, Fill = paint, Stroke = SvgPaint.None };
                 using var path = BuildRectPath(g, rect);
 
@@ -2303,8 +2328,28 @@ namespace PeachPDF.Svg
                             break;
 
                         default:
-                            RenderElement(g, document, target, opacity, viewport);
+                        {
+                            // The frame target's own content paints in (post target.Transform, matching the frame
+                            // SvgGeometryBounds.GetBoundingBox(target) reports its bbox in) - what ContextBounds
+                            // maps a gradient/pattern tagged with this use as its context element out of, once it
+                            // reaches a shape further down that actually paints with it (SvgUseElement.Fill/Stroke's
+                            // OfContextElement(use) in SvgTreeBuilder). Recorded under the use itself (a fresh
+                            // object per use occurrence), not the target, so a use of a use resolves each level's
+                            // context paint against its own frame.
+                            var targetFrame = target.Transform is { } t ? MultiplyMatrix(t, g.CurrentTransform) : g.CurrentTransform;
+                            var hadOuterFrame = s_paintContextFrames.TryGetValue(use, out var outerFrame);
+                            s_paintContextFrames[use] = targetFrame;
+                            try
+                            {
+                                RenderElement(g, document, target, opacity, viewport);
+                            }
+                            finally
+                            {
+                                if (hadOuterFrame) s_paintContextFrames[use] = outerFrame; else s_paintContextFrames.Remove(use);
+                            }
+
                             break;
+                        }
                     }
 
                     if (pushedUseOffset)
@@ -2373,7 +2418,7 @@ namespace PeachPDF.Svg
             if (element is not SvgLineElement && fill.Kind != SvgPaintKind.None)
             {
                 // A gradient or pattern that came through context-fill is measured against the context element, not this one.
-                var fillBounds = ContextBounds(fill);
+                var fillBounds = ContextBounds(g, fill);
                 if (fill.Kind == SvgPaintKind.PatternRef)
                 {
                     PaintPatternFill(g, document, element, path, opacity * element.FillOpacity, fillBounds, fill);
@@ -2388,7 +2433,7 @@ namespace PeachPDF.Svg
 
             if (stroke.Kind != SvgPaintKind.None && element.StrokeWidth > 0)
             {
-                var pen = ResolveStrokePen(g, document, element, opacity * element.StrokeOpacity, ContextBounds(stroke), stroke);
+                var pen = ResolveStrokePen(g, document, element, opacity * element.StrokeOpacity, ContextBounds(g, stroke), stroke);
                 if (pen is not null)
                     g.DrawPath(pen, path);
             }
@@ -2419,9 +2464,17 @@ namespace PeachPDF.Svg
                 return;
 
             // This shape is the context element of what its markers draw. Its own paint may itself be a context keyword (a shape inside a
-            // marker), which is resolved against the marker it is in, before this shape's markers take over.
+            // marker), which is resolved against the marker it is in, before this shape's markers take over. A gradient/pattern paint keeps
+            // whichever context element it already names (the nearest one wins - OfContextElement is a no-op once one is set) so a marker
+            // nested inside another marker or a use still measures against the original context, not this shape; a plain gradient/pattern
+            // authored directly on this shape's own fill/stroke gets tagged with this shape, so ContextBounds below has something to map from.
             var outer = s_markerContext;
-            s_markerContext = new MarkerContext(ForMarker(ResolveInMarker(element.Fill)), ForMarker(ResolveInMarker(element.Stroke)));
+            s_markerContext = new MarkerContext(ForMarker(element, ResolveInMarker(element.Fill)), ForMarker(element, ResolveInMarker(element.Stroke)));
+            // The frame this shape's own content paints in - what a gradient/pattern paint tagged with this shape as its context element
+            // needs mapped into the marker's own frame later (see ContextBounds). Saved/restored the same way s_markerContext is, in case
+            // painting this shape's own markers somehow re-enters painting this same shape (already bounded by MaxDefinitionNesting).
+            var hadOuterFrame = s_paintContextFrames.TryGetValue(element, out var outerFrame);
+            s_paintContextFrames[element] = g.CurrentTransform;
             try
             {
                 foreach (var vertex in vertices)
@@ -2435,6 +2488,7 @@ namespace PeachPDF.Svg
             finally
             {
                 s_markerContext = outer;
+                if (hadOuterFrame) s_paintContextFrames[element] = outerFrame; else s_paintContextFrames.Remove(element);
             }
         }
 
@@ -2443,6 +2497,19 @@ namespace PeachPDF.Svg
 
         [ThreadStatic]
         private static MarkerContext? s_markerContext;
+
+        /// <summary>
+        /// The frame (<see cref="RGraphics.CurrentTransform"/> snapshot) each live context element's own content paints in, keyed by the
+        /// element itself (a <c>use</c>, or the shape a marker is drawn on) - what <see cref="ContextBounds"/> maps a gradient/pattern's
+        /// box out of, into whatever frame is active when the paint is actually resolved. Reference-keyed: <see cref="SvgElement"/> has no
+        /// value equality, and a fresh instance is built per <c>use</c> occurrence, so the same key is never live for two different places
+        /// in the tree at once. <see cref="ThreadStaticAttribute"/> like every other renderer-scoped field in this class.
+        /// </summary>
+        [ThreadStatic]
+        private static Dictionary<SvgElement, RMatrix>? s_paintContextFramesField;
+
+        private static Dictionary<SvgElement, RMatrix> s_paintContextFrames =>
+            s_paintContextFramesField ??= new Dictionary<SvgElement, RMatrix>(ReferenceEqualityComparer.Instance);
 
         /// <summary>
         /// A paint with its context keywords replaced, when it is drawn inside a marker (the only place the tree builder leaves them, because the
@@ -2456,19 +2523,63 @@ namespace PeachPDF.Svg
         };
 
         /// <summary>
-        /// The paint a marker's content gets from its shape: a colour or none. A gradient or pattern would have to be measured in the shape's
-        /// own coordinate system, which the marker's placement has moved away from, so it is not carried into the marker.
+        /// The paint a marker's content gets from <paramref name="element"/> (the shape the marker is drawn on): per SVG 2 (painting,
+        /// "context paint"), a gradient/pattern paint server keeps the context element's own coordinate space and bounding box - tagging it
+        /// with <paramref name="element"/> as its context element (a no-op if it already names one further out) is what lets
+        /// <see cref="ContextBounds"/> later map that box into the marker content's frame via <see cref="s_paintContextFrames"/>, the same
+        /// way a gradient/pattern reaching a shape through a <c>use</c> already does.
         /// </summary>
-        private static SvgPaint ForMarker(SvgPaint paint) => paint.Kind is SvgPaintKind.Solid or SvgPaintKind.None ? paint : SvgPaint.None;
+        private static SvgPaint ForMarker(SvgElement element, SvgPaint paint) => paint.OfContextElement(element);
 
-        /// <summary>The box a gradient or pattern that came through context paint is measured against: the context element's. Null when the paint was the element's own.</summary>
-        private static RRect? ContextBounds(SvgPaint paint) => paint.ContextElement switch
+        /// <summary>
+        /// The box a gradient or pattern that came through context paint is measured against, remapped from the context element's own frame
+        /// (recorded in <see cref="s_paintContextFrames"/> when its content began painting) into <paramref name="g"/>'s current one - the
+        /// marker's placement matrix, or any transform between a <c>use</c>'s target and the shape actually painting, has moved the two
+        /// apart. Null when the paint was the element's own (no context element), or when the context element's frame was never recorded
+        /// (a target type <see cref="SvgGeometryBounds"/> doesn't measure, e.g. a <c>symbol</c>/nested <c>svg</c> reached through <c>use</c>).
+        /// </summary>
+        private static RRect? ContextBounds(RGraphics g, SvgPaint paint)
         {
-            // What a use instantiates is drawn in the use's own coordinate system, already moved by its x and y.
-            SvgUseElement { Target: { } target } => SvgGeometryBounds.GetBoundingBox(target),
-            { } context => SvgGeometryBounds.GetBoundingBox(context),
-            _ => null,
-        };
+            if (paint.ContextElement is not { } context)
+                return null;
+
+            // What a use instantiates is drawn in the use's own coordinate system, already moved by its x and y (folded into the
+            // recorded frame below, not applied here - see the use render switch).
+            var geometrySource = context is SvgUseElement { Target: { } target } ? target : context;
+            if (SvgGeometryBounds.GetBoundingBox(geometrySource) is not { } box)
+                return null;
+
+            if (!s_paintContextFrames.TryGetValue(context, out var contextFrame))
+                return box;
+
+            if (!g.CurrentTransform.TryInvert(out var toCurrentFrame))
+                return box;
+
+            return TransformRectAabb(box, contextFrame.Then(toCurrentFrame));
+        }
+
+        /// <summary>The axis-aligned envelope of <paramref name="rect"/>'s four corners mapped through <paramref name="matrix"/>.</summary>
+        private static RRect TransformRectAabb(RRect rect, RMatrix matrix)
+        {
+            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+
+            ReadOnlySpan<RPoint> corners =
+            [
+                new(rect.X, rect.Y), new(rect.Right, rect.Y),
+                new(rect.X, rect.Bottom), new(rect.Right, rect.Bottom),
+            ];
+
+            foreach (var corner in corners)
+            {
+                var p = ApplyMatrix(corner, matrix);
+                minX = Math.Min(minX, p.X);
+                maxX = Math.Max(maxX, p.X);
+                minY = Math.Min(minY, p.Y);
+                maxY = Math.Max(maxY, p.Y);
+            }
+
+            return new RRect(minX, minY, maxX - minX, maxY - minY);
+        }
 
         /// <summary>
         /// Places one marker instance: establishes its own (markerWidth x markerHeight, optionally

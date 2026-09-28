@@ -251,6 +251,12 @@ namespace PeachPDF.Html.Adapters
         /// rasterized. Null when creating one isn't supported in the current rendering context (e.g. a
         /// measure-only pass with no real PDF page to own the new object).
         /// </summary>
+        /// <remarks>
+        /// The returned <c>Graphics</c>'s own <see cref="CurrentTransform"/> starts seeded from this graphics'
+        /// current one, same as <see cref="BeginRasterSurface"/>'s (see its doc remarks for why) - a caller
+        /// implementing this should seed it too, or a reader consulting <see cref="CurrentTransform"/> inside
+        /// the tile gets a coordinate space it can't relate back to anything outside the tile.
+        /// </remarks>
         public abstract (RGraphics Graphics, RImage Image)? CreateTile(double width, double height);
 
         /// <summary>
@@ -304,7 +310,11 @@ namespace PeachPDF.Html.Adapters
         /// <summary>
         /// The accumulated transform of every <see cref="PushTransform"/> in effect, mapping this graphics' current user space to
         /// the layout space it started in (the space page content is laid out in). Identity for a graphics that does not track transforms.
-        /// A raster region starts in its requester's current user space, so it begins from the requester's value.
+        /// Bookkeeping only, read by callers (gradient/pattern objectBoundingBox math, an SVG backdrop repaint, context-fill/
+        /// context-stroke's coordinate-space mapping) - it plays no part in what this graphics actually draws, which a concrete
+        /// backend positions its own way. A tile this graphics hands out (<see cref="CreateTile"/>'s <c>Graphics</c>, or
+        /// <see cref="BeginRasterSurface"/>'s) starts seeded from this value, not <see cref="RMatrix.Identity"/>, precisely so a
+        /// reader can still relate the tile's own coordinate space back to whatever space content outside the tile is measured in.
         /// </summary>
         internal virtual RMatrix CurrentTransform => RMatrix.Identity;
 

@@ -52,10 +52,10 @@ PeachPDF renders SVG — inline `<svg>` elements in HTML, standalone SVG (`<img 
 `context-fill` and `context-stroke` (SVG 2) are values of `fill` and `stroke` that stand for the fill and stroke of the *context element*:
 
 - **`<use>`** is the context element of what it instantiates, so one shape can be reused with a different fill and stroke per use: the shape says `fill="context-fill" stroke="context-stroke"` and each `<use>` gives them. A nested `<use>` changes the context for its own content; a keyword written on the `<use>` itself refers to the context outside it. `fill="context-stroke"` (a fill taking the stroke) is valid.
-- **A marker** draws with the fill and stroke of the shape it is placed on, for every instance separately.
+- **A marker** draws with the fill and stroke of the shape it is placed on, for every instance separately — including a `<text>` inside the marker, and a shape's `FillPaint`/`StrokePaint` filter input.
 - **Elsewhere** there is no context element and the keywords paint nothing, unless the document was built for something that supplies one: the SVG document of an [OpenType SVG glyph](html-css-support.md#fonts) is drawn for text, so `context-fill` is the text's fill (its colour) and `context-stroke` its stroke, which is none because PeachPDF's text has no stroke paint.
 
-Gradients and patterns pass through `<use>` (measured against the box of what the `<use>` instantiates); through a marker only a colour or `none` is carried, and a gradient or pattern on the marked shape paints nothing inside the marker. A gradient or pattern through `<use>` is measured in the instantiated element's own coordinate system, so a `transform` between the `<use>` and the shape that paints with it is not accounted for, and `<text>` inside a marker does not resolve the keywords.
+Gradients and patterns pass through `<use>` and through a marker, each keeping the context element's own coordinate space and bounding box: a gradient or pattern on the shape a marker is drawn on is mapped through the marker's placement (its position, rotation and scale) so it lines up with the shape as if the marker were not there, and a gradient or pattern through `<use>` is measured against the box of what the `<use>` instantiates, mapped through any `transform` between that element and the shape actually painting it. This is exact when the `<use>` targets a shape or a `<g>`; when it targets a `<symbol>` or a nested `<svg>`, a gradient or pattern reached this way is measured against the wrong box instead.
 
 ## Gradients
 

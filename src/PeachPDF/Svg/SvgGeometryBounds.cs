@@ -17,8 +17,13 @@ using System.Collections.Generic;
 namespace PeachPDF.Svg
 {
     /// <summary>
-    /// Computes a shape's local-space bounding box - needed to resolve <c>objectBoundingBox</c>-unit
-    /// gradients/patterns/masks (fractions of the referencing shape's own geometry) at paint time.
+    /// Computes an element's local-space bounding box - needed to resolve <c>objectBoundingBox</c>-unit
+    /// gradients/patterns/masks (fractions of the referencing shape's own geometry) at paint time. The
+    /// box always excludes the element's <em>own</em> <see cref="SvgElement.Transform"/> (that is applied
+    /// externally, by whatever pushes the current transform before painting/measuring against it), but
+    /// for a group it includes every <em>descendant</em>'s own transform, composed all the way down -
+    /// a child's box (in the frame its own content paints in) is mapped through the child's transform
+    /// before being folded into the group's box (<see cref="UnionAll"/>/<see cref="TransformBounds"/>).
     /// </summary>
     internal static class SvgGeometryBounds
     {
@@ -49,10 +54,44 @@ namespace PeachPDF.Svg
                 if (bounds is not { } b)
                     continue;
 
+                // Compose the child's own transform in before unioning - see the class remarks. Skipping
+                // this silently contributed a transformed child's untransformed geometry instead, which
+                // SvgRenderer's context-paint-through-use fix relies on being correct, not "close enough".
+                if (element.Transform is { } transform)
+                    b = TransformBounds(b, transform);
+
                 result = result is { } r ? Union(r, b) : b;
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// The axis-aligned envelope of <paramref name="rect"/>'s four corners mapped through <paramref name="matrix"/>. Internal
+        /// (not just used by <see cref="UnionAll"/>) because <see cref="SvgRenderer"/>'s own parallel "union children's bounds"
+        /// pass for an opacity-group tile (<c>UnionOpacityGroupBounds</c>) needs the exact same child-transform composition.
+        /// </summary>
+        internal static RRect TransformBounds(RRect rect, RMatrix matrix)
+        {
+            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+
+            Span<(double X, double Y)> corners =
+            [
+                (rect.X, rect.Y), (rect.X + rect.Width, rect.Y),
+                (rect.X, rect.Y + rect.Height), (rect.X + rect.Width, rect.Y + rect.Height),
+            ];
+
+            foreach (var (x, y) in corners)
+            {
+                var px = x * matrix.M11 + y * matrix.M21 + matrix.OffsetX;
+                var py = x * matrix.M12 + y * matrix.M22 + matrix.OffsetY;
+                minX = Math.Min(minX, px);
+                maxX = Math.Max(maxX, px);
+                minY = Math.Min(minY, py);
+                maxY = Math.Max(maxY, py);
+            }
+
+            return new RRect(minX, minY, maxX - minX, maxY - minY);
         }
 
         private static RRect Union(RRect a, RRect b)
