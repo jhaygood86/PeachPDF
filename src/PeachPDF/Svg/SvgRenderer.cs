@@ -306,7 +306,27 @@ namespace PeachPDF.Svg
         /// shape as <see cref="RenderInto"/>, just relative to whatever transform is already active
         /// rather than the page's own initial (identity) transform.
         /// </summary>
-        private static void RenderViewport(RGraphics g, SvgDocument document, double x, double y, double width, double height, RRect? viewBox, SvgPreserveAspectRatio par, IReadOnlyList<SvgElement> children, double opacity)
+        /// <param name="g">The graphics to paint through.</param>
+        /// <param name="document">The owning document (gradient/clip/mask/pattern/filter registries for <paramref name="children"/> to resolve against).</param>
+        /// <param name="x">Local X of the viewport rectangle.</param>
+        /// <param name="y">Local Y of the viewport rectangle.</param>
+        /// <param name="width">Width of the viewport rectangle.</param>
+        /// <param name="height">Height of the viewport rectangle.</param>
+        /// <param name="viewBox">The viewBox mapped onto the viewport rectangle, or null for an identity (viewBox-less) mapping.</param>
+        /// <param name="par">Alignment/meet-slice mode for the viewBox-to-viewport mapping.</param>
+        /// <param name="children">The content to render into the new viewport.</param>
+        /// <param name="opacity">Accumulated ancestor opacity to multiply into <paramref name="children"/>'s own.</param>
+        /// <param name="contextElement">
+        /// The <c>&lt;use&gt;</c> reaching this viewport as a <c>&lt;symbol&gt;</c>/nested-<c>&lt;svg&gt;</c> target, when
+        /// that's how it's being rendered - null for every other caller (a directly-authored nested <c>&lt;svg&gt;</c>, a
+        /// <c>&lt;marker&gt;</c>, a <c>&lt;pattern&gt;</c>). When given, this viewport's own children's frame (the viewBox-
+        /// to-viewport <c>matrix</c> composed with the ambient transform active here) is recorded under it in
+        /// <see cref="s_paintContextFrames"/> for the duration of <paramref name="children"/>'s paint - the same mechanism
+        /// the plain-element <c>RenderElementSwitch</c> arm already uses for its own target, letting <see cref="ContextBounds"/>
+        /// map a gradient/pattern context paint that reaches into <paramref name="children"/> out of the (pre-mapping)
+        /// frame <see cref="SvgGeometryBounds.GetUseTargetBoundingBox"/> reports its box in.
+        /// </param>
+        private static void RenderViewport(RGraphics g, SvgDocument document, double x, double y, double width, double height, RRect? viewBox, SvgPreserveAspectRatio par, IReadOnlyList<SvgElement> children, double opacity, SvgElement? contextElement = null)
         {
             if (width <= 0 || height <= 0)
                 return;
@@ -322,15 +342,39 @@ namespace PeachPDF.Svg
             var viewportRect = new RRect(x, y, width, height);
             var matrix = ComputePaintViewportTransform(g, viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, par);
 
-            g.PushClip(viewportRect);
-            g.PushTransform(matrix);
+            var hadOuterFrame = false;
+            var outerFrame = default(RMatrix);
+            if (contextElement is not null)
+            {
+                hadOuterFrame = s_paintContextFrames.TryGetValue(contextElement, out outerFrame);
+                s_paintContextFrames[contextElement] = MultiplyMatrix(matrix, g.CurrentTransform);
+            }
 
-            var nestedViewport = (viewBoxWidth, viewBoxHeight);
-            foreach (var child in children)
-                RenderElement(g, document, child, opacity, nestedViewport);
+            var pushedClip = false;
+            var pushedTransform = false;
 
-            g.PopTransform();
-            g.PopClip();
+            try
+            {
+                g.PushClip(viewportRect);
+                pushedClip = true;
+                g.PushTransform(matrix);
+                pushedTransform = true;
+
+                var nestedViewport = (viewBoxWidth, viewBoxHeight);
+                foreach (var child in children)
+                    RenderElement(g, document, child, opacity, nestedViewport);
+            }
+            finally
+            {
+                if (pushedTransform) g.PopTransform();
+                if (pushedClip) g.PopClip();
+
+                if (contextElement is not null)
+                {
+                    if (hadOuterFrame) s_paintContextFrames[contextElement] = outerFrame;
+                    else s_paintContextFrames.Remove(contextElement);
+                }
+            }
         }
 
         /// <summary>
@@ -2316,15 +2360,19 @@ namespace PeachPDF.Svg
                     {
                         // A <symbol> has no size of its own - it's sized entirely by the referencing
                         // <use>'s width/height, defaulting to the current (ambient) viewport's size
-                        // when <use> doesn't specify them (spec's 100% default).
+                        // when <use> doesn't specify them (spec's 100% default). Passing `use` as
+                        // RenderViewport's contextElement records this viewport's own children's frame
+                        // under it, the same role the default arm's own s_paintContextFrames write plays
+                        // below - see RenderViewport's contextElement doc and
+                        // SvgGeometryBounds.GetUseTargetBoundingBox for the matching (pre-mapping) box.
                         case SvgSymbolElement symbol:
-                            RenderViewport(g, document, 0, 0, use.Width ?? viewport.Width, use.Height ?? viewport.Height, symbol.ViewBox, symbol.PreserveAspectRatio, symbol.Children, opacity);
+                            RenderViewport(g, document, 0, 0, use.Width ?? viewport.Width, use.Height ?? viewport.Height, symbol.ViewBox, symbol.PreserveAspectRatio, symbol.Children, opacity, use);
                             break;
 
                         // A nested <svg> target already has its own resolved size; <use>'s width/height
                         // only override it when actually specified.
                         case SvgNestedSvgElement nestedTarget:
-                            RenderViewport(g, document, 0, 0, use.Width ?? nestedTarget.Width, use.Height ?? nestedTarget.Height, nestedTarget.ViewBox, nestedTarget.PreserveAspectRatio, nestedTarget.Children, opacity);
+                            RenderViewport(g, document, 0, 0, use.Width ?? nestedTarget.Width, use.Height ?? nestedTarget.Height, nestedTarget.ViewBox, nestedTarget.PreserveAspectRatio, nestedTarget.Children, opacity, use);
                             break;
 
                         default:
@@ -2535,8 +2583,7 @@ namespace PeachPDF.Svg
         /// The box a gradient or pattern that came through context paint is measured against, remapped from the context element's own frame
         /// (recorded in <see cref="s_paintContextFrames"/> when its content began painting) into <paramref name="g"/>'s current one - the
         /// marker's placement matrix, or any transform between a <c>use</c>'s target and the shape actually painting, has moved the two
-        /// apart. Null when the paint was the element's own (no context element), or when the context element's frame was never recorded
-        /// (a target type <see cref="SvgGeometryBounds"/> doesn't measure, e.g. a <c>symbol</c>/nested <c>svg</c> reached through <c>use</c>).
+        /// apart. Null when the paint was the element's own (no context element), or when the context element's frame was never recorded.
         /// </summary>
         private static RRect? ContextBounds(RGraphics g, SvgPaint paint)
         {
@@ -2544,9 +2591,11 @@ namespace PeachPDF.Svg
                 return null;
 
             // What a use instantiates is drawn in the use's own coordinate system, already moved by its x and y (folded into the
-            // recorded frame below, not applied here - see the use render switch).
+            // recorded frame below, not applied here - see the use render switch). GetUseTargetBoundingBox (rather than plain
+            // GetBoundingBox) is what measures a symbol/nested-svg target too - see its own remarks for why that can't just be
+            // a new GetBoundingBox case instead.
             var geometrySource = context is SvgUseElement { Target: { } target } ? target : context;
-            if (SvgGeometryBounds.GetBoundingBox(geometrySource) is not { } box)
+            if (SvgGeometryBounds.GetUseTargetBoundingBox(geometrySource) is not { } box)
                 return null;
 
             if (!s_paintContextFrames.TryGetValue(context, out var contextFrame))
