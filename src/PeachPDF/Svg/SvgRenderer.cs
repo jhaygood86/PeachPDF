@@ -1867,28 +1867,17 @@ namespace PeachPDF.Svg
             var width = bbox.Width * 1.2;
             var height = bbox.Height * 1.2;
 
-            var tile = g.CreateTile(width, height);
-            if (tile is not { } t)
+            using var layer = g.BeginLayer(new LayerOptions(element.Opacity, Bounds: new Rect(x, y, width, height)));
+            if (layer is null)
             {
-                // No page/document context (a measure-only pass - CreateTile returns null there) - keep
+                // No page/document context (a measure-only pass - BeginLayer returns null there) - keep
                 // the graceful direct fallback rather than throwing. Tested by
                 // Opacity_SvgGroupOpacity_NoPageContext_FallsBackToDirectRender.
                 RenderElementSwitch(g, document, element, inheritedOpacity * element.Opacity, viewport);
                 return;
             }
 
-            var pushedOffset = x != 0 || y != 0;
-            if (pushedOffset)
-                t.Graphics.PushTransform(new Matrix3x2(1, 0, 0, 1, (float)-x, (float)-y));
-
-            RenderElementSwitch(t.Graphics, document, element, inheritedOpacity, viewport);
-
-            if (pushedOffset)
-                t.Graphics.PopTransform();
-
-            t.Graphics.Dispose();
-
-            g.DrawImageWithOpacity(t.Image, new Rect(x, y, width, height), element.Opacity);
+            RenderElementSwitch(layer.Canvas, document, element, inheritedOpacity, viewport);
         }
 
         /// <summary>

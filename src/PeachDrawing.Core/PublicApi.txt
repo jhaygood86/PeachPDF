@@ -48,6 +48,7 @@ PeachDrawing.Core.Canvas : abstract class
   method abstract Void PushClipExclude(Rect rect)
   method abstract Void PushTransform(Matrix3x2 matrix)
   method abstract Void ReturnPreviousSmoothingMode(Object prevMode)
+  method virtual CanvasLayer BeginLayer(LayerOptions options)
   method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
   method virtual Void DrawRaster(RasterSurface surface)
@@ -60,6 +61,10 @@ PeachDrawing.Core.Canvas : abstract class
   property Matrix3x2 CurrentTransform { get; }
   property Object TileCacheOwner { get; }
   property ValueTuple<Double, Double> TransformScale { get; }
+PeachDrawing.Core.CanvasLayer : sealed class
+  ctor(Canvas canvas, Action complete)
+  method virtual Void Dispose()
+  property Canvas Canvas { get; }
 PeachDrawing.Core.CanvasParagraphExtensions : static class
   method static Void DrawGlyphRun(Canvas canvas, GlyphRun run, Double size, PaintPoint baselineOrigin, PaintColor color, Double letterSpacing = 0)
   method static Void DrawParagraph(Canvas canvas, ParagraphLayout layout, PaintPoint origin, Func<PlacedRun, ParagraphPaint> paintForRun, Action<Canvas, PlacedRun, Rect> drawInlineBox = null)
@@ -362,6 +367,17 @@ PeachDrawing.Core.IntRect : struct
   property Int32 Top { get; init; }
   property Int32 Width { get; }
   property static IntRect Empty { get; }
+PeachDrawing.Core.LayerOptions : struct
+  ctor(Double Opacity = 1, PaintBlendMode BlendMode = Normal, ColorMatrix? ColorMatrix = null, Rect? Bounds = null)
+  method Void Deconstruct(out Double Opacity, out PaintBlendMode BlendMode, out ColorMatrix? ColorMatrix, out Rect? Bounds)
+  method virtual Boolean Equals(LayerOptions other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property ColorMatrix? ColorMatrix { get; init; }
+  property Double Opacity { get; init; }
+  property PaintBlendMode BlendMode { get; init; }
+  property Rect? Bounds { get; init; }
 PeachDrawing.Core.LineCap : enum Int32
   Butt = 0
   Round = 1

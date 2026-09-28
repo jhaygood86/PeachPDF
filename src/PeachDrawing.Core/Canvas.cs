@@ -262,6 +262,57 @@ namespace PeachDrawing.Core
         public abstract (Canvas Graphics, Image Image)? CreateTile(double width, double height);
 
         /// <summary>
+        /// Begins an isolated group of drawing that is composited onto this canvas as one piece when the returned layer is disposed:
+        /// with the given opacity, blend mode and colour transform applied to the group as a whole rather than to each shape in it.
+        /// This is what CSS <c>opacity</c> or SVG group opacity means - content that overlaps inside the group does not blend with
+        /// itself. Draw onto <see cref="CanvasLayer.Canvas"/> in this canvas's own coordinates.
+        /// </summary>
+        /// <param name="options">how the finished layer is composited, and the region it covers</param>
+        /// <returns>the layer, or <see langword="null"/> when this canvas cannot make one (as with <see cref="CreateTile"/>, e.g. a
+        /// measure-only pass); the caller then draws straight onto this canvas, where opacity and blending have no visible effect anyway</returns>
+        /// <remarks>
+        /// The default builds the layer from <see cref="CreateTile"/> and the <c>DrawImage…</c> methods, so it works on any canvas. A
+        /// canvas that can composite a group more directly overrides it.
+        /// </remarks>
+        public virtual CanvasLayer? BeginLayer(LayerOptions options)
+        {
+            var clip = GetClip();
+            var region = options.Bounds ?? new Rect(0, 0, clip.Right, clip.Bottom);
+
+            if (CreateTile(region.Width, region.Height) is not { } tile)
+                return null;
+
+            // A tile starts at its own origin; a region that does not is painted shifted so callers keep using this canvas's coordinates.
+            var shifted = region.X != 0 || region.Y != 0;
+            if (shifted)
+                tile.Graphics.PushTransform(new Matrix3x2(1, 0, 0, 1, (float)-region.X, (float)-region.Y));
+
+            // With no explicit region the layer is as large as the clip needs, so painting outside the clip is pointless.
+            if (options.Bounds is null)
+                tile.Graphics.PushClip(clip);
+
+            return new CanvasLayer(tile.Graphics, () =>
+            {
+                if (shifted)
+                    tile.Graphics.PopTransform();
+
+                tile.Graphics.Dispose();
+                var image = tile.Image;
+
+                // The colour matrix and the opacity/blend mode are separate graphics states in PDF, so a layer needing both goes through
+                // a second tile.
+                if (options.ColorMatrix is { } matrix && CreateTile(region.Width, region.Height) is { } recolored)
+                {
+                    recolored.Graphics.DrawImageWithColorMatrix(image, new Rect(0, 0, region.Width, region.Height), matrix);
+                    recolored.Graphics.Dispose();
+                    image = recolored.Image;
+                }
+
+                DrawImageWithOpacity(image, region, options.Opacity, options.BlendMode);
+            });
+        }
+
+        /// <summary>
         /// Asks this graphics for a pixel surface to paint an effect PDF cannot express as vector content
         /// (a blur, a cross-channel colour filter, ...) into. The returned region has this graphics' own
         /// coordinate system, so the same paint code that would have drawn to this graphics draws to it
