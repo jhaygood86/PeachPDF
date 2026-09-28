@@ -24,7 +24,7 @@ internal sealed partial class RasterGraphics
         polygon.AddTransformed(flat.Contours, UserToDevice);
 
         var sink = new EraseSink(this, clip);
-        ScanlineRasterizer.Fill(polygon, path.FillMode == RFillMode.EvenOdd, clip.Bounds, ref sink);
+        ScanlineRasterizer.Fill(polygon, path.FillMode == RFillMode.EvenOdd, clip.Bounds, ref sink, _adapter.RasterAntiAliasing);
     }
 
     /// <summary>Removes the pixels inside the layout-space rectangle <paramref name="rect"/> (see <see cref="Erase(RGraphicsPath)"/>).</summary>
@@ -38,7 +38,7 @@ internal sealed partial class RasterGraphics
         AddDeviceRect(polygon, ToUser(rect), UserToDevice);
 
         var sink = new EraseSink(this, clip);
-        ScanlineRasterizer.Fill(polygon, evenOdd: false, clip.Bounds, ref sink);
+        ScanlineRasterizer.Fill(polygon, evenOdd: false, clip.Bounds, ref sink, _adapter.RasterAntiAliasing);
     }
 
     private readonly struct EraseSink(RasterGraphics owner, ClipState clip) : ICoverageSink

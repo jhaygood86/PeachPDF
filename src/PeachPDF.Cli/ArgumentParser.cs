@@ -124,6 +124,7 @@ internal static class ArgumentParser
                 case "no-compress": _options.NoCompress = true; break;
                 case "raster-dpi": SetRasterDpi(_options, RequireValue(name, inlineValue)); break;
                 case "flatten-transparency": _options.FlattenTransparency = true; break;
+                case "no-raster-antialiasing": _options.NoRasterAntiAliasing = true; break;
                 case "tagged-pdf": _options.TaggedPdf = true; break;
                 case "interactive-pdf-forms": _options.InteractivePdfForms = true; break;
                 case "pdf-title": _options.PdfTitle = RequireValue(name, inlineValue) ?? _options.PdfTitle; break;

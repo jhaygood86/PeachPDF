@@ -107,7 +107,7 @@ internal sealed partial class RasterGraphics : RGraphics
 
         var polygon = new PolygonSet();
         AddDeviceRect(polygon, user, toDevice);
-        _clips.Push(current.Intersect(polygon, evenOdd: false));
+        _clips.Push(current.Intersect(polygon, evenOdd: false, _adapter.RasterAntiAliasing));
     }
 
     private static bool IsWhole(double v) => Math.Abs(v - Math.Round(v)) < 1e-3;
@@ -120,7 +120,7 @@ internal sealed partial class RasterGraphics : RGraphics
         var polygon = new PolygonSet();
         polygon.AddTransformed(flat.Contours, toDevice);
         var evenOdd = path.FillMode == RFillMode.EvenOdd;
-        _clips.Push(_clips.Peek().Intersect(polygon, evenOdd));
+        _clips.Push(_clips.Peek().Intersect(polygon, evenOdd, _adapter.RasterAntiAliasing));
     }
 
     public override void PushClipExclude(RRect rect)
@@ -162,7 +162,9 @@ internal sealed partial class RasterGraphics : RGraphics
             _blend = _blendModes.Pop();
     }
 
-    // Anti-aliasing is always on in this backend.
+    // This backend has one anti-aliasing setting for the whole render (PdfGenerateConfig.RasterAntiAliasing,
+    // read here as _adapter.RasterAntiAliasing), applied uniformly by ScanlineRasterizer to every fill, stroke,
+    // image and glyph. There is no separate per-call smoothing mode to switch here, so this stays a no-op.
     public override object SetAntiAliasSmoothingMode() => true;
 
     public override void ReturnPreviousSmoothingMode(object? prevMode)
@@ -418,7 +420,7 @@ internal sealed partial class RasterGraphics : RGraphics
             return;
 
         var sink = new PaintSink(this, paint, clip, mode ?? _blend, opacity);
-        ScanlineRasterizer.Fill(polygons, evenOdd, clip.Bounds, ref sink);
+        ScanlineRasterizer.Fill(polygons, evenOdd, clip.Bounds, ref sink, _adapter.RasterAntiAliasing);
     }
 
     private readonly struct PaintSink(RasterGraphics owner, PaintSource paint, ClipState clip, RBlendMode mode, int opacity) : ICoverageSink

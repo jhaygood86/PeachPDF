@@ -109,6 +109,9 @@ internal static class CliProgram
               --flatten-transparency
                                      Under PDF/A-1 or PDF/X-1a/X-3, render what needs
                                      transparency as opaque bitmaps instead of failing.
+              --no-raster-antialiasing
+                                     Do not anti-alias bitmaps PeachPDF renders itself
+                                     (see --raster-dpi); hard edges instead of smoothed.
 
         Network (HTTP inputs and resources):
               --http-timeout=SEC     HTTP request timeout in seconds.

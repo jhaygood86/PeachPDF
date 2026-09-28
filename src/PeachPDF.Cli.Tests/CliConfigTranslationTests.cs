@@ -76,6 +76,13 @@ public class CliConfigTranslationTests
         Assert.Equal(TransparencyPolicy.Flatten, CliRunner.BuildConfig(ArgumentParser.Parse(["--flatten-transparency", "doc.html"])).TransparencyPolicy);
     }
 
+    [Fact]
+    public void RasterAntiAliasing_DefaultsToOn_AndMapsWhenDisabled()
+    {
+        Assert.True(CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).RasterAntiAliasing);
+        Assert.False(CliRunner.BuildConfig(ArgumentParser.Parse(["--no-raster-antialiasing", "doc.html"])).RasterAntiAliasing);
+    }
+
     [Theory]
     [InlineData("50")]
     [InlineData("1201")]
