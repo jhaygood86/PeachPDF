@@ -11409,11 +11409,27 @@ var svgContextHtml =
     "</defs>" +
     "<path d=\"M30,65 C120,25 200,105 250,65\" fill=\"none\" stroke=\"url(#arrowGrad)\" stroke-width=\"6\" marker-end=\"url(#gradHead)\"/>" +
     "<use xlink:href=\"#pairShape\" x=\"320\" y=\"20\" fill=\"url(#pairGrad)\"/></svg>" +
+    "<p>The same context paint reaches into a <code>&lt;use&gt;</code>'s <code>&lt;symbol&gt;</code> or nested <code>&lt;svg&gt;</code> " +
+    "target too, measured against that target's whole content (both boxes below), not just the piece that actually paints with it " +
+    "(each box's right-hand half).</p>" +
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"520\" height=\"110\" viewBox=\"0 0 520 110\">" +
+    "<defs>" +
+    "<linearGradient id=\"symGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"#f59e0b\"/><stop offset=\"1\" stop-color=\"#7c2d12\"/></linearGradient>" +
+    "<symbol id=\"halves\" viewBox=\"0 0 20 20\"><rect width=\"10\" height=\"20\" fill=\"#e2e8f0\"/><rect x=\"10\" width=\"10\" height=\"20\" fill=\"context-fill\"/></symbol>" +
+    "<linearGradient id=\"nestGrad\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"#38bdf8\"/><stop offset=\"1\" stop-color=\"#0c4a6e\"/></linearGradient>" +
+    "<svg id=\"nestedHalves\" viewBox=\"0 0 20 20\" width=\"20\" height=\"20\"><rect width=\"10\" height=\"20\" fill=\"#e2e8f0\"/><rect x=\"10\" width=\"10\" height=\"20\" fill=\"context-fill\"/></svg>" +
+    "</defs>" +
+    "<text x=\"20\" y=\"14\" font-size=\"11\" fill=\"#555\">&lt;use&gt; of a &lt;symbol&gt;</text>" +
+    "<use xlink:href=\"#halves\" x=\"20\" y=\"20\" width=\"90\" height=\"90\" fill=\"url(#symGrad)\"/>" +
+    "<text x=\"150\" y=\"14\" font-size=\"11\" fill=\"#555\">&lt;use&gt; of a nested &lt;svg&gt;</text>" +
+    "<use xlink:href=\"#nestedHalves\" x=\"150\" y=\"20\" width=\"90\" height=\"90\" fill=\"url(#nestGrad)\"/>" +
+    "</svg>" +
     "</body></html>";
 await SaveShowcaseAsync("svg_context_paint", "Graphics & Effects", "SVG context paint",
     "SVG 2 context-fill and context-stroke: a shape defined once takes the fill and stroke of each <use> that instantiates it, a marker " +
     "draws with the fill and stroke of the shape it is placed on - including a gradient or pattern, mapped through the marker's own " +
-    "placement - and a use's context paint follows a transform between what it instantiates and the shape that actually paints it.",
+    "placement - and a use's context paint follows a transform between what it instantiates and the shape that actually paints it, " +
+    "including when the use targets a symbol or a nested svg.",
     svgContextHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // GSUB ligature substitution: font-variant-ligatures actually turns real GSUB liga/clig ligatures
