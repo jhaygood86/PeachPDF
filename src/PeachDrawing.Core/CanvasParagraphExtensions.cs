@@ -122,8 +122,8 @@ namespace PeachDrawing.Core
 
             void Line(double position, double thickness)
             {
-                // Font positions are y-up from the baseline; the canvas is y-down. The line is centred on its position.
-                double height = Math.Max(thickness * scale, 1.0 / canvas.PixelsPerPoint * 0.5);
+                // Font positions are y-up from the baseline; the canvas is y-down. The line is centred on its position, and is never thinner than half a point.
+                double height = Math.Max(thickness * scale, 0.5 * canvas.PixelsPerPoint);
                 canvas.DrawRectangle(brush, baselineOrigin.X, baselineOrigin.Y - position * scale - height / 2, run.Width, height);
             }
 
