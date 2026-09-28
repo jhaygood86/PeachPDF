@@ -2,7 +2,7 @@ using PeachDrawing.Core;
 using System;
 using System.Buffers;
 
-namespace PeachDrawing;
+namespace PeachDrawing.Core;
 
 /// <summary>
 /// A premultiplied RGBA8 pixel buffer together with where it sits in the coordinate space of the graphics
@@ -80,7 +80,13 @@ public sealed class RasterSurface : IDisposable
     /// <summary>The surface's rectangle in layout units (the rectangle a bitmap of it must be placed at).</summary>
     public Rect LayoutRect => new(GridX / PixelsPerUnitX, GridY / PixelsPerUnitY, Width / PixelsPerUnitX, Height / PixelsPerUnitY);
 
-    internal IntRect Bounds => new(0, 0, Width, Height);
+    /// <summary>The surface's pixel rectangle: (0, 0) to (<see cref="Width"/>, <see cref="Height"/>).</summary>
+    public IntRect Bounds => new(0, 0, Width, Height);
+
+    /// <summary>The surface's pixels as a <see cref="Memory{T}"/>, premultiplied RGBA8, row-major from the top-left; for a caller that cannot hold a <see cref="Span{T}"/> (in a lambda, say).</summary>
+    public Memory<byte> PixelMemory => _buffer is null
+        ? throw new ObjectDisposedException(nameof(RasterSurface))
+        : _buffer.AsMemory(0, Width * Height * 4);
 
     /// <summary>Fills every pixel with transparent black.</summary>
     public void Clear() => Pixels.Clear();

@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using System;
 using System.Buffers;
 
@@ -8,7 +9,7 @@ namespace PeachDrawing.Filters;
 /// particular colour, composited below the image". The shadow follows the real alpha shape of what was painted - glyphs,
 /// a PNG's transparent corners, a clipped outline - not its bounding box.
 /// </summary>
-internal static class DropShadow
+public static class DropShadow
 {
     /// <summary>
     /// Adds a shadow under the pixels of <paramref name="surface"/> in place: its alpha, tinted with the premultiplied

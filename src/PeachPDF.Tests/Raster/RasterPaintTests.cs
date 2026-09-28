@@ -383,7 +383,7 @@ namespace PeachPDF.Tests.Raster
             g.Dispose();
 
             Assert.True(g.IsOffscreenTile);
-            Assert.Null(g.FormCacheOwner);
+            Assert.Null(g.TileCacheOwner);
         }
     }
 }

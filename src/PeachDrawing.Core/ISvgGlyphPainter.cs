@@ -11,7 +11,7 @@ namespace PeachDrawing.Core
     /// obtained through <see cref="RenderContext.CreateSvgGlyphPainter"/> so a backend with no SVG engine
     /// (a standalone raster canvas) can supply none.
     /// </summary>
-    internal interface ISvgGlyphPainter
+    public interface ISvgGlyphPainter
     {
         /// <summary>Draws the glyph with its origin at (<paramref name="originX"/>, <paramref name="baselineY"/>), in the units of the graphics.</summary>
         /// <returns><see langword="false"/> when the document cannot be drawn, so that the caller draws the glyph's outline.</returns>

@@ -9,7 +9,7 @@ namespace PeachDrawing.Filters;
 /// size. Each takes its inputs and writes a result of the same size; none keeps state. Geometry-dependent parameters
 /// (radii, offsets, scales) arrive already converted to pixels.
 /// </summary>
-internal static partial class FilterOps
+public static partial class FilterOps
 {
     private static readonly byte[] ToLinearLut = BuildLut(toLinear: true);
     private static readonly byte[] ToSrgbLut = BuildLut(toLinear: false);
@@ -196,7 +196,7 @@ internal static partial class FilterOps
     /// <summary>Repeats the <paramref name="tile"/> rectangle of <paramref name="source"/> across the whole of <paramref name="destination"/>.</summary>
     public static void Tile(RasterSurface source, RasterSurface destination, IntRect tile)
     {
-        tile = tile.Intersect(source.Bounds);
+        tile = tile.Intersect(new IntRect(0, 0, source.Width, source.Height));
         if (tile.IsEmpty)
         {
             destination.Clear();

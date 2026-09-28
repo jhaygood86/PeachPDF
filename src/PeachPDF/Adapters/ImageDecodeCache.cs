@@ -24,7 +24,7 @@ namespace PeachPDF.Adapters
     /// Decodes an <see cref="XImage"/> to a premultiplied-RGBA8 <see cref="PixelBuffer"/> once and remembers
     /// the result for the image's lifetime - the cache <see cref="ImageAdapter.GetPixels"/> reads through.
     /// This is PDF-embedding-specific (keyed on <see cref="XImage"/>) and deliberately lives here rather than
-    /// in <c>PeachDrawing</c>: the raster backend's own pixel math (<see cref="Bitmap"/>'s premultiply
+    /// in <c>PeachDrawing</c>: the raster backend's own pixel math (<see cref="PixelMath"/>'s premultiply
     /// helpers) has no <see cref="XImage"/> concept at all, so the decode-and-cache step belongs on the PDF
     /// adapter side of that boundary, not the raster side of it.
     /// </summary>
@@ -40,7 +40,7 @@ namespace PeachPDF.Adapters
             PixelBuffer? buffer = null;
             if (image.TryGetRgba(out var w, out var h, out var rgba) && w > 0 && h > 0 && rgba.Length >= w * h * 4)
             {
-                Bitmap.Premultiply(rgba.AsSpan(0, w * h * 4));
+                PixelMath.Premultiply(rgba.AsSpan(0, w * h * 4));
                 buffer = new PixelBuffer(w, h, rgba);
             }
 

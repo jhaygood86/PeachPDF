@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using System;
 using System.Buffers;
 using System.Runtime.Intrinsics;
@@ -8,7 +9,7 @@ namespace PeachDrawing;
 /// Draws one surface as the picture a <see cref="Homography"/> makes of it: the raster half of a CSS <c>perspective</c> or 3D transform
 /// (a PDF <c>cm</c> is affine and cannot). Every destination pixel is mapped back through the inverse to the source and sampled there.
 /// </summary>
-internal static class Warp
+public static class Warp
 {
     /// <summary>The most samples taken along one axis of a pixel when the source is being shrunk (so up to 16 per pixel).</summary>
     private const int MaxSamplesPerAxis = 4;
@@ -212,7 +213,7 @@ internal static class Warp
 /// How deep a plane is (its z over its divisor, larger being nearer the viewer) at each point of it, from the same 4x4 matrix as its
 /// <see cref="Homography"/>: the z of the plane z = 0 after the matrix, and the divisor the map shares.
 /// </summary>
-internal readonly struct DepthPlane(double za, double zb, double zc, double wa, double wb, double wc)
+public readonly struct DepthPlane(double za, double zb, double zc, double wa, double wb, double wc)
 {
     private readonly double _za = za, _zb = zb, _zc = zc, _wa = wa, _wb = wb, _wc = wc;
 

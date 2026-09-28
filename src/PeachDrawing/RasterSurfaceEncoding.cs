@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachImage;
 using PeachImage.Formats.Png;
 using System;
@@ -14,7 +15,7 @@ namespace PeachDrawing;
 /// raster backend itself (see <c>PeachPDF.Adapters.RasterEmbedding</c> for the PDF-specific half - the
 /// <c>XImage</c> wrapping - that consumes this).
 /// </summary>
-internal static class RasterSurfaceEncoding
+public static class RasterSurfaceEncoding
 {
     /// <summary>Whether every pixel of <paramref name="surface"/> is fully opaque, so it needs no alpha plane (and no soft mask) to embed.</summary>
     public static bool IsOpaque(RasterSurface surface)
@@ -60,10 +61,10 @@ internal static class RasterSurfaceEncoding
         await image.SaveAsync(stream, formatName, options, cancellationToken);
     }
 
-    private static Image ToPeachImage(RasterSurface surface)
+    private static PeachImage.Image ToPeachImage(RasterSurface surface)
     {
         var opaque = IsOpaque(surface);
-        var image = Image.Create(surface.Width, surface.Height, opaque ? PixelFormat.Rgb24 : PixelFormat.Rgba32);
+        var image = PeachImage.Image.Create(surface.Width, surface.Height, opaque ? PixelFormat.Rgb24 : PixelFormat.Rgba32);
         if (opaque)
             StripAlpha(surface.Pixels, image.GetPixelSpan());
         else

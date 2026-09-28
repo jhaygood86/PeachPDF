@@ -34,13 +34,7 @@ namespace PeachDrawing.Tests.PublicApi
         }
 
         /// <summary>
-        /// This project grants its internals to PeachDrawing.Tests (its own tests) plus PeachPDF and
-        /// PeachPDF.Tests - see the InternalsVisibleTo comment in <c>PeachDrawing.csproj</c>: PeachPDF's
-        /// own <c>GraphicsAdapter</c> and <c>RasterCanvas</c> are the two real <c>Canvas</c>
-        /// implementations the shared <c>PeachDrawing.Core</c> internal coordination surface was
-        /// always meant for. This test pins the granted set to exactly those three, so a future accidental
-        /// widening (granting to some unrelated project) still fails a test instead of silently expanding
-        /// the surface PeachPDF-adjacent code can reach.
+        /// Only this project's own tests are granted its internals; PeachPDF and PeachPDF.Tests use the public API alone.
         /// </summary>
         [Fact]
         public void TheGrantedInternalsAreExactlyTheDocumentedSet()
@@ -49,7 +43,7 @@ namespace PeachDrawing.Tests.PublicApi
                 .Select(a => a.AssemblyName)
                 .ToList();
 
-            Assert.Equivalent(new[] { "PeachDrawing.Tests", "PeachPDF", "PeachPDF.Tests" }, granted);
+            Assert.Equivalent(new[] { "PeachDrawing.Tests" }, granted);
         }
 
         private static string Describe(Assembly assembly)

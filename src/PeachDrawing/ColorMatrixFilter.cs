@@ -9,10 +9,10 @@ namespace PeachDrawing;
 /// <c>sepia()</c>, <c>saturate()</c>, <c>hue-rotate()</c> and friends, including the cross-channel ones a PDF
 /// transfer function cannot express.
 /// </summary>
-internal static class ColorMatrixFilter
+public static class ColorMatrixFilter
 {
     /// <summary>Returns a new bitmap with <paramref name="matrix"/> applied to <paramref name="source"/>.</summary>
-    public static Bitmap Apply(Bitmap source, in ColorMatrix matrix)
+    internal static Bitmap Apply(Bitmap source, in ColorMatrix matrix)
     {
         var result = new byte[source.Width * source.Height * 4];
         Apply(source.Pixels.AsSpan(0, result.Length), result, matrix);

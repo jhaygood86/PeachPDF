@@ -97,7 +97,7 @@ namespace PeachPDF.Html.Core.Paint
             var a = color.A;
             DropShadow.Apply(surface, (int)Math.Round(dx), (int)Math.Round(dy),
                 sigma * surface.PixelsPerUnitX, sigma * surface.PixelsPerUnitY,
-                (byte)PixelKernels.Div255(color.R * a), (byte)PixelKernels.Div255(color.G * a), (byte)PixelKernels.Div255(color.B * a), a);
+                (byte)PixelMath.Div255(color.R * a), (byte)PixelMath.Div255(color.G * a), (byte)PixelMath.Div255(color.B * a), a);
         }
 
         /// <summary>

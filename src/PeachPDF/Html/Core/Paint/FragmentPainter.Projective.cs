@@ -136,11 +136,11 @@ namespace PeachPDF.Html.Core.Paint
             // warp enlarges it by, at most a few times over, so it does not blur.
             var dpi = container.Adapter.RasterizationDpi * Magnification(warp.Map, source);
 
-            using var sourceScope = g.BeginRasterSurface(source, dpi) as RasterSurfaceScope;
+            using var sourceScope = g.BeginRasterSurface(source, dpi);
             if (sourceScope is null)
                 return false;
 
-            using var destinationScope = g.BeginRasterSurface(destination) as RasterSurfaceScope;
+            using var destinationScope = g.BeginRasterSurface(destination);
             if (destinationScope is null)
                 return false;
 

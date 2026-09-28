@@ -22,10 +22,10 @@ internal static class Lighting
     {
         var w = source.Width;
         var h = source.Height;
-        var ps = source.Buffer;
+        var ps = source.PixelMemory;
         var pd = destination.Pixels;
 
-        double Alpha(int x, int y) => ps[(y * w + x) * 4 + 3] / 255.0;
+        double Alpha(int x, int y) => ps.Span[(y * w + x) * 4 + 3] / 255.0;
 
         var light = p.Light;
         var lr = lightColor.R / 255.0;

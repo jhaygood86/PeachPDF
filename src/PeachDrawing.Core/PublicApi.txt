@@ -49,9 +49,17 @@ PeachDrawing.Core.Canvas : abstract class
   method abstract Void PushTransform(Matrix3x2 matrix)
   method abstract Void ReturnPreviousSmoothingMode(Object prevMode)
   method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
+  method virtual Void DrawRaster(RasterSurface surface)
   method virtual Void DrawString(String str, Font font, PaintColor color, PaintPoint point, Size size, Double letterSpacing, FontPalette fontPalette, ShapeSettings? features, String logicalText)
+  property Boolean FlattensTransparency { get; }
+  property Boolean InvisibleText { get; set; }
   property Boolean IsOffscreenTile { get; }
+  property Boolean PrefersRasterGroups { get; }
   property Double PixelsPerPoint { get; }
+  property Matrix3x2 CurrentTransform { get; }
+  property Object TileCacheOwner { get; }
+  property ValueTuple<Double, Double> TransformScale { get; }
 PeachDrawing.Core.ColorMatrix : struct
   ctor(Matrix4x4 linear, Vector4 offset)
   field static ColorMatrix Identity
@@ -194,6 +202,8 @@ PeachDrawing.Core.GraphicsPath+Corner : enum Int32
   BottomRight = 3
   TopLeft = 0
   TopRight = 1
+PeachDrawing.Core.ISvgGlyphPainter : interface
+  method abstract Boolean TryPaint(Typeface typeface, UInt16 glyph, SvgGlyph svg, Double fontSize, Double originX, Double baselineY, PaintColor foreground, Int32 paletteIndex, IReadOnlyDictionary<Int32, PaintColor> overrides)
 PeachDrawing.Core.Image : abstract class
   method abstract Void Dispose()
   method virtual PixelBuffer? GetPixels()
@@ -209,6 +219,22 @@ PeachDrawing.Core.InkSpan : struct
   method virtual String ToString()
   property Double End { get; init; }
   property Double Start { get; init; }
+PeachDrawing.Core.IntRect : struct
+  ctor(Int32 Left, Int32 Top, Int32 Right, Int32 Bottom)
+  method IntRect Intersect(in IntRect other)
+  method Void Deconstruct(out Int32 Left, out Int32 Top, out Int32 Right, out Int32 Bottom)
+  method virtual Boolean Equals(IntRect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean IsEmpty { get; }
+  property Int32 Bottom { get; init; }
+  property Int32 Height { get; }
+  property Int32 Left { get; init; }
+  property Int32 Right { get; init; }
+  property Int32 Top { get; init; }
+  property Int32 Width { get; }
+  property static IntRect Empty { get; }
 PeachDrawing.Core.LineCap : enum Int32
   Butt = 0
   Round = 1
@@ -315,6 +341,10 @@ PeachDrawing.Core.PixelBuffer : struct
   property Int32 Height { get; init; }
   property Int32 Width { get; init; }
   property ReadOnlyMemory<Byte> PremultipliedRgba { get; init; }
+PeachDrawing.Core.PixelMath : static class
+  method static Int32 Div255(Int32 x)
+  method static Void Premultiply(Span<Byte> rgba)
+  method static Void Unpremultiply(ReadOnlySpan<Byte> premultiplied, Span<Byte> destination)
 PeachDrawing.Core.RNetworkResponse : class
   ctor(Stream ResourceStream, Dictionary<String, String[]> ResponseHeaders)
   method Void Deconstruct(out Stream ResourceStream, out Dictionary<String, String[]> ResponseHeaders)
@@ -345,6 +375,27 @@ PeachDrawing.Core.RadialGradientBrush : sealed class
   property IReadOnlyList<GradientStop> Stops { get; }
   property PaintPoint Center { get; }
   property PaintPoint Focus { get; }
+PeachDrawing.Core.RasterRegion : sealed class
+  ctor(Canvas graphics, RasterSurface surface)
+  method virtual Void Dispose()
+  property Canvas Graphics { get; }
+  property RasterSurface Surface { get; }
+PeachDrawing.Core.RasterSurface : sealed class
+  ctor(Int32 width, Int32 height, Int32 gridX, Int32 gridY, Double pixelsPerUnitX, Double pixelsPerUnitY)
+  method Span<Byte> Row(Int32 y)
+  method Void Clear()
+  method virtual Void Dispose()
+  property Double PixelsPerUnitX { get; }
+  property Double PixelsPerUnitY { get; }
+  property Int32 GridX { get; }
+  property Int32 GridY { get; }
+  property Int32 Height { get; }
+  property Int32 Stride { get; }
+  property Int32 Width { get; }
+  property IntRect Bounds { get; }
+  property Memory<Byte> PixelMemory { get; }
+  property Rect LayoutRect { get; }
+  property Span<Byte> Pixels { get; }
 PeachDrawing.Core.Rect : struct
   ctor(Double x, Double y, Double width, Double height)
   ctor(PaintPoint location, Size size)
@@ -397,8 +448,15 @@ PeachDrawing.Core.RenderContext : abstract class
   method Void AddFontFamilyMapping(String fromFamily, String toFamily)
   method Void ClearFontCache()
   method abstract String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
+  method virtual ISvgGlyphPainter CreateSvgGlyphPainter(Canvas host)
   method virtual Task<RNetworkResponse> GetResourceStream(RUri uri)
+  property Boolean RasterAntiAliasing { get; set; }
+  property Boolean TextStemDarkening { get; set; }
+  property Double LayoutUnitsPerPoint { get; }
+  property Double RasterizationDpi { get; set; }
+  property Int64 MaxRasterPixels { get; set; }
   property RUri BaseUri { get; }
+  property TextHinting TextHinting { get; set; }
 PeachDrawing.Core.Size : struct
   ctor(Double Width, Double Height)
   ctor(PaintPoint pt)

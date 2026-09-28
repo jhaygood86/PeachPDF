@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
@@ -12,7 +13,7 @@ namespace PeachDrawing.Filters;
 /// few percent and cost the same regardless of radius); below 2 it convolves with the exact kernel. Everything is
 /// integer arithmetic, so the result is identical on every CPU. Pixels outside the surface count as transparent.
 /// </summary>
-internal static partial class GaussianBlur
+public static partial class GaussianBlur
 {
     /// <summary>The smallest deviation, in pixels, for which the box approximation is used.</summary>
     internal const double BoxThreshold = 2.0;

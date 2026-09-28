@@ -74,10 +74,10 @@ namespace PeachPDF.Html.Core.Paint
 
         private bool OwnPaintNeedsTransparency(Canvas g, BoxFragment fragment)
         {
-            if (g.CreateTransparencyProbe() is not TransparencyProbe probe)
+            if (g is not ITransparencyProbeSource source)
                 return false;
 
-            return probe.Requires(scratch =>
+            return source.CreateTransparencyProbe().Requires(scratch =>
                 new FragmentPainter(container) { _ownOnly = true, _taggingSuppressed = true }.PaintContent(scratch, fragment));
         }
 
@@ -94,7 +94,7 @@ namespace PeachPDF.Html.Core.Paint
                 return true;
             }
 
-            using var scope = g.BeginRasterSurface(bounds) as RasterSurfaceScope;
+            using var scope = g.BeginRasterSurface(bounds);
             if (scope is null)
                 return false;
 

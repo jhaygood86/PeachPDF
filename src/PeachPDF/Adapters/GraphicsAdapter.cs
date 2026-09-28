@@ -28,7 +28,7 @@ namespace PeachPDF.Adapters
     /// <summary>
     /// Adapter for WinForms Graphics for core.
     /// </summary>
-    internal sealed class GraphicsAdapter : Canvas
+    internal sealed class GraphicsAdapter : Canvas, ITransparencyProbeSource
     {
         /// <summary>
         /// The wrapped WinForms graphics object
@@ -52,7 +52,7 @@ namespace PeachPDF.Adapters
 
         public override double PixelsPerPoint { get; }
 
-        internal override object? FormCacheOwner => _g.Owner;
+        public override object? TileCacheOwner => _g.Owner;
 
         /// <summary>
         /// _releaseGraphics is set true exactly for tile-backed instances (see the constructor
@@ -131,14 +131,14 @@ namespace PeachPDF.Adapters
         private readonly Stack<Matrix3x2> _transformStack = [];
         private Matrix3x2 _accumulated = Matrix3x2.Identity;
 
-        internal override Matrix3x2 CurrentTransform => _accumulated;
+        public override Matrix3x2 CurrentTransform => _accumulated;
 
         /// <summary>Seeds <see cref="CurrentTransform"/> for a freshly created tile - see <see cref="Canvas.CreateTile"/>'s
         /// doc remarks for why. Bookkeeping only: the tile's own native PDF graphics state (<see cref="_g"/>) still starts at
         /// its own identity, so this has no effect on what actually gets drawn into it.</summary>
         internal void SeedTransform(Matrix3x2 requester) => _accumulated = requester;
 
-        internal override (double X, double Y) TransformScale
+        public override (double X, double Y) TransformScale
         {
             get
             {
@@ -479,25 +479,20 @@ namespace PeachPDF.Adapters
             return (tileGraphics, new ImageAdapter(form));
         }
 
-        internal override RasterSurfaceScope? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null)
-        {
-            var scope = RasterSurfaceFactory.Create(_adapter, PixelsPerPoint, layoutBounds, dpiOverride ?? _adapter.RasterizationDpi, _adapter.MaxRasterPixels, TransformScale);
-            scope?.Graphics.SeedTransform(_accumulated);
-            return scope;
-        }
+        public override RasterRegion? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null) =>
+            RasterSurfaceFactory.Create(_adapter, PixelsPerPoint, layoutBounds, dpiOverride ?? _adapter.RasterizationDpi, _adapter.MaxRasterPixels, TransformScale, _accumulated);
 
-        internal override bool FlattensTransparency =>
+        public override bool FlattensTransparency =>
             _g.Owner is { } owner && owner.Options.FlattenTransparency &&
             (owner.Options.PdfAConformance is PdfAConformance.PdfA1B or PdfAConformance.PdfA1A ||
              owner.Options.PdfXConformance is PdfXConformance.X1a or PdfXConformance.X3);
 
         private TransparencyProbe? _probe;
 
-        internal override TransparencyProbe? CreateTransparencyProbe() => _probe ??= new TransparencyProbe(_adapter, PixelsPerPoint);
+        public TransparencyProbe CreateTransparencyProbe() => _probe ??= new TransparencyProbe(_adapter, PixelsPerPoint);
 
-        internal override void DrawRaster(object? surfaceObj)
+        public override void DrawRaster(RasterSurface surface)
         {
-            var surface = (RasterSurface)surfaceObj!;
 
             // A bitmap with soft edges needs an image soft mask (/SMask), a transparency construct PDF/A-1 and
             // PDF/X-1a/X-3 forbid. Rejected up front, with a message naming the CSS feature rather than the

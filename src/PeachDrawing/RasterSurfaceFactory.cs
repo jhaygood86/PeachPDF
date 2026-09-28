@@ -1,38 +1,14 @@
 using PeachDrawing.Core;
 using System;
+using System.Numerics;
 
 namespace PeachDrawing;
 
-/// <summary>
-/// A raster surface handed out by <see cref="Canvas.BeginRasterSurface"/>: paint into
-/// <see cref="Graphics"/>, post-process <see cref="Surface"/> if needed, then give the surface back to the graphics
-/// that produced it with <see cref="Canvas.DrawRaster"/>. Disposing releases the pixel buffer.
-/// </summary>
-internal sealed class RasterSurfaceScope : IDisposable
-{
-    public RasterSurfaceScope(RasterCanvas graphics, RasterSurface surface)
-    {
-        Graphics = graphics;
-        Surface = surface;
-    }
-
-    /// <summary>A graphics whose coordinate system is the requesting graphics' own, so paint code needs no translation.</summary>
-    public RasterCanvas Graphics { get; }
-
-    public RasterSurface Surface { get; }
-
-    public void Dispose()
-    {
-        Graphics.Dispose();
-        Surface.Dispose();
-    }
-}
-
 /// <summary>Creates raster surfaces on the shared pixel grid, at an exact physical resolution.</summary>
-internal static class RasterSurfaceFactory
+public static class RasterSurfaceFactory
 {
     /// <summary>The largest side, in pixels, of any raster surface.</summary>
-    internal const int MaxDimension = 16384;
+    public const int MaxDimension = 16384;
 
     /// <summary>
     /// Creates a surface covering <paramref name="layoutBounds"/> (layout units) at <paramref name="dpi"/> pixels
@@ -46,9 +22,16 @@ internal static class RasterSurfaceFactory
     /// seam. If the area or a side would exceed the limits, the resolution is lowered just enough to fit; the
     /// placed size is never changed.
     /// </remarks>
+    /// <param name="adapter">the render context the new canvas draws through</param>
+    /// <param name="pixelsPerPoint">layout units per point of the requesting canvas (its <see cref="Canvas.PixelsPerPoint"/>)</param>
+    /// <param name="layoutBounds">the region to cover, in layout units</param>
+    /// <param name="dpi">pixels per inch of paper</param>
+    /// <param name="maxPixels">the most pixels the surface may have before its resolution is lowered to fit</param>
+    /// <param name="transformScale">how much the requester's pushed transforms magnify a unit along each axis (see <see cref="Canvas.TransformScale"/>)</param>
+    /// <param name="initialTransform">the requester's <see cref="Canvas.CurrentTransform"/>, which the new canvas starts from</param>
     /// <returns>null when the bounds are empty, non-finite or the surface could not be allocated.</returns>
-    public static RasterSurfaceScope? Create(RenderContext adapter, double pixelsPerPoint, Rect layoutBounds, double dpi, long maxPixels,
-        (double X, double Y) transformScale = default)
+    public static RasterRegion? Create(RenderContext adapter, double pixelsPerPoint, Rect layoutBounds, double dpi, long maxPixels,
+        (double X, double Y) transformScale = default, Matrix3x2? initialTransform = null)
     {
         if (transformScale.X <= 0 || transformScale.Y <= 0)
             transformScale = (1.0, 1.0);
@@ -80,7 +63,10 @@ internal static class RasterSurfaceFactory
             if (w * h <= maxPixels && w <= MaxDimension && h <= MaxDimension)
             {
                 var surface = new RasterSurface((int)w, (int)h, (int)gx0, (int)gy0, ppuX, ppuY);
-                return new RasterSurfaceScope(new RasterCanvas(adapter, surface, pixelsPerPoint), surface);
+                var canvas = new RasterCanvas(adapter, surface, pixelsPerPoint);
+                if (initialTransform is { } seed)
+                    canvas.SeedTransform(seed);
+                return new RasterRegion(canvas, surface);
             }
 
             var factor = Math.Min(Math.Sqrt((double)maxPixels / (w * h)), (double)MaxDimension / Math.Max(w, h));

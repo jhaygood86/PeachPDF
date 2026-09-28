@@ -239,9 +239,9 @@ namespace PeachPDF.Tests.Raster
             var straight = new byte[] { 200, 100, 50, 128, 10, 20, 30, 255, 99, 99, 99, 0 };
             var work = (byte[])straight.Clone();
 
-            Bitmap.Premultiply(work);
+            PixelMath.Premultiply(work);
             var back = new byte[work.Length];
-            Bitmap.Unpremultiply(work, back);
+            PixelMath.Unpremultiply(work, back);
 
             Assert.InRange(back[0], 198, 202);
             Assert.InRange(back[1], 98, 102);

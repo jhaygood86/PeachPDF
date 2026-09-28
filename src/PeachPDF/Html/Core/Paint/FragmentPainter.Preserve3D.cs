@@ -276,7 +276,7 @@ namespace PeachPDF.Html.Core.Paint
             if (destination.Width <= 0 || destination.Height <= 0)
                 return true;
 
-            using var destinationScope = g.BeginRasterSurface(destination) as RasterSurfaceScope;
+            using var destinationScope = g.BeginRasterSurface(destination);
             if (destinationScope is null)
                 return false;
 
@@ -294,7 +294,7 @@ namespace PeachPDF.Html.Core.Paint
                     // A plane brought closer than its flat size is drawn larger than its bitmap: give it as many more pixels as the warp
                     // enlarges it by, so it does not blur.
                     var dpi = container.Adapter.RasterizationDpi * Magnification(plane.Map, plane.Source);
-                    using var sourceScope = g.BeginRasterSurface(plane.Source, dpi) as RasterSurfaceScope;
+                    using var sourceScope = g.BeginRasterSurface(plane.Source, dpi);
                     if (sourceScope is null)
                     {
                         plane.HasSource = false;

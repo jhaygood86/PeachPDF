@@ -32,7 +32,7 @@ namespace PeachPDF.Html.Core.Paint
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return true;
 
-            using var scope = g.BeginRasterSurface(bounds) as RasterSurfaceScope;
+            using var scope = g.BeginRasterSurface(bounds);
             if (scope is null)
                 return false;
 
@@ -56,11 +56,11 @@ namespace PeachPDF.Html.Core.Paint
             if (box.IsRounded)
             {
                 using var boxPath = BuildLayerRoundRect(rg, borderBox, ShadowCornerRadii(box, borderBox, spread: 0), 0);
-                rg.Erase(boxPath);
+                ((PeachDrawing.RasterCanvas)rg).Erase(boxPath);
             }
             else
             {
-                rg.EraseRectangle(borderBox);
+                ((PeachDrawing.RasterCanvas)rg).EraseRectangle(borderBox);
             }
 
             g.DrawRaster(scope.Surface);
@@ -86,7 +86,7 @@ namespace PeachPDF.Html.Core.Paint
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return true;
 
-            using var scope = g.BeginRasterSurface(bounds) as RasterSurfaceScope;
+            using var scope = g.BeginRasterSurface(bounds);
             if (scope is null)
                 return false;
 

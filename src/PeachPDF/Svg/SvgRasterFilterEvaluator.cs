@@ -43,7 +43,7 @@ namespace PeachPDF.Svg
                 return;
 
             // No raster context (a measure-only pass) - the same graceful bail-out the tile-based evaluation makes.
-            using var scope = g.BeginRasterSurface(new Rect(x, y, width, height)) as RasterSurfaceScope;
+            using var scope = g.BeginRasterSurface(new Rect(x, y, width, height));
             if (scope is null)
                 return;
 
@@ -112,7 +112,7 @@ namespace PeachPDF.Svg
             // A same-sized sRGB surface painted through a nested raster scope over the filter region, or null when none could be made.
             RasterSurface? PaintedSurface(Rect area, PaintedInput kind, bool stroke, FeImage? feImage, double offsetX, double offsetY)
             {
-                var scope = g.BeginRasterSurface(region) as RasterSurfaceScope;
+                var scope = g.BeginRasterSurface(region);
                 if (scope is null)
                     return null;
 
@@ -395,7 +395,7 @@ namespace PeachPDF.Svg
                         DropShadow.Apply(output,
                             (int)Math.Round(LengthX(shadow.Dx)), (int)Math.Round(LengthY(shadow.Dy)),
                             shadow.StdDeviationX > 0 ? LengthX(shadow.StdDeviationX) : 0, shadow.StdDeviationY > 0 ? LengthY(shadow.StdDeviationY) : 0,
-                            (byte)PixelKernels.Div255(color.R * shadowAlpha), (byte)PixelKernels.Div255(color.G * shadowAlpha), (byte)PixelKernels.Div255(color.B * shadowAlpha),
+                            (byte)PixelMath.Div255(color.R * shadowAlpha), (byte)PixelMath.Div255(color.G * shadowAlpha), (byte)PixelMath.Div255(color.B * shadowAlpha),
                             shadowAlpha);
                         break;
                     }

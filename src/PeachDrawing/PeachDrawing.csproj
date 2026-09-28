@@ -34,16 +34,9 @@
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachDrawing.Tests" />
 		<!--
-			Deliberate and permanent, mirroring PeachDrawing.Core' own grant (see its csproj's
-			comment for the full reasoning). PeachPDF's own GraphicsAdapter.BeginRasterSurface constructs and
-			drives a RasterCanvas as its raster fallback - it is the second real Canvas implementation this
-			internal surface was always meant for (RasterSurfaceFactory.Create, RasterSurfaceScope, and
-			RasterCanvas's own internal Canvas-coordination overrides), not a new kind of consumer, and
-			PeachPDF.Tests exercises those same internals directly. PublicApi/PublicSurfaceTests.cs's
-			TheGrantedInternalsAreExactlyTheDocumentedSet pins the granted set to exactly these three.
+			PeachPDF and PeachPDF.Tests are deliberately NOT granted access: PeachPDF uses this package through its
+			public API only. PublicApi/PublicSurfaceTests pins the granted set.
 		-->
-		<InternalsVisibleTo Include="PeachPDF" />
-		<InternalsVisibleTo Include="PeachPDF.Tests" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />

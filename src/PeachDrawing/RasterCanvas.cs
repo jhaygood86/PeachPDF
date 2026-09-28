@@ -57,7 +57,7 @@ public sealed partial class RasterCanvas : Canvas
         _sx = surface.PixelsPerUnitX * pixelsPerPoint;
         _sy = surface.PixelsPerUnitY * pixelsPerPoint;
 
-        _clips.Push(new ClipState(surface.Bounds, null));
+        _clips.Push(new ClipState(new IntRect(0, 0, surface.Width, surface.Height), null));
         _coverageScratch = new byte[surface.Width + 4];
         _pixelScratch = new byte[(surface.Width + 4) * 4];
     }
@@ -83,7 +83,8 @@ public sealed partial class RasterCanvas : Canvas
     public System.Threading.Tasks.Task SaveAsync(System.IO.Stream stream, string formatName, PeachImage.EncoderOptions options, System.Threading.CancellationToken cancellationToken = default) =>
         RasterSurfaceEncoding.SaveAsync(_surface, stream, formatName, options, cancellationToken);
 
-    internal override Matrix3x2 CurrentTransform => _layoutCtm;
+    /// <inheritdoc/>
+    public override Matrix3x2 CurrentTransform => _layoutCtm;
 
     /// <summary>Starts this graphics' transform at <paramref name="requester"/>'s: a raster region paints in its requester's current user space.</summary>
     internal void SeedTransform(Matrix3x2 requester) => _layoutCtm = requester;
@@ -94,7 +95,8 @@ public sealed partial class RasterCanvas : Canvas
     /// <inheritdoc/>
     public override bool IsOffscreenTile => true;
 
-    internal override bool PrefersRasterGroups => true;
+    /// <inheritdoc/>
+    public override bool PrefersRasterGroups => true;
 
     /// <summary>User space (points) to surface pixels under the current transform.</summary>
     private Affine UserToDevice => Affine.Then(_ctm, new Affine(_sx, 0, 0, _sy, -_surface.GridX, -_surface.GridY));
@@ -260,7 +262,7 @@ public sealed partial class RasterCanvas : Canvas
     /// own pixel pitch and grid instead of going back to the document's DPI, so compositing it back is an exact pixel
     /// copy rather than a resample, and it is cut to this surface: nothing outside it was painted to begin with.
     /// </summary>
-    internal override RasterSurfaceScope? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null)
+    public override RasterRegion? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null)
     {
         if (!(layoutBounds.Width > 0) || !(layoutBounds.Height > 0) ||
             double.IsNaN(layoutBounds.X + layoutBounds.Y + layoutBounds.Width + layoutBounds.Height) ||
@@ -281,12 +283,12 @@ public sealed partial class RasterCanvas : Canvas
         var nested = new RasterSurface((int)(right - left), (int)(bottom - top), (int)left, (int)top, ppuX, ppuY);
         var graphics = new RasterCanvas(_adapter, nested, _pixelsPerPoint);
         graphics.SeedTransform(_layoutCtm);
-        return new RasterSurfaceScope(graphics, nested);
+        return new RasterRegion(graphics, nested);
     }
 
-    internal override void DrawRaster(object? surfaceObj)
+        /// <inheritdoc/>
+    public override void DrawRaster(RasterSurface surface)
     {
-        var surface = (RasterSurface)surfaceObj!;
         var bitmap = new Bitmap(surface.Width, surface.Height, surface.Buffer);
         var rect = surface.LayoutRect;
         // Same pitch, on the same grid: nearest-neighbour is an exact pixel copy, where a bilinear tap could pick up a

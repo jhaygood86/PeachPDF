@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using System;
 
 namespace PeachDrawing.Filters;
@@ -6,7 +7,7 @@ namespace PeachDrawing.Filters;
 /// Perlin noise exactly as the SVG specification's reference implementation defines it (Filter Effects 1, <c>feTurbulence</c>),
 /// so a given seed, frequency and octave count yields the same picture every conforming renderer draws.
 /// </summary>
-internal sealed class Turbulence
+public sealed class Turbulence
 {
     private const int BSize = 0x100;
     private const int BM = 0xff;
@@ -24,6 +25,8 @@ internal sealed class Turbulence
         public int Width, Height, WrapX, WrapY;
     }
 
+    /// <summary>Creates a generator seeded per the SVG reference algorithm.</summary>
+    /// <param name="seed">the <c>feTurbulence</c> seed</param>
     public Turbulence(long seed)
     {
         Init(seed);

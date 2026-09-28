@@ -33,50 +33,10 @@
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachDrawing.Core.Tests" />
 		<!--
-			Deliberate and permanent, unlike PeachDrawing.Text's own InternalsVisibleTo (which grants nothing
-			to PeachPDF): step 8's public-API pass went through every member PeachPDF reached into across the
-			new assembly boundary and confirmed, one by one, that each remaining internal one is not "the
-			drawing API a standalone Canvas author needs" but PeachPDF's own HTML/CSS/SVG/PDF rendering
-			pipeline's private coordination surface with the Canvas/RenderContext abstraction - a different
-			kind of thing, the way a UI framework's own first-party controls sometimes reach past its public
-			surface into truly-internal rendering hooks no third-party control needs. Concretely:
-			Canvas.FormCacheOwner/InvisibleText/PrefersRasterGroups/FlattensTransparency/
-			CreateTransparencyProbe/TransformScale/CurrentTransform/SvgBackdrop/BeginRasterSurface/DrawRaster
-			are read or overridden only by GraphicsAdapter/RasterGraphics (the concrete PDF/raster Canvas
-			implementations) and FragmentPainter/SvgRenderer (the HTML/SVG paint code that drives any Canvas
-			polymorphically, per each member's own doc remarks - e.g. SvgBackdrop's "only SvgRenderer... ever
-			needs to know"); RenderContext.LayoutUnitsPerPoint is overridden by PdfSharpAdapter for its own
-			font-cache keying, and RasterizationDpi/TextHinting/TextStemDarkening/MaxRasterPixels/
-			RasterAntiAliasing are PdfGenerateConfig-driven knobs PdfGenerator sets each render - none of
-			these describe "how do I draw a rectangle," which is what the actually-public members already
-			cover in full. (RenderContext's internal CreateFont/CreateFontForCodepoint/
-			CreateSystemFallbackFontForCodepoint wrapper methods are a different case entirely: confirmed by
-			search that PeachPDF never calls them - only FontsHandler does, which lives in this same assembly
-			now, so they stay internal for that in-assembly collaboration and contribute nothing to why this
-			grant exists.) BeginRasterSurface/DrawRaster stay object?-typed even after Phase B: their real
-			type (RasterSurface) now lives in PeachDrawing, which this assembly cannot reference (the
-			dependency runs the other way), so object? is this member's permanent shape, not a placeholder
-			pending the raster backend's own extraction - both members would stay internal either way.
-
-			PeachPDF.Tests needs the identical grant, for the reason PeachDrawing.Text.Tests does NOT need
-			one from PeachDrawing.Text: PeachPDF.Tests exercises PeachPDF's own internals directly (including
-			the PdfSharpAdapter/RasterGraphics members this comment already covers, e.g. setting
-			RasterAntiAliasing/TextHinting directly on a test PdfSharpAdapter instance), not just PeachPDF's
-			public API - unlike PeachDrawing.Core.Tests below, which is this project's own internals
-			test project and needs a grant on that basis regardless of what PeachPDF needs.
-
-			PublicApi/InternalsGrantTests.cs pins the exact granted set (PeachPDF, PeachPDF.Tests,
-			PeachDrawing.Core.Tests, no more) the same way PeachDrawing.Text.Tests pins its own
-			all-or-nothing bar - a change to this ItemGroup should be a deliberate, reviewed edit to that
-			test, not a silent widening.
-		-->
-		<InternalsVisibleTo Include="PeachPDF" />
-		<InternalsVisibleTo Include="PeachPDF.Tests" />
-		<!--
-			Added at Phase B step 3 (the raster backend's actual extraction): PeachDrawing.RasterCanvas
-			overrides the same Canvas coordination members GraphicsAdapter does (CurrentTransform/
-			PrefersRasterGroups/BeginRasterSurface/DrawRaster/CreateSvgGlyphPainter, etc.) - it is the second
-			real Canvas implementation this internal surface was always meant for, not a new kind of consumer.
+			PeachPDF and PeachPDF.Tests are deliberately NOT granted access: PeachPDF drives this package through
+			its public API only, exactly as any other consumer would. The one sibling grant is PeachDrawing, the
+			software-raster Canvas implementation that ships alongside this package and shares its pixel buffers
+			(RasterSurface.Buffer) and font plumbing (FontsHandler). PublicApi/InternalsGrantTests pins the exact set.
 		-->
 		<InternalsVisibleTo Include="PeachDrawing" />
 	</ItemGroup>

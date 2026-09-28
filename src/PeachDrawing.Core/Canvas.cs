@@ -78,7 +78,7 @@ namespace PeachDrawing.Core
         /// reused on another page of that document, but never in another document. Null for graphics
         /// contexts without a PDF document (including test and measure-only graphics).
         /// </summary>
-        internal virtual object? FormCacheOwner => null;
+        public virtual object? TileCacheOwner => null;
 
         /// <summary>
         /// Get color pen.
@@ -263,7 +263,7 @@ namespace PeachDrawing.Core
 
         /// <summary>
         /// Asks this graphics for a pixel surface to paint an effect PDF cannot express as vector content
-        /// (a blur, a cross-channel colour filter, ...) into. The returned scope has this graphics' own
+        /// (a blur, a cross-channel colour filter, ...) into. The returned region has this graphics' own
         /// coordinate system, so the same paint code that would have drawn to this graphics draws to it
         /// unchanged; when finished, hand the surface back through <see cref="DrawRaster"/>.
         /// </summary>
@@ -272,17 +272,8 @@ namespace PeachDrawing.Core
         /// <returns>
         /// null when this graphics cannot rasterize (a measure-only pass, a test double), the region is empty, or it
         /// cannot be allocated - callers fall back to whatever they did before the raster backend existed.
-        /// <para>
-        /// Untyped (<c>object?</c>, not the concrete scope type) because the concrete raster surface still
-        /// lives in <c>PeachPDF.Raster</c>, which this project cannot reference without a circular
-        /// dependency (PeachPDF references this project, not the other way around) - the same reason
-        /// <see cref="CreateTransparencyProbe"/> and <see cref="SvgBackdrop"/> are <c>object?</c>-typed.
-        /// A concrete <see cref="Canvas"/> that implements this (e.g. <c>GraphicsAdapter</c>) overrides it
-        /// with a covariant return of its own real scope type; every caller that received the object back
-        /// from a call typed as <see cref="Canvas"/> must pattern-match it to that concrete type before use.
-        /// </para>
         /// </returns>
-        internal virtual object? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null) => null;
+        public virtual RasterRegion? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null) => null;
 
         /// <summary>
         /// While true, text this graphics draws is laid out and embedded as usual but paints nothing (PDF text render mode 3), so
@@ -290,31 +281,22 @@ namespace PeachDrawing.Core
         /// notion of text extraction (a raster graphics) draw no text at all while it is set. Everything other than text is
         /// unaffected; callers set it around the text-only pass and clear it afterwards.
         /// </summary>
-        internal bool InvisibleText { get; set; }
+        public bool InvisibleText { get; set; }
 
         /// <summary>
         /// Whether group effects (opacity, blend modes, colour functions) are best done by rendering the element into a tight
         /// bitmap and compositing that, rather than through <see cref="CreateTile"/>. True for a raster graphics, whose tile
         /// would otherwise span from the page origin; false for a PDF graphics, where a tile is a cheap vector Form XObject.
         /// </summary>
-        internal virtual bool PrefersRasterGroups => false;
+        public virtual bool PrefersRasterGroups => false;
 
         /// <summary>
         /// Whether the document being written forbids transparency (PDF/A-1, PDF/X-1a/X-3) and was asked to flatten it instead of
         /// rejecting it (<c>PdfGenerateConfig.TransparencyPolicy</c>). The painter then renders what needs transparency as an
         /// opaque bitmap.
         /// </summary>
-        internal virtual bool FlattensTransparency => false;
+        public virtual bool FlattensTransparency => false;
 
-        /// <summary>
-        /// A probe that answers whether painting something would need transparency, or null when this
-        /// graphics cannot tell. Untyped here so the base rendering abstraction never has to name a
-        /// PDF-specific type - the one caller (<c>FragmentPainter.OwnPaintNeedsTransparency</c>) knows to
-        /// expect <c>PeachPDF.Adapters.TransparencyProbe</c> and casts; a graphics with no notion of
-        /// transparency (a raster surface, or a third party's <c>Canvas</c>) just returns null, same as
-        /// before.
-        /// </summary>
-        internal virtual object? CreateTransparencyProbe() => null;
 
         /// <summary>
         /// How much the transforms pushed so far magnify a unit along each axis: the lengths of the images of the unit x and y
@@ -322,7 +304,7 @@ namespace PeachDrawing.Core
         /// <em>after</em> those transforms are applied, so it needs this to pick its pixel pitch; a graphics that does not
         /// track transforms reports no magnification.
         /// </summary>
-        internal virtual (double X, double Y) TransformScale => (1.0, 1.0);
+        public virtual (double X, double Y) TransformScale => (1.0, 1.0);
 
         /// <summary>
         /// The accumulated transform of every <see cref="PushTransform"/> in effect, mapping this graphics' current user space to
@@ -333,28 +315,15 @@ namespace PeachDrawing.Core
         /// <see cref="BeginRasterSurface"/>'s) starts seeded from this value, not <see cref="Matrix3x2.Identity"/>, precisely so a
         /// reader can still relate the tile's own coordinate space back to whatever space content outside the tile is measured in.
         /// </summary>
-        internal virtual Matrix3x2 CurrentTransform => Matrix3x2.Identity;
-
-        /// <summary>
-        /// What an SVG whose filters read <c>BackgroundImage</c> needs while it is being painted here: how to repaint what lies behind
-        /// an element. Null except while such an SVG (or a repaint of the part of it painted before an element) is being drawn.
-        /// Untyped here so the base rendering abstraction never has to name an SVG-specific type - only
-        /// <c>SvgRenderer</c> (which both sets and reads it) ever needs to know it's really a
-        /// <c>PeachPDF.Svg.SvgBackdropContext</c>.
-        /// </summary>
-        internal object? SvgBackdrop { get; set; }
+        public virtual Matrix3x2 CurrentTransform => Matrix3x2.Identity;
 
         /// <summary>
         /// Draws a surface obtained from <see cref="BeginRasterSurface"/> into this graphics at the rectangle the
         /// surface itself records, so its physical size is exact. Honours this graphics' current transform,
         /// clip and blend mode.
         /// </summary>
-        /// <param name="surface">
-        /// Untyped for the same reason <see cref="BeginRasterSurface"/>'s return is - see its doc remarks.
-        /// Always the exact object <see cref="BeginRasterSurface"/> handed back for this graphics; a
-        /// concrete override casts it to its own real surface type.
-        /// </param>
-        internal virtual void DrawRaster(object? surface) { }
+        /// <param name="surface">a surface obtained from <see cref="BeginRasterSurface"/> on this graphics</param>
+        public virtual void DrawRaster(RasterSurface surface) { }
 
         /// <summary>
         /// Whether this instance paints into an offscreen tile (e.g. one returned by

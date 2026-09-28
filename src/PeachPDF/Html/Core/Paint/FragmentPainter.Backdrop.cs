@@ -73,7 +73,7 @@ namespace PeachPDF.Html.Core.Paint
                     applied.Add(function);
             }
 
-            using var scope = g.BeginRasterSurface(region) as RasterSurfaceScope;
+            using var scope = g.BeginRasterSurface(region);
             if (scope is null)
                 return;
 

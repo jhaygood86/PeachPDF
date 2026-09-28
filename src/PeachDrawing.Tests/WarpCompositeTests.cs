@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Numerics;

@@ -1,8 +1,7 @@
-using PeachPDF.Adapters;
 using PeachDrawing.Core;
 using PeachDrawing;
 
-namespace PeachPDF.Tests.Raster
+namespace PeachDrawing.Tests
 {
     public class RasterGeometryTests
     {
@@ -114,7 +113,7 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public void FlatPath_FlattensACurveIntoManySegmentsWithinTolerance()
         {
-            using var path = new GraphicsPathAdapter();
+            using var path = new RasterGraphicsPath();
             path.Start(0, 0);
             path.AddBezierTo(0, 10, 10, 10, 10, 0);
 
@@ -135,7 +134,7 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public void FlatPath_RecordsClosedAndOpenSubpaths_InOrder()
         {
-            using var path = new GraphicsPathAdapter();
+            using var path = new RasterGraphicsPath();
             path.Start(0, 0);
             path.LineTo(5, 0);
             path.LineTo(5, 5);
@@ -153,7 +152,7 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public void FlatPath_AddsRectanglesAndArcs()
         {
-            using var path = new GraphicsPathAdapter();
+            using var path = new RasterGraphicsPath();
             // A closed rectangle.
             path.Start(30, 0);
             path.LineTo(35, 0);
@@ -193,7 +192,7 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public void FlatPath_DegenerateToleranceFallsBackToADefault()
         {
-            using var path = new GraphicsPathAdapter();
+            using var path = new RasterGraphicsPath();
             path.Start(0, 0);
             path.AddBezierTo(0, 10, 10, 10, 10, 0);
 

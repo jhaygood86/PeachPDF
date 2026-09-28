@@ -10,7 +10,7 @@ namespace PeachDrawing
     /// <see cref="Font.Typeface"/>/<see cref="Font.Size"/>, so it takes the portable <see cref="Font"/>
     /// directly rather than a backend-specific font wrapper.
     /// </summary>
-    internal static class TextOutlineBuilder
+    public static class TextOutlineBuilder
     {
         /// <summary>
         /// Builds the outline of <paramref name="str"/> into <paramref name="path"/> (returned, or disposed and

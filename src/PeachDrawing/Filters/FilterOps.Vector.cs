@@ -1,10 +1,11 @@
+using PeachDrawing.Core;
 using System;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 
 namespace PeachDrawing.Filters;
 
-internal static partial class FilterOps
+public static partial class FilterOps
 {
     /// <summary>
     /// Erode/dilate with sixteen bytes at a time. Where the whole window lies inside the surface the per-channel minimum (or maximum) over

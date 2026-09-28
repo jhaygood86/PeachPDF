@@ -83,7 +83,7 @@ namespace PeachDrawing.Core
         /// <see cref="FontsHandler"/> keys every font cache by it. 1 for an adapter whose layout unit is
         /// the point.
         /// </summary>
-        internal virtual double LayoutUnitsPerPoint => 1.0;
+        public virtual double LayoutUnitsPerPoint => 1.0;
 
         /// <summary>
         /// An <see cref="ISvgGlyphPainter"/> for <paramref name="host"/> to draw a glyph's OpenType SVG
@@ -93,25 +93,25 @@ namespace PeachDrawing.Core
         /// every SVG glyph the host draws); a caller that gets null may ask again next time - an override
         /// with nothing to offer should stay cheap to call repeatedly.
         /// </summary>
-        internal virtual ISvgGlyphPainter? CreateSvgGlyphPainter(Canvas host) => null;
+        public virtual ISvgGlyphPainter? CreateSvgGlyphPainter(Canvas host) => null;
 
         /// <summary>
         /// The resolution, in pixels per inch of paper, the raster backend renders effects at
         /// (see <c>PdfGenerateConfig.RasterizationDpi</c>). Set per render by the owner of the adapter.
         /// </summary>
-        internal double RasterizationDpi { get; set; } = 300;
+        public double RasterizationDpi { get; set; } = 300;
 
         /// <summary>How the raster backend fits glyph outlines to its pixel grid (see <c>PdfGenerateConfig.TextHinting</c>).</summary>
-        internal TextHinting TextHinting { get; set; } = TextHinting.None;
+        public TextHinting TextHinting { get; set; } = TextHinting.None;
 
         /// <summary>Whether hinted text of a font with CFF outlines has its stems thickened (see <c>PdfGenerateConfig.TextStemDarkening</c>).</summary>
-        internal bool TextStemDarkening { get; set; }
+        public bool TextStemDarkening { get; set; }
 
         /// <summary>The most pixels one raster surface may have before its resolution is lowered to fit.</summary>
-        internal long MaxRasterPixels { get; set; } = 64_000_000;
+        public long MaxRasterPixels { get; set; } = 64_000_000;
 
         /// <summary>Whether the raster backend anti-aliases what it draws (see <c>PdfGenerateConfig.RasterAntiAliasing</c>).</summary>
-        internal bool RasterAntiAliasing { get; set; } = true;
+        public bool RasterAntiAliasing { get; set; } = true;
 
         /// <summary>
         /// Resolve color value from given color name.

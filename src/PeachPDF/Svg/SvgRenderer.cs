@@ -55,7 +55,7 @@ namespace PeachPDF.Svg
 
             // Recording/measurement graphics have no PDF document to own a form and should still
             // receive the individual drawing calls directly.
-            if (g.FormCacheOwner is null)
+            if (g.TileCacheOwner is null)
             {
                 RenderInto(g, document, viewportRect);
                 return;
@@ -72,10 +72,10 @@ namespace PeachPDF.Svg
         public static Image? GetOrCreateForm(Canvas g, SvgDocument document, double width, double height)
         {
             if (width <= 0 || height <= 0 ||
-                (g.FormCacheOwner is not null && (width / g.PixelsPerPoint < 1 || height / g.PixelsPerPoint < 1)))
+                (g.TileCacheOwner is not null && (width / g.PixelsPerPoint < 1 || height / g.PixelsPerPoint < 1)))
                 return null;
 
-            var owner = g.FormCacheOwner;
+            var owner = g.TileCacheOwner;
             var key = (document, width, height, g.PixelsPerPoint);
             Dictionary<(SvgDocument Document, double Width, double Height, double PixelsPerPoint), Image>? cache =
                 owner is null ? null : FormCaches.GetValue(owner, _ => new());
@@ -121,16 +121,16 @@ namespace PeachPDF.Svg
 
             var viewport = (viewBoxWidth, viewBoxHeight);
 
-            var previousBackdrop = g.SvgBackdrop;
+            var previousBackdrop = SvgBackdropSlot.Get(g);
             if (document.ReadsBackdrop)
             {
-                g.SvgBackdrop = new SvgBackdropContext(document, PageBackdropFor(document))
+                SvgBackdropSlot.Set(g, new SvgBackdropContext(document, PageBackdropFor(document))
                 {
                     Frame = frame,
                     ViewportRect = viewportRect,
                     ViewBoxMatrix = matrix,
                     Viewport = viewport,
-                };
+                });
             }
 
             try
@@ -140,7 +140,7 @@ namespace PeachPDF.Svg
             }
             finally
             {
-                g.SvgBackdrop = previousBackdrop;
+                SvgBackdropSlot.Set(g, previousBackdrop);
             }
 
             g.PopTransform();
@@ -1739,7 +1739,7 @@ namespace PeachPDF.Svg
         private static void RenderElement(Canvas g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
         {
             // A backdrop repaint ends where the element it is repainting for begins.
-            if (g.SvgBackdrop is SvgBackdropContext backdrop && backdrop.ShouldSkip(element))
+            if (SvgBackdropSlot.Get(g) is { } backdrop && backdrop.ShouldSkip(element))
                 return;
 
             var opacity = inheritedOpacity * element.Opacity;
@@ -2194,7 +2194,7 @@ namespace PeachPDF.Svg
             {
                 // Only the graphics that paints the document's own content knows how to repaint what came before; a group's isolated
                 // tile has no backdrop, and neither does a document that is not being painted with one.
-                if (owner.SvgBackdrop is not SvgBackdropContext context || context.Depth >= MaxBackdropDepth || !owner.CurrentTransform.TryInvert(out var toUserSpace))
+                if (SvgBackdropSlot.Get(owner) is not { } context || context.Depth >= MaxBackdropDepth || !owner.CurrentTransform.TryInvert(out var toUserSpace))
                     return false;
 
                 // The page layer: the page is drawn in layout space, so put layout space into this element's user space.
@@ -2220,7 +2220,7 @@ namespace PeachPDF.Svg
                 };
 
                 // The document is clipped to its viewport when painted, so what overflows it is not part of the backdrop either.
-                g.SvgBackdrop = repaint;
+                SvgBackdropSlot.Set(g, repaint);
                 g.PushTransform(context.Frame.Then(toUserSpace));
                 g.PushClip(context.ViewportRect);
                 g.PushTransform(context.ViewBoxMatrix);
@@ -2235,7 +2235,7 @@ namespace PeachPDF.Svg
                 g.PopTransform();
                 g.PopClip();
                 g.PopTransform();
-                g.SvgBackdrop = null;
+                SvgBackdropSlot.Set(g, null);
                 return true;
             }
         }

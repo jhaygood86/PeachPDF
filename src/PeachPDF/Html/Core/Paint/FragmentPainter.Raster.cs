@@ -58,7 +58,7 @@ namespace PeachPDF.Html.Core.Paint
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return false;
 
-            using var scope = g.BeginRasterSurface(bounds) as RasterSurfaceScope;
+            using var scope = g.BeginRasterSurface(bounds);
             if (scope is null)
                 return false;
 
