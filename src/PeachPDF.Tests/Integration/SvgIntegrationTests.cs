@@ -2194,6 +2194,21 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task InlineSvg_MisCasedAttributeNameSelector_DoesNotMatch()
+        {
+            // The attribute-NAME half of case-sensitivity (as opposed to InlineSvg_MixedCaseSelector_
+            // MatchesWhenCaseAgrees / InlineSvg_GeneralCascadeAttributeValue_..., which vary the value):
+            // "DATA-HL" must NOT match a data-hl attribute through SVG's presentation-attribute pass
+            // (SvgCssBoxDomNode.GetAttribute) - the fill (blue) stands.
+            var html = InlineSvgDoc(
+                "rect[DATA-HL=\"1\"] { fill: #00ff00; }",
+                """<rect data-hl="1" fill="#0000ff" x="10" y="10" width="80" height="80"/>""");
+            var pdf = await GetPdfText(html);
+            Assert.DoesNotContain(Green, pdf);
+            Assert.Contains(Blue, pdf);
+        }
+
+        [Fact]
         public async Task Html_MisCasedSelector_StillMatches_CaseInsensitive()
         {
             // Regression guard: HTML matching stays ASCII case-insensitive (CssBox.NameComparison
@@ -2201,6 +2216,40 @@ namespace PeachPDF.Tests.Integration
             var html = "<!DOCTYPE html><html><head><style>body{margin:0}DIV{background-color:#00ff00}</style></head>" +
                        "<body><div style=\"width:50px;height:50px\">x</div></body></html>";
             Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        [Fact]
+        public async Task InlineSvg_GeneralCascadeAttributeValue_StaysCaseSensitiveForHtmlLegacyAttributeNames()
+        {
+            // `dir` is on the HTML Standard's fixed legacy-attribute list (issue #1384) that makes
+            // attribute *values* ASCII case-insensitive by default - but only for elements in the HTML
+            // namespace. Custom-property assignment runs through the general cascade
+            // (DomParser.CascadeApplyStyles / plain CssBox.NameComparison), not the SVG-specific
+            // presentation-attribute pass that InlineSvg_MixedCaseSelector_MatchesWhenCaseAgrees above
+            // exercises, so this must stay case-sensitive for an inline <svg> descendant regardless of
+            // the legacy list: "RTL" must not match dir="rtl".
+            var html = InlineSvgDoc(
+                ":root { --c: #0000ff; } rect[dir=RTL] { --c: #00ff00; } rect { fill: var(--c); }",
+                """<rect dir="rtl" x="10" y="10" width="80" height="80"/>""");
+            var pdf = await GetPdfText(html);
+            Assert.DoesNotContain(Green, pdf);
+            Assert.Contains(Blue, pdf);
+        }
+
+        [Fact]
+        public async Task InlineSvg_GeneralCascadeAttributeName_StaysCaseSensitive()
+        {
+            // The attribute-NAME half of InlineSvg_GeneralCascadeAttributeValue_...: through the general
+            // cascade's plain CssBox.GetAttribute (as opposed to SVG's presentation-attribute pass, see
+            // InlineSvg_MisCasedAttributeNameSelector_DoesNotMatch above), "DIR" must not find dir="rtl"
+            // either - attribute-name lookup itself must stay case-sensitive for foreign content, not
+            // just the value comparison that follows it.
+            var html = InlineSvgDoc(
+                ":root { --c: #0000ff; } rect[DIR=rtl] { --c: #00ff00; } rect { fill: var(--c); }",
+                """<rect dir="rtl" x="10" y="10" width="80" height="80"/>""");
+            var pdf = await GetPdfText(html);
+            Assert.DoesNotContain(Green, pdf);
+            Assert.Contains(Blue, pdf);
         }
 
         // var() custom properties resolve for inline (via the HTML cascade) and standalone (via the

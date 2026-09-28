@@ -1597,9 +1597,31 @@ namespace PeachPDF.Html.Core.Parse
         /// recognize <see cref="Floating.Footnote"/> - and never blockified, per
         /// <see cref="DerivedStyle.ActualDisplay"/>'s own exclusion).
         /// </para>
+        /// <para>
+        /// <b>Never descends into an inline <c>&lt;svg&gt;</c>/<c>&lt;math&gt;</c> subtree</b> (<see cref="CssBoxSvg"/>/
+        /// <see cref="CssBoxMath"/>), same as every other tree-restructuring pass in this file: a
+        /// <c>float: footnote</c> declared on foreign content inside a <c>&lt;foreignObject&gt;</c> is left
+        /// exactly where it is, rendered as ordinary in-place content rather than detached to the page's
+        /// footnote area - detaching it would relocate content the SVG/MathML source declared into
+        /// ordinary page flow, with no single correct answer for whether it should keep matching selectors
+        /// as foreign content or as HTML from then on. See issue #1507.
+        /// </para>
         /// </remarks>
         private static void DetachFootnoteBodies(CssBox box, HtmlContainerInt htmlContainer, CssValueParser valueParser, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes)
         {
+            // Inline <svg>/<math> are foreign content: their descendants are read directly by
+            // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree
+            // normalization must not descend into (and restructure) them - the same guard every other
+            // pass in this file has (see CssBoxSvg / issue #159). This one specifically also sidesteps a
+            // harder question a detach-and-relocate would otherwise raise: css-gcpm-3's footnote area is
+            // ordinary page content, not part of the SVG/MathML scene the source was declared in, so
+            // there's no single correct answer for whether the relocated body should keep matching as
+            // foreign content or as HTML - simplest and most consistent with every sibling pass here is to
+            // leave a float: footnote declared inside foreign content alone, same as IsFootnoteSource
+            // already excludes other contexts (table header/footer, absolutely positioned) where floating
+            // it out doesn't cleanly apply. See issue #1507.
+            if (box is CssBoxSvg or CssBoxMath) return;
+
             foreach (var child in box.Boxes.ToArray())
             {
                 if (IsFootnoteSource(child))

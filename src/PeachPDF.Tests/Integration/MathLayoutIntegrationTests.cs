@@ -56,6 +56,63 @@ namespace PeachPDF.Tests.Integration
             return null;
         }
 
+        static async Task<CssBox?> CascadeMathMl(string mathHtml, string css)
+        {
+            var html = $"<html><head><style>{css}</style></head><body>{mathHtml}</body></html>";
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+
+            // Selector matching against MathML descendants happens during the cascade (SetHtml), before
+            // CssBoxMath.EnsureLayout clears them from the box tree on layout - so this deliberately
+            // stops short of PerformLayout, which would make FindByTag(..., "mi") return null.
+            return FindByTag(container.Root!, "mi");
+        }
+
+        [Fact]
+        public async Task MathMl_TypeSelectorMatching_IsCaseSensitive()
+        {
+            // MathML is foreign content (XML) embedded via the same CssBox-based cascade as HTML
+            // (DomParser.CascadeApplyStyles), so type-selector matching must stay case-sensitive there
+            // too (Selectors 4 §6, mirrored by SVG's InlineSvg_MisCasedTypeSelector_DoesNotMatch):
+            // "MI" must not match <mi>.
+            var miBox = await CascadeMathMl(
+                "<math><mi>x</mi></math>", "MI { color: rgb(0, 255, 0); } mi { color: rgb(0, 0, 255); }");
+
+            Assert.NotNull(miBox);
+            Assert.Equal("rgb(0, 0, 255)", miBox!.Color);
+        }
+
+        [Fact]
+        public async Task MathMl_AttributeValueMatching_StaysCaseSensitiveForHtmlLegacyAttributeNames()
+        {
+            // `dir` is on the HTML Standard's fixed legacy-attribute list (issue #1384) that makes
+            // attribute *values* ASCII case-insensitive by default - but only for elements in the HTML
+            // namespace. MathML is foreign content and must stay case-sensitive regardless of the list:
+            // "RTL" must not match dir="rtl".
+            var miBox = await CascadeMathMl(
+                "<math><mi dir=\"rtl\">x</mi></math>",
+                "mi[dir=RTL] { color: rgb(0, 255, 0); } mi { color: rgb(0, 0, 255); }");
+
+            Assert.NotNull(miBox);
+            Assert.Equal("rgb(0, 0, 255)", miBox!.Color);
+        }
+
+        [Fact]
+        public async Task MathMl_AttributeNameMatching_StaysCaseSensitive()
+        {
+            // The attribute-NAME half of the test above: MathML has no dedicated presentation-attribute
+            // pass the way SVG does, so ALL of its selector matching - including the attribute-name
+            // lookup that finds which value to compare, not just the value comparison itself - goes
+            // through plain CssBox.GetAttribute. "DIR" must not find dir="rtl" either.
+            var miBox = await CascadeMathMl(
+                "<math><mi dir=\"rtl\">x</mi></math>",
+                "mi[DIR=rtl] { color: rgb(0, 255, 0); } mi { color: rgb(0, 0, 255); }");
+
+            Assert.NotNull(miBox);
+            Assert.Equal("rgb(0, 0, 255)", miBox!.Color);
+        }
+
         [Fact]
         public async Task MathWord_IsImageNotSpaces_ToStringIsMath()
         {

@@ -1204,13 +1204,13 @@ This is deliberately **not** blanket acceptance of anything unknown: a genuine t
 | Selector | Syntax | Notes |
 |----------|--------|-------|
 | Presence | `[attr]` | Element has the named attribute |
-| Exact match | `[attr=value]` | Attribute value equals `value`. In an HTML document values are compared ASCII case-insensitively by default |
+| Exact match | `[attr=value]` | Attribute value equals `value`. In an HTML document, values are compared case-sensitively by default, except for a fixed list of legacy attributes (`type`, `dir`, `align`, `rel`, `lang`, and around forty others) that the [HTML Standard](https://html.spec.whatwg.org/multipage/semantics-other.html#case-sensitivity-of-selectors) always compares ASCII case-insensitively. SVG and MathML elements are always case-sensitive, list or no list |
 | Whitespace list | `[attr~=value]` | Attribute is a whitespace-separated list containing `value` |
 | Contains | `[attr*=value]` | Attribute value contains `value` as a substring |
 | Starts with | `[attr^=value]` | Attribute value starts with `value` |
 | Ends with | `[attr$=value]` | Attribute value ends with `value` |
 | Hyphen prefix | `[attr\|=value]` | Attribute value equals `value` or starts with `value-` |
-| Case-sensitivity modifier | `[attr=value i]`, `[attr=value s]` | An `i` after the value forces an ASCII case-insensitive comparison and an `s` a case-sensitive one, for any of the value operators above ([Selectors 4 §6.3](https://www.w3.org/TR/selectors-4/#attribute-case)). Without a modifier the comparison follows the document language: case-insensitive for every attribute in an HTML document |
+| Case-sensitivity modifier | `[attr=value i]`, `[attr=value s]` | An `i` after the value forces an ASCII case-insensitive comparison and an `s` a case-sensitive one, for any of the value operators above ([Selectors 4 §6.3](https://www.w3.org/TR/selectors-4/#attribute-case)). Without a modifier the comparison follows the document language: case-sensitive, except for the fixed HTML legacy-attribute list noted above |
 
 ### Combinators
 

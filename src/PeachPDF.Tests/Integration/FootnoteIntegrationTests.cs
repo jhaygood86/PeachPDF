@@ -327,6 +327,29 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Footnote_InsideInlineSvg_StaysOrdinaryContent()
+        {
+            // Inline <svg>/<math> descendants are foreign content read directly by SvgTreeBuilder/
+            // MathTreeBuilder, not restructured like ordinary HTML boxes (issue #1507, same convention as
+            // every other tree-restructuring pass in DomParser.cs) - a float: footnote declared there is
+            // left exactly in place rather than detached to the page's footnote area, so it never reaches
+            // FootnoteCalls and the source box is never removed from its parent.
+            //
+            // Checked via `prepare` (post-cascade, pre-layout) rather than the laid-out root: CssBoxSvg's
+            // own EnsureLayout clears its Boxes once layout runs (SvgTreeBuilder reads them once, the same
+            // way CssBoxMath does - see MathLayoutIntegrationTests.CascadeMathMl), so a post-layout FindById
+            // would find nothing there regardless of whether this fix worked.
+            var html = Wrap(
+                "<svg xmlns='http://www.w3.org/2000/svg'><text id='t' style='float:footnote'>Note body</text></svg>");
+
+            CssBox? sourceBox = null;
+            var (_, container) = await LayoutAsync(html, prepare: root => sourceBox = FindById(root, "t"));
+
+            Assert.Empty(container.FootnoteCalls);
+            Assert.NotNull(sourceBox);
+        }
+
+        [Fact]
         public async Task Footnote_Nested_IsInert()
         {
             var html = Wrap(@"
