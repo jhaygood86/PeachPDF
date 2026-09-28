@@ -12,7 +12,7 @@ zero PeachPDF reference at all. Its actual per-instance unit convention is entir
   expect and can rely on.
 - **`GraphicsAdapter.BeginRasterSurface`** (PeachPDF's own nested-fallback-surface seam - see
   [[raster-graphics-mirrors-graphicsadapters-unit-conventions]]) constructs a `RasterCanvas` through
-  `PeachDrawing`'s internal `RasterSurfaceFactory.Create` with PeachPDF's *real* `PixelsPerPoint`, so that
+  `PeachDrawing`'s public `RasterSurfaceFactory.Create` with PeachPDF's *real* `PixelsPerPoint`, so that
   one `RasterCanvas` instance mirrors `GraphicsAdapter`'s own PDF-point convention exactly, for exactly as
   long as it takes `FragmentPainter` to paint into it.
 
@@ -31,7 +31,7 @@ permanently pinned to "1 unit = 1 pixel." That turned out to be unnecessary: `Ra
 already needs `pixelsPerPoint` for its own DPI-to-pixel-grid math (see
 [[raster-a-bitmap-is-placed-at-its-own-snapped-rectangle]]), so threading the same value into the
 `RasterCanvas` constructor it builds is strictly simpler than adding a second coordinate-system boundary
-around it - and it is `internal`-only plumbing PeachDrawing.Core's `Canvas.BeginRasterSurface` hook
+around it - and it is plumbing PeachDrawing.Core's `Canvas.BeginRasterSurface` hook
 already carries, not new public surface. A standalone consumer never sees `pixelsPerPoint` at all; it only
 exists on `RasterCanvas`'s constructor, which `RasterRenderContext.CreateCanvas` calls on the standalone
 consumer's behalf.

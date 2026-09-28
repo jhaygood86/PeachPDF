@@ -511,6 +511,20 @@ foreach (LineBox line in layout.Lines)
 
 Layout units are the units of `RunStyle.Size`; coordinates run right and down from the top left of the paragraph.
 
+### Drawing a layout
+
+`PeachDrawing.Text` stops at positions; painting is the caller's. With a `PeachDrawing.Core` canvas (the `RasterCanvas` from the `PeachDrawing` package, or any other `Canvas`), one call paints a laid-out paragraph:
+
+```csharp
+var layout = new ParagraphBuilder(new RunStyle(typeface, 16))
+    .AddText("Hello, ").PushRun(new RunStyle(bold, 16)).AddText("world").PopRun()
+    .Build().Layout(availableWidth: 300);
+
+canvas.DrawParagraph(layout, new PaintPoint(10, 10), PaintColor.FromArgb(255, 0, 0, 0));
+```
+
+Glyphs are drawn where the shaper put them (nothing is reshaped), from the face each run was shaped in, so fallback faces, kerning, ligatures, bitmap glyphs and COLR/CPAL colour glyphs come out exactly as laid out. The overload taking a `Func<PlacedRun, ParagraphPaint>` chooses a colour and `TextDecorations` (underline, overline, line-through, drawn from the face's own metrics) per run, and an optional callback receives each inline box's bounds. `canvas.DrawGlyphRun` paints a single `GlyphRun` from `Shaper.Shape`. Layout units are the canvas's user units.
+
 ## The `PeachDrawing.Text.Unicode` namespace
 
 Each entry point is a static class named for the algorithm or property it implements, and takes plain strings, runes

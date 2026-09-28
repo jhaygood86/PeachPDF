@@ -56,6 +56,17 @@ naming came from, which mostly predates this register.
 | `ColorMatrix` | A 4x5 (`Matrix4x4` + `Vector4`) color transform, for `feColorMatrix`/CSS filter color operations | SVG Filter Effects `feColorMatrix`'s own 4x5 matrix convention; built purely on `System.Numerics` types, no PDF-specific wrapper |
 | `TextHinting` | Whether raster-rendered text is fitted to the pixel grid by the font's own hinting | FreeType/DirectWrite "hinting" vocabulary; `None`/`Standard`/`Monochrome` are FreeType's own three rendering modes |
 
+### Text, paragraph and colour-glyph drawing
+
+| Public name | Role | Origin of the name and shape |
+|---|---|---|
+| `CanvasParagraphExtensions.DrawParagraph`/`DrawGlyphRun` | Paint an already-laid-out `ParagraphLayout` / already-shaped `GlyphRun` onto any `Canvas` | "Draw" + the `PeachDrawing.Text` type each consumes (`Paragraph`, `GlyphRun`), matching `Canvas.DrawString`/`DrawGlyphs`'s own verb; extension methods rather than new abstract members so existing `Canvas` implementations are not broken |
+| `ParagraphPaint`, `TextDecorations` (`Underline`, `Overline`, `LineThrough`) | The colour and lines a run of a paragraph is painted with | CSS Text Decoration's `text-decoration-line` keywords (`underline`/`overline`/`line-through`) as a `[Flags]` enum; "paint" is this package's existing word for colour-carrying values (`PaintColor`, `PaintPoint`) |
+| `ColorGlyphs.ColorGlyphPainter`, `IColorGlyphTarget`, `CanvasColorGlyphTarget` | Walk a glyph's COLR/CPAL artwork into clipped fills; where those fills go; the target that draws them on any `Canvas` | OpenType COLR/CPAL's own vocabulary ("color glyph", "paint"); painter/target split is the usual visitor shape |
+| `ColorGlyphPaint` (`SolidColorGlyphPaint`, `LinearColorGlyphPaint`, `RadialColorGlyphPaint`, `SweepColorGlyphPaint`) | A fully resolved fill handed to a target | COLR v1 `PaintSolid`/`PaintLinearGradient`/`PaintRadialGradient`/`PaintSweepGradient`, after palette resolution |
+| `RasterRegion`, `RasterSurface`, `IntRect`, `PixelMath` | An offscreen pixel surface a `Canvas` hands out for raster effects, its pixel rectangle type, and shared 8-bit pixel arithmetic | "Region"/"surface" are standard graphics vocabulary; `IntRect` is `System.Drawing.Rectangle`'s shape reduced to what the raster code needs; the members are the ones PeachPDF's effects pipeline reads |
+| `Canvas.TileCacheOwner`, `BeginRasterSurface`, `DrawRaster`, `TransformScale`, `CurrentTransform`, `PrefersRasterGroups`, `FlattensTransparency`, `InvisibleText`; `RenderContext.RasterizationDpi`/`TextHinting`/`TextStemDarkening`/`MaxRasterPixels`/`RasterAntiAliasing`/`LayoutUnitsPerPoint`/`CreateSvgGlyphPainter`; `ISvgGlyphPainter` | The optional hooks a backend overrides to join the raster-effects and SVG-glyph pipeline | Formerly `internal` (named for PeachPDF's own pipeline); now the documented contract - names kept, with `FormCacheOwner` renamed `TileCacheOwner` because it identifies the owner of tiles, not PDF forms |
+
 ### Geometry
 
 | Public name | Role | Origin of the name and shape |

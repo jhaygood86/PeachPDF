@@ -232,11 +232,28 @@ worked example. A few things worth knowing before you start:
 - **`GraphicsPath.Flatten` does the curve-to-polyline work for you.** Unless your backend has genuine native
   curve support you want to preserve, you likely never need to override any of `GraphicsPath`'s recorder
   methods at all.
-- **A handful of `Canvas`/`RenderContext` members are `internal`, not part of this public surface**: they're
-  PeachPDF's own HTML/CSS/SVG/PDF rendering-pipeline integration points (an SVG filter's access to what's
-  behind an element, a raster-fallback seam for effects vector content can't express, PDF/A transparency
-  policy, and the like) - not "the drawing API," which is everything described above in full. You won't
-  need them to draw shapes, text and images on a `Canvas`.
+- **The pipeline hooks are public, virtual and optional.** `BeginRasterSurface`/`DrawRaster` (a pixel surface,
+  handed out as a `RasterRegion`, for effects vector content cannot express), `PrefersRasterGroups`,
+  `FlattensTransparency`, `TransformScale`/`CurrentTransform`, `TileCacheOwner`, `InvisibleText` and
+  `RenderContext`'s raster settings (`RasterizationDpi`, `TextHinting`, `MaxRasterPixels`, ...) all default to
+  "not supported", so a `Canvas` that ignores them still works; overriding them is how a backend takes part in
+  the same effects pipeline PeachPDF drives. `RenderContext.CreateSvgGlyphPainter` is the seam a backend with an
+  SVG engine uses to draw OpenType `SVG ` glyphs.
+
+## Drawing shaped text, paragraphs and colour glyphs on any `Canvas`
+
+The package also holds the logic every `Canvas` shares for text that `PeachDrawing.Text` has already
+shaped, so an implementation gets it by implementing `DrawGlyphs` and the path/clip/brush members:
+
+- `canvas.DrawParagraph(layout, origin, colour)` and `canvas.DrawGlyphRun(run, size, baselineOrigin, colour)`
+  (`CanvasParagraphExtensions`) paint a `ParagraphLayout` or a `GlyphRun` at the positions the shaper and the
+  layout chose; `ParagraphPaint`/`TextDecorations` give a per-run colour and underline/overline/line-through
+  (see [Drawing a layout](peachdrawing-text.md#drawing-a-layout)).
+- `ColorGlyphs.ColorGlyphPainter` walks one glyph's COLR v0 layers or v1 paint graph - palette and
+  `font-palette` overrides, the foreground-colour sentinel, gradient stops and extend modes, transforms,
+  clips and blend modes - and describes it to an `IColorGlyphTarget` as clipped fills.
+  `CanvasColorGlyphTarget` maps that onto any `Canvas`'s own paths, clips, brushes and blend modes; a backend
+  with a different way of drawing implements `IColorGlyphTarget` itself.
 
 ## Licences
 

@@ -32,6 +32,10 @@ missing a row for it (a pre-existing gap in that file, not introduced here; wort
 file is touched for an unrelated reason, per this repo's own "add exactly one new file, edit nothing else"
 convention for invariants - fixing it here would mean editing a second file for this entry, which that
 convention exists specifically to avoid).
+| `RasterSurfaceFactory.Create`, `RasterCanvas`'s `BeginRasterSurface`/`DrawRaster`/`CurrentTransform`/`PrefersRasterGroups` overrides | Creating a raster region at an exact DPI on the shared pixel grid, and the raster backend's side of the raster-effects hooks | `Factory`/`Create` is the ordinary .NET factory naming; the overrides carry `PeachDrawing.Core`'s already-registered hook names |
+| `FilterOps`, `GaussianBlur`, `ColorMatrixFilter`, `DropShadow`, `Turbulence` | Pixel-level effect primitives over a `RasterSurface` | SVG Filter Effects primitive names (`feGaussianBlur`, `feColorMatrix`, `feDropShadow`, `feTurbulence`, and the compositing/morphology/displacement primitives `FilterOps` groups) and CSS `filter` function names; `Turbulence` is the SVG spec's reference algorithm |
+| `Warp`, `Homography`, `DepthPlane`, `DepthBuffer` | Drawing a surface through a projective map with a depth test, for CSS `perspective`/3D transforms | `Homography` is the standard projective-geometry term for a 3x3 plane map; `DepthBuffer` is the standard z-buffer name; `Warp` names what it does |
+| `TextOutlineBuilder`, `RasterSurfaceEncoding` | Turning a shaped run into a `GraphicsPath`; reading a surface's opacity and encoding it (PNG, CMYK pixels) | Ours; each named for its one job |
 
 Every name above either reuses an already-registered `PeachDrawing.Core` name with the ordinary
 `Raster` backend prefix this codebase already uses for its PDF backend (`GraphicsAdapter`), or is

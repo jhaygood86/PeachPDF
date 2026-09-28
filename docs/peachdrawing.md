@@ -91,7 +91,7 @@ raster-specific to learn separately.
 `RasterCanvas` implements the entire `Canvas` surface - rectangles, polygons, arbitrary vector paths (fill
 and stroke, with the usual dash/cap/join/miter controls), solid and gradient (linear, radial, conic)
 brushes, clipping (rectangular and arbitrary-path), affine transforms, the 16 PDF/CSS blend modes, shaped
-text (including COLR/CPAL colour glyphs, `SVG ` table glyphs falling back to their plain outline - see
+text (including COLR/CPAL colour glyphs - v0 layers and the v1 paint graph with solid, linear, radial and sweep gradients, transforms and blend-mode composites, honouring `font-palette` overrides - `SVG ` table glyphs falling back to their plain outline - see
 below - and CBDT/CBLC/sbix bitmap glyphs), and images (opacity, blend-mode compositing, colour-matrix
 transforms, alpha and luminosity masking). Grid-fitted (hinted) text rendering is supported through
 `PeachDrawing.Text`'s own hinting engine.

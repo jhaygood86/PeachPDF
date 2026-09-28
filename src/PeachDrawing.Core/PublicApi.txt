@@ -60,6 +60,85 @@ PeachDrawing.Core.Canvas : abstract class
   property Matrix3x2 CurrentTransform { get; }
   property Object TileCacheOwner { get; }
   property ValueTuple<Double, Double> TransformScale { get; }
+PeachDrawing.Core.CanvasParagraphExtensions : static class
+  method static Void DrawGlyphRun(Canvas canvas, GlyphRun run, Double size, PaintPoint baselineOrigin, PaintColor color, Double letterSpacing = 0)
+  method static Void DrawParagraph(Canvas canvas, ParagraphLayout layout, PaintPoint origin, Func<PlacedRun, ParagraphPaint> paintForRun, Action<Canvas, PlacedRun, Rect> drawInlineBox = null)
+  method static Void DrawParagraph(Canvas canvas, ParagraphLayout layout, PaintPoint origin, PaintColor color)
+PeachDrawing.Core.ColorGlyphs.CanvasColorGlyphTarget : sealed class
+  ctor(Canvas canvas)
+  method virtual Void FillOutline(GlyphOutline outline, Affine2x3 transform, PaintColor color)
+  method virtual Void FillRegion(Rect region, ColorGlyphPaint paint)
+  method virtual Void PopBlendMode()
+  method virtual Void PopClip()
+  method virtual Void PushBlendMode(PaintBlendMode mode)
+  method virtual Void PushOutlineClip(GlyphOutline outline, Affine2x3 transform)
+PeachDrawing.Core.ColorGlyphs.ColorGlyphPaint : abstract class
+  method abstract ColorGlyphPaint <Clone>$()
+  method virtual Boolean Equals(ColorGlyphPaint other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+PeachDrawing.Core.ColorGlyphs.ColorGlyphPainter : sealed class
+  ctor(Typeface typeface, Double fontSize, PaintColor foreground, Boolean yDown = True, Int32 paletteIndex = 0, IReadOnlyDictionary<Int32, PaintColor> overrides = null)
+  method Affine2x3 Placement(Double originX, Double originY)
+  method Void Paint(UInt16 glyphId, Affine2x3 placement, IColorGlyphTarget target)
+PeachDrawing.Core.ColorGlyphs.IColorGlyphTarget : interface
+  method abstract Void FillOutline(GlyphOutline outline, Affine2x3 transform, PaintColor color)
+  method abstract Void FillRegion(Rect region, ColorGlyphPaint paint)
+  method abstract Void PopBlendMode()
+  method abstract Void PopClip()
+  method abstract Void PushBlendMode(PaintBlendMode mode)
+  method abstract Void PushOutlineClip(GlyphOutline outline, Affine2x3 transform)
+PeachDrawing.Core.ColorGlyphs.LinearColorGlyphPaint : sealed class
+  ctor(PaintPoint Start, PaintPoint End, IReadOnlyList<PaintColor> Colors, IReadOnlyList<Double> Positions)
+  method Void Deconstruct(out PaintPoint Start, out PaintPoint End, out IReadOnlyList<PaintColor> Colors, out IReadOnlyList<Double> Positions)
+  method virtual Boolean Equals(ColorGlyphPaint other)
+  method virtual Boolean Equals(LinearColorGlyphPaint other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual LinearColorGlyphPaint <Clone>$()
+  method virtual String ToString()
+  property IReadOnlyList<Double> Positions { get; init; }
+  property IReadOnlyList<PaintColor> Colors { get; init; }
+  property PaintPoint End { get; init; }
+  property PaintPoint Start { get; init; }
+PeachDrawing.Core.ColorGlyphs.RadialColorGlyphPaint : sealed class
+  ctor(PaintPoint Center, PaintPoint Focal, Double Radius, IReadOnlyList<PaintColor> Colors, IReadOnlyList<Double> Positions)
+  method Void Deconstruct(out PaintPoint Center, out PaintPoint Focal, out Double Radius, out IReadOnlyList<PaintColor> Colors, out IReadOnlyList<Double> Positions)
+  method virtual Boolean Equals(ColorGlyphPaint other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(RadialColorGlyphPaint other)
+  method virtual Int32 GetHashCode()
+  method virtual RadialColorGlyphPaint <Clone>$()
+  method virtual String ToString()
+  property Double Radius { get; init; }
+  property IReadOnlyList<Double> Positions { get; init; }
+  property IReadOnlyList<PaintColor> Colors { get; init; }
+  property PaintPoint Center { get; init; }
+  property PaintPoint Focal { get; init; }
+PeachDrawing.Core.ColorGlyphs.SolidColorGlyphPaint : sealed class
+  ctor(PaintColor Color)
+  method Void Deconstruct(out PaintColor Color)
+  method virtual Boolean Equals(ColorGlyphPaint other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(SolidColorGlyphPaint other)
+  method virtual Int32 GetHashCode()
+  method virtual SolidColorGlyphPaint <Clone>$()
+  method virtual String ToString()
+  property PaintColor Color { get; init; }
+PeachDrawing.Core.ColorGlyphs.SweepColorGlyphPaint : sealed class
+  ctor(PaintPoint Center, Double Radius, IReadOnlyList<PaintColor> Colors, IReadOnlyList<Double> AnglesRadians)
+  method Void Deconstruct(out PaintPoint Center, out Double Radius, out IReadOnlyList<PaintColor> Colors, out IReadOnlyList<Double> AnglesRadians)
+  method virtual Boolean Equals(ColorGlyphPaint other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(SweepColorGlyphPaint other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  method virtual SweepColorGlyphPaint <Clone>$()
+  property Double Radius { get; init; }
+  property IReadOnlyList<Double> AnglesRadians { get; init; }
+  property IReadOnlyList<PaintColor> Colors { get; init; }
+  property PaintPoint Center { get; init; }
 PeachDrawing.Core.ColorMatrix : struct
   ctor(Matrix4x4 linear, Vector4 offset)
   field static ColorMatrix Identity
@@ -310,6 +389,16 @@ PeachDrawing.Core.PaintPoint : struct
   method virtual String ToString()
   property Double X { get; set; }
   property Double Y { get; set; }
+PeachDrawing.Core.ParagraphPaint : struct
+  ctor(PaintColor Color, TextDecorations Decorations = None, PaintColor? DecorationColor = null)
+  method Void Deconstruct(out PaintColor Color, out TextDecorations Decorations, out PaintColor? DecorationColor)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ParagraphPaint other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property PaintColor Color { get; init; }
+  property PaintColor? DecorationColor { get; init; }
+  property TextDecorations Decorations { get; init; }
 PeachDrawing.Core.PathContour : sealed class
   ctor(IReadOnlyList<PaintPoint> Points, Boolean Closed)
   method PathContour <Clone>$()
@@ -475,6 +564,11 @@ PeachDrawing.Core.Size : struct
 PeachDrawing.Core.SolidBrush : sealed class
   ctor(PaintColor color)
   property PaintColor PaintColor { get; }
+PeachDrawing.Core.TextDecorations : enum Int32
+  LineThrough = 4
+  None = 0
+  Overline = 2
+  Underline = 1
 PeachDrawing.Core.TextHinting : enum Int32
   Monochrome = 2
   None = 0
