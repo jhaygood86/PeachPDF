@@ -250,6 +250,33 @@ PeachDrawing.Core.FontPalette : sealed class
   method virtual String ToString()
   property IReadOnlyList<KeyValuePair<Int32, PaintColor>> Overrides { get; init; }
   property Int32 BasePaletteIndex { get; init; }
+PeachDrawing.Core.Geometry.PathMeasure : sealed class
+  ctor(GraphicsPath path, Double tolerance = 0.05)
+  method PathSample PointAtLength(Double distance)
+  property Boolean IsEmpty { get; }
+  property Double Area { get; }
+  property Double Length { get; }
+  property Rect Bounds { get; }
+PeachDrawing.Core.Geometry.PathSample : struct
+  ctor(Double X, Double Y, Double TangentDegrees)
+  method Void Deconstruct(out Double X, out Double Y, out Double TangentDegrees)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PathSample other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double TangentDegrees { get; init; }
+  property Double X { get; init; }
+  property Double Y { get; init; }
+PeachDrawing.Core.Geometry.PathShapes : static class
+  method static Void AddCircle(GraphicsPath path, Double centerX, Double centerY, Double radius)
+  method static Void AddEllipse(GraphicsPath path, Double centerX, Double centerY, Double radiusX, Double radiusY)
+  method static Void AddPie(GraphicsPath path, Double centerX, Double centerY, Double radiusX, Double radiusY, Double startAngleRadians, Double sweepRadians)
+  method static Void AddPolygon(GraphicsPath path, IReadOnlyList<PaintPoint> points)
+  method static Void AddRegularPolygon(GraphicsPath path, Double centerX, Double centerY, Double radius, Int32 sides, Double rotationRadians = 0)
+  method static Void AddRoundedRectangle(GraphicsPath path, Rect rect, Double radius)
+  method static Void AddRoundedRectangle(GraphicsPath path, Rect rect, Double topLeftX, Double topLeftY, Double topRightX, Double topRightY, Double bottomRightX, Double bottomRightY, Double bottomLeftX, Double bottomLeftY)
+  method static Void AddStar(GraphicsPath path, Double centerX, Double centerY, Double outerRadius, Double innerRadius, Int32 points, Double rotationRadians = 0)
+  method static Void AddWave(GraphicsPath path, PaintPoint start, PaintPoint end, Double amplitude, Double wavelength)
 PeachDrawing.Core.Geometry.PolygonClipper : static class
   method static List<PaintPoint> ClipToRect(IReadOnlyList<PaintPoint> polygon, Rect rect)
 PeachDrawing.Core.GlyphPlacement : struct

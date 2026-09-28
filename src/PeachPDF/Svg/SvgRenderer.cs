@@ -14,6 +14,7 @@ using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
@@ -3235,7 +3236,7 @@ namespace PeachPDF.Svg
         /// appending more than one subpath/shape into the same <see cref="GraphicsPath"/> (e.g. a
         /// multi-subpath <c>d</c> attribute, or a clip region built from several shapes).
         /// </summary>
-        private static void AppendPathSegments(GraphicsPath path, IReadOnlyList<PathSegment> segments)
+        internal static void AppendPathSegments(GraphicsPath path, IReadOnlyList<PathSegment> segments)
         {
             foreach (var segment in segments)
             {
@@ -3270,12 +3271,7 @@ namespace PeachPDF.Svg
             if (r <= 0)
                 return;
 
-            path.AddMove(cx + r, cy);
-            path.AddArc(cx, cy + r, r, r, 0, false, true);
-            path.AddArc(cx - r, cy, r, r, 0, false, true);
-            path.AddArc(cx, cy - r, r, r, 0, false, true);
-            path.AddArc(cx + r, cy, r, r, 0, false, true);
-            path.CloseFigure();
+            path.AddCircle(cx, cy, r);
         }
 
         private static void AppendPolygonGeometry(GraphicsPath path, SvgPolygonElement polygon)
@@ -3323,24 +3319,11 @@ namespace PeachPDF.Svg
 
             if (rx <= 0 || ry <= 0)
             {
-                path.AddMove(x, y);
-                path.LineTo(x + width, y);
-                path.LineTo(x + width, y + height);
-                path.LineTo(x, y + height);
-                path.CloseFigure();
+                path.AddRoundedRectangle(new Rect(x, y, width, height), 0);
                 return;
             }
 
-            path.AddMove(x + rx, y);
-            path.LineTo(x + width - rx, y);
-            path.AddArc(x + width, y + ry, rx, ry, 0, false, true);
-            path.LineTo(x + width, y + height - ry);
-            path.AddArc(x + width - rx, y + height, rx, ry, 0, false, true);
-            path.LineTo(x + rx, y + height);
-            path.AddArc(x, y + height - ry, rx, ry, 0, false, true);
-            path.LineTo(x, y + ry);
-            path.AddArc(x + rx, y, rx, ry, 0, false, true);
-            path.CloseFigure();
+            path.AddRoundedRectangle(new Rect(x, y, width, height), rx, ry, rx, ry, rx, ry, rx, ry);
         }
 
         /// <summary>Same four-quarter-arc technique as <see cref="AppendCircleGeometry"/>, with independent x/y radii.</summary>
@@ -3354,12 +3337,7 @@ namespace PeachPDF.Svg
             if (rx <= 0 || ry <= 0)
                 return;
 
-            path.AddMove(cx + rx, cy);
-            path.AddArc(cx, cy + ry, rx, ry, 0, false, true);
-            path.AddArc(cx - rx, cy, rx, ry, 0, false, true);
-            path.AddArc(cx, cy - ry, rx, ry, 0, false, true);
-            path.AddArc(cx + rx, cy, rx, ry, 0, false, true);
-            path.CloseFigure();
+            path.AddEllipse(cx, cy, rx, ry);
         }
 
         /// <summary>An open (unclosed) two-point line - fill has no visible effect since it has zero area.</summary>
