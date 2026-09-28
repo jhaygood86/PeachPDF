@@ -14,7 +14,7 @@
 
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -142,7 +142,7 @@ namespace PeachPDF.Adapters
         /// Fonts here are built at <c>size / PixelsPerPoint</c> points (see <c>CreateFontInt</c>), so
         /// <see cref="PixelsPerPoint"/> is part of a cached font's identity.
         /// </summary>
-        internal override double LayoutUnitsPerPoint => PixelsPerPoint;
+        public override double LayoutUnitsPerPoint => PixelsPerPoint;
 
         public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
         {
@@ -188,7 +188,7 @@ namespace PeachPDF.Adapters
         /// engine through <see cref="SvgGlyphPainter"/> - the only <see cref="RenderContext"/> in this
         /// codebase with one to offer.
         /// </summary>
-        internal override ISvgGlyphPainter CreateSvgGlyphPainter(Canvas host) => new SvgGlyphPainter(host, this);
+        public override ISvgGlyphPainter CreateSvgGlyphPainter(Canvas host) => new SvgGlyphPainter(host, this);
 
         public async Task AddFont(Stream stream, string? fontFamilyName)
         {

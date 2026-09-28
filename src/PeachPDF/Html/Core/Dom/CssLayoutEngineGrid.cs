@@ -1,6 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Parse;

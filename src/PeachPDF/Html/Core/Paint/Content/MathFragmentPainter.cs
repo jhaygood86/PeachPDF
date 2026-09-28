@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.MathML;
 

@@ -61,24 +61,3 @@ internal readonly record struct Affine(double M11, double M12, double M21, doubl
         }
     }
 }
-
-/// <summary>An integer pixel rectangle; the right and bottom edges are exclusive.</summary>
-internal readonly record struct IntRect(int Left, int Top, int Right, int Bottom)
-{
-    public int Width => Right - Left;
-
-    public int Height => Bottom - Top;
-
-    public bool IsEmpty => Right <= Left || Bottom <= Top;
-
-    public static IntRect Empty => new(0, 0, 0, 0);
-
-    public IntRect Intersect(in IntRect other)
-    {
-        var l = Math.Max(Left, other.Left);
-        var t = Math.Max(Top, other.Top);
-        var r = Math.Min(Right, other.Right);
-        var b = Math.Min(Bottom, other.Bottom);
-        return r <= l || b <= t ? Empty : new IntRect(l, t, r, b);
-    }
-}

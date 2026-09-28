@@ -1,5 +1,5 @@
 using PeachDrawing.Text.Unicode;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;

@@ -1,5 +1,5 @@
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;

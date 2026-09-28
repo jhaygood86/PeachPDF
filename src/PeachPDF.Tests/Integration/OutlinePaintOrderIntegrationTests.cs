@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;

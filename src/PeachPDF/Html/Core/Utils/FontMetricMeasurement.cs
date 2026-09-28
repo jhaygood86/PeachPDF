@@ -1,6 +1,6 @@
 using System.Text;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 
 namespace PeachPDF.Html.Core.Utils
 {
@@ -11,7 +11,7 @@ namespace PeachPDF.Html.Core.Utils
     /// Lives here, not in <c>Html/Adapters/</c> alongside <see cref="Font"/> itself, because reading a
     /// CSS unit's own definition is CSS-cascade knowledge, not something a generic rendering abstraction
     /// should carry - <c>Html/Adapters/</c> is destined to become a standalone package with no CSS concept
-    /// at all (see the PeachDrawing.Abstractions extraction plan).
+    /// at all (see the PeachDrawing.Core extraction plan).
     /// </summary>
     internal static class FontMetricMeasurement
     {

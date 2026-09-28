@@ -1,3 +1,4 @@
+using PeachDrawing.Core;
 using PeachDrawing;
 using PeachDrawing.Filters;
 

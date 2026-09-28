@@ -2,7 +2,7 @@ using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;

@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
@@ -164,7 +164,7 @@ namespace PeachPDF.Html.Core.Handlers
 
                 var form = SvgRenderer.GetOrCreateForm(g, svg, svgWidth, svgHeight);
                 return form is null ? null : new ResolvedSourceImage(form, svgWidth, svgHeight,
-                    numberUnit: Length.PointsPerPx, ownsImage: g.FormCacheOwner is null);
+                    numberUnit: Length.PointsPerPx, ownsImage: g.TileCacheOwner is null);
             }
 
             var tile = g.CreateTile(tileWidth, tileHeight);

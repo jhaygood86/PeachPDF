@@ -1,10 +1,10 @@
 # PeachDrawing
 
 `PeachDrawing` is a standalone CPU software rasterizer: a concrete `Canvas`/`RenderContext` implementation
-of [PeachDrawing.Abstractions](peachdrawing-abstractions.md), usable with **no PeachPDF reference at all**.
+of [PeachDrawing.Core](peachdrawing-core.md), usable with **no PeachPDF reference at all**.
 Draw shapes, text and images onto a `RasterCanvas` and save the result as a PNG or any other
 [PeachImage](https://www.nuget.org/packages/PeachImage)-supported format - no HTML, no CSS, no PDF involved
-anywhere. It depends only on `PeachDrawing.Abstractions` and `PeachImage`, is trimmable and Native AOT
+anywhere. It depends only on `PeachDrawing.Core` and `PeachImage`, is trimmable and Native AOT
 compatible, and is versioned in lockstep with PeachPDF: the same version number for every release.
 
 ```bash
@@ -23,7 +23,7 @@ dotnet add package PeachDrawing
 
 ```csharp
 using PeachDrawing;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachImage.Formats.Png;
 
 var ctx = new RasterRenderContext();
@@ -41,7 +41,7 @@ await using var file = File.Create("out.png");
 await canvas.SaveAsync(file, "png", new PngEncoderOptions());
 ```
 
-Everything on the right of `.` above resolves inside `PeachDrawing`/`PeachDrawing.Abstractions` alone - no
+Everything on the right of `.` above resolves inside `PeachDrawing`/`PeachDrawing.Core` alone - no
 `PeachPDF` project reference anywhere in the chain.
 
 ## `RasterRenderContext`
@@ -49,7 +49,7 @@ Everything on the right of `.` above resolves inside `PeachDrawing`/`PeachDrawin
 `RasterRenderContext` is a directly-constructible `RenderContext`: its constructor registers every font
 installed on the machine (by name, under `FontSet.InstalledFamilyNames`), so `GetFont`/`GetFontForCodepoint`
 (both inherited from `RenderContext` - see [RenderContext: colors, fonts and paint
-objects](peachdrawing-abstractions.md#rendercontext-colors-fonts-and-paint-objects)) work immediately with
+objects](peachdrawing-core.md#rendercontext-colors-fonts-and-paint-objects)) work immediately with
 no setup. Unlike PeachPDF's own `PdfSharpAdapter`, it does **not** alias CSS generic family names
 (`Helvetica`→`Arial`, `system-ui`, math-font resolution) - a standalone caller names a real family directly,
 since there is no CSS cascade here to resolve a generic keyword against.
@@ -74,7 +74,7 @@ for the internal reasoning, if you're implementing your own `Canvas` and compari
 Everything else `RasterCanvas` draws with - `DrawRectangle`, `DrawPolygon`, `DrawPath`, `DrawLine`,
 `DrawString`, `DrawGlyphs`, `DrawImage` and its blended/masked/color-matrix variants, `PushClip`/
 `PushTransform`/`PushBlendMode`, `CreateTile` - is exactly the `Canvas` surface documented in
-[Canvas: the drawing surface](peachdrawing-abstractions.md#canvas-the-drawing-surface); nothing about it is
+[Canvas: the drawing surface](peachdrawing-core.md#canvas-the-drawing-surface); nothing about it is
 raster-specific to learn separately.
 
 ## Exporting: `ToPixelBuffer`, `Save`, `SaveAsync`
@@ -91,7 +91,7 @@ raster-specific to learn separately.
 `RasterCanvas` implements the entire `Canvas` surface - rectangles, polygons, arbitrary vector paths (fill
 and stroke, with the usual dash/cap/join/miter controls), solid and gradient (linear, radial, conic)
 brushes, clipping (rectangular and arbitrary-path), affine transforms, the 16 PDF/CSS blend modes, shaped
-text (including COLR/CPAL colour glyphs, `SVG ` table glyphs falling back to their plain outline - see
+text (including COLR/CPAL colour glyphs - v0 layers and the v1 paint graph with solid, linear, radial and sweep gradients, transforms and blend-mode composites, honouring `font-palette` overrides - `SVG ` table glyphs falling back to their plain outline - see
 below - and CBDT/CBLC/sbix bitmap glyphs), and images (opacity, blend-mode compositing, colour-matrix
 transforms, alpha and luminosity masking). Grid-fitted (hinted) text rendering is supported through
 `PeachDrawing.Text`'s own hinting engine.
@@ -108,13 +108,13 @@ would get.
 ## Implementing your own `Canvas` instead
 
 If you need a different rendering target entirely - a hardware-accelerated backend, an SVG writer, a
-different image library - implement `Canvas`/`RenderContext` directly against `PeachDrawing.Abstractions`
+different image library - implement `Canvas`/`RenderContext` directly against `PeachDrawing.Core`
 rather than using this package. See [Implementing your own
-Canvas](peachdrawing-abstractions.md#implementing-your-own-canvas); `RasterCanvas`'s own source is a
+Canvas](peachdrawing-core.md#implementing-your-own-canvas); `RasterCanvas`'s own source is a
 complete, real second worked example alongside PeachPDF's `GraphicsAdapter`.
 
 ## Licences
 
 `PeachDrawing` is BSD 3-Clause. It carries no third-party code of its own; its dependencies
-(`PeachDrawing.Abstractions`, `PeachDrawing.Text`, `PeachImage`) carry their own notices. See
+(`PeachDrawing.Core`, `PeachDrawing.Text`, `PeachImage`) carry their own notices. See
 [License](license.md) for the whole list.

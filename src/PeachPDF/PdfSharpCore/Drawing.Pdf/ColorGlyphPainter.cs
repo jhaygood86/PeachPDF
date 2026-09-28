@@ -17,7 +17,7 @@
 //
 #endregion
 
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
@@ -29,8 +29,6 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 {
     internal sealed partial class ColorGlyphPainter
     {
-        private const int UseForegroundColor = 0xFFFF;
-
         private readonly XGraphicsPdfRenderer _renderer;
         private readonly XGraphics _gfx;
         private readonly Typeface _typeface;
@@ -329,90 +327,6 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             return painter.TryPaint(_typeface, (ushort)glyphId, svg, _font.Size, originX, baselineY, foreground, _paletteIndex, overrides);
         }
 
-        private void PaintGlyph(int glyphId, double originX, double originYOffset = 0)
-        {
-            Affine2x3 placement = Placement(originX, originYOffset);
-            // A bitmap-only colour font (CBDT/sbix) has no COLR table: its glyphs with no picture are plain outlines.
-
-            // Per the COLR processing model a v1-aware renderer resolves the v1 BaseGlyphList first,
-            // falling back to the v0 layer records only when the glyph has no v1 paint.
-            if (_typeface.GetColorPaint((ushort)glyphId) is { } paint)
-            {
-                PaintV1(paint, placement, hasClip: false, clip: default, depth: 0);
-                return;
-            }
-
-            if (_typeface.TryGetColorLayers((ushort)glyphId, out var layers))
-            {
-                for (int i = 0; i < layers.Count; i++)
-                    FillGlyphOutline(layers[i].GlyphId, placement, ResolveColor(layers[i].PaletteIndex));
-                return;
-            }
-
-            // A glyph with no color record inside a color font (e.g. space, digits): draw its plain
-            // outline in the text color.
-            FillGlyphOutline(glyphId, placement, _foreground);
-        }
-
-        /// <summary>Fills a single glyph's outline (mapped by <paramref name="transform"/>) with a solid color.</summary>
-        private void FillGlyphOutline(int glyphId, Affine2x3 transform, XColor color)
-        {
-            if (!_typeface.TryGetOutline((ushort)glyphId, out GlyphOutline outline) || outline.IsEmpty)
-                return;
-
-            if (_measuring)
-            {
-                IncludeInMeasuredBounds(WorldBounds(outline, transform));
-                return;
-            }
-
-            _gfx.DrawPath(new XSolidBrush(color), BuildPath(outline, transform));
-        }
-
-        private static XGraphicsPath BuildPath(GlyphOutline outline, Affine2x3 transform)
-        {
-            int pointCount = outline.Contours.Count;
-            for (var ci1 = 0; ci1 < outline.Contours.Count; ci1++)
-            {
-                OutlineContour contour = outline.Contours[ci1];
-                for (var si2 = 0; si2 < contour.Segments.Count; si2++)
-                {
-                    OutlineSegment segment = contour.Segments[si2];
-                    pointCount += segment.IsCubic ? 3 : 1;
-                }
-            }
-
-            var path = new XGraphicsPath(pointCount) { FillMode = XFillMode.Winding };
-
-            for (var ci3 = 0; ci3 < outline.Contours.Count; ci3++)
-            {
-                OutlineContour contour = outline.Contours[ci3];
-                XPoint current = Map(transform, contour.Start.X, contour.Start.Y);
-                for (var si4 = 0; si4 < contour.Segments.Count; si4++)
-                {
-                    OutlineSegment segment = contour.Segments[si4];
-                    XPoint end = Map(transform, segment.End.X, segment.End.Y);
-                    if (segment.IsCubic)
-                    {
-                        XPoint c1 = Map(transform, segment.Control1.X, segment.Control1.Y);
-                        XPoint c2 = Map(transform, segment.Control2.X, segment.Control2.Y);
-                        path.AddBezier(current.X, current.Y, c1.X, c1.Y, c2.X, c2.Y, end.X, end.Y);
-                    }
-                    else
-                    {
-                        path.AddLine(current.X, current.Y, end.X, end.Y);
-                    }
-                    current = end;
-                }
-                path.CloseFigure();
-            }
-
-            return path;
-        }
-
-        private static XPoint Map(Affine2x3 t, double x, double y)
-            => new(t.XX * x + t.XY * y + t.DX, t.YX * x + t.YY * y + t.DY);
-
         /// <summary>The design-units-&gt;world placement affine for a glyph at the given pen origin -
         /// <paramref name="originYOffset"/> is a GPOS mark-positioning Y delta (world units, already
         /// scaled and sign-adjusted for page direction the same way X is by the caller).</summary>
@@ -423,41 +337,6 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             double yy = _pageDownwards ? -_scale : _scale;
             double baselineY = _pageDownwards ? _baselineY - originYOffset : _baselineY + originYOffset;
             return new Affine2x3(_scale, 0, 0, yy, originX, baselineY);
-        }
-
-        private XColor ResolveColor(int paletteIndex) => ResolveColor(paletteIndex, 1.0);
-
-        private XColor ResolveColor(int paletteIndex, double alpha)
-        {
-            XColor color;
-            if (paletteIndex == UseForegroundColor)
-            {
-                // The COLR "use text color" sentinel is a paint reference, not a real CPAL entry index, so it
-                // resolves to the text color regardless of any font-palette override-colors.
-                color = _foreground;
-            }
-            else if (_overrides is not null && _overrides.TryGetValue(paletteIndex, out var over))
-            {
-                color = over;
-            }
-            else if (_typeface.ColorPalette is { } palette && palette.TryGetColor(_paletteIndex, paletteIndex, out var c))
-            {
-                color = XColor.FromArgb(c.A, c.R, c.G, c.B);
-            }
-            else
-            {
-                color = _foreground;
-            }
-
-            if (alpha < 1.0)
-            {
-                // XColor.A is a 0..1 double, but FromArgb's alpha argument is a 0..255 byte - scale, or
-                // every COLR paint alpha under 0.5 rounds to a fully transparent 0 and everything above
-                // it to 1/255, which is why alpha'd COLR content used to be invisible.
-                int scaledAlpha = (int)System.Math.Round(color.A * alpha * 255.0, MidpointRounding.AwayFromZero);
-                color = XColor.FromArgb(System.Math.Clamp(scaledAlpha, 0, 255), color.R, color.G, color.B);
-            }
-            return color;
         }
     }
 }

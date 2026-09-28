@@ -10,7 +10,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 
 namespace PeachPDF.MathML
 {

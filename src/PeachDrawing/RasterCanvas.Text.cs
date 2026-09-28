@@ -1,7 +1,8 @@
 ﻿using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
+using PeachDrawing.Core.ColorGlyphs;
 using System;
 using System.Collections.Generic;
 
@@ -70,6 +71,11 @@ public sealed partial class RasterCanvas
             {
                 // drawn from the glyph's own SVG document
             }
+            else if (typeface.HasColorGlyphs && TryDrawColorGlyph(typeface, glyph.GlyphIndex, font.Size, color, fontPalette?.BasePaletteIndex ?? 0,
+                         svgOverrides ?? ToGlyphOverrides(fontPalette), penX + glyph.XOffset * scale, baselineY - glyph.YOffset * scale))
+            {
+                // drawn from the glyph's COLR/CPAL color artwork
+            }
             else if (hinting is { } request && typeface.TryGetOutline((ushort)glyph.GlyphIndex, request, out var fitted))
             {
                 AddPixelGlyph(contours, fitted, toDevice, penX + glyph.XOffset * scale, baselineY - glyph.YOffset * scale, skew, tolerance,
@@ -102,6 +108,23 @@ public sealed partial class RasterCanvas
 
         // The picture is a layout-unit rectangle to DrawImage, like every other image.
         DrawImage(image, new Rect(left * _pixelsPerPoint, top * _pixelsPerPoint, width * _pixelsPerPoint, height * _pixelsPerPoint));
+    }
+
+    /// <summary>
+    /// Draws a glyph's COLR/CPAL color artwork (a v1 paint graph, else v0 layers) at a glyph origin given in points, through the shared
+    /// <see cref="ColorGlyphPainter"/>, so this canvas paints color fonts exactly as every other backend does. False when the glyph has
+    /// no color artwork (it is an ordinary outline glyph, which the caller draws).
+    /// </summary>
+    private bool TryDrawColorGlyph(Typeface typeface, int glyphId, double fontSize, PaintColor color, int paletteIndex,
+        IReadOnlyDictionary<int, PaintColor>? overrides, double originX, double baselineY)
+    {
+        if (typeface.GetColorPaint((ushort)glyphId) is null && !typeface.TryGetColorLayers((ushort)glyphId, out _))
+            return false;
+
+        // Path coordinates are in this canvas's user units (points * pixelsPerPoint); the glyph's design units scale to those.
+        var painter = new ColorGlyphPainter(typeface, fontSize * _pixelsPerPoint, color, yDown: true, paletteIndex, overrides);
+        painter.Paint((ushort)glyphId, painter.Placement(originX * _pixelsPerPoint, baselineY * _pixelsPerPoint), new CanvasColorGlyphTarget(this));
+        return true;
     }
 
     /// <summary>
@@ -155,7 +178,19 @@ public sealed partial class RasterCanvas
 
         foreach (var placement in glyphs)
         {
-            if (hinting is { } request && typeface.TryGetOutline((ushort)placement.GlyphIndex, request, out var fitted))
+            var glyphX = placement.X / _pixelsPerPoint;
+            var glyphY = placement.Y / _pixelsPerPoint;
+            if (typeface.HasBitmapGlyphs && typeface.TryGetBitmap((ushort)placement.GlyphIndex, font.Size, out var bitmap))
+                DrawBitmapGlyph(typeface, placement.GlyphIndex, bitmap, font.Size, glyphX, glyphY);
+            else if (typeface.HasSvgGlyphs && TryDrawSvgGlyph(typeface, placement.GlyphIndex, font.Size, color, 0, null, glyphX, glyphY))
+            {
+                // drawn from the glyph's own SVG document
+            }
+            else if (typeface.HasColorGlyphs && TryDrawColorGlyph(typeface, placement.GlyphIndex, font.Size, color, 0, null, glyphX, glyphY))
+            {
+                // drawn from the glyph's COLR/CPAL color artwork
+            }
+            else if (hinting is { } request && typeface.TryGetOutline((ushort)placement.GlyphIndex, request, out var fitted))
                 AddPixelGlyph(contours, fitted, toDevice, placement.X / _pixelsPerPoint, placement.Y / _pixelsPerPoint, 0, tolerance,
                     request.GridFitting == GridFitting.Monochrome);
             else if (typeface.TryGetOutline((ushort)placement.GlyphIndex, out var outline))

@@ -121,8 +121,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.Equal(RColorBlue(), resolved.PaintColor);
         }
 
-        private static PeachDrawing.Abstractions.PaintColor RColorBlue() =>
-            PeachDrawing.Abstractions.PaintColor.FromArgb(0, 0, 255);
+        private static PeachDrawing.Core.PaintColor RColorBlue() =>
+            PeachDrawing.Core.PaintColor.FromArgb(0, 0, 255);
 
         [Fact]
         public async Task RowBorder_WinsWhenNoCellDeclaresOne()

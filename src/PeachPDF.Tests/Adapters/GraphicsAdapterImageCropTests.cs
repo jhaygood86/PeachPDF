@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using System.IO;

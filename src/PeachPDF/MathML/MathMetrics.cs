@@ -1,7 +1,7 @@
 using PeachDrawing.Text.OpenType;
 using System;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 
 namespace PeachPDF.MathML

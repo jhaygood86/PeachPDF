@@ -6,26 +6,37 @@ namespace PeachDrawing;
 
 /// <summary>
 /// A projective map of the plane, a 3x3 matrix acting on the column vector (x, y, 1): the picture a 4x4 CSS transform (perspective
-/// included) makes of a flat element. Where an <see cref="Affine"/> keeps parallel lines parallel, this does not; the third row is
+/// included) makes of a flat element. Where an affine <see cref="System.Numerics.Matrix3x2"/> keeps parallel lines parallel, this does not; the third row is
 /// what makes the difference (the divisor <c>W</c>).
 /// </summary>
-internal readonly struct Homography(double m11, double m12, double m13, double m21, double m22, double m23, double m31, double m32, double m33)
+public readonly struct Homography(double m11, double m12, double m13, double m21, double m22, double m23, double m31, double m32, double m33)
 {
+    /// <summary>The matrix entry in row 1, column 1.</summary>
     public double M11 { get; } = m11;
+    /// <summary>The matrix entry in row 1, column 2.</summary>
     public double M12 { get; } = m12;
+    /// <summary>The matrix entry in row 1, column 3.</summary>
     public double M13 { get; } = m13;
+    /// <summary>The matrix entry in row 2, column 1.</summary>
     public double M21 { get; } = m21;
+    /// <summary>The matrix entry in row 2, column 2.</summary>
     public double M22 { get; } = m22;
+    /// <summary>The matrix entry in row 2, column 3.</summary>
     public double M23 { get; } = m23;
+    /// <summary>The matrix entry in row 3, column 1.</summary>
     public double M31 { get; } = m31;
+    /// <summary>The matrix entry in row 3, column 2.</summary>
     public double M32 { get; } = m32;
+    /// <summary>The matrix entry in row 3, column 3.</summary>
     public double M33 { get; } = m33;
 
     /// <summary>Below this the third row is treated as zero: the map is affine, and the cheaper path applies.</summary>
     private const double AffineTolerance = 1e-8;
 
+    /// <summary>The map that leaves every point where it is.</summary>
     public static Homography Identity { get; } = new(1, 0, 0, 0, 1, 0, 0, 0, 1);
 
+    /// <summary>The map that moves every point by (<paramref name="dx"/>, <paramref name="dy"/>).</summary>
     public static Homography Translation(double dx, double dy) => new(1, 0, dx, 0, 1, dy, 0, 0, 1);
 
     /// <summary>
@@ -63,6 +74,7 @@ internal readonly struct Homography(double m11, double m12, double m13, double m
     /// <summary>The same map scaled by -1, which is the same picture: used to make W positive where the element is.</summary>
     public Homography Negated() => new(-M11, -M12, -M13, -M21, -M22, -M23, -M31, -M32, -M33);
 
+    /// <summary>The map that undoes this one, or null when this one is singular.</summary>
     public Homography? Invert()
     {
         var c11 = M22 * M33 - M23 * M32;

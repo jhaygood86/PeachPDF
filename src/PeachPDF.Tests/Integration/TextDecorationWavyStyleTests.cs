@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// <c>text-decoration-style: wavy</c> strokes a wavy <see cref="PeachDrawing.Abstractions.GraphicsPath"/>
+    /// <c>text-decoration-style: wavy</c> strokes a wavy <see cref="PeachDrawing.Core.GraphicsPath"/>
     /// instead of drawing a straight <c>DrawLine</c> - it used to resolve to a solid pen and paint a
     /// straight line, the same output <c>solid</c> produces, which is an unambiguous spec deviation
     /// (css-text-decor-3 §2.2 defines <c>wavy</c> in its own words: "Draw a wavy line"). See

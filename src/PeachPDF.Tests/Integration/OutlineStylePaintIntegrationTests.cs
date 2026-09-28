@@ -1,6 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore;
@@ -22,7 +22,7 @@ namespace PeachPDF.Tests.Integration
     /// <c>BorderStylePaintIntegrationTests</c>). Uses <see cref="TestRecordingGraphics"/> to assert the
     /// real draw-call sequence, plus one real-PDF content-stream test
     /// (<see cref="OutlineColorInvert_ProducesADifferenceBlendModeExtGStateInTheRealPdf"/>) proving the
-    /// new <see cref="PeachDrawing.Abstractions.Canvas.PushBlendMode"/>/<see cref="PeachDrawing.Abstractions.Canvas.PopBlendMode"/>
+    /// new <see cref="PeachDrawing.Core.Canvas.PushBlendMode"/>/<see cref="PeachDrawing.Core.Canvas.PopBlendMode"/>
     /// primitive actually reaches the PDF-writing layer, not just the test mock.
     /// </summary>
     public class OutlineStylePaintIntegrationTests

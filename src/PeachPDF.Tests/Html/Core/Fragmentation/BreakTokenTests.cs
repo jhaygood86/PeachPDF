@@ -232,10 +232,10 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
 
             var first = new FlexBreakToken(container, 1, 0, lines,
                 new List<UnfinishedFlexItem> { new(item, itemToken) }, [],
-                new PeachDrawing.Abstractions.PaintPoint(0, 0));
+                new PeachDrawing.Core.PaintPoint(0, 0));
             var second = new FlexBreakToken(container, 1, 0, lines,
                 new List<UnfinishedFlexItem> { new(item, itemToken) }, [],
-                new PeachDrawing.Abstractions.PaintPoint(999, 999));
+                new PeachDrawing.Core.PaintPoint(999, 999));
 
             Assert.Equal(first, second);
         }
@@ -293,10 +293,10 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
 
             var first = new GridBreakToken(container, 1, 0, rows,
                 new List<UnfinishedGridItem> { new(item, itemToken) }, [], subgridContexts,
-                new PeachDrawing.Abstractions.PaintPoint(0, 0));
+                new PeachDrawing.Core.PaintPoint(0, 0));
             var second = new GridBreakToken(container, 1, 0, rows,
                 new List<UnfinishedGridItem> { new(item, itemToken) }, [], subgridContexts,
-                new PeachDrawing.Abstractions.PaintPoint(999, 999));
+                new PeachDrawing.Core.PaintPoint(999, 999));
 
             Assert.Equal(first, second);
         }

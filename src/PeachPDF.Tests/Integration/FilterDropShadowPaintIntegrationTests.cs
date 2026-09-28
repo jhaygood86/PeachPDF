@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;

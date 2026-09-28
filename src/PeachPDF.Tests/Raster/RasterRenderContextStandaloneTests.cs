@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachImage.Formats.Png;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;

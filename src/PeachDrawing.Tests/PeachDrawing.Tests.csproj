@@ -39,6 +39,20 @@
   <ItemGroup>
     <!-- Shared with PeachPDF.Tests/PeachDrawing.Text.Tests - see PeachDrawing.Text.Tests.csproj's own precedent. -->
     <Compile Include="..\PeachPDF.Tests\TestSupport\AllocationProbe.cs" Link="TestSupport\AllocationProbe.cs" />
+    <Compile Include="..\PeachPDF.Tests\TestSupport\BundledFonts.cs" Link="TestSupport\BundledFonts.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The bundled fonts the drawing tests read, linked into the output root where BundledFonts looks. -->
+    <None Include="..\..\assets\fonts\SourceSans3-Regular.ttf" Link="SourceSans3-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\ColorTestV0.ttf" Link="ColorTestV0.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\ColorTestV1.ttf" Link="ColorTestV1.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

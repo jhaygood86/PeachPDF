@@ -142,7 +142,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var resolved = table.CollapsedBorders!.Vertical(0, 0);
 
             // Equal width/style - Column outranks ColumnGroup, so red (the <col>'s own) wins.
-            Assert.Equal(PeachDrawing.Abstractions.PaintColor.FromArgb(255, 0, 0), resolved.PaintColor);
+            Assert.Equal(PeachDrawing.Core.PaintColor.FromArgb(255, 0, 0), resolved.PaintColor);
         }
     }
 }

@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 
 namespace PeachPDF.Html.Core

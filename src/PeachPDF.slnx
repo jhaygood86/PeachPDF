@@ -1,7 +1,7 @@
 <Solution>
   <Project Path="PeachDrawing/PeachDrawing.csproj" />
-  <Project Path="PeachDrawing.Abstractions/PeachDrawing.Abstractions.csproj" />
-  <Project Path="PeachDrawing.Abstractions.Tests/PeachDrawing.Abstractions.Tests.csproj" />
+  <Project Path="PeachDrawing.Core/PeachDrawing.Core.csproj" />
+  <Project Path="PeachDrawing.Core.Tests/PeachDrawing.Core.Tests.csproj" />
   <Project Path="PeachDrawing.Tests/PeachDrawing.Tests.csproj" />
   <Project Path="PeachDrawing.Text/PeachDrawing.Text.csproj" />
   <Project Path="PeachDrawing.Text.Benchmarks/PeachDrawing.Text.Benchmarks.csproj" />
