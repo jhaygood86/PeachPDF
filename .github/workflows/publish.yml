@@ -83,12 +83,16 @@ jobs:
       run: |
         dotnet build src/PeachDrawing.Text.Data/PeachDrawing.Text.Data.csproj --configuration Release
         dotnet build src/PeachDrawing.Text/PeachDrawing.Text.csproj --configuration Release
+        dotnet build src/PeachDrawing.Abstractions/PeachDrawing.Abstractions.csproj --configuration Release
+        dotnet build src/PeachDrawing/PeachDrawing.csproj --configuration Release
         dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release
 
     - name: Pack
       run: |
         dotnet pack src/PeachDrawing.Text.Data/PeachDrawing.Text.Data.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/PeachDrawing.Text/PeachDrawing.Text.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/PeachDrawing.Abstractions/PeachDrawing.Abstractions.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/PeachDrawing/PeachDrawing.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/PeachPDF/PeachPDF.csproj --configuration Release --no-build --output ./packages
 
     - name: NuGet login
@@ -99,17 +103,28 @@ jobs:
 
     - name: Push to NuGet.org
       # In dependency order: PeachDrawing.Text.Data first (PeachDrawing.Text depends on it), then
-      # PeachDrawing.Text (PeachPDF depends on it at this same version), then PeachPDF - each has to be
-      # on the feed before anyone can restore the one that depends on it. --skip-duplicate makes this
-      # safe to re-run. The exact version-pinned filenames (rather than a "PeachDrawing.Text.*" glob)
-      # avoid PeachDrawing.Text.Data's own package incidentally matching the PeachDrawing.Text push too,
-      # since its name starts with "PeachDrawing.Text.".
+      # PeachDrawing.Text (PeachDrawing.Abstractions depends on it at this same version), then
+      # PeachDrawing.Abstractions (PeachDrawing depends on it), then PeachDrawing (PeachPDF depends on
+      # it too, alongside PeachDrawing.Abstractions directly), then PeachPDF - each has to be on the feed
+      # before anyone can restore the one that depends on it. --skip-duplicate makes this safe to re-run.
+      # The exact version-pinned filenames (rather than a "PeachDrawing.Text.*"/"PeachDrawing.*" glob)
+      # avoid PeachDrawing.Text.Data's own package incidentally matching the PeachDrawing.Text push, and
+      # PeachDrawing.Abstractions incidentally matching the PeachDrawing push, since each pair shares a
+      # name prefix.
       run: |
         dotnet nuget push "./packages/PeachDrawing.Text.Data.${{ steps.version.outputs.value }}.nupkg" \
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
           --source https://api.nuget.org/v3/index.json \
           --skip-duplicate
         dotnet nuget push "./packages/PeachDrawing.Text.${{ steps.version.outputs.value }}.nupkg" \
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+          --source https://api.nuget.org/v3/index.json \
+          --skip-duplicate
+        dotnet nuget push "./packages/PeachDrawing.Abstractions.${{ steps.version.outputs.value }}.nupkg" \
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+          --source https://api.nuget.org/v3/index.json \
+          --skip-duplicate
+        dotnet nuget push "./packages/PeachDrawing.${{ steps.version.outputs.value }}.nupkg" \
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
           --source https://api.nuget.org/v3/index.json \
           --skip-duplicate
