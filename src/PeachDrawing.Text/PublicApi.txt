@@ -472,6 +472,8 @@ PeachDrawing.Text.Outlines.GlyphOutline : sealed class
   property Boolean IsEmpty { get; }
   property Boolean IsGridFitted { get; }
   property Double PixelsPerEm { get; }
+  property Double PixelsPerEmX { get; }
+  property Double PixelsPerEmY { get; }
   property IReadOnlyList<OutlineContour> Contours { get; }
   property Nullable<Double> GridFittedAdvance { get; }
 PeachDrawing.Text.Outlines.GridFitting : enum Int32
@@ -493,6 +495,8 @@ PeachDrawing.Text.Outlines.OutlinePoint : struct
 PeachDrawing.Text.Outlines.OutlineRequest : struct
   property Boolean StemDarkening { get; init; }
   property Double PixelsPerEm { get; init; }
+  property Double PixelsPerEmX { get; init; }
+  property Double PixelsPerEmY { get; init; }
   property GridFitting GridFitting { get; init; }
 PeachDrawing.Text.Outlines.OutlineSegment : struct
   method static OutlineSegment Cubic(OutlinePoint control1, OutlinePoint control2, OutlinePoint end)

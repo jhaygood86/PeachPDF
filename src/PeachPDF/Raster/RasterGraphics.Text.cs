@@ -158,9 +158,10 @@ internal sealed partial class RasterGraphics
     }
 
     /// <summary>
-    /// What to ask the typeface for when text is to be hinted: the size in device pixels per em and the kind of hinting. Null when hinting
-    /// is off or means nothing here: hinting fits outlines to a pixel grid, so it needs the text to reach the pixels unrotated, unskewed and
-    /// scaled the same in both directions (a rotation or a different scale per axis would turn the fitted grid into something else).
+    /// What to ask the typeface for when text is to be hinted: the size in device pixels per em, one for each axis, and the kind of
+    /// hinting. Null when hinting is off or means nothing here: hinting fits outlines to a pixel grid, so it needs the text to reach the
+    /// pixels unrotated and unskewed, though not necessarily at the same scale in both directions (a font's hinting instructions fit a
+    /// stretched grid as well as a square one; a rotation or a skew would turn the fitted grid into something else no font expects).
     /// </summary>
     private OutlineRequest? HintingRequest(XFont font, in Affine toDevice)
     {
@@ -168,16 +169,17 @@ internal sealed partial class RasterGraphics
         if (mode == TextHinting.None)
             return null;
 
-        // a pure scale and translation, the same scale in both directions, and no mirroring
+        // a pure scale and translation, no rotation or skew, and no mirroring; the two axes may scale differently (a non-square output
+        // DPI, or a non-uniform CTM), which is exactly the real-world trigger for non-square-pixel hinting
         var scaleX = toDevice.M11;
         var scaleY = toDevice.M22;
-        if (toDevice.M12 != 0 || toDevice.M21 != 0 || !(scaleX > 0) || !(scaleY > 0) ||
-            Math.Abs(scaleX - scaleY) > 1e-6 * Math.Max(scaleX, scaleY))
+        if (toDevice.M12 != 0 || toDevice.M21 != 0 || !(scaleX > 0) || !(scaleY > 0))
             return null;
 
         return new OutlineRequest
         {
-            PixelsPerEm = font.Size * scaleX,
+            PixelsPerEmX = font.Size * scaleX,
+            PixelsPerEmY = font.Size * scaleY,
             GridFitting = mode == TextHinting.Monochrome ? GridFitting.Monochrome : GridFitting.Standard,
             StemDarkening = _adapter.TextStemDarkening,
         };

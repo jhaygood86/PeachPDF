@@ -163,6 +163,10 @@
     <None Include="..\..\assets\fonts\HintingArithmetic.golden.json.gz" Link="HintingArithmetic.golden.json.gz">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Non-square pixels (assets/fonts/generate_hinting_anisotropic_fixtures.py): the TrueType and CFF fonts above at x_ppem != y_ppem. -->
+    <None Include="..\..\assets\fonts\HintingAnisotropic.golden.json.gz" Link="HintingAnisotropic.golden.json.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\..\assets\fonts\HintingGasp.ttf" Link="HintingGasp.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

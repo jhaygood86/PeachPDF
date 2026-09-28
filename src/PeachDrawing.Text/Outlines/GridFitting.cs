@@ -41,12 +41,36 @@ namespace PeachDrawing.Text.Outlines
     public readonly struct OutlineRequest
     {
         /// <summary>
-        /// The size the outline will be drawn at, in pixels per em, for an outline that is grid-fitted. It may be fractional; the
-        /// font's hinting works on the size in 1/64 pixel, except that a TrueType font that asks for whole pixels per em is fitted at the
-        /// nearest whole size (see <see cref="GlyphOutline.PixelsPerEm"/>). Ignored, and the outline stays in design units, for
-        /// <see cref="GridFitting.None"/>.
+        /// The horizontal size the outline will be drawn at, in pixels per em, for an outline that is grid-fitted. It may be
+        /// fractional; the font's hinting works on the size in 1/64 pixel, except that a TrueType font that asks for whole pixels per
+        /// em is fitted at the nearest whole size (see <see cref="GlyphOutline.PixelsPerEm"/>). Ignored, and the outline stays in
+        /// design units, for <see cref="GridFitting.None"/>. Setting <see cref="PixelsPerEm"/> instead sets this and
+        /// <see cref="PixelsPerEmY"/> together.
         /// </summary>
-        public double PixelsPerEm { get; init; }
+        public double PixelsPerEmX { get; init; }
+
+        /// <summary>
+        /// The vertical size the outline will be drawn at, in pixels per em; see <see cref="PixelsPerEmX"/>, which this follows in
+        /// every other respect. A device whose pixels are not square (a non-uniform scale or resolution) gives this a different value
+        /// from <see cref="PixelsPerEmX"/>, which is what fits a font's hinting instructions for a stretched grid instead of a square
+        /// one (FreeType's own <c>x_ppem</c>/<c>y_ppem</c>).
+        /// </summary>
+        public double PixelsPerEmY { get; init; }
+
+        /// <summary>
+        /// A convenience for the common case of a square pixel: setting it sets both <see cref="PixelsPerEmX"/> and
+        /// <see cref="PixelsPerEmY"/> to the same value; reading it gives <see cref="PixelsPerEmX"/>. Every caller that only ever set
+        /// this property keeps asking for, and getting, exactly what it always did.
+        /// </summary>
+        public double PixelsPerEm
+        {
+            get => PixelsPerEmX;
+            init
+            {
+                PixelsPerEmX = value;
+                PixelsPerEmY = value;
+            }
+        }
 
         /// <summary>How much to fit the outline to the pixel grid.</summary>
         public GridFitting GridFitting { get; init; }

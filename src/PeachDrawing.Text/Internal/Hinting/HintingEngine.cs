@@ -112,7 +112,8 @@ internal sealed class HintingEngine
     private int[]? NormalizedCoordinates() => TtVarTables.NormalizedCoordinates(_font, _variation);
 
     private static int FrontSlot(in GlyphKey key) =>
-        (int)(((uint)key.Glyph * 0x9E3779B1u + (uint)key.Size.Ppem26Dot6 * 0x85EBCA6Bu + (uint)key.Size.Mode * 0xC2B2AE35u + (key.Size.StemDarkening ? 0x27D4EB2Fu : 0u)) >> (32 - FrontBits));
+        (int)(((uint)key.Glyph * 0x9E3779B1u + (uint)key.Size.XPpem26Dot6 * 0x85EBCA6Bu + (uint)key.Size.YPpem26Dot6 * 0xC2B2AE35u +
+               (uint)key.Size.Mode * 0x27D4EB2Fu + (key.Size.StemDarkening ? 0x165667B1u : 0u)) >> (32 - FrontBits));
 
     private void Forget(in GlyphKey key)
     {
@@ -257,15 +258,27 @@ internal sealed class HintingEngine
     /// for grid-fitting is not hinted: the answer is <see cref="HintedGlyphResult.Failed"/>, and the caller keeps the scaled design.
     /// </summary>
     /// <param name="glyph">The glyph.</param>
-    /// <param name="ppem26Dot6">The size in pixels per em, in 1/64.</param>
+    /// <param name="ppem26Dot6">The size in pixels per em, in 1/64, the same in both directions.</param>
     /// <param name="mode">The kind of grid-fitting; not <see cref="GridFitting.None"/>.</param>
     /// <param name="stemDarkening">Whether the stem darkening of Adobe's CFF engine is on; it means nothing for a TrueType font.</param>
-    public HintedGlyphResult Get(int glyph, int ppem26Dot6, GridFitting mode, bool stemDarkening = false)
-    {
-        ppem26Dot6 = EffectivePpem(ppem26Dot6);
+    public HintedGlyphResult Get(int glyph, int ppem26Dot6, GridFitting mode, bool stemDarkening = false) =>
+        Get(glyph, ppem26Dot6, ppem26Dot6, mode, stemDarkening);
 
-        // the font's own word on which sizes want fitting (FT_GASP_DO_GRIDFIT: "if this bit is not set, no hinting gets applied")
-        if (GetGasp() is { } gasp && !gasp.AllowsGridFit((int)(((long)ppem26Dot6 + 32) >> 6)))
+    /// <param name="glyph">The glyph.</param>
+    /// <param name="xPpem26Dot6">The horizontal size in pixels per em, in 1/64.</param>
+    /// <param name="yPpem26Dot6">The vertical size in pixels per em, in 1/64; equal to <paramref name="xPpem26Dot6"/> for square pixels.</param>
+    /// <param name="mode">The kind of grid-fitting; not <see cref="GridFitting.None"/>.</param>
+    /// <param name="stemDarkening">Whether the stem darkening of Adobe's CFF engine is on; it means nothing for a TrueType font.</param>
+    public HintedGlyphResult Get(int glyph, int xPpem26Dot6, int yPpem26Dot6, GridFitting mode, bool stemDarkening = false)
+    {
+        (xPpem26Dot6, yPpem26Dot6) = EffectivePpem(xPpem26Dot6, yPpem26Dot6);
+
+        // the font's own word on which sizes want fitting (FT_GASP_DO_GRIDFIT: "if this bit is not set, no hinting gets applied"),
+        // asked at the larger axis, as the interpreter's own ttmetrics.ppem is (real FreeType calls FT_Get_Gasp on neither axis in
+        // particular, since it leaves the decision to the caller; this engine's own convention keeps it consistent with the CVT
+        // scaling axis the interpreter itself picks)
+        int gaspPpem = (int)(((long)Math.Max(xPpem26Dot6, yPpem26Dot6) + 32) >> 6);
+        if (GetGasp() is { } gasp && !gasp.AllowsGridFit(gaspPpem))
             return HintedGlyphResult.Failed;
 
         if (GetCffFace() is not null)
@@ -279,7 +292,7 @@ internal sealed class HintingEngine
             stemDarkening = false;
         }
 
-        var sizeKey = new SizeKey(ppem26Dot6, mode, stemDarkening, _variationKey);
+        var sizeKey = new SizeKey(xPpem26Dot6, yPpem26Dot6, mode, stemDarkening, _variationKey);
         var key = new GlyphKey(sizeKey, glyph);
 
         int slot = FrontSlot(key);
@@ -306,18 +319,24 @@ internal sealed class HintingEngine
     }
 
     /// <summary>
-    /// The size a face is actually scaled to. A TrueType font whose <c>head</c> flags ask for integer ppems (nearly all do) is scaled to the
-    /// nearest whole number of pixels per em, as FreeType does: 11.4 ppem is 11. Keying the caches by the size that counts means that every
-    /// fractional size of such a font shares one entry, instead of each running <c>prep</c> again and pushing another out of the cache.
+    /// The size a face is actually scaled to, each axis independently. A TrueType font whose <c>head</c> flags ask for integer ppems
+    /// (nearly all do) is scaled to the nearest whole number of pixels per em, as FreeType does: 11.4 ppem is 11. Keying the caches by
+    /// the size that counts means that every fractional size of such a font shares one entry, instead of each running <c>prep</c>
+    /// again and pushing another out of the cache.
     /// </summary>
-    private int EffectivePpem(int ppem26Dot6)
+    private (int X, int Y) EffectivePpem(int xPpem26Dot6, int yPpem26Dot6)
     {
         TtFace? face = GetFace();
         if (face is null || (face.HeadFlags & 8) == 0)
-            return ppem26Dot6;
+            return (xPpem26Dot6, yPpem26Dot6);
 
-        int rounded = (int)(((long)ppem26Dot6 + 32) >> 6) << 6;
-        return rounded > 0 ? rounded : ppem26Dot6;
+        return (RoundToWhole(xPpem26Dot6), RoundToWhole(yPpem26Dot6));
+
+        static int RoundToWhole(int ppem26Dot6)
+        {
+            int rounded = (int)(((long)ppem26Dot6 + 32) >> 6) << 6;
+            return rounded > 0 ? rounded : ppem26Dot6;
+        }
     }
 
     private HintedGlyphResult Compute(int glyph, SizeKey sizeKey)
@@ -332,7 +351,7 @@ internal sealed class HintingEngine
         try
         {
             // the outline is made from the loader's own arrays, without a copy of them first
-            return TtGlyphLoader.Load(size, glyph, sizeKey.Ppem26Dot6, s_readTrueTypeGlyph);
+            return TtGlyphLoader.Load(size, glyph, (sizeKey.XPpem26Dot6, sizeKey.YPpem26Dot6), s_readTrueTypeGlyph);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -351,7 +370,7 @@ internal sealed class HintingEngine
         try
         {
             // the outline is made from the thread's own arrays, without a copy of them first
-            return CffGlyphLoader.Load(size, glyph, sizeKey.Ppem26Dot6, s_readCffGlyph);
+            return CffGlyphLoader.Load(size, glyph, (sizeKey.XPpem26Dot6, sizeKey.YPpem26Dot6), s_readCffGlyph);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -372,7 +391,7 @@ internal sealed class HintingEngine
 
         try
         {
-            return new CffSize(face, key.Ppem26Dot6, key.StemDarkening);
+            return new CffSize(face, key.XPpem26Dot6, key.YPpem26Dot6, key.StemDarkening);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -396,7 +415,7 @@ internal sealed class HintingEngine
                 ? (TtInterpreterVersion.V35, TtRenderMode.Mono)
                 : (TtInterpreterVersion.V40, TtRenderMode.Normal);
 
-            return TtSize.Create(face, key.Ppem26Dot6, version, renderMode);
+            return TtSize.Create(face, key.XPpem26Dot6, key.YPpem26Dot6, version, renderMode);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -419,15 +438,17 @@ internal sealed class HintingEngine
 
     // The outline of a CFF glyph: each contour starts at an on-curve point and goes on by lines (an on-curve point) and cubic curves (two
     // control points and an on-curve point).
-    private static readonly CffGlyphReader<int, HintedGlyphResult> s_readCffGlyph =
-        static (in CffGlyphView hinted, int ppem26Dot6) => new HintedGlyphResult(ToOutline(hinted, ppem26Dot6), hinted.Advance / 64.0, true);
+    private static readonly CffGlyphReader<(int X, int Y), HintedGlyphResult> s_readCffGlyph =
+        static (in CffGlyphView hinted, (int X, int Y) ppem26Dot6) => new HintedGlyphResult(ToOutline(hinted, ppem26Dot6), hinted.Advance / 64.0, true);
 
-    private static GlyphOutline ToOutline(in CffGlyphView hinted, int ppem26Dot6)
+    private static GlyphOutline ToOutline(in CffGlyphView hinted, (int X, int Y) ppem26Dot6)
     {
         var outline = new GlyphOutline
         {
             IsGridFitted = true,
-            PixelsPerEm = ppem26Dot6 / 64.0,
+            PixelsPerEm = ppem26Dot6.X / 64.0,
+            PixelsPerEmX = ppem26Dot6.X / 64.0,
+            PixelsPerEmY = ppem26Dot6.Y / 64.0,
             GridFittedAdvance = hinted.Advance / 64.0,
         };
 
@@ -501,8 +522,8 @@ internal sealed class HintingEngine
         return segments;
     }
 
-    private static readonly TtGlyphReader<int, HintedGlyphResult> s_readTrueTypeGlyph =
-        static (in TtGlyphView hinted, int ppem26Dot6) => new HintedGlyphResult(ToOutline(hinted, ppem26Dot6), hinted.Advance / 64.0, hinted.IsHinted);
+    private static readonly TtGlyphReader<(int X, int Y), HintedGlyphResult> s_readTrueTypeGlyph =
+        static (in TtGlyphView hinted, (int X, int Y) ppem26Dot6) => new HintedGlyphResult(ToOutline(hinted, ppem26Dot6), hinted.Advance / 64.0, hinted.IsHinted);
 
     // The points of the contour being made; a thread keeps one list from glyph to glyph. Nothing of it goes into the outline (BuildContour copies).
     [ThreadStatic]
@@ -511,12 +532,14 @@ internal sealed class HintingEngine
     // The most points the list is kept at: a contour of a real glyph has a few hundred.
     private const int MaxRetainedContourPoints = 4096;
 
-    private static GlyphOutline ToOutline(in TtGlyphView hinted, int ppem26Dot6)
+    private static GlyphOutline ToOutline(in TtGlyphView hinted, (int X, int Y) ppem26Dot6)
     {
         var outline = new GlyphOutline
         {
             IsGridFitted = hinted.IsHinted,
-            PixelsPerEm = ppem26Dot6 / 64.0,
+            PixelsPerEm = ppem26Dot6.X / 64.0,
+            PixelsPerEmX = ppem26Dot6.X / 64.0,
+            PixelsPerEmY = ppem26Dot6.Y / 64.0,
             GridFittedAdvance = hinted.IsHinted ? hinted.Advance / 64.0 : null,
         };
 
@@ -564,7 +587,7 @@ internal sealed class HintingEngine
             Interlocked.Increment(ref s_unexpectedFailures);
     }
 
-    private readonly record struct SizeKey(int Ppem26Dot6, GridFitting Mode, bool StemDarkening, string? Variation);
+    private readonly record struct SizeKey(int XPpem26Dot6, int YPpem26Dot6, GridFitting Mode, bool StemDarkening, string? Variation);
 
     private readonly record struct GlyphKey(SizeKey Size, int Glyph);
 

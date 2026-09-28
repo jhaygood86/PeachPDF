@@ -222,6 +222,15 @@ if (face.TryGetOutline(glyph, request, out GlyphOutline fitted))
   em (nearly all do) is fitted at the nearest whole size, as in FreeType: asking for 11.4 gives an outline fitted at 11, which
   `GlyphOutline.PixelsPerEm` reports. Every fractional size of such a font shares one cached fitting. A font with CFF outlines is fitted
   at the size asked for.
+- **The horizontal and vertical size can differ.** `PixelsPerEm` is a convenience that sets `OutlineRequest.PixelsPerEmX` and
+  `PixelsPerEmY` to the same value; a device whose pixels are not square (a non-uniform scale, or a different horizontal and vertical
+  resolution) sets them independently, and the font is fitted for that stretched grid instead of a square one: a TrueType font's
+  instructions read the horizontal and vertical scale on their own terms wherever they measure a distance that is not purely horizontal
+  or vertical (FreeType's non-square-pixel paths), and a font with CFF outlines scales its two axes independently while still choosing
+  its blue zones and stem widths from the vertical axis alone, exactly as Adobe's engine does. `GlyphOutline.PixelsPerEmX` and
+  `PixelsPerEmY` report the two axes the outline was fitted at (`PixelsPerEm` gives the horizontal one). PeachPDF's own raster backend
+  computes both axes from the device transform it is drawing into, so a page rendered at a non-square DPI, or under a CSS transform
+  that scales the two axes differently, reaches this on its own.
 - **`GridFitting.None`** is the default and gives exactly the design-unit outline of the overload without a request.
 - **`GridFitting.Standard`** runs the font's instructions in the interpreter FreeType uses by default (its "v40" behaviour). It fits the
   vertical direction only, so glyphs keep the horizontal positions and widths of the design, which is what anti-aliased text wants. It
@@ -278,7 +287,7 @@ var request = new OutlineRequest { PixelsPerEm = 9, GridFitting = GridFitting.St
   both modes; the flags for ClearType (`GASP_SYMMETRIC_GRIDFIT`, `GASP_SYMMETRIC_SMOOTHING`) are not, since nothing here draws with it.
   At a location of a variable font the `MVAR` table moves the largest size of the first ten ranges (its `gsp0` to `gsp9` values), so which
   sizes are fitted can change with the weight or the width. `LTSH` and `VDMX` are not read (FreeType does not use them to load a glyph
-  either). Pixels are square: one size serves both directions.
+  either). When the two axes differ, the size compared against the table is the larger of the two, in pixels per em.
 
 The instruction interpreter and the CFF engine are ports of FreeType's (the CFF engine is the one Adobe contributed to FreeType), which
 is why the package carries the FreeType Project License notices and Adobe's (see [Licences](#licences)). They give the same fitted
