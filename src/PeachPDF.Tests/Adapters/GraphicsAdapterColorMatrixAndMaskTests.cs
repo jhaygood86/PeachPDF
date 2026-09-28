@@ -1,6 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using System.IO;
@@ -13,7 +12,7 @@ namespace PeachPDF.Tests.Adapters
     /// Exercises the new tile-compositing primitives through the actual production adapter
     /// (<see cref="GraphicsAdapter"/>) rather than the lower-level <c>XGraphics</c> calls
     /// <c>XGraphicsPdfRendererColorMatrixAndMaskTests</c> drives directly - this is what proves the
-    /// <c>RGraphics</c>-to-<c>XGraphics</c> forwarding (including the <c>RBlendMode</c>-to-string
+    /// <c>Canvas</c>-to-<c>XGraphics</c> forwarding (including the <c>PaintBlendMode</c>-to-string
     /// crossing at this exact boundary - see <c>XGraphicsPdfRenderer.DrawImageBlendedOver</c>'s remarks)
     /// actually works end to end, not just that the lower-level primitive does.
     /// </summary>
@@ -30,7 +29,7 @@ namespace PeachPDF.Tests.Adapters
             return (document, pageGfx, graphics, adapter);
         }
 
-        private static RImage NewTile(GraphicsAdapter graphics, RAdapter adapter, double size, RColor color)
+        private static Image NewTile(GraphicsAdapter graphics, RenderContext adapter, double size, PaintColor color)
         {
             var (tileGraphics, image) = graphics.CreateTile(size, size)!.Value;
             tileGraphics.DrawRectangle(adapter.GetSolidBrush(color), 0, 0, size, size);
@@ -49,9 +48,9 @@ namespace PeachPDF.Tests.Adapters
         public void DrawImageWithOpacity_BlendModeParameter_ForwardsToBM()
         {
             var (document, pageGfx, graphics, adapter) = NewPage();
-            var tile = NewTile(graphics, adapter, 50, RColor.FromArgb(255, 0, 0));
+            var tile = NewTile(graphics, adapter, 50, PaintColor.FromArgb(255, 0, 0));
 
-            graphics.DrawImageWithOpacity(tile, new RRect(10, 10, 50, 50), 1.0, RBlendMode.Multiply);
+            graphics.DrawImageWithOpacity(tile, new Rect(10, 10, 50, 50), 1.0, PaintBlendMode.Multiply);
             pageGfx.Dispose();
 
             var text = Serialize(document);
@@ -62,9 +61,9 @@ namespace PeachPDF.Tests.Adapters
         public void DrawImageWithOpacity_DefaultBlendMode_OmitsBM()
         {
             var (document, pageGfx, graphics, adapter) = NewPage();
-            var tile = NewTile(graphics, adapter, 50, RColor.FromArgb(255, 0, 0));
+            var tile = NewTile(graphics, adapter, 50, PaintColor.FromArgb(255, 0, 0));
 
-            graphics.DrawImageWithOpacity(tile, new RRect(10, 10, 50, 50), 0.5);
+            graphics.DrawImageWithOpacity(tile, new Rect(10, 10, 50, 50), 0.5);
             pageGfx.Dispose();
 
             var text = Serialize(document);
@@ -76,7 +75,7 @@ namespace PeachPDF.Tests.Adapters
         public void DrawImageWithColorMatrix_Forwards()
         {
             var (document, pageGfx, graphics, adapter) = NewPage();
-            var tile = NewTile(graphics, adapter, 50, RColor.FromArgb(255, 0, 0));
+            var tile = NewTile(graphics, adapter, 50, PaintColor.FromArgb(255, 0, 0));
 
             var brightness = new ColorMatrix(new Matrix4x4(
                 1.5f, 0, 0, 0,
@@ -84,7 +83,7 @@ namespace PeachPDF.Tests.Adapters
                 0, 0, 1.5f, 0,
                 0, 0, 0, 1), Vector4.Zero);
 
-            graphics.DrawImageWithColorMatrix(tile, new RRect(10, 10, 50, 50), brightness);
+            graphics.DrawImageWithColorMatrix(tile, new Rect(10, 10, 50, 50), brightness);
             pageGfx.Dispose();
 
             var text = Serialize(document);
@@ -95,10 +94,10 @@ namespace PeachPDF.Tests.Adapters
         public void DrawImageAlphaMasked_Forwards()
         {
             var (document, pageGfx, graphics, adapter) = NewPage();
-            var content = NewTile(graphics, adapter, 50, RColor.FromArgb(255, 0, 0));
-            var mask = NewTile(graphics, adapter, 50, RColor.FromArgb(255, 255, 255));
+            var content = NewTile(graphics, adapter, 50, PaintColor.FromArgb(255, 0, 0));
+            var mask = NewTile(graphics, adapter, 50, PaintColor.FromArgb(255, 255, 255));
 
-            graphics.DrawImageAlphaMasked(content, mask, new RRect(10, 10, 50, 50), invert: true);
+            graphics.DrawImageAlphaMasked(content, mask, new Rect(10, 10, 50, 50), invert: true);
             pageGfx.Dispose();
 
             var text = Serialize(document);
@@ -109,10 +108,10 @@ namespace PeachPDF.Tests.Adapters
         public void DrawImageBlendedOver_Forwards()
         {
             var (document, pageGfx, graphics, adapter) = NewPage();
-            var top = NewTile(graphics, adapter, 50, RColor.FromArgb(255, 0, 0));
-            var bottom = NewTile(graphics, adapter, 50, RColor.FromArgb(0, 0, 255));
+            var top = NewTile(graphics, adapter, 50, PaintColor.FromArgb(255, 0, 0));
+            var bottom = NewTile(graphics, adapter, 50, PaintColor.FromArgb(0, 0, 255));
 
-            graphics.DrawImageBlendedOver(top, bottom, new RRect(10, 10, 50, 50), RBlendMode.Screen);
+            graphics.DrawImageBlendedOver(top, bottom, new Rect(10, 10, 50, 50), PaintBlendMode.Screen);
             pageGfx.Dispose();
 
             var text = Serialize(document);
@@ -123,12 +122,12 @@ namespace PeachPDF.Tests.Adapters
         public void DrawImageWithColorMatrix_NonTileImage_IsNoOp()
         {
             // Contract shared with DrawImageMasked/DrawImageWithOpacity - a no-op if the image wasn't
-            // created via CreateTile on this same RGraphics (a raster ImageAdapter, not an XForm-backed one).
+            // created via CreateTile on this same Canvas (a raster ImageAdapter, not an XForm-backed one).
             var (document, pageGfx, graphics, adapter) = NewPage();
             var pngBytes = PeachPDF.Tests.TestSupport.RasterPngFixture.MakeSolidRgbaPngBytes(2, 2, 255, 0, 0);
             var nonTileImage = adapter.ImageFromStream(new MemoryStream(pngBytes));
 
-            graphics.DrawImageWithColorMatrix(nonTileImage, new RRect(0, 0, 2, 2), ColorMatrix.Identity);
+            graphics.DrawImageWithColorMatrix(nonTileImage, new Rect(0, 0, 2, 2), ColorMatrix.Identity);
             pageGfx.Dispose();
 
             var text = Serialize(document);

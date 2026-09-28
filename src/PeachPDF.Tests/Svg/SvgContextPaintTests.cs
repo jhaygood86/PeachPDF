@@ -1,6 +1,6 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Raster;
+using PeachDrawing.Abstractions;
+using PeachDrawing;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -32,8 +32,8 @@ namespace PeachPDF.Tests.Svg
         private static RasterSurface Paint(string markup, SvgPaint? contextFill = null, SvgPaint? contextStroke = null)
         {
             var surface = new RasterSurface(100, 100, 0, 0, 1, 1);
-            using var graphics = new RasterGraphics(Adapter, surface, 1);
-            SvgRenderer.RenderInto(graphics, Build(markup, contextFill, contextStroke), new RRect(0, 0, 100, 100));
+            using var graphics = new RasterCanvas(Adapter, surface, 1);
+            SvgRenderer.RenderInto(graphics, Build(markup, contextFill, contextStroke), new Rect(0, 0, 100, 100));
             return surface;
         }
 
@@ -138,7 +138,7 @@ namespace PeachPDF.Tests.Svg
                 <svg {Svg}>
                   <rect x="20" y="20" width="60" height="60" fill="context-fill" stroke="context-stroke" stroke-width="10"/>
                 </svg>
-                """, SvgPaint.Solid(RColor.FromArgb(255, 255, 0, 0)), SvgPaint.Solid(RColor.FromArgb(255, 0, 0, 255)));
+                """, SvgPaint.Solid(PaintColor.FromArgb(255, 255, 0, 0)), SvgPaint.Solid(PaintColor.FromArgb(255, 0, 0, 255)));
 
             AssertColour(surface, 50, 50, Red);
             AssertColour(surface, 20, 50, Blue);
@@ -153,7 +153,7 @@ namespace PeachPDF.Tests.Svg
                   <rect class="a" x="10" y="10" width="30" height="30"/>
                   <rect x="60" y="60" width="30" height="30" style="fill: context-stroke"/>
                 </svg>
-                """, SvgPaint.Solid(RColor.FromArgb(255, 255, 0, 0)), SvgPaint.Solid(RColor.FromArgb(255, 0, 0, 255)));
+                """, SvgPaint.Solid(PaintColor.FromArgb(255, 255, 0, 0)), SvgPaint.Solid(PaintColor.FromArgb(255, 0, 0, 255)));
 
             AssertColour(surface, 25, 25, Red);
             AssertColour(surface, 75, 75, Blue);
@@ -253,7 +253,7 @@ namespace PeachPDF.Tests.Svg
                   </defs>
                   <path d="M10,50 L50,50" fill="#00ff00" stroke="#000000" marker-end="url(#m)"/>
                 </svg>
-                """, SvgPaint.Solid(RColor.FromArgb(255, 255, 0, 0)));
+                """, SvgPaint.Solid(PaintColor.FromArgb(255, 255, 0, 0)));
 
             AssertColour(surface, 50, 50, Green);
         }
@@ -337,10 +337,10 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void AGradientThroughAUse_IsMeasuredCorrectlyWhenTheTargetPaintsThroughATile()
         {
-            // The use's target has its own opacity, so RenderElement paints it through RGraphics.CreateTile's
+            // The use's target has its own opacity, so RenderElement paints it through Canvas.CreateTile's
             // isolated tile (RenderContainerOpacityGroup) rather than directly on the outer graphics - the same
             // tile a mask or a <pattern> fill uses. Unless that tile's own CurrentTransform is seeded from the
-            // outer graphics' (RGraphics.CreateTile's contract), ContextBounds composes the context element's
+            // outer graphics' (Canvas.CreateTile's contract), ContextBounds composes the context element's
             // recorded frame against the wrong baseline and gets a materially different (nonsensical) box.
             var surface = Paint($"""
                 <svg {Svg}>
@@ -430,18 +430,18 @@ namespace PeachPDF.Tests.Svg
             var use = Assert.IsType<SvgUseElement>(Assert.Single(document.Children));
             var rect = Assert.IsType<SvgRectElement>(use.Target);
             Assert.Equal(SvgPaintKind.Solid, rect.Fill.Kind);
-            Assert.Equal(RColor.FromArgb(255, 255, 0, 0), rect.Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 255, 0, 0), rect.Fill.PaintColor);
             Assert.Equal(SvgPaintKind.None, rect.Stroke.Kind);
         }
 
         [Fact]
         public void TheKeywords_AreValidPaintValues()
         {
-            Assert.True(SvgValueParsers.TryParsePaint("context-fill", Adapter, RColor.Black, out var fill));
+            Assert.True(SvgValueParsers.TryParsePaint("context-fill", Adapter, PaintColor.Black, out var fill));
             Assert.Equal(SvgPaintKind.ContextFill, fill.Kind);
-            Assert.True(SvgValueParsers.TryParsePaint(" context-stroke ", Adapter, RColor.Black, out var stroke));
+            Assert.True(SvgValueParsers.TryParsePaint(" context-stroke ", Adapter, PaintColor.Black, out var stroke));
             Assert.Equal(SvgPaintKind.ContextStroke, stroke.Kind);
-            Assert.False(SvgValueParsers.TryParsePaint("context-nothing", Adapter, RColor.Black, out _));
+            Assert.False(SvgValueParsers.TryParsePaint("context-nothing", Adapter, PaintColor.Black, out _));
         }
 
         [Fact]
@@ -462,10 +462,10 @@ namespace PeachPDF.Tests.Svg
                 """);
 
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 100, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 100, 100));
 
             var call = Assert.Single(g.DrawStringCalls);
-            Assert.Equal(RColor.FromArgb(255, 255, 0, 0), call.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 255, 0, 0), call.PaintColor);
         }
 
         [Fact]
@@ -486,10 +486,10 @@ namespace PeachPDF.Tests.Svg
                 """);
 
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 100, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 100, 100));
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
-            Assert.Equal(RColor.FromArgb(255, 255, 0, 0), line.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 255, 0, 0), line.PaintColor);
         }
 
         [Fact]
@@ -519,8 +519,8 @@ namespace PeachPDF.Tests.Svg
             // Same geometry as AGradientOnTheShapeOfAMarker_IsMappedThroughThePlacementTransform, but the marker
             // rect reads the gradient through a FillPaint filter input instead of painting it directly - proving
             // RendererFilterInputs.PaintOf resolves a gradient/pattern context-fill (not just a solid one) and that
-            // ContextBounds still maps it correctly once the raster filter's own tile (RGraphics.BeginRasterSurface,
-            // seeded from the calling graphics unlike RGraphics.CreateTile) is in the picture.
+            // ContextBounds still maps it correctly once the raster filter's own tile (Canvas.BeginRasterSurface,
+            // seeded from the calling graphics unlike Canvas.CreateTile) is in the picture.
             var surface = Paint($"""
                 <svg {Svg}>
                   <defs>

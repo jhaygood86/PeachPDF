@@ -70,9 +70,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// directly, even when every stop is CMYK-tagged). <see cref="PdfColorMode.Cmyk"/> iff every color's
         /// <see cref="XColor.ColorSpace"/> is <see cref="XColorSpace.Cmyk"/>, else <see cref="PdfColorMode.Rgb"/>.
         /// Throws if the colors are a genuine mix of the two spaces - defense in depth mirroring
-        /// <see cref="PeachPDF.Adapters.PdfSharpAdapter.RejectMixedColorSpaceGradientStops(IEnumerable{Html.Adapters.Entities.RColor})"/>,
-        /// which already rejects that case before a brush is ever constructed, so this should never fire in
-        /// practice.
+        /// <c>RenderContext.RejectMixedColorSpaceGradientStops</c>, which already rejects that case before a
+        /// brush is ever constructed, so this should never fire in practice.
         /// </summary>
         private static PdfColorMode ResolveShadingColorMode(IReadOnlyList<XColor> colors)
         {

@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System.Collections.Generic;
 
 namespace PeachPDF.Svg
@@ -21,12 +21,12 @@ namespace PeachPDF.Svg
     /// </summary>
     internal static class SvgPointsParser
     {
-        public static RPoint[] Parse(string? points)
+        public static PaintPoint[] Parse(string? points)
         {
             if (string.IsNullOrWhiteSpace(points))
                 return [];
 
-            var result = new List<RPoint>();
+            var result = new List<PaintPoint>();
             var pos = 0;
 
             while (SvgNumberScanner.TryReadNumber(points, ref pos, out var x))
@@ -34,7 +34,7 @@ namespace PeachPDF.Svg
                 if (!SvgNumberScanner.TryReadNumber(points, ref pos, out var y))
                     break;
 
-                result.Add(new RPoint(x, y));
+                result.Add(new PaintPoint(x, y));
             }
 
             return [.. result];

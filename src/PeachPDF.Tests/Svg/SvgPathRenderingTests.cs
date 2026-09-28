@@ -1,6 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
@@ -28,7 +27,7 @@ namespace PeachPDF.Tests.Svg
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new PdfSharpAdapter());
             var graphics = new RealPathRecordingGraphics();
 
-            SvgRenderer.RenderInto(graphics, document, new RRect(0, 0, 100, 100));
+            SvgRenderer.RenderInto(graphics, document, new Rect(0, 0, 100, 100));
 
             var points = Assert.Single(graphics.Paths);
             Assert.Equal(10, points.Min(point => point.X), 3);
@@ -48,7 +47,7 @@ namespace PeachPDF.Tests.Svg
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new PdfSharpAdapter());
             var graphics = new RealPathRecordingGraphics();
 
-            SvgRenderer.RenderInto(graphics, document, new RRect(0, 0, 100, 100));
+            SvgRenderer.RenderInto(graphics, document, new Rect(0, 0, 100, 100));
 
             var points = Assert.Single(graphics.Paths);
             Assert.Equal(10, points.Min(point => point.X), 3);
@@ -59,9 +58,9 @@ namespace PeachPDF.Tests.Svg
         {
             public List<XPoint[]> Paths { get; } = [];
 
-            public override RGraphicsPath GetGraphicsPath() => new GraphicsPathAdapter();
+            public override GraphicsPath GetGraphicsPath() => new GraphicsPathAdapter();
 
-            public override void DrawPath(RPen pen, RGraphicsPath path)
+            public override void DrawPath(Pen pen, GraphicsPath path)
             {
                 Paths.Add(((GraphicsPathAdapter)path).GraphicsPath._corePath.PathPoints);
             }

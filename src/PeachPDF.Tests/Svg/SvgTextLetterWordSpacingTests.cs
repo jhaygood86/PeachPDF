@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary>
     /// Coverage for SVG <c>&lt;text&gt;</c>'s <c>letter-spacing</c>/<c>word-spacing</c> support (issue
     /// #533) - both were previously read nowhere in <see cref="SvgTreeBuilder"/>, so every
-    /// <see cref="RGraphics.DrawString"/>/<c>MeasureString</c> call always passed
+    /// <see cref="Canvas.DrawString"/>/<c>MeasureString</c> call always passed
     /// <c>letterSpacing: 0</c>. Renders through <see cref="SvgRenderer.RenderInto"/> into a
     /// <see cref="TestRecordingGraphics"/> and asserts the resolved value actually reaches
     /// <c>DrawString</c>.
@@ -29,7 +29,7 @@ namespace PeachPDF.Tests.Svg
                 """;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 200, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;
         }
 
@@ -93,8 +93,8 @@ namespace PeachPDF.Tests.Svg
             Assert.Equal("A ", first.Text);
             Assert.Equal("B", second.Text);
 
-            // second.Point.X = 10 (text x) + measured("A ") + wordSpacing(15).
-            Assert.True(second.Point.X > first.Point.X + first.Size.Width + 10);
+            // second.PaintPoint.X = 10 (text x) + measured("A ") + wordSpacing(15).
+            Assert.True(second.PaintPoint.X > first.PaintPoint.X + first.Size.Width + 10);
         }
 
         [Fact]
@@ -118,7 +118,7 @@ namespace PeachPDF.Tests.Svg
 
             // "CD"'s X must reflect the space's own width plus the extra word-spacing gap after it -
             // not just abut the space as it would if the gap were silently dropped.
-            Assert.True(cd.Point.X > space.Point.X + space.Size.Width + 5);
+            Assert.True(cd.PaintPoint.X > space.PaintPoint.X + space.Size.Width + 5);
         }
 
         [Fact]

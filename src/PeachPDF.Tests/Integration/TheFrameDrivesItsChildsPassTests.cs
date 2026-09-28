@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
@@ -53,7 +53,7 @@ namespace PeachPDF.Tests.Integration
 
             internal List<PassEntry> Entries { get; } = [];
 
-            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
+            protected override ValueTask PerformLayoutImp(Canvas g, CssBox frame, bool framePlacesChild)
             {
                 Entries.Add(new PassEntry(frame, framePlacesChild, ParentBox?.Location.Y ?? double.NaN));
                 return base.PerformLayoutImp(g, frame, framePlacesChild);
@@ -68,7 +68,7 @@ namespace PeachPDF.Tests.Integration
                 Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
             }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>
+            protected override ValueTask PerformLayoutImp(Canvas g, CssBox frame, bool framePlacesChild) =>
                 throw new InvalidOperationException("layout blew up");
         }
 

@@ -1,7 +1,6 @@
 using PeachDrawing.Text;
 using PeachDrawing.Text.Outlines;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
 using System;
@@ -58,7 +57,7 @@ namespace PeachPDF.Svg
         /// <param name="entryCount">How many palette entries there are: <c>--color0</c> up to one less.</param>
         /// <param name="foreground">The text colour.</param>
         /// <param name="adapter">The adapter that resolves the document's fonts and images.</param>
-        internal static SvgDocument? Build(SvgGlyph svg, Func<int, RColor?> palette, int entryCount, RColor foreground, RAdapter adapter)
+        internal static SvgDocument? Build(SvgGlyph svg, Func<int, PaintColor?> palette, int entryCount, PaintColor foreground, RenderContext adapter)
         {
             try
             {
@@ -124,7 +123,7 @@ namespace PeachPDF.Svg
         /// on: the least canvas, grown in each direction to hold the artwork (with a hair of margin for anti-aliasing) and no further from the
         /// origin than <see cref="MaxCanvasReachEms"/>.
         /// </summary>
-        internal static RRect CanvasFor(RRect? ink, int unitsPerEm)
+        internal static Rect CanvasFor(Rect? ink, int unitsPerEm)
         {
             double left = -CanvasLeftEms * unitsPerEm, top = -CanvasTopEms * unitsPerEm;
             double right = (CanvasWidthEms - CanvasLeftEms) * unitsPerEm, bottom = (CanvasHeightEms - CanvasTopEms) * unitsPerEm;
@@ -139,7 +138,7 @@ namespace PeachPDF.Svg
                 bottom = Math.Max(bottom, Math.Min(box.Y + box.Height + margin, reach));
             }
 
-            return new RRect(left, top, right - left, bottom - top);
+            return new Rect(left, top, right - left, bottom - top);
         }
 
         /// <summary>
@@ -327,7 +326,7 @@ namespace PeachPDF.Svg
             return size;
         }
 
-        private static void DefinePaletteColours(XElement root, Func<int, RColor?> palette, int entryCount)
+        private static void DefinePaletteColours(XElement root, Func<int, PaintColor?> palette, int entryCount)
         {
             // Only the entries the document mentions: the cascade copies its custom properties for every element, and a palette can have
             // tens of thousands of entries.

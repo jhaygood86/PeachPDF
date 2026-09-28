@@ -1,7 +1,6 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Raster;
+using PeachDrawing.Abstractions;
+using PeachDrawing;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
@@ -10,7 +9,7 @@ namespace PeachPDF.Tests.Svg
 {
     /// <summary>
     /// <c>feImage</c> and the <c>FillPaint</c>/<c>StrokePaint</c> inputs of a raster SVG filter, drawn end to end: real markup is built
-    /// into a scene graph, painted by <see cref="SvgRenderer"/> into a <see cref="RasterGraphics"/> host, and the pixels read back.
+    /// into a scene graph, painted by <see cref="SvgRenderer"/> into a <see cref="RasterCanvas"/> host, and the pixels read back.
     /// </summary>
     public class SvgFilterInputsTests
     {
@@ -23,15 +22,15 @@ namespace PeachPDF.Tests.Svg
             return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter);
         }
 
-        private static RasterGraphics Render(string body)
+        private static RasterCanvas Render(string body)
         {
             var document = Build(body);
-            var host = new RasterGraphics(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
-            SvgRenderer.RenderInto(host, document, new RRect(0, 0, 100, 100));
+            var host = new RasterCanvas(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+            SvgRenderer.RenderInto(host, document, new Rect(0, 0, 100, 100));
             return host;
         }
 
-        private static byte[] Pixel(RasterGraphics g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
+        private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 
         // The element sits at 20..60; the default filter region is -10%..+120% of that, 16..64.
         private static string Doc(string filter, string elementAttributes = "", string extras = "") =>
@@ -197,9 +196,9 @@ namespace PeachPDF.Tests.Svg
             var markup = $"""<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 50 50"><defs>{filter}</defs><rect x="5" y="5" width="15" height="40" fill="rgb(0,255,0)"/><rect x="10" y="10" width="20" height="20" filter="url(#f)"/></svg>""";
             var root = XDocument.Parse(markup).Root!;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter);
-            var host = new RasterGraphics(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+            var host = new RasterCanvas(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
 
-            SvgRenderer.RenderInto(host, document, new RRect(0, 0, 100, 100));
+            SvgRenderer.RenderInto(host, document, new Rect(0, 0, 100, 100));
 
             // The bar covers x 10..40 in device units; seen 20 device units (10 user units) to the right, at 30..60.
             Assert.Equal([0, 255, 0, 255], Pixel(host, 50, 45));
@@ -223,9 +222,9 @@ namespace PeachPDF.Tests.Svg
                 """;
             var root = XDocument.Parse(markup).Root!;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter);
-            var host = new RasterGraphics(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+            var host = new RasterCanvas(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
 
-            SvgRenderer.RenderInto(host, document, new RRect(0, 0, 100, 100));
+            SvgRenderer.RenderInto(host, document, new Rect(0, 0, 100, 100));
 
             // User x 22 sees x 12 (the bar); user x 32 sees x 22 (A's block, which only exists as A's filtered output).
             Assert.Equal([0, 255, 0, 255], Pixel(host, 44, 50));
@@ -251,9 +250,9 @@ namespace PeachPDF.Tests.Svg
                 """;
             var root = XDocument.Parse(markup).Root!;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, null, "print"), Adapter);
-            var host = new RasterGraphics(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+            var host = new RasterCanvas(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
 
-            SvgRenderer.RenderInto(host, document, new RRect(0, 0, 100, 100));
+            SvgRenderer.RenderInto(host, document, new Rect(0, 0, 100, 100));
 
             // User x 47 sees x 52, outside the viewport: empty, so the flood survives. User x 44 sees x 49: painted, so it is cut away.
             Assert.Equal([255, 0, 0, 255], Pixel(host, 94, 30));
@@ -264,7 +263,7 @@ namespace PeachPDF.Tests.Svg
         {
             public int Calls { get; private set; }
 
-            public bool Paint(RGraphics g)
+            public bool Paint(Canvas g)
             {
                 Calls++;
                 return true;
@@ -284,8 +283,8 @@ namespace PeachPDF.Tests.Svg
             {
                 foreach (var document in new[] { other, bound })
                 {
-                    var host = new RasterGraphics(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
-                    SvgRenderer.RenderInto(host, document, new RRect(0, 0, 100, 100));
+                    var host = new RasterCanvas(Adapter, new RasterSurface(100, 100, 0, 0, 1, 1), 1);
+                    SvgRenderer.RenderInto(host, document, new Rect(0, 0, 100, 100));
                 }
             }
             finally

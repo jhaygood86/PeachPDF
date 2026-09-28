@@ -1,6 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using System.Collections.Generic;
@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.Html.Core
                 MarginTop = BaseMargin,
                 MarginRight = BaseMargin,
                 MarginBottom = BaseMargin,
-                PageSize = new RSize(SheetW - 2 * BaseMargin, SheetH - 2 * BaseMargin),
+                PageSize = new Size(SheetW - 2 * BaseMargin, SheetH - 2 * BaseMargin),
                 PageRules = rules,
                 // PageRuleResolver.ResolvePageSize silently falls back to the base size when this is
                 // null (it needs an em/rem basis for a %/em/ex `size`, even though every fixture here

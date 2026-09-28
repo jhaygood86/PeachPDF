@@ -1,10 +1,10 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Adapters
 {
     /// <summary>
-    /// <c>RAdapter.GetPen(RColor)</c> hands back a pen cached per color, so two unrelated strokes in the
+    /// <c>RenderContext.GetPen(PaintColor)</c> hands back a pen cached per color, so two unrelated strokes in the
     /// same color get the same object. The cache is an allocation optimization, not a state carrier -
     /// these pin that it behaves like one.
     /// </summary>
@@ -17,8 +17,8 @@ namespace PeachPDF.Tests.Adapters
             var g = new TestRecordingGraphics();
 
             // Sanity for the tests below: without a shared instance there would be nothing to leak.
-            Assert.Same(adapter.GetPen(RColor.FromArgb(1, 2, 3)), adapter.GetPen(RColor.FromArgb(1, 2, 3)));
-            Assert.Same(g.GetPen(RColor.FromArgb(1, 2, 3)), g.GetPen(RColor.FromArgb(1, 2, 3)));
+            Assert.Same(adapter.GetPen(PaintColor.FromArgb(1, 2, 3)), adapter.GetPen(PaintColor.FromArgb(1, 2, 3)));
+            Assert.Same(g.GetPen(PaintColor.FromArgb(1, 2, 3)), g.GetPen(PaintColor.FromArgb(1, 2, 3)));
         }
 
         [Fact]
@@ -29,19 +29,19 @@ namespace PeachPDF.Tests.Adapters
             // its width - a list marker's ring, a form field's separator - would inherit both and paint
             // a row of dots instead of a line.
             var g = new TestRecordingGraphics();
-            var color = RColor.FromArgb(51, 51, 51);
+            var color = PaintColor.FromArgb(51, 51, 51);
 
-            var dotted = (TestPen)g.GetPen(color);
+            var dotted = g.GetPen(color);
             dotted.Width = 8;
-            dotted.LineCap = RLineCap.Round;
+            dotted.LineCap = LineCap.Round;
             dotted.SetDashPattern([0, 16], 0);
 
-            var reused = (TestPen)g.GetPen(color);
+            var reused = g.GetPen(color);
 
             Assert.Same(dotted, reused);
-            Assert.Equal(RLineCap.Butt, reused.RecordedLineCap);
-            Assert.Equal(RDashStyle.Solid, reused.RecordedDashStyle);
-            Assert.Null(reused.RecordedDashPattern);
+            Assert.Equal(LineCap.Butt, reused.LineCap);
+            Assert.Equal(DashStyle.Solid, reused.DashStyle);
+            Assert.Empty(reused.DashPattern);
             Assert.Equal(1, reused.Width);
         }
 
@@ -51,16 +51,16 @@ namespace PeachPDF.Tests.Adapters
             // The reset happens on retrieval, not on use - so a caller that configures a pen and then
             // strokes with it keeps everything it set.
             var g = new TestRecordingGraphics();
-            var pen = (TestPen)g.GetPen(RColor.FromArgb(9, 9, 9));
+            var pen = g.GetPen(PaintColor.FromArgb(9, 9, 9));
 
             pen.Width = 4;
-            pen.LineCap = RLineCap.Round;
+            pen.LineCap = LineCap.Round;
             pen.SetDashPattern([0, 8], 0);
 
             Assert.Equal(4, pen.Width);
-            Assert.Equal(RLineCap.Round, pen.RecordedLineCap);
-            Assert.NotNull(pen.RecordedDashPattern);
-            Assert.Equal([0d, 8d], pen.RecordedDashPattern!);
+            Assert.Equal(LineCap.Round, pen.LineCap);
+            Assert.NotEmpty(pen.DashPattern);
+            Assert.Equal([0d, 8d], pen.DashPattern);
         }
     }
 }

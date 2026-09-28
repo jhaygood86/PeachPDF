@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -119,8 +119,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Underline_ThickerStrokeWidensTheInkGapUpToTheBrowserCompatibleCap()
         {
-            static System.Collections.Generic.IReadOnlyList<RInkSpan> Crossing(InkAwareRecordingGraphics.InkQuery query) =>
-                [new RInkSpan(query.BaselineOrigin.X + 40, query.BaselineOrigin.X + 50)];
+            static System.Collections.Generic.IReadOnlyList<InkSpan> Crossing(InkAwareRecordingGraphics.InkQuery query) =>
+                [new InkSpan(query.BaselineOrigin.X + 40, query.BaselineOrigin.X + 50)];
 
             const string Text = "llllllllllllllllllll";
 
@@ -155,7 +155,7 @@ namespace PeachPDF.Tests.Integration
             // What is asserted is the wiring: the overline asks about a band at its own height, and the
             // crossing it gets back actually cuts it.
             var (lines, g) = await DecorationAsync("overline", "lllllll", skipInk: "all",
-                scriptedInk: q => [new RInkSpan(q.BaselineOrigin.X + 12, q.BaselineOrigin.X + 18)]);
+                scriptedInk: q => [new InkSpan(q.BaselineOrigin.X + 12, q.BaselineOrigin.X + 18)]);
 
             var query = Assert.Single(g.InkQueries);
             var overlineY = lines[0].Y1;
@@ -173,7 +173,7 @@ namespace PeachPDF.Tests.Integration
             // The two lines cross different parts of the same glyphs, so each must be measured against
             // its own band - one shared subtraction would give both the same gaps.
             var (lines, g) = await DecorationAsync("underline overline", "lllllll", skipInk: "all",
-                scriptedInk: q => [new RInkSpan(q.BaselineOrigin.X + 12, q.BaselineOrigin.X + 18)]);
+                scriptedInk: q => [new InkSpan(q.BaselineOrigin.X + 12, q.BaselineOrigin.X + 18)]);
 
             Assert.Equal(2, g.InkQueries.Count);
             Assert.NotEqual(
@@ -361,7 +361,7 @@ namespace PeachPDF.Tests.Integration
 
             using var g = new InkAwareRecordingGraphics(Adapter(container))
             {
-                ScriptedInk = q => [new RInkSpan(q.BaselineOrigin.X + 5, q.BaselineOrigin.X + 15)]
+                ScriptedInk = q => [new InkSpan(q.BaselineOrigin.X + 5, q.BaselineOrigin.X + 15)]
             };
             FragmentPaintHarness.PaintBox(container, d, g);
 
@@ -390,7 +390,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(System.Collections.Generic.List<TestRecordingGraphics.DrawLineCall> Lines, InkAwareRecordingGraphics Graphics)>
             DecorationAsync(string decoration, string text, string? skipInk, string? ancestorStyle = null,
-                System.Func<InkAwareRecordingGraphics.InkQuery, System.Collections.Generic.IReadOnlyList<RInkSpan>?>? scriptedInk = null,
+                System.Func<InkAwareRecordingGraphics.InkQuery, System.Collections.Generic.IReadOnlyList<InkSpan>?>? scriptedInk = null,
                 string? thickness = null)
         {
             var skip = skipInk is null ? "" : $"; text-decoration-skip-ink:{skipInk}";

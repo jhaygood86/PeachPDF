@@ -174,7 +174,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
         /// has an alpha value other than 1, it is ignored. Use property Opacity to get or set the
         /// opacity of an annotation.
         /// </summary>
-        public XColor Color
+        public XColor PaintColor
         {
             get
             {

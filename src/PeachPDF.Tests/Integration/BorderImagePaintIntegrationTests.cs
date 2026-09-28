@@ -1,6 +1,5 @@
 ﻿using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -16,7 +15,7 @@ namespace PeachPDF.Tests.Integration
     /// 9-slice algorithm itself (<c>BorderImageDrawHandler</c>), <c>border-image-slice</c>'s <c>fill</c>
     /// keyword, <c>-outset</c>, <c>-repeat</c>, and its precedence over the ordinary <c>border-style</c>
     /// stroke. Per this repo's testing convention, painting changes need the actual sequence/geometry of
-    /// <c>RGraphics</c> calls asserted, not just that painting completes - a real 4x4 raster image is
+    /// <c>Canvas</c> calls asserted, not just that painting completes - a real 4x4 raster image is
     /// decoded by the production adapter (so its intrinsic size is real) and painted through a recording
     /// graphics, and the recorded destination rectangles are asserted against the expected 9-slice geometry.
     /// </summary>
@@ -46,7 +45,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// <see cref="TestRecordingGraphics"/>'s own <see cref="RGraphics.CreateTile"/> always returns
+        /// <see cref="TestRecordingGraphics"/>'s own <see cref="Canvas.CreateTile"/> always returns
         /// null (no real page/document context) - correct for every other consumer's own tests, but a
         /// gradient/SVG <c>border-image-source</c> has no natural size of its own and is rendered into
         /// exactly that kind of tile (<c>BorderImageDrawHandler.ResolveSourceImage</c>), so exercising
@@ -54,7 +53,7 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         private sealed class TileCapableGraphics : TestRecordingGraphics
         {
-            public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) =>
+            public override (Canvas Graphics, Image Image)? CreateTile(double width, double height) =>
                 (new TestRecordingGraphics(), new TestImage(width, height));
         }
 
@@ -93,7 +92,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(10, border, 1);
 
             // The border box: content 100x60 + 10pt border all round = 120x80.
-            var borderBox = new RRect(0, 0, 120, 80);
+            var borderBox = new Rect(0, 0, 120, 80);
 
             var topLeftCorner = g.DrawImageCalls[0].DestRect;
             Assert.Equal(borderBox.Left, topLeftCorner.X, 1);
@@ -126,7 +125,7 @@ namespace PeachPDF.Tests.Integration
             var (_, g) = await PaintAsync(
                 $"border-image-source:url('{Png4X4}');border-image-slice:1;border-image-width:10pt");
 
-            static void AssertSrc(RRect? src, double x, double y, double w, double h)
+            static void AssertSrc(Rect? src, double x, double y, double w, double h)
             {
                 Assert.NotNull(src);
                 Assert.Equal(x, src!.Value.X, 3);
@@ -265,7 +264,7 @@ namespace PeachPDF.Tests.Integration
                 $"border-image-source:url('{Png4X4}');border-image-slice:1 fill;border-image-width:10pt;border-image-repeat:round",
                 width: 9, height: 13);
 
-            var middleSrc = new RRect(1, 1, 2, 2);
+            var middleSrc = new Rect(1, 1, 2, 2);
             var middleTiles = g.DrawImageCalls.Where(call => call.SrcRect == middleSrc).ToList();
 
             Assert.Equal(5 * 7, middleTiles.Count);
@@ -305,7 +304,7 @@ namespace PeachPDF.Tests.Integration
                 $"border-image-source:url('{Png4X4}');border-image-slice:1 fill;border-image-width:10pt;border-image-repeat:space",
                 width: 7, height: 9);
 
-            var middleSrc = new RRect(1, 1, 2, 2);
+            var middleSrc = new Rect(1, 1, 2, 2);
             var middleTiles = g.DrawImageCalls.Where(call => call.SrcRect == middleSrc).ToList();
 
             const int countX = 3;
@@ -358,7 +357,7 @@ namespace PeachPDF.Tests.Integration
                 $"border-image-source:url('{Png4X4}');border-image-slice:1 fill;border-image-width:10pt;border-image-repeat:space",
                 width: 1, height: 1);
 
-            var middleSrc = new RRect(1, 1, 2, 2);
+            var middleSrc = new Rect(1, 1, 2, 2);
             var middleTiles = g.DrawImageCalls.Where(call => call.SrcRect == middleSrc).ToList();
 
             var middleTile = Assert.Single(middleTiles);
@@ -379,7 +378,7 @@ namespace PeachPDF.Tests.Integration
         public async Task GradientSource_RendersIntoATileAndPaintsIt()
         {
             // A linear-gradient border-image-source has no natural size of its own - resolved via
-            // RGraphics.CreateTile instead of a raster image's own Width/Height (see
+            // Canvas.CreateTile instead of a raster image's own Width/Height (see
             // BorderImageDrawHandler.ResolveSourceImage's own remarks).
             var (_, g) = await PaintAsync(
                 "border-image-source:linear-gradient(red,blue);border-image-slice:1;border-image-width:10pt",
@@ -453,7 +452,7 @@ namespace PeachPDF.Tests.Integration
             // ...so a 50% slice is 15pt of it, and the top-left corner takes that much.
             var corner = g.DrawImageCalls[0].SrcRect;
             Assert.NotNull(corner);
-            Assert.Equal(new RRect(0, 0, 15, 15), corner!.Value);
+            Assert.Equal(new Rect(0, 0, 15, 15), corner!.Value);
         }
 
         [Fact]

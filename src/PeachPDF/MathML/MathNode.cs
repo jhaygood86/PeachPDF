@@ -8,6 +8,7 @@
 //
 #endregion
 
+using PeachDrawing.Abstractions;
 using System.Collections.Generic;
 
 namespace PeachPDF.MathML
@@ -26,7 +27,7 @@ namespace PeachPDF.MathML
 
         /// <summary>This node's own <c>mathcolor</c>, or the inherited value if unset - resolved eagerly
         /// so <c>MathRenderer</c> never needs to walk back up the tree for it.</summary>
-        public required Html.Adapters.Entities.RColor Color { get; init; }
+        public required PaintColor PaintColor { get; init; }
 
         /// <summary>This node's base font size in points, <b>before</b> any <c>scriptlevel</c>-driven
         /// scaling - the CSS-cascaded <c>font-size</c> as further overridden by a <c>mathsize</c> chain

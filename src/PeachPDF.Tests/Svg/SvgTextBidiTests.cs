@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -27,7 +27,7 @@ namespace PeachPDF.Tests.Svg
                 """;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 200, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;
         }
 
@@ -187,7 +187,7 @@ namespace PeachPDF.Tests.Svg
             // "BB" (logically last, small font) is visually first; "AA" (logically first, large font)
             // immediately follows it with no gap and no overlap.
             var bbAdvance = g.MeasureString("BB", bb.Font).Width;
-            Assert.Equal(bb.Point.X + bbAdvance, aa.Point.X, 1);
+            Assert.Equal(bb.PaintPoint.X + bbAdvance, aa.PaintPoint.X, 1);
         }
     }
 }

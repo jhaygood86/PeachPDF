@@ -540,7 +540,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(concrete.HasValue);
             Assert.Equal("0", concrete.Value);
             //Assert.Equal(Length.Zero, concrete.Width);
-            //Assert.Equal(Color.Transparent, concrete.Color);
+            //Assert.Equal(PaintColor.Transparent, concrete.Color);
             //Assert.Equal(LineStyle.None, concrete.Style);
         }
 
@@ -557,7 +557,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(concrete.HasValue);
             Assert.Equal("dotted", concrete.Value);
             //Assert.Equal(Length.Medium, concrete.Width);
-            //Assert.Equal(Color.Transparent, concrete.Color);
+            //Assert.Equal(PaintColor.Transparent, concrete.Color);
             //Assert.Equal(LineStyle.Dotted, concrete.Style);
         }
 
@@ -574,7 +574,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(concrete.HasValue);
             Assert.Equal("2px rgb(255, 0, 0)", concrete.Value);
             //Assert.Equal(new Length(2f, Length.Unit.Px), concrete.Width);
-            //Assert.Equal(Color.Red, concrete.Color);
+            //Assert.Equal(PaintColor.Red, concrete.Color);
             //Assert.Equal(LineStyle.None, concrete.Style);
         }
 
@@ -591,7 +591,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(concrete.HasValue);
             Assert.Equal("rgb(255, 100, 0)", concrete.Value);
             //Assert.Equal(Length.Medium, concrete.Width);
-            //Assert.Equal(Color.FromRgb(255, 100, 0), concrete.Color);
+            //Assert.Equal(PaintColor.FromRgb(255, 100, 0), concrete.Color);
             //Assert.Equal(LineStyle.None, concrete.Style);
         }
 
@@ -608,7 +608,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(concrete.HasValue);
             //Assert.Equal("groove rgb(255, 100, 0)", concrete.Value.CssText);
             //Assert.Equal(Length.Medium, concrete.Width);
-            //Assert.Equal(Color.FromRgb(255, 100, 0), concrete.Color);
+            //Assert.Equal(PaintColor.FromRgb(255, 100, 0), concrete.Color);
             //Assert.Equal(LineStyle.Groove, concrete.Style);
         }
 
@@ -625,7 +625,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(concrete.HasValue);
             Assert.Equal("3em inset rgb(0, 128, 0)", concrete.Value);
             //Assert.Equal(new Length(3f, Length.Unit.Em), concrete.Width);
-            //Assert.Equal(Color.Green, concrete.Color);
+            //Assert.Equal(PaintColor.Green, concrete.Color);
             //Assert.Equal(LineStyle.Inset, concrete.Style);
         }
 
@@ -642,7 +642,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(concrete.HasValue);
             //Assert.Equal("red solid 1px", concrete.Value.CssText);
             //Assert.Equal(new Length(1f, Length.Unit.Px), concrete.Width);
-            //Assert.Equal(Color.Red, concrete.Color);
+            //Assert.Equal(PaintColor.Red, concrete.Color);
             //Assert.Equal(LineStyle.Solid, concrete.Style);
         }
 
@@ -659,7 +659,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(concrete.HasValue);
             Assert.Equal("0.5px double rgb(0, 0, 0)", concrete.Value);
             //Assert.Equal(new Length(0.5f, Length.Unit.Px), concrete.Width);
-            //Assert.Equal(Color.Black, concrete.Color);
+            //Assert.Equal(PaintColor.Black, concrete.Color);
             //Assert.Equal(LineStyle.Double, concrete.Style);
         }
 
@@ -676,7 +676,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(concrete.HasValue);
             Assert.Equal("1px outset currentColor", concrete.Value);
             //Assert.Equal(new Length(1f, Length.Unit.Px), concrete.Width);
-            //Assert.Equal(Color.Transparent, concrete.Color);
+            //Assert.Equal(PaintColor.Transparent, concrete.Color);
             //Assert.Equal(LineStyle.Outset, concrete.Style);
         }
 
@@ -693,7 +693,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(concrete.HasValue);
             Assert.Equal("1px outset", concrete.Value);
             //Assert.Equal(new Length(1f, Length.Unit.Px), concrete.Width);
-            //Assert.Equal(Color.Transparent, concrete.Color);
+            //Assert.Equal(PaintColor.Transparent, concrete.Color);
             //Assert.Equal(LineStyle.Outset, concrete.Style);
         }
     }

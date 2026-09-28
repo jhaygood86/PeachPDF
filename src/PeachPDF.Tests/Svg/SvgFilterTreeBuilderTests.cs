@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Svg;
 using System.Linq;
 using System.Xml.Linq;
@@ -256,7 +256,7 @@ namespace PeachPDF.Tests.Svg
         [InlineData("color", "Color")]
         [InlineData("luminosity", "Luminosity")]
         [InlineData("not-a-real-mode", "Normal")]
-        // RBlendMode is internal, and a public [Theory] method can't take one as a parameter (CS0051) -
+        // PaintBlendMode is internal, and a public [Theory] method can't take one as a parameter (CS0051) -
         // InlineData carries the expected mode's own name instead, matched via ToString().
         public void FeBlend_ParsesModeToMatchingRBlendMode(string mode, string expectedModeName)
         {

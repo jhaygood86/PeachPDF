@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 
 namespace PeachPDF.Html.Core.Entities
 {
@@ -7,7 +7,7 @@ namespace PeachPDF.Html.Core.Entities
         public double FromAngleRad { get; init; } = 0.0;
         public double CenterX { get; init; } = 0.5;
         public double CenterY { get; init; } = 0.5;
-        public required (RColor? Color, double? PositionRad, bool IsHint)[] Stops { get; init; }
+        public required (PaintColor? PaintColor, double? PositionRad, bool IsHint)[] Stops { get; init; }
         public bool IsRepeating { get; init; }
         public GradientColorSpace ColorSpace { get; init; } = GradientColorSpace.Srgb;
         public HueInterpolationMethod HueMethod { get; init; } = HueInterpolationMethod.Shorter;

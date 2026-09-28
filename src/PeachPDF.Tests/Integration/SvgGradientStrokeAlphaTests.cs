@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for issue #134: a brush-backed stroke pen (SVG stroke="url(#gradient)")
-    /// carries no meaningful pen.Color - its constructor leaves Color at the default transparent
+    /// carries no meaningful pen.Color - its constructor leaves PaintColor at the default transparent
     /// black (alpha 0). RealizePen used pen.Color.A to drive the stroke's constant alpha /CA, so a
     /// gradient stroke emitted right after any opaque solid stroke got /CA 0 and became invisible.
     /// </summary>

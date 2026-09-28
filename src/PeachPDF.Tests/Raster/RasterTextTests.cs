@@ -1,16 +1,15 @@
 ﻿using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Raster;
+using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Text;
 
 namespace PeachPDF.Tests.Raster
 {
     /// <summary>
-    /// Text drawn through <see cref="RasterGraphics"/>. Uses a bundled font on a private adapter so nothing depends on
+    /// Text drawn through <see cref="RasterCanvas"/>. Uses a bundled font on a private adapter so nothing depends on
     /// what the machine has installed, and a font with a single Regular face so bold and italic are the synthesized
     /// forms - the ones the PDF renderer draws with a stroke and a shear.
     /// </summary>
@@ -18,7 +17,7 @@ namespace PeachPDF.Tests.Raster
     {
         private const string Family = "RasterTextTestSans";
 
-        private sealed record Fixture(PdfSharpAdapter Adapter, RasterGraphics Graphics, Func<RFontStyle, RFont> Font);
+        private sealed record Fixture(PdfSharpAdapter Adapter, RasterCanvas Graphics, Func<PaintFontStyle, Font> Font);
 
         private static async Task<Fixture> NewFixture(int width = 300, int height = 80)
         {
@@ -26,13 +25,13 @@ namespace PeachPDF.Tests.Raster
             await BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, Family);
 
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            var graphics = new RasterGraphics(adapter, surface, 1);
+            var graphics = new RasterCanvas(adapter, surface, 1);
             return new Fixture(adapter, graphics, style => adapter.GetFont(Family, 24, style)!);
         }
 
-        private static RColor Black => RColor.FromArgb(255, 0, 0, 0);
+        private static PaintColor Black => PaintColor.FromArgb(255, 0, 0, 0);
 
-        private static (int MinX, int MinY, int MaxX, int MaxY, int Ink) InkBounds(RasterGraphics g)
+        private static (int MinX, int MinY, int MaxX, int MaxY, int Ink) InkBounds(RasterCanvas g)
         {
             int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1, ink = 0;
             for (var y = 0; y < g.Surface.Height; y++)
@@ -54,17 +53,17 @@ namespace PeachPDF.Tests.Raster
             return (minX, minY, maxX, maxY, ink);
         }
 
-        private static void Draw(Fixture f, string text, RFont font, double x = 10, double y = 10, double letterSpacing = 0, RColor? color = null)
+        private static void Draw(Fixture f, string text, Font font, double x = 10, double y = 10, double letterSpacing = 0, PaintColor? color = null)
         {
             var size = f.Graphics.MeasureString(text, font);
-            f.Graphics.DrawString(text, font, color ?? Black, new RPoint(x, y), size, letterSpacing);
+            f.Graphics.DrawString(text, font, color ?? Black, new PaintPoint(x, y), size, letterSpacing);
         }
 
         [Fact]
         public async Task DrawString_PutsInkInsideTheMeasuredBoxOfTheRun()
         {
             var f = await NewFixture();
-            var font = f.Font(RFontStyle.Regular);
+            var font = f.Font(PaintFontStyle.Regular);
             var width = f.Graphics.MeasureString("Hello", font).Width;
 
             Draw(f, "Hello", font);
@@ -81,12 +80,12 @@ namespace PeachPDF.Tests.Raster
         public async Task BaselineIsWhereThePdfRendererPutsIt()
         {
             var f = await NewFixture();
-            var font = f.Font(RFontStyle.Regular);
+            var font = f.Font(PaintFontStyle.Regular);
             var real = ((FontAdapter)font).Font;
 
             Draw(f, "HHH", font);
 
-            // A flat-bottomed capital sits on the baseline: y + cell ascent (in points), not the rounded RFont.Ascent.
+            // A flat-bottomed capital sits on the baseline: y + cell ascent (in points), not the rounded Font.Ascent.
             var baseline = 10 + real.GetHeight() * real.CellAscent / real.CellSpace;
             var (_, _, _, maxY, _) = InkBounds(f.Graphics);
             Assert.InRange(maxY + 1, baseline - 1, baseline + 1);
@@ -97,7 +96,7 @@ namespace PeachPDF.Tests.Raster
         {
             var f = await NewFixture();
 
-            Draw(f, "MMM", f.Font(RFontStyle.Regular), color: RColor.FromArgb(255, 200, 0, 0));
+            Draw(f, "MMM", f.Font(PaintFontStyle.Regular), color: PaintColor.FromArgb(255, 200, 0, 0));
 
             var inked = Enumerable.Range(0, 300).SelectMany(x => Enumerable.Range(0, 80).Select(y => (x, y)))
                 .Where(p => f.Graphics.Surface.Row(p.y)[p.x * 4 + 3] == 255).ToList();
@@ -113,8 +112,8 @@ namespace PeachPDF.Tests.Raster
             var regular = await NewFixture();
             var bold = await NewFixture();
 
-            Draw(regular, "Bold", regular.Font(RFontStyle.Regular));
-            Draw(bold, "Bold", bold.Font(RFontStyle.Bold));
+            Draw(regular, "Bold", regular.Font(PaintFontStyle.Regular));
+            Draw(bold, "Bold", bold.Font(PaintFontStyle.Bold));
 
             Assert.True(InkBounds(bold.Graphics).Ink > InkBounds(regular.Graphics).Ink * 1.05);
         }
@@ -125,10 +124,10 @@ namespace PeachPDF.Tests.Raster
             var upright = await NewFixture();
             var italic = await NewFixture();
 
-            Draw(upright, "IIII", upright.Font(RFontStyle.Regular));
-            Draw(italic, "IIII", italic.Font(RFontStyle.Italic));
+            Draw(upright, "IIII", upright.Font(PaintFontStyle.Regular));
+            Draw(italic, "IIII", italic.Font(PaintFontStyle.Italic));
 
-            double TopCentre(RasterGraphics g)
+            double TopCentre(RasterCanvas g)
             {
                 var (_, minY, _, maxY, _) = InkBounds(g);
                 var y = minY + 2;
@@ -136,7 +135,7 @@ namespace PeachPDF.Tests.Raster
                 return xs.Average();
             }
 
-            double BottomCentre(RasterGraphics g)
+            double BottomCentre(RasterCanvas g)
             {
                 var (_, _, _, maxY, _) = InkBounds(g);
                 var y = maxY - 2;
@@ -154,8 +153,8 @@ namespace PeachPDF.Tests.Raster
             var tight = await NewFixture();
             var loose = await NewFixture();
 
-            Draw(tight, "spacing", tight.Font(RFontStyle.Regular));
-            Draw(loose, "spacing", loose.Font(RFontStyle.Regular), letterSpacing: 5);
+            Draw(tight, "spacing", tight.Font(PaintFontStyle.Regular));
+            Draw(loose, "spacing", loose.Font(PaintFontStyle.Regular), letterSpacing: 5);
 
             Assert.True(InkBounds(loose.Graphics).MaxX >= InkBounds(tight.Graphics).MaxX + 25);
         }
@@ -165,7 +164,7 @@ namespace PeachPDF.Tests.Raster
         {
             var f = await NewFixture();
 
-            f.Graphics.DrawString("", f.Font(RFontStyle.Regular), Black, new RPoint(10, 10), new RSize(0, 0));
+            f.Graphics.DrawString("", f.Font(PaintFontStyle.Regular), Black, new PaintPoint(10, 10), new Size(0, 0));
 
             Assert.Equal(0, InkBounds(f.Graphics).Ink);
         }
@@ -174,7 +173,7 @@ namespace PeachPDF.Tests.Raster
         public async Task DrawGlyphs_PlacesEachGlyphAtItsOwnBaselineOrigin()
         {
             var f = await NewFixture();
-            var font = f.Font(RFontStyle.Regular);
+            var font = f.Font(PaintFontStyle.Regular);
             var index = font.GetGlyphIndex(new Rune('H'));
             Assert.True(index > 0);
 
@@ -193,22 +192,22 @@ namespace PeachPDF.Tests.Raster
         public async Task GetTextOutline_ReturnsAFillableVectorOfTheRun_OrNullWhenThereIsNoInk()
         {
             var f = await NewFixture();
-            var font = f.Font(RFontStyle.Regular);
+            var font = f.Font(PaintFontStyle.Regular);
 
-            var outline = f.Graphics.GetTextOutline("Vector", font, new RPoint(10, 40));
+            var outline = f.Graphics.GetTextOutline("Vector", font, new PaintPoint(10, 40));
             Assert.NotNull(outline);
 
             f.Graphics.DrawPath(f.Graphics.GetSolidBrush(Black), outline);
             Assert.True(InkBounds(f.Graphics).Ink > 100);
 
-            Assert.Null(f.Graphics.GetTextOutline("   ", font, new RPoint(10, 40)));
+            Assert.Null(f.Graphics.GetTextOutline("   ", font, new PaintPoint(10, 40)));
         }
 
         [Fact]
         public async Task Measurement_AgreesWithTheLayoutEngine()
         {
             var f = await NewFixture();
-            var font = f.Font(RFontStyle.Regular);
+            var font = f.Font(PaintFontStyle.Regular);
             var pdf = new PdfSharpCore.Drawing.XGraphicsMeasureProbe(font).Width("measure me");
 
             Assert.Equal(pdf, f.Graphics.MeasureString("measure me", font).Width, 6);
@@ -221,7 +220,7 @@ namespace PeachPDF.Tests.Raster
 namespace PeachPDF.PdfSharpCore.Drawing
 {
     /// <summary>Test-only: measures with the same routine <c>GraphicsAdapter</c> uses (an <c>XGraphics</c> measure context).</summary>
-    internal sealed class XGraphicsMeasureProbe(PeachPDF.Html.Adapters.RFont font)
+    internal sealed class XGraphicsMeasureProbe(PeachDrawing.Abstractions.Font font)
     {
         public double Width(string text)
         {

@@ -1,6 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -34,7 +33,7 @@ namespace PeachPDF.Tests.Adapters
             // One crossing, not two: a band through the open loop of a descender cuts both its walls,
             // but each glyph is reported as a single hulled range so the decoration breaks once around
             // the letter instead of leaving a wisp of underline stranded inside the loop. See
-            // GraphicsAdapter.MeasureInkCrossings and RGraphics.GetInkCrossings.
+            // GraphicsAdapter.MeasureInkCrossings and Canvas.GetInkCrossings.
             var only = Assert.Single(crossings);
             Assert.True(only.End > only.Start, "the crossing should be a real interval");
             Assert.True(only.Start >= -0.01 && only.End <= fixture.Advance("g") + 0.01,
@@ -224,9 +223,9 @@ namespace PeachPDF.Tests.Adapters
         {
             private readonly XGraphics _measure;
             private readonly GraphicsAdapter _graphics;
-            private readonly RFont _font;
+            private readonly Font _font;
 
-            private Fixture(XGraphics measure, GraphicsAdapter graphics, RFont font)
+            private Fixture(XGraphics measure, GraphicsAdapter graphics, Font font)
             {
                 _measure = measure;
                 _graphics = graphics;
@@ -241,7 +240,7 @@ namespace PeachPDF.Tests.Adapters
                 var measure = XGraphics.CreateMeasureContext(new XSize(595, 842), XGraphicsUnit.Point, XPageDirection.Downwards);
                 var graphics = new GraphicsAdapter(adapter, measure, 1.0);
 
-                var font = adapter.GetFont(family, 40, RFontStyle.Regular);
+                var font = adapter.GetFont(family, 40, PaintFontStyle.Regular);
                 Assert.NotNull(font);
 
                 return new Fixture(measure, graphics, font);
@@ -254,22 +253,22 @@ namespace PeachPDF.Tests.Adapters
             /// </summary>
             /// <remarks>
             /// The run's origin is the point <c>DrawString</c> paints from, not its baseline — that is
-            /// what <see cref="RGraphics.GetInkCrossings"/> takes, so that the adapter can place the
+            /// what <see cref="Canvas.GetInkCrossings"/> takes, so that the adapter can place the
             /// baseline from the font's own unrounded metrics. The band is still expressed relative to the
             /// baseline here, which is what makes "2 points under the baseline" readable; the rounded
-            /// <see cref="RFont.Ascent"/> used to locate it is within half a unit of the adapter's own
+            /// <see cref="Font.Ascent"/> used to locate it is within half a unit of the adapter's own
             /// figure, far finer than the 40pt fixtures below care about.
             /// <para>
             /// <paramref name="originY"/> moves the whole run down the page — a later line — and the band
             /// moves with it, so the band stays in the same place relative to this run's own baseline.
             /// </para>
             /// </remarks>
-            internal System.Collections.Generic.IReadOnlyList<RInkSpan>? Crossings(
+            internal System.Collections.Generic.IReadOnlyList<InkSpan>? Crossings(
                 string text, double below, double height, double originX = 0, double letterSpacing = 0,
                 double originY = 0)
             {
                 var top = originY + _font.Ascent + below;
-                return _graphics.GetInkCrossings(text, _font, new RPoint(originX, originY), top, top + height, letterSpacing);
+                return _graphics.GetInkCrossings(text, _font, new PaintPoint(originX, originY), top, top + height, letterSpacing);
             }
 
             /// <summary>How far the pen advances over <paramref name="text"/>, for bounding a crossing.</summary>

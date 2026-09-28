@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Svg
                 """;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 200, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;
         }
 

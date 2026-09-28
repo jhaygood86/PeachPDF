@@ -1,4 +1,4 @@
-﻿using PeachPDF.Html.Adapters.Entities;
+﻿using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
@@ -962,7 +962,7 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap("<p id='p'>hello</p>"));
             var p = LayoutHarness.FindById(root, "p")!;
 
-            container.RecordContinuationShell(p, 2, new RRect(0, 0, 100, 100));
+            container.RecordContinuationShell(p, 2, new Rect(0, 0, 100, 100));
 
             p.RecordEmittedNothingAt(0, root, 0);
             Assert.True(p.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));
@@ -999,7 +999,7 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap("<p id='p'>hello</p>"));
             var p = LayoutHarness.FindById(root, "p")!;
 
-            container.RecordFragmentDisplacement(p, 2, 10, new RRect(0, 0, 100, 100));
+            container.RecordFragmentDisplacement(p, 2, 10, new Rect(0, 0, 100, 100));
 
             p.RecordEmittedNothingAt(0, root, 0);
             Assert.True(p.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));

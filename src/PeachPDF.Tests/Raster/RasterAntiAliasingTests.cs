@@ -1,7 +1,6 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Raster;
+using PeachDrawing.Abstractions;
+using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Text.RegularExpressions;
 
@@ -9,27 +8,27 @@ namespace PeachPDF.Tests.Raster
 {
     /// <summary>
     /// <see cref="PdfGenerateConfig.RasterAntiAliasing"/> reaches <see cref="ScanlineRasterizer"/> through
-    /// <c>RAdapter.RasterAntiAliasing</c>: the same accumulated coverage is computed either way (see the
+    /// <c>RenderContext.RasterAntiAliasing</c>: the same accumulated coverage is computed either way (see the
     /// rasterizer's own tests), only its final quantization to an alpha byte differs. These tests exercise
-    /// that end to end through <see cref="RasterGraphics"/> - shape fills, clips and text alike - since that
+    /// that end to end through <see cref="RasterCanvas"/> - shape fills, clips and text alike - since that
     /// is the actual paint path a document's raster content goes through, not just the rasterizer in
     /// isolation.
     /// </summary>
     public class RasterAntiAliasingTests
     {
-        private static RasterGraphics NewGraphics(bool antiAlias, int width = 20, int height = 20)
+        private static RasterCanvas NewGraphics(bool antiAlias, int width = 20, int height = 20)
         {
             var adapter = new PdfSharpAdapter { RasterAntiAliasing = antiAlias };
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
-            return new RasterGraphics(adapter, surface, 1);
+            return new RasterCanvas(adapter, surface, 1);
         }
 
-        private static byte AlphaAt(RasterGraphics g, int x, int y) => g.Surface.Row(y)[x * 4 + 3];
+        private static byte AlphaAt(RasterCanvas g, int x, int y) => g.Surface.Row(y)[x * 4 + 3];
 
-        private static RBrush Solid(RGraphics g, byte a, byte r, byte green, byte b) =>
-            g.GetSolidBrush(RColor.FromArgb(a, r, green, b));
+        private static Brush Solid(Canvas g, byte a, byte r, byte green, byte b) =>
+            g.GetSolidBrush(PaintColor.FromArgb(a, r, green, b));
 
-        private static bool HasFractionalAlpha(RasterGraphics g)
+        private static bool HasFractionalAlpha(RasterCanvas g)
         {
             for (var y = 0; y < g.Surface.Height; y++)
             {
@@ -89,7 +88,7 @@ namespace PeachPDF.Tests.Raster
             var on = NewGraphics(antiAlias: true, width: 10, height: 10);
             var off = NewGraphics(antiAlias: false, width: 10, height: 10);
 
-            void ClipAndFill(RasterGraphics g)
+            void ClipAndFill(RasterCanvas g)
             {
                 var path = g.GetGraphicsPath();
                 path.Start(0, 0);
@@ -122,15 +121,15 @@ namespace PeachPDF.Tests.Raster
             var adapterOff = new PdfSharpAdapter { RasterAntiAliasing = false };
             await BundledFonts.RegisterFont(adapterOff, BundledFonts.Ttf, family);
 
-            var on = new RasterGraphics(adapterOn, new RasterSurface(200, 60, 0, 0, 1, 1), 1);
-            var off = new RasterGraphics(adapterOff, new RasterSurface(200, 60, 0, 0, 1, 1), 1);
+            var on = new RasterCanvas(adapterOn, new RasterSurface(200, 60, 0, 0, 1, 1), 1);
+            var off = new RasterCanvas(adapterOff, new RasterSurface(200, 60, 0, 0, 1, 1), 1);
 
-            var black = RColor.FromArgb(255, 0, 0, 0);
-            var fontOn = adapterOn.GetFont(family, 28, RFontStyle.Regular)!;
-            var fontOff = adapterOff.GetFont(family, 28, RFontStyle.Regular)!;
+            var black = PaintColor.FromArgb(255, 0, 0, 0);
+            var fontOn = adapterOn.GetFont(family, 28, PaintFontStyle.Regular)!;
+            var fontOff = adapterOff.GetFont(family, 28, PaintFontStyle.Regular)!;
 
-            on.DrawString("Sample", fontOn, black, new RPoint(10, 10), on.MeasureString("Sample", fontOn));
-            off.DrawString("Sample", fontOff, black, new RPoint(10, 10), off.MeasureString("Sample", fontOff));
+            on.DrawString("Sample", fontOn, black, new PaintPoint(10, 10), on.MeasureString("Sample", fontOn));
+            off.DrawString("Sample", fontOff, black, new PaintPoint(10, 10), off.MeasureString("Sample", fontOff));
 
             // Small glyph outlines almost always leave a smoothed (fractional-alpha) edge when anti-aliased;
             // turning the setting off is not a no-op for text either.
@@ -204,7 +203,7 @@ namespace PeachPDF.Tests.Raster
             Assert.Contains("/Subtype /Image", off.Replace("/Subtype/Image", "/Subtype /Image"));
         }
 
-        private static int CountInk(RasterGraphics g)
+        private static int CountInk(RasterCanvas g)
         {
             var ink = 0;
             for (var y = 0; y < g.Surface.Height; y++)

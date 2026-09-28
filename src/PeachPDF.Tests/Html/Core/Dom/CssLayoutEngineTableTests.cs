@@ -1,6 +1,6 @@
 ﻿using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -2970,7 +2970,7 @@ Assert.NotNull(tbody);
         public async Task TableCaption_TableHasOwnBorder_PaintDrawsBorderOnlyAtGridRect()
         {
             // Painting-level check, per this repo's own testing convention that a layout-geometry
-            // assertion alone isn't proof for anything touching the RGraphics adapter layer: confirms
+            // assertion alone isn't proof for anything touching the Canvas adapter layer: confirms
             // the actual paint calls draw the table's own border at the grid decoration box's rect, not
             // somewhere spanning the caption too (_tableBox's own border paint is suppressed - see
             // CssBox.SuppressOwnBorderPaint - so every border-shaped draw call in this log has to be the
@@ -3040,8 +3040,8 @@ Assert.NotNull(tbody);
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, table, g);
 
-            static bool IsOpaqueBlack(RColor c) => c.A == 255 && c is { R: 0, G: 0, B: 0 };
-            var shadowRects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().Where(r => IsOpaqueBlack(r.Color)).ToList();
+            static bool IsOpaqueBlack(PaintColor c) => c.A == 255 && c is { R: 0, G: 0, B: 0 };
+            var shadowRects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().Where(r => IsOpaqueBlack(r.PaintColor)).ToList();
             Assert.Single(shadowRects);
         }
 
@@ -3119,7 +3119,7 @@ Assert.NotNull(tbody);
             FragmentPaintHarness.PaintBox(container, table, g);
 
             var backgroundIndex = g.Log.FindIndex(c =>
-                c is TestRecordingGraphics.DrawRectCall r && r.Color is { R: 238, G: 238, B: 238, A: 255 });
+                c is TestRecordingGraphics.DrawRectCall r && r.PaintColor is { R: 238, G: 238, B: 238, A: 255 });
             var headerIndex = g.Log.FindIndex(c =>
                 c is TestRecordingGraphics.DrawStringCall s && s.Text.Contains("HeaderA"));
             var bodyIndex = g.Log.FindIndex(c =>

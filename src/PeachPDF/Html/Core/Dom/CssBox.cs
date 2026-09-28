@@ -14,8 +14,7 @@ using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Handlers;
@@ -62,7 +61,7 @@ namespace PeachPDF.Html.Core.Dom
         /// microscopically positive (e.g. ~1e-13) rather than exactly zero is floating-point noise, not
         /// real visible area - accumulated rounding across the several arithmetic steps a relocated
         /// box's Y goes through (layout, ScrollOffset translation, clip intersection) routinely lands a
-        /// hair off exact zero in either direction. <see cref="RRect.IsEmpty"/>'s strict <c>&lt;= 0</c>
+        /// hair off exact zero in either direction. <see cref="Rect.IsEmpty"/>'s strict <c>&lt;= 0</c>
         /// check only catches the exactly-zero-or-negative case; this epsilon (a millionth of a point -
         /// far below anything a page layout or PDF viewer could ever meaningfully distinguish, but many
         /// orders of magnitude above the observed rounding noise) is for the paint-time visibility culls
@@ -1456,7 +1455,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets the rectangles where this box should be painted
         /// </summary>
-        internal Dictionary<CssLineBox, RRect> Rectangles { get; } = [];
+        internal Dictionary<CssLineBox, Rect> Rectangles { get; } = [];
 
         /// <summary>
         /// Gets the BoxWords of text in the box
@@ -1474,7 +1473,7 @@ namespace PeachPDF.Html.Core.Dom
         /// (<c>CssLayoutEngine.EmptyInlineContainingBlockFor</c>, read by
         /// <see cref="DomUtils.InlineContainingBlockOf"/>).
         /// </summary>
-        internal RRect? EmptyInlineContainingBlock { get; set; }
+        internal Rect? EmptyInlineContainingBlock { get; set; }
 
         /// <summary>
         /// Gets or sets the first linebox where content of this box appear
@@ -1586,7 +1585,7 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see cref="LayoutBlockChild"/>); a child its frame's own loop reaches is entered there instead.
         /// The root has no frame above it, so it stands in for its own.
         /// </remarks>
-        public ValueTask PerformLayout(RGraphics g) => (ParentBox ?? this).LayoutBlockChild(g, this);
+        public ValueTask PerformLayout(Canvas g) => (ParentBox ?? this).LayoutBlockChild(g, this);
 
         /// <summary>
         /// Set this box in 
@@ -2335,7 +2334,7 @@ namespace PeachPDF.Html.Core.Dom
         /// which only ever changes <c>Text</c>), and <see cref="DerivedStyle.ActualFontForCodepoint"/>'s
         /// cache is keyed by the literal codepoint value, not the resolved face - reading a *different*
         /// character's codepoint post-mirror than was read at measurement time returns a different cache
-        /// entry, whose <see cref="RFont.Ascent"/>/<see cref="RFont.Height"/> were never populated (still
+        /// entry, whose <see cref="Font.Ascent"/>/<see cref="Font.Height"/> were never populated (still
         /// their uninitialized sentinel), corrupting the baseline alignment <c>FragmentPainter.Text.cs</c>
         /// derives from them - even though every codepoint in one per-codepoint fragment resolves to the
         /// same face by construction (<see cref="EmitPerCodepointFragments"/>), so which one is read does
@@ -2343,7 +2342,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="TextTransform"/> (itself always length-and-position-preserving), so it names the same
         /// representative character at measurement and at paint alike.
         /// </remarks>
-        internal static RFont ResolveWordFont(CssRect word, CssBox styleSource)
+        internal static Font ResolveWordFont(CssRect word, CssBox styleSource)
         {
             if (word.UsesPerCodepointFont && (word.OriginalText ?? word.Text) is { Length: > 0 } text)
             {
@@ -2889,7 +2888,7 @@ namespace PeachPDF.Html.Core.Dom
         /// against the *previous* page's geometry, and two fresh lookups taken any time after that
         /// registration agree with each other and hide the staleness completely. <see cref="double.NaN"/>
         /// (via <see cref="double.IsNaN"/>) marks "not yet resolved this layout" / "not resolved via
-        /// <see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/> at all" (a table/flex/grid box sizes itself through its
+        /// <see cref="CssLayoutEngine.GetBoxWidth(Canvas, CssBox, double?)"/> at all" (a table/flex/grid box sizes itself through its
         /// own engine instead), for which the guard this field feeds is simply inapplicable.
         /// </summary>
         private double _measureResolvedAgainst = double.NaN;
@@ -3341,7 +3340,7 @@ namespace PeachPDF.Html.Core.Dom
         /// as the block path already does. Recurses naturally: each child's own <see cref="PerformLayoutImp"/>
         /// runs this again for its out-of-flow descendants.
         /// </summary>
-        private async ValueTask LayoutOutOfFlowChildren(RGraphics g)
+        private async ValueTask LayoutOutOfFlowChildren(Canvas g)
         {
             foreach (var childBox in Boxes)
             {
@@ -3372,7 +3371,7 @@ namespace PeachPDF.Html.Core.Dom
         /// prologue, a placement and a content phase that could be separated. Everything else, a horizontal
         /// rule included, goes through the generic pass.
         /// </remarks>
-        protected virtual ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>
+        protected virtual ValueTask PerformLayoutImp(Canvas g, CssBox frame, bool framePlacesChild) =>
             frame.DriveBlockChildPass(g, this, framePlacesChild);
 
         /// <summary>
@@ -3400,7 +3399,7 @@ namespace PeachPDF.Html.Core.Dom
         /// is <see cref="PerformLayout"/>'s, so a loop that drives its children through here reports a
         /// layout failure exactly as one calling <see cref="PerformLayout"/> on each of them did.
         /// </remarks>
-        internal async ValueTask LayoutBlockChild(RGraphics g, CssBox child, bool framePlacesChild = true)
+        internal async ValueTask LayoutBlockChild(Canvas g, CssBox child, bool framePlacesChild = true)
         {
             // Left for the inline flow that owns its positioned-inline containing block when that flow is
             // still mid-walk (issue #1304); it is laid out again from there, once the flow's lines are final.
@@ -3432,7 +3431,7 @@ namespace PeachPDF.Html.Core.Dom
         /// break into the next column, taking the flow with them. Which column it is in is recorded first: a
         /// detached fragmentainer no longer says.
         /// </summary>
-        private async ValueTask LayoutPageFloatInColumn(RGraphics g, CssBox child, HtmlContainerInt container, bool framePlacesChild)
+        private async ValueTask LayoutPageFloatInColumn(Canvas g, CssBox child, HtmlContainerInt container, bool framePlacesChild)
         {
             container.NotePageFloatColumn(child);
 
@@ -3475,7 +3474,7 @@ namespace PeachPDF.Html.Core.Dom
         /// in the fragmentainer it is leaving.
         /// </para>
         /// </remarks>
-        private async ValueTask DriveBlockChildPass(RGraphics g, CssBox child, bool framePlacesChild)
+        private async ValueTask DriveBlockChildPass(Canvas g, CssBox child, bool framePlacesChild)
         {
 #if DEBUG
             Console.WriteLine($"layout start: {child}");
@@ -3535,14 +3534,14 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ResolveBlockChildOffset"/>/<see cref="CommitBlockChildOffset"/> for — rather than one
         /// that is placed and then has to notice, from inside its own layout, that it should not have been.
         /// </remarks>
-        internal ValueTask LayoutContentAtItsAssignedPosition(RGraphics g) =>
+        internal ValueTask LayoutContentAtItsAssignedPosition(Canvas g) =>
             (ParentBox ?? this).LayoutBlockChild(g, this, framePlacesChild: false);
 
         /// <summary>
         /// Opens this box's layout pass: picks up the resumption record left for it, and runs its
         /// once-per-layout prologue if no earlier pass has.
         /// </summary>
-        private async ValueTask<BreakToken?> BeginBlockPass(RGraphics g)
+        private async ValueTask<BreakToken?> BeginBlockPass(Canvas g)
         {
             var resume = BeginLayoutPass();
 
@@ -3577,7 +3576,7 @@ namespace PeachPDF.Html.Core.Dom
         /// where this box has to be laid out again, when its epilogue concluded it must start somewhere
         /// else; null when the pass is done with it.
         /// </returns>
-        private async ValueTask<double?> LayoutPassContents(RGraphics g, BreakToken? resume, bool placed)
+        private async ValueTask<double?> LayoutPassContents(Canvas g, BreakToken? resume, bool placed)
         {
             if (placed)
             {
@@ -3771,7 +3770,7 @@ namespace PeachPDF.Html.Core.Dom
         /// back. Being positioned is what clears the flag (<c>CssRect.Top</c>'s setter), so the marker has to
         /// be positioned last.
         /// </remarks>
-        private async ValueTask LayoutOutsideMarker(RGraphics g)
+        private async ValueTask LayoutOutsideMarker(Canvas g)
         {
             if (DerivedStyle.ActualDisplay != Keywords.ListItem) return;
 
@@ -3979,7 +3978,7 @@ namespace PeachPDF.Html.Core.Dom
         /// fragmentainer, <see cref="MeasureWordsSize"/> is expensive and resolves images, applying
         /// <c>string-set</c> is not idempotent, and a forced break must not fire a second time.
         /// </remarks>
-        private async ValueTask PerformLayoutPrologue(RGraphics g)
+        private async ValueTask PerformLayoutPrologue(Canvas g)
         {
             if (DerivedStyle.ActualDisplay != Keywords.None)
             {
@@ -4128,7 +4127,7 @@ namespace PeachPDF.Html.Core.Dom
         /// layout a resumed pass re-enters, picking up where the previous fragmentainer stopped rather
         /// than starting over.
         /// </summary>
-        private async ValueTask LayoutContents(RGraphics g, BreakToken? resume)
+        private async ValueTask LayoutContents(Canvas g, BreakToken? resume)
         {
             if (PlacesItselfAsBlockBox)
             {
@@ -4308,7 +4307,7 @@ namespace PeachPDF.Html.Core.Dom
                 var prevSibling = DomUtils.GetPreviousSibling(this, false);
                 if (prevSibling != null)
                 {
-                    if (Location == RPoint.Empty)
+                    if (Location == PaintPoint.Empty)
                         Location = prevSibling.Location;
                     ActualBottom = prevSibling.ActualBottom;
                 }
@@ -4445,7 +4444,7 @@ namespace PeachPDF.Html.Core.Dom
         /// own commit pass declined to run for (see each engine's remarks).
         /// </param>
         private async ValueTask LayoutEngineContent(
-            RGraphics g, Func<RGraphics, CssBox, BreakToken?, ValueTask> engine, BreakToken? resume)
+            Canvas g, Func<Canvas, CssBox, BreakToken?, ValueTask> engine, BreakToken? resume)
         {
             await engine(g, this, resume);
 
@@ -4561,7 +4560,7 @@ namespace PeachPDF.Html.Core.Dom
         /// own width - unless it is <c>float-reference: column</c>, which was laid out in its column and is
         /// left there.
         /// </remarks>
-        internal async ValueTask LayoutOutOfFlowChildrenAgain(RGraphics g)
+        internal async ValueTask LayoutOutOfFlowChildrenAgain(Canvas g)
         {
             foreach (var childBox in Boxes)
             {
@@ -4588,10 +4587,10 @@ namespace PeachPDF.Html.Core.Dom
         /// that makes that work — the resumption record, the keep-with-next restart, a child's own break
         /// before it — is this loop's, and duplicating it is how the two would drift apart.
         /// </remarks>
-        internal ValueTask<bool> FillFragmentainerWithBlockChildren(RGraphics g, BreakToken? resume) =>
+        internal ValueTask<bool> FillFragmentainerWithBlockChildren(Canvas g, BreakToken? resume) =>
             LayoutBlockChildren(g, resume);
 
-        private async ValueTask<bool> LayoutBlockChildren(RGraphics g, BreakToken? resume)
+        private async ValueTask<bool> LayoutBlockChildren(Canvas g, BreakToken? resume)
         {
             var resumeAt = resume as BlockBreakToken;
             var start = resumeAt?.ResumeChildIndex ?? 0;
@@ -4977,7 +4976,7 @@ namespace PeachPDF.Html.Core.Dom
         /// them takes part in the reflection or in margin collapse - per CSS2.1 §8.3.1 an out-of-flow box's
         /// margin never adjoins anything.
         /// </remarks>
-        private async ValueTask LayoutVerticalBlockChildren(RGraphics g)
+        private async ValueTask LayoutVerticalBlockChildren(Canvas g)
         {
             var clientTop = ClientTop;
             var frame = WritingModeFrame.For(this);
@@ -5097,7 +5096,7 @@ namespace PeachPDF.Html.Core.Dom
                     ? marginBoxBlockStart.X - startMargin - childWidth
                     : marginBoxBlockStart.X + startMargin;
 
-                childBox.Location = new RPoint(trueX, clientTop);
+                childBox.Location = new PaintPoint(trueX, clientTop);
                 childBox.ActualBottom = clientTop;
 
                 await childBox.LayoutContentAtItsAssignedPosition(g);
@@ -5193,14 +5192,14 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see href="https://www.w3.org/TR/css-writing-modes-4/#orthogonal-auto">CSS Writing Modes 4 section
         /// 4.3</see>). Shared by the in-flow children and the floats <see cref="LayoutVerticalBlockChildren"/> places.
         /// </summary>
-        private static async ValueTask<double> ResolveVerticalChildBlockSize(RGraphics g, CssBox child, WritingModeFrame frame,
+        private static async ValueTask<double> ResolveVerticalChildBlockSize(Canvas g, CssBox child, WritingModeFrame frame,
             double logicalBlockOffset, double clientTop)
         {
             // A placeholder position so ResolveOwnInlineSize has something to fix Size.Width against;
             // the true position is written below, once that width is known - moving Location afterward
             // leaves Size.Width untouched, the same mechanic CssLayoutEngine.ShrinkAutoWidthTo already
             // relies on for this box's own auto-width shrink further down.
-            child.Location = new RPoint(frame.ToPhysical(0, logicalBlockOffset).X, clientTop);
+            child.Location = new PaintPoint(frame.ToPhysical(0, logicalBlockOffset).X, clientTop);
             await child.ResolveOwnInlineSize(g, clientTop);
             var childWidth = child.ActualRight - child.Location.X;
 
@@ -5303,7 +5302,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="VerticalFloatOccupancy"/>, which does not depend on it.
         /// </para>
         /// </remarks>
-        internal static async ValueTask PlaceVerticalFloat(RGraphics g, CssBox floated, WritingModeFrame frame, double clientTop,
+        internal static async ValueTask PlaceVerticalFloat(Canvas g, CssBox floated, WritingModeFrame frame, double clientTop,
             double marginBoxBlockStart, List<VerticalFloatPlacement> placed,
             List<(CssBox Box, double InlineFromBottom)> bottomFloats, double? inlineExtent)
         {
@@ -5327,7 +5326,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var childWidth = await ResolveVerticalChildBlockSize(g, floated, frame, marginBoxBlockStart, clientTop);
             var origin = frame.ToPhysical(0, marginBoxBlockStart);
-            floated.Location = new RPoint(
+            floated.Location = new PaintPoint(
                 frame.BlockStartIsRight ? origin.X - blockStartMargin - childWidth : origin.X + blockStartMargin, clientTop);
             floated.ActualBottom = clientTop;
 
@@ -5400,7 +5399,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Deliberately gated on <paramref name="resolvedBlockExtent"/> (the child's own already-resolved
         /// border-box width) rather than a <c>Width</c> style token the way <see cref="IsMarginCollapseThrough"/>
         /// gates on <c>Height == auto</c>: unlike a horizontal box's auto HEIGHT (always content-driven/
-        /// shrink-to-fit in this engine), a vertical child's auto WIDTH (<see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/>)
+        /// shrink-to-fit in this engine), a vertical child's auto WIDTH (<see cref="CssLayoutEngine.GetBoxWidth(Canvas, CssBox, double?)"/>)
         /// STRETCHES to fill the available block-axis space instead of shrinking - so "Width == auto" is
         /// not itself evidence of zero block-axis extent here. Border/padding/min-width are all
         /// non-negative and already folded into <paramref name="resolvedBlockExtent"/> by GetBoxWidth, so
@@ -5936,7 +5935,7 @@ namespace PeachPDF.Html.Core.Dom
             // that placed it survives untouched - which is precisely §2's one-inline-size rule.
             var top = ContentTopOfTheContainingBlockIn(fragmentainer, ContainingBlock);
 
-            Location = new RPoint(ResolveBlockInlineStart(ContainingBlock.ClientLeft, top), top);
+            Location = new PaintPoint(ResolveBlockInlineStart(ContainingBlock.ClientLeft, top), top);
             ActualBottom = Location.Y;
         }
 
@@ -6018,7 +6017,7 @@ namespace PeachPDF.Html.Core.Dom
         /// boundary on one inline size across its fragments, per CSS Fragmentation Level 3 §2.
         /// </para>
         /// </remarks>
-        private async ValueTask<bool> PlaceAndSizeBlockChild(RGraphics g, CssBox child)
+        private async ValueTask<bool> PlaceAndSizeBlockChild(Canvas g, CssBox child)
         {
             // The frame declined to place this box here at all (§5.2 concluded the break falls before it),
             // so there is no landing page to measure against and nothing to commit.
@@ -6079,7 +6078,7 @@ namespace PeachPDF.Html.Core.Dom
         /// second fresh lookup at the original Y - see <see cref="_measureResolvedAgainst"/>'s own remarks
         /// for why two fresh lookups can't see this box's own named-page registration invalidating the
         /// very slot its width was just resolved against. Always false for a box whose width didn't come
-        /// from <see cref="ResolveOwnInlineSize"/>'s <see cref="CssLayoutEngine.GetBoxWidth(RGraphics, CssBox, double?)"/> branch at
+        /// from <see cref="ResolveOwnInlineSize"/>'s <see cref="CssLayoutEngine.GetBoxWidth(Canvas, CssBox, double?)"/> branch at
         /// all (a table/flex/grid box, or one this method has not yet run for this layout).
         /// </remarks>
         private bool InlineSizeCameFromAnotherPagesMeasure() =>
@@ -6102,7 +6101,7 @@ namespace PeachPDF.Html.Core.Dom
         /// stores it as a size against the current <see cref="CssBox.Location"/>, so the frame
         /// above is free to move the box afterwards and take the size with it.
         /// </remarks>
-        private async ValueTask ResolveOwnInlineSize(RGraphics g, double blockTop)
+        private async ValueTask ResolveOwnInlineSize(Canvas g, double blockTop)
         {
             // Because their width and height are set by CssTable, CssLayoutEngineFlex or CssLayoutEngineGrid -
             // except a table cell under a vertical writing mode, where physical width is the table's row
@@ -6733,7 +6732,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     var top = FloatLineTop(child, offset.Top) ?? offset.Top;
 
-                    child.Location = new RPoint(child.ResolveBlockInlineStart(offset.Left, top), top);
+                    child.Location = new PaintPoint(child.ResolveBlockInlineStart(offset.Left, top), top);
                     child.ActualBottom = top;
 
                     // Stamped on every block-flow placement, not only a run head's - a box's own record
@@ -6781,7 +6780,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     child.RelativeOffsetX = offsetX;
                     child.RelativeOffsetY = offsetY;
-                    child.Location = new RPoint(child.Location.X + offsetX, child.Location.Y + offsetY);
+                    child.Location = new PaintPoint(child.Location.X + offsetX, child.Location.Y + offsetY);
                     child.ActualBottom = child.Location.Y;
                 }
 
@@ -6827,7 +6826,7 @@ namespace PeachPDF.Html.Core.Dom
                     var top = containingBlockTop + child.ActualMarginTop +
                               ResolveOffsetOrZero(child.Top, inlineContainingBlock?.Height ?? nearestPositionedAncestor.ActualHeight, child);
 
-                    child.Location = new RPoint(left, top);
+                    child.Location = new PaintPoint(left, top);
                 }
 
                 if (child.Position.Value is PositionMode.Fixed)
@@ -6860,7 +6859,7 @@ namespace PeachPDF.Html.Core.Dom
                                + ResolveOffsetOrZero(child.Left, pageZero.BandWidth, child);
                     var top = child.HtmlContainer.MarginTop + child.ActualMarginTop
                               + ResolveOffsetOrZero(child.Top, pageZero.BandHeight, child);
-                    child.Location = new RPoint(left, top);
+                    child.Location = new PaintPoint(left, top);
                 }
             }
 
@@ -6915,7 +6914,7 @@ namespace PeachPDF.Html.Core.Dom
         /// A box that stopped part-way through a fragmentainer has none of this settled yet, so a
         /// resumed pass runs it only once the box actually completes.
         /// </remarks>
-        private async ValueTask PerformLayoutEpilogue(RGraphics g)
+        private async ValueTask PerformLayoutEpilogue(Canvas g)
         {
             CssLayoutEngine.ApplyHeight(this);
 
@@ -7203,7 +7202,7 @@ namespace PeachPDF.Html.Core.Dom
             if (IsFixedOrInRunningElement) return;
 
             var actualWidth = Math.Max(GetMinimumWidth() + GetWidthMarginDeep(this), Size.Width < 90999 ? ActualRight - HtmlContainer!.Root!.Location.X : 0);
-            HtmlContainer!.ActualSize = CommonUtils.Max(HtmlContainer.ActualSize, new RSize(actualWidth, ActualBottom - HtmlContainer!.Root!.Location.Y));
+            HtmlContainer!.ActualSize = CommonUtils.Max(HtmlContainer.ActualSize, new Size(actualWidth, ActualBottom - HtmlContainer!.Root!.Location.Y));
         }
 
         /// <summary>
@@ -7387,7 +7386,7 @@ namespace PeachPDF.Html.Core.Dom
         /// unbounded <c>tab-size</c> declaration (e.g. <c>tab-size: 1e9</c>) must not be able to turn a
         /// single tab character into a multi-gigabyte string allocation.
         /// </summary>
-        internal static string ExpandTabs(string text, RGraphics g, RFont font, ShapeSettings shapingFeatures,
+        internal static string ExpandTabs(string text, Canvas g, Font font, ShapeSettings shapingFeatures,
             (bool IsNumber, double Value) tabSize, ref double lineX)
         {
             var spaceWidth = font.GetWhitespaceWidth(g);
@@ -7436,7 +7435,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Assigns words its width and height
         /// </summary>
         /// <param name="g"></param>
-        internal virtual async ValueTask MeasureWordsSize(RGraphics g)
+        internal virtual async ValueTask MeasureWordsSize(Canvas g)
         {
             // A leader's width is inherently a per-pass, transient value - CssLayoutEngine.ApplyLeaderFill
             // recomputes it fresh every pass from that pass's own line content, unlike ordinary text whose
@@ -7544,7 +7543,7 @@ namespace PeachPDF.Html.Core.Dom
         /// that method, this always re-runs (no "already measured" guard), since which words actually
         /// end up using first-line style can change (see <see cref="RemeasureWordsTail"/>).
         /// </summary>
-        internal void ApplyFirstLineStyleOverride(RGraphics g, CssBox firstLineStyle)
+        internal void ApplyFirstLineStyleOverride(Canvas g, CssBox firstLineStyle)
         {
             firstLineStyle.MeasureWordSpacing(g);
             firstLineStyle.MeasureLetterSpacing();
@@ -7613,7 +7612,7 @@ namespace PeachPDF.Html.Core.Dom
         /// word-spacing) fully correct even when a single inline element's content spans the boundary,
         /// rather than only approximately so.
         /// </summary>
-        internal void RemeasureWordsTail(RGraphics g, int fromWordIndex)
+        internal void RemeasureWordsTail(Canvas g, int fromWordIndex)
         {
             for (var i = fromWordIndex; i < Words.Count; i++)
             {
@@ -7945,7 +7944,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
         /// <param name="minWidth">The minimum width the content must be so it won't overflow (largest word + padding).</param>
         /// <param name="maxWidth">The total width the content can take without line wrapping (with padding).</param>
-        internal void GetMinMaxWidth(RGraphics g, out double minWidth, out double maxWidth)
+        internal void GetMinMaxWidth(Canvas g, out double minWidth, out double maxWidth)
         {
             double min = 0f;
             double minDecoration = 0f;
@@ -8038,7 +8037,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>table-cell</c> is excluded because the cells of a row sit side by side, so their widths
         /// add up on the row's line rather than competing - and a cell measured on its own account is
         /// measured by the table engine's own top-level
-        /// <see cref="GetMinMaxWidth(RGraphics, out double, out double)"/> call, which needs
+        /// <see cref="GetMinMaxWidth(Canvas, out double, out double)"/> call, which needs
         /// no reset. A box blockified by its <c>float</c> or by <c>position: absolute</c>/<c>fixed</c>
         /// reaches this with an already-blockified <see cref="DerivedStyle.ActualDisplay"/>, so it is
         /// correctly seen as block-level; a flex or grid ITEM does not, which is what
@@ -8219,7 +8218,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="inheritedDecoration">decoration from the current box's containing chain.</param>
         /// <param name="includeExplicitWidth">whether this recursive child contributes its declared width.</param>
         /// <returns></returns>
-        private static void GetMinMaxSumWords(RGraphics g, CssBox box, ref double min,
+        private static void GetMinMaxSumWords(Canvas g, CssBox box, ref double min,
             ref double minDecoration, ref double maxSum, ref double paddingSum, ref double marginSum,
             ref double widestLine, ref double trailingSpace, ref bool atLineStart,
             ref CssRect? previousWord, ref double unbreakableRunWidth,
@@ -9465,7 +9464,7 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var line in lines)
             {
                 var r = Rectangles[line];
-                Rectangles[line] = new RRect(r.X, r.Y + amount, r.Width, r.Height);
+                Rectangles[line] = new Rect(r.X, r.Y + amount, r.Width, r.Height);
             }
 
             foreach (var word in Words)
@@ -9700,7 +9699,7 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var line in lines)
             {
                 var r = Rectangles[line];
-                Rectangles[line] = new RRect(r.X + amount, r.Y, r.Width, r.Height);
+                Rectangles[line] = new Rect(r.X + amount, r.Y, r.Width, r.Height);
             }
 
             foreach (var word in Words)
@@ -9781,17 +9780,17 @@ namespace PeachPDF.Html.Core.Dom
         private void OnBlockAxisRelocated(double fromY, double toY) =>
             NotifyGeometryChanged(Math.Min(fromY, toY), 0);
 
-        internal RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
+        internal Font? GetCachedFont(string fontFamily, double fsize, PaintFontStyle st, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
             return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, weight, stretch, obliqueSkewSinus, variations);
         }
 
-        internal RFont? GetCachedFontForCodepoint(string fontFamily, double fsize, RFontStyle st, System.Text.Rune codepoint, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, EmojiPresentation presentation = EmojiPresentation.NoPreference, string? variations = null)
+        internal Font? GetCachedFontForCodepoint(string fontFamily, double fsize, PaintFontStyle st, System.Text.Rune codepoint, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, EmojiPresentation presentation = EmojiPresentation.NoPreference, string? variations = null)
         {
             return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, codepoint, weight, stretch, obliqueSkewSinus, presentation, variations);
         }
 
-        internal RColor GetActualColor(string colorStr)
+        internal PaintColor GetActualColor(string colorStr)
         {
             return HtmlContainer!.CssParser.ParseColor(colorStr);
         }

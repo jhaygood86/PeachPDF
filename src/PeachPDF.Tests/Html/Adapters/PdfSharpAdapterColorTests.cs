@@ -5,7 +5,7 @@ namespace PeachPDF.Tests.Html.Adapters
 {
     /// <summary>
     /// Direct unit tests for <see cref="PeachPDF.Adapters.PdfSharpAdapter"/>'s named-color resolution
-    /// (<c>GetColorInt</c>), which maps a CSS/system color name to an <c>RColor</c> via
+    /// (<c>GetColorInt</c>), which maps a CSS/system color name to an <c>PaintColor</c> via
     /// <see cref="System.Drawing.KnownColor"/>. Guards the trim/AOT-safe generic <c>Enum.TryParse&lt;KnownColor&gt;</c>
     /// path against regression.
     /// </summary>

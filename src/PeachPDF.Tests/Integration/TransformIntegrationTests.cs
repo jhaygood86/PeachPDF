@@ -1,10 +1,10 @@
 using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
+using System.Numerics;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
@@ -24,8 +24,8 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, m.M12);
             Assert.Equal(0, m.M21);
             Assert.Equal(1, m.M22);
-            Assert.Equal(0, m.OffsetX);
-            Assert.Equal(0, m.OffsetY);
+            Assert.Equal(0, m.M31);
+            Assert.Equal(0, m.M32);
         }
 
         [Fact]
@@ -55,8 +55,8 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, m.M12, 3);
             Assert.Equal(0, m.M21, 3);
             Assert.Equal(1, m.M22, 3);
-            Assert.Equal(50, m.OffsetX, 3);
-            Assert.Equal(20, m.OffsetY, 3);
+            Assert.Equal(50, m.M31, 3);
+            Assert.Equal(20, m.M32, 3);
         }
 
         [Fact]
@@ -64,7 +64,7 @@ namespace PeachPDF.Tests.Integration
         {
             // ActualTransformMatrix treats the box's own top-left corner as local (0, 0) - it is
             // cached and computed once, independent of the box's actual page position (see
-            // CssBox.Paint / RMatrix.RebaseOrigin for how the page position is re-applied at paint time).
+            // CssBox.Paint / Matrix3x2Extensions.RebaseOrigin for how the page position is re-applied at paint time).
             var divBox = await FindDivBox("transform: scale(2, 3); transform-origin: 0 0;");
             var m = divBox.ActualTransformMatrix;
 
@@ -72,8 +72,8 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, m.M12, 3);
             Assert.Equal(0, m.M21, 3);
             Assert.Equal(3, m.M22, 3);
-            Assert.Equal(0, m.OffsetX, 2);
-            Assert.Equal(0, m.OffsetY, 2);
+            Assert.Equal(0, m.M31, 2);
+            Assert.Equal(0, m.M32, 2);
         }
 
         [Fact]
@@ -118,8 +118,8 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, m.M12, 3);
             Assert.Equal(0, m.M21, 3);
             Assert.Equal(1, m.M22, 3);
-            Assert.Equal(50, m.OffsetX, 3);
-            Assert.Equal(20, m.OffsetY, 3);
+            Assert.Equal(50, m.M31, 3);
+            Assert.Equal(20, m.M32, 3);
         }
 
         [Fact]
@@ -132,8 +132,8 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, m.M12, 3);
             Assert.Equal(0, m.M21, 3);
             Assert.Equal(1, m.M22, 3);
-            Assert.Equal(10, m.OffsetX, 3);
-            Assert.Equal(20, m.OffsetY, 3);
+            Assert.Equal(10, m.M31, 3);
+            Assert.Equal(20, m.M32, 3);
         }
 
         // --- transform-origin ---
@@ -175,8 +175,8 @@ namespace PeachPDF.Tests.Integration
             var divBox = await FindDivBox("transform: translate(50pt, 0) rotate(90deg); transform-origin: 0 0;");
             var m = divBox.ActualTransformMatrix;
 
-            Assert.Equal(50.0, m.OffsetX, 2);
-            Assert.Equal(0.0, m.OffsetY, 2);
+            Assert.Equal(50.0, m.M31, 2);
+            Assert.Equal(0.0, m.M32, 2);
         }
 
         [Fact]
@@ -188,8 +188,8 @@ namespace PeachPDF.Tests.Integration
             var divBox = await FindDivBox("transform: rotate(90deg) translate(50pt, 0); transform-origin: 0 0;");
             var m = divBox.ActualTransformMatrix;
 
-            Assert.Equal(0.0, m.OffsetX, 2);
-            Assert.Equal(50.0, m.OffsetY, 2);
+            Assert.Equal(0.0, m.M31, 2);
+            Assert.Equal(50.0, m.M32, 2);
         }
 
         // --- 3D exactness (no perspective involved) ---
@@ -202,8 +202,8 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(Math.Cos(60.0 * Math.PI / 180.0), m.M11, 3);
             Assert.Equal(1.0, m.M22, 3);
-            Assert.Equal(0.0, m.OffsetX, 2);
-            Assert.Equal(0.0, m.OffsetY, 2);
+            Assert.Equal(0.0, m.M31, 2);
+            Assert.Equal(0.0, m.M32, 2);
         }
 
         [Fact]
@@ -240,8 +240,8 @@ namespace PeachPDF.Tests.Integration
             Assert.False(divBox.IsTransformed);
             Assert.Equal(1, m.M11, 3);
             Assert.Equal(1, m.M22, 3);
-            Assert.Equal(0, m.OffsetX, 2);
-            Assert.Equal(0, m.OffsetY, 2);
+            Assert.Equal(0, m.M31, 2);
+            Assert.Equal(0, m.M32, 2);
         }
 
         [Fact]
@@ -250,8 +250,8 @@ namespace PeachPDF.Tests.Integration
             var divBox = await FindDivBox("transform: translate3d(10pt, 20pt, 500pt); transform-origin: 0 0;");
             var m = divBox.ActualTransformMatrix;
 
-            Assert.Equal(10, m.OffsetX, 2);
-            Assert.Equal(20, m.OffsetY, 2);
+            Assert.Equal(10, m.M31, 2);
+            Assert.Equal(20, m.M32, 2);
         }
 
         [Fact]
@@ -265,8 +265,8 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, m.M12, 3);
             Assert.Equal(0, m.M21, 3);
             Assert.Equal(1, m.M22, 3);
-            Assert.Equal(30, m.OffsetX, 2);
-            Assert.Equal(40, m.OffsetY, 2);
+            Assert.Equal(30, m.M31, 2);
+            Assert.Equal(40, m.M32, 2);
         }
 
         // --- perspective() ---
@@ -310,12 +310,12 @@ namespace PeachPDF.Tests.Integration
             Assert.False(child.IsTransformed);
         }
 
-        // --- RMatrix.RebaseOrigin (page-position re-anchoring at paint time) ---
+        // --- Matrix3x2Extensions.RebaseOrigin (page-position re-anchoring at paint time) ---
 
         [Fact]
         public void RebaseOrigin_Identity_StaysIdentityAnywhere()
         {
-            var rebased = RMatrix.Identity.RebaseOrigin(1234, -567);
+            var rebased = Matrix3x2.Identity.RebaseOrigin(1234, -567);
             Assert.True(rebased.IsIdentity);
         }
 
@@ -326,11 +326,11 @@ namespace PeachPDF.Tests.Integration
             // when rebased to an arbitrary absolute page point, must leave that exact point unmoved -
             // this is the property that CssBox.Paint relies on to pivot correctly regardless of where
             // the box actually sits on the page.
-            var local = new RMatrix(0, 1, -1, 0, 0, 0); // rotate(90deg) around local (0,0)
+            var local = new Matrix3x2(0, 1, -1, 0, 0, 0); // rotate(90deg) around local (0,0)
             var rebased = local.RebaseOrigin(347.5, -12.25);
 
-            var mappedX = 347.5 * rebased.M11 + -12.25 * rebased.M21 + rebased.OffsetX;
-            var mappedY = 347.5 * rebased.M12 + -12.25 * rebased.M22 + rebased.OffsetY;
+            var mappedX = 347.5 * rebased.M11 + -12.25 * rebased.M21 + rebased.M31;
+            var mappedY = 347.5 * rebased.M12 + -12.25 * rebased.M22 + rebased.M32;
 
             Assert.Equal(347.5, mappedX, 6);
             Assert.Equal(-12.25, mappedY, 6);
@@ -341,11 +341,11 @@ namespace PeachPDF.Tests.Integration
         {
             // Translation commutes with the origin re-anchoring, so it must come out unchanged
             // regardless of what absolute point it's rebased to.
-            var local = new RMatrix(1, 0, 0, 1, 50, 20);
+            var local = new Matrix3x2(1, 0, 0, 1, 50, 20);
             var rebased = local.RebaseOrigin(999, -333);
 
-            Assert.Equal(50, rebased.OffsetX, 6);
-            Assert.Equal(20, rebased.OffsetY, 6);
+            Assert.Equal(50, rebased.M31, 6);
+            Assert.Equal(20, rebased.M32, 6);
         }
 
         // --- Regression: paint-time pivot must use the box's actual page position ---
@@ -355,7 +355,7 @@ namespace PeachPDF.Tests.Integration
         // paint passes (e.g. pagination), so CssBox.Paint re-anchors the pivot via RebaseOrigin right
         // before pushing it. This regression test drives the real Paint() pipeline (not just
         // ActualTransformMatrix) for a box positioned well away from the page's top-left corner, and
-        // inspects the matrix actually handed to RGraphics.PushTransform.
+        // inspects the matrix actually handed to Canvas.PushTransform.
 
         [Fact]
         public async Task Paint_RotationAroundOwnTopLeft_PivotsAroundActualPagePosition()
@@ -379,60 +379,60 @@ namespace PeachPDF.Tests.Integration
 
             // The box's own actual top-left corner on the page must be a fixed point of the
             // matrix that was really pushed to the graphics context.
-            var mappedX = divBox.Bounds.X * pushed.M11 + divBox.Bounds.Y * pushed.M21 + pushed.OffsetX;
-            var mappedY = divBox.Bounds.X * pushed.M12 + divBox.Bounds.Y * pushed.M22 + pushed.OffsetY;
+            var mappedX = divBox.Bounds.X * pushed.M11 + divBox.Bounds.Y * pushed.M21 + pushed.M31;
+            var mappedY = divBox.Bounds.X * pushed.M12 + divBox.Bounds.Y * pushed.M22 + pushed.M32;
 
             Assert.Equal(divBox.Bounds.X, mappedX, 1);
             Assert.Equal(divBox.Bounds.Y, mappedY, 1);
         }
 
-        private sealed class SpyGraphics : RGraphics
+        private sealed class SpyGraphics : Canvas
         {
-            public RMatrix? LastPushedTransform { get; private set; }
+            public Matrix3x2? LastPushedTransform { get; private set; }
 
-            public SpyGraphics() : base(new PdfSharpAdapter(), new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public SpyGraphics() : base(new PdfSharpAdapter(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-            public override void PushTransform(RMatrix matrix) => LastPushedTransform = matrix;
+            public override void PushTransform(Matrix3x2 matrix) => LastPushedTransform = matrix;
             public override void PopTransform() { }
-            public override void PushBlendMode(RBlendMode mode) { }
+            public override void PushBlendMode(PaintBlendMode mode) { }
             public override void PopBlendMode() { }
-            public override void PushClip(RRect rect) => _clipStack.Push(rect);
-            public override void PushClip(RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
+            public override void PushClip(Rect rect) => _clipStack.Push(rect);
+            public override void PushClip(GraphicsPath path) => _clipStack.Push(_clipStack.Peek());
             public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); }
-            public override void PushClipExclude(RRect rect) { }
+            public override void PushClipExclude(Rect rect) { }
             public override object SetAntiAliasSmoothingMode() => new object();
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
-            public override RGraphicsPath GetGraphicsPath() => null!;
+            public override GraphicsPath GetGraphicsPath() => null!;
 
-            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) => null;
-            public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
-            public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
-            public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal) { }
-            public override void DrawImageWithColorMatrix(RImage image, RRect destRect, ColorMatrix matrix) { }
-            public override void DrawImageAlphaMasked(RImage image, RImage maskImage, RRect destRect, bool invert = false) { }
-            public override void DrawImageBlendedOver(RImage top, RImage bottom, RRect destRect, RBlendMode blendMode) { }
+            public override GraphicsPath? GetTextOutline(string str, Font font, PaintPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) => null;
+            public override (Canvas Graphics, Image Image)? CreateTile(double width, double height) => null;
+            public override void DrawImageMasked(Image image, Image maskImage, Rect destRect) { }
+            public override void DrawImageWithOpacity(Image image, Rect destRect, double opacity, PaintBlendMode blendMode = PaintBlendMode.Normal) { }
+            public override void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix) { }
+            public override void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, bool invert = false) { }
+            public override void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode) { }
             public override void BeginMarkedContent(string structureType, int mcid) { }
             public override void EndMarkedContent() { }
             public override void BeginArtifact() { }
             public override void BeginVariableText() { }
             public override void EndVariableText() { }
-            public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null) => new(0, 12);
-            public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null) => str?.Length ?? 0;
-            public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
+            public override Size MeasureString(string str, Font font, ShapeSettings? features = null) => new(0, 12);
+            public override int CountShapedGlyphs(string str, Font font, ShapeSettings? features = null) => str?.Length ?? 0;
+            public override void MeasureString(string str, Font font, double maxWidth, out int charFit, out double charFitWidth)
             {
                 charFit = str?.Length ?? 0;
                 charFitWidth = 0;
             }
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null) { }
-            public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color) { }
-            public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2) { }
-            public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }
-            public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) { }
-            public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }
-            public override void DrawImage(RImage image, RRect destRect) { }
-            public override void DrawPath(RPen pen, RGraphicsPath path) { }
-            public override void DrawPath(RBrush brush, RGraphicsPath path) { }
-            public override void DrawPolygon(RBrush brush, RPoint[] points) { }
+            public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null) { }
+            public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color) { }
+            public override void DrawLine(Pen pen, double x1, double y1, double x2, double y2) { }
+            public override void DrawRectangle(Pen pen, double x, double y, double width, double height) { }
+            public override void DrawRectangle(Brush brush, double x, double y, double width, double height) { }
+            public override void DrawImage(Image image, Rect destRect, Rect srcRect) { }
+            public override void DrawImage(Image image, Rect destRect) { }
+            public override void DrawPath(Pen pen, GraphicsPath path) { }
+            public override void DrawPath(Brush brush, GraphicsPath path) { }
+            public override void DrawPolygon(Brush brush, PaintPoint[] points) { }
             public override void Dispose() { }
         }
 
@@ -441,8 +441,8 @@ namespace PeachPDF.Tests.Integration
         // ActualTransformMatrix treats the box's own top-left corner as local (0, 0), so probe
         // points here are box-local, not absolute page coordinates (see RebaseOrigin tests below
         // for the page-space behavior applied at paint time).
-        private static (double X, double Y) MapPoint(RMatrix m, double x, double y) =>
-            (x * m.M11 + y * m.M21 + m.OffsetX, x * m.M12 + y * m.M22 + m.OffsetY);
+        private static (double X, double Y) MapPoint(Matrix3x2 m, double x, double y) =>
+            (x * m.M11 + y * m.M21 + m.M31, x * m.M12 + y * m.M22 + m.M32);
 
         private Task<CssBox> FindDivBox(string css)
         {

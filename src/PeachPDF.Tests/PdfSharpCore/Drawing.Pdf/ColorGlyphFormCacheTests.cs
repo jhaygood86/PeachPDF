@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing.Pdf
             return match.Typeface;
         }
 
-        private static Dictionary<int, XColor> Overrides(params (int Entry, XColor Color)[] entries)
+        private static Dictionary<int, XColor> Overrides(params (int Entry, XColor PaintColor)[] entries)
         {
             var map = new Dictionary<int, XColor>();
             foreach ((int entry, XColor color) in entries)

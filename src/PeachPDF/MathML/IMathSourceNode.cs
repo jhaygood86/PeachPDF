@@ -1,6 +1,5 @@
 using System.Collections.Generic;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 
 namespace PeachPDF.MathML
 {
@@ -19,7 +18,7 @@ namespace PeachPDF.MathML
     /// <c>stretchy</c>, ...) are plain XML attributes, not CSS properties, so there is nothing here to
     /// match against a stylesheet. Genuine CSS properties that do apply to math content (<c>color</c>,
     /// <c>font-family</c>, <c>font-size</c>) have already been fully cascaded by the time this node is
-    /// read - see <see cref="Color"/>/<see cref="FontSizePt"/> - exactly the same way SVG reads
+    /// read - see <see cref="PaintColor"/>/<see cref="FontSizePt"/> - exactly the same way SVG reads
     /// already-cascaded values for the properties it doesn't have its own presentation-attribute
     /// registry for.
     /// </para>
@@ -50,7 +49,7 @@ namespace PeachPDF.MathML
         /// <summary>This element's already-cascaded CSS <c>color</c> (<c>CssBox.ActualColor</c> for the
         /// live-DOM implementation) - MathML's own <c>mathcolor</c> attribute, when present, overrides
         /// this at build time (see <see cref="MathTreeBuilder"/>).</summary>
-        RColor Color { get; }
+        PaintColor PaintColor { get; }
 
         /// <summary>This element's already-cascaded CSS <c>font-size</c>, in points
         /// (<c>CssBox.ActualFont.Size</c> for the live-DOM implementation) - the base <c>mathsize</c>
@@ -61,6 +60,6 @@ namespace PeachPDF.MathML
         /// (<c>CssBox.GetActualFontAtSize</c> for the live-DOM implementation) - used by
         /// <c>MathLayoutEngine</c> to get the math typeface at each distinct scriptlevel-scaled size a
         /// formula needs, without re-deriving which size to use.</summary>
-        RFont GetFontAtSize(double sizePt);
+        Font GetFontAtSize(double sizePt);
     }
 }

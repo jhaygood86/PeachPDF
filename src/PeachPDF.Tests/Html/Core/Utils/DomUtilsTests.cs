@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -194,7 +194,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var root = await Render("<div id='outer' style='width:100px;height:50px'><span id='inner'>Text</span></div>");
             var outer = DomUtils.GetBoxById(root, "outer")!;
-            var point = new RPoint(outer.Bounds.X + 1, outer.Bounds.Y + 1);
+            var point = new PaintPoint(outer.Bounds.X + 1, outer.Bounds.Y + 1);
 
             var found = DomUtils.GetCssBox(root, point);
 
@@ -206,7 +206,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var root = await Render("<div id='hidden' style='visibility:hidden;height:20px'>x</div>");
             var hidden = DomUtils.GetBoxById(root, "hidden")!;
-            var point = new RPoint(hidden.Bounds.X + 1, hidden.Bounds.Y + 1);
+            var point = new PaintPoint(hidden.Bounds.X + 1, hidden.Bounds.Y + 1);
 
             Assert.Null(DomUtils.GetCssBox(hidden, point));
         }
@@ -217,7 +217,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var root = await Render("<a id='link' href='#'>Click</a>");
             var link = DomUtils.GetBoxById(root, "link")!;
             var word = FindFirstWord(link)!;
-            var point = new RPoint(word.Rectangle.X + word.Rectangle.Width / 2, word.Rectangle.Y + word.Rectangle.Height / 2);
+            var point = new PaintPoint(word.Rectangle.X + word.Rectangle.Width / 2, word.Rectangle.Y + word.Rectangle.Height / 2);
 
             var found = DomUtils.GetLinkBox(root, point);
 
@@ -230,7 +230,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var root = await Render("<a id='link' href='#'>Click</a>");
 
-            Assert.Null(DomUtils.GetLinkBox(root, new RPoint(-1000, -1000)));
+            Assert.Null(DomUtils.GetLinkBox(root, new PaintPoint(-1000, -1000)));
         }
 
         [Fact]

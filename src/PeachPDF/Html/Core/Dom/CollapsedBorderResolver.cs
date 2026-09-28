@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System;
 
 namespace PeachPDF.Html.Core.Dom
@@ -54,7 +54,7 @@ namespace PeachPDF.Html.Core.Dom
                 // Clause 1: "hidden" suppresses the border unconditionally, beating every other
                 // candidate regardless of width - including a wider one from a more specific origin.
                 if (candidate.Style == LineStyle.Hidden)
-                    return new CollapsedBorder(LineStyle.Hidden, 0, RColor.Empty);
+                    return new CollapsedBorder(LineStyle.Hidden, 0, PaintColor.Empty);
 
                 // Clause 2: "none" never participates in the comparison at all.
                 if (candidate.Style == LineStyle.None)
@@ -66,7 +66,7 @@ namespace PeachPDF.Html.Core.Dom
 
             return best is null
                 ? CollapsedBorder.None
-                : new CollapsedBorder(best.Value.Style, best.Value.Width, best.Value.Color);
+                : new CollapsedBorder(best.Value.Style, best.Value.Width, best.Value.PaintColor);
         }
 
         /// <summary>Whether <paramref name="a"/> wins over the current best, <paramref name="b"/>.</summary>

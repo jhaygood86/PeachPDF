@@ -1,8 +1,7 @@
 using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Parse;
@@ -91,7 +90,7 @@ namespace PeachPDF.Html.Core.Dom
         /// column-reverse container publishes the latter — see <see cref="CommitLineContent"/>'s and
         /// <see cref="CommitColumnContent"/>'s own remarks.
         /// </param>
-        public static async ValueTask PerformLayout(RGraphics g, CssBox flexBox, BreakToken? resume = null)
+        public static async ValueTask PerformLayout(Canvas g, CssBox flexBox, BreakToken? resume = null)
         {
             try
             {
@@ -104,7 +103,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        private async ValueTask Layout(RGraphics g, BreakToken? resume)
+        private async ValueTask Layout(Canvas g, BreakToken? resume)
         {
             // A resumed pass re-enters only the items that did not finish their own content last time -
             // every earlier phase (measurement, sizing, line/main/cross positioning) already ran and its
@@ -386,7 +385,7 @@ namespace PeachPDF.Html.Core.Dom
 
         // ─── Phase 2: measurement ────────────────────────────────────────────────
 
-        private async ValueTask<FlexItem> MeasureItem(RGraphics g, CssBox box, double mainSize, bool mainSizeIndefinite)
+        private async ValueTask<FlexItem> MeasureItem(Canvas g, CssBox box, double mainSize, bool mainSizeIndefinite)
         {
             // Derive hypothetical main size from CSS properties (don't rely on PerformLayout result,
             // since auto-width block boxes fill the entire containing block instead of their intrinsic size).
@@ -416,7 +415,7 @@ namespace PeachPDF.Html.Core.Dom
             else
             {
                 // Auto width/basis: run PerformLayout to get cross-axis size and word positions.
-                box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
+                box.Location = new PaintPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
                 box.ActualBottom = box.Location.Y;
                 // A first-ever layout of box has nothing to reset, but this item can be measured more
                 // than once within one document-layout generation - most directly, a nested flex/grid
@@ -543,7 +542,7 @@ namespace PeachPDF.Html.Core.Dom
                 else                      { savedDim = box.Height; box.Height = FormatLayoutUnits(cssContentSize, box); }
             }
 
-            box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
+            box.Location = new PaintPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
             box.ActualBottom = box.Location.Y;
             // See the identical reset above: this item can be measured more than once per generation.
             box.RectanglesReset();
@@ -596,7 +595,7 @@ namespace PeachPDF.Html.Core.Dom
 
         // ─── Phase 4: flexible length resolution ──────────────────────────────────
 
-        private async ValueTask ResolveFlexibleLengths(RGraphics g, FlexLine line, double mainSize)
+        private async ValueTask ResolveFlexibleLengths(Canvas g, FlexLine line, double mainSize)
         {
             double mainGap = ParseMainGap(mainSize);
             double totalGapSpace = line.Items.Count > 1 ? mainGap * (line.Items.Count - 1) : 0;
@@ -646,7 +645,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        private async ValueTask ResizeItem(RGraphics g, FlexItem item, double finalSize)
+        private async ValueTask ResizeItem(Canvas g, FlexItem item, double finalSize)
         {
             // finalSize is the outer size (content + padding + border); the CSS property takes a
             // content-box value for content-box items but the full outer size for border-box items
@@ -664,7 +663,7 @@ namespace PeachPDF.Html.Core.Dom
                 item.Box.Height = FormatLayoutUnits(cssContentSize, item.Box);
             }
 
-            item.Box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
+            item.Box.Location = new PaintPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
             item.Box.ActualBottom = item.Box.Location.Y;
             item.Box.RectanglesReset();
             await PerformLayoutBlockified(g, item.Box);
@@ -685,7 +684,7 @@ namespace PeachPDF.Html.Core.Dom
         /// stretch item (or the default, since <c>align-items</c> defaults to <c>normal</c> ≡ stretch) is left
         /// full-width, and a definite-width item is left at its width.
         /// </summary>
-        private async ValueTask ShrinkColumnItemToContentWidth(RGraphics g, FlexItem item, double containerCrossSize, double mainSize)
+        private async ValueTask ShrinkColumnItemToContentWidth(Canvas g, FlexItem item, double containerCrossSize, double mainSize)
         {
             var box = item.Box;
 
@@ -730,7 +729,7 @@ namespace PeachPDF.Html.Core.Dom
             var savedHeight = box.Height;
             box.Width = FormatLayoutUnits(Math.Max(0, fitOuter - box.ActualBoxSizeIncludedWidth), box);
             box.Height = FormatLayoutUnits(Math.Max(0, item.FinalMainSize - MainBoxSizeIncluded(box)), box);
-            box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
+            box.Location = new PaintPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
             box.ActualBottom = box.Location.Y;
             box.RectanglesReset();
             await PerformLayoutBlockified(g, box);
@@ -916,7 +915,7 @@ namespace PeachPDF.Html.Core.Dom
 
         // ─── Phase 8: align-items / align-self ───────────────────────────────────
 
-        private async ValueTask ComputeCrossOffsets(RGraphics g, FlexLine line)
+        private async ValueTask ComputeCrossOffsets(Canvas g, FlexLine line)
         {
             // Pre-compute baseline offsets for items using baseline alignment. Per spec §8.5,
             // baseline alignment only applies when the cross axis is vertical (row-direction
@@ -1057,7 +1056,7 @@ namespace PeachPDF.Html.Core.Dom
                                     double crossContent = Math.Max(0, targetCross - CrossBoxSizeIncluded(item.Box));
                                     item.Box.Height = FormatLayoutUnits(crossContent, item.Box);
                                     item.Box.Width  = FormatLayoutUnits(Math.Max(0, item.FinalMainSize - MainBoxSizeIncluded(item.Box)), item.Box);
-                                    item.Box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
+                                    item.Box.Location = new PaintPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
                                     item.Box.ActualBottom = item.Box.Location.Y;
                                     item.Box.RectanglesReset();
                                     await PerformLayoutBlockified(g, item.Box);
@@ -1076,7 +1075,7 @@ namespace PeachPDF.Html.Core.Dom
                                     double crossContent = Math.Max(0, targetCross - CrossBoxSizeIncluded(item.Box));
                                     item.Box.Width  = FormatLayoutUnits(crossContent, item.Box);
                                     item.Box.Height = FormatLayoutUnits(Math.Max(0, item.FinalMainSize - MainBoxSizeIncluded(item.Box)), item.Box);
-                                    item.Box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
+                                    item.Box.Location = new PaintPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
                                     item.Box.ActualBottom = item.Box.Location.Y;
                                     item.Box.RectanglesReset();
                                     await PerformLayoutBlockified(g, item.Box);
@@ -1316,12 +1315,12 @@ namespace PeachPDF.Html.Core.Dom
         /// only have been published by that same confirmed path.
         /// </remarks>
         private async ValueTask CommitLineContent(
-            RGraphics g,
+            Canvas g,
             IReadOnlyList<IReadOnlyList<CssBox>> lines,
             int startLineIndex,
             IReadOnlyList<UnfinishedFlexItem>? seedUnfinished,
             IReadOnlyList<CssBox>? seedFinished,
-            RPoint placementOrigin)
+            PaintPoint placementOrigin)
         {
             var container = _flexBox.HtmlContainer;
 
@@ -1412,9 +1411,9 @@ namespace PeachPDF.Html.Core.Dom
         /// applies that same correction to every not-yet-committed item — see
         /// <c>CssLayoutEngineGrid.ResumeCommitPass</c>'s identical remarks for the full reasoning.
         /// </remarks>
-        private async ValueTask ResumeCommitPass(RGraphics g, FlexBreakToken resume)
+        private async ValueTask ResumeCommitPass(Canvas g, FlexBreakToken resume)
         {
-            var delta = new RPoint(
+            var delta = new PaintPoint(
                 _flexBox.Location.X - resume.PlacementOrigin.X,
                 _flexBox.Location.Y - resume.PlacementOrigin.Y);
 
@@ -1481,11 +1480,11 @@ namespace PeachPDF.Html.Core.Dom
         /// </para>
         /// </remarks>
         private async ValueTask CommitColumnContent(
-            RGraphics g,
+            Canvas g,
             IReadOnlyList<IReadOnlyList<CssBox>> lines,
             IReadOnlyList<ColumnLineCursor>? seedCursors,
             IReadOnlyList<int>? seedFinishedLines,
-            RPoint placementOrigin)
+            PaintPoint placementOrigin)
         {
             var container = _flexBox.HtmlContainer;
 
@@ -1551,9 +1550,9 @@ namespace PeachPDF.Html.Core.Dom
         /// of each unfinished line, plus every item after it in that same line — the ones the sequential
         /// walk has not reached yet either.
         /// </remarks>
-        private async ValueTask ResumeColumnCommitPass(RGraphics g, FlexColumnBreakToken resume)
+        private async ValueTask ResumeColumnCommitPass(Canvas g, FlexColumnBreakToken resume)
         {
-            var delta = new RPoint(
+            var delta = new PaintPoint(
                 _flexBox.Location.X - resume.PlacementOrigin.X,
                 _flexBox.Location.Y - resume.PlacementOrigin.Y);
 
@@ -1902,7 +1901,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="HtmlContainerInt.SuppressWordPageBreaks"/> for why a page-break decision made
         /// against this provisional position must never be allowed to stick.
         /// </summary>
-        private static async ValueTask PerformLayoutBlockified(RGraphics g, CssBox box)
+        private static async ValueTask PerformLayoutBlockified(Canvas g, CssBox box)
         {
             CssProperty<DisplayMode>? savedDisplay = null;
             if (box.IsInline)

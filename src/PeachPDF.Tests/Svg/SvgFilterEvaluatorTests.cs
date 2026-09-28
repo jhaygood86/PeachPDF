@@ -1,7 +1,6 @@
 using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
@@ -30,7 +29,7 @@ namespace PeachPDF.Tests.Svg
         public void SingleFeFlood_DrawsFloodTileOntoPage()
         {
             var page = new FakeFilterGraphics(Adapter, null);
-            var filter = new SvgFilterBuilder().AddFlood(RColor.FromArgb(255, 0, 0), 1.0).Build();
+            var filter = new SvgFilterBuilder().AddFlood(PaintColor.FromArgb(255, 0, 0), 1.0).Build();
 
             SvgFilterEvaluator.Render(page, filter, NewElement(), _ => { });
 
@@ -46,7 +45,7 @@ namespace PeachPDF.Tests.Svg
             // feOffset with no `in` - the first (and only) primitive, so its input must be SourceGraphic.
             var filter = new SvgFilterBuilder().AddOffset(dx: 5, dy: 5).Build();
 
-            SvgFilterEvaluator.Render(page, filter, NewElement(), tg => tg.DrawRectangle(tg.GetSolidBrush(RColor.Black), 0, 0, 10, 10));
+            SvgFilterEvaluator.Render(page, filter, NewElement(), tg => tg.DrawRectangle(tg.GetSolidBrush(PaintColor.Black), 0, 0, 10, 10));
 
             var finalTile = page.TilesById[FakeFilterGraphics.ExtractId(Assert.Single(page.PageLog))];
             var draw = Assert.Single(finalTile.Ops);
@@ -64,7 +63,7 @@ namespace PeachPDF.Tests.Svg
             // feFlood(result="a") then feOffset with no `in` - must chain off "a" (the previous result),
             // not fall back to SourceGraphic.
             var filter = new SvgFilterBuilder()
-                .AddFlood(RColor.FromArgb(255, 0, 0), 1.0, result: "a")
+                .AddFlood(PaintColor.FromArgb(255, 0, 0), 1.0, result: "a")
                 .AddOffset(dx: 1, dy: 1)
                 .Build();
 
@@ -83,8 +82,8 @@ namespace PeachPDF.Tests.Svg
             // primitives back, not the immediately-previous one - proves the resolution dictionary holds
             // every earlier result, not just `lastResult`.
             var filter = new SvgFilterBuilder()
-                .AddFlood(RColor.FromArgb(255, 0, 0), 1.0, result: "a")
-                .AddFlood(RColor.FromArgb(0, 0, 255), 1.0, result: "b")
+                .AddFlood(PaintColor.FromArgb(255, 0, 0), 1.0, result: "a")
+                .AddFlood(PaintColor.FromArgb(0, 0, 255), 1.0, result: "b")
                 .AddMerge(["a", "b"])
                 .Build();
 
@@ -139,8 +138,8 @@ namespace PeachPDF.Tests.Svg
         {
             var page = new FakeFilterGraphics(Adapter, null);
             var filter = new SvgFilterBuilder()
-                .AddFlood(RColor.FromArgb(255, 0, 0), 1.0, result: "a")
-                .AddFlood(RColor.FromArgb(0, 0, 255), 1.0, result: "b")
+                .AddFlood(PaintColor.FromArgb(255, 0, 0), 1.0, result: "a")
+                .AddFlood(PaintColor.FromArgb(0, 0, 255), 1.0, result: "b")
                 .AddComposite("a", "b", op)
                 .Build();
 
@@ -156,7 +155,7 @@ namespace PeachPDF.Tests.Svg
             var page = new FakeFilterGraphics(Adapter, null);
             var filter = new SvgFilterBuilder().AddLuminanceToAlpha().Build();
 
-            SvgFilterEvaluator.Render(page, filter, NewElement(), tg => tg.DrawRectangle(tg.GetSolidBrush(RColor.Black), 0, 0, 10, 10));
+            SvgFilterEvaluator.Render(page, filter, NewElement(), tg => tg.DrawRectangle(tg.GetSolidBrush(PaintColor.Black), 0, 0, 10, 10));
 
             var finalTile = page.TilesById[FakeFilterGraphics.ExtractId(Assert.Single(page.PageLog))];
             var op = Assert.Single(finalTile.Ops);
@@ -168,9 +167,9 @@ namespace PeachPDF.Tests.Svg
         {
             var page = new FakeFilterGraphics(Adapter, null);
             var filter = new SvgFilterBuilder()
-                .AddFlood(RColor.FromArgb(255, 0, 0), 1.0, result: "a")
-                .AddFlood(RColor.FromArgb(0, 0, 255), 1.0, result: "b")
-                .AddBlend("a", "b", RBlendMode.Multiply)
+                .AddFlood(PaintColor.FromArgb(255, 0, 0), 1.0, result: "a")
+                .AddFlood(PaintColor.FromArgb(0, 0, 255), 1.0, result: "b")
+                .AddBlend("a", "b", PaintBlendMode.Multiply)
                 .Build();
 
             SvgFilterEvaluator.Render(page, filter, NewElement(), _ => { });
@@ -189,7 +188,7 @@ namespace PeachPDF.Tests.Svg
                 .AddComponentTransfer(brightness)
                 .Build();
 
-            SvgFilterEvaluator.Render(page, filter, NewElement(), tg => tg.DrawRectangle(tg.GetSolidBrush(RColor.Black), 0, 0, 10, 10));
+            SvgFilterEvaluator.Render(page, filter, NewElement(), tg => tg.DrawRectangle(tg.GetSolidBrush(PaintColor.Black), 0, 0, 10, 10));
 
             var finalTile = page.TilesById[FakeFilterGraphics.ExtractId(Assert.Single(page.PageLog))];
             Assert.StartsWith("Matrix(", Assert.Single(finalTile.Ops));
@@ -202,7 +201,7 @@ namespace PeachPDF.Tests.Svg
             // whole filter region, so it degenerates to a single untiled copy of its input.
             var page = new FakeFilterGraphics(Adapter, null);
             var filter = new SvgFilterBuilder()
-                .AddFlood(RColor.FromArgb(255, 0, 0), 1.0, result: "a")
+                .AddFlood(PaintColor.FromArgb(255, 0, 0), 1.0, result: "a")
                 .AddTile("a")
                 .Build();
 
@@ -228,7 +227,7 @@ namespace PeachPDF.Tests.Svg
                 .Build();
             var element = new SvgRectElement { Width = 50, Height = 50 };
 
-            SvgFilterEvaluator.Render(page, filter, element, tg => tg.DrawRectangle(tg.GetSolidBrush(RColor.Black), 0, 0, 10, 10));
+            SvgFilterEvaluator.Render(page, filter, element, tg => tg.DrawRectangle(tg.GetSolidBrush(PaintColor.Black), 0, 0, 10, 10));
 
             var finalTile = page.TilesById[FakeFilterGraphics.ExtractId(Assert.Single(page.PageLog))];
             Assert.StartsWith("Draw(", Assert.Single(finalTile.Ops));
@@ -242,7 +241,7 @@ namespace PeachPDF.Tests.Svg
             // usable (non-empty) region rather than propagating the null, by falling back to the filter's
             // own literal X/Y/Width/Height fraction values unscaled.
             var page = new FakeFilterGraphics(Adapter, null);
-            var filter = new SvgFilter { FilterUnitsUserSpaceOnUse = false, X = 0, Y = 0, Width = 1, Height = 1, Primitives = [new FeFlood { Color = RColor.Black, Opacity = 1 }] };
+            var filter = new SvgFilter { FilterUnitsUserSpaceOnUse = false, X = 0, Y = 0, Width = 1, Height = 1, Primitives = [new FeFlood { PaintColor = PaintColor.Black, Opacity = 1 }] };
             var element = new SvgTextElement();
 
             SvgFilterEvaluator.Render(page, filter, element, _ => { });
@@ -271,8 +270,8 @@ namespace PeachPDF.Tests.Svg
         {
             private readonly List<FilterPrimitive> _primitives = [];
 
-            public SvgFilterBuilder AddFlood(RColor color, double opacity, string? result = null) =>
-                Add(new FeFlood { Color = color, Opacity = opacity, Result = result });
+            public SvgFilterBuilder AddFlood(PaintColor color, double opacity, string? result = null) =>
+                Add(new FeFlood { PaintColor = color, Opacity = opacity, Result = result });
 
             public SvgFilterBuilder AddOffset(double dx, double dy, string? result = null) =>
                 Add(new FeOffset { Dx = dx, Dy = dy, Result = result });
@@ -286,7 +285,7 @@ namespace PeachPDF.Tests.Svg
             public SvgFilterBuilder AddComposite(string? in1, string? in2, string op, string? result = null) =>
                 Add(new FeComposite { In = in1, In2 = in2, Operator = op, Result = result });
 
-            public SvgFilterBuilder AddBlend(string? in1, string? in2, RBlendMode mode, string? result = null) =>
+            public SvgFilterBuilder AddBlend(string? in1, string? in2, PaintBlendMode mode, string? result = null) =>
                 Add(new FeBlend { In = in1, In2 = in2, Mode = mode, Result = result });
 
             public SvgFilterBuilder AddColorMatrix(ColorMatrix matrix, string? result = null) =>
@@ -314,7 +313,7 @@ namespace PeachPDF.Tests.Svg
     }
 
     /// <summary>
-    /// A tile-label recording <see cref="RGraphics"/> for testing <see cref="SvgFilterEvaluator"/>'s
+    /// A tile-label recording <see cref="Canvas"/> for testing <see cref="SvgFilterEvaluator"/>'s
     /// resolution logic without a real PDF stack. Every <see cref="CreateTile"/> call returns a fresh
     /// <see cref="FakeImage"/> with a unique <see cref="FakeImage.Id"/>; every draw call into a tile's own
     /// <see cref="FakeFilterGraphics"/> instance appends a short description (naming any source
@@ -322,7 +321,7 @@ namespace PeachPDF.Tests.Svg
     /// can trace exactly which tile fed which primitive by walking <see cref="TilesById"/> from the final
     /// <see cref="PageLog"/> entry.
     /// </summary>
-    internal sealed class FakeFilterGraphics : RGraphics
+    internal sealed class FakeFilterGraphics : Canvas
     {
         private static int _nextId;
         private readonly FakeImage? _owner;
@@ -333,11 +332,11 @@ namespace PeachPDF.Tests.Svg
         /// <summary>Draw calls made directly on this instance when it is the "page" (not a tile) - <see cref="SvgFilterEvaluator.Render"/>'s final <c>DrawImage</c> lands here.</summary>
         public List<string> PageLog { get; }
 
-        public FakeFilterGraphics(RAdapter adapter, FakeImage? owner)
+        public FakeFilterGraphics(RenderContext adapter, FakeImage? owner)
             : this(adapter, owner, new Dictionary<int, FakeImage>(), []) { }
 
-        private FakeFilterGraphics(RAdapter adapter, FakeImage? owner, Dictionary<int, FakeImage> tilesById, List<string> pageLog)
-            : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue))
+        private FakeFilterGraphics(RenderContext adapter, FakeImage? owner, Dictionary<int, FakeImage> tilesById, List<string> pageLog)
+            : base(adapter, new Rect(0, 0, double.MaxValue, double.MaxValue))
         {
             _owner = owner;
             TilesById = tilesById;
@@ -358,65 +357,65 @@ namespace PeachPDF.Tests.Svg
             else PageLog.Add(op);
         }
 
-        private static string Id(RImage image) => image is FakeImage f ? f.Id.ToString() : "?";
+        private static string Id(Image image) => image is FakeImage f ? f.Id.ToString() : "?";
 
-        public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height)
+        public override (Canvas Graphics, Image Image)? CreateTile(double width, double height)
         {
             var image = new FakeImage(_nextId++);
             TilesById[image.Id] = image;
             return (new FakeFilterGraphics(_adapter, image, TilesById, PageLog), image);
         }
 
-        public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) => Log("Flood");
+        public override void DrawRectangle(Brush brush, double x, double y, double width, double height) => Log("Flood");
 
-        public override void DrawImage(RImage image, RRect destRect, RRect srcRect) => Log($"Draw({Id(image)})");
-        public override void DrawImage(RImage image, RRect destRect) => Log($"Draw({Id(image)})");
+        public override void DrawImage(Image image, Rect destRect, Rect srcRect) => Log($"Draw({Id(image)})");
+        public override void DrawImage(Image image, Rect destRect) => Log($"Draw({Id(image)})");
 
-        public override void DrawImageAlphaMasked(RImage image, RImage maskImage, RRect destRect, bool invert = false) =>
+        public override void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, bool invert = false) =>
             Log($"AlphaMask({Id(image)},{Id(maskImage)},{invert})");
 
-        public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) =>
+        public override void DrawImageMasked(Image image, Image maskImage, Rect destRect) =>
             Log($"LumMask({Id(image)},{Id(maskImage)})");
 
-        public override void DrawImageBlendedOver(RImage top, RImage bottom, RRect destRect, RBlendMode blendMode) =>
+        public override void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode) =>
             Log($"Blend({Id(top)},{Id(bottom)},{blendMode})");
 
-        public override void DrawImageWithColorMatrix(RImage image, RRect destRect, ColorMatrix matrix) =>
+        public override void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix) =>
             Log($"Matrix({Id(image)})");
 
-        public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal) { }
+        public override void DrawImageWithOpacity(Image image, Rect destRect, double opacity, PaintBlendMode blendMode = PaintBlendMode.Normal) { }
 
-        public override void PushClip(RRect rect) { }
-        public override void PushClip(RGraphicsPath path) { }
-        public override void PushClipExclude(RRect rect) { }
+        public override void PushClip(Rect rect) { }
+        public override void PushClip(GraphicsPath path) { }
+        public override void PushClipExclude(Rect rect) { }
         public override void PopClip() { }
-        public override void PushTransform(RMatrix matrix) { }
+        public override void PushTransform(Matrix3x2 matrix) { }
         public override void PopTransform() { }
-        public override void PushBlendMode(RBlendMode mode) { }
+        public override void PushBlendMode(PaintBlendMode mode) { }
         public override void PopBlendMode() { }
         public override object SetAntiAliasSmoothingMode() => new object();
         public override void ReturnPreviousSmoothingMode(object? prevMode) { }
-        public override RGraphicsPath GetGraphicsPath() => throw new NotSupportedException();
+        public override GraphicsPath GetGraphicsPath() => throw new NotSupportedException();
         public override void BeginMarkedContent(string structureType, int mcid) { }
         public override void EndMarkedContent() { }
         public override void BeginArtifact() { }
         public override void BeginVariableText() { }
         public override void EndVariableText() { }
-        public override RSize MeasureString(string str, RFont font, ShapeSettings? features = null) => new(0, 0);
-        public override int CountShapedGlyphs(string str, RFont font, ShapeSettings? features = null) => 0;
-        public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth) { charFit = 0; charFitWidth = 0; }
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, ShapeSettings? features = null) { }
-        public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color) { }
-        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) => null;
-        public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2) { }
-        public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }
-        public override void DrawPath(RPen pen, RGraphicsPath path) { }
-        public override void DrawPath(RBrush brush, RGraphicsPath path) { }
-        public override void DrawPolygon(RBrush brush, RPoint[] points) { }
+        public override Size MeasureString(string str, Font font, ShapeSettings? features = null) => new(0, 0);
+        public override int CountShapedGlyphs(string str, Font font, ShapeSettings? features = null) => 0;
+        public override void MeasureString(string str, Font font, double maxWidth, out int charFit, out double charFitWidth) { charFit = 0; charFitWidth = 0; }
+        public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null) { }
+        public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color) { }
+        public override GraphicsPath? GetTextOutline(string str, Font font, PaintPoint baselineOrigin, double letterSpacing = 0, ShapeSettings? features = null) => null;
+        public override void DrawLine(Pen pen, double x1, double y1, double x2, double y2) { }
+        public override void DrawRectangle(Pen pen, double x, double y, double width, double height) { }
+        public override void DrawPath(Pen pen, GraphicsPath path) { }
+        public override void DrawPath(Brush brush, GraphicsPath path) { }
+        public override void DrawPolygon(Brush brush, PaintPoint[] points) { }
         public override void Dispose() { }
     }
 
-    internal sealed class FakeImage(int id) : RImage
+    internal sealed class FakeImage(int id) : Image
     {
         public int Id { get; } = id;
         public List<string> Ops { get; } = [];

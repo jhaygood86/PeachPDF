@@ -1,6 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Integration
     /// Layout runs through the real <see cref="PdfSharpAdapter"/>/<see cref="GraphicsAdapter"/> (for
     /// accurate font metrics, matching real usage); paint verification for color/text assertions runs
     /// through <see cref="TestRecordingGraphics"/> instead, since it's the only way to introspect the
-    /// exact <see cref="RColor"/> a brush/pen was created with (see its doc comment).
+    /// exact <see cref="PaintColor"/> a brush/pen was created with (see its doc comment).
     /// </summary>
     public class MarkerStylingIntegrationTests
     {
@@ -32,8 +32,8 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, marker, g);
 
             var call = Assert.Single(g.DrawStringCalls);
-            Assert.Equal(RColor.FromArgb(255, 0, 0), call.Color);
-            Assert.NotEqual(RColor.FromArgb(0, 0, 255), call.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 0, 0), call.PaintColor);
+            Assert.NotEqual(PaintColor.FromArgb(0, 0, 255), call.PaintColor);
         }
 
         [Fact]
@@ -171,7 +171,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, marker, g);
 
             var pathCall = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>());
-            Assert.Equal(RColor.FromArgb(0, 128, 0), pathCall.Color);
+            Assert.Equal(PaintColor.FromArgb(0, 128, 0), pathCall.PaintColor);
         }
 
         [Fact]

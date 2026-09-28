@@ -256,7 +256,7 @@ namespace PeachPDF.Html.Core
                     // url(), gradients, and the syntactically-valid-but-not-rendered image functions
                     // image-set()/cross-fade()/element() (CSS Images 4 §2) — the same grammar background-image
                     // and friends use, so registration and property parsing agree. Tokenized in value context
-                    // so hex gradient stops (#f00 / #00f) resolve as Color tokens for the gradient converters.
+                    // so hex gradient stops (#f00 / #00f) resolve as PaintColor tokens for the gradient converters.
                     {
                         using var pooledTokens = CssValueParser.GetCssTokensPooled(value, inValueContext: true);
                         List<Token> tokens = pooledTokens;

@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Svg;
 
 namespace PeachPDF.Tests.Svg
@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.Svg
         {
             // A right-angle turn: (0,0) -> (10,0) -> (10,10). Incoming angle 0°, outgoing 90° ->
             // bisector 45°.
-            var points = new[] { new RPoint(0, 0), new RPoint(10, 0), new RPoint(10, 10) };
+            var points = new[] { new PaintPoint(0, 0), new PaintPoint(10, 0), new PaintPoint(10, 10) };
             var vertices = SvgMarkerGeometry.ComputeForPoints(points, closed: false);
 
             Assert.Equal(3, vertices.Count);
@@ -48,7 +48,7 @@ namespace PeachPDF.Tests.Svg
         {
             // A closed square: first/last vertex should each bisect with the WRAPPING closing edge,
             // not just their single open-path-style neighbor.
-            var points = new[] { new RPoint(0, 0), new RPoint(10, 0), new RPoint(10, 10), new RPoint(0, 10) };
+            var points = new[] { new PaintPoint(0, 0), new PaintPoint(10, 0), new PaintPoint(10, 10), new PaintPoint(0, 10) };
             var vertices = SvgMarkerGeometry.ComputeForPoints(points, closed: true);
 
             Assert.Equal(4, vertices.Count);

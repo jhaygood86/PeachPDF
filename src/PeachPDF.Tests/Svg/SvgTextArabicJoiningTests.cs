@@ -1,7 +1,7 @@
 using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
@@ -13,7 +13,7 @@ namespace PeachPDF.Tests.Svg
     /// Coverage for SVG <c>&lt;text&gt;</c>'s Arabic-family joining-form resolution/shaping-run
     /// wiring (issue #533) - <c>SvgRenderer.ResolveComplexScriptRuns</c>/<c>GlyphInfo.ShapingRunFirst</c>,
     /// mirroring <see cref="SvgTextLanguageTests"/>'s own pattern of asserting the resolved
-    /// <see cref="ShapeSettings"/> actually reaches <see cref="RGraphics.DrawString"/> via the
+    /// <see cref="ShapeSettings"/> actually reaches <see cref="Canvas.DrawString"/> via the
     /// <see cref="TestRecordingGraphics"/> mock, not just that some internal state parses correctly.
     /// Real-font glyph-substitution proof (not just wiring) lives in
     /// <see cref="SvgTextArabicJoiningCharacterizationTests"/>.
@@ -39,7 +39,7 @@ namespace PeachPDF.Tests.Svg
                 """;
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
             var g = new TestRecordingGraphics();
-            SvgRenderer.RenderInto(g, document, new RRect(0, 0, 200, 100));
+            SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
             return g;
         }
 

@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.PdfSharpCore;
@@ -121,10 +121,10 @@ namespace PeachPDF.Tests.Integration
             {
                 Stops =
                 [
-                    (RColor.FromArgb(0xDD, 0xDD, 0xDD), 0.0, false),
-                    (RColor.FromArgb(0xDD, 0xDD, 0xDD), System.Math.PI / 2, false),
-                    (RColor.FromArgb(0xFF, 0xFF, 0xFF), 0.0, false),
-                    (RColor.FromArgb(0xFF, 0xFF, 0xFF), System.Math.PI, false),
+                    (PaintColor.FromArgb(0xDD, 0xDD, 0xDD), 0.0, false),
+                    (PaintColor.FromArgb(0xDD, 0xDD, 0xDD), System.Math.PI / 2, false),
+                    (PaintColor.FromArgb(0xFF, 0xFF, 0xFF), 0.0, false),
+                    (PaintColor.FromArgb(0xFF, 0xFF, 0xFF), System.Math.PI, false),
                 ],
                 IsRepeating = false,
             };

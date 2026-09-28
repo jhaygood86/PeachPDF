@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
@@ -69,10 +68,10 @@ namespace PeachPDF.Html.Core.Paint
         private List<OverflowClipStep> _overflowClips = [];
 
         /// <summary>One rectangle of a box's outline and which of its edges are real ones.</summary>
-        private readonly record struct OutlineRect(RRect Rect, bool HasLeftEdge, bool HasRightEdge, bool HasTopEdge, bool HasBottomEdge);
+        private readonly record struct OutlineRect(Rect Rect, bool HasLeftEdge, bool HasRightEdge, bool HasTopEdge, bool HasBottomEdge);
 
         /// <summary>One <c>overflow</c> clip as <see cref="RenderUtils.ClipGraphicsByOverflow"/> pushes it.</summary>
-        private readonly record struct OverflowClipStep(RRect Rect, OverflowClipCurve? Curve);
+        private readonly record struct OverflowClipStep(Rect Rect, OverflowClipCurve? Curve);
 
         /// <summary>A box's outline, and the clips it has to be drawn under.</summary>
         private sealed record DeferredOutline(CssBox Box, List<OutlineRect> Rects, OverflowClipStep[] Clips);
@@ -120,7 +119,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <param name="outer">what <see cref="OpenOutlineScope"/> returned</param>
         /// <param name="builder">the tagged-PDF builder, or null when output is untagged</param>
         /// <param name="draw">false to only restore the enclosing scope - after a paint that failed</param>
-        private void CloseOutlineScope(RGraphics g, OutlineScopeState? outer, StructureTagBuilder? builder, bool draw = true)
+        private void CloseOutlineScope(Canvas g, OutlineScopeState? outer, StructureTagBuilder? builder, bool draw = true)
         {
             draw &= !_stopped;
 
@@ -144,7 +143,7 @@ namespace PeachPDF.Html.Core.Paint
         /// Draws the outlines this scope has collected so far and empties it, ahead of the scope's
         /// positive <c>z-index</c> layers. Anything collected after this is drawn when the scope closes.
         /// </summary>
-        private void DrawScopeOutlinesSoFar(RGraphics g, StructureTagBuilder? builder)
+        private void DrawScopeOutlinesSoFar(Canvas g, StructureTagBuilder? builder)
         {
             if (_stopped)
                 return;
@@ -167,7 +166,7 @@ namespace PeachPDF.Html.Core.Paint
         /// is opened there: inside an artifact the rings already are one, and inside a content element
         /// they join its content, which is where an outline was always tagged before it was deferred.
         /// </remarks>
-        private static void DrawOutlines(RGraphics g, List<DeferredOutline> outlines, StructureTagBuilder? builder)
+        private static void DrawOutlines(Canvas g, List<DeferredOutline> outlines, StructureTagBuilder? builder)
         {
             if (outlines.Count == 0) return;
 
@@ -213,7 +212,7 @@ namespace PeachPDF.Html.Core.Paint
         /// Draws <paramref name="box"/>'s outline now if no scope is collecting, or hands it to the
         /// scope that is.
         /// </summary>
-        private void PaintOrDeferOutline(RGraphics g, CssBox box, List<OutlineRect> rects)
+        private void PaintOrDeferOutline(Canvas g, CssBox box, List<OutlineRect> rects)
         {
             // Every box collects its rectangles, outline or not. Only one that will draw something is
             // worth carrying to its scope - an empty entry would still replay its clips there, and open
@@ -227,7 +226,7 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>Draws one box's outline from the rectangles its paint collected.</summary>
-        private static void DrawOutline(RGraphics g, CssBox box, List<OutlineRect> rects)
+        private static void DrawOutline(Canvas g, CssBox box, List<OutlineRect> rects)
         {
             // More than one rectangle is a fragmented box, whose outline CSS UI 4 §3.1 asks be drawn
             // as one connected shape rather than closed separately around each fragment - see
@@ -240,7 +239,7 @@ namespace PeachPDF.Html.Core.Paint
                 !IsVerticalDecorationGeometry(box) &&
                 OutlineDrawHandler.SupportsRegionOutline(box))
             {
-                var region = new List<RRect>(rects.Count);
+                var region = new List<Rect>(rects.Count);
                 foreach (var rect in rects) region.Add(rect.Rect);
 
                 OutlineDrawHandler.DrawRegionOutline(g, box, region);

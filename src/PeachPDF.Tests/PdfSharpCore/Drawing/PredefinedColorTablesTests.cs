@@ -50,7 +50,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         [Fact]
         public void XPens_Black_HasBlackColor()
         {
-            Assert.Equal(XColors.Black, XPens.Black.Color);
+            Assert.Equal(XColors.Black, XPens.Black.PaintColor);
         }
 
         [Fact]
@@ -69,7 +69,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         [Fact]
         public void XBrushes_Black_HasBlackColor()
         {
-            Assert.Equal(XColors.Black, XBrushes.Black.Color);
+            Assert.Equal(XColors.Black, XBrushes.Black.PaintColor);
         }
     }
 }

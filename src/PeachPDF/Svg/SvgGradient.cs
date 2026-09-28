@@ -10,8 +10,9 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace PeachPDF.Svg
 {
@@ -21,7 +22,7 @@ namespace PeachPDF.Svg
     internal readonly struct SvgGradientStop
     {
         public double Offset { get; init; }
-        public RColor Color { get; init; }
+        public PaintColor PaintColor { get; init; }
     }
 
     /// <summary>How a gradient's colors extend beyond its own defined 0-1 stop range.</summary>
@@ -54,7 +55,7 @@ namespace PeachPDF.Svg
         /// Parsed <c>gradientTransform</c> (only translate/scale/matrix are supported - see
         /// <see cref="SvgTransformParser"/>).
         /// </summary>
-        public RMatrix? GradientTransform { get; init; }
+        public Matrix3x2? GradientTransform { get; init; }
 
         public IReadOnlyList<SvgGradientStop> Stops { get; init; } = [];
 

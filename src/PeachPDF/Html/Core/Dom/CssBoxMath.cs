@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 using PeachPDF.MathML;
 using System.Threading.Tasks;
 
@@ -38,7 +38,7 @@ namespace PeachPDF.Html.Core.Dom
             Words.Add(_mathWord);
         }
 
-        internal override ValueTask MeasureWordsSize(RGraphics g)
+        internal override ValueTask MeasureWordsSize(Canvas g)
         {
             if (!_wordsSizeMeasured)
             {
@@ -99,7 +99,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Synchronous: unlike <see cref="CssBoxSvg"/>, MathML has no external resources
         /// (<c>&lt;image&gt;</c> hrefs, etc.) to prefetch first.
         /// </summary>
-        internal void EnsureLayout(RGraphics g)
+        internal void EnsureLayout(Canvas g)
         {
             if (_layout is not null)
                 return;

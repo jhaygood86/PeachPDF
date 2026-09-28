@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -165,7 +165,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets a List of rectangles that are to be painted on this linebox
         /// </summary>
-        public Dictionary<CssBox, RRect> Rectangles { get; }
+        public Dictionary<CssBox, Rect> Rectangles { get; }
 
         /// <summary>
         /// Get the height of this box line (the max height of all the words)
@@ -296,13 +296,13 @@ namespace PeachPDF.Html.Core.Dom
 
             if (Rectangles.TryGetValue(box, out var f))
             {
-                Rectangles[box] = RRect.FromLTRB(
+                Rectangles[box] = Rect.FromLTRB(
                     Math.Min(f.X, x), Math.Min(f.Y, y),
                     Math.Max(f.Right, r), Math.Max(f.Bottom, b));
             }
             else
             {
-                Rectangles.Add(box, RRect.FromLTRB(x, y, r, b));
+                Rectangles.Add(box, Rect.FromLTRB(x, y, r, b));
             }
 
             if (box.ParentBox is { IsInline: true })

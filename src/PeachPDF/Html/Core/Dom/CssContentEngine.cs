@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
@@ -33,7 +33,7 @@ namespace PeachPDF.Html.Core.Dom
             List<Token> tokens = pooledTokens;
 
             // Detect image content (url() or gradient functions) before building text
-            if (tokens.Count > 0 && cssBox.HtmlContainer?.Adapter is RAdapter adapter)
+            if (tokens.Count > 0 && cssBox.HtmlContainer?.Adapter is RenderContext adapter)
             {
                 var first = tokens[0];
                 if (first.Type == TokenType.Url ||

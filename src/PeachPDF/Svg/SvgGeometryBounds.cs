@@ -10,9 +10,10 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace PeachPDF.Svg
 {
@@ -27,22 +28,22 @@ namespace PeachPDF.Svg
     /// </summary>
     internal static class SvgGeometryBounds
     {
-        public static RRect? GetBoundingBox(SvgElement element) => element switch
+        public static Rect? GetBoundingBox(SvgElement element) => element switch
         {
             SvgPathElement path => PathBounds(path.Segments),
-            SvgCircleElement { R: > 0 } circle => new RRect(circle.Cx - circle.R, circle.Cy - circle.R, circle.R * 2, circle.R * 2),
-            SvgEllipseElement { Rx: > 0, Ry: > 0 } ellipse => new RRect(ellipse.Cx - ellipse.Rx, ellipse.Cy - ellipse.Ry, ellipse.Rx * 2, ellipse.Ry * 2),
-            SvgRectElement { Width: > 0, Height: > 0 } rect => new RRect(rect.X, rect.Y, rect.Width, rect.Height),
+            SvgCircleElement { R: > 0 } circle => new Rect(circle.Cx - circle.R, circle.Cy - circle.R, circle.R * 2, circle.R * 2),
+            SvgEllipseElement { Rx: > 0, Ry: > 0 } ellipse => new Rect(ellipse.Cx - ellipse.Rx, ellipse.Cy - ellipse.Ry, ellipse.Rx * 2, ellipse.Ry * 2),
+            SvgRectElement { Width: > 0, Height: > 0 } rect => new Rect(rect.X, rect.Y, rect.Width, rect.Height),
             SvgPolygonElement polygon => PointsBounds(polygon.Points),
             SvgPolylineElement polyline => PointsBounds(polyline.Points),
-            SvgLineElement line => PointsBounds([new RPoint(line.X1, line.Y1), new RPoint(line.X2, line.Y2)]),
+            SvgLineElement line => PointsBounds([new PaintPoint(line.X1, line.Y1), new PaintPoint(line.X2, line.Y2)]),
             SvgUseElement { Target: { } target } use => Offset(GetBoundingBox(target), use.X, use.Y),
             SvgGroupElement group => UnionAll(group.Children),
             _ => null,
         };
 
-        private static RRect? Offset(RRect? rect, double dx, double dy) =>
-            rect is { } r ? new RRect(r.X + dx, r.Y + dy, r.Width, r.Height) : null;
+        private static Rect? Offset(Rect? rect, double dx, double dy) =>
+            rect is { } r ? new Rect(r.X + dx, r.Y + dy, r.Width, r.Height) : null;
 
         /// <summary>
         /// The box <see cref="SvgRenderer"/>'s context-paint mechanism (<c>ContextBounds</c>) measures a <c>&lt;use&gt;</c>'s
@@ -65,16 +66,16 @@ namespace PeachPDF.Svg
         /// recorded frame composes <c>target.Transform</c> with the ambient to match <see cref="GetBoundingBox"/>'s own
         /// (also pre-<c>Transform</c>) convention for every other target type.
         /// </remarks>
-        internal static RRect? GetUseTargetBoundingBox(SvgElement target) => target switch
+        internal static Rect? GetUseTargetBoundingBox(SvgElement target) => target switch
         {
             SvgSymbolElement symbol => UnionAll(symbol.Children),
             SvgNestedSvgElement nestedSvg => UnionAll(nestedSvg.Children),
             _ => GetBoundingBox(target),
         };
 
-        private static RRect? UnionAll(IEnumerable<SvgElement> elements)
+        private static Rect? UnionAll(IEnumerable<SvgElement> elements)
         {
-            RRect? result = null;
+            Rect? result = null;
 
             foreach (var element in elements)
             {
@@ -99,7 +100,7 @@ namespace PeachPDF.Svg
         /// (not just used by <see cref="UnionAll"/>) because <see cref="SvgRenderer"/>'s own parallel "union children's bounds"
         /// pass for an opacity-group tile (<c>UnionOpacityGroupBounds</c>) needs the exact same child-transform composition.
         /// </summary>
-        internal static RRect TransformBounds(RRect rect, RMatrix matrix)
+        internal static Rect TransformBounds(Rect rect, Matrix3x2 matrix)
         {
             double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
 
@@ -111,27 +112,27 @@ namespace PeachPDF.Svg
 
             foreach (var (x, y) in corners)
             {
-                var px = x * matrix.M11 + y * matrix.M21 + matrix.OffsetX;
-                var py = x * matrix.M12 + y * matrix.M22 + matrix.OffsetY;
+                var px = x * matrix.M11 + y * matrix.M21 + matrix.M31;
+                var py = x * matrix.M12 + y * matrix.M22 + matrix.M32;
                 minX = Math.Min(minX, px);
                 maxX = Math.Max(maxX, px);
                 minY = Math.Min(minY, py);
                 maxY = Math.Max(maxY, py);
             }
 
-            return new RRect(minX, minY, maxX - minX, maxY - minY);
+            return new Rect(minX, minY, maxX - minX, maxY - minY);
         }
 
-        private static RRect Union(RRect a, RRect b)
+        private static Rect Union(Rect a, Rect b)
         {
             var minX = Math.Min(a.X, b.X);
             var minY = Math.Min(a.Y, b.Y);
             var maxX = Math.Max(a.X + a.Width, b.X + b.Width);
             var maxY = Math.Max(a.Y + a.Height, b.Y + b.Height);
-            return new RRect(minX, minY, maxX - minX, maxY - minY);
+            return new Rect(minX, minY, maxX - minX, maxY - minY);
         }
 
-        private static RRect? PointsBounds(RPoint[] points)
+        private static Rect? PointsBounds(PaintPoint[] points)
         {
             if (points.Length == 0)
                 return null;
@@ -147,7 +148,7 @@ namespace PeachPDF.Svg
                 maxY = Math.Max(maxY, points[i].Y);
             }
 
-            return new RRect(minX, minY, maxX - minX, maxY - minY);
+            return new Rect(minX, minY, maxX - minX, maxY - minY);
         }
 
         /// <summary>
@@ -157,7 +158,7 @@ namespace PeachPDF.Svg
         /// positioning (minor error just shifts stops/tiles slightly, with no visible artifact).
         /// <see cref="SvgInkExtent"/>, which needs a box that holds the ink, adds an allowance for arcs.
         /// </summary>
-        private static RRect? PathBounds(IReadOnlyList<PathSegment> segments)
+        private static Rect? PathBounds(IReadOnlyList<PathSegment> segments)
         {
             double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
             var any = false;
@@ -188,7 +189,7 @@ namespace PeachPDF.Svg
                 }
             }
 
-            return any ? new RRect(minX, minY, maxX - minX, maxY - minY) : null;
+            return any ? new Rect(minX, minY, maxX - minX, maxY - minY) : null;
         }
     }
 }

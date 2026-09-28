@@ -59,4 +59,4 @@ For timing whole-document rendering, the [showcase harness](#the-showcase-harnes
 ## See also
 
 - [Architecture](architecture.md) — what each of these tests is verifying: the HTML → DOM → CSS → layout → paint → PDF pipeline.
-- [CONTRIBUTING.md](https://github.com/jhaygood86/PeachPDF/blob/main/CONTRIBUTING.md) — exact local commands, testing conventions (layout-property assertions, `RGraphics` recording mocks), and how to reproduce the coverage gate locally.
+- [CONTRIBUTING.md](https://github.com/jhaygood86/PeachPDF/blob/main/CONTRIBUTING.md) — exact local commands, testing conventions (layout-property assertions, `Canvas` recording mocks), and how to reproduce the coverage gate locally.

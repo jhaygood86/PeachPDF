@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using System;
 using Xunit;
@@ -19,7 +19,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             int row = 0,
             int column = 0,
             byte colorSeed = 0) =>
-            new(style, width, RColor.FromArgb(colorSeed, colorSeed, colorSeed), origin, row, column);
+            new(style, width, PaintColor.FromArgb(colorSeed, colorSeed, colorSeed), origin, row, column);
 
         [Fact]
         public void StylePriority_MatchesCss21Order()
@@ -146,8 +146,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
                     var moreSpecific = origins[i];
                     var lessSpecific = origins[j];
 
-                    var winnerColor = RColor.FromArgb(1, 1, 1);
-                    var loserColor = RColor.FromArgb(2, 2, 2);
+                    var winnerColor = PaintColor.FromArgb(1, 1, 1);
+                    var loserColor = PaintColor.FromArgb(2, 2, 2);
                     var candidates = new[]
                     {
                         new CollapsedBorderCandidate(LineStyle.Solid, 2, loserColor, lessSpecific, 0, 0),
@@ -156,7 +156,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
                     var result = CollapsedBorderResolver.Resolve(candidates, leftToRight: true);
 
-                    Assert.True(result.Color == winnerColor,
+                    Assert.True(result.PaintColor == winnerColor,
                         $"{moreSpecific} should have outranked {lessSpecific}");
                 }
             }
@@ -165,8 +165,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
         [Fact]
         public void DifferOnlyInColor_MoreSpecificOriginStillDecides()
         {
-            var cellColor = RColor.FromArgb(255, 0, 0);
-            var tableColor = RColor.FromArgb(0, 0, 255);
+            var cellColor = PaintColor.FromArgb(255, 0, 0);
+            var tableColor = PaintColor.FromArgb(0, 0, 255);
             var candidates = new[]
             {
                 new CollapsedBorderCandidate(LineStyle.Solid, 2, tableColor, CollapsedBorderOrigin.Table, 0, 0),
@@ -175,7 +175,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             var result = CollapsedBorderResolver.Resolve(candidates, leftToRight: true);
 
-            Assert.Equal(cellColor, result.Color);
+            Assert.Equal(cellColor, result.PaintColor);
         }
 
         [Fact]
@@ -192,12 +192,12 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // Both candidates resolve to the same style/width; assert via a distinguishing color instead.
             var withColor = new[]
             {
-                new CollapsedBorderCandidate(LineStyle.Solid, 2, RColor.FromArgb(1, 1, 1), CollapsedBorderOrigin.Cell, 5, 3),
-                new CollapsedBorderCandidate(LineStyle.Solid, 2, RColor.FromArgb(2, 2, 2), CollapsedBorderOrigin.Cell, 1, 1),
+                new CollapsedBorderCandidate(LineStyle.Solid, 2, PaintColor.FromArgb(1, 1, 1), CollapsedBorderOrigin.Cell, 5, 3),
+                new CollapsedBorderCandidate(LineStyle.Solid, 2, PaintColor.FromArgb(2, 2, 2), CollapsedBorderOrigin.Cell, 1, 1),
             };
             var resolved = CollapsedBorderResolver.Resolve(withColor, leftToRight: true);
 
-            Assert.Equal(RColor.FromArgb(2, 2, 2), resolved.Color); // column 1 beats column 3
+            Assert.Equal(PaintColor.FromArgb(2, 2, 2), resolved.PaintColor); // column 1 beats column 3
         }
 
         [Fact]
@@ -205,13 +205,13 @@ namespace PeachPDF.Tests.Html.Core.Dom
         {
             var candidates = new[]
             {
-                new CollapsedBorderCandidate(LineStyle.Solid, 2, RColor.FromArgb(1, 1, 1), CollapsedBorderOrigin.Cell, 0, 3),
-                new CollapsedBorderCandidate(LineStyle.Solid, 2, RColor.FromArgb(2, 2, 2), CollapsedBorderOrigin.Cell, 0, 1),
+                new CollapsedBorderCandidate(LineStyle.Solid, 2, PaintColor.FromArgb(1, 1, 1), CollapsedBorderOrigin.Cell, 0, 3),
+                new CollapsedBorderCandidate(LineStyle.Solid, 2, PaintColor.FromArgb(2, 2, 2), CollapsedBorderOrigin.Cell, 0, 1),
             };
 
             var resolved = CollapsedBorderResolver.Resolve(candidates, leftToRight: false);
 
-            Assert.Equal(RColor.FromArgb(1, 1, 1), resolved.Color); // column 3 beats column 1 under rtl
+            Assert.Equal(PaintColor.FromArgb(1, 1, 1), resolved.PaintColor); // column 3 beats column 1 under rtl
         }
 
         [Fact]
@@ -219,13 +219,13 @@ namespace PeachPDF.Tests.Html.Core.Dom
         {
             var candidates = new[]
             {
-                new CollapsedBorderCandidate(LineStyle.Solid, 2, RColor.FromArgb(1, 1, 1), CollapsedBorderOrigin.Cell, 5, 0),
-                new CollapsedBorderCandidate(LineStyle.Solid, 2, RColor.FromArgb(2, 2, 2), CollapsedBorderOrigin.Cell, 1, 0),
+                new CollapsedBorderCandidate(LineStyle.Solid, 2, PaintColor.FromArgb(1, 1, 1), CollapsedBorderOrigin.Cell, 5, 0),
+                new CollapsedBorderCandidate(LineStyle.Solid, 2, PaintColor.FromArgb(2, 2, 2), CollapsedBorderOrigin.Cell, 1, 0),
             };
 
             var resolved = CollapsedBorderResolver.Resolve(candidates, leftToRight: true);
 
-            Assert.Equal(RColor.FromArgb(2, 2, 2), resolved.Color); // row 1 beats row 5
+            Assert.Equal(PaintColor.FromArgb(2, 2, 2), resolved.PaintColor); // row 1 beats row 5
         }
 
         [Fact]

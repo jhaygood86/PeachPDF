@@ -1,0 +1,66 @@
+PeachDrawing.RasterCanvas : sealed class
+  ctor(RenderContext adapter, RasterSurface surface, Double pixelsPerPoint)
+  method PixelBuffer ToPixelBuffer()
+  method Task SaveAsync(Stream stream, String formatName, EncoderOptions options, CancellationToken cancellationToken = null)
+  method Void Erase(GraphicsPath path)
+  method Void EraseRectangle(Rect rect)
+  method Void Save(Stream stream, String formatName, EncoderOptions options)
+  method virtual GraphicsPath GetGraphicsPath()
+  method virtual GraphicsPath GetTextOutline(String str, Font font, PaintPoint baselineOrigin, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual Int32 CountShapedGlyphs(String str, Font font, ShapeSettings? features = null)
+  method virtual Object SetAntiAliasSmoothingMode()
+  method virtual Size MeasureString(String str, Font font, ShapeSettings? features = null)
+  method virtual ValueTuple<Canvas, Image>? CreateTile(Double width, Double height)
+  method virtual Void BeginArtifact()
+  method virtual Void BeginMarkedContent(String structureType, Int32 mcid)
+  method virtual Void BeginVariableText()
+  method virtual Void Dispose()
+  method virtual Void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color)
+  method virtual Void DrawImage(Image image, Rect destRect)
+  method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect)
+  method virtual Void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, Boolean invert = False)
+  method virtual Void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode)
+  method virtual Void DrawImageMasked(Image image, Image maskImage, Rect destRect)
+  method virtual Void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix)
+  method virtual Void DrawImageWithOpacity(Image image, Rect destRect, Double opacity, PaintBlendMode blendMode = Normal)
+  method virtual Void DrawLine(Pen pen, Double x1, Double y1, Double x2, Double y2)
+  method virtual Void DrawPath(Brush brush, GraphicsPath path)
+  method virtual Void DrawPath(Pen pen, GraphicsPath path)
+  method virtual Void DrawPolygon(Brush brush, PaintPoint[] points)
+  method virtual Void DrawRectangle(Brush brush, Double x, Double y, Double width, Double height)
+  method virtual Void DrawRectangle(Pen pen, Double x, Double y, Double width, Double height)
+  method virtual Void DrawString(String str, Font font, PaintColor color, PaintPoint point, Size size, Double letterSpacing = 0, FontPalette fontPalette = null, ShapeSettings? features = null)
+  method virtual Void EndMarkedContent()
+  method virtual Void EndVariableText()
+  method virtual Void MeasureString(String str, Font font, Double maxWidth, out Int32 charFit, out Double charFitWidth)
+  method virtual Void PopBlendMode()
+  method virtual Void PopClip()
+  method virtual Void PopTransform()
+  method virtual Void PushBlendMode(PaintBlendMode mode)
+  method virtual Void PushClip(GraphicsPath path)
+  method virtual Void PushClip(Rect rect)
+  method virtual Void PushClipExclude(Rect rect)
+  method virtual Void PushTransform(Matrix3x2 matrix)
+  method virtual Void ReturnPreviousSmoothingMode(Object prevMode)
+  property Boolean IsOffscreenTile { get; }
+  property Double PixelsPerPoint { get; }
+  property RasterSurface Surface { get; }
+PeachDrawing.RasterRenderContext : sealed class
+  ctor()
+  method RasterCanvas CreateCanvas(Int32 widthPx, Int32 heightPx, Double dpi = 96)
+  method Task AddFont(Stream stream, String fontFamilyName)
+  method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
+PeachDrawing.RasterSurface : sealed class
+  ctor(Int32 width, Int32 height, Int32 gridX, Int32 gridY, Double pixelsPerUnitX, Double pixelsPerUnitY)
+  method Span<Byte> Row(Int32 y)
+  method Void Clear()
+  method virtual Void Dispose()
+  property Double PixelsPerUnitX { get; }
+  property Double PixelsPerUnitY { get; }
+  property Int32 GridX { get; }
+  property Int32 GridY { get; }
+  property Int32 Height { get; }
+  property Int32 Stride { get; }
+  property Int32 Width { get; }
+  property Rect LayoutRect { get; }
+  property Span<Byte> Pixels { get; }

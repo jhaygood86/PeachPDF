@@ -1,3 +1,4 @@
+using PeachDrawing.Abstractions;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.Tests.TestSupport;
@@ -1059,7 +1060,7 @@ namespace PeachPDF.Tests.Integration
             // silently misaligned the two - the mask would evaluate as fully transparent everywhere,
             // even though every other check here (/SMask, /Luminosity, /Subtype /Form present) still
             // passed, since those only check token presence, not where the tokens actually land.
-            // RGraphics.DrawImageMasked fixes this by emitting the mask's "gs" and the content's "Do"
+            // Canvas.DrawImageMasked fixes this by emitting the mask's "gs" and the content's "Do"
             // on the SAME "q ... cm ... gs ... Do Q" line, sharing one placement transform - assert
             // that structure directly so a future regression to the old "ambient gs, unrelated Do"
             // shape fails loudly here instead of only being visible as a blank render.

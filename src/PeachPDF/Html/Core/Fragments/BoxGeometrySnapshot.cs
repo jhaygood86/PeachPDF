@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using System;
 using System.Collections.Generic;
@@ -27,10 +27,10 @@ namespace PeachPDF.Html.Core.Fragments
         /// </summary>
         internal sealed class BoxGeometry
         {
-            internal RPoint Location { get; set; }
+            internal PaintPoint Location { get; set; }
             internal double ActualRight { get; set; }
             internal double ActualBottom { get; set; }
-            internal Dictionary<CssLineBox, RRect> Rectangles { get; } = [];
+            internal Dictionary<CssLineBox, Rect> Rectangles { get; } = [];
 
             /// <summary>
             /// Where each of the box's words sat, or null for one that belongs to the <i>next</i>
@@ -45,9 +45,9 @@ namespace PeachPDF.Html.Core.Fragments
             /// time instead: by then the resumed pass has re-placed the word and cleared the flag, while this
             /// snapshot still holds where it used to be.
             /// </remarks>
-            internal List<RPoint?> WordOrigins { get; } = [];
+            internal List<PaintPoint?> WordOrigins { get; } = [];
 
-            internal RRect Bounds => RRect.FromLTRB(Location.X, Location.Y, ActualRight, ActualBottom);
+            internal Rect Bounds => Rect.FromLTRB(Location.X, Location.Y, ActualRight, ActualBottom);
         }
 
         private readonly Dictionary<CssBox, BoxGeometry> _geometry = [];
@@ -134,7 +134,7 @@ namespace PeachPDF.Html.Core.Fragments
             foreach (var word in box.Words)
             {
                 geometry.WordOrigins.Add(
-                    word.AwaitsTheNextFragmentainer ? null : new RPoint(word.Left, word.Top));
+                    word.AwaitsTheNextFragmentainer ? null : new PaintPoint(word.Left, word.Top));
             }
 
             _geometry[box] = geometry;
@@ -261,20 +261,20 @@ namespace PeachPDF.Html.Core.Fragments
         /// </summary>
         private static void ShiftGeometry(BoxGeometry geometry, double dx, double dy)
         {
-            geometry.Location = new RPoint(geometry.Location.X + dx, geometry.Location.Y + dy);
+            geometry.Location = new PaintPoint(geometry.Location.X + dx, geometry.Location.Y + dy);
             geometry.ActualRight += dx;
             geometry.ActualBottom += dy;
 
             foreach (var line in geometry.Rectangles.Keys)
             {
                 var r = geometry.Rectangles[line];
-                geometry.Rectangles[line] = new RRect(r.X + dx, r.Y + dy, r.Width, r.Height);
+                geometry.Rectangles[line] = new Rect(r.X + dx, r.Y + dy, r.Width, r.Height);
             }
 
             for (var i = 0; i < geometry.WordOrigins.Count; i++)
             {
                 if (geometry.WordOrigins[i] is { } origin)
-                    geometry.WordOrigins[i] = new RPoint(origin.X + dx, origin.Y + dy);
+                    geometry.WordOrigins[i] = new PaintPoint(origin.X + dx, origin.Y + dy);
             }
         }
     }

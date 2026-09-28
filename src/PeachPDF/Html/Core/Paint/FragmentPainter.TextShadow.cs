@@ -1,10 +1,10 @@
 using PeachDrawing.Text.Shaping;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
-using PeachPDF.Raster.Filters;
+using PeachDrawing;
+using PeachDrawing.Filters;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -48,7 +48,7 @@ namespace PeachPDF.Html.Core.Paint
         /// selectable and tagged. A graphics that cannot rasterize draws a blurred shadow as nothing, which is what an
         /// unsupported <c>text-shadow</c> always did.
         /// </remarks>
-        private static void PaintTextShadows(RGraphics g, CssBox styleSource, RFont font, string text, RPoint point, RSize size,
+        private static void PaintTextShadows(Canvas g, CssBox styleSource, Font font, string text, PaintPoint point, Size size,
             ShapeSettings features, string? logicalText)
         {
             // Shadows are shapes, not text: nothing for an invisible-text pass to supply.
@@ -70,7 +70,7 @@ namespace PeachPDF.Html.Core.Paint
                 var dx = CssValueParser.ParseLength(layer.OffsetX, 0, styleSource);
                 var dy = CssValueParser.ParseLength(layer.OffsetY, 0, styleSource);
                 var blur = Math.Max(0, CssValueParser.ParseLength(layer.Blur, 0, styleSource));
-                var shadowPoint = new RPoint(point.X + dx, point.Y + dy);
+                var shadowPoint = new PaintPoint(point.X + dx, point.Y + dy);
 
                 if (blur <= 0)
                 {
@@ -81,12 +81,12 @@ namespace PeachPDF.Html.Core.Paint
                 // Glyph ink can overhang the word's own box a little (an italic's slant, a wide swash); the padding keeps it.
                 var overhang = size.Height * 0.25;
                 var margin = 1.5 * blur + overhang;
-                var run = new RRect(shadowPoint.X, shadowPoint.Y, size.Width, size.Height);
+                var run = new Rect(shadowPoint.X, shadowPoint.Y, size.Width, size.Height);
                 var bounds = Intersect(Inflate(run, margin), Inflate(g.GetClip(), margin));
                 if (bounds.Width <= 0 || bounds.Height <= 0)
                     continue;
 
-                using var scope = g.BeginRasterSurface(bounds);
+                using var scope = g.BeginRasterSurface(bounds) as RasterSurfaceScope;
                 if (scope is null)
                     continue;
 

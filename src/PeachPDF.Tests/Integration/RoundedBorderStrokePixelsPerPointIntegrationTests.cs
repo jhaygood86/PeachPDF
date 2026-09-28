@@ -29,7 +29,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// Issue #851: <c>BordersDrawHandler.GetPen</c> set a rounded border stroke's <c>RPen.Width</c>
+        /// Issue #851: <c>BordersDrawHandler.GetPen</c> set a rounded border stroke's <c>Pen.Width</c>
         /// from a raw, un-divided layout-space value - unlike the path's own (correctly divided)
         /// coordinates asserted above, so at a non-default <c>PixelsPerInch</c> the stroke rendered
         /// correctly positioned but visibly thicker than declared.

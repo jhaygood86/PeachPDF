@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Utils;
 
 namespace PeachPDF.Tests.Html.Core.Utils
@@ -67,9 +67,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void Max_ReturnsComponentWiseMaximum()
         {
-            var result = CommonUtils.Max(new RSize(10, 20), new RSize(30, 5));
+            var result = CommonUtils.Max(new Size(10, 20), new Size(30, 5));
 
-            Assert.Equal(new RSize(30, 20), result);
+            Assert.Equal(new Size(30, 20), result);
         }
 
         [Fact]

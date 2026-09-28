@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Svg;
 using System.Linq;
 using System.Xml.Linq;
@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.Svg
     {
         private static readonly PdfSharpAdapter Adapter = new();
 
-        private static readonly RColor White = RColor.FromArgb(0xff, 0xff, 0xff);
+        private static readonly PaintColor White = PaintColor.FromArgb(0xff, 0xff, 0xff);
 
         private static SvgDocument Build(string markup)
         {
@@ -37,7 +37,7 @@ namespace PeachPDF.Tests.Svg
 
             var fill = OnlyRect(document.Patterns["p"].Children).Fill;
             Assert.Equal(SvgPaintKind.Solid, fill.Kind);
-            Assert.Equal(White, fill.Color);
+            Assert.Equal(White, fill.PaintColor);
         }
 
         [Fact]
@@ -53,9 +53,9 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """);
 
-            Assert.Equal(White, OnlyRect(document.Markers["m"].Children).Fill.Color);
-            Assert.Equal(White, OnlyRect(document.Masks["k"].Children).Fill.Color);
-            Assert.Equal(White, OnlyRect(document.ClipPaths["c"].Shapes).Fill.Color);
+            Assert.Equal(White, OnlyRect(document.Markers["m"].Children).Fill.PaintColor);
+            Assert.Equal(White, OnlyRect(document.Masks["k"].Children).Fill.PaintColor);
+            Assert.Equal(White, OnlyRect(document.ClipPaths["c"].Shapes).Fill.PaintColor);
         }
 
         [Fact]
@@ -70,8 +70,8 @@ namespace PeachPDF.Tests.Svg
                 """);
 
             var rect = OnlyRect(document.Masks["k"].Children);
-            Assert.Equal(White, rect.Fill.Color);                                  // <g> beats the root
-            Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), rect.Stroke.Color);   // <defs> beats the root
+            Assert.Equal(White, rect.Fill.PaintColor);                                  // <g> beats the root
+            Assert.Equal(PaintColor.FromArgb(0x00, 0xff, 0x00), rect.Stroke.PaintColor);   // <defs> beats the root
         }
 
         [Fact]
@@ -83,7 +83,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """);
 
-            Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), OnlyRect(document.Patterns["p"].Children).Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0xff, 0x00), OnlyRect(document.Patterns["p"].Children).Fill.PaintColor);
         }
 
         [Fact]
@@ -95,7 +95,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """);
 
-            Assert.Equal(RColor.FromArgb(0x00, 0x00, 0xff), OnlyRect(document.Patterns["p"].Children).Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0x00, 0xff), OnlyRect(document.Patterns["p"].Children).Fill.PaintColor);
         }
 
         [Fact]
@@ -108,7 +108,7 @@ namespace PeachPDF.Tests.Svg
                 """);
 
             var rect = OnlyRect(document.Markers["m"].Children);
-            Assert.Equal(RColor.FromArgb(0x00, 0x00, 0xff), rect.Stroke.Color);
+            Assert.Equal(PaintColor.FromArgb(0x00, 0x00, 0xff), rect.Stroke.PaintColor);
             Assert.Equal(3, rect.StrokeWidth);
             Assert.Equal(0.5, rect.FillOpacity);
         }
@@ -123,7 +123,7 @@ namespace PeachPDF.Tests.Svg
                 """);
 
             var rect = OnlyRect(document.Patterns["p"].Children);
-            Assert.Equal(RColor.Black, rect.Fill.Color);
+            Assert.Equal(PaintColor.Black, rect.Fill.PaintColor);
             Assert.Equal(SvgPaintKind.None, rect.Stroke.Kind);
             Assert.Equal(1, rect.StrokeWidth);
         }
@@ -337,8 +337,8 @@ namespace PeachPDF.Tests.Svg
 
             Assert.Equal(20, OnlyRect(document.Patterns["a"].Children).Width, 6);
             Assert.Equal(40, OnlyRect(document.Patterns["b"].Children).Width, 6);
-            Assert.Equal(White, OnlyRect(document.Patterns["b"].Children).Fill.Color);
-            Assert.Equal(White, OnlyRect(document.Masks["c"].Children).Fill.Color);
+            Assert.Equal(White, OnlyRect(document.Patterns["b"].Children).Fill.PaintColor);
+            Assert.Equal(White, OnlyRect(document.Masks["c"].Children).Fill.PaintColor);
         }
 
         [Fact]
@@ -350,7 +350,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """);
 
-            Assert.Equal(White, OnlyRect(document.ClipPaths["c"].Shapes).Fill.Color);
+            Assert.Equal(White, OnlyRect(document.ClipPaths["c"].Shapes).Fill.PaintColor);
         }
 
         [Fact]
@@ -364,7 +364,7 @@ namespace PeachPDF.Tests.Svg
                 </svg>
                 """);
 
-            Assert.Equal(White, OnlyRect(document.Markers["inner"].Children).Fill.Color);
+            Assert.Equal(White, OnlyRect(document.Markers["inner"].Children).Fill.PaintColor);
         }
 
         [Fact]
@@ -378,7 +378,7 @@ namespace PeachPDF.Tests.Svg
                 """);
 
             var use = Assert.IsType<SvgUseElement>(Assert.Single(document.Children));
-            Assert.Equal(White, Assert.IsType<SvgRectElement>(use.Target).Fill.Color);
+            Assert.Equal(White, Assert.IsType<SvgRectElement>(use.Target).Fill.PaintColor);
         }
     }
 }

@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -114,7 +114,7 @@ public class ConditionGroupingRuleIntegrationTests
         var document = svgBox.Document;
         Assert.NotNull(document);
         var circle = Assert.IsType<SvgCircleElement>(document!.Children[0]);
-        Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.Color);
+        Assert.Equal(PaintColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.PaintColor);
     }
 
     [Fact]

@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 
 namespace PeachPDF.Html.Core.Entities;
 
@@ -19,7 +19,7 @@ internal sealed class ParsedRadialGradient
     public RadialGradientSize Size { get; init; } = RadialGradientSize.FarthestCorner;
     public Length? ExplicitRadiusX { get; init; }
     public Length? ExplicitRadiusY { get; init; }
-    public required (RColor? Color, Length? Position, bool IsHint)[] Stops { get; init; }
+    public required (PaintColor? PaintColor, Length? Position, bool IsHint)[] Stops { get; init; }
     public bool IsRepeating { get; init; }
     public GradientColorSpace ColorSpace { get; init; } = GradientColorSpace.Srgb;
     public HueInterpolationMethod HueMethod { get; init; } = HueInterpolationMethod.Shorter;

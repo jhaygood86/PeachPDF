@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -945,11 +945,11 @@ namespace PeachPDF.Tests.Integration
             // PixelsPerPoint-scaled) and PageRules are captured for per-page selection.
             await container.SetHtml(html, null);
 
-            container.PageSize = new RSize(
+            container.PageSize = new Size(
                 SheetW * ppp - container.MarginLeft - container.MarginRight,
                 SheetH * ppp - container.MarginTop - container.MarginBottom);
-            container.Location = new RPoint(container.MarginLeft, container.MarginTop);
-            container.MaxSize = new RSize(container.PageSize.Width, 0);
+            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
+            container.MaxSize = new Size(container.PageSize.Width, 0);
 
             var measure = XGraphics.CreateMeasureContext(
                 new XSize(container.PageSize.Width, container.PageSize.Height), XGraphicsUnit.Point, XPageDirection.Downwards);
@@ -970,11 +970,11 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
-            container.PageSize = new RSize(
+            container.PageSize = new Size(
                 400 - container.MarginLeft - container.MarginRight,
                 100 - container.MarginTop - container.MarginBottom);
-            container.Location = new RPoint(container.MarginLeft, container.MarginTop);
-            container.MaxSize = new RSize(container.PageSize.Width, 0);
+            container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
+            container.MaxSize = new Size(container.PageSize.Width, 0);
 
             var measure = XGraphics.CreateMeasureContext(
                 new XSize(container.PageSize.Width, container.PageSize.Height), XGraphicsUnit.Point, XPageDirection.Downwards);

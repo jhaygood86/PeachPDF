@@ -1,5 +1,4 @@
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -17,7 +16,7 @@ namespace PeachPDF.Html.Core.Dom
     /// </summary>
     internal static class FootnoteBodyLayout
     {
-        internal static ValueTask LayoutFootnoteBodyFor(RGraphics g, CssBox body, RRect contentRect, HtmlContainerInt container) =>
+        internal static ValueTask LayoutFootnoteBodyFor(Canvas g, CssBox body, Rect contentRect, HtmlContainerInt container) =>
             RunningElementLayout.LayoutRunningElementFor(g, body, contentRect, container);
     }
 }

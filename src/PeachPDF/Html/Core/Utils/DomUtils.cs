@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
@@ -36,7 +36,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="box">the box to check</param>
         /// <param name="location">the location to check</param>
         /// <returns>true - location inside the box, false - otherwise</returns>
-        public static bool IsInBox(CssBox box, RPoint location)
+        public static bool IsInBox(CssBox box, PaintPoint location)
         {
             foreach (var line in box.Rectangles)
             {
@@ -345,7 +345,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="location">the location to find the box by</param>
         /// <param name="visible">Optional: if to get only visible boxes (default - true)</param>
         /// <returns>css link box if exists or null</returns>
-        public static CssBox? GetCssBox(CssBox? box, RPoint location, bool visible = true)
+        public static CssBox? GetCssBox(CssBox? box, PaintPoint location, bool visible = true)
         {
             if (box == null) return null;
 
@@ -449,7 +449,7 @@ namespace PeachPDF.Html.Core.Utils
         /// concerned - its own descendant boxes (if any) aren't ordinary HTML content, so recursion
         /// stops there rather than continuing into <c>box.Boxes</c>.
         /// </summary>
-        public static void GetAllSvgLinks(CssBox? box, List<(RRect Rect, string Href)> linkBoxes)
+        public static void GetAllSvgLinks(CssBox? box, List<(Rect Rect, string Href)> linkBoxes)
         {
             switch (box)
             {
@@ -480,7 +480,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="box">the box to start search from</param>
         /// <param name="location">the location to find the box by</param>
         /// <returns>css link box if exists or null</returns>
-        public static CssBox? GetLinkBox(CssBox? box, RPoint location)
+        public static CssBox? GetLinkBox(CssBox? box, PaintPoint location)
         {
             switch (box)
             {
@@ -884,7 +884,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </remarks>
         /// <param name="ancestor">the nearest positioned ancestor of the absolutely positioned box</param>
         /// <returns>the containing block's padding rectangle, or null</returns>
-        internal static RRect? InlineContainingBlockOf(CssBox ancestor)
+        internal static Rect? InlineContainingBlockOf(CssBox ancestor)
         {
             if (!ancestor.IsInline || IsAtomicInline(ancestor)) return null;
 
@@ -906,7 +906,7 @@ namespace PeachPDF.Html.Core.Utils
             var top = first.Top + ancestor.ActualBorderTopWidth;
             var bottom = last.Bottom - ancestor.ActualBorderBottomWidth;
 
-            return new RRect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
+            return new Rect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
         }
 
         /// <summary>

@@ -129,7 +129,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Gets or sets the color.
         /// </summary>
-        public XColor Color
+        public XColor PaintColor
         {
             get { return _color; }
             set

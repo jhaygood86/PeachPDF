@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
@@ -9,14 +9,14 @@ using PeachPDF.PdfSharpCore.Drawing;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// CSS Color 4/5 function forms the CSS-OM color converter doesn't handle - <c>oklch()</c>,
+    /// CSS PaintColor 4/5 function forms the CSS-OM color converter doesn't handle - <c>oklch()</c>,
     /// <c>oklab()</c>, <c>lab()</c>, <c>lch()</c>, and <c>color-mix()</c> - now resolve to real sRGB
     /// colors instead of silently falling back to black. (These are what a Tailwind v4 default palette
     /// and its opacity modifiers are authored in.)
     /// </summary>
     public class ModernColorParsingTests
     {
-        private static RColor Parse(string value) => new CssValueParser(new PdfSharpAdapter()).GetActualColor(value);
+        private static PaintColor Parse(string value) => new CssValueParser(new PdfSharpAdapter()).GetActualColor(value);
 
         // ── hsl()/hwb() as solid colors (previously stack-overflowed at resolve time) ──
 
@@ -187,7 +187,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void ColorMix_PercentageBeforeColor_IsAccepted()
         {
-            // Per CSS Color 5 §3.1 the percentage may precede the color; `30% white` == `white 30%`.
+            // Per CSS PaintColor 5 §3.1 the percentage may precede the color; `30% white` == `white 30%`.
             var before = Parse("color-mix(in srgb, 30% white, black)");
             var after = Parse("color-mix(in srgb, white 30%, black)");
             Assert.Equal(after.R, before.R);
@@ -234,7 +234,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Oklch_ViaBackgroundShorthand_ExpandsToBackgroundColor()
         {
-            // Regression: the `background` shorthand must accept a CSS Color 4/5 function and carry it to
+            // Regression: the `background` shorthand must accept a CSS PaintColor 4/5 function and carry it to
             // the background-color longhand (a strict-only Layer A color grammar dropped it, leaving the
             // box with no background).
             var html = "<!DOCTYPE html><html><head><style>div { background: oklch(0.63 0.26 29); }</style></head><body><div>x</div></body></html>";

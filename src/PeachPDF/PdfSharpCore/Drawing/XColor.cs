@@ -131,8 +131,8 @@ namespace PeachPDF.PdfSharpCore.Drawing
             return new XColor((byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)(argb));
         }
 
-        // from System.Drawing.Color
-        //public static XColor FromArgb(int alpha, Color baseColor);
+        // from System.Drawing.PaintColor
+        //public static XColor FromArgb(int alpha, PaintColor baseColor);
         //public static XColor FromArgb(int red, int green, int blue);
         //public static XColor FromArgb(int alpha, int red, int green, int blue);
         //public static XColor FromKnownColor(KnownColor color);
@@ -234,8 +234,8 @@ namespace PeachPDF.PdfSharpCore.Drawing
         }
 
         /// <summary>
-        /// Determines whether the specified object is a Color structure and is equivalent to this 
-        /// Color structure.
+        /// Determines whether the specified object is a PaintColor structure and is equivalent to this 
+        /// PaintColor structure.
         /// </summary>
         public override bool Equals(object? obj)
         {

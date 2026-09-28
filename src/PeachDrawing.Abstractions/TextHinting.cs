@@ -1,0 +1,26 @@
+namespace PeachDrawing.Abstractions
+{
+    /// <summary>
+    /// Whether text drawn into a bitmap is fitted to the bitmap's pixel grid by the font's own hinting, which makes small
+    /// text sharper. See <c>PeachPDF.PdfGenerateConfig.TextHinting</c>.
+    /// </summary>
+    /// <remarks>
+    /// Hinting means something only where there are pixels: the text of a PDF page itself is always the embedded font, drawn by the
+    /// viewer, and is never hinted. It applies to the text inside the regions a <see cref="Canvas"/> rasterizes (see
+    /// <c>PeachPDF.PdfGenerateConfig.RasterizationDpi</c>), such as under a <c>filter</c> or when flattening transparency.
+    /// </remarks>
+    public enum TextHinting
+    {
+        /// <summary>No hinting: glyph outlines are the design of the font, scaled. The default.</summary>
+        None = 0,
+
+        /// <summary>
+        /// Hinting in FreeType's default mode (TrueType instructions, or the hints of CFF outlines), which fits glyphs vertically only and leaves their horizontal metrics alone. Suited to
+        /// anti-aliased text.
+        /// </summary>
+        Standard = 1,
+
+        /// <summary>TrueType hinting in the original mode, which fits both directions, as for text drawn without anti-aliasing. CFF fonts are fitted as in <see cref="Standard"/>.</summary>
+        Monochrome = 2,
+    }
+}

@@ -155,6 +155,20 @@ jobs:
       if: steps.changes.outputs.src == 'true'
       run: dotnet test src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --configuration Release --logger "trx;LogFileName=engine-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
+    # The drawing-surface abstraction (PeachDrawing.Abstractions) has its own test project; run it into the
+    # same coverage directory so the diff-coverage gate below covers it too. It is small and needs no browser,
+    # so all of its target frameworks run in the one invocation.
+    - name: Test abstraction (PeachDrawing.Abstractions)
+      if: steps.changes.outputs.src == 'true'
+      run: dotnet test src/PeachDrawing.Abstractions.Tests/PeachDrawing.Abstractions.Tests.csproj --configuration Release --logger "trx;LogFileName=abstractions-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+
+    # The standalone raster backend (PeachDrawing) has its own test project; run it into the same coverage
+    # directory so the diff-coverage gate below covers it too. It is small and needs no browser, so all of
+    # its target frameworks run in the one invocation.
+    - name: Test raster backend (PeachDrawing)
+      if: steps.changes.outputs.src == 'true'
+      run: dotnet test src/PeachDrawing.Tests/PeachDrawing.Tests.csproj --configuration Release --logger "trx;LogFileName=raster-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+
     # The css-properties.json -> CssPropertyRegistry.g.cs/SvgPropertyRegistry.g.cs source generator has
     # its own test project (JSON reader, PPGxxx diagnostics, generated-output shape); run it into the
     # same coverage directory so the diff-coverage gate below covers it too.
@@ -182,6 +196,8 @@ jobs:
           src/PeachPDF.Tests/**/*.trx
           src/PeachPDF.Cli.Tests/**/*.trx
           src/PeachDrawing.Text.Tests/**/*.trx
+          src/PeachDrawing.Abstractions.Tests/**/*.trx
+          src/PeachDrawing.Tests/**/*.trx
           src/PeachPDF.SourceGenerators.Tests/**/*.trx
 
     - name: Upload coverage reports

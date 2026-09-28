@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 using PeachPDF.PdfSharpCore.Drawing;
 
 namespace PeachPDF.Adapters
@@ -18,7 +18,7 @@ namespace PeachPDF.Adapters
     /// <summary>
     /// Adapter for WinForms Font object for core.
     /// </summary>
-    internal sealed class FontFamilyAdapter : RFontFamily
+    internal sealed class FontFamilyAdapter : FontFamily
     {
         private readonly string _name;
 

@@ -1,6 +1,6 @@
 using PeachDrawing.Text;
 using PeachDrawing.Text.Outlines;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -16,11 +16,11 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgGlyphDocumentTests
     {
-        private static readonly RColor Text = RColor.FromArgb(255, 1, 2, 3);
+        private static readonly PaintColor Text = PaintColor.FromArgb(255, 1, 2, 3);
 
         private static SvgGlyph Glyph(string document, string id = "glyph2", int first = 2, int last = 2) => new(document, id, first, last, 1000);
 
-        private static SvgDocument? Build(SvgGlyph glyph, params RColor?[] palette) =>
+        private static SvgDocument? Build(SvgGlyph glyph, params PaintColor?[] palette) =>
             SvgGlyphDocument.Build(glyph, i => i < palette.Length ? palette[i] : null, palette.Length, Text, new TestGraphicsAdapter());
 
         private static SvgElement Only(SvgDocument document) => Assert.Single(Flatten(document.Children));
@@ -47,28 +47,28 @@ namespace PeachPDF.Tests.Svg
         public void APaletteVariable_InAStyleProperty_TakesThePaletteColour()
         {
             var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect width=\"10\" height=\"10\" style=\"fill: var(--color1, red)\"/></g></svg>"),
-                RColor.FromArgb(255, 9, 9, 9), RColor.FromArgb(255, 10, 20, 30));
+                PaintColor.FromArgb(255, 9, 9, 9), PaintColor.FromArgb(255, 10, 20, 30));
 
             Assert.NotNull(doc);
-            Assert.Equal(RColor.FromArgb(255, 10, 20, 30), Only(doc!).Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 10, 20, 30), Only(doc!).Fill.PaintColor);
         }
 
         [Fact]
         public void APaletteVariable_InAPresentationAttribute_TakesThePaletteColour()
         {
             var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect width=\"10\" height=\"10\" fill=\"var(--color0, red)\"/></g></svg>"),
-                RColor.FromArgb(255, 9, 8, 7));
+                PaintColor.FromArgb(255, 9, 8, 7));
 
-            Assert.Equal(RColor.FromArgb(255, 9, 8, 7), Only(doc!).Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 9, 8, 7), Only(doc!).Fill.PaintColor);
         }
 
         [Fact]
         public void APaletteVariable_WithNoEntry_UsesTheDocumentsFallback()
         {
             var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect width=\"10\" height=\"10\" fill=\"var(--color5, #00ff00)\"/></g></svg>"),
-                RColor.FromArgb(255, 9, 8, 7));
+                PaintColor.FromArgb(255, 9, 8, 7));
 
-            Assert.Equal(RColor.FromArgb(255, 0, 255, 0), Only(doc!).Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 0, 255, 0), Only(doc!).Fill.PaintColor);
         }
 
         [Theory]
@@ -79,7 +79,7 @@ namespace PeachPDF.Tests.Svg
         {
             var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect width=\"10\" height=\"10\" {paint}/></g></svg>"));
 
-            Assert.Equal(Text, Only(doc!).Fill.Color);
+            Assert.Equal(Text, Only(doc!).Fill.PaintColor);
         }
 
         [Fact]
@@ -99,9 +99,9 @@ namespace PeachPDF.Tests.Svg
 
             var elements = Flatten(doc!.Children).ToList();
             var rect = Assert.IsType<SvgRectElement>(Assert.IsType<SvgUseElement>(elements[0]).Target);
-            Assert.Equal(RColor.FromArgb(255, 255, 0, 0), rect.Fill.Color);
-            Assert.Equal(RColor.FromArgb(255, 0, 0, 255), rect.Stroke.Color);
-            Assert.Equal(Text, elements[1].Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 255, 0, 0), rect.Fill.PaintColor);
+            Assert.Equal(PaintColor.FromArgb(255, 0, 0, 255), rect.Stroke.PaintColor);
+            Assert.Equal(Text, elements[1].Fill.PaintColor);
         }
 
         [Fact]
@@ -112,8 +112,8 @@ namespace PeachPDF.Tests.Svg
             var three = Build(Glyph(shared, "glyph3", 3, 4));
             var four = Build(Glyph(shared, "glyph4", 3, 4));
 
-            Assert.Equal(RColor.FromArgb(255, 0x11, 0x11, 0x11), Only(three!).Fill.Color);
-            Assert.Equal(RColor.FromArgb(255, 0x22, 0x22, 0x22), Only(four!).Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 0x11, 0x11, 0x11), Only(three!).Fill.PaintColor);
+            Assert.Equal(PaintColor.FromArgb(255, 0x22, 0x22, 0x22), Only(four!).Fill.PaintColor);
         }
 
         [Fact]
@@ -131,7 +131,7 @@ namespace PeachPDF.Tests.Svg
         {
             var doc = Build(Glyph($"<svg {Ns}><rect width=\"10\" height=\"10\" fill=\"#008080\"/></svg>", "glyph5", 5, 5));
 
-            Assert.Equal(RColor.FromArgb(255, 0, 128, 128), Only(doc!).Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 0, 128, 128), Only(doc!).Fill.PaintColor);
         }
 
         [Fact]
@@ -145,7 +145,7 @@ namespace PeachPDF.Tests.Svg
         {
             var doc = Build(Glyph($"<svg {Ns} viewBox=\"0 0 5 5\"><g id=\"glyph2\"><rect x=\"100\" y=\"-800\" width=\"800\" height=\"800\"/></g></svg>"));
 
-            Assert.Equal(new RRect(-1000, -1500, 3000, 2000), doc!.ViewBox);
+            Assert.Equal(new Rect(-1000, -1500, 3000, 2000), doc!.ViewBox);
             Assert.Equal(3000, doc.Width);
             Assert.Equal(2000, doc.Height);
         }
@@ -192,8 +192,8 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void ANonFiniteExtent_IsIgnored()
         {
-            Assert.Equal(new RRect(-1000, -1500, 3000, 2000), SvgGlyphDocument.CanvasFor(new RRect(double.NegativeInfinity, 0, double.PositiveInfinity, 1), 1000));
-            Assert.Equal(new RRect(-1000, -1500, 3000, 2000), SvgGlyphDocument.CanvasFor(new RRect(double.NaN, 0, 5, 5), 1000));
+            Assert.Equal(new Rect(-1000, -1500, 3000, 2000), SvgGlyphDocument.CanvasFor(new Rect(double.NegativeInfinity, 0, double.PositiveInfinity, 1), 1000));
+            Assert.Equal(new Rect(-1000, -1500, 3000, 2000), SvgGlyphDocument.CanvasFor(new Rect(double.NaN, 0, 5, 5), 1000));
         }
 
         [Fact]
@@ -201,7 +201,7 @@ namespace PeachPDF.Tests.Svg
         {
             var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect width=\"0\" height=\"0\"/></g></svg>"));
 
-            Assert.Equal(new RRect(-1000, -1500, 3000, 2000), doc!.ViewBox);
+            Assert.Equal(new Rect(-1000, -1500, 3000, 2000), doc!.ViewBox);
         }
 
         [Fact]
@@ -209,7 +209,7 @@ namespace PeachPDF.Tests.Svg
         {
             var doc = Build(Glyph($"<svg {Ns} viewBox=\"0 0 5 5\" width=\"5\" height=\"5\"><g id=\"glyph2\"><rect width=\"10\" height=\"10\"/></g></svg>"));
 
-            Assert.Equal(new RRect(-1000, -1500, 3000, 2000), doc!.ViewBox);
+            Assert.Equal(new Rect(-1000, -1500, 3000, 2000), doc!.ViewBox);
         }
 
         // ---- hostile documents ------------------------------------------------------------------------------------------------------
@@ -259,13 +259,13 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void APaletteWithManyEntries_IsOnlyDefinedWhereTheDocumentNamesThem()
         {
-            var palette = new RColor?[5000];
+            var palette = new PaintColor?[5000];
             for (int i = 0; i < palette.Length; i++)
-                palette[i] = RColor.FromArgb(255, i % 256, 0, 0);
+                palette[i] = PaintColor.FromArgb(255, i % 256, 0, 0);
 
             var doc = Build(Glyph($"<svg {Ns}><g id=\"glyph2\"><rect width=\"1\" height=\"1\" fill=\"var(--color4000, blue)\"/></g></svg>"), palette);
 
-            Assert.Equal(RColor.FromArgb(255, 4000 % 256, 0, 0), Only(doc!).Fill.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 4000 % 256, 0, 0), Only(doc!).Fill.PaintColor);
         }
 
         [Fact]

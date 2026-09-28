@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Pdf;
@@ -128,7 +128,7 @@ namespace PeachPDF.Tests.Integration
                 + "</div>"));
 
             var rect = CommonUtils.GetFirstValueOrDefault(
-                Assert.IsType<CssBoxFormField>(LayoutHarness.FindById(root, "f")).Rectangles, RRect.Empty);
+                Assert.IsType<CssBoxFormField>(LayoutHarness.FindById(root, "f")).Rectangles, Rect.Empty);
             var after = FirstWordIn(LayoutHarness.FindById(root, "after")!);
 
             Assert.Equal(rect.Right, after.Left, 0.01);
@@ -178,7 +178,7 @@ namespace PeachPDF.Tests.Integration
         /// <c>PdfGenerator.HandleFormFields</c> reads (<c>box.Rectangles</c>' first entry) and the
         /// one <c>Fragment.PrimaryRect</c> hands the painter.
         /// </summary>
-        static async Task<RRect> FieldRect(string inputHtml)
+        static async Task<Rect> FieldRect(string inputHtml)
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(inputHtml));
             var box = Assert.IsType<CssBoxFormField>(LayoutHarness.FindById(root, "f"));

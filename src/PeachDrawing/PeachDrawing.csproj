@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<Import Project="..\Version.props" />
+	<PropertyGroup>
+		<AssemblyName>PeachDrawing</AssemblyName>
+		<RootNamespace>PeachDrawing</RootNamespace>
+		<PackageId>PeachDrawing</PackageId>
+		<Description>A standalone software raster Canvas for PeachDrawing.Abstractions - draw shapes, text and images onto a bitmap and save it in any PeachImage-supported format, with no PDF, HTML or CSS involved. This is also the raster fallback PeachPDF itself uses for effects PDF cannot express in vector form (filters, shadows, backdrop effects).</Description>
+		<PackageTags>drawing;graphics;canvas;raster;rendering</PackageTags>
+		<PackageIcon>peach.png</PackageIcon>
+		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/jhaygood86/PeachPDF.git</RepositoryUrl>
+		<PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+		<IncludeSymbols>true</IncludeSymbols>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+		<GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+		<GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+		<GenerateAssemblyTitleVersionAttribute>false</GenerateAssemblyTitleVersionAttribute>
+		<GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+		<RunCodeAnalysis>false</RunCodeAnalysis>
+		<IsTrimmable>true</IsTrimmable>
+		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+		<IsAotCompatible>true</IsAotCompatible>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\PeachDrawing.Abstractions\PeachDrawing.Abstractions.csproj" />
+		<PackageReference Include="PeachImage" Version="0.4.6" />
+	</ItemGroup>
+	<ItemGroup>
+		<InternalsVisibleTo Include="PeachDrawing.Tests" />
+		<!--
+			Deliberate and permanent, mirroring PeachDrawing.Abstractions' own grant (see its csproj's
+			comment for the full reasoning). PeachPDF's own GraphicsAdapter.BeginRasterSurface constructs and
+			drives a RasterCanvas as its raster fallback - it is the second real Canvas implementation this
+			internal surface was always meant for (RasterSurfaceFactory.Create, RasterSurfaceScope, and
+			RasterCanvas's own internal Canvas-coordination overrides), not a new kind of consumer, and
+			PeachPDF.Tests exercises those same internals directly. PublicApi/PublicSurfaceTests.cs's
+			TheGrantedInternalsAreExactlyTheDocumentedSet pins the granted set to exactly these three.
+		-->
+		<InternalsVisibleTo Include="PeachPDF" />
+		<InternalsVisibleTo Include="PeachPDF.Tests" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
+	</ItemGroup>
+</Project>

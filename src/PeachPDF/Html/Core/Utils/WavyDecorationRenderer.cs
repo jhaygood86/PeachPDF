@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System;
 
 namespace PeachPDF.Html.Core.Utils
@@ -24,7 +23,7 @@ namespace PeachPDF.Html.Core.Utils
     /// peak amplitude works out to <c>3·controlPointDistance·t(1−t)(1−2t)</c>, maximized at
     /// <c>t = ½ − √3⁄6 ≈ 0.211</c>, giving peak ≈ <c>0.289 × controlPointDistance</c>. The constants below
     /// are chosen relative to the resolved decoration thickness (unlike Blink's own physical-pixel "+1"
-    /// terms, which don't have a meaningful equivalent once <see cref="RGraphics.PixelsPerPoint"/> can
+    /// terms, which don't have a meaningful equivalent once <see cref="Canvas.PixelsPerPoint"/> can
     /// differ from 1) so the wave scales correctly at any thickness: a control-point distance of
     /// <c>4 × thickness</c> gives a peak amplitude of about <c>1.15 × thickness</c> - a total
     /// (peak-to-trough) vertical span of about <c>2.3 × thickness</c>, close to the "~2.5× the resolved
@@ -47,12 +46,12 @@ namespace PeachPDF.Html.Core.Utils
     /// <para>
     /// <b>Units.</b> <c>x1</c>/<c>x2</c>/<c>y</c>/<c>thickness</c>
     /// are in the caller's raw, un-divided layout-space pixels - the same convention
-    /// <see cref="RGraphics.DrawLine"/> uses (its own backend implementation divides by
-    /// <see cref="RGraphics.PixelsPerPoint"/> before reaching the PDF). Unlike <c>DrawLine</c>,
-    /// <see cref="RGraphics.DrawPath(RPen, RGraphicsPath)"/> never does that division itself - a
+    /// <see cref="Canvas.DrawLine"/> uses (its own backend implementation divides by
+    /// <see cref="Canvas.PixelsPerPoint"/> before reaching the PDF). Unlike <c>DrawLine</c>,
+    /// <see cref="Canvas.DrawPath(Pen, GraphicsPath)"/> never does that division itself - a
     /// box-geometry path has no ambient transform to divide it back down (issue #812; see
     /// <c>RenderUtils.GetRoundRect</c>'s remarks) - so this method divides every path coordinate, and the
-    /// stroking pen's own width, by <see cref="RGraphics.PixelsPerPoint"/> itself, the same way
+    /// stroking pen's own width, by <see cref="Canvas.PixelsPerPoint"/> itself, the same way
     /// <c>RenderUtils.GetRoundRect</c>/<c>FragmentPainter.BuildRingPath</c> already do.
     /// </para>
     /// </remarks>
@@ -98,7 +97,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="x2">the segment's end - must be greater than <paramref name="x1"/></param>
         /// <param name="y">where a solid line of the same decoration would be drawn</param>
         /// <param name="thickness">the resolved decoration thickness, in the same raw units as <paramref name="y"/></param>
-        internal static void StrokeWavyLine(RGraphics g, RColor color, string? line,
+        internal static void StrokeWavyLine(Canvas g, PaintColor color, string? line,
             double x1, double x2, double y, double thickness)
         {
             var t = Math.Max(thickness, MinimumThickness);
@@ -110,7 +109,7 @@ namespace PeachPDF.Html.Core.Utils
             // evenly) - clipping, rather than hand-trimming the final Bézier, is the same trick both
             // Blink and WebKit use for the same reason.
             var verticalMargin = controlPointDistance + t;
-            g.PushClip(RRect.FromLTRB(x1, centerY - verticalMargin, x2, centerY + verticalMargin));
+            g.PushClip(Rect.FromLTRB(x1, centerY - verticalMargin, x2, centerY + verticalMargin));
 
             var ppp = g.PixelsPerPoint;
             var path = g.GetGraphicsPath();
@@ -131,7 +130,7 @@ namespace PeachPDF.Html.Core.Utils
             // other style, even though the wave around it keeps a visible amplitude).
             var pen = g.GetPen(color);
             pen.Width = thickness / ppp;
-            pen.DashStyle = RDashStyle.Solid;
+            pen.DashStyle = DashStyle.Solid;
 
             g.DrawPath(pen, path);
 

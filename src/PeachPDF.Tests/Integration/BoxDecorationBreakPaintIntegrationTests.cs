@@ -1,4 +1,4 @@
-﻿using PeachPDF.Html.Adapters.Entities;
+﻿using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
@@ -88,7 +88,7 @@ namespace PeachPDF.Tests.Integration
             // line's right - so after the per-line clip, only line 0 shows left rounding and only line 2
             // shows right rounding. That is exactly what a browser draws for the default `slice`.
             var paths = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(p => p.Color == RColor.FromArgb(0, 255, 0)).ToList();
+                .Where(p => p.PaintColor == PaintColor.FromArgb(0, 255, 0)).ToList();
             Assert.Equal(3, paths.Count);
 
             var total = rects.Sum(r => r.Width);
@@ -116,9 +116,9 @@ namespace PeachPDF.Tests.Integration
 
             // "No border is inserted at a break": the leading edge is drawn once, on the first line, and the
             // trailing edge once, on the last - never at the two wrap points.
-            var blue = RColor.FromArgb(0, 0, 255);
+            var blue = PaintColor.FromArgb(0, 0, 255);
             var vertical = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
-                .Where(p => p.Color == blue && IsVerticalEdge(p.Points)).ToList();
+                .Where(p => p.PaintColor == blue && IsVerticalEdge(p.Points)).ToList();
 
             Assert.Equal(2, vertical.Count);
         }
@@ -255,7 +255,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, span, g);
 
             var paths = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(p => p.Color == RColor.FromArgb(0, 255, 0)).ToList();
+                .Where(p => p.PaintColor == PaintColor.FromArgb(0, 255, 0)).ToList();
             Assert.Equal(3, paths.Count);
 
             for (var i = 0; i < 3; i++)
@@ -333,7 +333,7 @@ namespace PeachPDF.Tests.Integration
                 // The whole box's background rectangle, on both pages - the page clip does the cutting, so
                 // no border is inserted at the break.
                 var fill = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
-                    r => r.Color == RColor.FromArgb(10, 20, 30));
+                    r => r.PaintColor == PaintColor.FromArgb(10, 20, 30));
 
                 Assert.Equal(tall.Bounds.Height, fill.Height, 1);
             }
@@ -357,7 +357,7 @@ namespace PeachPDF.Tests.Integration
             // that lives on it - and it is closed off with its own bottom border at the band edge, rather
             // than running off the page.
             var fill = Assert.Single(page0.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
-                r => r.Color == RColor.FromArgb(10, 20, 30));
+                r => r.PaintColor == PaintColor.FromArgb(10, 20, 30));
 
             Assert.True(fill.Height < tall.Bounds.Height,
                 $"expected the fragment to be cut to its band, got the whole box ({fill.Height})");
@@ -382,7 +382,7 @@ namespace PeachPDF.Tests.Integration
             var span = LayoutHarness.FindById(root, "s")!;
             Assert.True(container.FragmentTree!.Fragmentainers.Count >= 2);
 
-            var blue = RColor.FromArgb(0, 0, 255);
+            var blue = PaintColor.FromArgb(0, 0, 255);
             var vertical = 0;
 
             for (var page = 0; page < container.FragmentTree.Fragmentainers.Count; page++)
@@ -391,7 +391,7 @@ namespace PeachPDF.Tests.Integration
                 FragmentPaintHarness.PaintBox(container, span, g, page);
 
                 vertical += g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
-                    .Count(p => p.Color == blue && IsVerticalEdge(p.Points));
+                    .Count(p => p.PaintColor == blue && IsVerticalEdge(p.Points));
             }
 
             Assert.Equal(2, vertical);
@@ -515,7 +515,7 @@ namespace PeachPDF.Tests.Integration
             // would only add a clip pair and a wider fill to the output for no visible difference. Painting
             // it per line is the identical result and is what keeps such a box's content stream unchanged.
             var fills = g.Log.OfType<TestRecordingGraphics.DrawRectCall>()
-                .Where(r => r.Color == RColor.FromArgb(0, 255, 0)).ToList();
+                .Where(r => r.PaintColor == PaintColor.FromArgb(0, 255, 0)).ToList();
             Assert.Equal(3, fills.Count);
 
             for (var i = 0; i < 3; i++)
@@ -542,7 +542,7 @@ namespace PeachPDF.Tests.Integration
             // background-clip insets the fill by the box's own border and padding, which belongs at the
             // box's true ends - not at every break. So this box cannot take the per-line short path.
             var fills = g.Log.OfType<TestRecordingGraphics.DrawRectCall>()
-                .Where(r => r.Color == RColor.FromArgb(0, 255, 0)).ToList();
+                .Where(r => r.PaintColor == PaintColor.FromArgb(0, 255, 0)).ToList();
 
             var total = rects.Sum(r => r.Width);
             // padding-box sits inside the border, so the fill is inset by the border alone.
@@ -581,7 +581,7 @@ namespace PeachPDF.Tests.Integration
         /// which is also why the layer is matched to its fragment by inline position rather than by asking
         /// the paint harness for "the box's fragment on this page".
         /// </remarks>
-        private static IEnumerable<(BoxFragment Fragment, RRect Fill, List<RRect> Clips)> GradientLayerPerFragment(
+        private static IEnumerable<(BoxFragment Fragment, Rect Fill, List<Rect> Clips)> GradientLayerPerFragment(
             PeachPDF.Html.Core.HtmlContainerInt container, List<BoxFragment> fragments)
         {
             foreach (var page in fragments.Select(f => f.FragmentainerIndex).Distinct())
@@ -619,14 +619,14 @@ namespace PeachPDF.Tests.Integration
         /// <c>BoxEdgesDrawHandler</c>'s uniform fast path - abutting quads leave an antialiasing seam
         /// along each mitre), so a ring is exactly the observable for "this fragment closed itself".
         /// </summary>
-        private static IEnumerable<TestRecordingGraphics.DrawPathCall> RingsOf(TestRecordingGraphics g, RColor color) =>
-            g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Where(p => !p.Stroked && p.Color == color);
+        private static IEnumerable<TestRecordingGraphics.DrawPathCall> RingsOf(TestRecordingGraphics g, PaintColor color) =>
+            g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Where(p => !p.Stroked && p.PaintColor == color);
 
         private static int CountBlueRings(TestRecordingGraphics g) =>
-            RingsOf(g, RColor.FromArgb(0, 0, 255)).Count();
+            RingsOf(g, PaintColor.FromArgb(0, 0, 255)).Count();
 
         private static IEnumerable<TestRecordingGraphics.DrawPathCall> BlackRings(TestRecordingGraphics g) =>
-            RingsOf(g, RColor.Black);
+            RingsOf(g, PaintColor.Black);
 
         private static int CountBlueRingsAcrossPages(PeachPDF.Html.Core.HtmlContainerInt container)
         {
@@ -644,7 +644,7 @@ namespace PeachPDF.Tests.Integration
 
         private static int CountBlueEdges(PeachPDF.Html.Core.HtmlContainerInt container, bool vertical)
         {
-            var blue = RColor.FromArgb(0, 0, 255);
+            var blue = PaintColor.FromArgb(0, 0, 255);
             var count = 0;
 
             for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
@@ -653,7 +653,7 @@ namespace PeachPDF.Tests.Integration
                 FragmentPaintHarness.PaintPage(container, g, page);
 
                 count += g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
-                    .Count(p => p.Color == blue && IsVerticalEdge(p.Points) == vertical);
+                    .Count(p => p.PaintColor == blue && IsVerticalEdge(p.Points) == vertical);
             }
 
             return count;
@@ -678,7 +678,7 @@ namespace PeachPDF.Tests.Integration
         /// <see cref="LayoutHarness"/> lays out in. Zero-margin fixtures put fragment-local coordinates at
         /// the same values, so these read directly against what the painter recorded.
         /// </summary>
-        private static List<RRect> OrderedRectangles(CssBox box) =>
+        private static List<Rect> OrderedRectangles(CssBox box) =>
             box.Rectangles.Values.OrderBy(r => r.Y).ThenBy(r => r.X).ToList();
 
         /// <summary>
@@ -686,12 +686,12 @@ namespace PeachPDF.Tests.Integration
         /// brush to its first stop's colour, so a <c>linear-gradient(to right,#f00,...)</c> layer shows up as
         /// a red fill over the layer's own clip rectangle.
         /// </summary>
-        private static IEnumerable<RRect> GradientFills(TestRecordingGraphics g) =>
+        private static IEnumerable<Rect> GradientFills(TestRecordingGraphics g) =>
             g.Log.OfType<TestRecordingGraphics.DrawRectCall>()
-                .Where(r => r.Color == RColor.FromArgb(255, 0, 0))
-                .Select(r => new RRect(r.X, r.Y, r.Width, r.Height));
+                .Where(r => r.PaintColor == PaintColor.FromArgb(255, 0, 0))
+                .Select(r => new Rect(r.X, r.Y, r.Width, r.Height));
 
-        private static void AssertEachFillIsClippedTo(TestRecordingGraphics g, List<RRect> rects)
+        private static void AssertEachFillIsClippedTo(TestRecordingGraphics g, List<Rect> rects)
         {
             var clips = g.Log.OfType<TestRecordingGraphics.PushClipCall>().Select(c => c.Rect).ToList();
 
@@ -705,7 +705,7 @@ namespace PeachPDF.Tests.Integration
         /// Whether a border trapezoid is one of the two inline-axis (left/right) edges rather than a
         /// top/bottom one - the edges §6.2 suppresses at a line break.
         /// </summary>
-        private static bool IsVerticalEdge(IReadOnlyList<RPoint> points)
+        private static bool IsVerticalEdge(IReadOnlyList<PaintPoint> points)
         {
             var width = points.Max(p => p.X) - points.Min(p => p.X);
             var height = points.Max(p => p.Y) - points.Min(p => p.Y);

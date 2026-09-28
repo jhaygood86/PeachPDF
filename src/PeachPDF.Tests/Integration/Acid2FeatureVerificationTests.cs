@@ -1,6 +1,6 @@
 ﻿using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
@@ -660,7 +660,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task PositionedZIndex_PaintsOverFixedPositionedContent()
         {
-            // Painting-order coverage per CLAUDE.md: asserts the actual sequence of RGraphics calls,
+            // Painting-order coverage per CLAUDE.md: asserts the actual sequence of Canvas calls,
             // not just final layout/geometry - a black position:fixed bar declared AFTER (later in the
             // box tree than) a white position:relative;z-index:2 box must still be painted BEFORE it
             // (i.e. underneath), matching Acid2's ".intro { z-index: 2 }" requirement.
@@ -684,8 +684,8 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintPage(container, recorder);
 
             var drawRectCalls = recorder.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            var blackIndex = drawRectCalls.FindIndex(c => c.Color == RColor.FromArgb(255, 0, 0, 0));
-            var whiteIndex = drawRectCalls.FindIndex(c => c.Color == RColor.FromArgb(255, 255, 255, 255));
+            var blackIndex = drawRectCalls.FindIndex(c => c.PaintColor == PaintColor.FromArgb(255, 0, 0, 0));
+            var whiteIndex = drawRectCalls.FindIndex(c => c.PaintColor == PaintColor.FromArgb(255, 255, 255, 255));
 
             Assert.True(blackIndex >= 0, "Expected the fixed-positioned black box to be drawn.");
             Assert.True(whiteIndex >= 0, "Expected the z-index:2 white box to be drawn.");
@@ -751,15 +751,15 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintPage(container, recorder);
 
             var drawRectCalls = recorder.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
-            var blockIndex = drawRectCalls.FindIndex(c => c.Color == RColor.FromArgb(70, 80, 90));
-            var floatIndex = drawRectCalls.FindIndex(c => c.Color == RColor.FromArgb(40, 50, 60));
-            var inlineIndex = drawRectCalls.FindIndex(c => c.Color == RColor.FromArgb(10, 20, 30));
+            var blockIndex = drawRectCalls.FindIndex(c => c.PaintColor == PaintColor.FromArgb(70, 80, 90));
+            var floatIndex = drawRectCalls.FindIndex(c => c.PaintColor == PaintColor.FromArgb(40, 50, 60));
+            var inlineIndex = drawRectCalls.FindIndex(c => c.PaintColor == PaintColor.FromArgb(10, 20, 30));
 
             Assert.True(blockIndex >= 0, "Expected the block box to be drawn.");
             Assert.True(floatIndex >= 0, "Expected the float box to be drawn.");
             Assert.True(inlineIndex >= 0,
                 "Expected the inline image's background to be drawn. All recorded rect colors: "
-                + string.Join(", ", drawRectCalls.Select(c => c.Color)));
+                + string.Join(", ", drawRectCalls.Select(c => c.PaintColor)));
             Assert.True(blockIndex < floatIndex, "Expected the block to paint before (under) the float.");
             Assert.True(floatIndex < inlineIndex, "Expected the float to paint before (under) the inline box.");
         }
@@ -980,7 +980,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             Assert.Contains(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
-                r => r.Color == RColor.FromArgb(37, 38, 39));
+                r => r.PaintColor == PaintColor.FromArgb(37, 38, 39));
             // Solid borders paint as a filled shape (BordersDrawHandler), not DrawLine.
             Assert.NotEmpty(g.FilledShapes);
         }
@@ -1004,7 +1004,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             Assert.Contains(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
-                r => r.Color == RColor.FromArgb(43, 44, 45));
+                r => r.PaintColor == PaintColor.FromArgb(43, 44, 45));
             // Solid borders paint as a filled shape (BordersDrawHandler), not DrawLine.
             Assert.NotEmpty(g.FilledShapes);
         }
@@ -1118,17 +1118,17 @@ namespace PeachPDF.Tests.Integration
 
             var image = new TrackingImage();
             var g = new TestRecordingGraphics();
-            var rect = new RRect(0, 0, 100, 100);
+            var rect = new Rect(0, 0, 100, 100);
 
             PeachPDF.Html.Core.Handlers.BackgroundImageDrawHandler.DrawBackgroundImage(
                 g, image, "auto", "0% 0%", "repeat", rect, rect, null, box, intrinsicSizeInCssPixels: true);
 
             Assert.Contains(false, image.InterpolateHistory);
             Assert.True(image.Interpolate,
-                "Interpolate must be restored to its original value after a repeating draw completes, since the same RImage may be reused elsewhere");
+                "Interpolate must be restored to its original value after a repeating draw completes, since the same Image may be reused elsewhere");
         }
 
-        private sealed class TrackingImage : PeachPDF.Html.Adapters.RImage
+        private sealed class TrackingImage : PeachDrawing.Abstractions.Image
         {
             public override double Width => 2;
             public override double Height => 2;

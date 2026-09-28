@@ -11,8 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -30,7 +29,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// Backgrounds and Borders Module Level 3.
         /// </summary>
         /// <param name="g">the device to draw into</param>
-        /// <param name="image">the image to draw (a natural bitmap, or a <see cref="RGraphics.CreateTile"/>-produced tile standing in for a gradient layer)</param>
+        /// <param name="image">the image to draw (a natural bitmap, or a <see cref="Canvas.CreateTile"/>-produced tile standing in for a gradient layer)</param>
         /// <param name="sizeValue">the resolved background-size CSS value for this layer</param>
         /// <param name="positionValue">the resolved background-position CSS value for this layer</param>
         /// <param name="backgroundRepeat">the background-repeat CSS value</param>
@@ -40,12 +39,12 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="box">the box the image is painted on, needed for em/rem-relative length resolution</param>
         /// <param name="intrinsicSizeInCssPixels">true when <paramref name="image"/> is a natural bitmap whose
         /// Width/Height are CSS pixels (1px = 1/96in) needing conversion to layout points; false when it is a
-        /// <see cref="RGraphics.CreateTile"/>-produced tile already sized in layout units</param>
+        /// <see cref="Canvas.CreateTile"/>-produced tile already sized in layout units</param>
         public static void DrawBackgroundImage(
-            RGraphics g, RImage image,
+            Canvas g, Image image,
             string sizeValue, string positionValue, string backgroundRepeat,
-            RRect positioningRect, RRect clipRect,
-            RGraphicsPath? roundedClipPath,
+            Rect positioningRect, Rect clipRect,
+            GraphicsPath? roundedClipPath,
             CssBox box,
             bool intrinsicSizeInCssPixels)
         {
@@ -66,10 +65,10 @@ namespace PeachPDF.Html.Core.Handlers
             var (offsetX, offsetY) = BackgroundLayerResolver.ResolvePosition(
                 positionValue, positioningRect.Width, positioningRect.Height, tileWidth, tileHeight, box);
 
-            var location = new RPoint(positioningRect.X + offsetX, positioningRect.Y + offsetY);
+            var location = new PaintPoint(positioningRect.X + offsetX, positioningRect.Y + offsetY);
 
-            var srcRect = new RRect(0, 0, image.Width, image.Height);
-            var destRect = new RRect(location, new RSize(tileWidth, tileHeight));
+            var srcRect = new Rect(0, 0, image.Width, image.Height);
+            var destRect = new Rect(location, new Size(tileWidth, tileHeight));
 
             // The actual visible painting area - clipRect (rounded corners only ever shrink this
             // further, so the plain rectangle is always a safe superset) intersected with the current
@@ -96,8 +95,8 @@ namespace PeachPDF.Html.Core.Handlers
             // over another tiled layer) - any interpolation/smoothing at all leaves a soft seam between
             // adjacent copies, or between the two layers, that never resolves crisp/solid regardless of
             // rasterization DPI. Force nearest-neighbor for the duration of a repeating draw, restoring
-            // afterward since the same RImage may be reused elsewhere (a plain <img>, or a differently-
-            // configured background layer) where smoothing is still wanted. See RImage.Interpolate's
+            // afterward since the same Image may be reused elsewhere (a plain <img>, or a differently-
+            // configured background layer) where smoothing is still wanted. See Image.Interpolate's
             // own doc comment.
             var wasInterpolate = image.Interpolate;
             if (backgroundRepeat != "no-repeat")
@@ -105,7 +104,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             // Bound the repeat loops to the tiles that can actually land in the visible area, not
             // positioningRect's full extent - see visibleRect's own doc comment above.
-            var tileBounds = RRect.Intersect(positioningRect, visibleRect);
+            var tileBounds = Rect.Intersect(positioningRect, visibleRect);
 
             switch (backgroundRepeat)
             {
@@ -156,31 +155,31 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Draw the background image repeating it over the X axis, at the resolved tile size.
         /// </summary>
-        private static void DrawRepeatX(RGraphics g, RImage image, RRect rectangle, RRect srcRect, RRect destRect)
+        private static void DrawRepeatX(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect)
         {
             var startX = FirstTileStart(destRect.X, destRect.Width, rectangle.X);
 
             var x = startX;
             for (var i = 0; i < MaxTilesPerAxis && x < rectangle.Right; i++, x += destRect.Width)
-                g.DrawImage(image, new RRect(x, destRect.Y, destRect.Width, destRect.Height), srcRect);
+                g.DrawImage(image, new Rect(x, destRect.Y, destRect.Width, destRect.Height), srcRect);
         }
 
         /// <summary>
         /// Draw the background image repeating it over the Y axis, at the resolved tile size.
         /// </summary>
-        private static void DrawRepeatY(RGraphics g, RImage image, RRect rectangle, RRect srcRect, RRect destRect)
+        private static void DrawRepeatY(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect)
         {
             var startY = FirstTileStart(destRect.Y, destRect.Height, rectangle.Y);
 
             var y = startY;
             for (var i = 0; i < MaxTilesPerAxis && y < rectangle.Bottom; i++, y += destRect.Height)
-                g.DrawImage(image, new RRect(destRect.X, y, destRect.Width, destRect.Height), srcRect);
+                g.DrawImage(image, new Rect(destRect.X, y, destRect.Width, destRect.Height), srcRect);
         }
 
         /// <summary>
         /// Draw the background image repeating it over both X and Y axes, at the resolved tile size.
         /// </summary>
-        private static void DrawRepeat(RGraphics g, RImage image, RRect rectangle, RRect srcRect, RRect destRect)
+        private static void DrawRepeat(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect)
         {
             var startX = FirstTileStart(destRect.X, destRect.Width, rectangle.X);
             var startY = FirstTileStart(destRect.Y, destRect.Height, rectangle.Y);
@@ -190,7 +189,7 @@ namespace PeachPDF.Html.Core.Handlers
             {
                 var x = startX;
                 for (var i = 0; i < MaxTilesPerAxis && x < rectangle.Right; i++, x += destRect.Width)
-                    g.DrawImage(image, new RRect(x, y, destRect.Width, destRect.Height), srcRect);
+                    g.DrawImage(image, new Rect(x, y, destRect.Width, destRect.Height), srcRect);
             }
         }
 

@@ -81,7 +81,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             for (int idx = 0; idx < colorInfos.Length; idx++)
             {
                 ColorResourceInfo c2 = colorInfos[idx];
-                if (c2.Argb != c2.Color.Rgb)
+                if (c2.Argb != c2.PaintColor.Rgb)
                     c2.GetType();
             }
         }
@@ -334,13 +334,13 @@ namespace PeachPDF.PdfSharpCore.Drawing
             public ColorResourceInfo(XKnownColor knownColor, XColor color, uint argb, string name, string nameDE)
             {
                 KnownColor = knownColor;
-                Color = color;
+                PaintColor = color;
                 Argb = argb;
                 Name = name;
                 NameDE = nameDE;
             }
             public XKnownColor KnownColor;
-            public XColor Color;
+            public XColor PaintColor;
             public uint Argb;
             public string Name;
             // ReSharper disable once InconsistentNaming

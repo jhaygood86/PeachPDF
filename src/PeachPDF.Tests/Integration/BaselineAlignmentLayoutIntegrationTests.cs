@@ -125,9 +125,9 @@ namespace PeachPDF.Tests.Integration
         public async Task LineHeightNormal_LeavesItsInkNearWhereTheFlowPutIt()
         {
             // The guard that the half-leading is not a gratuitous shift: `line-height: normal`
-            // resolves from the font's own ascent+descent+line-gap (RFont.NormalLineHeight), a metric
+            // resolves from the font's own ascent+descent+line-gap (Font.NormalLineHeight), a metric
             // derived independently of the ascent+descent pair the glyph content area itself uses
-            // (RFont.Height) - so the two are usually close but not always bit-for-bit equal, and
+            // (Font.Height) - so the two are usually close but not always bit-for-bit equal, and
             // Arial's own "normal" leading is a small negative fraction of a point rather than exactly
             // zero. Assert the shift equals the font's own half-leading rather than assuming it is
             // exactly zero, so an ordinary paragraph is confirmed to move by the same formula every

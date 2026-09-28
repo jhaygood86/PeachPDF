@@ -11,8 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System.Collections.Generic;
@@ -134,7 +133,7 @@ namespace PeachPDF.Html.Core.Dom
             Text = CssCounterEngine.FormatCounterValue(index, listStyleType) + ".";
         }
 
-        internal override async ValueTask MeasureWordsSize(RGraphics g)
+        internal override async ValueTask MeasureWordsSize(Canvas g)
         {
             if (!_wordsSizeMeasured)
             {
@@ -171,7 +170,7 @@ namespace PeachPDF.Html.Core.Dom
         /// this - it's simply the owner's first inline child, positioned by the ordinary inline-layout
         /// algorithm like any other flowed content.
         /// </summary>
-        protected override async ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
+        protected override async ValueTask PerformLayoutImp(Canvas g, CssBox frame, bool framePlacesChild)
         {
             // This box's own pass never routes through CssBox.BeginBlockPass (there is no prologue/
             // placement/content split for a marker), so nothing else clears CssBox._awaitingRefill for it -
@@ -218,8 +217,8 @@ namespace PeachPDF.Html.Core.Dom
 
             var left = owner.ClientLeft - width - ActualMarginRight;
 
-            Location = new RPoint(left, top);
-            Size = new RSize(width, height);
+            Location = new PaintPoint(left, top);
+            Size = new Size(width, height);
 
             if (word is not null)
             {

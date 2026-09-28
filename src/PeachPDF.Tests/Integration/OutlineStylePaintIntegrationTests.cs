@@ -1,6 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore;
@@ -22,7 +22,7 @@ namespace PeachPDF.Tests.Integration
     /// <c>BorderStylePaintIntegrationTests</c>). Uses <see cref="TestRecordingGraphics"/> to assert the
     /// real draw-call sequence, plus one real-PDF content-stream test
     /// (<see cref="OutlineColorInvert_ProducesADifferenceBlendModeExtGStateInTheRealPdf"/>) proving the
-    /// new <see cref="PeachPDF.Html.Adapters.RGraphics.PushBlendMode"/>/<see cref="PeachPDF.Html.Adapters.RGraphics.PopBlendMode"/>
+    /// new <see cref="PeachDrawing.Abstractions.Canvas.PushBlendMode"/>/<see cref="PeachDrawing.Abstractions.Canvas.PopBlendMode"/>
     /// primitive actually reaches the PDF-writing layer, not just the test mock.
     /// </summary>
     public class OutlineStylePaintIntegrationTests
@@ -39,9 +39,9 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             var ring = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                p => !p.Stroked && p.Color == RColor.FromArgb(10, 20, 30));
+                p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(10, 20, 30));
             Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>(),
-                p => p.Color == RColor.FromArgb(10, 20, 30));
+                p => p.PaintColor == PaintColor.FromArgb(10, 20, 30));
 
             const double offset = 4;
             const double width = 6;
@@ -68,7 +68,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             var ring = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                p => !p.Stroked && p.Color == RColor.FromArgb(10, 20, 30));
+                p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(10, 20, 30));
             var outerTop = ring.Points.Take(4).Min(p => p.Y);
             var innerTop = ring.Points.Skip(4).Take(4).Min(p => p.Y);
 
@@ -93,7 +93,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             var ring = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                p => !p.Stroked && p.Color == RColor.FromArgb(10, 20, 30));
+                p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(10, 20, 30));
             var outer = ring.Points.Take(4).ToList();
 
             Assert.Equal(expectedWidth, outer.Max(p => p.X) - outer.Min(p => p.X), 1);
@@ -113,7 +113,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             var outline = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                p => p.Stroked && p.Color == RColor.FromArgb(10, 20, 30));
+                p => p.Stroked && p.PaintColor == PaintColor.FromArgb(10, 20, 30));
             Assert.True(outline.Points.Count > 8);
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
 
@@ -130,7 +130,7 @@ namespace PeachPDF.Tests.Integration
         {
             const string box =
                 "width:80pt; height:50pt; margin:0; border-top-left-radius:20pt";
-            var color = RColor.FromArgb(10, 20, 30);
+            var color = PaintColor.FromArgb(10, 20, 30);
 
             var (borderRoot, borderContainer) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 $"<div id='b' style='{box}; border:6pt solid rgb(10,20,30)'>x</div>"));
@@ -147,10 +147,10 @@ namespace PeachPDF.Tests.Integration
 
             var borderPath = Assert.Single(
                 borderG.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                path => path.Stroked && path.Color == color);
+                path => path.Stroked && path.PaintColor == color);
             var outlinePath = Assert.Single(
                 outlineG.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                path => path.Stroked && path.Color == color);
+                path => path.Stroked && path.PaintColor == color);
 
             Assert.Equal(borderPath.StrokeWidth, outlinePath.StrokeWidth);
             Assert.Equal(borderPath.Points, outlinePath.Points);
@@ -168,7 +168,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             var outline = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                path => !path.Stroked && path.Color == RColor.FromArgb(10, 20, 30));
+                path => !path.Stroked && path.PaintColor == PaintColor.FromArgb(10, 20, 30));
             Assert.Equal(8, outline.Points.Count);
         }
 
@@ -256,7 +256,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             var ring = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                p => !p.Stroked && p.Color == RColor.FromArgb(9, 9, 9));
+                p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(9, 9, 9));
 
             // Chrome centres the auto ring on the rectangle outline-offset inflates the border box to,
             // rather than seating it wholly outside that rectangle the way every other style sits - so
@@ -296,9 +296,9 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(solidContainer, LayoutHarness.FindById(solidRoot, "b")!, solidG);
 
             var autoRing = Assert.Single(autoG.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                p => !p.Stroked && p.Color == RColor.FromArgb(9, 9, 9));
+                p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(9, 9, 9));
             var solidRing = Assert.Single(solidG.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                p => !p.Stroked && p.Color == RColor.FromArgb(9, 9, 9));
+                p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(9, 9, 9));
             Assert.Equal(solidRing.Points, autoRing.Points);
         }
 
@@ -315,7 +315,7 @@ namespace PeachPDF.Tests.Integration
             static double RingThickness(TestRecordingGraphics g)
             {
                 var ring = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                    .Single(p => !p.Stroked && p.Color == RColor.FromArgb(9, 9, 9));
+                    .Single(p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(9, 9, 9));
                 return ring.Points.Skip(4).Take(4).Min(p => p.Y) - ring.Points.Take(4).Min(p => p.Y);
             }
 
@@ -346,7 +346,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                p => !p.Stroked && p.Color == RColor.FromArgb(7, 8, 9));
+                p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(7, 8, 9));
         }
 
         [Fact]
@@ -364,10 +364,10 @@ namespace PeachPDF.Tests.Integration
             var popIndex = g.Log.FindIndex(e => e is TestRecordingGraphics.PopBlendModeCall);
             Assert.True(pushIndex >= 0, "expected a PushBlendMode call");
             Assert.True(popIndex > pushIndex, "expected PopBlendMode to follow PushBlendMode");
-            Assert.Equal(RBlendMode.Difference, ((TestRecordingGraphics.PushBlendModeCall)g.Log[pushIndex]).Mode);
+            Assert.Equal(PaintBlendMode.Difference, ((TestRecordingGraphics.PushBlendModeCall)g.Log[pushIndex]).Mode);
 
             var ring = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                p => !p.Stroked && p.Color == RColor.White);
+                p => !p.Stroked && p.PaintColor == PaintColor.White);
 
             // Every outline draw call sits inside the push/pop bracket.
             var ringIndex = g.Log.IndexOf(ring);
@@ -401,15 +401,15 @@ namespace PeachPDF.Tests.Integration
 
             // Both the uniform border and the complete solid outline paint as one ring path. Match on
             // color so this assertion remains about paint order rather than path representation.
-            static bool IsFill(object entry, RColor color) => entry switch
+            static bool IsFill(object entry, PaintColor color) => entry switch
             {
-                TestRecordingGraphics.DrawPolygonCall p => p.Color == color,
-                TestRecordingGraphics.DrawPathCall { Stroked: false } p => p.Color == color,
+                TestRecordingGraphics.DrawPolygonCall p => p.PaintColor == color,
+                TestRecordingGraphics.DrawPathCall { Stroked: false } p => p.PaintColor == color,
                 _ => false
             };
 
-            var lastBorderIndex = g.Log.FindLastIndex(e => IsFill(e, RColor.FromArgb(1, 1, 1)));
-            var firstOutlineIndex = g.Log.FindIndex(e => IsFill(e, RColor.FromArgb(2, 2, 2)));
+            var lastBorderIndex = g.Log.FindLastIndex(e => IsFill(e, PaintColor.FromArgb(1, 1, 1)));
+            var firstOutlineIndex = g.Log.FindIndex(e => IsFill(e, PaintColor.FromArgb(2, 2, 2)));
 
             Assert.True(lastBorderIndex >= 0);
             Assert.True(firstOutlineIndex >= 0);
@@ -432,7 +432,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             var lastTextIndex = g.Log.FindLastIndex(e => e is TestRecordingGraphics.DrawStringCall);
-            var firstOutlineIndex = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawPathCall { Stroked: false } p && p.Color == RColor.FromArgb(2, 2, 2));
+            var firstOutlineIndex = g.Log.FindIndex(e => e is TestRecordingGraphics.DrawPathCall { Stroked: false } p && p.PaintColor == PaintColor.FromArgb(2, 2, 2));
 
             Assert.True(lastTextIndex >= 0);
             Assert.True(firstOutlineIndex >= 0);
@@ -454,13 +454,13 @@ namespace PeachPDF.Tests.Integration
             var dotted = style == "dotted";
             var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
             Assert.Equal(4, lines.Count);
-            Assert.All(lines, l => Assert.Equal(RColor.FromArgb(3, 3, 3), l.Color));
+            Assert.All(lines, l => Assert.Equal(PaintColor.FromArgb(3, 3, 3), l.PaintColor));
             Assert.All(lines, l => Assert.Equal(8, l.Width, 1));
 
             // A dot is a zero-length dash under a round cap; a dash is a real segment under a butt cap.
             // The pattern is fitted to each side, so its exact lengths depend on the side - but the cap
             // and the zero-vs-nonzero dash are what tell the two styles apart at all.
-            Assert.All(lines, l => Assert.Equal(dotted ? RLineCap.Round : RLineCap.Butt, l.LineCap));
+            Assert.All(lines, l => Assert.Equal(dotted ? LineCap.Round : LineCap.Butt, l.LineCap));
             Assert.All(lines, l =>
             {
                 Assert.NotNull(l.DashPattern);
@@ -537,9 +537,9 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(outlineContainer, LayoutHarness.FindById(outlineRoot, "b")!, outlineG);
 
             var borderLines = borderG.Log.OfType<TestRecordingGraphics.DrawLineCall>()
-                .Where(l => l.Color == RColor.FromArgb(3, 3, 3)).ToList();
+                .Where(l => l.PaintColor == PaintColor.FromArgb(3, 3, 3)).ToList();
             var outlineLines = outlineG.Log.OfType<TestRecordingGraphics.DrawLineCall>()
-                .Where(l => l.Color == RColor.FromArgb(3, 3, 3)).ToList();
+                .Where(l => l.PaintColor == PaintColor.FromArgb(3, 3, 3)).ToList();
 
             Assert.Equal(4, borderLines.Count);
             Assert.Equal(4, outlineLines.Count);
@@ -564,11 +564,11 @@ namespace PeachPDF.Tests.Integration
 
             // Each stripe is one complete even-odd ring rather than four abutting side polygons.
             var rings = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(p => !p.Stroked && p.Color == RColor.FromArgb(51, 51, 51))
+                .Where(p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(51, 51, 51))
                 .ToList();
             Assert.Equal(2, rings.Count);
             Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>(),
-                p => p.Color == RColor.FromArgb(51, 51, 51));
+                p => p.PaintColor == PaintColor.FromArgb(51, 51, 51));
 
             var nearBox = rings.OrderByDescending(InnerTop).First();
             var farFromBox = rings.OrderBy(InnerTop).First();
@@ -601,13 +601,13 @@ namespace PeachPDF.Tests.Integration
 
             // groove's outer half (farthest from the box) paints as `inset`, its inner half as `outset`.
             // Each entry is one connected equal-shade side pair, so no same-color corner seam remains.
-            var dark = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: true);
-            var light = BorderBevelColors.Shade(RColor.FromArgb(51, 51, 51), darken: false);
+            var dark = BorderBevelColors.Shade(PaintColor.FromArgb(51, 51, 51), darken: true);
+            var light = BorderBevelColors.Shade(PaintColor.FromArgb(51, 51, 51), darken: false);
             var outerTopLeft = outerIsInset ? dark : light;
             var outerBottomRight = outerIsInset ? light : dark;
             Assert.Equal(
                 [outerTopLeft, outerBottomRight, outerBottomRight, outerTopLeft],
-                pairs.Select(pair => pair.Color));
+                pairs.Select(pair => pair.PaintColor));
         }
 
         [Fact]
@@ -627,15 +627,15 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(2, pairs.Count);
             Assert.All(pairs, pair => Assert.Equal(6, pair.Points.Count));
 
-            var baseColor = RColor.FromArgb(100, 100, 100);
+            var baseColor = PaintColor.FromArgb(100, 100, 100);
             var dark = BorderBevelColors.Shade(baseColor, darken: true);
             var light = BorderBevelColors.Shade(baseColor, darken: false);
 
             // The lit pair is genuinely lightened rather than left at the declared color, matching what
             // a browser paints - and matching border, which shares the same shading.
             Assert.NotEqual(baseColor, light);
-            Assert.Equal(dark, pairs[0].Color);  // one connected top + left path
-            Assert.Equal(light, pairs[1].Color); // one connected bottom + right path
+            Assert.Equal(dark, pairs[0].PaintColor);  // one connected top + left path
+            Assert.Equal(light, pairs[1].PaintColor); // one connected bottom + right path
         }
 
         [Fact]
@@ -655,12 +655,12 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(2, pairs.Count);
             Assert.All(pairs, pair => Assert.Equal(6, pair.Points.Count));
 
-            var baseColor = RColor.FromArgb(100, 100, 100);
+            var baseColor = PaintColor.FromArgb(100, 100, 100);
             var dark = BorderBevelColors.Shade(baseColor, darken: true);
             var light = BorderBevelColors.Shade(baseColor, darken: false);
 
-            Assert.Equal(light, pairs[0].Color); // one connected top + left path
-            Assert.Equal(dark, pairs[1].Color);  // one connected bottom + right path
+            Assert.Equal(light, pairs[0].PaintColor); // one connected top + left path
+            Assert.Equal(dark, pairs[1].PaintColor);  // one connected bottom + right path
         }
 
         [Fact]
@@ -681,8 +681,8 @@ namespace PeachPDF.Tests.Integration
                 .Where(path => !path.Stroked)
                 .ToList();
             Assert.Equal(2, pairs.Count);
-            Assert.Equal(RColor.FromArgb(240, 240, 240), pairs[0].Color); // lit top + left
-            Assert.Equal(RColor.FromArgb(156, 156, 156), pairs[1].Color); // darkened bottom + right
+            Assert.Equal(PaintColor.FromArgb(240, 240, 240), pairs[0].PaintColor); // lit top + left
+            Assert.Equal(PaintColor.FromArgb(156, 156, 156), pairs[1].PaintColor); // darkened bottom + right
         }
 
         [Fact]
@@ -764,13 +764,13 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, span, g);
 
-            var blue = RColor.FromArgb(0, 0, 255);
+            var blue = PaintColor.FromArgb(0, 0, 255);
             var shapes = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(p => !p.Stroked && p.Color == blue)
+                .Where(p => !p.Stroked && p.PaintColor == blue)
                 .ToList();
 
             var shape = Assert.Single(shapes);
-            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>(), p => p.Color == blue);
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>(), p => p.PaintColor == blue);
 
             // One connected contour, so the band is exactly two subpaths: the contour itself and the
             // inset copy that hollows it out. Three separate rings would be six.
@@ -801,13 +801,13 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, span, g);
 
-            var red = RColor.FromArgb(255, 0, 0);
-            var blue = RColor.FromArgb(0, 0, 255);
+            var red = PaintColor.FromArgb(255, 0, 0);
+            var blue = PaintColor.FromArgb(0, 0, 255);
 
             // Border: still open at both wrap points - only the true leading and trailing edges draw
             // their own separate vertical side polygon.
             var borderVerticalSides = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
-                .Where(p => p.Color == red && IsVerticalEdge(p.Points))
+                .Where(p => p.PaintColor == red && IsVerticalEdge(p.Points))
                 .ToList();
             Assert.Equal(2, borderVerticalSides.Count);
 
@@ -815,11 +815,11 @@ namespace PeachPDF.Tests.Integration
             // inset copy hollowing it out - never a separate side polygon the way an open edge set
             // would produce, and never a ring per line.
             var outlineShapes = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(p => !p.Stroked && p.Color == blue)
+                .Where(p => !p.Stroked && p.PaintColor == blue)
                 .ToList();
             var outline = Assert.Single(outlineShapes);
             Assert.Equal(2, outline.SubpathStarts.Count);
-            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>(), p => p.Color == blue);
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>(), p => p.PaintColor == blue);
         }
 
         [Fact]
@@ -836,7 +836,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, span, g);
 
             var bluePaths = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(path => path.Color == RColor.FromArgb(0, 0, 255))
+                .Where(path => path.PaintColor == PaintColor.FromArgb(0, 0, 255))
                 .ToList();
             var shape = Assert.Single(bluePaths);
 
@@ -848,7 +848,7 @@ namespace PeachPDF.Tests.Integration
             Assert.All(
                 g.Log.Select((entry, index) => (entry, index))
                     .Where(item => item.entry is TestRecordingGraphics.DrawPathCall path &&
-                                   path.Color == RColor.FromArgb(0, 0, 255)),
+                                   path.PaintColor == PaintColor.FromArgb(0, 0, 255)),
                 item => Assert.IsNotType<TestRecordingGraphics.PushClipCall>(g.Log[item.index - 1]));
 
             // Being a filled band rather than a centerline stroke, the recorded bounds reach the true
@@ -880,7 +880,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, span, g);
 
             var shapes = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(path => path.Color == RColor.FromArgb(0, 0, 255))
+                .Where(path => path.PaintColor == PaintColor.FromArgb(0, 0, 255))
                 .ToList();
             var shape = Assert.Single(shapes);
 
@@ -918,7 +918,7 @@ namespace PeachPDF.Tests.Integration
             var div = LayoutHarness.FindById(root, "b")!;
             Assert.True(container.FragmentTree!.Fragmentainers.Count >= 2);
 
-            var blue = RColor.FromArgb(0, 0, 255);
+            var blue = PaintColor.FromArgb(0, 0, 255);
             var horizontal = 0;
 
             for (var page = 0; page < container.FragmentTree.Fragmentainers.Count; page++)
@@ -927,10 +927,10 @@ namespace PeachPDF.Tests.Integration
                 FragmentPaintHarness.PaintBox(container, div, g, page);
 
                 // No fully closed ring appears on either page.
-                Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(), p => p.Color == blue);
+                Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(), p => p.PaintColor == blue);
 
                 horizontal += g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
-                    .Count(p => p.Color == blue && !IsVerticalEdge(p.Points));
+                    .Count(p => p.PaintColor == blue && !IsVerticalEdge(p.Points));
             }
 
             // Only the box's own true top (page 0) and true bottom (page 1) horizontal edges paint -
@@ -955,10 +955,10 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, span, g);
 
-            var blue = RColor.FromArgb(0, 0, 255);
+            var blue = PaintColor.FromArgb(0, 0, 255);
             var shape = Assert.Single(
                 g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                p => !p.Stroked && p.Color == blue);
+                p => !p.Stroked && p.PaintColor == blue);
 
             Assert.Equal(6, shape.SubpathStarts.Count);
 
@@ -995,7 +995,7 @@ namespace PeachPDF.Tests.Integration
                 FragmentPaintHarness.PaintBox(container, span, g);
 
                 return g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                    .Single(p => !p.Stroked && p.Color == RColor.FromArgb(0, 0, 255))
+                    .Single(p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(0, 0, 255))
                     .SubpathStarts.Count;
             }
         }
@@ -1017,7 +1017,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, span, g);
 
             var bands = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(p => !p.Stroked && p.Color == RColor.FromArgb(0, 0, 255))
+                .Where(p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(0, 0, 255))
                 .ToList();
             Assert.Equal(2, bands.Count);
 
@@ -1063,12 +1063,12 @@ namespace PeachPDF.Tests.Integration
             if (style == "dotted")
             {
                 Assert.Equal(0, contour.DashPattern[0]);
-                Assert.Equal(RLineCap.Round, contour.LineCap);
+                Assert.Equal(LineCap.Round, contour.LineCap);
             }
             else
             {
                 Assert.Equal(6, contour.DashPattern[0], 1); // dashed = 2x the outline width
-                Assert.Equal(RLineCap.Butt, contour.LineCap);
+                Assert.Equal(LineCap.Butt, contour.LineCap);
             }
 
             // The one path is the whole union's boundary, not a single line's ring.
@@ -1100,7 +1100,7 @@ namespace PeachPDF.Tests.Integration
 
             // The step's short edges cannot carry a 24pt dash, so they fall back to solid, while the
             // long edges of the same contour still carry their fitted pattern.
-            Assert.Contains(lines, l => l.DashPattern is null && l.DashStyle == RDashStyle.Solid);
+            Assert.Contains(lines, l => l.DashPattern is null && l.DashStyle == DashStyle.Solid);
             Assert.Contains(lines, l => l.DashPattern is not null);
         }
 
@@ -1210,7 +1210,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(4, lines.Count);
             Assert.All(lines, line =>
             {
-                Assert.Equal(byte.MaxValue, line.Color.A);
+                Assert.Equal(byte.MaxValue, line.PaintColor.A);
                 Assert.NotNull(line.DashPattern);
             });
         }
@@ -1241,9 +1241,9 @@ namespace PeachPDF.Tests.Integration
 
             // Exactly two shades - a lit face and a shaded one. One would be a flat frame, meaning the
             // direction rule never fired; more would mean a per-side colour leaked in.
-            var shades = paths.Select(p => p.Color).Distinct().ToList();
+            var shades = paths.Select(p => p.PaintColor).Distinct().ToList();
             Assert.Equal(2, shades.Count);
-            Assert.DoesNotContain(RColor.FromArgb(0x33, 0x66, 0xcc), shades);
+            Assert.DoesNotContain(PaintColor.FromArgb(0x33, 0x66, 0xcc), shades);
 
             // One fill per shade - two for a single-pass bevel, twice that for groove/ridge's two
             // passes. A fill per EDGE instead would abut two same-shade faces along each mitre, and two
@@ -1300,7 +1300,7 @@ namespace PeachPDF.Tests.Integration
             var paths = g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
             var passes = style is "groove" or "ridge" ? 2 : 1;
             Assert.Equal(2 * passes, paths.Count);
-            Assert.Equal(2, paths.Select(p => p.Color).Distinct().Count());
+            Assert.Equal(2, paths.Select(p => p.PaintColor).Distinct().Count());
 
             // The band really is rounded - a square one would reach its own corners.
             var band = paths[0];
@@ -1508,7 +1508,7 @@ namespace PeachPDF.Tests.Integration
         /// boundary edge it came from does - so the direction of travel names its bevel shade the
         /// same way: rightwards or upwards is lit.
         /// </summary>
-        private readonly record struct BandStraight(RPoint From, RPoint To, bool IsLit);
+        private readonly record struct BandStraight(PaintPoint From, PaintPoint To, bool IsLit);
 
         /// <summary>
         /// The straight runs of <paramref name="path"/>'s outer subpaths (even indices: each contour
@@ -1549,7 +1549,7 @@ namespace PeachPDF.Tests.Integration
         /// from both and skipped as tied. A wrong-shade repaint always covers a whole run of the
         /// band, so half-point spacing cannot step over one.
         /// </summary>
-        private static IEnumerable<RPoint> StraightSamples(
+        private static IEnumerable<PaintPoint> StraightSamples(
             TestRecordingGraphics.DrawPathCall path)
         {
             for (var subpath = 0; subpath < path.SubpathStarts.Count; subpath++)
@@ -1571,7 +1571,7 @@ namespace PeachPDF.Tests.Integration
                     var length = Math.Abs(to.X - from.X) + Math.Abs(to.Y - from.Y);
                     var steps = Math.Max(1, (int)Math.Ceiling(length / 0.5));
                     for (var step = 0; step <= steps; step++)
-                        yield return new RPoint(
+                        yield return new PaintPoint(
                             from.X + (to.X - from.X) * step / steps,
                             from.Y + (to.Y - from.Y) * step / steps);
                 }
@@ -1582,7 +1582,7 @@ namespace PeachPDF.Tests.Integration
         /// The distance from <paramref name="point"/> to the segment
         /// <paramref name="straight"/> spans.
         /// </summary>
-        private static double DistanceToSegment(RPoint point, BandStraight straight)
+        private static double DistanceToSegment(PaintPoint point, BandStraight straight)
         {
             var dx = straight.To.X - straight.From.X;
             var dy = straight.To.Y - straight.From.Y;
@@ -1604,7 +1604,7 @@ namespace PeachPDF.Tests.Integration
         /// boundary counts as outside, since neighbouring edges' territories meet along their shared
         /// mitre by construction.
         /// </summary>
-        private static bool StrictlyContains(IReadOnlyList<RPoint> polygon, RPoint point)
+        private static bool StrictlyContains(IReadOnlyList<PaintPoint> polygon, PaintPoint point)
         {
             const double tolerance = 1e-9;
             var inside = false;
@@ -1635,7 +1635,7 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// Whether any two non-adjacent sides of the closed polygon <paramref name="polygon"/> cross.
         /// </summary>
-        private static bool SelfIntersects(IReadOnlyList<RPoint> polygon)
+        private static bool SelfIntersects(IReadOnlyList<PaintPoint> polygon)
         {
             var n = polygon.Count;
 
@@ -1652,10 +1652,10 @@ namespace PeachPDF.Tests.Integration
 
             return false;
 
-            static bool SegmentsCross(RPoint a, RPoint b, RPoint c, RPoint d) =>
+            static bool SegmentsCross(PaintPoint a, PaintPoint b, PaintPoint c, PaintPoint d) =>
                 Side(a, b, c) * Side(a, b, d) < 0 && Side(c, d, a) * Side(c, d, b) < 0;
 
-            static int Side(RPoint a, RPoint b, RPoint p)
+            static int Side(PaintPoint a, PaintPoint b, PaintPoint p)
             {
                 var cross = (b.X - a.X) * (p.Y - a.Y) - (b.Y - a.Y) * (p.X - a.X);
                 return Math.Abs(cross) < 1e-9 ? 0 : Math.Sign(cross);
@@ -1668,7 +1668,7 @@ namespace PeachPDF.Tests.Integration
         /// it bends towards - so a test asking where the shape is has to evaluate the curve rather
         /// than assert against them.
         /// </summary>
-        private static IEnumerable<RPoint> Flatten(TestRecordingGraphics.DrawPathCall path)
+        private static IEnumerable<PaintPoint> Flatten(TestRecordingGraphics.DrawPathCall path)
         {
             for (var i = 0; i < path.Points.Count; i++)
             {
@@ -1686,7 +1686,7 @@ namespace PeachPDF.Tests.Integration
                     {
                         var t = step / 8.0;
                         var u = 1 - t;
-                        yield return new RPoint(
+                        yield return new PaintPoint(
                             u * u * u * p0.X + 3 * u * u * t * p1.X + 3 * u * t * t * p2.X + t * t * t * p3.X,
                             u * u * u * p0.Y + 3 * u * u * t * p1.Y + 3 * u * t * t * p2.Y + t * t * t * p3.Y);
                     }
@@ -1701,7 +1701,7 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// How far <paramref name="point"/> lies from <paramref name="polygon"/>'s boundary.
         /// </summary>
-        private static double DistanceToPolygon(IReadOnlyList<RPoint> polygon, RPoint point)
+        private static double DistanceToPolygon(IReadOnlyList<PaintPoint> polygon, PaintPoint point)
         {
             var best = double.MaxValue;
 
@@ -1729,7 +1729,7 @@ namespace PeachPDF.Tests.Integration
         /// <paramref name="path"/> split into its subpaths - for a bevel clip, the one quad it holds
         /// per boundary edge of that shade.
         /// </summary>
-        private static IEnumerable<IReadOnlyList<RPoint>> Quads(TestGraphicsPath path)
+        private static IEnumerable<IReadOnlyList<PaintPoint>> Quads(TestGraphicsPath path)
         {
             for (var i = 0; i < path.SubpathStarts.Count; i++)
             {
@@ -1747,7 +1747,7 @@ namespace PeachPDF.Tests.Integration
         /// carry exactly - an arc's end, which sits on the mitre it is cut by - would otherwise land
         /// either side of the edge on rounding alone.
         /// </summary>
-        private static bool ContainsPoint(IReadOnlyList<RPoint> polygon, RPoint point)
+        private static bool ContainsPoint(IReadOnlyList<PaintPoint> polygon, PaintPoint point)
         {
             const double tolerance = 0.01;
             var inside = false;
@@ -1795,7 +1795,7 @@ namespace PeachPDF.Tests.Integration
 
             var shape = Assert.Single(
                 g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                p => !p.Stroked && p.Color == RColor.FromArgb(0, 0, 255));
+                p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(0, 0, 255));
 
             var outer = shape.Subpath(0);
             var left = rects.Min(r => r.Left) - 2;
@@ -1872,14 +1872,14 @@ namespace PeachPDF.Tests.Integration
             var gDefault = new TestRecordingGraphics { PixelsPerPointOverride = 1.0 };
             FragmentPaintHarness.PaintBox(containerDefault, divDefault, gDefault);
             var bandsDefault = gDefault.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(p => !p.Stroked && p.Color == RColor.FromArgb(51, 51, 51)).ToList();
+                .Where(p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(51, 51, 51)).ToList();
 
             var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
             var divScaled = LayoutHarness.FindById(rootScaled, "b")!;
             var gScaled = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
             FragmentPaintHarness.PaintBox(containerScaled, divScaled, gScaled);
             var bandsScaled = gScaled.Log.OfType<TestRecordingGraphics.DrawPathCall>()
-                .Where(p => !p.Stroked && p.Color == RColor.FromArgb(51, 51, 51)).ToList();
+                .Where(p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(51, 51, 51)).ToList();
 
             // double contributes two complete rings, one for each stripe.
             Assert.Equal(2, bandsDefault.Count);
@@ -1897,7 +1897,7 @@ namespace PeachPDF.Tests.Integration
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         /// <summary>A filled ring band's colour and axis-aligned bounds.</summary>
-        private readonly record struct BandInfo(RColor Color, double Left, double Top, double Width, double Height)
+        private readonly record struct BandInfo(PaintColor PaintColor, double Left, double Top, double Width, double Height)
         {
             public double Bottom => Top + Height;
 
@@ -1910,7 +1910,7 @@ namespace PeachPDF.Tests.Integration
         {
             var left = p.Points.Min(pt => pt.X);
             var top = p.Points.Min(pt => pt.Y);
-            return new BandInfo(p.Color, left, top, p.Points.Max(pt => pt.X) - left, p.Points.Max(pt => pt.Y) - top);
+            return new BandInfo(p.PaintColor, left, top, p.Points.Max(pt => pt.X) - left, p.Points.Max(pt => pt.Y) - top);
         }
 
         private static double OuterTop(TestRecordingGraphics.DrawPathCall ring) =>
@@ -1922,7 +1922,7 @@ namespace PeachPDF.Tests.Integration
         private static double RingThickness(TestRecordingGraphics.DrawPathCall ring) =>
             InnerTop(ring) - OuterTop(ring);
 
-        private static bool IsVerticalEdge(System.Collections.Generic.IReadOnlyList<RPoint> points)
+        private static bool IsVerticalEdge(System.Collections.Generic.IReadOnlyList<PaintPoint> points)
         {
             var width = points.Max(p => p.X) - points.Min(p => p.X);
             var height = points.Max(p => p.Y) - points.Min(p => p.Y);
@@ -1958,7 +1958,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                p => !p.Stroked && p.Color == RColor.FromArgb(10, 20, 30));
+                p => !p.Stroked && p.PaintColor == PaintColor.FromArgb(10, 20, 30));
         }
 
         /// <summary>
@@ -1980,7 +1980,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, div, g);
 
             Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawPathCall>(),
-                p => p.Color == RColor.FromArgb(10, 20, 30));
+                p => p.PaintColor == PaintColor.FromArgb(10, 20, 30));
         }
 
         private static async Task<string> GetPdfText(string html)

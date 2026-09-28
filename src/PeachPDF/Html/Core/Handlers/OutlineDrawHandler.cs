@@ -1,6 +1,5 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -27,7 +26,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// to give outlines at a content-area edge room to enter the page margin before any narrower
         /// overflow clips are established.
         /// </summary>
-        internal static double OutwardReach(RGraphics g, CssBox box)
+        internal static double OutwardReach(Canvas g, CssBox box)
         {
             var style = box.OutlineStyle.Value;
             if (style is OutlineStyle.None or OutlineStyle.Hidden) return 0;
@@ -66,12 +65,12 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="rects">
         /// the border-box rectangles of every fragment of <paramref name="box"/> on this page
         /// </param>
-        public static void DrawRegionOutline(RGraphics g, CssBox box, IReadOnlyList<RRect> rects)
+        public static void DrawRegionOutline(Canvas g, CssBox box, IReadOnlyList<Rect> rects)
         {
             if (rects.Count == 0) return;
             if (!TryResolveRing(g, box, out var ring)) return;
 
-            var inflated = new List<RRect>(rects.Count);
+            var inflated = new List<Rect>(rects.Count);
             foreach (var rect in rects)
             {
                 if (rect is not { Width: > 0, Height: > 0 }) continue;
@@ -82,7 +81,7 @@ namespace PeachPDF.Html.Core.Handlers
                 var horizontalReach = ClampReach(ring.Reach, rect.Width, ring.Width, true, true);
                 var verticalReach = ClampReach(ring.Reach, rect.Height, ring.Width, true, true);
 
-                inflated.Add(RRect.FromLTRB(
+                inflated.Add(Rect.FromLTRB(
                     rect.Left - horizontalReach,
                     rect.Top - verticalReach,
                     rect.Right + horizontalReach,
@@ -101,10 +100,10 @@ namespace PeachPDF.Html.Core.Handlers
             var declared = box.ComputeRadii(rects[0]);
             if (declared.IsRounded) radii = declared;
 
-            if (ring.IsInvert) g.PushBlendMode(RBlendMode.Difference);
+            if (ring.IsInvert) g.PushBlendMode(PaintBlendMode.Difference);
 
             OutlineRegionPainter.DrawRegionOutline(
-                g, contours, ToLineStyle(ring.Style), ring.Color, ring.Width, radii, ring.Offset);
+                g, contours, ToLineStyle(ring.Style), ring.PaintColor, ring.Width, radii, ring.Offset);
 
             if (ring.IsInvert) g.PopBlendMode();
         }
@@ -133,7 +132,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="hasTopEdge">whether the box's own top edge belongs to this rectangle</param>
         /// <param name="hasBottomEdge">whether the box's own bottom edge belongs to this rectangle</param>
         public static void DrawOutline(
-            RGraphics g, CssBox box, RRect rect,
+            Canvas g, CssBox box, Rect rect,
             bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge, bool hasBottomEdge)
         {
             if (rect is not { Width: > 0, Height: > 0 }) return;
@@ -143,7 +142,7 @@ namespace PeachPDF.Html.Core.Handlers
                 ring.Reach, rect.Width, ring.Width, hasLeftEdge, hasRightEdge);
             var verticalReach = ClampReach(
                 ring.Reach, rect.Height, ring.Width, hasTopEdge, hasBottomEdge);
-            var outerRect = RRect.FromLTRB(
+            var outerRect = Rect.FromLTRB(
                 hasLeftEdge ? rect.Left - horizontalReach : rect.Left,
                 hasTopEdge ? rect.Top - verticalReach : rect.Top,
                 hasRightEdge ? rect.Right + horizontalReach : rect.Right,
@@ -166,17 +165,17 @@ namespace PeachPDF.Html.Core.Handlers
                     tlx, tly, trx, try_, brx, bry, blx, bly);
             }
 
-            if (ring.IsInvert) g.PushBlendMode(RBlendMode.Difference);
+            if (ring.IsInvert) g.PushBlendMode(PaintBlendMode.Difference);
 
             BoxEdgesDrawHandler.DrawBoxEdges(
-                g, outerRect, ToLineStyle(ring.Style), ring.Color, ring.Width,
+                g, outerRect, ToLineStyle(ring.Style), ring.PaintColor, ring.Width,
                 hasLeftEdge, hasRightEdge, hasTopEdge, hasBottomEdge, outerRadii);
 
             if (ring.IsInvert) g.PopBlendMode();
         }
 
         /// <summary>Whether <paramref name="box"/> has an outline that draws anything at all.</summary>
-        internal static bool Paints(RGraphics g, CssBox box) => TryResolveRing(g, box, out _);
+        internal static bool Paints(Canvas g, CssBox box) => TryResolveRing(g, box, out _);
 
         #region Private methods
 
@@ -185,7 +184,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// colour, width, offset and the style actually painted.
         /// </summary>
         /// <returns>whether there is a ring to paint at all</returns>
-        private static bool TryResolveRing(RGraphics g, CssBox box, out Ring ring)
+        private static bool TryResolveRing(Canvas g, CssBox box, out Ring ring)
         {
             ring = default;
 
@@ -193,7 +192,7 @@ namespace PeachPDF.Html.Core.Handlers
             if (style is OutlineStyle.None or OutlineStyle.Hidden) return false;
 
             var isInvert = string.Equals(box.OutlineColor, Keywords.Invert, StringComparison.OrdinalIgnoreCase);
-            var color = isInvert ? RColor.White : box.ActualOutlineColor;
+            var color = isInvert ? PaintColor.White : box.ActualOutlineColor;
             var offset = box.ActualOutlineOffset;
 
             double width;
@@ -226,7 +225,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// the style actually painted, with <c>auto</c> already resolved to <c>solid</c> (CSS-UI-4
         /// leaves <c>auto</c>'s appearance UA-defined)
         /// </param>
-        /// <param name="Color">
+        /// <param name="PaintColor">
         /// the colour to paint, with <c>invert</c> resolved - see <paramref name="IsInvert"/>
         /// </param>
         /// <param name="Width">the ring's thickness</param>
@@ -236,7 +235,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// through a difference blend rather than in its own colour
         /// </param>
         private readonly record struct Ring(
-            OutlineStyle Style, RColor Color, double Width, double Offset, bool IsInvert)
+            OutlineStyle Style, PaintColor PaintColor, double Width, double Offset, bool IsInvert)
         {
             /// <summary>How far outside the border edge the ring's outer edge sits.</summary>
             internal double Reach => Offset + Width;
@@ -258,7 +257,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// width, which turns the ordinary outward-facing band into a centred one without any of the
         /// ring geometry below needing to know about it.
         /// </remarks>
-        private static double AutoRingWidth(RGraphics g) =>
+        private static double AutoRingWidth(Canvas g) =>
             AutoRingWidthInCssPixels * Length.PointsPerPx * g.PixelsPerPoint;
 
         /// <summary>Chrome's own focus-ring thickness - see <see cref="AutoRingWidth"/>.</summary>

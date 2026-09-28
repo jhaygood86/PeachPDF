@@ -1,5 +1,6 @@
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Raster;
+using PeachPDF.Adapters;
+using PeachDrawing.Abstractions;
+using PeachDrawing;
 
 namespace PeachPDF.Tests.Raster
 {
@@ -103,13 +104,19 @@ namespace PeachPDF.Tests.Raster
             Assert.Equal((0, 1), set.GetContour(0));
         }
 
-        private static FlatPath Flatten(XGraphicsPath path, double tolerance = 0.05) => FlatPath.From(path, tolerance);
+        // The four tests below build geometry through GraphicsPathAdapter (the GraphicsPath the PDF
+        // backend uses) rather than a raw XGraphicsPath: FlatPath.From's own flattening algorithm moved
+        // to GraphicsPath.Flatten (shared, backend-agnostic segment recording - see GraphicsPath's own
+        // remarks), so what these tests actually exercise is that shared base-class recording/flattening,
+        // reached the same way any real caller reaches it.
+        private static FlatPath Flatten(GraphicsPath path, double tolerance = 0.05) => FlatPath.From(path, tolerance);
 
         [Fact]
         public void FlatPath_FlattensACurveIntoManySegmentsWithinTolerance()
         {
-            var path = new XGraphicsPath();
-            path.AddBezier(0, 0, 0, 10, 10, 10, 10, 0);
+            using var path = new GraphicsPathAdapter();
+            path.Start(0, 0);
+            path.AddBezierTo(0, 10, 10, 10, 10, 0);
 
             var flat = Flatten(path);
 
@@ -128,12 +135,13 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public void FlatPath_RecordsClosedAndOpenSubpaths_InOrder()
         {
-            var path = new XGraphicsPath();
-            path.AddLine(0, 0, 5, 0);
-            path.AddLine(5, 0, 5, 5);
+            using var path = new GraphicsPathAdapter();
+            path.Start(0, 0);
+            path.LineTo(5, 0);
+            path.LineTo(5, 5);
             path.CloseFigure();
-            path.StartFigure();
-            path.AddLine(10, 10, 20, 10);
+            path.AddMove(10, 10);
+            path.LineTo(20, 10);
 
             var flat = Flatten(path);
 
@@ -143,16 +151,23 @@ namespace PeachPDF.Tests.Raster
         }
 
         [Fact]
-        public void FlatPath_AddsEllipsesRectanglesAndArcs()
+        public void FlatPath_AddsRectanglesAndArcs()
         {
-            var path = new XGraphicsPath();
-            path.AddEllipse(0, 0, 20, 10);
-            path.AddRectangle(new XRect(30, 0, 5, 5));
-            path.AddArc(new XPoint(40, 0), new XPoint(50, 10), new XSize(10, 10), 0, false, XSweepDirection.Clockwise);
+            using var path = new GraphicsPathAdapter();
+            // A closed rectangle.
+            path.Start(30, 0);
+            path.LineTo(35, 0);
+            path.LineTo(35, 5);
+            path.LineTo(30, 5);
+            path.CloseFigure();
+            // A real elliptical arc, SVG-style parameterization: (40,0) to (50,10), radius 10x10,
+            // clockwise, the small arc.
+            path.AddMove(40, 0);
+            path.AddArc(50, 10, 10, 10, 0, isLargeArc: false, sweepClockwise: true);
 
             var flat = Flatten(path);
 
-            Assert.True(flat.ContourCount >= 3);
+            Assert.True(flat.ContourCount >= 2);
             var bounds = flat.Contours.GetBounds();
             Assert.NotNull(bounds);
             Assert.InRange(bounds.Value.MaxX, 49.9, 50.1);
@@ -178,8 +193,9 @@ namespace PeachPDF.Tests.Raster
         [Fact]
         public void FlatPath_DegenerateToleranceFallsBackToADefault()
         {
-            var path = new XGraphicsPath();
-            path.AddBezier(0, 0, 0, 10, 10, 10, 10, 0);
+            using var path = new GraphicsPathAdapter();
+            path.Start(0, 0);
+            path.AddBezierTo(0, 10, 10, 10, 10, 0);
 
             Assert.True(Flatten(path, 0).Contours.PointCount > 2);
             Assert.True(Flatten(path, double.NaN).Contours.PointCount > 2);

@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -30,7 +30,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, s, g);
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
-            Assert.Equal(RColor.FromArgb(0, 0, 255), line.Color);
+            Assert.Equal(PaintColor.FromArgb(0, 0, 255), line.PaintColor);
 
             var rect = s.Rectangles.Values.Single();
             Assert.True(line.Y1 > rect.Top, "underline should sit below the rectangle's top edge");
@@ -118,7 +118,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, s, g);
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
-            Assert.Equal(RColor.FromArgb(255, 0, 0), line.Color);
+            Assert.Equal(PaintColor.FromArgb(255, 0, 0), line.PaintColor);
         }
 
         [Fact]

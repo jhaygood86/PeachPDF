@@ -1,7 +1,7 @@
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Paint;
-using PeachPDF.Raster;
+using PeachDrawing;
 
 namespace PeachPDF.Tests.Raster
 {

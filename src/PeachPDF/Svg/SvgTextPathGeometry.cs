@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using System;
 using System.Collections.Generic;
 
@@ -32,18 +32,18 @@ namespace PeachPDF.Svg
         // invisible.
         private const int CubicSteps = 24;
 
-        private readonly struct Segment(RPoint a, RPoint b, double startLength, double endLength)
+        private readonly struct Segment(PaintPoint a, PaintPoint b, double startLength, double endLength)
         {
-            public RPoint A { get; } = a;
-            public RPoint B { get; } = b;
+            public PaintPoint A { get; } = a;
+            public PaintPoint B { get; } = b;
             public double StartLength { get; } = startLength;
             public double EndLength { get; } = endLength;
         }
 
         private readonly List<Segment> _segments = [];
         private double _total;
-        private RPoint _current;
-        private RPoint _subpathStart;
+        private PaintPoint _current;
+        private PaintPoint _subpathStart;
         private bool _hasCurrent;
 
         private double _minX = double.MaxValue, _minY = double.MaxValue, _maxX = double.MinValue, _maxY = double.MinValue;
@@ -53,7 +53,7 @@ namespace PeachPDF.Svg
         public bool IsEmpty => _segments.Count == 0;
 
         /// <summary>The axis-aligned bounding box of the flattened path (default when <see cref="IsEmpty"/>).</summary>
-        public RRect Bounds => IsEmpty ? default : new RRect(_minX, _minY, _maxX - _minX, _maxY - _minY);
+        public Rect Bounds => IsEmpty ? default : new Rect(_minX, _minY, _maxX - _minX, _maxY - _minY);
 
         public SvgTextPathGeometry(IReadOnlyList<PathSegment> segments)
         {
@@ -62,20 +62,20 @@ namespace PeachPDF.Svg
                 switch (segment.Kind)
                 {
                     case PathSegmentKind.MoveTo:
-                        _current = new RPoint(segment.X, segment.Y);
+                        _current = new PaintPoint(segment.X, segment.Y);
                         _subpathStart = _current;
                         _hasCurrent = true;
                         break;
 
                     case PathSegmentKind.LineTo:
-                        Emit(new RPoint(segment.X, segment.Y));
+                        Emit(new PaintPoint(segment.X, segment.Y));
                         break;
 
                     case PathSegmentKind.CubicBezierTo:
                         FlattenCubic(
-                            new RPoint(segment.X1, segment.Y1),
-                            new RPoint(segment.X2, segment.Y2),
-                            new RPoint(segment.X, segment.Y));
+                            new PaintPoint(segment.X1, segment.Y1),
+                            new PaintPoint(segment.X2, segment.Y2),
+                            new PaintPoint(segment.X, segment.Y));
                         break;
 
                     case PathSegmentKind.ArcTo:
@@ -121,7 +121,7 @@ namespace PeachPDF.Svg
             return (last.B.X, last.B.Y, lastAngle);
         }
 
-        private void Emit(RPoint to)
+        private void Emit(PaintPoint to)
         {
             if (!_hasCurrent)
             {
@@ -143,7 +143,7 @@ namespace PeachPDF.Svg
             _current = to;
         }
 
-        private void FlattenCubic(RPoint c1, RPoint c2, RPoint end)
+        private void FlattenCubic(PaintPoint c1, PaintPoint c2, PaintPoint end)
         {
             var p0 = _current;
             for (var i = 1; i <= CubicSteps; i++)
@@ -153,14 +153,14 @@ namespace PeachPDF.Svg
             }
         }
 
-        private static RPoint CubicPoint(RPoint p0, RPoint c1, RPoint c2, RPoint p3, double t)
+        private static PaintPoint CubicPoint(PaintPoint p0, PaintPoint c1, PaintPoint c2, PaintPoint p3, double t)
         {
             var u = 1 - t;
             var a = u * u * u;
             var b = 3 * u * u * t;
             var c = 3 * u * t * t;
             var d = t * t * t;
-            return new RPoint(
+            return new PaintPoint(
                 a * p0.X + b * c1.X + c * c2.X + d * p3.X,
                 a * p0.Y + b * c1.Y + c * c2.Y + d * p3.Y);
         }
@@ -172,7 +172,7 @@ namespace PeachPDF.Svg
         /// </summary>
         private void FlattenArc(PathSegment segment)
         {
-            var end = new RPoint(segment.X, segment.Y);
+            var end = new PaintPoint(segment.X, segment.Y);
             var rx = Math.Abs(segment.RadiusX);
             var ry = Math.Abs(segment.RadiusY);
 
@@ -234,7 +234,7 @@ namespace PeachPDF.Svg
                 var theta = theta1 + deltaTheta * i / steps;
                 var ex = rx * Math.Cos(theta);
                 var ey = ry * Math.Sin(theta);
-                Emit(new RPoint(
+                Emit(new PaintPoint(
                     cosPhi * ex - sinPhi * ey + cx,
                     sinPhi * ex + cosPhi * ey + cy));
             }
@@ -250,7 +250,7 @@ namespace PeachPDF.Svg
             return angle;
         }
 
-        private void Track(RPoint p)
+        private void Track(PaintPoint p)
         {
             _minX = Math.Min(_minX, p.X);
             _minY = Math.Min(_minY, p.Y);
@@ -258,7 +258,7 @@ namespace PeachPDF.Svg
             _maxY = Math.Max(_maxY, p.Y);
         }
 
-        private static double Distance(RPoint a, RPoint b)
+        private static double Distance(PaintPoint a, PaintPoint b)
         {
             var dx = b.X - a.X;
             var dy = b.Y - a.Y;

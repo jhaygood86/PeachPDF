@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
@@ -504,14 +504,14 @@ namespace PeachPDF.Html.Core
         /// <param name="stylesheet">the stylesheet source to parse</param>
         /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
         /// <returns>the parsed css data</returns>
-        public static async Task<CssData> Parse(RAdapter adapter, string stylesheet, bool combineWithDefault = true)
+        public static async Task<CssData> Parse(RenderContext adapter, string stylesheet, bool combineWithDefault = true)
         {
             var parser = new CssParser(adapter, null);
             return await parser.ParseStyleSheet(stylesheet, combineWithDefault);
         }
 
         /// <summary>
-        /// Genuinely zero-copy counterpart of <see cref="Parse(RAdapter, string, bool)"/> - see
+        /// Genuinely zero-copy counterpart of <see cref="Parse(RenderContext, string, bool)"/> - see
         /// <see cref="CssParser.ParseStyleSheet(ReadOnlyMemory{char}, bool)"/>'s own remarks for why
         /// <see cref="ReadOnlyMemory{T}"/>, not <see cref="ReadOnlySpan{T}"/>, is what makes this possible.
         /// </summary>
@@ -519,7 +519,7 @@ namespace PeachPDF.Html.Core
         /// <param name="stylesheet">the stylesheet source to parse</param>
         /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
         /// <returns>the parsed css data</returns>
-        public static async Task<CssData> Parse(RAdapter adapter, ReadOnlyMemory<char> stylesheet, bool combineWithDefault = true)
+        public static async Task<CssData> Parse(RenderContext adapter, ReadOnlyMemory<char> stylesheet, bool combineWithDefault = true)
         {
             var parser = new CssParser(adapter, null);
             return await parser.ParseStyleSheet(stylesheet, combineWithDefault);

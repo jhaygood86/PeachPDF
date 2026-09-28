@@ -11,8 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Utils;
 using System.Threading.Tasks;
 
@@ -65,7 +64,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Assigns words its width and height
         /// </summary>
         /// <param name="g">the device to use</param>
-        internal override ValueTask MeasureWordsSize(RGraphics g)
+        internal override ValueTask MeasureWordsSize(Canvas g)
         {
             if (!_wordsSizeMeasured)
             {

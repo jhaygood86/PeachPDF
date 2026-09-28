@@ -393,7 +393,7 @@ namespace PeachPDF.Tests.Integration
             if (!OperatingSystem.IsWindows()) return;
 
             var html = LayoutHarness.Wrap("""
-                <div id="text" style="box-sizing:border-box;width:330px;font-family:Calibri,Noto Color Emoji,Noto Emoji,Segoe UI Emoji,Segoe UI Symbol,sans-serif;font-size:24px;color:#16324f;text-align:left;font-weight:bold;overflow-wrap:anywhere;white-space:pre-wrap;">Northline Office B.V. <span style="color:rgb(31, 31, 31);font-size:28px;font-weight:400">🥰💀✌️🌴🐢🐐🍄⚽🍻👑📸😬👀🚨🏡🕊️🏆😻🌟🧿🍀🎨🍜</span> sl;fasdfaslfkl;askdfl;asdkfl;kasf;kasd;f; asdl;fkl;as fkl;askfl;sk l;asdfk l;asdk l;asdkfl; askf;laskfl;kl; asfkasdfl;</div>
+                <div id="text" style="box-sizing:border-box;width:330px;font-family:Calibri,Noto PaintColor Emoji,Noto Emoji,Segoe UI Emoji,Segoe UI Symbol,sans-serif;font-size:24px;color:#16324f;text-align:left;font-weight:bold;overflow-wrap:anywhere;white-space:pre-wrap;">Northline Office B.V. <span style="color:rgb(31, 31, 31);font-size:28px;font-weight:400">🥰💀✌️🌴🐢🐐🍄⚽🍻👑📸😬👀🚨🏡🕊️🏆😻🌟🧿🍀🎨🍜</span> sl;fasdfaslfkl;askdfl;asdkfl;kasf;kasd;f; asdl;fkl;as fkl;askfl;sk l;asdfk l;asdk l;asdkfl; askf;laskfl;kl; asfkasdfl;</div>
                 """);
 
             var (root, _) = await LayoutHarness.LayoutAsync(html);

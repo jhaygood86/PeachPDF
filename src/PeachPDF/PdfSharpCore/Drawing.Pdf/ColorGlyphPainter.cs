@@ -17,6 +17,7 @@
 //
 #endregion
 
+using PeachDrawing.Abstractions;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
@@ -57,7 +58,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             _scale = font.Size / _typeface.Metrics.UnitsPerEm;
             _letterSpacing = letterSpacing;
             _pageDownwards = pageDirection == XPageDirection.Downwards;
-            _foreground = brush is XSolidBrush solid ? solid.Color : XColors.Black;
+            _foreground = brush is XSolidBrush solid ? solid.PaintColor : XColors.Black;
             _paletteIndex = paletteIndex;
             _overrides = overrides is { Count: > 0 } ? overrides : null;
             _baselineX = baselineX;
@@ -316,7 +317,16 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
 
             double baselineY = _pageDownwards ? _baselineY - originYOffset : _baselineY + originYOffset;
-            return painter.TryPaint(_typeface, (ushort)glyphId, svg, _font.Size, originX, baselineY, _foreground, _paletteIndex, _overrides);
+            var foreground = PaintColor.FromArgb((int)System.Math.Round(_foreground.A * 255), _foreground.R, _foreground.G, _foreground.B);
+            Dictionary<int, PaintColor>? overrides = null;
+            if (_overrides is { Count: > 0 })
+            {
+                overrides = new Dictionary<int, PaintColor>(_overrides.Count);
+                foreach (var (entry, colour) in _overrides)
+                    overrides[entry] = PaintColor.FromArgb((int)System.Math.Round(colour.A * 255), colour.R, colour.G, colour.B);
+            }
+
+            return painter.TryPaint(_typeface, (ushort)glyphId, svg, _font.Size, originX, baselineY, foreground, _paletteIndex, overrides);
         }
 
         private void PaintGlyph(int glyphId, double originX, double originYOffset = 0)

@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+using PeachDrawing.Abstractions;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -18,9 +18,9 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class OutlinePaintOrderIntegrationTests
     {
-        private static readonly RColor Ring = RColor.FromArgb(217, 74, 74);
-        private static readonly RColor Gray = RColor.FromArgb(238, 238, 238);
-        private static readonly RColor Blue = RColor.FromArgb(10, 20, 200);
+        private static readonly PaintColor Ring = PaintColor.FromArgb(217, 74, 74);
+        private static readonly PaintColor Gray = PaintColor.FromArgb(238, 238, 238);
+        private static readonly PaintColor Blue = PaintColor.FromArgb(10, 20, 200);
 
         private const string Outline = "outline: 20pt solid rgb(217,74,74); outline-offset: 6pt";
 
@@ -112,8 +112,8 @@ namespace PeachPDF.Tests.Integration
         {
             // Siblings in document order; a descendant's ring before its ancestor's, since each box's
             // outline was drawn as the last step of its own paint.
-            var second = RColor.FromArgb(40, 160, 60);
-            var inner = RColor.FromArgb(200, 120, 0);
+            var second = PaintColor.FromArgb(40, 160, 60);
+            var inner = PaintColor.FromArgb(200, 120, 0);
             var g = await PaintAsync(
                 $"<div style='{Outline}'>first</div>" +
                 "<div style='outline: 4pt solid rgb(40,160,60)'>" +
@@ -157,7 +157,7 @@ namespace PeachPDF.Tests.Integration
                 "</table>");
 
             var ring = IndexOfFill(g, Ring);
-            var lastBorder = LastIndexOfFill(g, RColor.FromArgb(10, 200, 20));
+            var lastBorder = LastIndexOfFill(g, PaintColor.FromArgb(10, 200, 20));
 
             Assert.True(lastBorder >= 0, "no collapsed border was painted");
             Assert.True(ring > lastBorder, "a collapsed border was painted over the outline");
@@ -257,24 +257,24 @@ namespace PeachPDF.Tests.Integration
             return g;
         }
 
-        private static bool IsFillOf(object entry, RColor color) => entry switch
+        private static bool IsFillOf(object entry, PaintColor color) => entry switch
         {
-            TestRecordingGraphics.DrawRectCall r => r.Color == color,
-            TestRecordingGraphics.DrawPathCall { Stroked: false } p => p.Color == color,
-            TestRecordingGraphics.DrawPolygonCall p => p.Color == color,
+            TestRecordingGraphics.DrawRectCall r => r.PaintColor == color,
+            TestRecordingGraphics.DrawPathCall { Stroked: false } p => p.PaintColor == color,
+            TestRecordingGraphics.DrawPolygonCall p => p.PaintColor == color,
             _ => false
         };
 
-        private static int IndexOfFill(TestRecordingGraphics g, RColor color) =>
+        private static int IndexOfFill(TestRecordingGraphics g, PaintColor color) =>
             g.Log.FindIndex(e => IsFillOf(e, color));
 
-        private static int LastIndexOfFill(TestRecordingGraphics g, RColor color) =>
+        private static int LastIndexOfFill(TestRecordingGraphics g, PaintColor color) =>
             g.Log.FindLastIndex(e => IsFillOf(e, color));
 
         /// <summary>The rectangular clips still pushed when the log reaches <paramref name="index"/>.</summary>
-        private static List<RRect> ActiveClipsAt(TestRecordingGraphics g, int index)
+        private static List<Rect> ActiveClipsAt(TestRecordingGraphics g, int index)
         {
-            var stack = new List<RRect>();
+            var stack = new List<Rect>();
             foreach (var entry in g.Log.Take(index))
             {
                 if (entry is TestRecordingGraphics.PushClipCall push) stack.Add(push.Rect);

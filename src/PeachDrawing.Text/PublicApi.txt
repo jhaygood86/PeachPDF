@@ -779,6 +779,7 @@ PeachDrawing.Text.TypefaceQuery : struct
   method Int32 GetHashCode()
   method String ToString()
   method Void Deconstruct(out Double Weight, out Int32 Width, out Boolean IsItalic, out Nullable<Rune> MustCover, out IReadOnlyList<AxisSetting> Axes, out Nullable<Double> WidthPercent, out Nullable<Double> ObliqueAngle)
+  method static TypefaceQuery From(Double weight, Double widthPercent, Boolean isItalic, Nullable<Rune> mustCover, IReadOnlyList<AxisSetting> axes, Nullable<Double> obliqueSkewSinus)
   property Boolean IsItalic { get; init; }
   property Double Weight { get; init; }
   property IReadOnlyList<AxisSetting> Axes { get; init; }
