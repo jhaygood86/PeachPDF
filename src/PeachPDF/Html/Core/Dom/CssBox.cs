@@ -145,9 +145,25 @@ namespace PeachPDF.Html.Core.Dom
                 _parentBox.Boxes.Add(this);
             }
 
+            // Computed once here rather than walked live from NameComparison/GetAttribute (both hot
+            // paths - see their remarks): a box's foreign-content status is fixed by where it's parsed
+            // into the tree (this constructor always runs before the cascade that reads either member -
+            // see DomParser.CascadeApplyStyles), so this is a snapshot, not a re-derivable query. `this
+            // is CssBoxSvg or CssBoxMath` is safe in a base constructor - the object's runtime type is
+            // already fixed by the time a derived constructor reaches this base call.
+            IsWithinForeignContent = parentBox is { IsWithinForeignContent: true } || this is CssBoxSvg or CssBoxMath;
+
             Id = ++IdCounterBox.Value;
             HtmlTag = tag;
         }
+
+        /// <summary>
+        /// Whether this box is the root of, or a descendant within, an inline <c>&lt;svg&gt;</c>/<c>&lt;math&gt;</c>
+        /// subtree - foreign (XML) content per the HTML Standard, matched case-sensitively regardless of
+        /// the HTML-only case-insensitivity rules <see cref="ICssDomNode.NameComparison"/> and
+        /// <see cref="ICssDomNode.GetAttribute"/> otherwise apply. See issue #1384.
+        /// </summary>
+        internal bool IsWithinForeignContent { get; }
 
         public uint Id { get; }
 
@@ -7702,14 +7718,37 @@ namespace PeachPDF.Html.Core.Dom
         // member (GetAttribute, the CustomProperties field).
         string? ICssDomNode.TagName => HtmlTag?.Name;
 
-        string? ICssDomNode.GetAttribute(string name) => GetAttribute(name, null);
+        // Foreign content (SVG, MathML) is XML, not HTML: attribute *names* are case-sensitive there,
+        // unlike HtmlTag.Attributes' backing dictionary, which is always built OrdinalIgnoreCase-keyed
+        // (HtmlTag's constructor and SetAttribute) since it also serves ordinary HTML lookups. An inline
+        // <svg>/<math> subtree still runs through this same CssBox-based cascade
+        // (DomParser.CascadeApplyStyles), so a foreign-content box needs its own case-sensitive scan -
+        // mirroring SvgCssBoxDomNode.GetAttribute in Svg/SvgCssDomNodes.cs, which does the same thing for
+        // SVG's presentation-attribute pass.
+        string? ICssDomNode.GetAttribute(string name)
+        {
+            if (!IsWithinForeignContent) return GetAttribute(name, null);
+
+            var attributes = HtmlTag?.Attributes;
+            if (attributes is null) return null;
+            foreach (var attribute in attributes)
+                if (string.Equals(attribute.Key, name, StringComparison.Ordinal))
+                    return attribute.Value;
+            return null;
+        }
 
         // Ordinal, not InvariantCulture. The comment above already states the rule as ASCII
         // case-insensitivity, which is what ordinal expresses; InvariantCulture applies full Unicode
         // case folding, under which U+212A KELVIN SIGN equals ASCII "k" and a class of "K" matches
         // the selector `.k`. It is also the hot comparison in the selector matcher - one name against
         // every candidate rule for every box - and a culture-aware one routes each through ICU.
-        StringComparison ICssDomNode.NameComparison => StringComparison.OrdinalIgnoreCase;
+        //
+        // The HTML Standard's case-sensitivity exceptions - both element/attribute *names* and, per issue
+        // #1384, the fixed legacy attribute-*value* list in CssData - are scoped to "elements in the HTML
+        // namespace" only, so this defers to the IsWithinForeignContent snapshot taken at construction
+        // rather than assuming every CssBox is HTML.
+        StringComparison ICssDomNode.NameComparison =>
+            IsWithinForeignContent ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
         ICssDomNode? ICssDomNode.Parent => ParentBox;
 

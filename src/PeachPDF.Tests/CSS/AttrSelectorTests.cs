@@ -164,8 +164,9 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Theory]
-        // Default (HTML): ASCII case-insensitive, as the engine has always compared attribute values.
-        [InlineData("[data-x=abc]", true)]
+        // `data-x` isn't on the HTML Standard's fixed legacy-attribute list (issue #1384), so the
+        // unmodified default is case-sensitive - only the explicit `i` modifier rows below match.
+        [InlineData("[data-x=abc]", false)]
         [InlineData("[data-x=abc i]", true)]
         [InlineData("[data-x=abc s]", false)]
         [InlineData("[data-x=ABC s]", true)]
@@ -201,6 +202,32 @@ namespace PeachPDF.Tests.CSS
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 $"<style>{selector} {{ color: rgb(255, 0, 0) }}</style><p id='x' data-x='EN-us'>x</p>"));
+
+            var color = LayoutHarness.FindById(root, "x")!.Color;
+
+            Assert.Equal(matches, color == "rgb(255, 0, 0)");
+        }
+
+        [Theory]
+        // `type` is on the HTML Standard's fixed legacy-attribute list (§4.16.2) - the unmodified
+        // default stays ASCII case-insensitive for it, same as the engine's behavior before #1384.
+        [InlineData("[type=BUTTON]", true)]
+        [InlineData("[type~=BUTTON]", true)]
+        [InlineData("[type^=BUT]", true)]
+        [InlineData("[type$=TON]", true)]
+        [InlineData("[type*=UTT]", true)]
+        [InlineData("[type=BUTTON s]", false)] // an explicit `s` still overrides the list either way
+        // `data-x` is not on the list - #1384's fix: the unmodified default is now case-sensitive.
+        [InlineData("[data-x=ABC]", false)]
+        [InlineData("[data-x~=ABC]", false)]
+        [InlineData("[data-x^=AB]", false)]
+        [InlineData("[data-x$=BC]", false)]
+        [InlineData("[data-x*=B]", false)]
+        [InlineData("[data-x=ABC i]", true)] // an explicit `i` still opts back into the lenient match
+        public async Task DefaultCaseSensitivity_FollowsTheHtmlLegacyAttributeList(string selector, bool matches)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<style>{selector} {{ color: rgb(255, 0, 0) }}</style><p id='x' type='button' data-x='abc'>x</p>"));
 
             var color = LayoutHarness.FindById(root, "x")!.Color;
 
