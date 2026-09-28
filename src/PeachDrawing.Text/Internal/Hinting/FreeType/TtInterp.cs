@@ -161,6 +161,12 @@ internal sealed partial class TtExecContext
     private int _moveX, _moveY;
     private int _projKind, _dualKind, _moveKind;
 
+    // Non-square pixels (ttmetrics.ratio, x_ppem != y_ppem): _ratio caches Current_Ratio between the graphics-state changes that
+    // invalidate it (ComputeFuncs), and _isStretched picks the stretched cvt/ppem routines and the non-square branches of
+    // MD/MDRP/IP for the run, exactly as TT_RunIns picks func_read_cvt et al. once per glyph.
+    private int _ratio;
+    private bool _isStretched;
+
     /// <summary>
     /// Activates backward compatibility (bit 2) and tracks IUP (bits 0-1). If this is zero, the interpreter is either in
     /// v35 or in native ClearType mode.
@@ -418,13 +424,16 @@ internal sealed partial class TtExecContext
         return unchecked((int)(c >> 14));
     }
 
-    private int CurrentPpem() => Metrics.Ppem;
+    // func_cur_ppem: Current_Ppem for square pixels, Current_Ppem_Stretched (ppem * Current_Ratio) otherwise.
+    private int CurrentPpem() => _isStretched ? FtCalc.MulFix(Metrics.Ppem, CurrentRatio()) : Metrics.Ppem;
 
     // ---------------------------------------------------------------------------------------------------------------
     //                                       CVT AND STORAGE (copy on write)
     // ---------------------------------------------------------------------------------------------------------------
 
-    private int ReadCvt(int idx) => Cvt[idx];
+    // func_read_cvt: Read_CVT for square pixels, Read_CVT_Stretched (cvt[idx] * Current_Ratio) otherwise. Used by RCVT and by the
+    // indirect cvt reads of MIAP/MIRP.
+    private int ReadCvt(int idx) => _isStretched ? FtCalc.MulFix(Cvt[idx], CurrentRatio()) : Cvt[idx];
 
     private void ModifyCvtCheck()
     {
@@ -439,16 +448,22 @@ internal sealed partial class TtExecContext
         }
     }
 
-    private void WriteCvt(int idx, int value)
+    // Write_CVT: writes a value already in pixels, with no ratio adjustment. This is what WCVTF uses directly (FreeType's
+    // Ins_WCVTF sets exc->cvt[I] itself, bypassing func_write_cvt and so the stretched routine, even for a stretched size).
+    private void WriteCvtRaw(int idx, int value)
     {
         ModifyCvtCheck();
         Cvt[idx] = value;
     }
 
+    // func_write_cvt: Write_CVT for square pixels, Write_CVT_Stretched (value / Current_Ratio) otherwise. Used by WCVTP.
+    private void WriteCvt(int idx, int value) => WriteCvtRaw(idx, _isStretched ? FtCalc.DivFix(value, CurrentRatio()) : value);
+
+    // func_move_cvt: Move_CVT for square pixels, Move_CVT_Stretched (increment / Current_Ratio) otherwise. Used by DELTAC.
     private void MoveCvt(int idx, int value)
     {
         ModifyCvtCheck();
-        Cvt[idx] = unchecked(Cvt[idx] + value);
+        Cvt[idx] = unchecked(Cvt[idx] + (_isStretched ? FtCalc.DivFix(value, CurrentRatio()) : value));
     }
 
     // ---------------------------------------------------------------------------------------------------------------
@@ -872,6 +887,16 @@ internal sealed partial class TtExecContext
     private int DualProjectPoints(int[] x1, int[] y1, int i1, int[] x2, int[] y2, int i2) =>
         DualProject(unchecked(x1[i1] - x2[i2]), unchecked(y1[i1] - y2[i2]));
 
+    // The non-square-pixel branch of MD/MDRP/IP: each axis of (v1 - v2) is scaled by its own axis's x_scale/y_scale before the dual
+    // projection, instead of the single DUALPROJ(v1, v2) followed by one FT_MulFix that the square-pixel case uses (FAST_DUALPROJ
+    // applied to a vector the caller has already scaled).
+    private int DualProjectScaledPoints(int[] x1, int[] y1, int i1, int[] x2, int[] y2, int i2)
+    {
+        int dx = FtCalc.MulFix(unchecked(x1[i1] - x2[i2]), Metrics.XScale);
+        int dy = FtCalc.MulFix(unchecked(y1[i1] - y2[i2]), Metrics.YScale);
+        return DualProject(dx, dy);
+    }
+
     /// <summary>Computes the projection and movement functions according to the current graphics state (<c>Compute_Funcs</c>).</summary>
     private void ComputeFuncs()
     {
@@ -915,6 +940,37 @@ internal sealed partial class TtExecContext
             _dualKind = 1;
         else
             _dualKind = 2;
+
+        // Disable cached aspect ratio: a changed projection or dual vector needs Current_Ratio recomputed.
+        _ratio = 0;
+    }
+
+    /// <summary>
+    /// The current aspect ratio scaling factor, in 16.16, always at most 1.0 (<c>Current_Ratio</c>): 1.0 when the projection vector is
+    /// horizontal, <see cref="TtSizeMetrics.YRatio"/> when it is vertical, and otherwise the length of the projection vector's
+    /// components each weighed by its axis's ratio. Cached until <see cref="ComputeFuncs"/> next runs (a changed projection or dual
+    /// vector), as FreeType caches it on the execution context.
+    /// </summary>
+    private int CurrentRatio()
+    {
+        // 0 is "not cached yet", exactly as exc->tt_metrics.ratio uses it in FreeType: a ratio that rounds to 0 (an axis ratio of
+        // roughly 4096:1 or more, which TtSize.Reset never produces from a valid ppem pair) would recompute every call instead of
+        // caching, which costs nothing but a few redundant multiplications and never gives a wrong answer.
+        if (_ratio == 0)
+        {
+            if (GS.ProjY == 0)
+                _ratio = Metrics.XRatio;
+            else if (GS.ProjX == 0)
+                _ratio = Metrics.YRatio;
+            else
+            {
+                int x = MulFix14(Metrics.XRatio, GS.ProjX);
+                int y = MulFix14(Metrics.YRatio, GS.ProjY);
+                _ratio = FtTrigon.Hypot(x, y);
+            }
+        }
+
+        return _ratio;
     }
 
     /// <summary>
@@ -1392,6 +1448,9 @@ internal sealed partial class TtExecContext
             _loopcallCounterMax = 100ul * (uint)NumGlyphs;
 
         _negJumpCounterMax = _loopcallCounterMax;
+
+        // set cvt and ppem functions: the stretched routines for a non-square size, the plain ones otherwise (TT_RunIns)
+        _isStretched = Metrics.XPpem != Metrics.YPpem;
 
         // reset graphics state
         GS = sizeGraphicsState;

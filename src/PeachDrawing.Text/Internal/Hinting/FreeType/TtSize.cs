@@ -68,14 +68,17 @@ internal sealed class TtSize
 {
     public TtFace Face { get; }
 
-    /// <summary>The requested size in 26.6 pixels per em.</summary>
-    public int Ppem26Dot6 { get; }
+    /// <summary>The requested horizontal size in 26.6 pixels per em (<c>x_ppem</c>, before rounding).</summary>
+    public int XPpem26Dot6 { get; }
+
+    /// <summary>The requested vertical size in 26.6 pixels per em (<c>y_ppem</c>, before rounding); equal to <see cref="XPpem26Dot6"/> for square pixels.</summary>
+    public int YPpem26Dot6 { get; }
 
     public TtInterpreterVersion Version { get; }
     public TtRenderMode Mode { get; }
 
-    /// <summary>The scale from font units to 26.6 pixels, in 16.16 (<c>metrics->x_scale</c>, which is also the y scale: pixels are square).</summary>
-    public int Scale => Metrics.XScale;
+    /// <summary>The scale from font units to 26.6 pixels of the larger axis, in 16.16 (<c>ttmetrics.scale</c>; the CVT program and <c>WCVTF</c> scale by it).</summary>
+    public int Scale => Metrics.Scale;
 
     public TtSizeMetrics Metrics;
 
@@ -117,42 +120,58 @@ internal sealed class TtSize
     /// <summary>The offset of the <c>hdmx</c> record of advance widths to use for this size, or -1 (<c>loader->widthp</c>).</summary>
     public int DeviceMetricsOffset { get; private set; } = -1;
 
-    private TtSize(TtFace face, int ppem26Dot6, TtInterpreterVersion version, TtRenderMode mode)
+    private TtSize(TtFace face, int xPpem26Dot6, int yPpem26Dot6, TtInterpreterVersion version, TtRenderMode mode)
     {
         Face = face;
-        Ppem26Dot6 = ppem26Dot6;
+        XPpem26Dot6 = xPpem26Dot6;
+        YPpem26Dot6 = yPpem26Dot6;
         Version = version;
         Mode = mode;
     }
 
     /// <summary>
-    /// Sets up a size and runs the font program and the CVT program for it, as FreeType does on the first hinted glyph load
-    /// after a size request.
+    /// Sets up a square-pixel size (<see cref="XPpem26Dot6"/> equal to <see cref="YPpem26Dot6"/>) and runs the font program and the CVT
+    /// program for it, as FreeType does on the first hinted glyph load after a size request.
     /// </summary>
     /// <exception cref="HintingException">The size is invalid, or a program failed: no glyph of the size can be hinted.</exception>
-    public static TtSize Create(TtFace face, int ppem26Dot6, TtInterpreterVersion version, TtRenderMode mode, bool pedantic = false)
+    public static TtSize Create(TtFace face, int ppem26Dot6, TtInterpreterVersion version, TtRenderMode mode, bool pedantic = false) =>
+        Create(face, ppem26Dot6, ppem26Dot6, version, mode, pedantic);
+
+    /// <summary>
+    /// Sets up a size, square or not, and runs the font program and the CVT program for it, as FreeType does on the first hinted glyph
+    /// load after a size request. When <paramref name="xPpem26Dot6"/> and <paramref name="yPpem26Dot6"/> differ, the interpreter takes
+    /// the non-square-pixel paths (<c>Current_Ratio</c>, the stretched <c>cvt</c>/ppem routines and the non-square branches of
+    /// <c>MD</c>/<c>MDRP</c>/<c>IP</c>) instead of the plain ones.
+    /// </summary>
+    /// <exception cref="HintingException">The size is invalid, or a program failed: no glyph of the size can be hinted.</exception>
+    public static TtSize Create(TtFace face, int xPpem26Dot6, int yPpem26Dot6, TtInterpreterVersion version, TtRenderMode mode, bool pedantic = false)
     {
-        var size = new TtSize(face, ppem26Dot6, version, mode);
+        var size = new TtSize(face, xPpem26Dot6, yPpem26Dot6, version, mode);
         size.Reset();
         size.InitBytecode(pedantic);
         return size;
     }
 
-    // FT_Request_Metrics (FT_SIZE_REQUEST_TYPE_NOMINAL, width and height equal) and tt_size_reset.
+    // FT_Request_Metrics (FT_SIZE_REQUEST_TYPE_NOMINAL, independent width and height) and tt_size_reset: the "note regarding
+    // non-squared pixels" of ttobjs.h. All cvt entries are scaled to the larger axis (ttmetrics.scale/ppem), and a ratio is kept for
+    // each axis so that a read or write of the cvt, and a distance measured off-axis, can be adjusted to it (Current_Ratio).
     private void Reset()
     {
-        long scaled = Ppem26Dot6;
-        if (scaled <= 0)
+        long xScaled = XPpem26Dot6;
+        long yScaled = YPpem26Dot6;
+        if (xScaled <= 0 || yScaled <= 0)
             throw new HintingException("The size is not positive.");
 
-        int xScale = FtCalc.DivFix(Ppem26Dot6, Face.UnitsPerEm);
-        long ppem = (scaled + 32) >> 6;
+        int xScale = FtCalc.DivFix(XPpem26Dot6, Face.UnitsPerEm);
+        int yScale = FtCalc.DivFix(YPpem26Dot6, Face.UnitsPerEm);
+        long xPpem = (xScaled + 32) >> 6;
+        long yPpem = (yScaled + 32) >> 6;
 
-        if (ppem > 0xFFFF)
+        if (xPpem > 0xFFFF || yPpem > 0xFFFF)
             throw new HintingException("The size is too large.");
 
         // FreeType refuses a size whose ppem rounds to zero (Invalid_PPem); a glyph load then falls back to no scaling.
-        if (ppem == 0)
+        if (xPpem == 0 || yPpem == 0)
             throw new HintingException("The size rounds to zero pixels per em.");
 
         // This bit flag, if set, indicates that the ppems must be rounded to integers. Nearly all TrueType fonts have this
@@ -160,17 +179,37 @@ internal sealed class TtSize
         if ((Face.HeadFlags & 8) != 0)
         {
             // base scaling values on integer ppem values, as mandated by the TrueType specification
-            xScale = FtCalc.DivFix((int)ppem << 6, Face.UnitsPerEm);
+            xScale = FtCalc.DivFix((int)xPpem << 6, Face.UnitsPerEm);
+            yScale = FtCalc.DivFix((int)yPpem << 6, Face.UnitsPerEm);
+        }
+
+        // Choose the CVT scaling size (the larger of the two ppems, as ttobjs.h's note prescribes) and the ratio of each axis to it.
+        int scale, ppem, xRatio, yRatio;
+        if (xPpem >= yPpem)
+        {
+            scale = xScale;
+            ppem = (int)xPpem;
+            xRatio = 0x10000;
+            yRatio = FtCalc.DivFix((int)yPpem, (int)xPpem);
+        }
+        else
+        {
+            scale = yScale;
+            ppem = (int)yPpem;
+            xRatio = FtCalc.DivFix((int)xPpem, (int)yPpem);
+            yRatio = 0x10000;
         }
 
         Metrics = new TtSizeMetrics
         {
             XScale = xScale,
-            YScale = xScale,
-            XPpem = (int)ppem,
-            YPpem = (int)ppem,
-            Scale = xScale,
-            Ppem = (int)ppem,
+            YScale = yScale,
+            XPpem = (int)xPpem,
+            YPpem = (int)yPpem,
+            Scale = scale,
+            Ppem = ppem,
+            XRatio = xRatio,
+            YRatio = yRatio,
         };
 
         // For the `MPS' bytecode instruction we need the point size. Resolution 72 dpi, as no resolution is given.

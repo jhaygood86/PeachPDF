@@ -147,11 +147,27 @@ namespace PeachPDF.Tests.Raster
         }
 
         [Fact]
-        public async Task TextScaledDifferentlyInTheTwoDirectionsIsNotHinted()
+        public async Task TextScaledDifferentlyInTheTwoDirectionsIsHintedToAStretchedGrid()
         {
+            // 12 px scaled 2x horizontally and 1x vertically reaches the pixels as 24 horizontal and 12 vertical ppem: a non-square
+            // pixel is exactly the real-world trigger for the font's non-square-pixel hinting paths, so this is no longer refused.
             var stretch = new RMatrix(2, 0, 0, 1, 0, 0);
 
-            Assert.Equal(await Render(TextHinting.None, transform: stretch), await Render(TextHinting.Standard, transform: stretch));
+            var none = await Render(TextHinting.None, transform: stretch);
+            var hinted = await Render(TextHinting.Standard, transform: stretch);
+
+            Assert.NotEqual(none, hinted);
+            Assert.True(hinted.Where((b, i) => i % 4 == 3 && b > 0).Count() > 60, "the hinted text has ink");
+        }
+
+        [Fact]
+        public async Task RotationOrSkewStillRefusesHintingEvenWithAnisotropicSupport()
+        {
+            // a rotation mixes M12/M21 in, which the guard still refuses whatever the two axes' own scales are: fitting a rotated or
+            // skewed grid is not what a font's hinting instructions do, square pixels or not.
+            var skew = new RMatrix(2, 0.3, 0, 1, 0, 0);
+
+            Assert.Equal(await Render(TextHinting.None, transform: skew), await Render(TextHinting.Standard, transform: skew));
         }
 
         [Fact]

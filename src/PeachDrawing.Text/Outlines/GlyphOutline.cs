@@ -103,12 +103,22 @@ namespace PeachDrawing.Text.Outlines
         public bool IsGridFitted { get; internal init; }
 
         /// <summary>
-        /// The size, in pixels per em, the coordinates are scaled to; 0 when they are in design units. For a grid-fitted outline it is the
-        /// size the font was fitted at, which is the size asked for except that a TrueType font whose <c>head</c> table asks for whole
-        /// pixels per em (nearly all of them do) is fitted at the nearest whole number: 11.4 is asked for and 11 is what the glyph is fitted
-        /// at, as in FreeType.
+        /// The horizontal size, in pixels per em, the coordinates are scaled to; 0 when they are in design units. For a grid-fitted
+        /// outline it is the size the font was fitted at, which is the size asked for except that a TrueType font whose <c>head</c>
+        /// table asks for whole pixels per em (nearly all of them do) is fitted at the nearest whole number: 11.4 is asked for and 11 is
+        /// what the glyph is fitted at, as in FreeType. The same as <see cref="PixelsPerEmY"/> unless the outline was fitted for a
+        /// non-square pixel (<see cref="OutlineRequest.PixelsPerEmX"/> and <see cref="OutlineRequest.PixelsPerEmY"/> differed).
         /// </summary>
         public double PixelsPerEm { get; internal init; }
+
+        /// <summary>The same value as <see cref="PixelsPerEm"/>, named for the axis explicitly.</summary>
+        public double PixelsPerEmX { get; internal init; }
+
+        /// <summary>
+        /// The vertical size, in pixels per em, the coordinates are scaled to; 0 when they are in design units. The same as
+        /// <see cref="PixelsPerEmX"/> (and so <see cref="PixelsPerEm"/>) unless the outline was fitted for a non-square pixel.
+        /// </summary>
+        public double PixelsPerEmY { get; internal init; }
 
         /// <summary>
         /// The advance of the glyph in pixels after grid-fitting, a whole number of pixels as the font's hinting leaves it, or
@@ -116,12 +126,15 @@ namespace PeachDrawing.Text.Outlines
         /// </summary>
         public double? GridFittedAdvance { get; internal init; }
 
-        /// <summary>The same shape with every coordinate multiplied by a factor, as an outline that is not grid-fitted at a size.</summary>
-        internal GlyphOutline WithScale(double factor, double pixelsPerEm)
+        /// <summary>
+        /// The same shape with every coordinate multiplied by a factor, one for each axis, as an outline that is not grid-fitted at a
+        /// size (the two factors differ only for a non-square pixel).
+        /// </summary>
+        internal GlyphOutline WithScale(double factorX, double factorY, double pixelsPerEmX, double pixelsPerEmY)
         {
-            var result = new GlyphOutline { PixelsPerEm = pixelsPerEm };
+            var result = new GlyphOutline { PixelsPerEm = pixelsPerEmX, PixelsPerEmX = pixelsPerEmX, PixelsPerEmY = pixelsPerEmY };
 
-            OutlinePoint Map(OutlinePoint p) => new(p.X * factor, p.Y * factor);
+            OutlinePoint Map(OutlinePoint p) => new(p.X * factorX, p.Y * factorY);
 
             foreach (OutlineContour source in ContourList)
             {
