@@ -153,6 +153,17 @@ PeachDrawing.Core.ConicGradientBrush : sealed class
   property IReadOnlyList<Double> AnglesRadians { get; }
   property IReadOnlyList<GradientStop> Stops { get; }
   property PaintPoint Center { get; }
+PeachDrawing.Core.CurveContour : sealed class
+  ctor(PaintPoint Start, IReadOnlyList<PathCommand> Commands, Boolean Closed)
+  method CurveContour <Clone>$()
+  method Void Deconstruct(out PaintPoint Start, out IReadOnlyList<PathCommand> Commands, out Boolean Closed)
+  method virtual Boolean Equals(CurveContour other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean Closed { get; init; }
+  property IReadOnlyList<PathCommand> Commands { get; init; }
+  property PaintPoint Start { get; init; }
 PeachDrawing.Core.DashStyle : enum Int32
   Custom = 5
   Dash = 1
@@ -239,6 +250,8 @@ PeachDrawing.Core.FontPalette : sealed class
   method virtual String ToString()
   property IReadOnlyList<KeyValuePair<Int32, PaintColor>> Overrides { get; init; }
   property Int32 BasePaletteIndex { get; init; }
+PeachDrawing.Core.Geometry.PolygonClipper : static class
+  method static List<PaintPoint> ClipToRect(IReadOnlyList<PaintPoint> polygon, Rect rect)
 PeachDrawing.Core.GlyphPlacement : struct
   ctor(Int32 GlyphIndex, Double X, Double Y)
   method Void Deconstruct(out Int32 GlyphIndex, out Double X, out Double Y)
@@ -262,6 +275,7 @@ PeachDrawing.Core.GradientStop : struct
   property Double Position { get; init; }
   property PaintColor PaintColor { get; init; }
 PeachDrawing.Core.GraphicsPath : abstract class
+  method IReadOnlyList<CurveContour> GetCurveContours()
   method IReadOnlyList<PathContour> Flatten(Double tolerance)
   method Void ArcTo(Double x, Double y, Double size, Corner corner)
   method abstract GraphicsPath ClipToRect(Rect rect)
@@ -399,6 +413,22 @@ PeachDrawing.Core.ParagraphPaint : struct
   property PaintColor Color { get; init; }
   property PaintColor? DecorationColor { get; init; }
   property TextDecorations Decorations { get; init; }
+PeachDrawing.Core.PathCommand : struct
+  ctor(PathCommandKind Kind, PaintPoint Control1, PaintPoint Control2, PaintPoint End)
+  method Void Deconstruct(out PathCommandKind Kind, out PaintPoint Control1, out PaintPoint Control2, out PaintPoint End)
+  method static PathCommand CubicTo(PaintPoint control1, PaintPoint control2, PaintPoint end)
+  method static PathCommand LineTo(PaintPoint end)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PathCommand other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property PaintPoint Control1 { get; init; }
+  property PaintPoint Control2 { get; init; }
+  property PaintPoint End { get; init; }
+  property PathCommandKind Kind { get; init; }
+PeachDrawing.Core.PathCommandKind : enum Int32
+  Cubic = 1
+  Line = 0
 PeachDrawing.Core.PathContour : sealed class
   ctor(IReadOnlyList<PaintPoint> Points, Boolean Closed)
   method PathContour <Clone>$()

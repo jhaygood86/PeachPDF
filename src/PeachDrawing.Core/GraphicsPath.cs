@@ -386,6 +386,39 @@ namespace PeachDrawing.Core
             return result;
         }
 
+        /// <summary>
+        /// Reads this path's recorded geometry with its curves intact: one <see cref="CurveContour"/> per subpath, made of
+        /// lines and cubic Béziers (every arc already converted to cubics at record time). Like <see cref="Flatten"/> it is
+        /// independent of whatever native representation a concrete subclass also builds, and it returns a snapshot: later
+        /// edits to the path do not change a list already returned. This is what geometry that must stay curved - measuring
+        /// a path's length, or combining two paths - reads instead of the flattened polylines.
+        /// </summary>
+        /// <returns>the subpaths, in the order they were recorded</returns>
+        public IReadOnlyList<CurveContour> GetCurveContours()
+        {
+            var result = new List<CurveContour>(_contours.Count);
+            foreach (var contour in _contours)
+            {
+                var commands = new List<PathCommand>(contour.Segments.Count);
+                foreach (var segment in contour.Segments)
+                {
+                    switch (segment)
+                    {
+                        case LineSegment l:
+                            commands.Add(PathCommand.LineTo(new PaintPoint(l.X, l.Y)));
+                            break;
+                        case CubicSegment c:
+                            commands.Add(PathCommand.CubicTo(new PaintPoint(c.X1, c.Y1), new PaintPoint(c.X2, c.Y2), new PaintPoint(c.X3, c.Y3)));
+                            break;
+                    }
+                }
+
+                result.Add(new CurveContour(new PaintPoint(contour.StartX, contour.StartY), commands, contour.Closed));
+            }
+
+            return result;
+        }
+
         /// <summary>Wang's-formula uniform subdivision - the same bound <c>Raster/FlatPath.cs</c> uses, so
         /// flattening this path directly agrees with flattening the same geometry via a concrete backend's
         /// own native path representation.</summary>

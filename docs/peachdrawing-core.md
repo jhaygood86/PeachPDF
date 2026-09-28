@@ -196,6 +196,14 @@ build its own native representation still calls `base.MethodName(...)` to keep t
 `FillMode` (`Nonzero`/`EvenOdd`, PDF 32000-1 §8.5.3's two fill rules) and `ClipToRect`/`Dispose` are the
 only genuinely abstract members.
 
+`Flatten` gives you polylines; when the geometry has to stay curved, `GetCurveContours()` gives you the same subpaths as
+`CurveContour` values instead - a `Start` point, the `PathCommand` lines and cubic Béziers that follow it (an arc is
+already recorded as cubics, so there is no third kind), and whether the subpath was closed. It is a snapshot: editing the
+path afterwards does not change a list you already hold.
+
+`PeachDrawing.Core.Geometry.PolygonClipper.ClipToRect` clips a closed polygon (convex, concave or self-intersecting) to an
+axis-aligned rectangle. Fewer than three points back means nothing with area is left inside.
+
 ## `Font`, `FontFamily` and `Image`
 
 `Font` is a resolved, sized typeface, built from a `PeachDrawing.Text.Typeface` (`Font.Typeface`) plus
