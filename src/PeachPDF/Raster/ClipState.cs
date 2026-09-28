@@ -19,8 +19,12 @@ internal sealed class ClipState
     /// <summary><c>Bounds.Width * Bounds.Height</c> coverage bytes, or null for a plain rectangle.</summary>
     public byte[]? Mask { get; }
 
-    /// <summary>Intersects this clip with the region <paramref name="polygons"/> covers under <paramref name="evenOdd"/>.</summary>
-    public ClipState Intersect(PolygonSet polygons, bool evenOdd)
+    /// <summary>
+    /// Intersects this clip with the region <paramref name="polygons"/> covers under <paramref name="evenOdd"/>,
+    /// with hard (fully transparent/opaque) edges instead of anti-aliased ones when <paramref name="antiAlias"/>
+    /// is false.
+    /// </summary>
+    public ClipState Intersect(PolygonSet polygons, bool evenOdd, bool antiAlias = true)
     {
         var polyBounds = polygons.GetBounds();
         if (polyBounds is not { } b || Bounds.IsEmpty)
@@ -35,7 +39,7 @@ internal sealed class ClipState
 
         var mask = new byte[bounds.Width * bounds.Height];
         var sink = new MaskSink(mask, bounds);
-        ScanlineRasterizer.Fill(polygons, evenOdd, bounds, ref sink);
+        ScanlineRasterizer.Fill(polygons, evenOdd, bounds, ref sink, antiAlias);
 
         if (Mask is not null)
         {

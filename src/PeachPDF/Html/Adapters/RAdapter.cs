@@ -138,6 +138,9 @@ namespace PeachPDF.Html.Adapters
         /// <summary>The most pixels one raster surface may have before its resolution is lowered to fit.</summary>
         internal long MaxRasterPixels { get; set; } = 64_000_000;
 
+        /// <summary>Whether the raster backend anti-aliases what it draws (see <c>PdfGenerateConfig.RasterAntiAliasing</c>).</summary>
+        internal bool RasterAntiAliasing { get; set; } = true;
+
         /// <summary>
         /// Resolve color value from given color name.
         /// </summary>

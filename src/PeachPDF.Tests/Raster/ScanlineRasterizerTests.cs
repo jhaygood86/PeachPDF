@@ -9,11 +9,11 @@ namespace PeachPDF.Tests.Raster
             public void Span(int y, int x0, ReadOnlySpan<byte> coverage) => coverage.CopyTo(buffer.AsSpan(y * width + x0));
         }
 
-        private static byte[] Fill(PolygonSet polygons, bool evenOdd, int width, int height)
+        private static byte[] Fill(PolygonSet polygons, bool evenOdd, int width, int height, bool antiAlias = true)
         {
             var buffer = new byte[width * height];
             var sink = new ArraySink(buffer, width);
-            ScanlineRasterizer.Fill(polygons, evenOdd, new IntRect(0, 0, width, height), ref sink);
+            ScanlineRasterizer.Fill(polygons, evenOdd, new IntRect(0, 0, width, height), ref sink, antiAlias);
             return buffer;
         }
 
@@ -136,6 +136,37 @@ namespace PeachPDF.Tests.Raster
             Assert.Equal(255, buffer[1 * 4 + 1]);
             Assert.Equal(0, buffer[0]);
             Assert.Equal(0, buffer[1 * 4 + 3]);
+        }
+
+        [Fact]
+        public void AntiAliasOff_ThresholdsFractionalCoverageToHardEdge()
+        {
+            // 1.5..3 across a 4-wide row: pixel 1 is 50% covered, pixel 2 fully, pixels 0 and 3 empty -
+            // exactly HorizontalHalfPixelEdge_GivesHalfCoverage's geometry, but quantized to 0/255 only.
+            var cov = Fill(Rect(1.5, 0, 3, 1), false, 4, 1, antiAlias: false);
+
+            Assert.Equal(0, cov[0]);
+            Assert.Equal(255, cov[1]);
+            Assert.Equal(255, cov[2]);
+            Assert.Equal(0, cov[3]);
+        }
+
+        [Fact]
+        public void AntiAliasOff_BelowHalfCoverageThresholdsToFullyTransparent()
+        {
+            // A quarter-covered pixel (25%) is well under the 50% threshold.
+            var cov = Fill(Rect(0.5, 0.5, 1, 1), false, 1, 1, antiAlias: false);
+
+            Assert.Equal(0, cov[0]);
+        }
+
+        [Fact]
+        public void AntiAliasOff_FullyAndEmptyPixelsAreUnaffected()
+        {
+            var covOn = Fill(Rect(1, 1, 4, 3), false, 6, 5);
+            var covOff = Fill(Rect(1, 1, 4, 3), false, 6, 5, antiAlias: false);
+
+            Assert.Equal(covOn, covOff);
         }
 
         [Fact]

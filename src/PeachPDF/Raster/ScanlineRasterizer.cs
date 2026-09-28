@@ -23,6 +23,12 @@ internal interface ICoverageSink
 /// Chosen over a signed-area accumulation rasterizer because that approach cannot evaluate the even-odd
 /// rule (or nonzero on overlapping same-direction contours) correctly, and the stroker relies on filling a
 /// union of overlapping pieces nonzero.
+/// <para>
+/// The accumulated per-pixel coverage is the single source of truth for how much of a pixel a fill covers;
+/// <see cref="Fill{TSink}"/>'s <c>antiAlias</c> parameter only changes how that number becomes the alpha byte
+/// handed to <see cref="ICoverageSink.Span"/> - smoothed to a fractional value (the default) or thresholded to
+/// fully transparent/opaque - so there is exactly one coverage algorithm regardless of the setting.
+/// </para>
 /// </remarks>
 internal static class ScanlineRasterizer
 {
@@ -41,7 +47,7 @@ internal static class ScanlineRasterizer
         public int Direction;
     }
 
-    public static void Fill<TSink>(PolygonSet polygons, bool evenOdd, IntRect clip, ref TSink sink)
+    public static void Fill<TSink>(PolygonSet polygons, bool evenOdd, IntRect clip, ref TSink sink, bool antiAlias = true)
         where TSink : struct, ICoverageSink
     {
         if (clip.IsEmpty || polygons.PointCount < 3)
@@ -170,7 +176,12 @@ internal static class ScanlineRasterizer
                         var total = cover[col] + running;
                         if (total > TotalPerPixel) total = TotalPerPixel;
                         else if (total < 0) total = 0;
-                        alpha[i] = (byte)((total * 255 + TotalPerPixel / 2) / TotalPerPixel);
+
+                        // Same coverage number either way; only its quantization to an alpha byte differs.
+                        alpha[i] = antiAlias
+                            ? (byte)((total * 255 + TotalPerPixel / 2) / TotalPerPixel)
+                            : total * 2 >= TotalPerPixel ? (byte)255 : (byte)0;
+
                         cover[col] = 0;
                         delta[col] = 0;
                     }

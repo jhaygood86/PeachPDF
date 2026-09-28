@@ -12645,6 +12645,56 @@ await SaveShowcaseAsync("text_hinting_cff2_none", "Graphics & Effects", "Raster 
         RasterizationDpi = 72
     });
 
+// --- Raster anti-aliasing toggle: the same small shape and small text, with and without RasterAntiAliasing ---
+
+const string RasterAaCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { margin: 0 0 0.9em; color: #555; font-size: 8pt }
+    .raster { filter: grayscale(1); margin-bottom: 10px }
+    .cap { font-size: 6.5pt; color: #666; margin: 10px 0 2px }
+    .shapes { display: flex; align-items: center; gap: 14px }
+    .circle { width: 34px; height: 34px; border-radius: 50%; background: #2a5db0 }
+    .diamond { width: 26px; height: 26px; background: #c33; transform: rotate(45deg) }
+    .text { font-size: 9px }
+    </style>
+    """;
+
+string RasterAaHtml(string intro) =>
+    "<!DOCTYPE html><html><head>" + RasterAaCss + "</head><body><h1>Raster anti-aliasing</h1><p class=\"intro\">" + intro + "</p>" +
+    "<div class=\"cap\">shapes</div>" +
+    "<div class=\"raster shapes\"><div class=\"circle\"></div><div class=\"diamond\"></div></div>" +
+    "<div class=\"cap\">small text</div>" +
+    "<div class=\"raster text\">Hamburgefonstiv: HEH illicit 0123456789 The quick brown fox jumps over the lazy dog</div>" +
+    "</body></html>";
+
+var rasterAaConfig = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    PageOrientation = PageOrientation.Portrait,
+    ShrinkToFit = true,
+    RasterizationDpi = 72,
+};
+
+await SaveShowcaseAsync("raster_antialiasing_on", "Graphics & Effects", "Raster Anti-Aliasing (On, Default)",
+    "PdfGenerateConfig.RasterAntiAliasing left at its default, true: a circle, a rotated square and small text, all drawn into a bitmap (here under filter: grayscale(1), at a deliberately low RasterizationDpi of 72), have smoothed, fractional-coverage edges. This is a whole-graphics setting - it affects shape fills, images and text alike, not text alone. Compare with the same page with it off.",
+    RasterAaHtml("The circle, diamond and text below are rasterized at 72 dpi with anti-aliasing on. Compare with the same page with it off."),
+    rasterAaConfig);
+
+await SaveShowcaseAsync("raster_antialiasing_off", "Graphics & Effects", "Raster Anti-Aliasing (Off)",
+    "The same page with PdfGenerateConfig.RasterAntiAliasing = false: every pixel PeachPDF rasterizes itself is thresholded to fully transparent or fully opaque instead of smoothed, so the curved and diagonal edges look stair-stepped and the small text looks harder-edged. The PDF's own vector text and paths are unaffected either way, since a viewer anti-aliases those itself.",
+    RasterAaHtml("The circle, diamond and text below are rasterized at 72 dpi with anti-aliasing off. Compare with the same page with it on."),
+    new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PageOrientation = PageOrientation.Portrait,
+        ShrinkToFit = true,
+        RasterizationDpi = 72,
+        RasterAntiAliasing = false,
+    });
+
 // --- Raster shadows showcase (text-shadow, Gaussian box-shadow, silhouette drop-shadow) ---
 
 // A 64x64 PNG whose corners are fully transparent: a filled circle with a soft (partial-alpha) rim.

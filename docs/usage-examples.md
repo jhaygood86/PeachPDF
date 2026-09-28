@@ -853,6 +853,25 @@ var config = new PdfGenerateConfig
 
 A value that is not one of the three throws an `ArgumentOutOfRangeException` when generation starts.
 
+### Turning off smoothing: `RasterAntiAliasing`
+
+Every bitmap PeachPDF renders itself — a `filter:`-triggered region, a region flattened under [`TransparencyPolicy.Flatten`](#flattening-transparency-for-pdfa-1-and-pdfx), and any glyph fill drawn while `TextHinting` routes it through the raster path — is anti-aliased by default: an edge that only partly covers a pixel gets a proportional (fractional) alpha instead of being rounded to fully in or fully out. `RasterAntiAliasing` turns that off:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    RasterizationDpi = 96,
+    RasterAntiAliasing = false,   // true (the default) smooths edges; false gives hard 0/255 pixels
+};
+```
+
+- It is a single, graphics-wide switch: shape fills and strokes, images, and text all go through the same setting — there is no separate text-only toggle.
+- It has no effect on the PDF's own vector text and path content stream, which is not a bitmap at all. A PDF viewer (or a rasterizer such as PDFium or MuPDF) anti-aliases that content on its own when displaying it, independent of this setting.
+- A document with no rasterized regions and no raster-hinted text is byte-for-byte the same regardless of this value.
+
+On the command line the setting is `--no-raster-antialiasing`; see [the CLI reference](cli.md).
+
 ## Flattening transparency for PDF/A-1 and PDF/X
 
 PDF/A-1 and PDF/X-1a/X-3 forbid transparency, which CSS uses everywhere: `opacity`, `rgba()` colours, gradients with an alpha stop, PNGs with an alpha channel, `mix-blend-mode`, blurred shadows, `filter`, SVG masks and filters. By default a document that targets one of these levels and uses any of it is rejected. `TransparencyPolicy.Flatten` turns the rejection into a conversion:

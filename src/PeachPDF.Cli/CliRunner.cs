@@ -113,6 +113,11 @@ internal static class CliRunner
             config.TransparencyPolicy = TransparencyPolicy.Flatten;
         }
 
+        if (options.NoRasterAntiAliasing)
+        {
+            config.RasterAntiAliasing = false;
+        }
+
         if (options.PageSize is { } pageSize)
         {
             config.PageSize = pageSize;

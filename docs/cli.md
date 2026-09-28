@@ -121,6 +121,7 @@ the default media type is **print**.
 | `--no-compress` | Do not compress PDF content streams. |
 | `--raster-dpi=DPI` | Resolution, in pixels per inch of paper (72 to 1200, default 300), of effects PeachPDF renders as bitmaps, such as CSS `filter: blur()`. Higher is sharper and larger; the printed size never changes. See [Rasterized effects](usage-examples.md#rasterized-effects-and-resolution). |
 | `--flatten-transparency` | For a document that targets PDF/A-1 or PDF/X-1a/X-3 (which forbid transparency): render what needs it as opaque bitmaps at `--raster-dpi` instead of failing. See [Flattening transparency](usage-examples.md#flattening-transparency-for-pdfa-1-and-pdfx). |
+| `--no-raster-antialiasing` | Do not anti-alias bitmaps PeachPDF renders itself (shape fills, images and text alike) — threshold every pixel to fully transparent or fully opaque instead of smoothing it. Has no effect on the PDF's own vector content. See [Turning off smoothing](usage-examples.md#turning-off-smoothing-rasterantialiasing). |
 
 Length units accepted by `--page-size` and `--page-margin` are `mm`, `cm`, `in`, `pt`, `pc`, and `px`
 (`1px = 1/96in`); a bare number is treated as points.
