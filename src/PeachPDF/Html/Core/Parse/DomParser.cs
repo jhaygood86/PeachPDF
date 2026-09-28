@@ -3429,6 +3429,7 @@ namespace PeachPDF.Html.Core.Parse
             box.CharScripts = box.CharScripts?[count..];
             box.JoiningForms = box.JoiningForms?[count..];
             box.UseCategories = box.UseCategories?[count..];
+            box.KhmerCategories = box.KhmerCategories?[count..];
             box.Text = text[count..];
             box.ParseToWords();
 

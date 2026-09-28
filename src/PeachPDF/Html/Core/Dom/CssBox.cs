@@ -1339,6 +1339,19 @@ namespace PeachPDF.Html.Core.Dom
         internal UseCategory[]? UseCategories { get; set; }
 
         /// <summary>
+        /// One resolved <see cref="KhmerCategory"/> per character of <see cref="Text"/>, set alongside
+        /// <see cref="BidiLevels"/>/<see cref="CharScripts"/>/<see cref="JoiningForms"/>/
+        /// <see cref="UseCategories"/> by the same pass (see <c>KhmerCategoryClassifier</c>) - the exact
+        /// mirror of <see cref="UseCategories"/>'s own remarks (paragraph-wide allocation, null rather
+        /// than an all-<see cref="KhmerCategory.Other"/> array for a paragraph with no Khmer text at
+        /// all - see <see cref="CssBidiParagraphResolver"/>'s own <c>KhmerShapedScripts</c>), for the
+        /// same reason: <see cref="KhmerCategory.Other"/> is a real, actively-processed category, not an
+        /// inert sentinel. <c>ToRuneIndexedKhmerCategories</c> is what narrows this back down to "does
+        /// *this specific word* need Khmer shaping" - never read this field directly.
+        /// </summary>
+        internal KhmerCategory[]? KhmerCategories { get; set; }
+
+        /// <summary>
         /// Gets the line-boxes of this box (if block box)
         /// </summary>
         internal List<CssLineBox> LineBoxes { get; } = [];
@@ -1912,7 +1925,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (!needsPerCodepoint && !needsOrientationSplit)
                 {
-                    Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter, originalText, ToRuneIndexedJoiningForms(wordStart, text), ToRuneIndexedUseCategories(wordStart, text))
+                    Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter, originalText, ToRuneIndexedJoiningForms(wordStart, text), ToRuneIndexedUseCategories(wordStart, text), ToRuneIndexedKhmerCategories(wordStart, text))
                     {
                         HyphenationCandidates = hyphenationCandidates,
                         IsUprightOrientation = WholeTextOrientationIsUpright(text),
@@ -1959,7 +1972,7 @@ namespace PeachPDF.Html.Core.Dom
                     // Sliced by this run's own position within the ORIGINAL (pre-case-flip) text - joining
                     // forms depend on codepoint identity, not case (moot for Arabic-family text anyway,
                     // which has no case and so never reaches this synthesis path in practice).
-                    Words.Add(new CssRectWord(this, displayText, runSpaceBefore, runSpaceAfter, runOriginalText, ToRuneIndexedJoiningForms(wordStart + start, runText), ToRuneIndexedUseCategories(wordStart + start, runText))
+                    Words.Add(new CssRectWord(this, displayText, runSpaceBefore, runSpaceAfter, runOriginalText, ToRuneIndexedJoiningForms(wordStart + start, runText), ToRuneIndexedUseCategories(wordStart + start, runText), ToRuneIndexedKhmerCategories(wordStart + start, runText))
                     {
                         FontSizeScale = scale,
                         ScaledFontKind = scale == 1.0 ? ScaledFontKind.None : ScaledFontKind.SmallCaps,
@@ -2046,15 +2059,50 @@ namespace PeachPDF.Html.Core.Dom
         /// USE-shaped script at all - the overwhelming common case) or when every character in this
         /// specific span resolved to <see cref="UseCategory.O"/>.
         /// </summary>
-        private UseCategory[]? ToRuneIndexedUseCategories(int textStart, string fragmentText)
+        private UseCategory[]? ToRuneIndexedUseCategories(int textStart, string fragmentText) =>
+            ToRuneIndexedCategories(UseCategories, UseCategory.O, textStart, fragmentText);
+
+        /// <summary>
+        /// Slices <see cref="KhmerCategories"/> (this box's own UTF-16-char-indexed, paragraph-resolved
+        /// Khmer categories) down to <paramref name="fragmentText"/>'s own span and re-indexes it per
+        /// <see cref="Rune"/> - the exact mirror of <see cref="ToRuneIndexedUseCategories"/>, including
+        /// its "every character in this span resolved to an inert placeholder" check, for the same
+        /// reason (<see cref="KhmerCategories"/> is allocated paragraph-wide, not per-box - see that
+        /// property's own remarks). Returns null when <see cref="KhmerCategories"/> itself is null (no
+        /// paragraph in this box contains Khmer text at all - the overwhelming common case) or when
+        /// every character in this specific span resolved to <see cref="KhmerCategory.Other"/>.
+        /// </summary>
+        private KhmerCategory[]? ToRuneIndexedKhmerCategories(int textStart, string fragmentText) =>
+            ToRuneIndexedCategories(KhmerCategories, KhmerCategory.Other, textStart, fragmentText);
+
+        /// <summary>
+        /// The shared implementation behind <see cref="ToRuneIndexedUseCategories"/> and
+        /// <see cref="ToRuneIndexedKhmerCategories"/> - slices <paramref name="charIndexed"/> (a box's
+        /// own UTF-16-char-indexed, paragraph-resolved category array, or null when no paragraph this
+        /// box belongs to needed one at all) down to <paramref name="fragmentText"/>'s own span and
+        /// re-indexes it per <see cref="Rune"/>, the same way <see cref="ToRuneIndexedJoiningForms"/>
+        /// does. Returns null when <paramref name="charIndexed"/> itself is null, or when every
+        /// character in this specific span resolved to <paramref name="inertValue"/> - the "does this
+        /// word's own span actually contain a non-inert category" guard both callers need for the
+        /// identical reason: the source array is allocated *paragraph-wide* the moment any codepoint
+        /// anywhere in the paragraph needs it, then sliced onto *every* contributing box in that
+        /// paragraph, including one whose own text has none of that category's script in it at all -
+        /// without this check, such a box would get a spurious non-null, all-<paramref name="inertValue"/>
+        /// slice, and <c>ResolveWordShapingFeatures</c> would request that script's own shaping for it
+        /// purely because of unrelated content elsewhere in the same paragraph (found by an adversarial
+        /// post-change review pass against the first, USE-only version of this method, not by any test
+        /// that shipped with it).
+        /// </summary>
+        private static T[]? ToRuneIndexedCategories<T>(T[]? charIndexed, T inertValue, int textStart, string fragmentText) where T : struct, Enum
         {
-            if (UseCategories is not { } charIndexed || fragmentText.Length == 0)
+            if (charIndexed is null || fragmentText.Length == 0)
                 return null;
 
+            var comparer = EqualityComparer<T>.Default;
             var any = false;
             for (var c = textStart; c < textStart + fragmentText.Length; c++)
             {
-                if (charIndexed[c] != UseCategory.O)
+                if (!comparer.Equals(charIndexed[c], inertValue))
                 {
                     any = true;
                     break;
@@ -2072,7 +2120,7 @@ namespace PeachPDF.Html.Core.Dom
                 runeCount++;
             }
 
-            var result = new UseCategory[runeCount];
+            var result = new T[runeCount];
             var r = 0;
             for (var i = 0; i < fragmentText.Length;)
             {
@@ -2134,7 +2182,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 var fragText = text.Substring(start, index - start);
-                Words.Add(new CssRectWord(this, fragText, first && hasSpaceBefore, index >= text.Length && hasSpaceAfter, originalText.Substring(start, index - start), ToRuneIndexedJoiningForms(textStart + start, fragText), ToRuneIndexedUseCategories(textStart + start, fragText))
+                Words.Add(new CssRectWord(this, fragText, first && hasSpaceBefore, index >= text.Length && hasSpaceAfter, originalText.Substring(start, index - start), ToRuneIndexedJoiningForms(textStart + start, fragText), ToRuneIndexedUseCategories(textStart + start, fragText), ToRuneIndexedKhmerCategories(textStart + start, fragText))
                 {
                     FontSizeScale = fontSizeScale,
                     SuppressWrapBefore = !first || alwaysSuppressWrap,

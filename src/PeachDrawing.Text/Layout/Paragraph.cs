@@ -23,11 +23,17 @@ namespace PeachDrawing.Text.Layout
         // Scripts the Universal Shaping Engine classification covers; other text never gets categories.
         private static readonly HashSet<string> UseShapedScripts = ["Devanagari", "Bengali", "Gujarati", "Tamil"];
 
+        // The script HarfBuzz's own (pre-Universal-Shaping-Engine) Khmer shaper covers - kept separate
+        // from UseShapedScripts since Khmer is a genuinely different shaping model, not a fifth
+        // Universal-Shaping-Engine script (see KhmerCategory's own remarks).
+        private static readonly HashSet<string> KhmerShapedScripts = ["Khmer"];
+
         private readonly (int Start, int End, RunStyle Style)[] _runs;
         private readonly BidiAnalysis _bidi;
         private readonly string[] _scripts;
         private readonly ArabicJoiningForm[] _joining;
         private readonly UseCategory[]? _use;
+        private readonly KhmerCategory[]? _khmer;
         private readonly bool[] _isGraphemeBoundary;
         private readonly int[] _nextOpportunity;
         private readonly Atom[] _atoms;
@@ -52,7 +58,7 @@ namespace PeachDrawing.Text.Layout
             _runs = runs;
             _bidi = Bidi.Analyze(text, style.Direction);
 
-            (_scripts, _joining, _use) = ResolveScripts(text);
+            (_scripts, _joining, _use, _khmer) = ResolveScripts(text);
             Opportunities = LineBreaker.FindOpportunities(text, style.LineBreak);
             HasSoftHyphens = style.Hyphens != Hyphens.None && text.Contains(SoftHyphen);
             if (style.Hyphens == Hyphens.None)
@@ -282,7 +288,7 @@ namespace PeachDrawing.Text.Layout
             return atoms.ToArray();
         }
 
-        private static (string[] Scripts, ArabicJoiningForm[] Joining, UseCategory[]? Use) ResolveScripts(string text)
+        private static (string[] Scripts, ArabicJoiningForm[] Joining, UseCategory[]? Use, KhmerCategory[]? Khmer) ResolveScripts(string text)
         {
             int length = text.Length;
             var codepoints = new List<int>(length);
@@ -311,6 +317,7 @@ namespace PeachDrawing.Text.Layout
             var forms = ArabicJoining.Resolve(codepoints);
 
             UseCategory[]? categories = null;
+            KhmerCategory[]? khmerCategories = null;
             for (int c = 0; c < resolved.Count; c++)
             {
                 if (UseShapedScripts.Contains(resolved[c]))
@@ -318,11 +325,17 @@ namespace PeachDrawing.Text.Layout
                     categories ??= new UseCategory[codepoints.Count];
                     categories[c] = UniversalShaping.Classify(codepoints[c]);
                 }
+                else if (KhmerShapedScripts.Contains(resolved[c]))
+                {
+                    khmerCategories ??= new KhmerCategory[codepoints.Count];
+                    khmerCategories[c] = KhmerShaping.Classify(codepoints[c]);
+                }
             }
 
             var scripts = new string[length];
             var charForms = new ArabicJoiningForm[length];
             UseCategory[]? charCategories = categories is null ? null : new UseCategory[length];
+            KhmerCategory[]? charKhmerCategories = khmerCategories is null ? null : new KhmerCategory[length];
             for (int c = 0; c < length; c++)
             {
                 int cp = codepointOfChar[c];
@@ -332,9 +345,13 @@ namespace PeachDrawing.Text.Layout
                 {
                     charCategories[c] = categories![cp];
                 }
+                if (charKhmerCategories is not null)
+                {
+                    charKhmerCategories[c] = khmerCategories![cp];
+                }
             }
 
-            return (scripts, charForms, charCategories);
+            return (scripts, charForms, charCategories, charKhmerCategories);
         }
 
         /// <summary>Shapes the piece <c>[start, end)</c> of one atom, once.</summary>
@@ -364,7 +381,14 @@ namespace PeachDrawing.Text.Layout
 
             var pieceText = Text.Substring(start, end - start);
             var forms = new List<ArabicJoiningForm>();
-            List<UseCategory>? categories = _use is null ? null : [];
+            // Built only when this piece's own script is actually the shaped one - _use/_khmer are
+            // paragraph-wide arrays (allocated the moment ANY codepoint anywhere in the paragraph needs
+            // one), so a non-USE/non-Khmer piece sharing a paragraph with USE/Khmer text (e.g. an
+            // embedded Latin-numeral run inside Khmer body text) would otherwise build a throwaway list
+            // every time it's shaped, for no reason: neither list is ever read below unless the matching
+            // Contains check on the next line also passes.
+            List<UseCategory>? categories = _use is not null && UseShapedScripts.Contains(atom.Script) ? [] : null;
+            List<KhmerCategory>? khmerCategories = _khmer is not null && KhmerShapedScripts.Contains(atom.Script) ? [] : null;
             bool anyJoining = false;
             for (int i = start; i < end;)
             {
@@ -372,6 +396,7 @@ namespace PeachDrawing.Text.Layout
                 forms.Add(_joining[i]);
                 anyJoining |= _joining[i] != ArabicJoiningForm.None;
                 categories?.Add(_use![i]);
+                khmerCategories?.Add(_khmer![i]);
                 i += consumed;
             }
 
@@ -382,6 +407,10 @@ namespace PeachDrawing.Text.Layout
             else if (categories is not null && UseShapedScripts.Contains(atom.Script))
             {
                 settings = settings with { UseCategories = categories };
+            }
+            else if (khmerCategories is not null && KhmerShapedScripts.Contains(atom.Script))
+            {
+                settings = settings with { KhmerCategories = khmerCategories };
             }
 
             var run = Shaper.Shape(style.Typeface, pieceText, settings);
@@ -671,7 +700,7 @@ namespace PeachDrawing.Text.Layout
                 style = style with { Typeface = stand };
             }
 
-            var run = Shaper.Shape(style.Typeface, text, (style.Shape ?? ShapeSettings.Default) with { ScriptTag = null, JoiningForms = null, UseCategories = null, ReverseForDisplay = false });
+            var run = Shaper.Shape(style.Typeface, text, (style.Shape ?? ShapeSettings.Default) with { ScriptTag = null, JoiningForms = null, UseCategories = null, KhmerCategories = null, ReverseForDisplay = false });
             var clusterStarts = new HashSet<int>();
             foreach (var glyph in run.Glyphs)
             {
