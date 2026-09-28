@@ -1,5 +1,5 @@
 using PeachDrawing;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 
 namespace PeachDrawing.Tests
 {

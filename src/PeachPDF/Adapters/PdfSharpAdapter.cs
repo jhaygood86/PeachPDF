@@ -14,7 +14,7 @@
 
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore.Drawing;

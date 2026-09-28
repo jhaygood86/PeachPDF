@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
 using Xunit;

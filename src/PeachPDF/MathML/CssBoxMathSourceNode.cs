@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using PeachPDF.Html.Core.Dom;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 
 namespace PeachPDF.MathML
 {

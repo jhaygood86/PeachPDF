@@ -12,7 +12,7 @@
 #endregion
 
 using System.Globalization;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 
 namespace PeachPDF.MathML
 {

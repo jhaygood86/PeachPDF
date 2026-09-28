@@ -175,7 +175,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, root, g);
 
-            var red = PeachDrawing.Abstractions.PaintColor.FromArgb(255, 0, 0);
+            var red = PeachDrawing.Core.PaintColor.FromArgb(255, 0, 0);
             Assert.Contains(g.Log, entry => entry switch
             {
                 TestRecordingGraphics.DrawRectCall r => r.PaintColor == red,

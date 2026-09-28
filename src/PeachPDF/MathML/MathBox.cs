@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 
 namespace PeachPDF.MathML
 {

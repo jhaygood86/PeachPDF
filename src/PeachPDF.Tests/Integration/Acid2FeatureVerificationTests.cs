@@ -1,6 +1,6 @@
 ﻿using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
@@ -1128,7 +1128,7 @@ namespace PeachPDF.Tests.Integration
                 "Interpolate must be restored to its original value after a repeating draw completes, since the same Image may be reused elsewhere");
         }
 
-        private sealed class TrackingImage : PeachDrawing.Abstractions.Image
+        private sealed class TrackingImage : PeachDrawing.Core.Image
         {
             public override double Width => 2;
             public override double Height => 2;

@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Fragments;
 
 namespace PeachPDF.Html.Core.Paint.Content

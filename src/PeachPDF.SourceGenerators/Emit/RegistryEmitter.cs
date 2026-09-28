@@ -369,7 +369,7 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Frozen;");
             sb.AppendLine("using System.Collections.Generic;");
-            sb.AppendLine("using PeachDrawing.Abstractions;");
+            sb.AppendLine("using PeachDrawing.Core;");
             sb.AppendLine();
             sb.AppendLine("namespace PeachPDF.Svg");
             sb.AppendLine("{");

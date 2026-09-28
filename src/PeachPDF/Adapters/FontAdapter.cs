@@ -16,7 +16,7 @@ using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
 

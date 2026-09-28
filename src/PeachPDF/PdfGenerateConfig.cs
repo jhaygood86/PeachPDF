@@ -12,7 +12,7 @@
 
 #nullable enable
 
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Network;
 using System.Collections.Generic;
 
@@ -367,7 +367,7 @@ namespace PeachPDF
         /// <remarks>
         /// It affects only bitmaps PeachPDF renders itself: a CSS <c>filter:</c>-triggered region, a region
         /// rendered opaque under <see cref="TransparencyPolicy.Flatten"/>, and glyph fills drawn while
-        /// <see cref="TextHinting"/> is not <see cref="PeachDrawing.Abstractions.TextHinting.None"/>. It has no effect on the
+        /// <see cref="TextHinting"/> is not <see cref="PeachDrawing.Core.TextHinting.None"/>. It has no effect on the
         /// PDF's own vector text and path content stream, which is not a bitmap at all - a PDF viewer (or a
         /// rasterizer such as PDFium or MuPDF) anti-aliases that content on its own when displaying it,
         /// independent of this setting. A document with no rasterized regions and no raster-hinted text is
@@ -377,7 +377,7 @@ namespace PeachPDF
 
         /// <summary>
         /// Whether the text PeachPDF draws into a bitmap (see <see cref="RasterizationDpi"/>) is fitted to the pixel grid by the font's own
-        /// hinting. Defaults to <see cref="PeachDrawing.Abstractions.TextHinting.None"/>, so output does not change unless it is asked for.
+        /// hinting. Defaults to <see cref="PeachDrawing.Core.TextHinting.None"/>, so output does not change unless it is asked for.
         /// </summary>
         /// <remarks>
         /// It helps text set small at a low <see cref="RasterizationDpi"/>, where pixels are big enough to see. It never affects the PDF's own
@@ -390,7 +390,7 @@ namespace PeachPDF
 
         /// <summary>
         /// Whether hinted text that PeachPDF draws into a bitmap is also made a little heavier at its stems, when its font has CFF outlines.
-        /// Defaults to <see langword="false"/>. It has an effect only where <see cref="TextHinting"/> is not <see cref="PeachDrawing.Abstractions.TextHinting.None"/>.
+        /// Defaults to <see langword="false"/>. It has an effect only where <see cref="TextHinting"/> is not <see cref="PeachDrawing.Core.TextHinting.None"/>.
         /// </summary>
         /// <remarks>
         /// Thin stems of small text tend to look lighter than the designer intended once they are anti-aliased; this is the compensation of

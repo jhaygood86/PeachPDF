@@ -1,6 +1,6 @@
 ﻿using PeachDrawing.Text;
 using PeachDrawing.Text.Outlines;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.Svg;

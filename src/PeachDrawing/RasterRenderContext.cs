@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
 using System;
@@ -20,7 +20,7 @@ namespace PeachDrawing;
 /// </summary>
 /// <remarks>
 /// Font creation goes through <see cref="TypefaceFont"/> and image decoding through
-/// <see cref="DecodedImage"/> - both PeachDrawing.Abstractions/PeachDrawing's own types, no PDF backend
+/// <see cref="DecodedImage"/> - both PeachDrawing.Core/PeachDrawing's own types, no PDF backend
 /// involved anywhere in the chain. PeachPDF drives this same class as its own raster fallback (the effects
 /// PDF cannot express in vector form - filters, shadows, backdrop effects); this is not a copy built for
 /// PeachPDF's benefit, it is the one implementation both uses.

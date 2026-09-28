@@ -1,5 +1,5 @@
 using PeachDrawing.Text.Unicode;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 
 namespace PeachPDF.Html.Core.Utils
 {

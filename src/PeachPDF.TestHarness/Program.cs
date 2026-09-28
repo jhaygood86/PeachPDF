@@ -1,5 +1,5 @@
 ﻿using PeachDrawing.Text.Outlines;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF;
 using PeachPDF.Layout;
 using PeachPDF.PdfSharpCore;

@@ -4,7 +4,7 @@
 		<AssemblyName>PeachDrawing</AssemblyName>
 		<RootNamespace>PeachDrawing</RootNamespace>
 		<PackageId>PeachDrawing</PackageId>
-		<Description>A standalone software raster Canvas for PeachDrawing.Abstractions - draw shapes, text and images onto a bitmap and save it in any PeachImage-supported format, with no PDF, HTML or CSS involved. This is also the raster fallback PeachPDF itself uses for effects PDF cannot express in vector form (filters, shadows, backdrop effects).</Description>
+		<Description>A standalone software raster Canvas for PeachDrawing.Core - draw shapes, text and images onto a bitmap and save it in any PeachImage-supported format, with no PDF, HTML or CSS involved. This is also the raster fallback PeachPDF itself uses for effects PDF cannot express in vector form (filters, shadows, backdrop effects).</Description>
 		<PackageTags>drawing;graphics;canvas;raster;rendering</PackageTags>
 		<PackageIcon>peach.png</PackageIcon>
 		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
@@ -28,13 +28,13 @@
 		<IsAotCompatible>true</IsAotCompatible>
 	</PropertyGroup>
 	<ItemGroup>
-		<ProjectReference Include="..\PeachDrawing.Abstractions\PeachDrawing.Abstractions.csproj" />
+		<ProjectReference Include="..\PeachDrawing.Core\PeachDrawing.Core.csproj" />
 		<PackageReference Include="PeachImage" Version="0.4.6" />
 	</ItemGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachDrawing.Tests" />
 		<!--
-			Deliberate and permanent, mirroring PeachDrawing.Abstractions' own grant (see its csproj's
+			Deliberate and permanent, mirroring PeachDrawing.Core' own grant (see its csproj's
 			comment for the full reasoning). PeachPDF's own GraphicsAdapter.BeginRasterSurface constructs and
 			drives a RasterCanvas as its raster fallback - it is the second real Canvas implementation this
 			internal surface was always meant for (RasterSurfaceFactory.Create, RasterSurfaceScope, and

@@ -1,5 +1,5 @@
 using PeachDrawing;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachDrawing.Filters;
 using System;
 using System.Collections.Generic;

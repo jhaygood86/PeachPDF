@@ -1,7 +1,7 @@
 # `RasterCanvas`'s own contract is plain device pixels; PDF-point semantics are a constructor parameter, not a hardcoded assumption
 
 `RasterCanvas` has no built-in notion of a PDF point, a CSS layout unit, or any host document's own
-coordinate system - it is a generic 2D raster `Canvas` (`PeachDrawing.Abstractions.Canvas`) usable with
+coordinate system - it is a generic 2D raster `Canvas` (`PeachDrawing.Core.Canvas`) usable with
 zero PeachPDF reference at all. Its actual per-instance unit convention is entirely determined by the
 `pixelsPerPoint` value passed to its constructor: "one user-space unit is `pixelsPerPoint` device pixels."
 
@@ -31,7 +31,7 @@ permanently pinned to "1 unit = 1 pixel." That turned out to be unnecessary: `Ra
 already needs `pixelsPerPoint` for its own DPI-to-pixel-grid math (see
 [[raster-a-bitmap-is-placed-at-its-own-snapped-rectangle]]), so threading the same value into the
 `RasterCanvas` constructor it builds is strictly simpler than adding a second coordinate-system boundary
-around it - and it is `internal`-only plumbing PeachDrawing.Abstractions's `Canvas.BeginRasterSurface` hook
+around it - and it is `internal`-only plumbing PeachDrawing.Core's `Canvas.BeginRasterSurface` hook
 already carries, not new public surface. A standalone consumer never sees `pixelsPerPoint` at all; it only
 exists on `RasterCanvas`'s constructor, which `RasterRenderContext.CreateCanvas` calls on the standalone
 consumer's behalf.

@@ -1,6 +1,6 @@
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 
 namespace PeachDrawing
 {

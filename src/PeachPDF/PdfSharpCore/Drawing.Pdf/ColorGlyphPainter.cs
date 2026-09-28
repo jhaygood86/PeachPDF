@@ -17,7 +17,7 @@
 //
 #endregion
 
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;

@@ -140,7 +140,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Draws each glyph in <paramref name="glyphs"/> at its own explicit world-space position,
         /// addressed directly by font glyph index rather than by Unicode character - see
-        /// <see cref="PeachDrawing.Abstractions.Canvas.DrawGlyphs"/>'s own remarks for why this exists
+        /// <see cref="PeachDrawing.Core.Canvas.DrawGlyphs"/>'s own remarks for why this exists
         /// (an OpenType MATH table's stretchy-operator glyphs, which have no Unicode mapping to shape
         /// through the ordinary <see cref="DrawString(string, XFont, XBrush, XRect, XStringFormat, double, XGlyphPalette?, ShapeSettings, string)"/> path).
         /// </summary>

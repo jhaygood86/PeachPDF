@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using System.Net;
 using System.Net.Http;
 using System.Text;

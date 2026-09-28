@@ -12,7 +12,7 @@
 
 using PeachDrawing.Text;
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachDrawing;
@@ -95,7 +95,7 @@ namespace PeachPDF.Adapters
             _g.SvgGlyphPainter = new SvgGlyphPainter(this, adapter);
         }
 
-        private readonly PeachDrawing.Abstractions.ISvgGlyphPainter? _previousSvgGlyphPainter;
+        private readonly PeachDrawing.Core.ISvgGlyphPainter? _previousSvgGlyphPainter;
 
         /// <summary>The adapter this graphics draws for, which resolves the fonts and images of what is drawn.</summary>
         internal RenderContext Adapter => _adapter;

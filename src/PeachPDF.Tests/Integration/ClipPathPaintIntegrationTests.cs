@@ -9,7 +9,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Verifies the <c>clip-path</c> paint hook in <see cref="CssBox.Paint"/>: a basic-shape clip is pushed
-    /// (as an <see cref="PeachDrawing.Abstractions.GraphicsPath"/>) before the element paints and popped after,
+    /// (as an <see cref="PeachDrawing.Core.GraphicsPath"/>) before the element paints and popped after,
     /// bracketing the whole element rendering, with the geometry resolved against the border-box. Uses the
     /// recording graphics adapter so we assert the actual clip call sequence and resolved coordinates, not
     /// just that painting completed.

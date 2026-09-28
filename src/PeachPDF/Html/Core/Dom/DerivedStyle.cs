@@ -2,7 +2,7 @@
 using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -801,7 +801,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Lazily parses the used value of the <c>filter</c> property (Filter Effects Level 1 §3) into its
         /// ordered function list - empty for <c>none</c> or an unparsable value. Kept as the raw
         /// <see cref="FilterGrammar.FilterFunction"/> list (never pre-resolved
-        /// <see cref="PeachDrawing.Abstractions.ColorMatrix"/>es) for the same reason <see cref="BoxShadowGrammar"/>'s
+        /// <see cref="PeachDrawing.Core.ColorMatrix"/>es) for the same reason <see cref="BoxShadowGrammar"/>'s
         /// own layers stay raw text: <c>drop-shadow()</c>'s lengths still need box-relative resolution via
         /// <c>CssValueParser.ParseLength</c> against THIS box, which only the paint-time caller
         /// (<c>FragmentPainter.PaintFilterDropShadows</c>) can do.

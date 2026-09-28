@@ -155,12 +155,12 @@ jobs:
       if: steps.changes.outputs.src == 'true'
       run: dotnet test src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --configuration Release --logger "trx;LogFileName=engine-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
-    # The drawing-surface abstraction (PeachDrawing.Abstractions) has its own test project; run it into the
+    # The drawing-surface abstraction (PeachDrawing.Core) has its own test project; run it into the
     # same coverage directory so the diff-coverage gate below covers it too. It is small and needs no browser,
     # so all of its target frameworks run in the one invocation.
-    - name: Test abstraction (PeachDrawing.Abstractions)
+    - name: Test abstraction (PeachDrawing.Core)
       if: steps.changes.outputs.src == 'true'
-      run: dotnet test src/PeachDrawing.Abstractions.Tests/PeachDrawing.Abstractions.Tests.csproj --configuration Release --logger "trx;LogFileName=abstractions-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test src/PeachDrawing.Core.Tests/PeachDrawing.Core.Tests.csproj --configuration Release --logger "trx;LogFileName=abstractions-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
     # The standalone raster backend (PeachDrawing) has its own test project; run it into the same coverage
     # directory so the diff-coverage gate below covers it too. It is small and needs no browser, so all of
@@ -196,7 +196,7 @@ jobs:
           src/PeachPDF.Tests/**/*.trx
           src/PeachPDF.Cli.Tests/**/*.trx
           src/PeachDrawing.Text.Tests/**/*.trx
-          src/PeachDrawing.Abstractions.Tests/**/*.trx
+          src/PeachDrawing.Core.Tests/**/*.trx
           src/PeachDrawing.Tests/**/*.trx
           src/PeachPDF.SourceGenerators.Tests/**/*.trx
 
