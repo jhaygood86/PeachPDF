@@ -92,7 +92,7 @@ namespace PeachDrawing.Core
         /// <param name="style">the pattern of lines</param>
         /// <param name="foreground">the colour of the lines</param>
         /// <param name="background">the colour between the lines; use a fully transparent colour to leave it unpainted</param>
-        /// <param name="spacing">the distance between neighbouring lines, in user units</param>
+        /// <param name="spacing">the distance between neighbouring lines, in user units, measured across a horizontal or vertical line (for a diagonal, along a horizontal)</param>
         /// <param name="lineWidth">the thickness of a line, in user units; a value that is not positive uses a tenth of <paramref name="spacing"/></param>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="spacing"/> is not a positive, finite number</exception>
         public HatchBrush(HatchStyle style, PaintColor foreground, PaintColor background, double spacing = 8, double lineWidth = 0)
@@ -116,7 +116,7 @@ namespace PeachDrawing.Core
         /// <summary>The colour between the lines.</summary>
         public PaintColor Background { get; }
 
-        /// <summary>The distance between neighbouring lines, in user units.</summary>
+        /// <summary>The distance between neighbouring lines, in user units, measured across a horizontal or vertical line (for a diagonal, along a horizontal).</summary>
         public double Spacing { get; }
 
         /// <summary>The thickness of a line, in user units.</summary>

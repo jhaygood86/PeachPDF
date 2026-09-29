@@ -306,11 +306,15 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 {
                     Debug.Assert(UnrealizedCtm.IsIdentity, "Must realize ctm first.");
 
-                    // Pattern space maps to the page's default coordinate system, not to the current user space, so the brush's own
-                    // matrix is followed by everything that separates the current user space from it.
-                    XMatrix matrix = _renderer.DefaultViewMatrix;
-                    matrix.Prepend(EffectiveCtm);
-                    matrix.Prepend(tilingBrush.Matrix);
+                    // A pattern's matrix maps pattern space (here the brush's own y-down space) to the page's default coordinate system.
+                    // The renderer writes y-up coordinates and keeps user transforms in its world transform, so the map is found the way a
+                    // gradient's coordinates are: three points of the brush's space go through the brush matrix, then WorldToView (which
+                    // applies the world transform and the y flip), then the view matrix. An affine map is fixed by three points.
+                    XMatrix toDefault = _renderer.DefaultViewMatrix;
+                    toDefault.Prepend(EffectiveCtm);
+                    XPoint Map(double x, double y) => toDefault.Transform(_renderer.WorldToView(tilingBrush.Matrix.Transform(new XPoint(x, y))));
+                    XPoint origin = Map(0, 0), unitX = Map(1, 0), unitY = Map(0, 1);
+                    XMatrix matrix = new XMatrix(unitX.X - origin.X, unitX.Y - origin.Y, unitY.X - origin.X, unitY.Y - origin.Y, origin.X, origin.Y);
 
                     PdfTilingPattern pattern = new PdfTilingPattern(_renderer.Owner);
                     pattern.SetupFromBrush(tilingBrush, matrix);

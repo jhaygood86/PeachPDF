@@ -58,7 +58,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 throw new ArgumentNullException("brush");
 
             Elements[Keys.PaintType] = new PdfInteger(1);
-            Elements[Keys.TilingType] = new PdfInteger(1);
+            Elements[Keys.TilingType] = new PdfInteger(2);
             Elements.SetRectangle(Keys.BBox, new PdfRectangle(0, 0, brush.CellWidth, brush.CellHeight));
             Elements[Keys.XStep] = new PdfReal(brush.CellWidth);
             Elements[Keys.YStep] = new PdfReal(brush.CellHeight);

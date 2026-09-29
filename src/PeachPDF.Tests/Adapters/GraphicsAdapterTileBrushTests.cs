@@ -1,5 +1,6 @@
 using PeachPDF.Adapters;
 using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using System;
@@ -85,7 +86,9 @@ namespace PeachPDF.Tests.Adapters
         public void Transform_ReachesThePatternMatrix()
         {
             var (document, pageGfx, graphics, adapter) = NewPage();
-            var rotated = new TileBrush(NewTile(graphics, adapter, 20), 20, 20, Matrix3x2.CreateRotation(MathF.PI / 6));
+
+            // 1 x 1 cells over 200 x 100 are 20,000 cells: more than are worth drawing one by one, so the turned grid stays a pattern.
+            var rotated = new TileBrush(NewTile(graphics, adapter, 20), 1, 1, Matrix3x2.CreateRotation(MathF.PI / 6));
 
             graphics.DrawRectangle(rotated, 0, 0, 200, 100);
             pageGfx.Dispose();
@@ -96,6 +99,97 @@ namespace PeachPDF.Tests.Adapters
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries);
             Assert.Equal(6, numbers.Length);
             Assert.True(Math.Abs(double.Parse(numbers[1], System.Globalization.CultureInfo.InvariantCulture)) > 0.1);
+        }
+
+        [Fact]
+        public void ATurnedGrid_OfFewCells_IsDrawnCellByCell_NotAsAPattern()
+        {
+            var (document, pageGfx, graphics, adapter) = NewPage();
+            var rotated = new TileBrush(NewTile(graphics, adapter, 20), 20, 20, Matrix3x2.CreateRotation(MathF.PI / 6));
+
+            graphics.DrawRectangle(rotated, 0, 0, 200, 100);
+            pageGfx.Dispose();
+
+            var text = Serialize(document);
+            Assert.DoesNotContain("/PatternType", text);
+            Assert.True(Regex.Matches(text, @"/Fm\d+ Do").Count >= 20, "every cell that can show should be drawn");
+        }
+
+        [Fact]
+        public void ATurnedGrid_CoversTheWholeShape_WhateverItsPositionAndRotation()
+        {
+            // The cells drawn must reach every corner of the shape, however the grid is turned: the extreme cells' corners, mapped back
+            // through the turn, enclose the shape.
+            var (document, pageGfx, graphics, adapter) = NewPage();
+            var turned = new TileBrush(NewTile(graphics, adapter, 10), 10, 10, Matrix3x2.CreateRotation(MathF.PI / 4) * Matrix3x2.CreateTranslation(123, -77));
+
+            graphics.DrawRectangle(turned, 300, 200, 90, 60);
+            graphics.DrawRectangle(turned, -50, -50, 20, 20);
+            pageGfx.Dispose();
+
+            // A wide shape needs at least its area's worth of cells; too few would leave a corner bare.
+            var cells = Regex.Matches(Serialize(document), @"/Fm\d+ Do").Count;
+            Assert.True(cells >= (90 * 60 + 20 * 20) / 100, $"{cells} cells cannot cover the shapes");
+        }
+
+        [Fact]
+        public void AnUprightGrid_UnderARotatedCanvasTransform_IsDrawnCellByCell()
+        {
+            var (document, pageGfx, graphics, adapter) = NewPage();
+            var upright = new TileBrush(NewTile(graphics, adapter, 20), 20, 20);
+
+            graphics.PushTransform(Matrix3x2.CreateRotation(MathF.PI / 6));
+            graphics.DrawRectangle(upright, 0, 0, 200, 100);
+            graphics.PopTransform();
+            pageGfx.Dispose();
+
+            Assert.DoesNotContain("/PatternType", Serialize(document));
+        }
+
+        [Fact]
+        public void HatchBrush_UnderARotatedTransform_IsDrawnCellByCell()
+        {
+            var (document, pageGfx, graphics, _) = NewPage();
+
+            graphics.PushTransform(Matrix3x2.CreateRotation(MathF.PI / 6));
+            graphics.DrawRectangle(new HatchBrush(HatchStyle.Cross, PaintColor.Black, PaintColor.White, 8), 0, 0, 100, 60);
+            graphics.PopTransform();
+            pageGfx.Dispose();
+
+            Assert.DoesNotContain("/PatternType", Serialize(document));
+        }
+
+        [Fact]
+        public void ATurnedGrid_FilledIntoAPathOrPolygon_IsAlsoDrawnCellByCell()
+        {
+            var (document, pageGfx, graphics, adapter) = NewPage();
+            var turned = new TileBrush(NewTile(graphics, adapter, 10), 10, 10, Matrix3x2.CreateRotation(MathF.PI / 5));
+
+            using (var path = graphics.GetGraphicsPath())
+            {
+                path.AddCircle(100, 100, 40);
+                graphics.DrawPath(turned, path);
+            }
+
+            graphics.DrawPolygon(turned, [new PaintPoint(200, 50), new PaintPoint(280, 60), new PaintPoint(240, 130)]);
+            pageGfx.Dispose();
+
+            var text = Serialize(document);
+            Assert.DoesNotContain("/PatternType", text);
+            Assert.True(Regex.Matches(text, @"/Fm\d+ Do").Count > 30);
+        }
+
+        [Fact]
+        public void ATurnedGrid_OfAnEmptyShape_DrawsNoCellsAndDoesNotThrow()
+        {
+            var (document, pageGfx, graphics, adapter) = NewPage();
+            var turned = new TileBrush(NewTile(graphics, adapter, 10), 10, 10, Matrix3x2.CreateRotation(MathF.PI / 5));
+
+            graphics.DrawRectangle(turned, 0, 0, 0, 50);
+            pageGfx.Dispose();
+
+            // Nothing to cover, so no cell is drawn one by one (the empty fill itself takes the ordinary pattern route).
+            Assert.Empty(Regex.Matches(Serialize(document), @"100 Tz /Fm\d+ Do"));
         }
 
         [Fact]

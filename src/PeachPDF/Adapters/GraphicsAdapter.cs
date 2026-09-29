@@ -13,6 +13,7 @@
 using PeachDrawing.Text;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachDrawing;
@@ -521,6 +522,9 @@ namespace PeachPDF.Adapters
 
         public override void DrawRectangle(Brush brush, double x, double y, double width, double height)
         {
+            if (TryPaintTurnedTiles(brush, new Rect(x, y, width, height), () => PushClip(new Rect(x, y, width, height))))
+                return;
+
             var xBrush = ToXBrush(brush);
             if (xBrush is XBaseGradientBrush)
             {
@@ -643,6 +647,9 @@ namespace PeachPDF.Adapters
 
         public override void DrawPath(Brush brush, GraphicsPath path)
         {
+            if (brush is TileBrush or HatchBrush && TryPaintTurnedTiles(brush, new PathMeasure(path).Bounds, () => PushClip(path)))
+                return;
+
             var xBrush = ToXBrush(brush);
             if (xBrush is XBaseGradientBrush)
             {
@@ -660,6 +667,19 @@ namespace PeachPDF.Adapters
         {
             if (points is { Length: > 0 })
             {
+                if (brush is TileBrush or HatchBrush)
+                {
+                    double minX = points.Min(p => p.X), minY = points.Min(p => p.Y);
+                    var bounds = new Rect(minX, minY, points.Max(p => p.X) - minX, points.Max(p => p.Y) - minY);
+                    if (TryPaintTurnedTiles(brush, bounds, () =>
+                        {
+                            using var outline = GetGraphicsPath();
+                            outline.AddPolygon(points);
+                            PushClip(outline);
+                        }))
+                        return;
+                }
+
                 _g.DrawPolygon(ToXBrush(brush), Utils.Convert(points, PixelsPerPoint), XFillMode.Winding);
             }
         }
@@ -699,6 +719,67 @@ namespace PeachPDF.Adapters
                 : throw new NotSupportedException("A hatch needs a canvas that can make tiles."),
             _ => throw new NotSupportedException($"Unknown brush type {brush.GetType()}"),
         };
+
+        /// <summary>The most cells of a turned grid that are drawn one by one; a shape needing more is painted with the tiling pattern instead.</summary>
+        private const int MaxTurnedTiles = 10_000;
+
+        /// <summary>
+        /// Paints a tile brush whose grid the current transform turns or skews as individual cells under a clip, and reports whether it did.
+        /// A viewer renders a rotated tiling pattern by drawing each cell with anti-aliased edges, which shows as hairline seams between
+        /// cells; cells drawn as separate images do not. An upright grid (the usual case) is left to the tiling pattern, which is written
+        /// once however many cells it covers.
+        /// </summary>
+        private bool TryPaintTurnedTiles(Brush brush, Rect shapeBounds, Action pushShapeClip)
+        {
+            if (brush is HatchBrush hatch)
+                brush = hatch.ToTileBrush(this)!;
+
+            if (brush is not TileBrush tile || shapeBounds.Width <= 0 || shapeBounds.Height <= 0)
+                return false;
+
+            // Where a cell's edges end up on the page: the brush's own transform, then everything already pushed onto this canvas.
+            var onPage = tile.Transform.Then(_accumulated);
+            var scale = Math.Abs(onPage.M11) + Math.Abs(onPage.M22) + 1e-12;
+            if (Math.Abs(onPage.M12) <= 1e-6 * scale && Math.Abs(onPage.M21) <= 1e-6 * scale)
+                return false;
+
+            if (!Matrix3x2.Invert(tile.Transform, out var toBrush))
+                return false;
+
+            // The shape's bounds, in brush space, decide which cells can be seen.
+            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+            foreach (var corner in new[]
+            {
+                new Vector2((float)shapeBounds.Left, (float)shapeBounds.Top), new Vector2((float)shapeBounds.Right, (float)shapeBounds.Top),
+                new Vector2((float)shapeBounds.Right, (float)shapeBounds.Bottom), new Vector2((float)shapeBounds.Left, (float)shapeBounds.Bottom),
+            })
+            {
+                var p = Vector2.Transform(corner, toBrush);
+                minX = Math.Min(minX, p.X);
+                maxX = Math.Max(maxX, p.X);
+                minY = Math.Min(minY, p.Y);
+                maxY = Math.Max(maxY, p.Y);
+            }
+
+            var firstColumn = Math.Floor(minX / tile.CellWidth);
+            var lastColumn = Math.Ceiling(maxX / tile.CellWidth);
+            var firstRow = Math.Floor(minY / tile.CellHeight);
+            var lastRow = Math.Ceiling(maxY / tile.CellHeight);
+            if ((lastColumn - firstColumn) * (lastRow - firstRow) is <= 0 or > MaxTurnedTiles)
+                return false;
+
+            pushShapeClip();
+            PushTransform(tile.Transform);
+            for (var row = firstRow; row < lastRow; row++)
+            {
+                for (var column = firstColumn; column < lastColumn; column++)
+                    DrawImage(tile.Tile, new Rect(column * tile.CellWidth, row * tile.CellHeight, tile.CellWidth, tile.CellHeight), tile.Sampling);
+            }
+
+            PopTransform();
+            PopClip();
+            return true;
+        }
 
         /// <summary>A repeating tile as a PDF tiling pattern: a tile made by <see cref="CreateTile"/> stays vector content, any other image is embedded once.</summary>
         private XTilingBrush ToXTilingBrush(TileBrush tile)
