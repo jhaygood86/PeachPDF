@@ -63,7 +63,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             var box = await BoxOf($"<div id='t' style='overflow:{overflow}'>text</div>");
 
             Assert.Equal(expected, MonolithicContent.IsScrollContainer(box));
-            Assert.Equal(expected, MonolithicContent.IsMonolithic(box));
+            Assert.False(MonolithicContent.IsMonolithic(box));
         }
 
         // CSS Overflow 3 §3.3: the root's overflow propagates to the viewport, and <body>'s does when the
@@ -87,7 +87,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         [Fact]
         public async Task Body_UnderARootThatAlreadyDeclaredOverflow_IsAScrollContainer()
         {
-            var box = await BoxOfTag("html { overflow: hidden } body { overflow: auto }", "body");
+            var box = await BoxOfTag("html { overflow: hidden } body { overflow: auto; height:100pt }", "body");
 
             Assert.True(MonolithicContent.IsScrollContainer(box));
             Assert.True(MonolithicContent.IsMonolithic(box));

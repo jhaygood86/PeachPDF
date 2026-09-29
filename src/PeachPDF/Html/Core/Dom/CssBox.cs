@@ -4041,6 +4041,13 @@ namespace PeachPDF.Html.Core.Dom
         internal string? HeightBeforeItemPin { get; set; }
 
         /// <summary>
+        /// Whether this box's subtree holds an absolutely positioned box that renders, as
+        /// <see cref="Fragmentation.MonolithicContent"/> asks it on every layout pass. It depends only on the
+        /// style of boxes that exist before layout begins, so it is worked out once.
+        /// </summary>
+        internal bool? HoldsAbsolutelyPositionedBox { get; set; }
+
+        /// <summary>
         /// Everything that must happen exactly once for this box, before any of its content is placed:
         /// measuring its words, applying <c>string-set</c>, resolving its used page name, and taking any
         /// forced break that falls before it.
@@ -4254,8 +4261,8 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    // css-break-3 §2: monolithic content (here, a scroll container - a replaced element
-                    // has no children to reach this dispatch at all) may not be broken. Detaching the
+                    // css-break-3 §4.1: monolithic content (here, a scroll container that IsMonolithic keeps
+                    // whole - a replaced element has no children to reach this dispatch at all) is not broken. Detaching the
                     // fragmentainer for the duration of its own children's layout means nothing inside can
                     // record a page break at all, so its content lays out as one continuous run whose
                     // natural height may exceed a single fragmentainer - exactly like any other tall
@@ -4388,8 +4395,9 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Whether this box is <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>
-        /// monolithic content that the epilogue's page-context mover may move at all. Whether there is
+        /// Whether this box is monolithic content (a replaced element, <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>,
+        /// or a scroll container kept whole, <see href="https://www.w3.org/TR/css-break-3/#possible-breaks">§4.1</see>)
+        /// that the epilogue's page-context mover may move at all. Whether there is
         /// somewhere to move it <i>to</i> is a separate question, asked at the call site against the
         /// destination band.
         /// </summary>
@@ -4428,13 +4436,13 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Whether this box paginates its own content but recorded no break inside itself on this pass,
         /// so it did not fragment and the §4.3 mover beside this one applies to it as it does to content
-        /// that <see cref="MonolithicContent.IsMonolithic">may not be broken at all</see>.
+        /// that <see cref="MonolithicContent.IsMonolithic">is kept unbroken</see>.
         /// </summary>
         /// <remarks>
         /// <para>
         /// <b>Only a table asserts this, and it asserts it as a fact rather than as a property.</b> A
         /// table's own break points are between its rows, and whether one was taken is settled by the
-        /// engine and recorded in <see cref="PageBreakBottoms"/> — so unlike §2's set, which is decided
+        /// engine and recorded in <see cref="PageBreakBottoms"/> — so unlike the monolithic set, which is decided
         /// from style, this is a question that can only be answered once the box has finished laying out.
         /// That is exactly the epilogue's own position, and it is why the correction belongs here rather
         /// than at the end of <c>CssLayoutEngineTable.LayoutCells</c>, where it used to sit: the engine
@@ -6281,7 +6289,7 @@ namespace PeachPDF.Html.Core.Dom
             if (!child._isForcedBreak || child.HtmlContainer is not { } container) return null;
 
             // A measurement pass at a provisional position (flex/grid item sizing), or a monolithic
-            // subtree whose own breaking css-break-3 §2 forbids (#350: CssBox.LayoutContents suppresses
+            // subtree whose own breaking is suppressed as monolithic content (css-break-3 §2, §4.1; #350: CssBox.LayoutContents suppresses
             // both this and CurrentFragmentainer for such a subtree) - either way, nothing here should act
             // on a break. Reading the flag those callers already set (rather than IsFragmenting, which is
             // equally false once layout has simply finished and no pass is running at all - a shape
@@ -7096,8 +7104,8 @@ namespace PeachPDF.Html.Core.Dom
             // mover by construction (it measures against PageBandHeightOf and relocates to PageTopOf),
             // so a hint naming a different fragmentation context must not suppress a page break.
             //
-            // Monolithic content (css-break-3 §2 - a replaced element, a scroll container) reaches the same
-            // mover, because "may not be broken" and "asks not to be broken" want the same relocation. So
+            // Monolithic content (css-break-3 §2 for a replaced element, §4.1 for a scroll container kept
+            // whole) reaches the same mover, because "is not broken" and "asks not to be broken" want the same relocation. So
             // does a table that did not break between any two of its own rows: it did not fragment, which
             // is what the other two say about themselves in advance rather than after the fact.
             var avoidsBreak = BreakValues.AvoidsBreak(BreakInside.Value, FragmentationContext.Page);
@@ -7127,7 +7135,7 @@ namespace PeachPDF.Html.Core.Dom
                 // The two arms part company on a box that fits in no fragmentainer. An unsatisfiable
                 // `avoid` is relaxed and the box still moves, maximizing what lands on one page (§4.3); a
                 // monolithic box is left exactly where it is instead, because there is nowhere to move it
-                // to - §2 has it overflow in place, which for a scroll container's own children is what
+                // to - §2 has it overflow in place (§4.1 likewise for a scroll container), which for its own children is what
                 // LayoutContents' own fragmentainer-detach around this box's content already arranged
                 // (#350) before this mover ever runs; this arm just declines to also try relocating the
                 // box itself. The question is asked of the *destination* band, which per-page @page
@@ -8252,7 +8260,7 @@ namespace PeachPDF.Html.Core.Dom
         /// table column beside it.
         /// </para>
         /// </summary>
-        private static bool IsFlexOrGridItem(CssBox box) =>
+        internal static bool IsFlexOrGridItem(CssBox box) =>
             box.ParentBox?.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
                 or Keywords.Grid or Keywords.InlineGrid;
 
@@ -9658,7 +9666,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// <para>
         /// The single place the §4.3 corrections — <c>break-inside: avoid</c>,
-        /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see> monolithic content,
+        /// monolithic content (<see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>, <see href="https://www.w3.org/TR/css-break-3/#possible-breaks">§4.1</see>),
         /// <c>orphans</c>/<c>widows</c>, and the keep-with-next pull they share — turn a stated
         /// decision into geometry, so that how a break is <i>taken</i> is decided once rather than per
         /// mover.

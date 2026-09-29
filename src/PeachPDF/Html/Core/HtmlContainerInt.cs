@@ -591,7 +591,7 @@ namespace PeachPDF.Html.Core
         /// ends up, and that pass is never resumed - permanently desyncing the word from its own box.
         /// <para>
         /// Also set, for a different reason, around a monolithic subtree's own children
-        /// (<see cref="Dom.CssBox.LayoutContents"/>, #350): css-break-3 §2 forbids breaking such content
+        /// (<see cref="Dom.CssBox.LayoutContents"/>, #350): css-break-3 §2 and §4.1 keep such content unbroken
         /// at all, so a forced break inside it must not take effect either. <see cref="Dom.CssBox.ForcedBreakTopFor"/>
         /// reads this flag (rather than <see cref="IsFragmenting"/>, which is equally false once a pass
         /// has simply finished with none running at all) to tell "inside a suppressed subtree" from that.
@@ -2983,6 +2983,11 @@ namespace PeachPDF.Html.Core
             switch (token)
             {
                 case InlineBreakToken inline when ReferenceEquals(inline.Box, box):
+                    // The record says how many lines the box had completed; one whose line boxes have since
+                    // been replaced by a later layout of the same box (a re-flow within the pass that asked
+                    // for the rewind) holds fewer, so the request is stale and there is nothing to cut down.
+                    if (box.LineBoxes.Count < inline.CompletedLineCount) return false;
+
                     rebuilt = inline with
                     {
                         // The walk position of the first line the budget gives up, which is where the flow

@@ -2424,6 +2424,107 @@ await SaveShowcaseAsync("paged_media_page_floats", "Paged Media", "Page floats",
     "css-page-floats' float: top/bottom/top-bottom/snap/inside/outside: a float: top figure landing flush at the true top of its landing page with flow content starting below the reserved strip, a float: bottom callout landing flush at the true bottom with flow content stopping above it, float: top-bottom falling back to the bottom edge once the top edge has no room left, inside/outside resolving to opposite physical sides depending on whether the landing page is a right-hand (recto) or left-hand (verso) page, and float-reference: column pinning a float to the edge of the column its anchor sits in so only that column gives up room.",
     pageFloatsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── Scroll containers across page breaks ───────────────────────────────────
+// Unconstrained overflow containers retain line and block break points (css-break-3 §4.1).
+// A scroll container with a definite height or maximum stays monolithic; an auto-height one in
+// ordinary block flow breaks like any other block.
+var scrollContainerCodeLines = string.Join("\n", Enumerable.Range(1, 34).Select(i =>
+    $"{i,2}  " + (i % 5) switch
+    {
+        0 => "return total;",
+        1 => "var total = 0;",
+        2 => "foreach (var line in invoice.Lines)",
+        3 => "    total += line.Quantity * line.UnitPrice;",
+        _ => "// apply discounts and taxes per line",
+    }));
+
+var scrollContainersAcrossPagesHtml = $$"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: 105mm 148mm;
+      margin: 12mm 10mm;
+      @bottom-center { content: "Page " counter(page); font-size: 7pt; font-family: Arial; color: #888; }
+    }
+    body { font-family: Arial, sans-serif; font-size: 8.5pt; line-height: 1.35; margin: 0; color: #1f2937; }
+    h1 { font-size: 12pt; margin: 0 0 6pt; }
+    h2 { break-after: avoid; font-size: 10pt; margin: 10pt 0 4pt; }
+    pre {
+      overflow: auto;
+      background: #f3f4f6;
+      border: 0.75pt solid #9ca3af;
+      padding: 6pt;
+      font-size: 7.5pt;
+      line-height: 1.3;
+      margin: 0;
+    }
+    .panel {
+      overflow: hidden;
+      border: 0.75pt solid #2563eb;
+      background: #eff6ff;
+      padding: 4pt 8pt;
+    }
+    .panel p { margin: 0 0 4pt; }
+    .capped {
+      overflow: auto;
+      height: 170pt;
+      border: 0.75pt solid #b45309;
+      background: #fffbeb;
+      padding: 4pt 8pt;
+    }
+    </style>
+    </head>
+    <body>
+    <h1>Scroll containers across page breaks</h1>
+    <p>A box with <code>overflow: auto</code> or <code>hidden</code> and no height of its own grows with its
+    content, so on paper it has nothing to clip. It breaks between its lines like any other block, as it
+    does when a browser prints it, instead of being sliced with a line lost at every page edge.</p>
+
+    <h2>A code listing with overflow: auto</h2>
+    <pre>{{scrollContainerCodeLines}}</pre>
+
+    <h2>An overflow: hidden panel</h2>
+    <div class="panel">
+    <p>Every paragraph in this panel is drawn whole on one page or the next. The border and background
+    are sliced at the page edge, as box-decoration-break: slice does for any block.</p>
+    <p>Because the panel has no height of its own, print treats it as an ordinary block: a page edge
+    falls between two of its lines instead of slicing through one.</p>
+    <p>Add break-inside: avoid to keep a short panel together instead.</p>
+    <p>This is the case the clearfix idiom produces most often: a long, auto-height wrapper whose only job
+    is to establish a new block formatting context, with ordinary paragraphs inside it.</p>
+    <p>Its height grows with its content, so there is nothing it can clip in the block axis, and the page
+    edge simply falls between two of its lines.</p>
+    <p>The last paragraphs continue on the next page, still inside the same blue panel.</p>
+    </div>
+
+    <p>An overflow: auto box whose own height is capped is different. With a height or a max-height
+    PeachPDF treats it as monolithic content, like an image, and never breaks it between its lines
+    (browsers split such a box instead). Where it would straddle a page boundary, it is carried to the next page whole.</p>
+
+    <p>Everything above uses up most of this page, so the box below is left with less room than its own
+    height. A box that scrolls has a fixed extent, so the page edge cannot be allowed to fall through it.</p>
+
+    <h2>A fixed-height box stays whole</h2>
+    <div class="capped">
+    <p>This box has overflow: auto and height: 170pt, so it is treated as monolithic: it moves whole
+    to the next page when it does not fit where it starts, rather than breaking.</p>
+    <p>It starts too close to the foot of the page for all of its paragraphs, so the whole box, border
+    and all, has moved to this page instead of leaving its first lines behind on the last one.</p>
+    <p>An auto-height box in the same place would have broken between two of these paragraphs.</p>
+    <p>To keep a short auto-height box together as well, give it break-inside: avoid.</p>
+    </div>
+
+    <p>End of document.</p>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("scroll_containers_across_pages", "Paged Media", "Scroll Containers Across Pages",
+    "An auto-height overflow: auto code listing and an overflow: hidden panel breaking cleanly between their lines across page boundaries, and a fixed-height overflow: auto box moving whole to the next page instead.",
+    scrollContainersAcrossPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──
 // The classic hand-authored table of contents: leader() fills the gap between a chapter
 // title and its page number with a dotted rule, and target-counter(attr(href), page)
@@ -3005,14 +3106,13 @@ var monolithicHtml = """
     }
     .card h2 { font-size: 10pt; margin: 0 0 0.3em; color: #1d4ed8 }
     .card p { margin: 0; font-size: 8.5pt }
-    .clipped { overflow: hidden }
+    .clipped { break-inside: avoid }
     .tag { font-size: 7pt; letter-spacing: .04em; text-transform: uppercase; color: #64748b }
     </style></head><body>
     <h1>Monolithic content at a page break</h1>
-    <p class="intro">CSS Fragmentation Level 3 &sect;2 makes a scroll container &mdash; any box with
-    <code>overflow</code> other than <code>visible</code> &mdash; monolithic: it may not be split, so where it
-    would straddle a page boundary it moves to the next page whole. The two cards below are identical apart
-    from that one declaration.</p>
+    <p class="intro">Content that asks not to be broken &mdash; a box with <code>break-inside: avoid</code>, or a
+    replaced element such as an image &mdash; is not split: where it would straddle a page boundary it moves to
+    the next page whole. The two cards below are identical apart from <code>break-inside: avoid</code>.</p>
     """
     + string.Concat(Enumerable.Range(1, 14).Select(i =>
         $"<p>Filler paragraph {i}. This body copy pushes the cards down the page so that each one meets the "
@@ -3030,10 +3130,10 @@ var monolithicHtml = """
         + "page boundary at the same place its twin met the first one.</p>"))
     + """
     <div class="card clipped">
-      <span class="tag">overflow: hidden</span>
+      <span class="tag">break-inside: avoid</span>
       <h2>This card moves whole</h2>
-      <p>Being a scroll container makes it monolithic, so rather than being cut in half it is carried
-      wholesale onto the next page, leaving the gap above it.</p>
+      <p>Because it asks not to be broken, rather than being cut in half it is carried wholesale onto the
+      next page, leaving the gap above it.</p>
     </div>
     """
     + string.Concat(Enumerable.Range(31, 4).Select(i =>
@@ -3050,7 +3150,7 @@ var monolithicHtml = """
         + "between its own lines rather than above it.</p>"))
     + """
     <div class="card clipped">
-      <span class="tag">overflow: hidden &mdash; multi-line</span>
+      <span class="tag">break-inside: avoid &mdash; multi-line</span>
       <h2>Its lines stay evenly spaced</h2>
       <p>The page boundary falls part-way through this paragraph, so the box is relocated after some of its
       text had already been placed on the following page. Because it is laid out again at its destination
@@ -3075,9 +3175,9 @@ var monolithicHtml = """
     + """
     <div style="border:1px solid #a3a3a3; border-radius:6px; padding:8px 10px; background:#fafafa">
       <div class="card clipped">
-        <span class="tag">first child &mdash; monolithic</span>
+        <span class="tag">first child &mdash; break-inside: avoid</span>
         <h2>The panel moves too</h2>
-        <p>This card may not be split, so it starts on the next page. The panel around it is not what
+        <p>This card is not split, so it starts on the next page. The panel around it is not what
         asked for the break, but the break point is the panel's own, so the panel opens on that page as
         well rather than being cut open on this one.</p>
       </div>
@@ -3210,8 +3310,8 @@ var monolithicHtml = """
     """;
 
 await SaveShowcaseAsync("paged_media_monolithic_content", "Paged Media", "Monolithic Content",
-    "A box with overflow: hidden is a scroll container, which CSS Fragmentation §2 forbids breaking: it "
-    + "moves to the next page whole instead of being cut in half by the page boundary. A flex line and a "
+    "A box with break-inside: avoid moves to the next page whole instead of being cut in half by the page "
+    + "boundary. A flex line and a "
     + "grid row that ask not to be broken move as a unit for the same reason, and the lines below a "
     + "moved one follow it rather than staying put. A forced break is taken from either side of a break "
     + "point, so break-after on one line opens the next page for the line after it — and break-after: "
