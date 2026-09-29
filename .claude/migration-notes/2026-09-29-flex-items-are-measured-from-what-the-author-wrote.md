@@ -14,3 +14,10 @@ Two visible changes:
    narrower where the earlier answer was a first, provisional, wider measurement (`flexbox` showcase, §8).
 
 Neither changes a document with a single content width and no flex container measured more than once.
+
+3. **Blocks inside a multi-column container, in a document whose pages have different content widths.** A multi-column
+   container used to count as a link of the "unconstrained main column" chain, so a block-level child of it (a flex
+   container, most visibly) measured against the page area the container spans instead of against its column, and a flex
+   container came out as wide as the whole container in each column. Children of a multi-column container now measure
+   against their column.
+

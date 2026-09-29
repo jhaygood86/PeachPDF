@@ -137,12 +137,13 @@ namespace PeachPDF.Html.Core.Dom
             var slot = container.SlotStartingAt(top);
             container.ClearInlineFrame(_flexBox, slot);
 
-            var startWidth = await CssLayoutEngine.GetBoxWidth(g, _flexBox);
-            var slotWidth = await CssLayoutEngine.GetBoxWidth(g, _flexBox, top);
-            var delta = slotWidth - startWidth;
+            // Against the frame the container was laid out with - which is what its live geometry still is on
+            // a resumed pass - rather than a second measurement of the first page: inside a multi-column
+            // container the measure is the column's, which is not a function of the page alone.
+            var slotFrameWidth = await CssLayoutEngine.GetBoxWidth(g, _flexBox, top) + _flexBox.ActualBoxSizeIncludedWidth;
 
-            if (Math.Abs(delta) > 0.01)
-                container.RecordInlineFrame(_flexBox, slot, _flexBox.Bounds.X, _flexBox.Bounds.Width + delta);
+            if (Math.Abs(slotFrameWidth - _flexBox.Bounds.Width) > 0.01)
+                container.RecordInlineFrame(_flexBox, slot, _flexBox.Bounds.X, slotFrameWidth);
         }
 
         /// <summary>
@@ -1591,6 +1592,7 @@ namespace PeachPDF.Html.Core.Dom
             bool refitLine = false)
         {
             var bottoms = lineBottoms?.ToList();
+            var measures = lineMeasures?.ToList();
 
             var container = _flexBox.HtmlContainer;
 
@@ -1605,6 +1607,12 @@ namespace PeachPDF.Html.Core.Dom
             for (var lineIndex = startLineIndex; lineIndex < lines.Count; lineIndex++)
             {
                 var isResumedLine = lineIndex == startLineIndex && seedUnfinished is not null;
+
+                // A line that has not started is still free to be sized for the page it now lands on: an
+                // earlier line that grew, or a definite-height container that spread its lines, can have put
+                // it on a page of another measure than the one it was sized against.
+                if (!isResumedLine && measures is not null && bottoms is not null)
+                    await ReflowLineForItsPage(g, lines, lineIndex, measures, bottoms);
 
                 var pending = isResumedLine
                     ? seedUnfinished!.Select(u => (Box: u.Item, Resume: (BreakToken?)u.Token)).ToList()
@@ -1632,7 +1640,7 @@ namespace PeachPDF.Html.Core.Dom
                     var resumeSlot = unfinished.Max(u => u.Token.ResumeSlotIndex);
                     _flexBox.SetPendingBreakToken(new FlexBreakToken(
                         _flexBox, resumeSlot, lineIndex, lines, unfinished, finished, placementOrigin,
-                        lineMeasures, bottoms, lineRefit));
+                        measures, bottoms, lineRefit));
                     return;
                 }
 
@@ -1670,13 +1678,120 @@ namespace PeachPDF.Html.Core.Dom
 
             bottoms[lineIndex] = newBottom;
 
+            ShiftLinesBelow(lines, lineIndex, bottoms, delta);
+        }
+
+        /// <summary>
+        /// Moves every line below <paramref name="lineIndex"/> by <paramref name="delta"/> and lets the
+        /// container's own bottom follow, then puts the lines below back through the fragmentation
+        /// relocation the shift may have made a line need.
+        /// </summary>
+        /// <remarks>
+        /// A container with a definite <c>height</c> keeps it: its lines were spread over that height by
+        /// <c>align-content</c> and a line that grew does not grow the container.
+        /// </remarks>
+        private void ShiftLinesBelow(IReadOnlyList<IReadOnlyList<CssBox>> lines, int lineIndex, List<double> bottoms, double delta)
+        {
             for (var below = lineIndex + 1; below < lines.Count; below++)
             {
                 ItemContentCommit.RepositionForResume(lines[below], new PaintPoint(0, delta));
                 bottoms[below] += delta;
             }
 
-            _flexBox.ActualBottom += delta;
+            var definiteHeight = CssValueParser.IsValidLength(_flexBox.Height);
+            if (!definiteHeight) _flexBox.ActualBottom += delta;
+
+            RelocateLinesFrom(lines, lineIndex + 1, bottoms);
+        }
+
+        /// <summary>
+        /// Runs the line relocation of <see cref="RelocateLinesAcrossFragmentainers"/> again over the lines
+        /// from <paramref name="from"/> down, at the positions they now hold, and brings their recorded
+        /// bottoms - and the container's - up to date.
+        /// </summary>
+        private void RelocateLinesFrom(IReadOnlyList<IReadOnlyList<CssBox>> lines, int from, List<double> bottoms)
+        {
+            if (from >= lines.Count || _flexBox.HtmlContainer is not { } container) return;
+
+            // `lines` is in block-axis order; the groups' break-point sides are given in flow order.
+            var flowLines = lines.ToList();
+            if (_isWrapReverse) flowLines.Reverse();
+
+            var groups = BuildLineGroups(flowLines);
+            var lastBottom = bottoms[^1];
+
+            LineRelocation.Relocate(container, groups.Skip(from).ToList());
+
+            for (var line = from; line < lines.Count; line++)
+                bottoms[line] = lines[line].Max(box => box.ActualBottom);
+
+            if (!CssValueParser.IsValidLength(_flexBox.Height))
+                _flexBox.ActualBottom += bottoms[^1] - lastBottom;
+        }
+
+        /// <summary>
+        /// Sizes the line at <paramref name="lineIndex"/> - which no pass has started - against the measure
+        /// of the page it now lands on, when that is not the measure it was sized for.
+        /// </summary>
+        /// <remarks>
+        /// <see href="https://www.w3.org/TR/css-flexbox-1/#pagination-algo">css-flexbox-1 §10.1</see> reruns
+        /// flex layout with the next page's size for what has not been laid out yet. Nothing here is frozen,
+        /// so its items may be measured for real; membership of the line is kept (re-collecting it would
+        /// change the lines after it, which were sized already). The line stays where its top is, and what
+        /// its new height moves - the lines below and the container's bottom - moves with it, through
+        /// <see cref="ShiftLinesBelow"/>.
+        /// </remarks>
+        private async ValueTask ReflowLineForItsPage(
+            Canvas g, IReadOnlyList<IReadOnlyList<CssBox>> lines, int lineIndex, List<double> measures, List<double> bottoms)
+        {
+            if (_flexBox.HtmlContainer is not { UseVariableInlineMeasure: true } container
+                || _flexBox.DerivedStyle.ActualDisplay != Keywords.Flex
+                || !_mainAxisIsPhysicalX
+                || lineIndex >= measures.Count)
+            {
+                return;
+            }
+
+            var boxes = lines[lineIndex];
+            var top = boxes.Min(box => box.Location.Y);
+            var measure = await MeasureAt(g, container.PageTopOf(container.SlotStartingAt(top)));
+
+            if (Math.Abs(measure - measures[lineIndex]) <= 0.01) return;
+
+            var items = new List<FlexItem>(boxes.Count);
+            foreach (var box in boxes)
+                items.Add(await MeasureFlexItem(g, box, measure, mainSizeIndefinite: false));
+
+            var line = new FlexLine(items) { MainSize = measure };
+            await ResolveFlexibleLengths(g, line, measure);
+            line.CrossSize = ComputeLineCrossSize(line);
+            ComputeMainOffsets(line, measure, indefiniteMainSize: false);
+            await ComputeCrossOffsets(g, line);
+
+            foreach (var item in items)
+            {
+                var x = _effectiveMainStartIsAtMax
+                    ? _flexBox.ClientLeft + measure - item.MainOffset - item.FinalMainSize
+                    : _flexBox.ClientLeft + item.MainOffset;
+                var crossSize = item.Box.ActualBoxSizingHeight;
+                var y = _crossStartIsAtMax
+                    ? top + line.CrossSize - item.CrossOffset - crossSize
+                    : top + item.CrossOffset;
+
+                var dx = x - item.Box.Location.X;
+                var dy = y - item.Box.Location.Y;
+
+                if (Math.Abs(dx) > 0.01) item.Box.OffsetLeft(dx);
+                if (Math.Abs(dy) > 0.01) item.Box.OffsetTop(dy);
+            }
+
+            measures[lineIndex] = measure;
+
+            var newBottom = top + line.CrossSize;
+            var delta = newBottom - bottoms[lineIndex];
+            bottoms[lineIndex] = newBottom;
+
+            if (Math.Abs(delta) > 0.01) ShiftLinesBelow(lines, lineIndex, bottoms, delta);
         }
 
         /// <summary>
@@ -1878,7 +1993,7 @@ namespace PeachPDF.Html.Core.Dom
                     box.Width = FormatLayoutUnits(Math.Max(0, width - box.ActualBoxSizeIncludedWidth), box);
                     box.Height = box.HeightBeforeItemPin ?? Keywords.Auto;
 
-                    RefitContinuingDescendants(container, token, slot);
+                    await RefitContinuingDescendants(g, container, token, slot);
                 }
             }
 
@@ -1971,13 +2086,26 @@ namespace PeachPDF.Html.Core.Dom
         /// the fragmentainer <paramref name="slot"/> and the ones after it, keeping the frame it had in every
         /// earlier fragmentainer it was laid out in.
         /// </summary>
+        private static void MoveFrame(HtmlContainerInt container, CssBox box, int slot, double x, double y, double right)
+        {
+            StateEarlierFrames(container, box, slot);
+
+            box.Location = new PaintPoint(x, y);
+            box.ActualRight = right;
+        }
+
+        /// <summary>
+        /// States the frame <paramref name="box"/> has now for every earlier fragmentainer it was laid out
+        /// in, ahead of its live geometry moving to describe <paramref name="slot"/> instead.
+        /// </summary>
         /// <remarks>
         /// The fragment tree reads a box's live geometry wherever nothing was stated, so the frame the box
         /// had is stated for each earlier slot (<see cref="HtmlContainerInt.RecordInlineFrame"/>) before the
-        /// live geometry that described it moves, and whatever an earlier pass had already stated from
-        /// <paramref name="slot"/> on is discarded, because this pass decides it again.
+        /// live geometry that described it moves. Whatever an earlier pass had already stated for
+        /// <paramref name="slot"/> is discarded, because this pass decides it again; frames stated for
+        /// later slots stay - they were derived from the same CSS and hold for pages no pass will visit.
         /// </remarks>
-        private static void MoveFrame(HtmlContainerInt container, CssBox box, int slot, double x, double y, double right)
+        private static void StateEarlierFrames(HtmlContainerInt container, CssBox box, int slot)
         {
             var old = box.Bounds;
 
@@ -1987,45 +2115,46 @@ namespace PeachPDF.Html.Core.Dom
                     container.RecordInlineFrame(box, earlier, old.X, old.Width);
             }
 
-            // The frame in this slot is now the live one; whatever was stated for it is superseded. Frames
-            // stated for later slots stay - they were derived from the same CSS and hold for pages no pass
-            // will visit.
             container.ClearInlineFrame(box, slot);
-
-            box.Location = new PaintPoint(x, y);
-            box.ActualRight = right;
         }
 
         /// <summary>
         /// Re-fits the boxes an item's unfinished content resumes into - the chain of blocks between the
-        /// item and the line being continued - to the frame their containing block now has.
+        /// item and the content being continued - to the frame their containing block now has.
         /// </summary>
         /// <remarks>
         /// A continuing block is not sized again on the pass that resumes it (its line boxes re-wrap
         /// against its containing block's live edge, which is why moving the item is enough for the text),
         /// so its own <see cref="CssBox.ActualRight"/> would keep describing the earlier page's width and
-        /// its background and border would be drawn there. Only an in-flow block with an auto width follows
-        /// its containing block; anything else states its own width and keeps it.
+        /// its background and border would be drawn there. Each is resolved again the way placement
+        /// resolved it (<see cref="CssBox.RefitInlineFrame"/>), so an explicit, percentage or
+        /// <c>max-width</c>-clamped width and an <c>rtl</c> block follow the page too. A nested flex
+        /// container is re-fitted the same way and its own resumed pass re-fits its items; a table or grid
+        /// decides its own width and is left to its engine.
         /// </remarks>
-        private static void RefitContinuingDescendants(HtmlContainerInt container, BreakToken itemToken, int slot)
+        private static async ValueTask RefitContinuingDescendants(
+            Canvas g, HtmlContainerInt container, BreakToken itemToken, int slot)
         {
             var link = itemToken is BlockBreakToken block ? block.ChildToken : null;
 
             for (; link is not null; link = (link as BlockBreakToken)?.ChildToken)
             {
                 var box = link.Box;
-                var containing = box.ContainingBlock;
 
-                if (box.IsOutOfFlow || box.IsInline || CssValueParser.IsValidLength(box.Width)
-                    || !ReferenceEquals(box.ParentBox, containing))
-                {
+                if (box.IsOutOfFlow || box.IsInline || !ReferenceEquals(box.ParentBox, box.ContainingBlock))
                     continue;
+
+                if (box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.TableCell
+                    or Keywords.Grid or Keywords.InlineGrid or Keywords.InlineFlex)
+                {
+                    return;
                 }
 
-                var x = containing.ClientLeft + box.ActualMarginLeft;
-                var right = containing.ClientRight - box.ActualMarginRight;
+                StateEarlierFrames(container, box, slot);
+                await box.RefitInlineFrame(g);
 
-                MoveFrame(container, box, slot, x, box.Location.Y, right);
+                // A nested flex container's items are its own to re-fit, on its own resumed pass.
+                if (box.DerivedStyle.ActualDisplay == Keywords.Flex) return;
             }
         }
 

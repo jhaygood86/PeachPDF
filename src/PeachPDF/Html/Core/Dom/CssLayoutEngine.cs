@@ -2261,6 +2261,11 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box.DerivedStyle.ActualDisplay is not (Keywords.Block or Keywords.ListItem)) return false;
             if (!FillsContainingBlockWidth(box)) return false;
+
+            // A multi-column container's children are laid out in its columns, whose width is what they
+            // measure against - not the page area the container itself spans.
+            if (box.EstablishesMultiColumnContext) return false;
+
             if (!string.IsNullOrEmpty(box.Width) && box.Width != Keywords.Auto) return false;
             if (CssValueParser.IsValidLength(box.MaxWidth)) return false;
 

@@ -344,6 +344,93 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task StraddlingRow_BlocksWithAnExplicitWidthFollowTheirItemWhenItMoves()
+        {
+            // justify-content: space-between puts the second item against the right edge, so its X moves
+            // with the page's measure; the fixed-width and max-width blocks inside it must move with it.
+            var container = await BuildAsync(Head + $$"""
+                #f { display: flex; justify-content: space-between; } .i { flex: 0 0 auto; width: 150pt; }
+                #fixed { width: 100pt; } #capped { max-width: 90pt; }
+                </style></head><body><div id="f"><div class="i" id="a">{{Words(300, "a")}}</div><div class="i" id="b"><p id="fixed">{{Words(150, "b")}}</p><p id="capped">{{Words(150, "c")}}</p></div></div></body></html>
+                """);
+
+            var b = FramesOf(container, "b");
+            var fixedBlock = FramesOf(container, "fixed");
+            var capped = FramesOf(container, "capped");
+
+            Assert.True(b.Count >= 2);
+            Assert.NotEqual(b[0].Left, b[1].Left, Tolerance);
+
+            foreach (var frames in new[] { fixedBlock, capped })
+            {
+                foreach (var (page, frame) in frames)
+                {
+                    Assert.True(frame.Left >= b[page].Left - Tolerance, $"page {page}: {frame.Left} < {b[page].Left}");
+                    Assert.True(frame.Right <= b[page].Right + Tolerance, $"page {page}: {frame.Right} > {b[page].Right}");
+                }
+            }
+
+            Assert.All(fixedBlock, f => Assert.Equal(100, f.Value.Width, Tolerance));
+            Assert.All(capped, f => Assert.True(f.Value.Width <= 90 + Tolerance));
+        }
+
+        [Fact]
+        public async Task WrappedRow_LineBelowALineThatGrewIsSizedForThePageItLandsOn()
+        {
+            // The first line is one full-width item of text: it continues onto narrower pages, wraps into more
+            // lines there than it was sized for, and pushes the second line - two items that fill their line -
+            // onto a page the first line's height never suggested. Whatever page the second line ends up on,
+            // its items fill that page's measure.
+            var container = await BuildAsync(Head + $$"""
+                #f { display: flex; flex-wrap: wrap; } .i { flex: 1 0 100pt; }
+                #a { flex: 1 1 100%; }
+                </style></head><body><div id="f"><div class="i" id="a">{{Words(900, "a")}}</div><div class="i" id="b" style="height: 40pt">b</div><div class="i" id="c" style="height: 40pt">c</div></div></body></html>
+                """);
+
+            var a = FramesOf(container, "a");
+            var b = FramesOf(container, "b");
+            var c = FramesOf(container, "c");
+
+            Assert.True(a.Count >= 3);
+
+            var page = b.Keys.Max();
+            var measure = page == 0 ? FirstPageMeasure : LaterPageMeasure;
+
+            Assert.Equal(measure, b[page].Width + c[page].Width, Tolerance);
+            Assert.Equal(b[page].Right, c[page].Left, Tolerance);
+
+            var f = ById(container, "f");
+            Assert.True(ById(container, "b").ActualBottom <= f.ActualBottom + 0.5);
+            Assert.True(ById(container, "a").ActualBottom <= ById(container, "b").Location.Y + 0.5);
+        }
+
+        [Fact]
+        public async Task DefiniteHeightWrappedRow_LinesWhollyOnALaterPageAreSizedForIt()
+        {
+            // space-between spreads the three 100pt lines over the 700pt height: the second lies wholly on
+            // the second page and the third wholly on the third, so no line straddles a boundary and nothing
+            // is ever resumed. Each is sized for the page it lands on: a 512pt page cannot grow three items
+            // whose basis is 170pt plus border, where the 562pt first page shares the room among them.
+            var items = string.Concat(Enumerable.Range(0, 9).Select(n =>
+                $"<div class=\"i\" id=\"g{n}\" style=\"height: 100pt; flex: 1 0 170pt\">{Words(4, "g" + n + "_")}</div>"));
+            var container = await BuildAsync(Head + $$"""
+                #f { display: flex; flex-wrap: wrap; height: 700pt; align-content: space-between; }
+                </style></head><body><div id="f">{{items}}</div></body></html>
+                """);
+
+            Assert.Equal(FirstPageMeasure / 3, FramesOf(container, "g0")[0].Width, Tolerance);
+
+            foreach (var n in Enumerable.Range(3, 6))
+            {
+                var frames = FramesOf(container, $"g{n}");
+
+                Assert.NotEmpty(frames);
+                Assert.All(frames, f => Assert.True(f.Key > 0, $"g{n} reaches page {f.Key}"));
+                Assert.All(frames, f => Assert.Equal(171.5, f.Value.Width, Tolerance));
+            }
+        }
+
+        [Fact]
         public async Task DefiniteHeightWrappedRow_ItemsNoPassResumesAreStatedForTheLaterPage()
         {
             var items = string.Concat(Enumerable.Range(0, 9).Select(n =>
@@ -363,6 +450,36 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotEmpty(widths);
             Assert.All(widths, width => Assert.True(width < FirstPageMeasure / 3 - 5, $"{width} was sized for the first page"));
+        }
+
+        [Fact]
+        public async Task FlexContainerInsideAMultiColumnContainer_FillsItsColumnOnEveryPage()
+        {
+            var container = await BuildAsync(Head + $$"""
+                #m { columns: 2; column-gap: 20pt; column-fill: auto; height: 240pt; }
+                #f { display: flex; } .i { flex: 1 1 0; }
+                </style></head><body><div id="m"><div id="f"><div class="i" id="a">{{Words(700, "a")}}</div><div class="i" id="b">{{Words(700, "b")}}</div></div></div></body></html>
+                """);
+
+            var tree = container.FragmentTree!;
+            Assert.True(tree.Fragmentainers.Count >= 3);
+
+            var f = ById(container, "f");
+            var a = ById(container, "a");
+            var b = ById(container, "b");
+
+            for (var page = 0; page < tree.Fragmentainers.Count; page++)
+            {
+                var measure = page == 0 ? FirstPageMeasure : LaterPageMeasure;
+                var column = (measure - 20) / 2;
+
+                foreach (var (box, expected) in new[] { (f, column), (a, column / 2), (b, column / 2) })
+                {
+                    if (FragmentOf(tree.Fragmentainers[page].Root, box) is not { } fragment) continue;
+
+                    Assert.Equal(expected, fragment.WholeBoxRect.Width, Tolerance);
+                }
+            }
         }
 
         // ─── the machinery ────────────────────────────────────────────────────────

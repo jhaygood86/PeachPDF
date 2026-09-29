@@ -138,15 +138,26 @@ Verified against Prince, which lays these documents out the same way, and agains
 it re-sizes only the container and lets every item overflow it at its first page's width. A **column**
 container's items keep the cross size they started with, in both of them, and so here.
 
-Left as it is, each a genuine css-break-3 §5.1 deviation - a fragment sizes to its own fragmentainer - and
-each tracked: a flex line that is *unstarted* on a page reached only because a re-fitted line above it grew
-is sized for the page it was expected to land on, not the one it did; an item that does not stretch
-(`align-self` other than `stretch`) keeps the offset its earlier line height gave it when a re-fitted line
-grows, and lines below a grown one are moved without re-running line relocation; a block on a straddling
-item's break chain with an explicit, percentage or `max-width`-clamped width keeps its earlier frame when the
-item's own X moves (`justify-content`/`rtl`); a re-fitted item's sizes come from `RederiveItem`, which does not
-share `MeasureItem`'s inline-only/replaced/aspect-ratio branches; a centred container (`margin: auto`) keeps
-its X while its width follows the page; per-line measures apply to wrapping rows only, so `column`,
-`inline-flex` and definite-height rows keep the measure they started with (a definite-height row's *started*
-lines are still re-fitted); a flex container inside a multi-column container is not re-fitted per column; and
-the grid analogue of all of this. Tracked as [#1515](https://github.com/jhaygood86/PeachPDF/issues/1515) (flex) and [#1516](https://github.com/jhaygood86/PeachPDF/issues/1516) (grid).
+Also handled (#1515): a flex line that is unstarted on a page reached only because a re-fitted line above it grew
+is re-sized for the page it lands on (`ReflowLineForItsPage`, run at the top of each line's turn in the commit
+loop, which also covers a definite-height container whose `align-content` spreads its lines onto later pages), and
+the lines below a grown line go back through the fragmentation relocation (`ShiftLinesBelow`,
+`RelocateLinesFrom`); the blocks on a straddling item's break chain are resolved again the way placement resolved
+them (`CssBox.RefitInlineFrame`: explicit, percentage and `max-width`-clamped widths, `rtl`); and a flex container
+inside a multi-column container is sized to its column, because a multi-column container no longer counts as a link
+of the "unconstrained main column" chain (`IsOrdinaryUnconstrainedBlock`) - its children measure against the column,
+not against the page area the container spans.
+
+What is left, and why each is not a flex deviation to fix here:
+
+- An item that does not stretch (`align-self` other than `stretch`) keeps its offset in a line that grew: its
+  content is already emitted in earlier fragmentainers, which cannot move.
+- `RederiveItem` sizes an already-started item from CSS alone, so an `auto`-basis inline-only item can come out a
+  few points wider than `MeasureItem`'s widest-wrapped-line measure would have: it must not be laid out again.
+- `column` containers keep the cross size their items started with - Prince and Chromium both do - and `inline-flex`
+  is atomic, so neither is re-fitted per page.
+- A container centred with `margin: auto` and an explicit `width` keeps its X while the page's measure changes.
+  That is not flex-specific: an ordinary block with `width: 300pt; margin: 0 auto` does the same, because auto
+  margins resolve against the containing block's single width (`CssLayoutEngine.FreeInlineSpace`). Tracked with
+  the block case as [#1518](https://github.com/jhaygood86/PeachPDF/issues/1518).
+- Grid: [#1516](https://github.com/jhaygood86/PeachPDF/issues/1516).

@@ -6141,6 +6141,28 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Resolves this in-flow block's own inline frame again against its containing block as that block
+        /// now stands - the frame <see cref="PlaceAndSizeBlockChild"/> gave it, asked again for a box that
+        /// continues on a page whose measure is not the one it was placed against.
+        /// </summary>
+        /// <remarks>
+        /// The same two questions placement asks, so an explicit, percentage or <c>min</c>/<c>max</c>-clamped
+        /// width, and an <c>rtl</c> containing block, come out exactly as they would have had the box been
+        /// placed there. Only its inline frame changes: <see cref="Location"/>'s block-axis coordinate is
+        /// where the box already is. A box whose width its own engine decides (a table, a grid) is left alone
+        /// by the caller.
+        /// </remarks>
+        internal async ValueTask RefitInlineFrame(Canvas g)
+        {
+            var top = Location.Y;
+            var width = await CssLayoutEngine.GetBoxWidth(g, this, top);
+
+            ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
+            Location = new PaintPoint(ResolveBlockInlineStart(ContainingBlock.ClientLeft, top), top);
+            ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
+        }
+
+        /// <summary>
         /// Where a forced break (css-break-3 §3.1) before <paramref name="child"/> puts it: the content top
         /// of the slot the break lands in. Null when no forced break falls before it, or when nothing
         /// precedes it in the flow for a break to fall after.
