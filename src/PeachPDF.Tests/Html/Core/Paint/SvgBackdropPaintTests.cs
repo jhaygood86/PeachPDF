@@ -17,7 +17,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 
         // A blue div at x 0..40pt holding an SVG 60pt wide, whose one rectangle is filtered to show the backdrop 30pt to its right.
-        private static string Page(string svgStyle = "", string offset = "dx=\"-40\"") => $"""
+        private static string Page(string svgStyle = "", string offset = "dx=\"-40\"") => "<style>body{margin:0}</style>" + $"""
             <div style="margin:0;width:40pt;height:60pt;background:rgb(0,0,255)">
               <svg width="80" height="40" viewBox="0 0 80 40" style="display:block;{svgStyle}">
                 <defs><filter id="f" color-interpolation-filters="sRGB"><feOffset in="BackgroundImage" {offset} dy="0"/></filter></defs>

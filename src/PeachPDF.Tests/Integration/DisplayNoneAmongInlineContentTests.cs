@@ -94,13 +94,12 @@ namespace PeachPDF.Tests.Integration
             var words = string.Join(' ', Enumerable.Range(1, 400).Select(i => $"w{i}"));
 
             var (_, withoutBody) = await LayoutHarness.LayoutAsync(
-                "<style>p{margin:0}</style>" + Float + words, pageWidth: 200, pageHeight: 150, margin: 10);
+                "<style>body{margin:0}p{margin:0}</style>" + Float + words, pageWidth: 200, pageHeight: 150, margin: 10);
             var (_, withBody) = await LayoutHarness.LayoutAsync(
                 "<style>p{margin:0}</style><body style='margin:0'>" + Float + words + "</body>", pageWidth: 200, pageHeight: 150, margin: 10);
 
-            // The text used to be dropped, leaving the float and a run of blank pages. The control's body
-            // takes margin:0 because a document that omits <body> gets no body rules at all (the UA sheet's
-            // own 8px body margin included), so the two only agree once the control gives that margin up.
+            // The text used to be dropped, leaving the float and a run of blank pages. Both documents
+            // take a zero body margin so the implicit body and the written-out one lay out identically.
             Assert.True(withBody.FragmentTree!.Fragmentainers.Count > 1, "the control must paginate");
             Assert.Equal(withBody.FragmentTree!.Fragmentainers.Count, withoutBody.FragmentTree!.Fragmentainers.Count);
         }
@@ -203,7 +202,7 @@ namespace PeachPDF.Tests.Integration
         {
             var (root, _) = await LayoutHarness.LayoutAsync("<style>p{margin:0}</style>alpha bravo");
 
-            Assert.True(DomUtils.ContainsInlinesOnly(root));
+            Assert.True(DomUtils.ContainsInlinesOnly(DomUtils.GetBoxByTagName(root, "body")));
         }
 
         [Fact]

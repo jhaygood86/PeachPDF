@@ -69,6 +69,7 @@ namespace PeachPDF.Html.Core.Parse
         {
             CssBox.ClearCounter();
             var root = HtmlParser.ParseDocument(html);
+            HtmlParser.EnsureHtmlAndBody(root);
             root.IsRoot = true;
             root.HtmlContainer = htmlContainer;
 
