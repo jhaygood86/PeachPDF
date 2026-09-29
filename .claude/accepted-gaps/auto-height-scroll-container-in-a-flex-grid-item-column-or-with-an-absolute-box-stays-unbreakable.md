@@ -36,5 +36,4 @@ resolving the overflow clip from the finished fragment for a box that continues,
 function of the box's own style. A fix for the third belongs in how an absolute box is placed when its
 containing block continues onto another page. Both are more than the change that introduced this note.
 
-Tracking issue: not yet filed. This note was recorded offline; file the issue upstream with the three cases
-above and add its number here.
+Tracking issue: #1528.
