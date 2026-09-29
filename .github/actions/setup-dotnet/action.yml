@@ -1,0 +1,38 @@
+name: Setup .NET SDKs
+description: Installs the .NET 8/10 SDKs, optionally the .NET 11 RC SDK, and restores a NuGet package cache.
+
+inputs:
+  include-net11:
+    description: Install the .NET 11 (RC) SDK too, so global.json promotes to it and net11.0 joins TargetFrameworks.
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          10.0.x
+
+    # A separate step because dotnet-quality applies to every entry in dotnet-version, and
+    # 8.0.x/10.0.x only have GA builds; net11.0 is still pre-GA (RC), which setup-dotnet
+    # classifies as "preview" quality. Drop this step (and the dotnet-quality knob) once
+    # .NET 11 ships its GA SDK. global.json's rollForward "latestMajor"/allowPrerelease
+    # automatically promotes to this SDK once it's installed - net8.0/net10.0 still build/run
+    # fine under it since those runtimes were also installed above. Without it (include-net11:
+    # false) src/Directory.Build.props simply leaves TargetFrameworks at net8.0;net10.0.
+    - name: Setup .NET 11 (RC)
+      if: inputs.include-net11 == 'true'
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 11.0.x
+        dotnet-quality: 'preview'
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('src/**/*.csproj', 'src/Directory.Build.props', 'src/Version.props') }}
+        restore-keys: nuget-${{ runner.os }}-
