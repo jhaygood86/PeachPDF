@@ -12,6 +12,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace PeachDrawing.Core
 {
@@ -74,8 +75,13 @@ namespace PeachDrawing.Core
 
     /// <summary>A gradient that varies with distance from <see cref="Center"/>/<see cref="Focus"/> out to an ellipse of
     /// radius (<see cref="RadiusX"/>, <see cref="RadiusY"/>).</summary>
-    public sealed class RadialGradientBrush(PaintPoint center, PaintPoint focus, double radiusX, double radiusY, IReadOnlyList<GradientStop> stops, GradientSpread spread) : Brush
+    public sealed class RadialGradientBrush(PaintPoint center, PaintPoint focus, double radiusX, double radiusY, IReadOnlyList<GradientStop> stops, GradientSpread spread, Matrix3x2? transform = null) : Brush
     {
+        /// <summary>An optional matrix, applied after the geometry above, that carries the gradient's ellipse into the
+        /// coordinates the brush is painted in - what lets it rotate or skew, which a pair of axis-aligned radii cannot
+        /// express. <see langword="null"/> when the geometry is already in paint coordinates.</summary>
+        public Matrix3x2? Transform { get; } = transform;
+
         /// <summary>The center of the outer ellipse the gradient's last stop reaches.</summary>
         public PaintPoint Center { get; } = center;
         /// <summary>The point the gradient's first stop starts at - equal to <see cref="Center"/> for a concentric radial gradient.</summary>

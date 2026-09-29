@@ -367,7 +367,16 @@ internal abstract class PaintSource
             // RenderContext.GetRadialGradientBrush always resolves a focus (defaulting to the centre - see its
             // own remarks) and never expresses an inner radius, so there is no "two-colour, r1/r2" shape
             // to handle here the way XRadialGradientBrush's own dual constructor does.
-            return new RadialPaint(deviceToUser, new Stops(brush.Stops), brush.Center.X, brush.Center.Y,
+            var toLocal = deviceToUser;
+            if (brush.Transform is { } t)
+            {
+                if (Affine.FromMatrix(t).Invert() is not { } inverse)
+                    return null;
+
+                toLocal = Affine.Then(deviceToUser, inverse);
+            }
+
+            return new RadialPaint(toLocal, new Stops(brush.Stops), brush.Center.X, brush.Center.Y,
                 brush.RadiusX, brush.RadiusY, brush.Focus.X, brush.Focus.Y, brush.Spread == GradientSpread.Repeat, innerRatio: 0);
         }
 

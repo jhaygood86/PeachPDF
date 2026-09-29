@@ -1799,6 +1799,7 @@ namespace PeachPDF.Svg
         {
             SvgGroupElement or SvgNestedSvgElement => true,
             SvgUseElement { Target: SvgGroupElement or SvgSymbolElement or SvgNestedSvgElement } => true,
+            SvgUseElement { Target: SvgUseElement inner } => NeedsContainerOpacityGroup(inner),
             _ => false,
         };
 
@@ -1833,9 +1834,8 @@ namespace PeachPDF.Svg
             //
             // A descendant's own `transform` IS folded into the bounds (UnionOpacityGroupBounds composes it the
             // same way SvgGeometryBounds.UnionAll does), so a child carrying a translate/scale is still sized
-            // correctly, not just approximately. Remaining approximation: a <use>-of-a-<use>-of-a-container isn't
-            // routed here (NeedsContainerOpacityGroup only unwraps one <use> level), so its target's children
-            // fall back to the per-shape multiply.
+            // correctly, not just approximately. A <use> of a <use> of a container is routed here too
+            // (NeedsContainerOpacityGroup unwraps <use> chains).
             if (GetOpacityGroupBounds(g, element, viewport) is not { } bbox || bbox.Width <= 0 || bbox.Height <= 0)
             {
                 // Truly empty / zero-area content: nothing paints, so there is nothing to double-blend -
@@ -2276,7 +2276,9 @@ namespace PeachPDF.Svg
                 case SvgPolylineElement polyline:
                 {
                     using var graphicsPath = BuildPolylinePath(g, polyline);
-                    PaintShape(g, document, polyline, graphicsPath, opacity);
+                    // The shape is closed implicitly for fill purposes only (SVG 1.1 §9.6); the stroke stays open.
+                    using var fillPath = BuildPolylineFillPath(g, polyline);
+                    PaintShape(g, document, polyline, graphicsPath, opacity, fillPath);
                     break;
                 }
 
@@ -2415,7 +2417,7 @@ namespace PeachPDF.Svg
             return (bbox.X + mask.X * bbox.Width, bbox.Y + mask.Y * bbox.Height, mask.Width * bbox.Width, mask.Height * bbox.Height);
         }
 
-        private static void PaintShape(Canvas g, SvgDocument document, SvgElement element, GraphicsPath path, double opacity)
+        private static void PaintShape(Canvas g, SvgDocument document, SvgElement element, GraphicsPath path, double opacity, GraphicsPath? fillPath = null)
         {
             // Per spec, <line> has no interior region - "fill" never applies to it, regardless of the
             // element's own/inherited fill paint (which otherwise defaults to solid black). Emitting a
@@ -2432,13 +2434,13 @@ namespace PeachPDF.Svg
                 var fillBounds = ContextBounds(g, fill);
                 if (fill.Kind == SvgPaintKind.PatternRef)
                 {
-                    PaintPatternFill(g, document, element, path, opacity * element.FillOpacity, fillBounds, fill);
+                    PaintPatternFill(g, document, element, fillPath ?? path, opacity * element.FillOpacity, fillBounds, fill);
                 }
                 else
                 {
                     var brush = ResolvePaintBrush(g, document, element, fill, opacity * element.FillOpacity, fillBounds);
                     if (brush is not null)
-                        g.DrawPath(brush, path);
+                        g.DrawPath(brush, fillPath ?? path);
                 }
             }
 
@@ -2780,6 +2782,12 @@ namespace PeachPDF.Svg
                     if (isRepeating)
                         (r, stops) = ExpandRadialSpread(owner, new PaintPoint(cx, cy), r, stops, reflect, boundsOverride);
 
+                    // A rotation/skew turns the circle into a rotated ellipse, which two axis-aligned radii cannot
+                    // state - the matrix travels with the brush instead. Translate/scale-only stays pre-applied.
+                    if (gradient.GradientTransform is { } gt && (gt.M12 != 0 || gt.M21 != 0))
+                        return g.GetRadialGradientBrush(new PaintPoint(cx, cy), r, r, stops, isRepeating, new PaintPoint(fx, fy),
+                            GradientTransformInUserSpace(owner, gradient, gt, boundsOverride));
+
                     var center = ApplyMatrix(new PaintPoint(cx, cy), gradient.GradientTransform);
                     var focal = ApplyMatrix(new PaintPoint(fx, fy), gradient.GradientTransform);
                     var (radiusX, radiusY) = ApplyMatrixToRadius(r, gradient.GradientTransform);
@@ -2993,10 +3001,23 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
+        /// The user-space matrix equivalent of a <c>gradientTransform</c>. In <c>objectBoundingBox</c> units the
+        /// transform acts inside the 0-1 box space (SVG 1.1 §13.2.2), so it is conjugated by the box matrix.
+        /// </summary>
+        private static Matrix3x2 GradientTransformInUserSpace(SvgElement owner, SvgGradient gradient, Matrix3x2 gt, Rect? boundsOverride)
+        {
+            if (gradient.GradientUnitsUserSpaceOnUse || OwnerBounds(owner, boundsOverride) is not { } bbox
+                || bbox.Width <= 0 || bbox.Height <= 0)
+                return gt;
+
+            var box = new Matrix3x2((float)bbox.Width, 0, 0, (float)bbox.Height, (float)bbox.X, (float)bbox.Y);
+            return Matrix3x2.Invert(box, out var inverse) ? inverse * gt * box : gt;
+        }
+
+        /// <summary>
         /// Transforms a radial gradient's radius as a pair of axis vectors (ignoring translation) -
-        /// valid for the translate/scale-only <c>gradientTransform</c> subset supported in v1. A
-        /// rotated matrix would turn the circle into a rotated ellipse, which
-        /// <see cref="Canvas.GetRadialGradientBrush"/> has no way to express; documented limitation.
+        /// valid for the translate/scale-only <c>gradientTransform</c> subset. A rotated or skewed
+        /// matrix travels with the brush instead (see <see cref="ResolveGradientBrush"/>).
         /// </summary>
         private static (double RadiusX, double RadiusY) ApplyMatrixToRadius(double r, Matrix3x2? matrix)
         {
@@ -3035,6 +3056,16 @@ namespace PeachPDF.Svg
             var graphicsPath = g.GetGraphicsPath();
             graphicsPath.FillMode = polyline.FillRule;
             AppendPolylineGeometry(graphicsPath, polyline);
+            return graphicsPath;
+        }
+
+        /// <summary>The polyline's geometry closed back to its first point - for fill only; the stroke keeps the open path.</summary>
+        private static GraphicsPath BuildPolylineFillPath(Canvas g, SvgPolylineElement polyline)
+        {
+            var graphicsPath = g.GetGraphicsPath();
+            graphicsPath.FillMode = polyline.FillRule;
+            AppendPolylinePoints(graphicsPath, polyline.Points);
+            graphicsPath.CloseFigure();
             return graphicsPath;
         }
 

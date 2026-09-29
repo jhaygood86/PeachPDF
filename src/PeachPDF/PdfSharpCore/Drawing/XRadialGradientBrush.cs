@@ -66,7 +66,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// omitted, matching every pre-existing caller's behavior exactly. Only honored for the
         /// circular (non-ellipse) shading path - see <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfShading"/>.
         /// </summary>
-        public XRadialGradientBrush(XPoint center, double radiusX, double radiusY, XColor[] colors, double[] positions, XPoint? focalCenter = null)
+        public XRadialGradientBrush(XPoint center, double radiusX, double radiusY, XColor[] colors, double[] positions, XPoint? focalCenter = null, XMatrix? transform = null)
             : base(colors[0], colors[colors.Length - 1])
         {
             _center1 = center;
@@ -78,10 +78,13 @@ namespace PeachPDF.PdfSharpCore.Drawing
             _colors = colors;
             _positions = positions;
             _focalCenter = focalCenter ?? center;
+            _transform = transform;
         }
 
         internal XPoint _center1, _center2;
         internal XPoint _focalCenter;
+        /// <summary>Carries the center/radii geometry into world space (rotation/skew); null when already there.</summary>
+        internal XMatrix? _transform;
         internal double _r1, _r2;
         internal double _radiusX, _radiusY;
         internal XColor[]? _colors;

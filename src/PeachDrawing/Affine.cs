@@ -19,6 +19,8 @@ internal readonly record struct Affine(double M11, double M12, double M21, doubl
 
     public double Determinant => M11 * M22 - M12 * M21;
 
+    public static Affine FromMatrix(System.Numerics.Matrix3x2 m) => new(m.M11, m.M12, m.M21, m.M22, m.M31, m.M32);
+
     public static Affine Scale(double sx, double sy) => new(sx, 0, 0, sy, 0, 0);
 
     /// <summary>Applies <paramref name="first"/> and then <paramref name="second"/> to a point.</summary>

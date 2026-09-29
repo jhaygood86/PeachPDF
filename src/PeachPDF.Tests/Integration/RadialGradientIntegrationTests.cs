@@ -465,5 +465,31 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(matrix[4], 0, 60);
             Assert.InRange(matrix[5], 0, 60);
         }
+
+        [Fact]
+        public async Task SvgRadialGradient_RotatedByGradientTransform_CarriesTheRotationInItsPatternMatrix()
+        {
+            // A 90 degree rotation of a 40 x 20 ellipse: an axis-aligned approximation could only ever
+            // write a diagonal pattern matrix, so the off-diagonal terms are what prove the rotation landed.
+            const string Html = """
+                <!DOCTYPE html><html><body style="margin: 0">
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <radialGradient id="rg" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="20"
+                                    gradientTransform="translate(50 50) rotate(90) scale(2 1) translate(-50 -50)">
+                      <stop offset="0" stop-color="#e0f7fa"/><stop offset="1" stop-color="#006064"/>
+                    </radialGradient>
+                  </defs>
+                  <rect x="0" y="0" width="100" height="100" fill="url(#rg)"/>
+                </svg></body></html>
+                """;
+
+            var matrix = Assert.Single(ShadingPatternMatrices(await GetPdfText(Html)));
+
+            Assert.Equal(0, matrix[0], 3);
+            Assert.Equal(0, matrix[3], 3);
+            Assert.Equal(15 * 2, Math.Abs(matrix[1]), 3); // 40 user units * 0.75 (100px viewBox -> 75pt)
+            Assert.Equal(15, Math.Abs(matrix[2]), 3);
+        }
     }
 }

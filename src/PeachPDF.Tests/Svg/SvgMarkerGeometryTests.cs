@@ -128,5 +128,50 @@ namespace PeachPDF.Tests.Svg
 
             Assert.Equal(90, vertices[0].AngleDegrees, 3);
         }
+
+        [Fact]
+        public void ComputeForPath_ArcTo_UsesTrueArcTangentsNotTheChord()
+        {
+            // A clockwise (screen y-down) semicircle from (0,0) to (20,0) about (10,0): it leaves heading
+            // straight "up" (-90 degrees) and arrives heading straight "down" (+90) - the chord is 0 degrees.
+            var segments = new[]
+            {
+                PathSegment.MoveTo(0, 0),
+                PathSegment.ArcTo(10, 10, 0, false, true, 20, 0),
+            };
+            var vertices = SvgMarkerGeometry.ComputeForPath(segments);
+
+            Assert.Equal(2, vertices.Count);
+            Assert.Equal(-90, vertices[0].AngleDegrees, 3);
+            Assert.Equal(90, vertices[1].AngleDegrees, 3);
+        }
+
+        [Fact]
+        public void ComputeForPath_ArcTo_CounterClockwiseSweepReversesTheTangents()
+        {
+            var segments = new[]
+            {
+                PathSegment.MoveTo(0, 0),
+                PathSegment.ArcTo(10, 10, 0, false, false, 20, 0),
+            };
+            var vertices = SvgMarkerGeometry.ComputeForPath(segments);
+
+            Assert.Equal(90, vertices[0].AngleDegrees, 3);
+            Assert.Equal(-90, vertices[1].AngleDegrees, 3);
+        }
+
+        [Fact]
+        public void ComputeForPath_ArcTo_DegenerateRadiusFallsBackToTheChord()
+        {
+            var segments = new[]
+            {
+                PathSegment.MoveTo(0, 0),
+                PathSegment.ArcTo(0, 0, 0, false, true, 20, 0),
+            };
+            var vertices = SvgMarkerGeometry.ComputeForPath(segments);
+
+            Assert.Equal(0, vertices[0].AngleDegrees, 3);
+            Assert.Equal(0, vertices[1].AngleDegrees, 3);
+        }
     }
 }
