@@ -1,6 +1,6 @@
 using PeachDrawing.Text.Shaping;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
@@ -201,16 +201,18 @@ namespace PeachPDF.Html.Core.Paint
         private static void PaintClippedBrush(Canvas g, CssBox box, Brush brush, Rect clipRect, GraphicsPath? roundedClipPath)
         {
             // TODO:a handle it correctly (tables background)
-            object? prevMode = null;
-            if (box.HtmlContainer is { AvoidGeometryAntialias: false } && roundedClipPath != null)
-                prevMode = g.SetAntiAliasSmoothingMode();
+            var smooth = box.HtmlContainer is { AvoidGeometryAntialias: false } && roundedClipPath != null;
+            if (smooth)
+                g.PushAntiAlias(true);
 
             if (roundedClipPath != null)
                 g.DrawPath(brush, roundedClipPath);
             else
                 g.DrawRectangle(brush, clipRect.X, clipRect.Y, clipRect.Width, clipRect.Height);
 
-            g.ReturnPreviousSmoothingMode(prevMode);
+            if (smooth)
+                g.PopAntiAlias();
+
             brush.Dispose();
         }
 

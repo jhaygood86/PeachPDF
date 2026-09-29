@@ -11,7 +11,8 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using System.Collections.Generic;
@@ -202,29 +203,7 @@ namespace PeachPDF.Html.Core.Utils
             seX /= ppp; seY /= ppp; swX /= ppp; swY /= ppp;
 
             var path = g.GetGraphicsPath();
-
-            // Top edge: start after NW corner, end before NE corner.
-            path.Start(rect.Left + nwX, rect.Top);
-            path.LineTo(rect.Right - neX, rect.Top);
-            if (neX > 0 || neY > 0)
-                path.ArcTo(rect.Right, rect.Top + neY, neX, neY, GraphicsPath.Corner.TopRight);
-
-            // Right edge.
-            path.LineTo(rect.Right, rect.Bottom - seY);
-            if (seX > 0 || seY > 0)
-                path.ArcTo(rect.Right - seX, rect.Bottom, seX, seY, GraphicsPath.Corner.BottomRight);
-
-            // Bottom edge.
-            path.LineTo(rect.Left + swX, rect.Bottom);
-            if (swX > 0 || swY > 0)
-                path.ArcTo(rect.Left, rect.Bottom - swY, swX, swY, GraphicsPath.Corner.BottomLeft);
-
-            // Left edge.
-            path.LineTo(rect.Left, rect.Top + nwY);
-            if (nwX > 0 || nwY > 0)
-                path.ArcTo(rect.Left + nwX, rect.Top, nwX, nwY, GraphicsPath.Corner.TopLeft);
-
-            path.CloseFigure();
+            path.AddRoundedRectangle(rect, nwX, nwY, neX, neY, seX, seY, swX, swY);
             return path;
         }
     }

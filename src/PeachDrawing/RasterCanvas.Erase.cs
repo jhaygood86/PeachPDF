@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using System;
 
 namespace PeachDrawing;
@@ -22,7 +22,7 @@ public sealed partial class RasterCanvas
         polygon.AddTransformed(flat.Contours, UserToDevice);
 
         var sink = new EraseSink(this, clip);
-        ScanlineRasterizer.Fill(polygon, path.FillMode == FillMode.EvenOdd, clip.Bounds, ref sink, _adapter.RasterAntiAliasing);
+        ScanlineRasterizer.Fill(polygon, path.FillMode == FillMode.EvenOdd, clip.Bounds, ref sink, AntiAlias);
     }
 
     /// <summary>Removes the pixels inside the layout-space rectangle <paramref name="rect"/> (see <see cref="Erase(GraphicsPath)"/>).</summary>
@@ -36,7 +36,7 @@ public sealed partial class RasterCanvas
         AddDeviceRect(polygon, ToUser(rect), UserToDevice);
 
         var sink = new EraseSink(this, clip);
-        ScanlineRasterizer.Fill(polygon, evenOdd: false, clip.Bounds, ref sink, _adapter.RasterAntiAliasing);
+        ScanlineRasterizer.Fill(polygon, evenOdd: false, clip.Bounds, ref sink, AntiAlias);
     }
 
     private readonly struct EraseSink(RasterCanvas owner, ClipState clip) : ICoverageSink

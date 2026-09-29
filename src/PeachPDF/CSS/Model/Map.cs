@@ -966,6 +966,15 @@ namespace PeachPDF.CSS
                 {Keywords.ClosestCorner, RadialGradient.SizeMode.ClosestCorner},
                 {Keywords.FarthestCorner, RadialGradient.SizeMode.FarthestCorner}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, ImageRenderingMode> ImageRenderingModes =
+            new Dictionary<string, ImageRenderingMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, ImageRenderingMode.Auto},
+                {Keywords.Smooth, ImageRenderingMode.Smooth},
+                {Keywords.HighQuality, ImageRenderingMode.HighQuality},
+                {Keywords.CrispEdges, ImageRenderingMode.CrispEdges},
+                {Keywords.Pixelated, ImageRenderingMode.Pixelated}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, ObjectFitting> ObjectFittings =
             new Dictionary<string, ObjectFitting>(StringComparer.OrdinalIgnoreCase)
             {

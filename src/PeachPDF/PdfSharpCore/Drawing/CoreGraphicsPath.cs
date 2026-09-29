@@ -26,6 +26,8 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
 // DEALINGS IN THE SOFTWARE.
 #endregion
+using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -333,7 +335,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
             foreach (var contour in EnumerateFlattenedContours())
             {
-                var clipped = SutherlandHodgman.ClipToRect(contour, left, top, right, bottom);
+                var clipped = PolygonClipper.ClipToRect(contour.ConvertAll(p => new PaintPoint(p.X, p.Y)), new Rect(left, top, right - left, bottom - top));
 
                 // Fewer than 3 points can't enclose any area at all. That alone isn't sufficient,
                 // though: clipping against a degenerate (zero-width or zero-height) rectangle - or a
@@ -358,7 +360,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// from a degenerate sliver or point"). <see cref="ClipToRect(double,double,double,double)"/>'s
         /// own remarks explain why a point count above the 3-vertex minimum isn't sufficient on its own.
         /// </summary>
-        private static bool IsNegligibleArea(List<XPoint> polygon)
+        private static bool IsNegligibleArea(List<PaintPoint> polygon)
         {
             double area = 0;
             var n = polygon.Count;

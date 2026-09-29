@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
 

@@ -476,5 +476,9 @@
         public const string Ellipsis = "ellipsis";
         public const string FromFont = "from-font";
         public const string Under = "under";
+        public const string Smooth = "smooth";
+        public const string HighQuality = "high-quality";
+        public const string CrispEdges = "crisp-edges";
+        public const string Pixelated = "pixelated";
     }
 }

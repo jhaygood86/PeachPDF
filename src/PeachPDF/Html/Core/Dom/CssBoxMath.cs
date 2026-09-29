@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.MathML;
 using System.Threading.Tasks;
 

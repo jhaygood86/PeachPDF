@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
@@ -408,11 +408,14 @@ namespace PeachPDF.Html.Core.Paint
         /// </remarks>
         private void PaintWithOpacity(Canvas g, BoxFragment fragment, FilterEffectResolver.Resolved filter)
         {
-            var clip = g.GetClip();
-            var tileRect = new Rect(0, 0, clip.Right, clip.Bottom);
+            var opacity = fragment.Box.ActualOpacity * filter.OpacityMultiplier;
+            var options = new LayerOptions(
+                opacity,
+                ToRBlendMode(fragment.Box.ActualMixBlendMode),
+                filter.HasColorMatrix ? filter.ColorMatrix : null);
 
-            var tile = g.CreateTile(tileRect.Width, tileRect.Height);
-            if (tile is not { } t)
+            using var layer = g.BeginLayer(options);
+            if (layer is null)
             {
                 // No page/document context to own a Form XObject in (e.g. a measure-only pass) -
                 // opacity/blend-mode/filter have no visual effect there anyway, so just paint directly.
@@ -420,28 +423,7 @@ namespace PeachPDF.Html.Core.Paint
                 return;
             }
 
-            t.Graphics.PushClip(clip);
-            PaintTagged(t.Graphics, fragment);
-            t.Graphics.Dispose();
-
-            var image = t.Image;
-
-            // The color matrix is a separate ExtGState (/TR) from opacity/blend-mode's (/ca, /BM), so a
-            // filter list needing both goes through a second tile - correctness first, per this repo's own
-            // "don't over-optimize call count in this pass" note; most boxes need at most one of the two.
-            if (filter.HasColorMatrix)
-            {
-                var matrixTile = g.CreateTile(tileRect.Width, tileRect.Height);
-                if (matrixTile is { } mt)
-                {
-                    mt.Graphics.DrawImageWithColorMatrix(image, tileRect, filter.ColorMatrix);
-                    mt.Graphics.Dispose();
-                    image = mt.Image;
-                }
-            }
-
-            var opacity = fragment.Box.ActualOpacity * filter.OpacityMultiplier;
-            g.DrawImageWithOpacity(image, tileRect, opacity, ToRBlendMode(fragment.Box.ActualMixBlendMode));
+            PaintTagged(layer.Canvas, fragment);
         }
 
         /// <summary>

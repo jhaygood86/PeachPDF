@@ -1,7 +1,7 @@
 ﻿using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Network;
 using System;
 using System.Collections.Generic;

@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachDrawing;
 using PeachDrawing.Filters;
@@ -32,7 +32,7 @@ namespace PeachPDF.Html.Core.Paint
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return true;
 
-            using var scope = g.BeginRasterSurface(bounds) as RasterSurfaceScope;
+            using var scope = g.BeginRasterSurface(bounds);
             if (scope is null)
                 return false;
 
@@ -56,11 +56,11 @@ namespace PeachPDF.Html.Core.Paint
             if (box.IsRounded)
             {
                 using var boxPath = BuildLayerRoundRect(rg, borderBox, ShadowCornerRadii(box, borderBox, spread: 0), 0);
-                rg.Erase(boxPath);
+                ((PeachDrawing.RasterCanvas)rg).Erase(boxPath);
             }
             else
             {
-                rg.EraseRectangle(borderBox);
+                ((PeachDrawing.RasterCanvas)rg).EraseRectangle(borderBox);
             }
 
             g.DrawRaster(scope.Surface);
@@ -86,11 +86,12 @@ namespace PeachPDF.Html.Core.Paint
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return true;
 
-            using var scope = g.BeginRasterSurface(bounds) as RasterSurfaceScope;
-            if (scope is null)
+            // The blur radius is twice the standard deviation (CSS Backgrounds 3 §7.2).
+            using var layer = g.BeginLayer(new LayerOptions(Bounds: bounds, Effects: [new BlurEffect(blur / 2)]));
+            if (layer is null)
                 return false;
 
-            var rg = scope.Graphics;
+            var rg = layer.Canvas;
 
             // Shadow-coloured region: a rectangle larger than the bitmap, with the lit hole punched out (even-odd).
             var everything = Inflate(bounds, margin + 1);
@@ -124,10 +125,6 @@ namespace PeachPDF.Html.Core.Paint
             using (var brush = rg.GetSolidBrush(color))
                 rg.DrawPath(brush, ring);
 
-            var sigma = blur / 2;
-            GaussianBlur.Apply(scope.Surface, sigma * scope.Surface.PixelsPerUnitX, sigma * scope.Surface.PixelsPerUnitY);
-
-            g.DrawRaster(scope.Surface);
             return true;
         }
     }

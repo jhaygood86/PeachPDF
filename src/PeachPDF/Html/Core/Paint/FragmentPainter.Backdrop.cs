@@ -1,5 +1,5 @@
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
@@ -73,7 +73,7 @@ namespace PeachPDF.Html.Core.Paint
                     applied.Add(function);
             }
 
-            using var scope = g.BeginRasterSurface(region) as RasterSurfaceScope;
+            using var scope = g.BeginRasterSurface(region);
             if (scope is null)
                 return;
 

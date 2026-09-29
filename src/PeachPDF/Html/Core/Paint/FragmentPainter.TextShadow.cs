@@ -1,10 +1,8 @@
 using PeachDrawing.Text.Shaping;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
-using PeachDrawing;
-using PeachDrawing.Filters;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -86,16 +84,13 @@ namespace PeachPDF.Html.Core.Paint
                 if (bounds.Width <= 0 || bounds.Height <= 0)
                     continue;
 
-                using var scope = g.BeginRasterSurface(bounds) as RasterSurfaceScope;
-                if (scope is null)
+                // The blur radius is twice the standard deviation (CSS Text Decoration 3, as for box-shadow).
+                using var shadow = g.BeginLayer(new LayerOptions(Bounds: bounds, Effects: [new BlurEffect(blur / 2)]));
+                if (shadow is null)
                     continue;
 
-                scope.Graphics.DrawString(text, font, color, shadowPoint, size, styleSource.ActualLetterSpacing,
+                shadow.Canvas.DrawString(text, font, color, shadowPoint, size, styleSource.ActualLetterSpacing,
                     styleSource.ActualFontPalette, features, logicalText);
-
-                var sigma = blur / 2;
-                GaussianBlur.Apply(scope.Surface, sigma * scope.Surface.PixelsPerUnitX, sigma * scope.Surface.PixelsPerUnitY);
-                g.DrawRaster(scope.Surface);
             }
         }
     }

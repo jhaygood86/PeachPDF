@@ -7,7 +7,7 @@ namespace PeachDrawing.Tests.PublicApi
     /// Pins the public surface of <c>PeachDrawing</c> to <c>src/PeachDrawing/PublicApi.txt</c>, so a type
     /// or member becomes public only by a reviewed edit to that file. Run the tests with
     /// <c>UPDATE_PUBLIC_API=1</c> to rewrite it after an intended change. Adapted from
-    /// <c>PeachDrawing.Abstractions.Tests</c>'s own <c>PublicApi/PublicSurfaceTests.cs</c> - identical
+    /// <c>PeachDrawing.Core.Tests</c>'s own <c>PublicApi/PublicSurfaceTests.cs</c> - identical
     /// reflection-based snapshot logic, but see <see cref="TheGrantedInternalsAreExactlyTheDocumentedSet"/>
     /// for how the InternalsVisibleTo assertion differs.
     /// </summary>
@@ -34,13 +34,7 @@ namespace PeachDrawing.Tests.PublicApi
         }
 
         /// <summary>
-        /// This project grants its internals to PeachDrawing.Tests (its own tests) plus PeachPDF and
-        /// PeachPDF.Tests - see the InternalsVisibleTo comment in <c>PeachDrawing.csproj</c>: PeachPDF's
-        /// own <c>GraphicsAdapter</c> and <c>RasterCanvas</c> are the two real <c>Canvas</c>
-        /// implementations the shared <c>PeachDrawing.Abstractions</c> internal coordination surface was
-        /// always meant for. This test pins the granted set to exactly those three, so a future accidental
-        /// widening (granting to some unrelated project) still fails a test instead of silently expanding
-        /// the surface PeachPDF-adjacent code can reach.
+        /// Only this project's own tests are granted its internals; PeachPDF and PeachPDF.Tests use the public API alone.
         /// </summary>
         [Fact]
         public void TheGrantedInternalsAreExactlyTheDocumentedSet()
@@ -49,7 +43,7 @@ namespace PeachDrawing.Tests.PublicApi
                 .Select(a => a.AssemblyName)
                 .ToList();
 
-            Assert.Equivalent(new[] { "PeachDrawing.Tests", "PeachPDF", "PeachPDF.Tests" }, granted);
+            Assert.Equivalent(new[] { "PeachDrawing.Tests" }, granted);
         }
 
         private static string Describe(Assembly assembly)

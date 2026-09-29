@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Network;
 using System;
 using System.Collections.Frozen;

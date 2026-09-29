@@ -34,7 +34,7 @@
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Internal;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;

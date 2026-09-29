@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachDrawing;
 using System.Numerics;
 
@@ -383,7 +383,7 @@ namespace PeachPDF.Tests.Raster
             g.Dispose();
 
             Assert.True(g.IsOffscreenTile);
-            Assert.Null(g.FormCacheOwner);
+            Assert.Null(g.TileCacheOwner);
         }
     }
 }

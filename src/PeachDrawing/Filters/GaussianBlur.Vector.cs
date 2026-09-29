@@ -17,7 +17,7 @@ namespace PeachDrawing.Filters;
 /// one, far more than the 2^-16 spacing of floats near 255, so the rounded quotient truncates to the same integer the scalar form's
 /// integer reciprocal gives. No fused operations, no reciprocal estimates: the bytes are the scalar bytes.
 /// </remarks>
-internal static partial class GaussianBlur
+public static partial class GaussianBlur
 {
     internal static void BoxVector(ReadOnlySpan<byte> src, Span<byte> dst, int width, int height, int size, int before, bool horizontal)
     {

@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using System.Numerics;
 
 namespace PeachPDF.Svg
@@ -15,7 +15,7 @@ namespace PeachPDF.Svg
 
     /// <summary>
     /// What an SVG whose filters read <c>BackgroundImage</c> needs while it is painted, carried on the <see cref="Canvas"/> it paints
-    /// to (<see cref="Canvas.SvgBackdrop"/>). The backdrop of a filtered element is everything painted before it inside the current
+    /// to (see <see cref="SvgBackdropSlot"/>). The backdrop of a filtered element is everything painted before it inside the current
     /// isolation group: the page behind an inline SVG, then the SVG's own earlier content. Neither is kept anywhere while painting, so
     /// both are repainted on demand into a bitmap - the SVG's by walking its scene graph again from the root and stopping at the element.
     /// </summary>
@@ -63,5 +63,24 @@ namespace PeachPDF.Svg
             Stopped = true;
             return true;
         }
+    }
+
+    /// <summary>
+    /// The <see cref="SvgBackdropContext"/> in effect on a <see cref="Canvas"/> while an SVG that reads <c>BackgroundImage</c> is painted
+    /// to it. Kept beside the canvas rather than on it: only <see cref="SvgRenderer"/> sets and reads it, so the drawing abstraction has
+    /// no reason to carry it.
+    /// </summary>
+    internal static class SvgBackdropSlot
+    {
+        private sealed class Holder
+        {
+            public SvgBackdropContext? Value;
+        }
+
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Canvas, Holder> Slots = new();
+
+        public static SvgBackdropContext? Get(Canvas canvas) => Slots.TryGetValue(canvas, out var holder) ? holder.Value : null;
+
+        public static void Set(Canvas canvas, SvgBackdropContext? value) => Slots.GetOrCreateValue(canvas).Value = value;
     }
 }

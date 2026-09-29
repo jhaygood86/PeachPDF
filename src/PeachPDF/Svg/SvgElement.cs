@@ -12,7 +12,7 @@
 
 using PeachDrawing.Text.Shaping;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;

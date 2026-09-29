@@ -1,3 +1,69 @@
+PeachDrawing.ColorMatrixFilter : static class
+  method static Void Apply(ReadOnlySpan<Byte> source, Span<Byte> destination, in ColorMatrix matrix)
+  method static Void ApplyInPlace(RasterSurface surface, IReadOnlyList<ColorMatrix> matrices)
+  method static Void ApplyInPlace(RasterSurface surface, in ColorMatrix matrix)
+PeachDrawing.DepthBuffer : sealed class
+  ctor(Int32 width, Int32 height)
+  method Span<Single> Row(Int32 y)
+  method virtual Void Dispose()
+  property Int32 Height { get; }
+  property Int32 Width { get; }
+PeachDrawing.DepthPlane : struct
+  ctor(Double za, Double zb, Double zc, Double wa, Double wb, Double wc)
+  method Double At(Double u, Double v)
+  method Double Numerator(Double u, Double v, Double w)
+  method static DepthPlane FromMatrix4(in Matrix4x4 m)
+PeachDrawing.Filters.DropShadow : static class
+  method static Void Apply(RasterSurface surface, Int32 dx, Int32 dy, Double sigmaX, Double sigmaY, Byte r, Byte g, Byte b, Byte a)
+PeachDrawing.Filters.FilterOps : static class
+  method static PaintColor ConvertColor(PaintColor color, Boolean toLinear)
+  method static RasterSurface Blank(RasterSurface like)
+  method static RasterSurface Clone(RasterSurface source)
+  method static RasterSurface MirrorPad(RasterSurface source, Int32 padX, Int32 padY)
+  method static Void Arithmetic(RasterSurface a, RasterSurface b, RasterSurface result, Double k1, Double k2, Double k3, Double k4)
+  method static Void Blend(PaintBlendMode mode, RasterSurface top, RasterSurface bottom, RasterSurface result)
+  method static Void ClipTo(RasterSurface surface, IntRect keep)
+  method static Void ComponentTransfer(RasterSurface source, RasterSurface destination, Byte[] r, Byte[] g, Byte[] b, Byte[] a)
+  method static Void ConvertColorSpace(RasterSurface surface, Boolean toLinear)
+  method static Void CopyCentre(RasterSurface padded, RasterSurface destination, Int32 padX, Int32 padY)
+  method static Void Displace(RasterSurface source, RasterSurface map, RasterSurface destination, Double scaleX, Double scaleY, Int32 xChannel, Int32 yChannel)
+  method static Void Fill(RasterSurface surface, PaintColor color, Double opacity)
+  method static Void Morphology(RasterSurface source, RasterSurface destination, Int32 radiusX, Int32 radiusY, Boolean dilate)
+  method static Void Offset(RasterSurface source, RasterSurface destination, Int32 dx, Int32 dy)
+  method static Void OverInPlace(RasterSurface destination, RasterSurface top)
+  method static Void PorterDuff(String op, RasterSurface a, RasterSurface b, RasterSurface result)
+  method static Void Tile(RasterSurface source, RasterSurface destination, IntRect tile)
+  method static Void ZeroColor(RasterSurface surface)
+PeachDrawing.Filters.GaussianBlur : static class
+  method static Void Apply(RasterSurface surface, Double sigmaX, Double sigmaY)
+PeachDrawing.Filters.Turbulence : sealed class
+  ctor(Int64 seed)
+  method Double Sample(Int32 channel, Double x, Double y, Double baseFrequencyX, Double baseFrequencyY, Int32 octaves, Boolean fractalSum, Boolean stitching, Double tileX, Double tileY, Double tileWidth, Double tileHeight)
+  method Void Render(RasterSurface surface, Double pixelsPerUserX, Double pixelsPerUserY, Double baseFrequencyX, Double baseFrequencyY, Int32 octaves, Boolean fractalSum, Boolean stitching, Double tileX, Double tileY, Double tileWidth, Double tileHeight)
+PeachDrawing.Homography : struct
+  ctor(Double m11, Double m12, Double m13, Double m21, Double m22, Double m23, Double m31, Double m32, Double m33)
+  method Boolean TryProjectRectangleBounds(Double left, Double top, Double right, Double bottom, out Double minX, out Double minY, out Double maxX, out Double maxY, Double epsilon = 0.0001)
+  method Homography Negated()
+  method Homography? Invert()
+  method List<ValueTuple<Double, Double>> ProjectRectangle(Double left, Double top, Double right, Double bottom, Double epsilon = 0.0001)
+  method ValueTuple<Double, Double, Double> ApplyHomogeneous(Double x, Double y)
+  method ValueTuple<Double, Double>? Apply(Double x, Double y)
+  method static Homography FromMatrix4(in Matrix4x4 m)
+  method static Homography Then(in Homography first, in Homography second)
+  method static Homography Translation(Double dx, Double dy)
+  property Boolean IsAffine { get; }
+  property Double M11 { get; }
+  property Double M12 { get; }
+  property Double M13 { get; }
+  property Double M21 { get; }
+  property Double M22 { get; }
+  property Double M23 { get; }
+  property Double M31 { get; }
+  property Double M32 { get; }
+  property Double M33 { get; }
+  property static Homography Identity { get; }
+PeachDrawing.PathStroker : static class
+  method static Void Stroke(GraphicsPath path, Pen pen, GraphicsPath destination, Double tolerance = 0.1)
 PeachDrawing.RasterCanvas : sealed class
   ctor(RenderContext adapter, RasterSurface surface, Double pixelsPerPoint)
   method PixelBuffer ToPixelBuffer()
@@ -7,8 +73,10 @@ PeachDrawing.RasterCanvas : sealed class
   method Void Save(Stream stream, String formatName, EncoderOptions options)
   method virtual GraphicsPath GetGraphicsPath()
   method virtual GraphicsPath GetTextOutline(String str, Font font, PaintPoint baselineOrigin, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
   method virtual Int32 CountShapedGlyphs(String str, Font font, ShapeSettings? features = null)
   method virtual Object SetAntiAliasSmoothingMode()
+  method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
   method virtual Size MeasureString(String str, Font font, ShapeSettings? features = null)
   method virtual ValueTuple<Canvas, Image>? CreateTile(Double width, Double height)
   method virtual Void BeginArtifact()
@@ -17,7 +85,9 @@ PeachDrawing.RasterCanvas : sealed class
   method virtual Void Dispose()
   method virtual Void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color)
   method virtual Void DrawImage(Image image, Rect destRect)
+  method virtual Void DrawImage(Image image, Rect destRect, ImageSampling sampling)
   method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect)
+  method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect, ImageSampling sampling)
   method virtual Void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, Boolean invert = False)
   method virtual Void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode)
   method virtual Void DrawImageMasked(Image image, Image maskImage, Rect destRect)
@@ -27,15 +97,18 @@ PeachDrawing.RasterCanvas : sealed class
   method virtual Void DrawPath(Brush brush, GraphicsPath path)
   method virtual Void DrawPath(Pen pen, GraphicsPath path)
   method virtual Void DrawPolygon(Brush brush, PaintPoint[] points)
+  method virtual Void DrawRaster(RasterSurface surface)
   method virtual Void DrawRectangle(Brush brush, Double x, Double y, Double width, Double height)
   method virtual Void DrawRectangle(Pen pen, Double x, Double y, Double width, Double height)
   method virtual Void DrawString(String str, Font font, PaintColor color, PaintPoint point, Size size, Double letterSpacing = 0, FontPalette fontPalette = null, ShapeSettings? features = null)
   method virtual Void EndMarkedContent()
   method virtual Void EndVariableText()
   method virtual Void MeasureString(String str, Font font, Double maxWidth, out Int32 charFit, out Double charFitWidth)
+  method virtual Void PopAntiAlias()
   method virtual Void PopBlendMode()
   method virtual Void PopClip()
   method virtual Void PopTransform()
+  method virtual Void PushAntiAlias(Boolean enabled)
   method virtual Void PushBlendMode(PaintBlendMode mode)
   method virtual Void PushClip(GraphicsPath path)
   method virtual Void PushClip(Rect rect)
@@ -43,24 +116,29 @@ PeachDrawing.RasterCanvas : sealed class
   method virtual Void PushTransform(Matrix3x2 matrix)
   method virtual Void ReturnPreviousSmoothingMode(Object prevMode)
   property Boolean IsOffscreenTile { get; }
+  property Boolean PrefersRasterGroups { get; }
   property Double PixelsPerPoint { get; }
+  property Matrix3x2 CurrentTransform { get; }
   property RasterSurface Surface { get; }
+PeachDrawing.RasterLayerEffects : static class
+  method static ValueTuple<Double, Double> GetInkMargin(IReadOnlyList<LayerEffect> effects)
+  method static Void Apply(RasterSurface surface, IReadOnlyList<LayerEffect> effects)
 PeachDrawing.RasterRenderContext : sealed class
   ctor()
   method RasterCanvas CreateCanvas(Int32 widthPx, Int32 heightPx, Double dpi = 96)
   method Task AddFont(Stream stream, String fontFamilyName)
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
-PeachDrawing.RasterSurface : sealed class
-  ctor(Int32 width, Int32 height, Int32 gridX, Int32 gridY, Double pixelsPerUnitX, Double pixelsPerUnitY)
-  method Span<Byte> Row(Int32 y)
-  method Void Clear()
-  method virtual Void Dispose()
-  property Double PixelsPerUnitX { get; }
-  property Double PixelsPerUnitY { get; }
-  property Int32 GridX { get; }
-  property Int32 GridY { get; }
-  property Int32 Height { get; }
-  property Int32 Stride { get; }
-  property Int32 Width { get; }
-  property Rect LayoutRect { get; }
-  property Span<Byte> Pixels { get; }
+PeachDrawing.RasterSurfaceEncoding : static class
+  method static Boolean IsOpaque(RasterSurface surface)
+  method static Byte[] EncodePng(RasterSurface surface, Boolean opaque)
+  method static Byte[] ToCmykPixels(RasterSurface surface, Boolean richBlack)
+  method static Task SaveAsync(RasterSurface surface, Stream stream, String formatName, EncoderOptions options, CancellationToken cancellationToken = null)
+  method static Void Save(RasterSurface surface, Stream stream, String formatName, EncoderOptions options)
+PeachDrawing.RasterSurfaceFactory : static class
+  field const Int32 MaxDimension
+  method static RasterRegion Create(RenderContext adapter, Double pixelsPerPoint, Rect layoutBounds, Double dpi, Int64 maxPixels, ValueTuple<Double, Double> transformScale = null, Matrix3x2? initialTransform = null)
+PeachDrawing.TextOutlineBuilder : static class
+  method static GraphicsPath Build(GraphicsPath path, Font realFont, Double pixelsPerPoint, String str, PaintPoint baselineOrigin, Double letterSpacing, ShapeSettings features)
+PeachDrawing.Warp : static class
+  method static Void Apply(RasterSurface source, RasterSurface destination, in Homography sourceToDestination)
+  method static Void Composite(RasterSurface source, RasterSurface destination, in Homography sourceToDestination, in DepthPlane plane, DepthBuffer depth)

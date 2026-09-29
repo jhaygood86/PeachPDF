@@ -46,7 +46,7 @@ jobs:
   #            ping and fail the job)
   #   engine - PeachDrawing.Text.Tests. Font/text engine code is OS-neutral, so Windows and macOS
   #            run net10.0 only and Ubuntu runs every TFM.
-  #   small  - the CLI, Abstractions, raster and source-generator test projects (each small, no browser)
+  #   small  - the CLI, Core, raster and source-generator test projects (each small, no browser)
   test:
     needs: changes
     if: needs.changes.outputs.src == 'true'
@@ -144,7 +144,7 @@ jobs:
     - name: Build small test projects
       if: matrix.suite == 'small'
       run: |
-        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Abstractions.Tests', 'PeachDrawing.Tests', 'PeachPDF.SourceGenerators.Tests') {
+        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Core.Tests', 'PeachDrawing.Tests', 'PeachPDF.SourceGenerators.Tests') {
           dotnet build "src/$p/$p.csproj" --configuration Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
@@ -153,9 +153,9 @@ jobs:
       if: matrix.suite == 'small'
       run: dotnet test src/PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=cli-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
-    - name: Test abstraction (PeachDrawing.Abstractions)
+    - name: Test abstraction (PeachDrawing.Core)
       if: matrix.suite == 'small'
-      run: dotnet test src/PeachDrawing.Abstractions.Tests/PeachDrawing.Abstractions.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=abstractions-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test src/PeachDrawing.Core.Tests/PeachDrawing.Core.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=abstractions-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
     - name: Test raster backend (PeachDrawing)
       if: matrix.suite == 'small'

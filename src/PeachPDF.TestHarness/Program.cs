@@ -1,5 +1,5 @@
 ﻿using PeachDrawing.Text.Outlines;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF;
 using PeachPDF.Layout;
 using PeachPDF.PdfSharpCore;
@@ -9736,6 +9736,46 @@ await SaveShowcaseAsync("object_fit", "Images & Replaced Content", "object-fit &
     "replaced <img>: the same 2:1 image sized/cropped/positioned inside a fixed square box, with corner " +
     "markers making each fit and crop obvious.",
     objectFitHtml, pdfConfig);
+
+// ── image-rendering: how a raster image is resampled ────────────────────────────────────
+var pixelArt = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAUUlEQVR4nGP8//8/Awj8PisGYUABq/ErRhDNhE0SWYwJxlAJ4oRLwtggOcZfZ0QxdCMDsBXIutFNgZuArujOuu8QBSBfYHMkzCdgK2BewuZNAH4iJnECnYKiAAAAAElFTkSuQmCC";
+static string RenderingCell(string img, string mode, string note) =>
+    "<div class=\"cell\">" +
+    $"<div class=\"frame\"><img src=\"{img}\" style=\"width:128px;height:128px;image-rendering:{mode}\"></div>" +
+    $"<div class=\"lbl\">image-rendering: {mode}</div><div class=\"sub\">{note}</div></div>";
+var imageRenderingHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; } h3 { font-size: 14px; margin: 20px 0 10px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 4px; }" +
+    ".row { display: flex; flex-wrap: wrap; gap: 14px; }" +
+    ".cell { font-size: 11px; color: #555; width: 128px; }" +
+    ".frame { width: 128px; height: 128px; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #dbeafe; }" +
+    ".lbl { margin-top: 6px; font-family: monospace; } .sub { margin-top: 2px; }" +
+    ".inherit { image-rendering: pixelated; } .tile { width: 128px; height: 128px; border: 1px solid #cbd5e1; border-radius: 6px; background-size: 32px 32px; }" +
+    "</style></head><body>" +
+    "<h2>image-rendering</h2>" +
+    "<p class=\"note\">The same 8&times;8 pixel-art image enlarged sixteen times. The keyword picks how the pixels in between are computed.</p>" +
+    "<h3>On an &lt;img&gt;</h3>" +
+    "<div class=\"row\">" +
+    RenderingCell(pixelArt, "auto", "the viewer smooths") +
+    RenderingCell(pixelArt, "smooth", "bilinear blend") +
+    RenderingCell(pixelArt, "high-quality", "sharper curve") +
+    RenderingCell(pixelArt, "crisp-edges", "hard-edged pixels") +
+    RenderingCell(pixelArt, "pixelated", "hard-edged pixels") +
+    "</div>" +
+    "<h3>Inherited, and on a repeating background</h3>" +
+    "<div class=\"row inherit\">" +
+    $"<div class=\"cell\"><div class=\"frame\"><img src=\"{pixelArt}\" style=\"width:128px;height:128px\"></div><div class=\"lbl\">inherited pixelated</div></div>" +
+    $"<div class=\"cell\"><div class=\"tile\" style=\"background-image:url('{pixelArt}')\"></div><div class=\"lbl\">background, repeat</div></div>" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("image_rendering", "Images & Replaced Content", "image-rendering",
+    "The CSS image-rendering property (auto, smooth, high-quality, crisp-edges, pixelated) on a small pixel-art " +
+    "image enlarged sixteen times: blended pixels versus hard-edged ones, inherited down the tree and applied " +
+    "to a repeating background as well as an img.",
+    imageRenderingHtml, pdfConfig);
 
 // ── CMYK JPEG images: preserved, never converted to RGB ────────────────────────────────
 // A real Adobe-authored CMYK JPEG (Adobe APP14 transform=0, inverted-CMYK convention) - copied

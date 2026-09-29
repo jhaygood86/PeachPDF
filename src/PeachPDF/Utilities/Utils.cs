@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 
 namespace PeachPDF.Utilities
@@ -50,15 +50,15 @@ namespace PeachPDF.Utilities
         /// <summary>
         /// Convert from WinForms size to core size.
         /// </summary>
-        public static PeachDrawing.Abstractions.Size Convert(XSize s, double pixelsPerPoint)
+        public static PeachDrawing.Core.Size Convert(XSize s, double pixelsPerPoint)
         {
-            return new PeachDrawing.Abstractions.Size(s.Width * pixelsPerPoint, s.Height * pixelsPerPoint);
+            return new PeachDrawing.Core.Size(s.Width * pixelsPerPoint, s.Height * pixelsPerPoint);
         }
 
         /// <summary>
         /// Convert from core size to WinForms size.
         /// </summary>
-        public static XSize Convert(PeachDrawing.Abstractions.Size s, double pixelsPerPoint)
+        public static XSize Convert(PeachDrawing.Core.Size s, double pixelsPerPoint)
         {
             return new XSize(s.Width / pixelsPerPoint, s.Height / pixelsPerPoint);
         }

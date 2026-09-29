@@ -1,6 +1,6 @@
 ﻿using PeachDrawing.Text;
 using PeachDrawing.Text.Outlines;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.Svg;
@@ -36,7 +36,7 @@ namespace PeachPDF.Adapters
         {
             _host = host;
             _adapter = adapter;
-            _documents = Documents.GetOrCreateValue(host.FormCacheOwner ?? adapter);
+            _documents = Documents.GetOrCreateValue(host.TileCacheOwner ?? adapter);
         }
 
         public bool TryPaint(Typeface typeface, ushort glyph, SvgGlyph svg, double fontSize, double originX, double baselineY,

@@ -1,6 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachDrawing;
 using PeachDrawing.Filters;
 using PeachPDF.Tests.TestSupport;

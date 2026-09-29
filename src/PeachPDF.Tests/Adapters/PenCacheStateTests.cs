@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Adapters

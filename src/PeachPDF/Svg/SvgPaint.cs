@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 
 namespace PeachPDF.Svg
 {

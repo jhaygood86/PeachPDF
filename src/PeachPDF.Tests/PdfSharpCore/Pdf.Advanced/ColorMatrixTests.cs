@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using System.Numerics;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf.Advanced

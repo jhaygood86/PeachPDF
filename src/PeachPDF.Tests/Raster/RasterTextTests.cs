@@ -1,6 +1,6 @@
 ﻿using PeachDrawing.Text.Shaping;
 using PeachPDF.Adapters;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
@@ -220,7 +220,7 @@ namespace PeachPDF.Tests.Raster
 namespace PeachPDF.PdfSharpCore.Drawing
 {
     /// <summary>Test-only: measures with the same routine <c>GraphicsAdapter</c> uses (an <c>XGraphics</c> measure context).</summary>
-    internal sealed class XGraphicsMeasureProbe(PeachDrawing.Abstractions.Font font)
+    internal sealed class XGraphicsMeasureProbe(PeachDrawing.Core.Font font)
     {
         public double Width(string text)
         {

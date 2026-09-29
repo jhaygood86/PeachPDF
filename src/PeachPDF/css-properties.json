@@ -1748,6 +1748,24 @@
       }
     },
     {
+      "name": "image-rendering",
+      "comment": "CSS Images 3 5.3. Inherited. Chooses how a raster image is resampled when it is drawn at a size other than its own: auto and smooth filter, high-quality filters with a sharper curve, crisp-edges and pixelated keep hard pixel edges.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "ImageRenderingMode",
+        "keywordMap": "Map.ImageRenderingModes",
+        "fallback": "ImageRenderingMode.Auto"
+      },
+      "html": {
+        "propertyPath": "ImageRendering",
+        "csharpDataType": "CssProperty<ImageRenderingMode>",
+        "area": "BackgroundArea",
+        "getterExpression": "{box}.ImageRendering.ToString()"
+      }
+    },
+    {
       "name": "object-position",
       "comment": "Unlike background-position, object-position is a single <position> (no comma list, no FromList()), so cssDataType 'cssom-grammar' calls the already-public Converters.PointConverter.Convert directly - the same converter ObjectPositionProperty's own real grammar uses - instead of the full cssom round trip.",
       "inherited": false,

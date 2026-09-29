@@ -124,7 +124,7 @@ div { width: 100pt; height: 100pt; border-radius: 60pt; }
 </style></head><body><div></div></body></html>";
 
             var divBox = await FindDivBoxFromHtml(html);
-            var radii = divBox.ComputeRadii(new PeachDrawing.Abstractions.Rect(0, 0, 100, 100));
+            var radii = divBox.ComputeRadii(new PeachDrawing.Core.Rect(0, 0, 100, 100));
 
             // After reduction TLX + TRX must equal 100 (the width), so each ≈ 50.
             Assert.Equal(100.0, radii.TLX + radii.TRX, 2);
@@ -148,7 +148,7 @@ div { width: 200pt; height: 20pt; border-radius: 300pt; }
 </style></head><body><div></div></body></html>";
 
             var divBox = await FindDivBoxFromHtml(html);
-            var radii = divBox.ComputeRadii(new PeachDrawing.Abstractions.Rect(0, 0, 200, 20));
+            var radii = divBox.ComputeRadii(new PeachDrawing.Core.Rect(0, 0, 200, 20));
 
             Assert.Equal(10.0, radii.TLX, 2);
             Assert.Equal(10.0, radii.TLY, 2);
@@ -163,7 +163,7 @@ div { width: 200pt; height: 200pt; border-radius: 30pt; }
 </style></head><body><div></div></body></html>";
 
             var divBox = await FindDivBoxFromHtml(html);
-            var radii = divBox.ComputeRadii(new PeachDrawing.Abstractions.Rect(0, 0, 200, 200));
+            var radii = divBox.ComputeRadii(new PeachDrawing.Core.Rect(0, 0, 200, 200));
 
             Assert.Equal(30.0, radii.TLX, 2);
             Assert.Equal(30.0, radii.TLY, 2);
@@ -182,8 +182,8 @@ div { width: 200pt; height: 200pt; border: 6pt solid black; border-radius: 14pt;
 </style></head><body><div></div></body></html>";
 
             var divBox = await FindDivBoxFromHtml(html);
-            var borderBoxRect = new PeachDrawing.Abstractions.Rect(0, 0, 200, 200);
-            var paddingRect = new PeachDrawing.Abstractions.Rect(6, 6, 188, 188);
+            var borderBoxRect = new PeachDrawing.Core.Rect(0, 0, 200, 200);
+            var paddingRect = new PeachDrawing.Core.Rect(6, 6, 188, 188);
 
             var radii = divBox.ComputeInnerRadii(borderBoxRect, paddingRect, 6, 6, 6, 6);
 
@@ -204,8 +204,8 @@ div { width: 200pt; height: 200pt; border: 10pt solid black; border-radius: 4pt;
 </style></head><body><div></div></body></html>";
 
             var divBox = await FindDivBoxFromHtml(html);
-            var borderBoxRect = new PeachDrawing.Abstractions.Rect(0, 0, 200, 200);
-            var paddingRect = new PeachDrawing.Abstractions.Rect(10, 10, 180, 180);
+            var borderBoxRect = new PeachDrawing.Core.Rect(0, 0, 200, 200);
+            var paddingRect = new PeachDrawing.Core.Rect(10, 10, 180, 180);
 
             var radii = divBox.ComputeInnerRadii(borderBoxRect, paddingRect, 10, 10, 10, 10);
 
@@ -224,8 +224,8 @@ div { width: 200pt; height: 200pt; border: 5pt solid black; padding: 10pt; borde
 </style></head><body><div></div></body></html>";
 
             var divBox = await FindDivBoxFromHtml(html);
-            var borderBoxRect = new PeachDrawing.Abstractions.Rect(0, 0, 200, 200);
-            var contentRect = new PeachDrawing.Abstractions.Rect(15, 15, 170, 170);
+            var borderBoxRect = new PeachDrawing.Core.Rect(0, 0, 200, 200);
+            var contentRect = new PeachDrawing.Core.Rect(15, 15, 170, 170);
 
             var radii = divBox.ComputeInnerRadii(borderBoxRect, contentRect, 15, 15, 15, 15);
 
@@ -247,8 +247,8 @@ div { width: 100pt; height: 20pt; border: 4pt solid black; border-radius: 40pt; 
 </style></head><body><div></div></body></html>";
 
             var divBox = await FindDivBoxFromHtml(html);
-            var borderBoxRect = new PeachDrawing.Abstractions.Rect(0, 0, 100, 20);
-            var paddingRect = new PeachDrawing.Abstractions.Rect(4, 4, 92, 12);
+            var borderBoxRect = new PeachDrawing.Core.Rect(0, 0, 100, 20);
+            var paddingRect = new PeachDrawing.Core.Rect(4, 4, 92, 12);
 
             var radii = divBox.ComputeInnerRadii(borderBoxRect, paddingRect, 4, 4, 4, 4);
 
@@ -268,8 +268,8 @@ div { width: 200pt; height: 200pt; border-style: solid; border-width: 2pt 4pt 6p
 
             var divBox = await FindDivBoxFromHtml(html);
             // border-width: top right bottom left = 2 4 6 8
-            var borderBoxRect = new PeachDrawing.Abstractions.Rect(0, 0, 200, 200);
-            var paddingRect = new PeachDrawing.Abstractions.Rect(8, 2, 200 - 8 - 4, 200 - 2 - 6);
+            var borderBoxRect = new PeachDrawing.Core.Rect(0, 0, 200, 200);
+            var paddingRect = new PeachDrawing.Core.Rect(8, 2, 200 - 8 - 4, 200 - 2 - 6);
 
             var radii = divBox.ComputeInnerRadii(borderBoxRect, paddingRect, 8, 2, 4, 6);
 

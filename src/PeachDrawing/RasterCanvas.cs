@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -57,7 +57,7 @@ public sealed partial class RasterCanvas : Canvas
         _sx = surface.PixelsPerUnitX * pixelsPerPoint;
         _sy = surface.PixelsPerUnitY * pixelsPerPoint;
 
-        _clips.Push(new ClipState(surface.Bounds, null));
+        _clips.Push(new ClipState(new IntRect(0, 0, surface.Width, surface.Height), null));
         _coverageScratch = new byte[surface.Width + 4];
         _pixelScratch = new byte[(surface.Width + 4) * 4];
     }
@@ -83,7 +83,8 @@ public sealed partial class RasterCanvas : Canvas
     public System.Threading.Tasks.Task SaveAsync(System.IO.Stream stream, string formatName, PeachImage.EncoderOptions options, System.Threading.CancellationToken cancellationToken = default) =>
         RasterSurfaceEncoding.SaveAsync(_surface, stream, formatName, options, cancellationToken);
 
-    internal override Matrix3x2 CurrentTransform => _layoutCtm;
+    /// <inheritdoc/>
+    public override Matrix3x2 CurrentTransform => _layoutCtm;
 
     /// <summary>Starts this graphics' transform at <paramref name="requester"/>'s: a raster region paints in its requester's current user space.</summary>
     internal void SeedTransform(Matrix3x2 requester) => _layoutCtm = requester;
@@ -94,7 +95,15 @@ public sealed partial class RasterCanvas : Canvas
     /// <inheritdoc/>
     public override bool IsOffscreenTile => true;
 
-    internal override bool PrefersRasterGroups => true;
+    /// <inheritdoc/>
+    public override bool PrefersRasterGroups => true;
+
+    /// <inheritdoc/>
+    protected override bool SupportsLayerEffects => true;
+
+    /// <inheritdoc/>
+    protected override void ApplyLayerEffects(RasterSurface surface, IReadOnlyList<LayerEffect> effects) =>
+        RasterLayerEffects.Apply(surface, effects);
 
     /// <summary>User space (points) to surface pixels under the current transform.</summary>
     private Affine UserToDevice => Affine.Then(_ctm, new Affine(_sx, 0, 0, _sy, -_surface.GridX, -_surface.GridY));
@@ -132,7 +141,7 @@ public sealed partial class RasterCanvas : Canvas
 
         var polygon = new PolygonSet();
         AddDeviceRect(polygon, user, toDevice);
-        _clips.Push(current.Intersect(polygon, evenOdd: false, _adapter.RasterAntiAliasing));
+        _clips.Push(current.Intersect(polygon, evenOdd: false, AntiAlias));
     }
 
     private static bool IsWhole(double v) => Math.Abs(v - Math.Round(v)) < 1e-3;
@@ -146,7 +155,7 @@ public sealed partial class RasterCanvas : Canvas
         var polygon = new PolygonSet();
         polygon.AddTransformed(flat.Contours, toDevice);
         var evenOdd = path.FillMode == FillMode.EvenOdd;
-        _clips.Push(_clips.Peek().Intersect(polygon, evenOdd, _adapter.RasterAntiAliasing));
+        _clips.Push(_clips.Peek().Intersect(polygon, evenOdd, AntiAlias));
     }
 
     /// <inheritdoc/>
@@ -193,9 +202,26 @@ public sealed partial class RasterCanvas : Canvas
             _blend = _blendModes.Pop();
     }
 
-    // This backend has one anti-aliasing setting for the whole render (PdfGenerateConfig.RasterAntiAliasing,
-    // read here as _adapter.RasterAntiAliasing), applied uniformly by ScanlineRasterizer to every fill, stroke,
-    // image and glyph. There is no separate per-call smoothing mode to switch here, so this stays a no-op.
+    // The render-wide setting (PdfGenerateConfig.RasterAntiAliasing, read as _adapter.RasterAntiAliasing) is the default; a
+    // PushAntiAlias overrides it for the shapes drawn until the matching PopAntiAlias, and ScanlineRasterizer honours whichever applies.
+    private readonly Stack<bool> _antiAlias = new();
+
+    private bool AntiAlias => _antiAlias.Count > 0 ? _antiAlias.Peek() : _adapter.RasterAntiAliasing;
+
+    /// <summary>
+    /// Smoothing can be turned off for a stretch of drawing, but never on when the render as a whole turned it off
+    /// (<c>RasterAntiAliasing</c> is false, for output that must be identical from run to run): that setting is the ceiling.
+    /// </summary>
+    /// <inheritdoc/>
+    public override void PushAntiAlias(bool enabled) => _antiAlias.Push(enabled && _adapter.RasterAntiAliasing);
+
+    /// <inheritdoc/>
+    public override void PopAntiAlias()
+    {
+        if (_antiAlias.Count > 0)
+            _antiAlias.Pop();
+    }
+
     /// <inheritdoc/>
     public override object SetAntiAliasSmoothingMode() => true;
 
@@ -260,7 +286,7 @@ public sealed partial class RasterCanvas : Canvas
     /// own pixel pitch and grid instead of going back to the document's DPI, so compositing it back is an exact pixel
     /// copy rather than a resample, and it is cut to this surface: nothing outside it was painted to begin with.
     /// </summary>
-    internal override RasterSurfaceScope? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null)
+    public override RasterRegion? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null)
     {
         if (!(layoutBounds.Width > 0) || !(layoutBounds.Height > 0) ||
             double.IsNaN(layoutBounds.X + layoutBounds.Y + layoutBounds.Width + layoutBounds.Height) ||
@@ -281,12 +307,12 @@ public sealed partial class RasterCanvas : Canvas
         var nested = new RasterSurface((int)(right - left), (int)(bottom - top), (int)left, (int)top, ppuX, ppuY);
         var graphics = new RasterCanvas(_adapter, nested, _pixelsPerPoint);
         graphics.SeedTransform(_layoutCtm);
-        return new RasterSurfaceScope(graphics, nested);
+        return new RasterRegion(graphics, nested);
     }
 
-    internal override void DrawRaster(object? surfaceObj)
+        /// <inheritdoc/>
+    public override void DrawRaster(RasterSurface surface)
     {
-        var surface = (RasterSurface)surfaceObj!;
         var bitmap = new Bitmap(surface.Width, surface.Height, surface.Buffer);
         var rect = surface.LayoutRect;
         // Same pitch, on the same grid: nearest-neighbour is an exact pixel copy, where a bilinear tap could pick up a
@@ -382,6 +408,10 @@ public sealed partial class RasterCanvas : Canvas
 
     private PaintSource? CreatePaint(Brush? brush)
     {
+        // A hatch is a tile drawn on demand.
+        if (brush is HatchBrush hatch)
+            brush = hatch.ToTileBrush(this);
+
         if (UserToDevice.Invert() is not { } deviceToUser)
             return null;
 
@@ -417,7 +447,7 @@ public sealed partial class RasterCanvas : Canvas
     }
 
     /// <summary>The dash lengths in user units, matching what <c>PdfGraphicsState.RealizePen</c> writes.</summary>
-    private static double[]? ResolveDashes(Pen pen, double width)
+    internal static double[]? ResolveDashes(Pen pen, double width)
     {
         // Presets are multiples of the pen's own width; a zero width never dashes.
         var w = pen.Width;
@@ -459,7 +489,7 @@ public sealed partial class RasterCanvas : Canvas
             return;
 
         var sink = new PaintSink(this, paint, clip, mode ?? _blend, opacity);
-        ScanlineRasterizer.Fill(polygons, evenOdd, clip.Bounds, ref sink, _adapter.RasterAntiAliasing);
+        ScanlineRasterizer.Fill(polygons, evenOdd, clip.Bounds, ref sink, AntiAlias);
     }
 
     private readonly struct PaintSink(RasterCanvas owner, PaintSource paint, ClipState clip, PaintBlendMode mode, int opacity) : ICoverageSink
@@ -545,6 +575,14 @@ public sealed partial class RasterCanvas : Canvas
     public override void DrawImage(Image image, Rect destRect, Rect srcRect) => DrawImageCore(image, destRect, srcRect, 255, _blend);
 
     /// <inheritdoc/>
+    public override void DrawImage(Image image, Rect destRect, ImageSampling sampling) =>
+        DrawImageCore(image, destRect, null, 255, _blend, sampling);
+
+    /// <inheritdoc/>
+    public override void DrawImage(Image image, Rect destRect, Rect srcRect, ImageSampling sampling) =>
+        DrawImageCore(image, destRect, srcRect, 255, _blend, sampling);
+
+    /// <inheritdoc/>
     public override void DrawImageWithOpacity(Image image, Rect destRect, double opacity, PaintBlendMode blendMode = PaintBlendMode.Normal) =>
         DrawImageCore(image, destRect, null, (int)Math.Round(Math.Clamp(opacity, 0, 1) * 255), blendMode);
 
@@ -595,15 +633,16 @@ public sealed partial class RasterCanvas : Canvas
         DrawBitmap(ColorMatrixFilter.Apply(bitmap, matrix), image.Width, image.Height, destRect, null, image.Interpolate, 255, _blend);
     }
 
-    private void DrawImageCore(Image image, Rect destRect, Rect? srcRect, int opacity, PaintBlendMode mode)
+    private void DrawImageCore(Image image, Rect destRect, Rect? srcRect, int opacity, PaintBlendMode mode,
+        ImageSampling sampling = ImageSampling.Automatic)
     {
         if (!TryGetBitmap(image, out var bitmap, out var naturalWidth, out var naturalHeight))
             return;
 
-        DrawBitmap(bitmap, naturalWidth, naturalHeight, destRect, srcRect, image.Interpolate, opacity, mode);
+        DrawBitmap(bitmap, naturalWidth, naturalHeight, destRect, srcRect, image.Interpolate, opacity, mode, sampling);
     }
 
-    private static bool TryGetBitmap(Image image, out Bitmap bitmap, out double naturalWidth, out double naturalHeight)
+    internal static bool TryGetBitmap(Image image, out Bitmap bitmap, out double naturalWidth, out double naturalHeight)
     {
         // RasterImage already keeps its pixels as a Bitmap (its own tile surface's own backing buffer) -
         // reuse that instance directly rather than round-tripping it through PixelBuffer, so a tile drawn
@@ -641,7 +680,7 @@ public sealed partial class RasterCanvas : Canvas
     /// null for all of it.
     /// </summary>
     private void DrawBitmap(Bitmap bitmap, double naturalWidth, double naturalHeight, Rect destRect, Rect? srcRect,
-        bool interpolate, int opacity, PaintBlendMode mode)
+        bool interpolate, int opacity, PaintBlendMode mode, ImageSampling sampling = ImageSampling.Automatic)
     {
         if (naturalWidth <= 0 || naturalHeight <= 0 || destRect.Width <= 0 || destRect.Height <= 0)
             return;
@@ -664,11 +703,17 @@ public sealed partial class RasterCanvas : Canvas
 
         // Smooth unless the image asked for crisp pixels and is being magnified.
         var scale = Math.Sqrt(Math.Abs(deviceToBitmap.Determinant));
-        var smooth = interpolate || scale > 1 + 1e-6;
+        var smooth = sampling switch
+        {
+            ImageSampling.Nearest => false,
+            ImageSampling.Bilinear or ImageSampling.Bicubic => true,
+            ImageSampling.Pixelated => scale > 1 + 1e-6,
+            _ => interpolate || scale > 1 + 1e-6,
+        };
 
         var polygon = new PolygonSet();
         AddDeviceRect(polygon, dest, toDevice);
-        FillPolygons(polygon, evenOdd: false, new BitmapPaint(bitmap, deviceToBitmap, smooth), opacity, mode);
+        FillPolygons(polygon, evenOdd: false, new BitmapPaint(bitmap, deviceToBitmap, smooth, bicubic: sampling == ImageSampling.Bicubic), opacity, mode);
     }
 
     /// <summary>Builds a new bitmap the size of <paramref name="a"/>, combining each pixel with the (nearest) pixel of <paramref name="b"/>.</summary>

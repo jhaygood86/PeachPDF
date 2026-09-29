@@ -12,7 +12,8 @@
 
 using PeachDrawing.Text;
 using PeachDrawing.Text.Shaping;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachDrawing;
@@ -28,7 +29,7 @@ namespace PeachPDF.Adapters
     /// <summary>
     /// Adapter for WinForms Graphics for core.
     /// </summary>
-    internal sealed class GraphicsAdapter : Canvas
+    internal sealed class GraphicsAdapter : Canvas, ITransparencyProbeSource
     {
         /// <summary>
         /// The wrapped WinForms graphics object
@@ -52,7 +53,7 @@ namespace PeachPDF.Adapters
 
         public override double PixelsPerPoint { get; }
 
-        internal override object? FormCacheOwner => _g.Owner;
+        public override object? TileCacheOwner => _g.Owner;
 
         /// <summary>
         /// _releaseGraphics is set true exactly for tile-backed instances (see the constructor
@@ -95,7 +96,7 @@ namespace PeachPDF.Adapters
             _g.SvgGlyphPainter = new SvgGlyphPainter(this, adapter);
         }
 
-        private readonly PeachDrawing.Abstractions.ISvgGlyphPainter? _previousSvgGlyphPainter;
+        private readonly PeachDrawing.Core.ISvgGlyphPainter? _previousSvgGlyphPainter;
 
         /// <summary>The adapter this graphics draws for, which resolves the fonts and images of what is drawn.</summary>
         internal RenderContext Adapter => _adapter;
@@ -131,14 +132,14 @@ namespace PeachPDF.Adapters
         private readonly Stack<Matrix3x2> _transformStack = [];
         private Matrix3x2 _accumulated = Matrix3x2.Identity;
 
-        internal override Matrix3x2 CurrentTransform => _accumulated;
+        public override Matrix3x2 CurrentTransform => _accumulated;
 
         /// <summary>Seeds <see cref="CurrentTransform"/> for a freshly created tile - see <see cref="Canvas.CreateTile"/>'s
         /// doc remarks for why. Bookkeeping only: the tile's own native PDF graphics state (<see cref="_g"/>) still starts at
         /// its own identity, so this has no effect on what actually gets drawn into it.</summary>
         internal void SeedTransform(Matrix3x2 requester) => _accumulated = requester;
 
-        internal override (double X, double Y) TransformScale
+        public override (double X, double Y) TransformScale
         {
             get
             {
@@ -324,100 +325,18 @@ namespace PeachPDF.Adapters
         }
 
         /// <summary>
-        /// <see cref="GetInkCrossings"/>'s actual measurement, in coordinates relative to the run's own
-        /// origin and baseline - the form <see cref="_inkCrossings"/> caches. Null means no glyph in the
-        /// run had a decodable outline at all.
+        /// <see cref="GetInkCrossings"/>'s actual measurement, in coordinates relative to the run's own origin and baseline - the form
+        /// <see cref="_inkCrossings"/> caches. Null means no glyph in the run had a decodable outline at all.
         /// </summary>
         private static List<InkSpan>? MeasureInkCrossings(
             Typeface typeface, XFont realFont, string str, in InkCrossingKey key,
             double pixelsPerPoint)
         {
-            // Same design-units-to-user-space scale GetTextOutline resolves; see its own remarks. The
-            // em-square is y-up and user space is y-down, so the band's top edge is the HIGH design y.
+            // Same design-units-to-user-space scale GetTextOutline resolves; see its own remarks.
             var scale = realFont.Size * pixelsPerPoint / typeface.Metrics.UnitsPerEm;
-            if (scale <= 0) return null;
-
-            List<InkSpan> spans = [];
-            var sawOutline = false;
-            double penX = 0;
-
-            foreach (var glyph in Shaper.Shape(typeface, str, key.Features).Glyphs)
-            {
-                var glyphId = glyph.GlyphIndex;
-
-                if (typeface.TryGetOutline((ushort)glyphId, out var outline))
-                {
-                    sawOutline = true;
-
-                    // GPOS positioning shifts where this glyph paints without changing its outline -
-                    // exactly as GetTextOutline applies it, so ink is measured where it is drawn. A mark
-                    // attached with a negative XOffset therefore lands left of the base it follows, which
-                    // is why the whole list is sorted and merged below rather than assumed ordered.
-                    var glyphX = penX + glyph.XOffset * scale;
-                    var glyphY = -glyph.YOffset * scale;
-
-                    var crossings = outline.Crossings(
-                        (glyphY - key.BandBottom) / scale, (glyphY - key.BandTop) / scale);
-
-                    // One span per glyph, hulling everything the glyph puts in the band, rather than one
-                    // span per ink run. CSS Text Decoration 4 §2.10.5 leaves the skip shape to the UA and
-                    // names this exact choice - "whether to show the line within enclosed areas of a
-                    // glyph" - noting that hiding it "gives a cleaner look to the type" and that following
-                    // each contour can leave "typographically-awkward wisps of underline". Per-run spans
-                    // produced precisely those wisps: a stub of underline stranded inside the bowl of a
-                    // 'g' or the counter of an 'o'. Both Chrome and Firefox hull per glyph - measured on
-                    // 'o', 'g', 'n', 'v', 'H' and U+2026, whose three separate dots become a single gap in
-                    // both - so this is also what a document author will have proofed against.
-                    //
-                    // Crossings is sorted and disjoint, so its first start and last end are the extremes.
-                    if (crossings.Count > 0)
-                    {
-                        spans.Add(new InkSpan(
-                            glyphX + crossings[0].Start * scale,
-                            glyphX + crossings[^1].End * scale));
-                    }
-                }
-
-                penX += (typeface.GetAdvance((ushort)glyphId) + glyph.XAdvanceDelta) * scale + key.LetterSpacing;
-            }
-
-            // No glyph in the run had a decodable outline at all - a CFF/bitmap font, or a run of
-            // nothing but spaces. Null rather than an empty list, so the caller can tell "no ink
-            // information" from "this run genuinely crosses nothing"; see Canvas.GetInkCrossings.
-            if (!sawOutline) return null;
-
-            return MergeSpans(spans);
-        }
-
-        /// <summary>
-        /// <paramref name="spans"/> sorted left to right and unioned, so the result honours
-        /// <see cref="Canvas.GetInkCrossings"/>'s documented contract regardless of the order the
-        /// glyph walk produced them in.
-        /// </summary>
-        private static List<InkSpan> MergeSpans(List<InkSpan> spans)
-        {
-            if (spans.Count <= 1) return spans;
-
-            spans.Sort(static (a, b) => a.Start.CompareTo(b.Start));
-
-            List<InkSpan> merged = [spans[0]];
-
-            for (var i = 1; i < spans.Count; i++)
-            {
-                var last = merged[^1];
-                var next = spans[i];
-
-                if (next.Start <= last.End)
-                {
-                    merged[^1] = new InkSpan(last.Start, Math.Max(last.End, next.End));
-                }
-                else
-                {
-                    merged.Add(next);
-                }
-            }
-
-            return merged;
+            return InkCrossings.Measure(typeface, str, scale, key.BandTop, key.BandBottom, key.LetterSpacing, key.Features) is { } spans
+                ? [.. spans]
+                : null;
         }
 
         /// <summary>
@@ -479,25 +398,25 @@ namespace PeachPDF.Adapters
             return (tileGraphics, new ImageAdapter(form));
         }
 
-        internal override RasterSurfaceScope? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null)
-        {
-            var scope = RasterSurfaceFactory.Create(_adapter, PixelsPerPoint, layoutBounds, dpiOverride ?? _adapter.RasterizationDpi, _adapter.MaxRasterPixels, TransformScale);
-            scope?.Graphics.SeedTransform(_accumulated);
-            return scope;
-        }
+        protected override bool SupportsLayerEffects => true;
 
-        internal override bool FlattensTransparency =>
+        protected override void ApplyLayerEffects(RasterSurface surface, IReadOnlyList<LayerEffect> effects) =>
+            RasterLayerEffects.Apply(surface, effects);
+
+        public override RasterRegion? BeginRasterSurface(Rect layoutBounds, double? dpiOverride = null) =>
+            RasterSurfaceFactory.Create(_adapter, PixelsPerPoint, layoutBounds, dpiOverride ?? _adapter.RasterizationDpi, _adapter.MaxRasterPixels, TransformScale, _accumulated);
+
+        public override bool FlattensTransparency =>
             _g.Owner is { } owner && owner.Options.FlattenTransparency &&
             (owner.Options.PdfAConformance is PdfAConformance.PdfA1B or PdfAConformance.PdfA1A ||
              owner.Options.PdfXConformance is PdfXConformance.X1a or PdfXConformance.X3);
 
         private TransparencyProbe? _probe;
 
-        internal override TransparencyProbe? CreateTransparencyProbe() => _probe ??= new TransparencyProbe(_adapter, PixelsPerPoint);
+        public TransparencyProbe CreateTransparencyProbe() => _probe ??= new TransparencyProbe(_adapter, PixelsPerPoint);
 
-        internal override void DrawRaster(object? surfaceObj)
+        public override void DrawRaster(RasterSurface surface)
         {
-            var surface = (RasterSurface)surfaceObj!;
 
             // A bitmap with soft edges needs an image soft mask (/SMask), a transparency construct PDF/A-1 and
             // PDF/X-1a/X-3 forbid. Rejected up front, with a message naming the CSS feature rather than the
@@ -603,6 +522,9 @@ namespace PeachPDF.Adapters
 
         public override void DrawRectangle(Brush brush, double x, double y, double width, double height)
         {
+            if (TryPaintTurnedTiles(brush, new Rect(x, y, width, height), () => PushClip(new Rect(x, y, width, height))))
+                return;
+
             var xBrush = ToXBrush(brush);
             if (xBrush is XBaseGradientBrush)
             {
@@ -725,6 +647,9 @@ namespace PeachPDF.Adapters
 
         public override void DrawPath(Brush brush, GraphicsPath path)
         {
+            if (brush is TileBrush or HatchBrush && TryPaintTurnedTiles(brush, new PathMeasure(path).Bounds, () => PushClip(path)))
+                return;
+
             var xBrush = ToXBrush(brush);
             if (xBrush is XBaseGradientBrush)
             {
@@ -742,6 +667,19 @@ namespace PeachPDF.Adapters
         {
             if (points is { Length: > 0 })
             {
+                if (brush is TileBrush or HatchBrush)
+                {
+                    double minX = points.Min(p => p.X), minY = points.Min(p => p.Y);
+                    var bounds = new Rect(minX, minY, points.Max(p => p.X) - minX, points.Max(p => p.Y) - minY);
+                    if (TryPaintTurnedTiles(brush, bounds, () =>
+                        {
+                            using var outline = GetGraphicsPath();
+                            outline.AddPolygon(points);
+                            PushClip(outline);
+                        }))
+                        return;
+                }
+
                 _g.DrawPolygon(ToXBrush(brush), Utils.Convert(points, PixelsPerPoint), XFillMode.Winding);
             }
         }
@@ -775,8 +713,97 @@ namespace PeachPDF.Adapters
                 Utils.Convert(conic.Center, PixelsPerPoint), conic.OuterRadius / PixelsPerPoint,
                 conic.Stops.Select(s => Utils.Convert(s.PaintColor)).ToArray(),
                 conic.AnglesRadians.ToArray()),
+            TileBrush tile => ToXTilingBrush(tile),
+            HatchBrush hatch => hatch.ToTileBrush(this) is { } hatchTile
+                ? ToXTilingBrush(hatchTile)
+                : throw new NotSupportedException("A hatch needs a canvas that can make tiles."),
             _ => throw new NotSupportedException($"Unknown brush type {brush.GetType()}"),
         };
+
+        /// <summary>The most cells of a turned grid that are drawn one by one; a shape needing more is painted with the tiling pattern instead.</summary>
+        private const int MaxTurnedTiles = 10_000;
+
+        /// <summary>
+        /// Paints a tile brush whose grid the current transform turns or skews as individual cells under a clip, and reports whether it did.
+        /// A viewer renders a rotated tiling pattern by drawing each cell with anti-aliased edges, which shows as hairline seams between
+        /// cells; cells drawn as separate images do not. An upright grid (the usual case) is left to the tiling pattern, which is written
+        /// once however many cells it covers.
+        /// </summary>
+        private bool TryPaintTurnedTiles(Brush brush, Rect shapeBounds, Action pushShapeClip)
+        {
+            if (brush is HatchBrush hatch)
+            {
+                if (hatch.ToTileBrush(this) is not { } hatchTile)
+                    return false;
+
+                brush = hatchTile;
+            }
+
+            if (brush is not TileBrush tile || shapeBounds.Width <= 0 || shapeBounds.Height <= 0)
+                return false;
+
+            // Where a cell's edges end up on the page: the brush's own transform, then everything already pushed onto this canvas.
+            var onPage = tile.Transform.Then(_accumulated);
+            var scale = Math.Abs(onPage.M11) + Math.Abs(onPage.M22) + 1e-12;
+            if (Math.Abs(onPage.M12) <= 1e-6 * scale && Math.Abs(onPage.M21) <= 1e-6 * scale)
+                return false;
+
+            if (!Matrix3x2.Invert(tile.Transform, out var toBrush))
+                return false;
+
+            // The shape's bounds, in brush space, decide which cells can be seen.
+            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+            foreach (var corner in new[]
+            {
+                new Vector2((float)shapeBounds.Left, (float)shapeBounds.Top), new Vector2((float)shapeBounds.Right, (float)shapeBounds.Top),
+                new Vector2((float)shapeBounds.Right, (float)shapeBounds.Bottom), new Vector2((float)shapeBounds.Left, (float)shapeBounds.Bottom),
+            })
+            {
+                var p = Vector2.Transform(corner, toBrush);
+                minX = Math.Min(minX, p.X);
+                maxX = Math.Max(maxX, p.X);
+                minY = Math.Min(minY, p.Y);
+                maxY = Math.Max(maxY, p.Y);
+            }
+
+            var firstColumn = Math.Floor(minX / tile.CellWidth);
+            var lastColumn = Math.Ceiling(maxX / tile.CellWidth);
+            var firstRow = Math.Floor(minY / tile.CellHeight);
+            var lastRow = Math.Ceiling(maxY / tile.CellHeight);
+            if ((lastColumn - firstColumn) * (lastRow - firstRow) is <= 0 or > MaxTurnedTiles)
+                return false;
+
+            pushShapeClip();
+            PushTransform(tile.Transform);
+            for (var row = firstRow; row < lastRow; row++)
+            {
+                for (var column = firstColumn; column < lastColumn; column++)
+                    DrawImage(tile.Tile, new Rect(column * tile.CellWidth, row * tile.CellHeight, tile.CellWidth, tile.CellHeight), tile.Sampling);
+            }
+
+            PopTransform();
+            PopClip();
+            return true;
+        }
+
+        /// <summary>A repeating tile as a PDF tiling pattern: a tile made by <see cref="CreateTile"/> stays vector content, any other image is embedded once.</summary>
+        private XTilingBrush ToXTilingBrush(TileBrush tile)
+        {
+            if (tile.Tile is not ImageAdapter { Image: { } image })
+                throw new NotSupportedException("A tile brush on a PDF canvas needs a tile made by this canvas or decoded by its render context.");
+
+            // Cell size and the translation are in layout units; the linear part of a transform is unit-free. See ToXBrush's gradients.
+            var m = tile.Transform;
+            var matrix = new XMatrix(m.M11, m.M12, m.M21, m.M22, m.M31 / PixelsPerPoint, m.M32 / PixelsPerPoint);
+            bool? interpolate = tile.Sampling switch
+            {
+                ImageSampling.Nearest or ImageSampling.Pixelated => false,
+                ImageSampling.Bilinear or ImageSampling.Bicubic => true,
+                _ => null,
+            };
+
+            return new XTilingBrush(image, tile.CellWidth / PixelsPerPoint, tile.CellHeight / PixelsPerPoint, matrix, interpolate);
+        }
 
         /// <summary>Reuses PdfSharpCore's built-in static brushes for the common opaque black/white/transparent
         /// cases, the same optimization <c>PdfSharpAdapter.CreateSolidBrush</c> used to apply.</summary>

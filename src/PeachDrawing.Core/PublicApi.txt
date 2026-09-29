@@ -1,0 +1,806 @@
+PeachDrawing.Core.BlurEffect : sealed class
+  ctor(Double SigmaX, Double SigmaY)
+  ctor(Double sigma)
+  method Void Deconstruct(out Double SigmaX, out Double SigmaY)
+  method virtual BlurEffect <Clone>$()
+  method virtual Boolean Equals(BlurEffect other)
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double SigmaX { get; init; }
+  property Double SigmaY { get; init; }
+PeachDrawing.Core.Brush : abstract class
+  method virtual Void Dispose()
+PeachDrawing.Core.Canvas : abstract class
+  method Brush GetConicGradientBrush(PaintPoint center, Double outerRadius, PaintColor[] colors, Double[] anglesRad)
+  method Brush GetLinearGradientBrush(PaintPoint p1, PaintPoint p2, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False)
+  method Brush GetLinearGradientBrush(Rect rect, PaintColor color1, PaintColor color2, Double angle)
+  method Brush GetRadialGradientBrush(PaintPoint center, Double radiusX, Double radiusY, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False, PaintPoint? focalCenter = null)
+  method Brush GetSolidBrush(PaintColor color)
+  method Pen GetPen(Brush brush)
+  method Pen GetPen(PaintColor color)
+  method Rect GetClip()
+  method Void ResumeClipping()
+  method Void SuspendClipping()
+  method abstract GraphicsPath GetGraphicsPath()
+  method abstract GraphicsPath GetTextOutline(String str, Font font, PaintPoint baselineOrigin, Double letterSpacing = 0, ShapeSettings? features = null)
+  method abstract Int32 CountShapedGlyphs(String str, Font font, ShapeSettings? features = null)
+  method abstract Object SetAntiAliasSmoothingMode()
+  method abstract Size MeasureString(String str, Font font, ShapeSettings? features = null)
+  method abstract ValueTuple<Canvas, Image>? CreateTile(Double width, Double height)
+  method abstract Void BeginArtifact()
+  method abstract Void BeginMarkedContent(String structureType, Int32 mcid)
+  method abstract Void BeginVariableText()
+  method abstract Void Dispose()
+  method abstract Void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color)
+  method abstract Void DrawImage(Image image, Rect destRect)
+  method abstract Void DrawImage(Image image, Rect destRect, Rect srcRect)
+  method abstract Void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, Boolean invert = False)
+  method abstract Void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode)
+  method abstract Void DrawImageMasked(Image image, Image maskImage, Rect destRect)
+  method abstract Void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix)
+  method abstract Void DrawImageWithOpacity(Image image, Rect destRect, Double opacity, PaintBlendMode blendMode = Normal)
+  method abstract Void DrawLine(Pen pen, Double x1, Double y1, Double x2, Double y2)
+  method abstract Void DrawPath(Brush brush, GraphicsPath path)
+  method abstract Void DrawPath(Pen pen, GraphicsPath path)
+  method abstract Void DrawPolygon(Brush brush, PaintPoint[] points)
+  method abstract Void DrawRectangle(Brush brush, Double x, Double y, Double width, Double height)
+  method abstract Void DrawRectangle(Pen pen, Double x, Double y, Double width, Double height)
+  method abstract Void DrawString(String str, Font font, PaintColor color, PaintPoint point, Size size, Double letterSpacing = 0, FontPalette fontPalette = null, ShapeSettings? features = null)
+  method abstract Void EndMarkedContent()
+  method abstract Void EndVariableText()
+  method abstract Void MeasureString(String str, Font font, Double maxWidth, out Int32 charFit, out Double charFitWidth)
+  method abstract Void PopBlendMode()
+  method abstract Void PopClip()
+  method abstract Void PopTransform()
+  method abstract Void PushBlendMode(PaintBlendMode mode)
+  method abstract Void PushClip(GraphicsPath path)
+  method abstract Void PushClip(Rect rect)
+  method abstract Void PushClipExclude(Rect rect)
+  method abstract Void PushTransform(Matrix3x2 matrix)
+  method abstract Void ReturnPreviousSmoothingMode(Object prevMode)
+  method virtual CanvasLayer BeginLayer(LayerOptions options)
+  method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
+  method virtual Void DrawImage(Image image, Rect destRect, ImageSampling sampling)
+  method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect, ImageSampling sampling)
+  method virtual Void DrawRaster(RasterSurface surface)
+  method virtual Void DrawString(String str, Font font, PaintColor color, PaintPoint point, Size size, Double letterSpacing, FontPalette fontPalette, ShapeSettings? features, String logicalText)
+  method virtual Void PopAntiAlias()
+  method virtual Void PushAntiAlias(Boolean enabled)
+  property Boolean FlattensTransparency { get; }
+  property Boolean InvisibleText { get; set; }
+  property Boolean IsOffscreenTile { get; }
+  property Boolean PrefersRasterGroups { get; }
+  property Double PixelsPerPoint { get; }
+  property Matrix3x2 CurrentTransform { get; }
+  property Object TileCacheOwner { get; }
+  property ValueTuple<Double, Double> TransformScale { get; }
+PeachDrawing.Core.CanvasLayer : sealed class
+  ctor(Canvas canvas, Action complete)
+  method virtual Void Dispose()
+  property Canvas Canvas { get; }
+PeachDrawing.Core.CanvasParagraphExtensions : static class
+  method static Void DrawGlyphRun(Canvas canvas, GlyphRun run, Double size, PaintPoint baselineOrigin, PaintColor color, Double letterSpacing = 0)
+  method static Void DrawParagraph(Canvas canvas, ParagraphLayout layout, PaintPoint origin, Func<PlacedRun, ParagraphPaint> paintForRun, Action<Canvas, PlacedRun, Rect> drawInlineBox = null)
+  method static Void DrawParagraph(Canvas canvas, ParagraphLayout layout, PaintPoint origin, PaintColor color)
+PeachDrawing.Core.ColorGlyphs.CanvasColorGlyphTarget : sealed class
+  ctor(Canvas canvas)
+  method virtual Void FillOutline(GlyphOutline outline, Affine2x3 transform, PaintColor color)
+  method virtual Void FillRegion(Rect region, ColorGlyphPaint paint)
+  method virtual Void PopBlendMode()
+  method virtual Void PopClip()
+  method virtual Void PushBlendMode(PaintBlendMode mode)
+  method virtual Void PushOutlineClip(GlyphOutline outline, Affine2x3 transform)
+PeachDrawing.Core.ColorGlyphs.ColorGlyphPaint : abstract class
+  method abstract ColorGlyphPaint <Clone>$()
+  method virtual Boolean Equals(ColorGlyphPaint other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+PeachDrawing.Core.ColorGlyphs.ColorGlyphPainter : sealed class
+  ctor(Typeface typeface, Double fontSize, PaintColor foreground, Boolean yDown = True, Int32 paletteIndex = 0, IReadOnlyDictionary<Int32, PaintColor> overrides = null)
+  method Affine2x3 Placement(Double originX, Double originY)
+  method Void Paint(UInt16 glyphId, Affine2x3 placement, IColorGlyphTarget target)
+PeachDrawing.Core.ColorGlyphs.IColorGlyphTarget : interface
+  method abstract Void FillOutline(GlyphOutline outline, Affine2x3 transform, PaintColor color)
+  method abstract Void FillRegion(Rect region, ColorGlyphPaint paint)
+  method abstract Void PopBlendMode()
+  method abstract Void PopClip()
+  method abstract Void PushBlendMode(PaintBlendMode mode)
+  method abstract Void PushOutlineClip(GlyphOutline outline, Affine2x3 transform)
+PeachDrawing.Core.ColorGlyphs.LinearColorGlyphPaint : sealed class
+  ctor(PaintPoint Start, PaintPoint End, IReadOnlyList<PaintColor> Colors, IReadOnlyList<Double> Positions)
+  method Void Deconstruct(out PaintPoint Start, out PaintPoint End, out IReadOnlyList<PaintColor> Colors, out IReadOnlyList<Double> Positions)
+  method virtual Boolean Equals(ColorGlyphPaint other)
+  method virtual Boolean Equals(LinearColorGlyphPaint other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual LinearColorGlyphPaint <Clone>$()
+  method virtual String ToString()
+  property IReadOnlyList<Double> Positions { get; init; }
+  property IReadOnlyList<PaintColor> Colors { get; init; }
+  property PaintPoint End { get; init; }
+  property PaintPoint Start { get; init; }
+PeachDrawing.Core.ColorGlyphs.RadialColorGlyphPaint : sealed class
+  ctor(PaintPoint Center, PaintPoint Focal, Double Radius, IReadOnlyList<PaintColor> Colors, IReadOnlyList<Double> Positions)
+  method Void Deconstruct(out PaintPoint Center, out PaintPoint Focal, out Double Radius, out IReadOnlyList<PaintColor> Colors, out IReadOnlyList<Double> Positions)
+  method virtual Boolean Equals(ColorGlyphPaint other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(RadialColorGlyphPaint other)
+  method virtual Int32 GetHashCode()
+  method virtual RadialColorGlyphPaint <Clone>$()
+  method virtual String ToString()
+  property Double Radius { get; init; }
+  property IReadOnlyList<Double> Positions { get; init; }
+  property IReadOnlyList<PaintColor> Colors { get; init; }
+  property PaintPoint Center { get; init; }
+  property PaintPoint Focal { get; init; }
+PeachDrawing.Core.ColorGlyphs.SolidColorGlyphPaint : sealed class
+  ctor(PaintColor Color)
+  method Void Deconstruct(out PaintColor Color)
+  method virtual Boolean Equals(ColorGlyphPaint other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(SolidColorGlyphPaint other)
+  method virtual Int32 GetHashCode()
+  method virtual SolidColorGlyphPaint <Clone>$()
+  method virtual String ToString()
+  property PaintColor Color { get; init; }
+PeachDrawing.Core.ColorGlyphs.SweepColorGlyphPaint : sealed class
+  ctor(PaintPoint Center, Double Radius, IReadOnlyList<PaintColor> Colors, IReadOnlyList<Double> AnglesRadians)
+  method Void Deconstruct(out PaintPoint Center, out Double Radius, out IReadOnlyList<PaintColor> Colors, out IReadOnlyList<Double> AnglesRadians)
+  method virtual Boolean Equals(ColorGlyphPaint other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(SweepColorGlyphPaint other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  method virtual SweepColorGlyphPaint <Clone>$()
+  property Double Radius { get; init; }
+  property IReadOnlyList<Double> AnglesRadians { get; init; }
+  property IReadOnlyList<PaintColor> Colors { get; init; }
+  property PaintPoint Center { get; init; }
+PeachDrawing.Core.ColorMatrix : struct
+  ctor(Matrix4x4 linear, Vector4 offset)
+  field static ColorMatrix Identity
+  method ColorMatrix Compose(ColorMatrix appliedAfterThis)
+  method Vector4 Apply(Vector4 color)
+  property Boolean IsChannelIndependent { get; }
+  property Matrix4x4 Linear { get; }
+  property Vector4 Offset { get; }
+PeachDrawing.Core.ColorMatrixEffect : sealed class
+  ctor(ColorMatrix Matrix)
+  method Void Deconstruct(out ColorMatrix Matrix)
+  method virtual Boolean Equals(ColorMatrixEffect other)
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual ColorMatrixEffect <Clone>$()
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property ColorMatrix Matrix { get; init; }
+PeachDrawing.Core.ConicGradientBrush : sealed class
+  ctor(PaintPoint center, Double outerRadius, IReadOnlyList<GradientStop> stops, IReadOnlyList<Double> anglesRadians)
+  property Double OuterRadius { get; }
+  property IReadOnlyList<Double> AnglesRadians { get; }
+  property IReadOnlyList<GradientStop> Stops { get; }
+  property PaintPoint Center { get; }
+PeachDrawing.Core.CurveContour : sealed class
+  ctor(PaintPoint Start, IReadOnlyList<PathCommand> Commands, Boolean Closed)
+  method CurveContour <Clone>$()
+  method Void Deconstruct(out PaintPoint Start, out IReadOnlyList<PathCommand> Commands, out Boolean Closed)
+  method virtual Boolean Equals(CurveContour other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean Closed { get; init; }
+  property IReadOnlyList<PathCommand> Commands { get; init; }
+  property PaintPoint Start { get; init; }
+PeachDrawing.Core.DashStyle : enum Int32
+  Custom = 5
+  Dash = 1
+  DashDot = 3
+  DashDotDot = 4
+  Dot = 2
+  Solid = 0
+PeachDrawing.Core.DropShadowEffect : sealed class
+  ctor(Double OffsetX, Double OffsetY, Double SigmaX, Double SigmaY, PaintColor Color)
+  method Void Deconstruct(out Double OffsetX, out Double OffsetY, out Double SigmaX, out Double SigmaY, out PaintColor Color)
+  method virtual Boolean Equals(DropShadowEffect other)
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual DropShadowEffect <Clone>$()
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double OffsetX { get; init; }
+  property Double OffsetY { get; init; }
+  property Double SigmaX { get; init; }
+  property Double SigmaY { get; init; }
+  property PaintColor Color { get; init; }
+PeachDrawing.Core.EllipticalArc : static class
+  method static Boolean TryGetCenterParameterization(Double x1, Double y1, Double x2, Double y2, Double radiusX, Double radiusY, Double rotationRadians, Boolean isLargeArc, Boolean sweepClockwise, out EllipticalArcCenter arc)
+PeachDrawing.Core.EllipticalArcCenter : struct
+  ctor(Double CenterX, Double CenterY, Double RadiusX, Double RadiusY, Double RotationRadians, Double StartAngle, Double EndAngle)
+  method Void Deconstruct(out Double CenterX, out Double CenterY, out Double RadiusX, out Double RadiusY, out Double RotationRadians, out Double StartAngle, out Double EndAngle)
+  method virtual Boolean Equals(EllipticalArcCenter other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double CenterX { get; init; }
+  property Double CenterY { get; init; }
+  property Double EndAngle { get; init; }
+  property Double RadiusX { get; init; }
+  property Double RadiusY { get; init; }
+  property Double RotationRadians { get; init; }
+  property Double StartAngle { get; init; }
+PeachDrawing.Core.FillMode : enum Int32
+  EvenOdd = 1
+  Nonzero = 0
+PeachDrawing.Core.Font : abstract class
+  method Double? GetAdvanceEm(Rune rune)
+  method abstract Boolean HasGlyph(Rune rune)
+  method abstract Boolean SupportsFontVariantCaps(CapsMode feature)
+  method abstract Boolean SupportsFontVariantPosition(SubSuperMode feature)
+  method abstract Double GetWhitespaceWidth(Canvas graphics)
+  method abstract ValueTuple<Double, Double>? GetSubSuperscriptMetrics(Boolean superscript)
+  method virtual Boolean MatchesEmojiPresentation(Rune baseCodepoint, EmojiPresentation presentation)
+  method virtual Boolean TryGetPaletteColor(Int32 paletteIndex, Int32 entryIndex, out PaintColor color)
+  method virtual Double GetVerticalAdvance(Rune rune)
+  method virtual Double GetVerticalOriginY(Rune rune)
+  method virtual Int32 GetGlyphAdvanceWidthDesignUnits(Int32 glyphIndex)
+  method virtual Int32 GetGlyphIndex(Rune rune)
+  method virtual Int32? FirstDarkPalette()
+  method virtual Int32? FirstLightPalette()
+  property Boolean HasMathTable { get; }
+  property Boolean HasVerticalMetrics { get; }
+  property Boolean HasVerticalOrigin { get; }
+  property Double Ascent { get; }
+  property Double FontUnitsPerEm { get; }
+  property Double Height { get; }
+  property Double LeftPadding { get; }
+  property Double NormalLineHeight { get; }
+  property Double Size { get; }
+  property Double TextBaselineOffset { get; }
+  property Double UnderlineOffset { get; }
+  property Double UnderlinePosition { get; }
+  property Double UnderlineThickness { get; }
+  property Double? CapHeightEm { get; }
+  property Double? ObliqueSkewSinus { get; }
+  property Double? XHeightEm { get; }
+  property Int32 PaletteCount { get; }
+  property Int32 PaletteEntryCount { get; }
+  property MathTable MathTable { get; }
+  property String FaceKey { get; }
+  property SyntheticStyle SyntheticStyle { get; }
+  property Typeface Typeface { get; }
+PeachDrawing.Core.FontFaceDescriptors : struct
+  ctor(AxisRange? Weight = null, Boolean? IsItalic = null, AxisRange? Width = null, AxisRange? Oblique = null)
+  method Void Deconstruct(out AxisRange? Weight, out Boolean? IsItalic, out AxisRange? Width, out AxisRange? Oblique)
+  method virtual Boolean Equals(FontFaceDescriptors other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property AxisRange? Oblique { get; init; }
+  property AxisRange? Weight { get; init; }
+  property AxisRange? Width { get; init; }
+  property Boolean? IsItalic { get; init; }
+PeachDrawing.Core.FontFamily : abstract class
+  property String Name { get; }
+PeachDrawing.Core.FontPalette : sealed class
+  ctor(Int32 BasePaletteIndex, IReadOnlyList<KeyValuePair<Int32, PaintColor>> Overrides)
+  method FontPalette <Clone>$()
+  method Void Deconstruct(out Int32 BasePaletteIndex, out IReadOnlyList<KeyValuePair<Int32, PaintColor>> Overrides)
+  method virtual Boolean Equals(FontPalette other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property IReadOnlyList<KeyValuePair<Int32, PaintColor>> Overrides { get; init; }
+  property Int32 BasePaletteIndex { get; init; }
+PeachDrawing.Core.Geometry.PathMeasure : sealed class
+  ctor(GraphicsPath path, Double tolerance = 0.05)
+  method PathSample PointAtLength(Double distance)
+  property Boolean IsEmpty { get; }
+  property Double Area { get; }
+  property Double Length { get; }
+  property Rect Bounds { get; }
+PeachDrawing.Core.Geometry.PathOperation : enum Int32
+  Difference = 2
+  Intersect = 1
+  Union = 0
+  Xor = 3
+PeachDrawing.Core.Geometry.PathOperations : static class
+  method static Void Combine(GraphicsPath first, GraphicsPath second, PathOperation operation, GraphicsPath destination)
+PeachDrawing.Core.Geometry.PathSample : struct
+  ctor(Double X, Double Y, Double TangentDegrees)
+  method Void Deconstruct(out Double X, out Double Y, out Double TangentDegrees)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PathSample other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double TangentDegrees { get; init; }
+  property Double X { get; init; }
+  property Double Y { get; init; }
+PeachDrawing.Core.Geometry.PathShapes : static class
+  method static Void AddCircle(GraphicsPath path, Double centerX, Double centerY, Double radius)
+  method static Void AddEllipse(GraphicsPath path, Double centerX, Double centerY, Double radiusX, Double radiusY)
+  method static Void AddPie(GraphicsPath path, Double centerX, Double centerY, Double radiusX, Double radiusY, Double startAngleRadians, Double sweepRadians)
+  method static Void AddPolygon(GraphicsPath path, IReadOnlyList<PaintPoint> points)
+  method static Void AddRegularPolygon(GraphicsPath path, Double centerX, Double centerY, Double radius, Int32 sides, Double rotationRadians = 0)
+  method static Void AddRoundedRectangle(GraphicsPath path, Rect rect, Double radius)
+  method static Void AddRoundedRectangle(GraphicsPath path, Rect rect, Double topLeftX, Double topLeftY, Double topRightX, Double topRightY, Double bottomRightX, Double bottomRightY, Double bottomLeftX, Double bottomLeftY)
+  method static Void AddStar(GraphicsPath path, Double centerX, Double centerY, Double outerRadius, Double innerRadius, Int32 points, Double rotationRadians = 0)
+  method static Void AddWave(GraphicsPath path, PaintPoint start, PaintPoint end, Double amplitude, Double wavelength)
+PeachDrawing.Core.Geometry.PolygonClipper : static class
+  method static List<PaintPoint> ClipToRect(IReadOnlyList<PaintPoint> polygon, Rect rect)
+PeachDrawing.Core.GlyphPlacement : struct
+  ctor(Int32 GlyphIndex, Double X, Double Y)
+  method Void Deconstruct(out Int32 GlyphIndex, out Double X, out Double Y)
+  method virtual Boolean Equals(GlyphPlacement other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double X { get; init; }
+  property Double Y { get; init; }
+  property Int32 GlyphIndex { get; init; }
+PeachDrawing.Core.GradientSpread : enum Int32
+  Pad = 0
+  Repeat = 1
+PeachDrawing.Core.GradientStop : struct
+  ctor(PaintColor PaintColor, Double Position)
+  method Void Deconstruct(out PaintColor PaintColor, out Double Position)
+  method virtual Boolean Equals(GradientStop other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Position { get; init; }
+  property PaintColor PaintColor { get; init; }
+PeachDrawing.Core.GraphicsPath : abstract class
+  method IReadOnlyList<CurveContour> GetCurveContours()
+  method IReadOnlyList<PathContour> Flatten(Double tolerance)
+  method Void ArcTo(Double x, Double y, Double size, Corner corner)
+  method abstract GraphicsPath ClipToRect(Rect rect)
+  method abstract Void Dispose()
+  method virtual Void AddArc(Double x, Double y, Double radiusX, Double radiusY, Double rotationAngle, Boolean isLargeArc, Boolean sweepClockwise)
+  method virtual Void AddBezierTo(Double x1, Double y1, Double x2, Double y2, Double x3, Double y3)
+  method virtual Void AddMove(Double x, Double y)
+  method virtual Void AddPath(GraphicsPath path)
+  method virtual Void ArcTo(Double x, Double y, Double radiusX, Double radiusY, Corner corner)
+  method virtual Void CloseFigure()
+  method virtual Void LineTo(Double x, Double y)
+  method virtual Void Start(Double x, Double y)
+  method virtual Void Transform(Matrix3x2 matrix)
+  property FillMode FillMode { get; set; }
+PeachDrawing.Core.GraphicsPath+Corner : enum Int32
+  BottomLeft = 2
+  BottomRight = 3
+  TopLeft = 0
+  TopRight = 1
+PeachDrawing.Core.HatchBrush : sealed class
+  ctor(HatchStyle style, PaintColor foreground, PaintColor background, Double spacing = 8, Double lineWidth = 0)
+  method TileBrush ToTileBrush(Canvas canvas)
+  property Double LineWidth { get; }
+  property Double Spacing { get; }
+  property HatchStyle Style { get; }
+  property PaintColor Background { get; }
+  property PaintColor Foreground { get; }
+PeachDrawing.Core.HatchStyle : enum Int32
+  BackwardDiagonal = 3
+  Cross = 4
+  DiagonalCross = 5
+  ForwardDiagonal = 2
+  Horizontal = 0
+  Vertical = 1
+PeachDrawing.Core.ISvgGlyphPainter : interface
+  method abstract Boolean TryPaint(Typeface typeface, UInt16 glyph, SvgGlyph svg, Double fontSize, Double originX, Double baselineY, PaintColor foreground, Int32 paletteIndex, IReadOnlyDictionary<Int32, PaintColor> overrides)
+PeachDrawing.Core.Image : abstract class
+  method abstract Void Dispose()
+  method virtual PixelBuffer? GetPixels()
+  property Boolean Interpolate { get; set; }
+  property Double Height { get; }
+  property Double Width { get; }
+PeachDrawing.Core.ImageSampling : enum Int32
+  Automatic = 0
+  Bicubic = 3
+  Bilinear = 2
+  Nearest = 1
+  Pixelated = 4
+PeachDrawing.Core.InkCrossings : static class
+  method static IReadOnlyList<InkSpan> Measure(Typeface typeface, String text, Double scale, Double bandTop, Double bandBottom, Double letterSpacing, ShapeSettings features)
+PeachDrawing.Core.InkSpan : struct
+  ctor(Double Start, Double End)
+  method Void Deconstruct(out Double Start, out Double End)
+  method virtual Boolean Equals(InkSpan other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double End { get; init; }
+  property Double Start { get; init; }
+PeachDrawing.Core.IntRect : struct
+  ctor(Int32 Left, Int32 Top, Int32 Right, Int32 Bottom)
+  method IntRect Intersect(in IntRect other)
+  method Void Deconstruct(out Int32 Left, out Int32 Top, out Int32 Right, out Int32 Bottom)
+  method virtual Boolean Equals(IntRect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean IsEmpty { get; }
+  property Int32 Bottom { get; init; }
+  property Int32 Height { get; }
+  property Int32 Left { get; init; }
+  property Int32 Right { get; init; }
+  property Int32 Top { get; init; }
+  property Int32 Width { get; }
+  property static IntRect Empty { get; }
+PeachDrawing.Core.LayerEffect : abstract class
+  method abstract LayerEffect <Clone>$()
+  method virtual Boolean Equals(LayerEffect other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+PeachDrawing.Core.LayerOptions : struct
+  ctor(Double Opacity = 1, PaintBlendMode BlendMode = Normal, ColorMatrix? ColorMatrix = null, Rect? Bounds = null, IReadOnlyList<LayerEffect> Effects = null)
+  method Void Deconstruct(out Double Opacity, out PaintBlendMode BlendMode, out ColorMatrix? ColorMatrix, out Rect? Bounds, out IReadOnlyList<LayerEffect> Effects)
+  method virtual Boolean Equals(LayerOptions other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property ColorMatrix? ColorMatrix { get; init; }
+  property Double Opacity { get; init; }
+  property IReadOnlyList<LayerEffect> Effects { get; init; }
+  property PaintBlendMode BlendMode { get; init; }
+  property Rect? Bounds { get; init; }
+PeachDrawing.Core.LineCap : enum Int32
+  Butt = 0
+  Round = 1
+  Square = 2
+PeachDrawing.Core.LineJoin : enum Int32
+  Bevel = 2
+  Miter = 0
+  Round = 1
+PeachDrawing.Core.LinearGradientBrush : sealed class
+  ctor(PaintPoint start, PaintPoint end, IReadOnlyList<GradientStop> stops, GradientSpread spread)
+  property GradientSpread Spread { get; }
+  property IReadOnlyList<GradientStop> Stops { get; }
+  property PaintPoint End { get; }
+  property PaintPoint Start { get; }
+PeachDrawing.Core.Matrix3x2Extensions : static class
+  method static Boolean TryInvert(Matrix3x2 matrix, out Matrix3x2 inverse)
+  method static Matrix3x2 RebaseOrigin(Matrix3x2 matrix, Double px, Double py)
+  method static Matrix3x2 Then(Matrix3x2 matrix, Matrix3x2 next)
+PeachDrawing.Core.PaintBlendMode : enum Int32
+  Color = 14
+  ColorBurn = 7
+  ColorDodge = 6
+  Darken = 4
+  Difference = 10
+  Exclusion = 11
+  HardLight = 8
+  Hue = 12
+  Lighten = 5
+  Luminosity = 15
+  Multiply = 1
+  Normal = 0
+  Overlay = 3
+  Saturation = 13
+  Screen = 2
+  SoftLight = 9
+PeachDrawing.Core.PaintColor : struct
+  field static PaintColor Empty
+  method ValueTuple<Byte, Byte, Byte> ToRgb()
+  method static PaintColor FromArgb(Int32 alpha, Int32 red, Int32 green, Int32 blue)
+  method static PaintColor FromArgb(Int32 red, Int32 green, Int32 blue)
+  method static PaintColor FromCmyk(Int32 alpha, Single cyan, Single magenta, Single yellow, Single key)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean IsCmyk { get; }
+  property Boolean IsEmpty { get; }
+  property Byte A { get; }
+  property Byte B { get; }
+  property Byte G { get; }
+  property Byte R { get; }
+  property Single C { get; }
+  property Single K { get; }
+  property Single M { get; }
+  property Single Y { get; }
+  property static PaintColor Black { get; }
+  property static PaintColor LightGray { get; }
+  property static PaintColor Transparent { get; }
+  property static PaintColor White { get; }
+  property static PaintColor WhiteSmoke { get; }
+PeachDrawing.Core.PaintFontStyle : enum Int32
+  Bold = 1
+  Italic = 2
+  Regular = 0
+  Strikeout = 8
+  Underline = 4
+PeachDrawing.Core.PaintPoint : struct
+  ctor(Double X, Double Y)
+  field static PaintPoint Empty
+  method Void Deconstruct(out Double X, out Double Y)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PaintPoint other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double X { get; set; }
+  property Double Y { get; set; }
+PeachDrawing.Core.ParagraphPaint : struct
+  ctor(PaintColor Color, TextDecorations Decorations = None, PaintColor? DecorationColor = null)
+  method Void Deconstruct(out PaintColor Color, out TextDecorations Decorations, out PaintColor? DecorationColor)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ParagraphPaint other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property PaintColor Color { get; init; }
+  property PaintColor? DecorationColor { get; init; }
+  property TextDecorations Decorations { get; init; }
+PeachDrawing.Core.PathCommand : struct
+  ctor(PathCommandKind Kind, PaintPoint Control1, PaintPoint Control2, PaintPoint End)
+  method Void Deconstruct(out PathCommandKind Kind, out PaintPoint Control1, out PaintPoint Control2, out PaintPoint End)
+  method static PathCommand CubicTo(PaintPoint control1, PaintPoint control2, PaintPoint end)
+  method static PathCommand LineTo(PaintPoint end)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PathCommand other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property PaintPoint Control1 { get; init; }
+  property PaintPoint Control2 { get; init; }
+  property PaintPoint End { get; init; }
+  property PathCommandKind Kind { get; init; }
+PeachDrawing.Core.PathCommandKind : enum Int32
+  Cubic = 1
+  Line = 0
+PeachDrawing.Core.PathContour : sealed class
+  ctor(IReadOnlyList<PaintPoint> Points, Boolean Closed)
+  method PathContour <Clone>$()
+  method Void Deconstruct(out IReadOnlyList<PaintPoint> Points, out Boolean Closed)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PathContour other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean Closed { get; init; }
+  property IReadOnlyList<PaintPoint> Points { get; init; }
+PeachDrawing.Core.PathGlyph : struct
+  ctor(Int32 GlyphIndex, Double Advance, Matrix3x2 Transform)
+  method Void Deconstruct(out Int32 GlyphIndex, out Double Advance, out Matrix3x2 Transform)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PathGlyph other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Advance { get; init; }
+  property Int32 GlyphIndex { get; init; }
+  property Matrix3x2 Transform { get; init; }
+PeachDrawing.Core.PathText : static class
+  method static IReadOnlyList<PathGlyph> Layout(Typeface typeface, Double size, String text, PathMeasure path, PathTextOptions options = null)
+  method static Matrix3x2? GetGlyphFrame(PathMeasure path, Double distance, PathTextSide side = Left, Double normalOffset = 0, Double rotationDegrees = 0)
+  method static Void DrawStringAlongPath(Canvas canvas, String text, Typeface typeface, Double size, PaintColor color, GraphicsPath path, PathTextOptions options = null)
+PeachDrawing.Core.PathTextAnchor : enum Int32
+  End = 2
+  Middle = 1
+  Start = 0
+PeachDrawing.Core.PathTextOptions : struct
+  ctor(Double StartOffset = 0, PathTextAnchor Anchor = Start, PathTextSide Side = Left, Double LetterSpacing = 0, ShapeSettings? Shaping = null)
+  method Void Deconstruct(out Double StartOffset, out PathTextAnchor Anchor, out PathTextSide Side, out Double LetterSpacing, out ShapeSettings? Shaping)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PathTextOptions other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double LetterSpacing { get; init; }
+  property Double StartOffset { get; init; }
+  property PathTextAnchor Anchor { get; init; }
+  property PathTextSide Side { get; init; }
+  property ShapeSettings? Shaping { get; init; }
+PeachDrawing.Core.PathTextSide : enum Int32
+  Left = 0
+  Right = 1
+PeachDrawing.Core.Pen : sealed class
+  ctor()
+  method Void SetDashPattern(Double[] pattern, Double offset)
+  property Brush Paint { get; set; }
+  property DashStyle DashStyle { get; set; }
+  property Double DashOffset { get; }
+  property Double MiterLimit { get; set; }
+  property Double Width { get; set; }
+  property Double[] DashPattern { get; }
+  property LineCap LineCap { get; set; }
+  property LineJoin LineJoin { get; set; }
+PeachDrawing.Core.PixelBuffer : struct
+  ctor(Int32 Width, Int32 Height, ReadOnlyMemory<Byte> PremultipliedRgba)
+  method Void Deconstruct(out Int32 Width, out Int32 Height, out ReadOnlyMemory<Byte> PremultipliedRgba)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PixelBuffer other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Int32 Height { get; init; }
+  property Int32 Width { get; init; }
+  property ReadOnlyMemory<Byte> PremultipliedRgba { get; init; }
+PeachDrawing.Core.PixelMath : static class
+  method static Int32 Div255(Int32 x)
+  method static Void Premultiply(Span<Byte> rgba)
+  method static Void Unpremultiply(ReadOnlySpan<Byte> premultiplied, Span<Byte> destination)
+PeachDrawing.Core.RNetworkResponse : class
+  ctor(Stream ResourceStream, Dictionary<String, String[]> ResponseHeaders)
+  method Void Deconstruct(out Stream ResourceStream, out Dictionary<String, String[]> ResponseHeaders)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(RNetworkResponse other)
+  method virtual Int32 GetHashCode()
+  method virtual RNetworkResponse <Clone>$()
+  method virtual String ToString()
+  property Dictionary<String, String[]> ResponseHeaders { get; init; }
+  property Stream ResourceStream { get; init; }
+PeachDrawing.Core.RUri : class
+  ctor(RUri baseUri, RUri uri)
+  ctor(RUri baseUri, String uri)
+  ctor(String uriString)
+  ctor(String uriString, UriKind uriKind)
+  ctor(Uri uri)
+  property Boolean IsAbsoluteUri { get; }
+  property Boolean IsFile { get; }
+  property String AbsoluteUri { get; }
+  property String OriginalString { get; }
+  property String Scheme { get; }
+  property Uri Uri { get; }
+PeachDrawing.Core.RadialGradientBrush : sealed class
+  ctor(PaintPoint center, PaintPoint focus, Double radiusX, Double radiusY, IReadOnlyList<GradientStop> stops, GradientSpread spread)
+  property Double RadiusX { get; }
+  property Double RadiusY { get; }
+  property GradientSpread Spread { get; }
+  property IReadOnlyList<GradientStop> Stops { get; }
+  property PaintPoint Center { get; }
+  property PaintPoint Focus { get; }
+PeachDrawing.Core.RasterRegion : sealed class
+  ctor(Canvas graphics, RasterSurface surface)
+  method virtual Void Dispose()
+  property Canvas Graphics { get; }
+  property RasterSurface Surface { get; }
+PeachDrawing.Core.RasterSurface : sealed class
+  ctor(Int32 width, Int32 height, Int32 gridX, Int32 gridY, Double pixelsPerUnitX, Double pixelsPerUnitY)
+  method Span<Byte> Row(Int32 y)
+  method Void Clear()
+  method virtual Void Dispose()
+  property Double PixelsPerUnitX { get; }
+  property Double PixelsPerUnitY { get; }
+  property Int32 GridX { get; }
+  property Int32 GridY { get; }
+  property Int32 Height { get; }
+  property Int32 Stride { get; }
+  property Int32 Width { get; }
+  property IntRect Bounds { get; }
+  property Memory<Byte> PixelMemory { get; }
+  property Rect LayoutRect { get; }
+  property Span<Byte> Pixels { get; }
+PeachDrawing.Core.Rect : struct
+  ctor(Double x, Double y, Double width, Double height)
+  ctor(PaintPoint location, Size size)
+  field static Rect Empty
+  method Boolean Contains(Double x, Double y)
+  method Boolean Contains(PaintPoint pt)
+  method Boolean Contains(Rect rect)
+  method Boolean IntersectsWith(Rect rect)
+  method Void Inflate(Double x, Double y)
+  method Void Inflate(Size size)
+  method Void Intersect(Rect rect)
+  method Void Offset(Double x, Double y)
+  method Void Offset(PaintPoint pos)
+  method static Rect FromLTRB(Double left, Double top, Double right, Double bottom)
+  method static Rect Inflate(Rect rect, Double x, Double y)
+  method static Rect Intersect(Rect a, Rect b)
+  method static Rect Union(Rect a, Rect b)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean IsEmpty { get; }
+  property Double Bottom { get; }
+  property Double Height { get; set; }
+  property Double Left { get; }
+  property Double Right { get; }
+  property Double Top { get; }
+  property Double Width { get; set; }
+  property Double X { get; set; }
+  property Double Y { get; set; }
+  property PaintPoint Location { get; set; }
+  property Size Size { get; set; }
+PeachDrawing.Core.RenderContext : abstract class
+  method Boolean FamilyHasExplicitUnicodeRanges(String family)
+  method Boolean IsFontExists(String font)
+  method Brush GetConicGradientBrush(PaintPoint center, Double outerRadius, PaintColor[] colors, Double[] anglesRad)
+  method Brush GetLinearGradientBrush(PaintPoint p1, PaintPoint p2, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False)
+  method Brush GetLinearGradientBrush(Rect rect, PaintColor color1, PaintColor color2, Double angle)
+  method Brush GetRadialGradientBrush(PaintPoint center, Double radiusX, Double radiusY, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False, PaintPoint? focalCenter = null)
+  method Brush GetSolidBrush(PaintColor color)
+  method Font GetFont(String family, Double size, PaintFontStyle style, Double? weight = null, Double? stretch = null, Double? obliqueSkewSinus = null, String variations = null)
+  method Font GetFontForCodepoint(String family, Double size, PaintFontStyle style, Rune codepoint, Double? weight = null, Double? stretch = null, Double? obliqueSkewSinus = null, String variations = null)
+  method Font GetSystemFallbackFontForCodepoint(Double size, PaintFontStyle style, Rune codepoint, Double? weight = null, Double? stretch = null, Double? obliqueSkewSinus = null, EmojiPresentation presentation = NoPreference, String variations = null)
+  method Image ImageFromStream(Stream memoryStream)
+  method PaintColor GetColor(String colorName)
+  method Pen GetPen(Brush brush)
+  method Pen GetPen(PaintColor color)
+  method Task<Boolean> AddFontFamilyFromUrl(String fontFamilyName, String url, String format, RUri baseUri = null, FontFaceDescriptors descriptors = null, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  method Task<Boolean> AddLocalFontFamily(String fontFamilyName, String localFontFaceName, FontFaceDescriptors descriptors = null, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  method Void AddFontFamily(FontFamily fontFamily)
+  method Void AddFontFamilyMapping(String fromFamily, String toFamily)
+  method Void ClearFontCache()
+  method abstract String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
+  method virtual ISvgGlyphPainter CreateSvgGlyphPainter(Canvas host)
+  method virtual Task<RNetworkResponse> GetResourceStream(RUri uri)
+  property Boolean RasterAntiAliasing { get; set; }
+  property Boolean TextStemDarkening { get; set; }
+  property Double LayoutUnitsPerPoint { get; }
+  property Double RasterizationDpi { get; set; }
+  property Int64 MaxRasterPixels { get; set; }
+  property RUri BaseUri { get; }
+  property TextHinting TextHinting { get; set; }
+PeachDrawing.Core.Size : struct
+  ctor(Double Width, Double Height)
+  ctor(PaintPoint pt)
+  ctor(Size size)
+  field static Size Empty
+  method Void Deconstruct(out Double Width, out Double Height)
+  method static Size Add(Size sz1, Size sz2)
+  method static Size Subtract(Size sz1, Size sz2)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(Size other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean IsEmpty { get; }
+  property Double Height { get; set; }
+  property Double Width { get; set; }
+PeachDrawing.Core.SolidBrush : sealed class
+  ctor(PaintColor color)
+  property PaintColor PaintColor { get; }
+PeachDrawing.Core.TextDecorations : enum Int32
+  LineThrough = 4
+  None = 0
+  Overline = 2
+  Underline = 1
+PeachDrawing.Core.TextHinting : enum Int32
+  Monochrome = 2
+  None = 0
+  Standard = 1
+PeachDrawing.Core.TextMeasurement : static class
+  field const Double BoldEmphasis
+  field const Double ItalicSkewAngleSinus
+  method static Size Measure(String text, Typeface typeface, Double size, SyntheticStyle synthesis, ShapeSettings features)
+PeachDrawing.Core.TileBrush : sealed class
+  ctor(Image tile, Double cellWidth, Double cellHeight)
+  ctor(Image tile, Double cellWidth, Double cellHeight, Matrix3x2 transform, ImageSampling sampling = Automatic)
+  property Double CellHeight { get; }
+  property Double CellWidth { get; }
+  property Image Tile { get; }
+  property ImageSampling Sampling { get; }
+  property Matrix3x2 Transform { get; }
+PeachDrawing.Core.TypefaceFont : sealed class
+  ctor(Typeface typeface, Double size, SyntheticStyle syntheticStyle = None, Double? obliqueSkewSinus = null)
+  method virtual Boolean HasGlyph(Rune rune)
+  method virtual Boolean MatchesEmojiPresentation(Rune baseCodepoint, EmojiPresentation presentation)
+  method virtual Boolean SupportsFontVariantCaps(CapsMode feature)
+  method virtual Boolean SupportsFontVariantPosition(SubSuperMode feature)
+  method virtual Boolean TryGetPaletteColor(Int32 paletteIndex, Int32 entryIndex, out PaintColor color)
+  method virtual Double GetVerticalAdvance(Rune rune)
+  method virtual Double GetVerticalOriginY(Rune rune)
+  method virtual Double GetWhitespaceWidth(Canvas graphics)
+  method virtual Int32 GetGlyphAdvanceWidthDesignUnits(Int32 glyphIndex)
+  method virtual Int32 GetGlyphIndex(Rune rune)
+  method virtual Int32? FirstDarkPalette()
+  method virtual Int32? FirstLightPalette()
+  method virtual ValueTuple<Double, Double>? GetSubSuperscriptMetrics(Boolean superscript)
+  property Boolean HasMathTable { get; }
+  property Boolean HasVerticalMetrics { get; }
+  property Boolean HasVerticalOrigin { get; }
+  property Double Ascent { get; }
+  property Double FontUnitsPerEm { get; }
+  property Double Height { get; }
+  property Double LeftPadding { get; }
+  property Double NormalLineHeight { get; }
+  property Double Size { get; }
+  property Double UnderlineOffset { get; }
+  property Double UnderlinePosition { get; }
+  property Double UnderlineThickness { get; }
+  property Double? CapHeightEm { get; }
+  property Double? ObliqueSkewSinus { get; }
+  property Double? XHeightEm { get; }
+  property Int32 PaletteCount { get; }
+  property Int32 PaletteEntryCount { get; }
+  property MathTable MathTable { get; }
+  property String FaceKey { get; }
+  property SyntheticStyle SyntheticStyle { get; }
+  property Typeface Typeface { get; }

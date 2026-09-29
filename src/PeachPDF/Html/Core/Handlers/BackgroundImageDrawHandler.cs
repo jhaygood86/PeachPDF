@@ -11,7 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -98,9 +98,9 @@ namespace PeachPDF.Html.Core.Handlers
             // afterward since the same Image may be reused elsewhere (a plain <img>, or a differently-
             // configured background layer) where smoothing is still wanted. See Image.Interpolate's
             // own doc comment.
-            var wasInterpolate = image.Interpolate;
-            if (backgroundRepeat != "no-repeat")
-                image.Interpolate = false;
+            // An explicit `image-rendering` wins over that default.
+            var sampling = ImageRenderingResolver.Resolve(
+                box.ImageRendering.Value, backgroundRepeat != "no-repeat" ? ImageSampling.Pixelated : ImageSampling.Automatic);
 
             // Bound the repeat loops to the tiles that can actually land in the visible area, not
             // positioningRect's full extent - see visibleRect's own doc comment above.
@@ -109,20 +109,18 @@ namespace PeachPDF.Html.Core.Handlers
             switch (backgroundRepeat)
             {
                 case "no-repeat":
-                    g.DrawImage(image, destRect, srcRect);
+                    g.DrawImage(image, destRect, srcRect, sampling);
                     break;
                 case "repeat-x":
-                    DrawRepeatX(g, image, tileBounds, srcRect, destRect);
+                    DrawRepeatX(g, image, tileBounds, srcRect, destRect, sampling);
                     break;
                 case "repeat-y":
-                    DrawRepeatY(g, image, tileBounds, srcRect, destRect);
+                    DrawRepeatY(g, image, tileBounds, srcRect, destRect, sampling);
                     break;
                 default:
-                    DrawRepeat(g, image, tileBounds, srcRect, destRect);
+                    DrawRepeat(g, image, tileBounds, srcRect, destRect, sampling);
                     break;
             }
-
-            image.Interpolate = wasInterpolate;
 
             g.PopClip();
         }
@@ -155,31 +153,31 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Draw the background image repeating it over the X axis, at the resolved tile size.
         /// </summary>
-        private static void DrawRepeatX(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect)
+        private static void DrawRepeatX(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect, ImageSampling sampling)
         {
             var startX = FirstTileStart(destRect.X, destRect.Width, rectangle.X);
 
             var x = startX;
             for (var i = 0; i < MaxTilesPerAxis && x < rectangle.Right; i++, x += destRect.Width)
-                g.DrawImage(image, new Rect(x, destRect.Y, destRect.Width, destRect.Height), srcRect);
+                g.DrawImage(image, new Rect(x, destRect.Y, destRect.Width, destRect.Height), srcRect, sampling);
         }
 
         /// <summary>
         /// Draw the background image repeating it over the Y axis, at the resolved tile size.
         /// </summary>
-        private static void DrawRepeatY(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect)
+        private static void DrawRepeatY(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect, ImageSampling sampling)
         {
             var startY = FirstTileStart(destRect.Y, destRect.Height, rectangle.Y);
 
             var y = startY;
             for (var i = 0; i < MaxTilesPerAxis && y < rectangle.Bottom; i++, y += destRect.Height)
-                g.DrawImage(image, new Rect(destRect.X, y, destRect.Width, destRect.Height), srcRect);
+                g.DrawImage(image, new Rect(destRect.X, y, destRect.Width, destRect.Height), srcRect, sampling);
         }
 
         /// <summary>
         /// Draw the background image repeating it over both X and Y axes, at the resolved tile size.
         /// </summary>
-        private static void DrawRepeat(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect)
+        private static void DrawRepeat(Canvas g, Image image, Rect rectangle, Rect srcRect, Rect destRect, ImageSampling sampling)
         {
             var startX = FirstTileStart(destRect.X, destRect.Width, rectangle.X);
             var startY = FirstTileStart(destRect.Y, destRect.Height, rectangle.Y);
@@ -189,7 +187,7 @@ namespace PeachPDF.Html.Core.Handlers
             {
                 var x = startX;
                 for (var i = 0; i < MaxTilesPerAxis && x < rectangle.Right; i++, x += destRect.Width)
-                    g.DrawImage(image, new Rect(x, y, destRect.Width, destRect.Height), srcRect);
+                    g.DrawImage(image, new Rect(x, y, destRect.Width, destRect.Height), srcRect, sampling);
             }
         }
 

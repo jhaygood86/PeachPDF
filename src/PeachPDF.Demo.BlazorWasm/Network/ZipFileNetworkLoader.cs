@@ -1,4 +1,4 @@
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using System.IO.Compression;
 using System.Text;
 using PeachPDF.Network;

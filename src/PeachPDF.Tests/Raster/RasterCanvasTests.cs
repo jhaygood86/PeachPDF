@@ -1,5 +1,5 @@
 using PeachPDF.Adapters;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachDrawing;
 using System.Numerics;
 
@@ -65,7 +65,7 @@ namespace PeachPDF.Tests.Raster
         public void LayoutUnits_AreDividedByPixelsPerPoint_ThenScaledToPixels()
         {
             // 96 layout units per inch (ppp 96/72) painted at 288 dpi: 3 pixels per layout unit.
-            using var scope = RasterSurfaceFactory.Create(Adapter, 96.0 / 72.0, new Rect(0, 0, 10, 10), 288, RasterCanvas.MaxTilePixels);
+            using var scope = RasterSurfaceFactory.Create(Adapter, 96.0 / 72.0, new Rect(0, 0, 10, 10), 288, 64_000_000);
 
             Assert.NotNull(scope);
             Assert.Equal(30, scope.Surface.Width);
@@ -73,10 +73,10 @@ namespace PeachPDF.Tests.Raster
 
             scope.Graphics.DrawRectangle(Solid(scope.Graphics, 255, 0, 255, 0), 1, 1, 2, 2);
 
-            Assert.Equal(new byte[] { 0, 255, 0, 255 }, Pixel(scope.Graphics, 3, 3));
-            Assert.Equal(new byte[] { 0, 255, 0, 255 }, Pixel(scope.Graphics, 8, 8));
-            Assert.Equal(new byte[] { 0, 0, 0, 0 }, Pixel(scope.Graphics, 2, 3));
-            Assert.Equal(new byte[] { 0, 0, 0, 0 }, Pixel(scope.Graphics, 9, 3));
+            Assert.Equal(new byte[] { 0, 255, 0, 255 }, Pixel((RasterCanvas)scope.Graphics, 3, 3));
+            Assert.Equal(new byte[] { 0, 255, 0, 255 }, Pixel((RasterCanvas)scope.Graphics, 8, 8));
+            Assert.Equal(new byte[] { 0, 0, 0, 0 }, Pixel((RasterCanvas)scope.Graphics, 2, 3));
+            Assert.Equal(new byte[] { 0, 0, 0, 0 }, Pixel((RasterCanvas)scope.Graphics, 9, 3));
         }
 
         [Theory]

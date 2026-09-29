@@ -2,7 +2,7 @@ using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
-using PeachDrawing.Abstractions;
+using PeachDrawing.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -988,6 +988,12 @@ namespace PeachPDF.Html.Core.Dom
             var inheritedGeneratedContent = _computedStyle.GeneratedContent;
             inheritedGeneratedContent = inheritedGeneratedContent.SetPropertyValue(inheritedGeneratedContent.Quotes, parentStyle.GeneratedContent.Quotes, static (a, v) => a with { Quotes = v });
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.GeneratedContent, inheritedGeneratedContent, static (s, a) => s with { GeneratedContent = a });
+
+            // `image-rendering` is the one Inherited: true property in BackgroundArea (the rest are box-local), so, like
+            // `quotes` above, it is copied on its own rather than by adopting the whole area.
+            var inheritedBackground = _computedStyle.Background;
+            inheritedBackground = inheritedBackground.SetPropertyValue(inheritedBackground.ImageRendering, parentStyle.Background.ImageRendering, static (a, v) => a with { ImageRendering = v });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Background, inheritedBackground, static (s, a) => s with { Background = a });
 
             // The invalidations these bypass (border/padding/opacity/transform/color/font-palette caches)
             // are intentionally skipped here - every value copied above either has no such cache, or (for
