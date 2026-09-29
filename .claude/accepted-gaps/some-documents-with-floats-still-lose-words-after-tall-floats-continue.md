@@ -19,4 +19,4 @@ A duplicated word is a lesser failure than a lost one, and this change trades in
 corpus words lost fall by an order of magnitude and duplicated words stay at zero. On the corpora that already
 duplicated words, duplicates rise slightly (about 3%) while losses fall.
 
-Tracking issue: not yet filed.
+Tracking issue: #1523.

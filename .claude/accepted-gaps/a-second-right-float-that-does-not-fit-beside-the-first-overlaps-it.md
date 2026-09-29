@@ -21,9 +21,6 @@ high as possible", and the sentence that a float without enough horizontal room 
 apply to right floats as they do to left ones.
 
 It shows up more once a tall float continues across pages, because the text that used to be lost beside such an
-overlap is now drawn. On a corpus of 500 generated float layouts the number of overlapping word pairs went from
-1,542 to 4,873 with the continuation change; the two worst documents were an `overflow: hidden` wrapper holding
-only a tall right float next to another right float.
+overlap is now drawn, so the overlap is visible in documents where the loss hid it.
 
-Tracking issue: not yet filed. This note was recorded offline; file the issue upstream with the table above and
-add its number here.
+Tracking issue: #1522.
