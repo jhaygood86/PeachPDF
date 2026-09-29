@@ -76,5 +76,46 @@ namespace PeachPDF.Tests.Html.Core.Paint
             Assert.True(Pixel(page, 50, 76)[0] > 200);
             Assert.True(Pixel(page, 50, 3)[2] > 200);
         }
+
+        private static string Kids = "<div style=\"width:20pt;height:20pt;background:#f00;-webkit-box-flex:0\"></div><div style=\"width:20pt;height:30pt;background:#00f;-webkit-box-flex:0\"></div>";
+
+        [Theory]
+        [InlineData("display:-webkit-box;-webkit-box-pack:center;-webkit-box-align:center", "display:flex;justify-content:center;align-items:center")]
+        [InlineData("display:-webkit-box;-webkit-box-pack:end;-webkit-box-align:end", "display:flex;justify-content:flex-end;align-items:flex-end")]
+        [InlineData("display:-webkit-box;-webkit-box-pack:justify", "display:flex;justify-content:space-between")]
+        [InlineData("display:-webkit-box;-webkit-box-direction:reverse", "display:flex;flex-direction:row-reverse")]
+        [InlineData("display:-moz-box;-moz-box-pack:center", "display:flex;justify-content:center")]
+        [InlineData("display:-webkit-box;-webkit-box-orient:vertical", "display:block")]
+        public async Task LegacyBox_PaintsTheSameAsTheStandardModel(string legacyStyle, string standardStyle)
+        {
+            var legacy = AllPixels(await Paint($"<div style=\"margin:0;width:100pt;height:80pt;{legacyStyle}\">{Kids}</div>"), 120, 100);
+            var standard = AllPixels(await Paint($"<div style=\"margin:0;width:100pt;height:80pt;{standardStyle}\">{Kids}</div>"), 120, 100);
+
+            Assert.Equal(standard, legacy);
+            Assert.Contains(legacy, b => b != 0);
+        }
+
+        [Fact]
+        public async Task LegacyBoxPack_ActuallyMovesTheItems()
+        {
+            var start = AllPixels(await Paint($"<div style=\"margin:0;width:100pt;height:80pt;display:-webkit-box\">{Kids}</div>"), 120, 100);
+            var centered = AllPixels(await Paint($"<div style=\"margin:0;width:100pt;height:80pt;display:-webkit-box;-webkit-box-pack:center\">{Kids}</div>"), 120, 100);
+
+            Assert.NotEqual(start, centered);
+        }
+
+        [Fact]
+        public async Task LineClampIdiom_PaintsTheSameAsStandardLineClamp_AndClips()
+        {
+            const string text = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen";
+            string Doc(string style) => $"<div style=\"margin:0;width:60pt;font:10pt Arial;color:#000;{style}\">{text}</div>";
+
+            var legacy = AllPixels(await Paint(Doc("display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden")), 120, 100);
+            var standard = AllPixels(await Paint(Doc("display:block;line-clamp:2;overflow:hidden")), 120, 100);
+            var unclamped = AllPixels(await Paint(Doc("display:block;overflow:hidden")), 120, 100);
+
+            Assert.Equal(standard, legacy);
+            Assert.NotEqual(unclamped, legacy);
+        }
     }
 }

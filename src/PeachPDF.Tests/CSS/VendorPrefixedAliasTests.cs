@@ -76,9 +76,9 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
-        public void PrefixesWithNoStandardGrammar_AreStillDropped()
+        public void PrefixesWithNoSupportedStandardGrammar_AreStillDropped()
         {
-            var sheet = ParseStyleSheet("div { -webkit-box-orient: vertical; -webkit-box-flex: 1; color: red }");
+            var sheet = ParseStyleSheet("div { -webkit-box-lines: multiple; -webkit-column-break-before: always; color: red }");
             var style = ((StyleRule)sheet.Rules[0]).Style;
 
             Assert.Single(style);
@@ -227,6 +227,75 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal("content-box", CssUtils.GetPropertyValue(box, "box-sizing"));
         }
 
+        // --- The 2009 flexbox model: display: -webkit-box and its container/item properties. ---
+
+        [Theory]
+        [InlineData("display:-webkit-box", "flex")]
+        [InlineData("display:-moz-box", "flex")]
+        [InlineData("display:-webkit-inline-box", "inline-flex")]
+        [InlineData("display:-webkit-box; -webkit-box-orient:horizontal", "flex")]
+        [InlineData("display:-webkit-box; -webkit-box-orient:vertical", "block")]
+        [InlineData("display:-webkit-box; -webkit-box-orient:block-axis", "block")]
+        [InlineData("display:-webkit-inline-box; -webkit-box-orient:vertical", "inline-block")]
+        [InlineData("-webkit-box-orient:vertical; display:-webkit-box", "block")]
+        public async Task LegacyBox_ResolvesToTheStandardDisplayOnceTheOrientationIsKnown(string css, string expected)
+        {
+            var box = await FindDivBox(css);
+
+            Assert.Equal(expected, CssUtils.GetPropertyValue(box, "display"));
+        }
+
+        [Theory]
+        [InlineData("-webkit-box-pack:center", "justify-content", "center")]
+        [InlineData("-webkit-box-pack:start", "justify-content", "flex-start")]
+        [InlineData("-webkit-box-pack:end", "justify-content", "flex-end")]
+        [InlineData("-webkit-box-pack:justify", "justify-content", "space-between")]
+        [InlineData("-webkit-box-align:center", "align-items", "center")]
+        [InlineData("-webkit-box-align:start", "align-items", "flex-start")]
+        [InlineData("-webkit-box-align:end", "align-items", "flex-end")]
+        [InlineData("-webkit-box-align:baseline", "align-items", "baseline")]
+        [InlineData("-webkit-box-align:stretch", "align-items", "stretch")]
+        [InlineData("-moz-box-pack:center", "justify-content", "center")]
+        [InlineData("-webkit-box-orient:vertical", "flex-direction", "column")]
+        [InlineData("-webkit-box-orient:inline-axis", "flex-direction", "row")]
+        [InlineData("-webkit-box-direction:reverse", "flex-direction", "row-reverse")]
+        [InlineData("-webkit-box-orient:vertical; -webkit-box-direction:reverse", "flex-direction", "column-reverse")]
+        [InlineData("-webkit-box-direction:reverse; -webkit-box-orient:vertical", "flex-direction", "column-reverse")]
+        [InlineData("-webkit-box-orient:vertical; -webkit-box-direction:normal", "flex-direction", "column")]
+        [InlineData("-webkit-box-flex:2", "flex-grow", "2")]
+        [InlineData("-moz-box-flex:1", "flex-grow", "1")]
+        [InlineData("-webkit-box-ordinal-group:3", "order", "3")]
+        [InlineData("-webkit-box-pack:inherit", "justify-content", "normal")]
+        public async Task LegacyBoxProperty_IsTranslatedOntoTheStandardFlexProperty(string css, string standardName, string expected)
+        {
+            var box = await FindDivBox(css);
+
+            Assert.Equal(expected, CssUtils.GetPropertyValue(box, standardName));
+        }
+
+        [Theory]
+        [InlineData("-webkit-box-pack:bogus")]
+        [InlineData("-webkit-box-orient:diagonal")]
+        [InlineData("-webkit-box-align:middle")]
+        public void LegacyBoxProperty_WithAnInvalidKeyword_IsDropped(string declaration)
+        {
+            Assert.False(ParseDeclaration(declaration).HasValue);
+        }
+
+        [Fact]
+        public async Task LineClampIdiom_ClampsTheBoxToThatManyLines()
+        {
+            const string text = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen";
+            var legacy = await FindTextBox("display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; width:60pt", text);
+            var standard = await FindTextBox("display:block; line-clamp:2; overflow:hidden; width:60pt", text);
+            var unclamped = await FindTextBox("display:block; overflow:hidden; width:60pt", text);
+
+            var legacyHeight = legacy.ActualBottom - legacy.Location.Y;
+            Assert.Equal(standard.ActualBottom - standard.Location.Y, legacyHeight);
+            Assert.True(legacyHeight < unclamped.ActualBottom - unclamped.Location.Y);
+            Assert.Equal("2", CssUtils.GetPropertyValue(legacy, "line-clamp"));
+        }
+
         private static async Task<CssBox> FindDivBox(string css)
         {
             var adapter = new PdfSharpAdapter();
@@ -244,6 +313,25 @@ namespace PeachPDF.Tests.CSS
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
+            return Find(container.Root!, "div")!;
+        }
+
+        private static async Task<CssBox> FindTextBox(string css, string text)
+        {
+            var adapter = new PdfSharpAdapter();
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(
+                $"<!DOCTYPE html><html><head><style>div {{ font: 10pt Arial; margin:0; {css} }}</style></head><body style=\"margin:0\"><div>{text}</div></body></html>",
+                null);
+
+            var size = new XSize(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            await container.PerformLayout(graphics);
+
             return Find(container.Root!, "div")!;
         }
 

@@ -12998,15 +12998,21 @@ body { margin: 0; font-family: sans-serif; font-size: 12px; }
 .rep  { background: -webkit-repeating-linear-gradient(45deg, #e33 0, #e33 10px, #fc3 10px, #fc3 20px); }
 .rot  { -webkit-transform: rotate(-8deg); background: #3c6; }
 .sticky { position: -webkit-sticky; position: sticky; top: 0; background: #e33; }
+.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; width: 200px; height: auto; background: #36f; }
+.legacybox { display: -webkit-box; -webkit-box-orient: horizontal; -webkit-box-pack: justify; -webkit-box-align: center; width: 330px; height: 90px; padding: 8px; background: #3c6; margin-right: 10px; }
+.legacybox span { display: block; width: 60px; height: 40px; background: #fc3; -webkit-box-flex: 0; }
+.legacybox span + span { height: 70px; background: #e33; }
 </style></head><body>
 <div class="row"><div class="cell lin1">webkit linear left</div><div class="cell lin2">webkit linear top</div><div class="cell lin3">moz linear 45deg</div><div class="cell lin4">bottom right</div></div>
 <div class="row"><div class="cell rad1">webkit radial</div><div class="cell rad2">moz radial at 30% 40%</div><div class="cell rep">repeating</div><div class="cell rot">-webkit-transform</div></div>
-<div class="row"><div class="cell sticky">-webkit-sticky</div></div>
+<div class="row"><div class="cell sticky">-webkit-sticky</div>
+<div class="cell clamp">-webkit-line-clamp: 3 with display: -webkit-box and -webkit-box-orient: vertical cuts this long paragraph of text off after exactly three lines and marks the cut with an ellipsis, however much more text follows it.</div></div>
+<div class="row"><div class="legacybox"><span></span><span></span><span></span></div></div>
 </body></html>
 """;
 
 await SaveShowcaseAsync("vendor_prefixed_css", "Graphics & Effects", "Legacy Vendor-Prefixed CSS",
-    "A stylesheet written only with the legacy -webkit-/-moz- spellings (autoprefixer-era output): prefixed linear, radial and repeating gradients in their pre-standard syntax, box-shadow, border-radius, box-sizing, transform, flex and sticky - each renders exactly as its standard spelling.",
+    "A stylesheet written only with the legacy -webkit-/-moz- spellings (autoprefixer-era output): prefixed linear, radial and repeating gradients in their pre-standard syntax, box-shadow, border-radius, box-sizing, transform, flex and sticky, the -webkit-box flexbox model (box-pack, box-align) and the -webkit-box + -webkit-line-clamp text-truncation idiom - each renders exactly as its standard spelling.",
     vendorPrefixedHtml, pdfConfig);
 
 // --- PDF/A-1 with flattened transparency showcase ---

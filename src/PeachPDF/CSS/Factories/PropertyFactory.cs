@@ -97,6 +97,15 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.Filter, () => new FilterProperty(), true);
             AddLonghand(PropertyNames.BackdropFilter, () => new BackdropFilterProperty(), true);
             AddLonghand(PropertyNames.BoxDecorationBreak, () => new BoxDecorationBreak());
+            foreach (var legacyPrefix in LegacyBoxProperty.Prefixes)
+            {
+                foreach (var legacyBase in new[] { LegacyBoxProperty.Orient, LegacyBoxProperty.Direction, LegacyBoxProperty.Pack, LegacyBoxProperty.Align })
+                {
+                    var prefix = legacyPrefix;
+                    var baseName = legacyBase;
+                    AddLonghand(prefix + baseName, () => new LegacyBoxProperty(prefix, baseName));
+                }
+            }
             AddLonghand(PropertyNames.BreakAfter, () => new BreakAfterProperty());
             AddLonghand(PropertyNames.BreakBefore, () => new BreakBeforeProperty());
             AddLonghand(PropertyNames.BreakInside, () => new BreakInsideProperty());

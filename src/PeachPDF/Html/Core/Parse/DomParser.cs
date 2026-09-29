@@ -1178,6 +1178,7 @@ namespace PeachPDF.Html.Core.Parse
             // display — would stay inline+in-flow even with `position: absolute`, so it never becomes
             // out-of-flow and its left/top/width/height never apply (the Charts.css area/line `td::before`
             // fill relies on exactly this blockification).
+            LegacyBox.Resolve(box);
             BlockifyPositionedBox(box);
 
             // 11. Normalize a flex/grid item's own computed style (css-flexbox-1 §4 / css-grid-2 §6):
@@ -2102,6 +2103,9 @@ namespace PeachPDF.Html.Core.Parse
                 };
 
                 if (value is null) continue;
+
+                // The 2009 flexbox container properties translate onto the standard flex properties (see LegacyBox).
+                if (LegacyBox.TryApply(valueParser, box, prop.Name, value)) continue;
 
                 if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
                 {

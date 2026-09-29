@@ -1,4 +1,4 @@
-# line-clamp: vertical writing mode, cross-formatting-context line counting, block-ellipsis value, first-line font, no -webkit-box alias
+# line-clamp: vertical writing mode, cross-formatting-context line counting, block-ellipsis value, first-line font
 
 Tracked as **#1051** (re-scoped from its original filing - see "What changed" at the bottom). Deliberate
 v1 scope decisions for `line-clamp` (CSS Overflow Module Level 4 §line-clamp - a shorthand there for
@@ -66,17 +66,6 @@ first-line style (`FirstLineStyle`/`RemeasureWordsTail`), but the generated elli
 come out a visibly different size/face than the real text it sits beside on a `line-clamp: 1` block
 with a `::first-line` override.
 
-## No `-webkit-box`/`-webkit-line-clamp`/`-webkit-box-orient` legacy alias
-
-Many real-world documents still use the pre-standardization idiom
-(`display: -webkit-box; -webkit-line-clamp: N; -webkit-box-orient: vertical`) instead of the standard
-`line-clamp: N`. This isn't recognized at all - `display: -webkit-box` is invalid-and-dropped at parse
-time like any unrecognized `display` value (`CssSheetIgnoreVendorPrefixes`), so a document using only
-the legacy form gets no clamping whatsoever. Supporting it means teaching `display` computation to
-recognize a value with no corresponding real internal `DisplayMode` (WebKit's own fake
-flexbox-that-isn't-flexbox), which is its own design decision, separate from - and larger than -
-implementing the standard property.
-
 ## What changed from the original filing
 
 The original version of this note (and of issue #1051) described word-granularity truncation itself as
@@ -84,5 +73,4 @@ a v1 simplification of `text-overflow`'s character-level truncation. On closer r
 §block-ellipsis, word/soft-wrap-opportunity granularity is not a simplification - it's the **specified**
 placement rule ("after the last soft wrap opportunity that would still allow the entire block overflow
 ellipsis to fit"). That section has been removed rather than carried forward here, and the five gaps
-above (three genuine spec deviations not previously tracked, plus the pre-existing RTL and `-webkit-box`
-notes) replace it.
+above (three genuine spec deviations not previously tracked, plus the pre-existing RTL note) replace it.

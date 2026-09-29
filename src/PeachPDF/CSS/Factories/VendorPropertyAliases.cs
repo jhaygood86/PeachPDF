@@ -60,6 +60,16 @@ namespace PeachPDF.CSS
                 map["-moz-" + name] = name;
             }
 
+            // The item side of the 2009 flexbox model. box-flex's <number> and box-ordinal-group's <integer> mean the
+            // same thing as flex-grow and order; the container side needs value translation (LegacyBox).
+            foreach (var prefix in new[] { "-webkit-", "-moz-" })
+            {
+                map[prefix + "box-flex"] = PropertyNames.FlexGrow;
+                map[prefix + "box-ordinal-group"] = PropertyNames.Order;
+            }
+
+            map["-webkit-line-clamp"] = PropertyNames.LineClamp;
+
             // WebKit's logical box properties predate margin-inline-*/padding-inline-*.
             foreach (var (legacy, standard) in new[]
             {

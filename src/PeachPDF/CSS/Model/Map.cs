@@ -892,6 +892,12 @@ namespace PeachPDF.CSS
                 {Keywords.InlineFlex, DisplayMode.InlineFlex},
                 {Keywords.WebkitFlex, DisplayMode.Flex},
                 {Keywords.WebkitInlineFlex, DisplayMode.InlineFlex},
+                // The 2009 flexbox model. Resolved to block/flex (inline-*) after the cascade by LegacyBox.Resolve,
+                // once -webkit-box-orient is known.
+                {Keywords.WebkitBox, DisplayMode.Flex},
+                {Keywords.WebkitInlineBox, DisplayMode.InlineFlex},
+                {Keywords.MozBox, DisplayMode.Flex},
+                {Keywords.MozInlineBox, DisplayMode.InlineFlex},
                 {Keywords.Grid, DisplayMode.Grid},
                 {Keywords.InlineGrid, DisplayMode.InlineGrid}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);

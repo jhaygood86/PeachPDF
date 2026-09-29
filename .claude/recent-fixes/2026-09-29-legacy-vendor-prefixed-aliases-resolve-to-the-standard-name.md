@@ -22,8 +22,17 @@ edge (flip to `to bottom`/`to right`), radial puts the position first and uses `
 spelling (plus direction sanity checks so a mutual blank render can't pass); the `vendor_prefixed_css` showcase was
 rasterized with PDFium and MuPDF and agrees.
 
-**Not done (tracked separately):** `display: -webkit-box` + `-webkit-line-clamp`, `-webkit-gradient()`, prefixed
-sizing keywords, and prefixed forms of properties with no standard support here.
+**2009 flexbox / `-webkit-line-clamp`:** `-webkit-line-clamp` is a plain alias of `line-clamp`; `-webkit-box-flex` and
+`-webkit-box-ordinal-group` alias `flex-grow`/`order`. The container properties (`-webkit-box-orient`/`-direction`/
+`-pack`/`-align`) need *value* translation, so they are real OM properties (`LegacyBoxProperty`) with no computed
+storage: `LegacyBox.TryApply` (called from `DomParser.AssignCssBlock`) rewrites each onto the standard flex property,
+composing `orient`+`direction` into `flex-direction` from the box's current value so their order doesn't matter.
+`display: -webkit-box` cannot be resolved per-declaration (orientation may come later), so `Map.DisplayModes` accepts it
+as `Flex` and `LegacyBox.Resolve` (cascade step before `BlockifyPositionedBox`) turns it into `block` when the final
+`flex-direction` is a column, else `flex`. Vertical → **block, not flex column** is deliberate: a text child of a flex
+container becomes an anonymous flex *item*, and `line-clamp` (non-inherited) on the container would never reach it.
+
+**Not done:** `-webkit-gradient()`, prefixed sizing keywords, and prefixed forms of properties with no standard support here.
 
 **Not aliased on purpose:** `-webkit-column-break-*` (legacy `always` value differs from `break-*`), `-o-`/`-ms-`
 property prefixes (never widely needed for the properties above).
