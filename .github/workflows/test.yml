@@ -6,18 +6,58 @@ on:
   push:
     branches: [ main ]
 
+# A newer push to the same PR supersedes an in-flight run; pushes to main always run to completion.
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: pwsh
+
 jobs:
+  # Doc-only PRs shouldn't pay for the full test suite, but `test-gate` below is the required
+  # status check - a trigger-level `paths:` filter would leave it stuck pending and block the
+  # merge. So the workflow always runs; every heavy job is gated on whether anything under src/
+  # actually changed (a skipped job counts as success for the gate).
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Detect source changes
+      uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: |
+          src:
+            - 'src/**'
+            - '.github/actions/**'
+            - '.github/workflows/test.yml'
+
+  # One leg per {OS x suite}, run in parallel; wall time is the slowest leg rather than the sum.
+  #   main   - PeachPDF.Tests, one step per target framework (a multi-targeted `dotnet test` would
+  #            launch every TFM's test host concurrently; three ~14k-test suites plus Playwright
+  #            Chromium contending for a small runner made xUnit's host miss VSTest's health-check
+  #            ping and fail the job)
+  #   engine - PeachDrawing.Text.Tests. Font/text engine code is OS-neutral, so Windows and macOS
+  #            run net10.0 only and Ubuntu runs every TFM.
+  #   small  - the CLI, Abstractions, raster and source-generator test projects (each small, no browser)
   test:
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
+    name: test (${{ matrix.os }}, ${{ matrix.suite }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
-
-    runs-on: ${{ matrix.os }}
-
-    defaults:
-      run:
-        shell: pwsh
+        suite: [main, engine, small]
 
     steps:
     - name: Checkout
@@ -25,80 +65,24 @@ jobs:
       with:
         fetch-depth: 0
 
-    # Doc-only PRs shouldn't pay for the full test suite, but this job is a required
-    # status check — a trigger-level `paths:` filter would leave it stuck pending and
-    # block the merge. So the job always runs; the heavy steps below are gated on
-    # whether anything under src/ actually changed, and the job still reports success
-    # when they're skipped.
-    - name: Detect source changes
-      uses: dorny/paths-filter@v3
-      id: changes
-      with:
-        filters: |
-          src:
-            - 'src/**'
-
     - name: Setup .NET
-      if: steps.changes.outputs.src == 'true'
-      uses: actions/setup-dotnet@v4
+      uses: ./.github/actions/setup-dotnet
       with:
-        dotnet-version: |
-          8.0.x
-          10.0.x
-
-    # A separate step because dotnet-quality applies to every entry in dotnet-version, and
-    # 8.0.x/10.0.x only have GA builds; net11.0 is still pre-GA (RC), which setup-dotnet
-    # classifies as "preview" quality. Drop this step (and the dotnet-quality knob) once
-    # .NET 11 ships its GA SDK. global.json's rollForward "latestMajor"/allowPrerelease
-    # automatically promotes to this SDK once it's installed - net8.0/net10.0 still build/run
-    # fine under it since those runtimes were also installed above. No further wiring needed:
-    # a contributor without this SDK installed keeps building/testing net8.0/net10.0 exactly as
-    # before (see src/Directory.Build.props for how net11.0 opts in per resolved SDK).
-    - name: Setup .NET 11 (RC)
-      if: steps.changes.outputs.src == 'true'
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 11.0.x
-        dotnet-quality: 'preview'
-
-    - name: Setup Python
-      if: steps.changes.outputs.src == 'true'
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
+        # macOS skips the RC SDK (and so net11.0): net11.0 is exercised on Windows and Linux.
+        include-net11: ${{ matrix.os != 'macos-latest' }}
 
     - name: Install fonts (Linux)
-      if: runner.os == 'Linux' && steps.changes.outputs.src == 'true'
+      if: runner.os == 'Linux'
       run: sudo apt-get update && sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core
 
-    - name: Install diff-cover and ReportGenerator
-      if: steps.changes.outputs.src == 'true'
-      run: |
-        pip install diff-cover
-        dotnet tool install --global dotnet-reportgenerator-globaltool
-
-    - name: Restore
-      if: steps.changes.outputs.src == 'true'
-      run: dotnet restore src/PeachPDF.Tests/PeachPDF.Tests.csproj
+    # ---- main -------------------------------------------------------------------------------
 
     - name: Build
-      if: steps.changes.outputs.src == 'true'
-      run: dotnet build src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-restore --configuration Release
-
-    # The TestHarness is the showcase generator for the docs site (pages.yml); nothing
-    # else builds it in CI, so compile it here to catch breaks before release day.
-    - name: Build TestHarness (showcase generator)
-      if: runner.os == 'Linux' && steps.changes.outputs.src == 'true'
-      run: dotnet build src/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj --configuration Release
-
-    # The in-browser demo published to peachpdf.net/demo by pages.yml. Building it here keeps a
-    # library change that breaks the WebAssembly target from being discovered on release day.
-    - name: Build Blazor WebAssembly demo
-      if: runner.os == 'Linux' && steps.changes.outputs.src == 'true'
-      run: dotnet build src/PeachPDF.Demo.BlazorWasm/PeachPDF.Demo.BlazorWasm.csproj --configuration Release
+      if: matrix.suite == 'main'
+      run: dotnet build src/PeachPDF.Tests/PeachPDF.Tests.csproj --configuration Release
 
     - name: Install Playwright browsers
-      if: steps.changes.outputs.src == 'true'
+      if: matrix.suite == 'main'
       run: |
         $playwrightScript = Get-ChildItem -Path src/PeachPDF.Tests/bin/Release -Filter playwright.ps1 -Recurse | Select-Object -First 1 -ExpandProperty FullName
         if ($IsLinux) {
@@ -112,8 +96,7 @@ jobs:
     # MimeTypeResolver test asserts (adding each only if absent) so the OS-native lookup returns
     # real MIME types. HKCR maps to HKLM\Software\Classes and is writable on the elevated runner.
     - name: Ensure MIME content-type associations (Windows)
-      if: runner.os == 'Windows' && steps.changes.outputs.src == 'true'
-      shell: pwsh
+      if: runner.os == 'Windows' && matrix.suite == 'main'
       run: |
         $map = @{ '.html' = 'text/html'; '.css' = 'text/css'; '.png' = 'image/png'; '.jpg' = 'image/jpeg' }
         foreach ($ext in $map.Keys) {
@@ -123,86 +106,143 @@ jobs:
           }
         }
 
-    # One step per target framework, run sequentially, rather than a single bare `dotnet test`
-    # (which builds/runs every TFM in TargetFrameworks at once). A multi-targeted `dotnet test`
-    # launches all of its TFMs' test hosts concurrently - fine for two, but adding net11.0 as a
-    # third pushed windows-latest's runner over the edge: three full ~10,000-test suites (each
-    # spawning Playwright Chromium instances) contending for the runner's small core count caused
-    # xUnit's net8.0 host to miss VSTest's health-check ping ("Test process did not respond within
-    # 60 seconds") and fail the whole job, even though net8.0 itself had nothing wrong with it.
     - name: Test (net8.0)
-      if: steps.changes.outputs.src == 'true'
+      if: matrix.suite == 'main'
       run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net8.0 --logger "trx;LogFileName=test-results-net8.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
     - name: Test (net10.0)
-      if: steps.changes.outputs.src == 'true'
+      if: matrix.suite == 'main'
       run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net10.0 --logger "trx;LogFileName=test-results-net10.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
     - name: Test (net11.0)
-      if: steps.changes.outputs.src == 'true'
+      if: matrix.suite == 'main' && matrix.os != 'macos-latest'
       run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net11.0 --logger "trx;LogFileName=test-results-net11.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
-    # The CLI (net10.0-only) has its own test project; run it into the same coverage directory so the
-    # diff-coverage gate below covers PeachPDF.Cli too.
+    # ---- engine -----------------------------------------------------------------------------
+
+    - name: Build engine tests
+      if: matrix.suite == 'engine'
+      run: dotnet build src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --configuration Release
+
+    - name: Test engine (net10.0)
+      if: matrix.suite == 'engine'
+      run: dotnet test src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --no-build --configuration Release --framework net10.0 --logger "trx;LogFileName=engine-test-results-net10.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+
+    - name: Test engine (net8.0)
+      if: matrix.suite == 'engine' && runner.os == 'Linux'
+      run: dotnet test src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --no-build --configuration Release --framework net8.0 --logger "trx;LogFileName=engine-test-results-net8.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+
+    - name: Test engine (net11.0)
+      if: matrix.suite == 'engine' && runner.os == 'Linux'
+      run: dotnet test src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --no-build --configuration Release --framework net11.0 --logger "trx;LogFileName=engine-test-results-net11.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+
+    # ---- small ------------------------------------------------------------------------------
+
+    # Each project writes into the same coverage directory so the per-OS diff-coverage gate covers
+    # PeachPDF.Cli, PeachDrawing.Abstractions, PeachDrawing and the source generator too. Every
+    # project is built once up front so the test steps can use --no-build.
+    - name: Build small test projects
+      if: matrix.suite == 'small'
+      run: |
+        foreach ($p in 'PeachPDF.Cli.Tests', 'PeachDrawing.Abstractions.Tests', 'PeachDrawing.Tests', 'PeachPDF.SourceGenerators.Tests') {
+          dotnet build "src/$p/$p.csproj" --configuration Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+
     - name: Test CLI
-      if: steps.changes.outputs.src == 'true'
-      run: dotnet test src/PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj --configuration Release --logger "trx;LogFileName=cli-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      if: matrix.suite == 'small'
+      run: dotnet test src/PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=cli-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
-    # The font and text engine (PeachDrawing.Text) has its own test project; run it into the same coverage
-    # directory so the diff-coverage gate below covers the engine's code too. It is small and needs no browser,
-    # so all of its target frameworks run in the one invocation.
-    - name: Test engine (PeachDrawing.Text)
-      if: steps.changes.outputs.src == 'true'
-      run: dotnet test src/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --configuration Release --logger "trx;LogFileName=engine-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
-
-    # The drawing-surface abstraction (PeachDrawing.Abstractions) has its own test project; run it into the
-    # same coverage directory so the diff-coverage gate below covers it too. It is small and needs no browser,
-    # so all of its target frameworks run in the one invocation.
     - name: Test abstraction (PeachDrawing.Abstractions)
-      if: steps.changes.outputs.src == 'true'
-      run: dotnet test src/PeachDrawing.Abstractions.Tests/PeachDrawing.Abstractions.Tests.csproj --configuration Release --logger "trx;LogFileName=abstractions-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      if: matrix.suite == 'small'
+      run: dotnet test src/PeachDrawing.Abstractions.Tests/PeachDrawing.Abstractions.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=abstractions-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
-    # The standalone raster backend (PeachDrawing) has its own test project; run it into the same coverage
-    # directory so the diff-coverage gate below covers it too. It is small and needs no browser, so all of
-    # its target frameworks run in the one invocation.
     - name: Test raster backend (PeachDrawing)
-      if: steps.changes.outputs.src == 'true'
-      run: dotnet test src/PeachDrawing.Tests/PeachDrawing.Tests.csproj --configuration Release --logger "trx;LogFileName=raster-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      if: matrix.suite == 'small'
+      run: dotnet test src/PeachDrawing.Tests/PeachDrawing.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=raster-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
-    # The css-properties.json -> CssPropertyRegistry.g.cs/SvgPropertyRegistry.g.cs source generator has
-    # its own test project (JSON reader, PPGxxx diagnostics, generated-output shape); run it into the
-    # same coverage directory so the diff-coverage gate below covers it too.
+    # The css-properties.json -> CssPropertyRegistry.g.cs/SvgPropertyRegistry.g.cs source generator's
+    # tests (JSON reader, PPGxxx diagnostics, generated-output shape).
     - name: Test source generators
-      if: steps.changes.outputs.src == 'true'
-      run: dotnet test src/PeachPDF.SourceGenerators.Tests/PeachPDF.SourceGenerators.Tests.csproj --configuration Release --logger "trx;LogFileName=source-generators-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      if: matrix.suite == 'small'
+      run: dotnet test src/PeachPDF.SourceGenerators.Tests/PeachPDF.SourceGenerators.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=source-generators-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+
+    # ---- artifacts --------------------------------------------------------------------------
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ matrix.os }}-${{ matrix.suite }}
+        path: |
+          coverage/**/*.trx
+          src/**/TestResults/*.trx
+        if-no-files-found: ignore
+
+    # Raw per-leg cobertura files; the coverage job for this OS merges them.
+    - name: Upload raw coverage
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-raw-${{ matrix.os }}-${{ matrix.suite }}
+        path: coverage/**/coverage.cobertura.xml
+        if-no-files-found: ignore
+
+  # Merges one OS's legs' coverage into the HTML report and enforces the diff-coverage gate for
+  # that OS, exactly as the old single job did.
+  coverage:
+    needs: [changes, test]
+    if: always() && needs.changes.outputs.src == 'true' && needs.test.result != 'cancelled' && needs.test.result != 'skipped'
+    name: coverage (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        # global.json pins SDK 10.0.100, so the tool install needs the 10 SDK.
+        dotnet-version: 10.0.x
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install diff-cover and ReportGenerator
+      run: |
+        pip install diff-cover
+        dotnet tool install --global dotnet-reportgenerator-globaltool
+
+    - name: Download raw coverage
+      uses: actions/download-artifact@v4
+      with:
+        pattern: coverage-raw-${{ matrix.os }}-*
+        path: coverage
+        merge-multiple: true
 
     - name: Generate HTML coverage report
-      if: always() && steps.changes.outputs.src == 'true'
       run: reportgenerator -reports:coverage/**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:Html
 
     - name: Diff coverage gate (PRs only)
-      if: github.event_name == 'pull_request' && steps.changes.outputs.src == 'true'
+      if: github.event_name == 'pull_request'
       run: |
         git fetch origin ${{ github.base_ref }}
         $coverageFiles = (Get-ChildItem -Path coverage -Filter coverage.cobertura.xml -Recurse | ForEach-Object FullName)
         diff-cover $coverageFiles --compare-branch=origin/${{ github.base_ref }} --fail-under=90 --html-report diff-cover-report.html
 
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      if: always() && steps.changes.outputs.src == 'true'
-      with:
-        name: test-results-${{ matrix.os }}
-        path: |
-          src/PeachPDF.Tests/**/*.trx
-          src/PeachPDF.Cli.Tests/**/*.trx
-          src/PeachDrawing.Text.Tests/**/*.trx
-          src/PeachDrawing.Abstractions.Tests/**/*.trx
-          src/PeachDrawing.Tests/**/*.trx
-          src/PeachPDF.SourceGenerators.Tests/**/*.trx
-
     - name: Upload coverage reports
       uses: actions/upload-artifact@v4
-      if: always() && steps.changes.outputs.src == 'true'
+      if: always()
       with:
         name: coverage-reports-${{ matrix.os }}
         path: |
@@ -210,3 +250,38 @@ jobs:
           coverage-report/**
           diff-cover-report.html
         if-no-files-found: ignore
+
+  # The TestHarness is the showcase generator for the docs site (pages.yml), and the Blazor
+  # WebAssembly demo is published to peachpdf.net/demo by pages.yml; nothing else builds either in
+  # CI, so compile them here to catch breaks before release day. Off the test critical path.
+  build-extras:
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: ./.github/actions/setup-dotnet
+
+    - name: Build TestHarness (showcase generator)
+      run: dotnet build src/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj --configuration Release
+
+    - name: Build Blazor WebAssembly demo
+      run: dotnet build src/PeachPDF.Demo.BlazorWasm/PeachPDF.Demo.BlazorWasm.csproj --configuration Release
+
+  # The single required status check. Skipped jobs (docs-only change) count as success; any failed
+  # or cancelled job fails the gate.
+  test-gate:
+    needs: [changes, test, coverage, build-extras]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - name: Check results
+      run: |
+        $results = '${{ join(needs.*.result, ' ') }}'.Split(' ')
+        Write-Host "Job results: $results"
+        if ($results -contains 'failure' -or $results -contains 'cancelled') { exit 1 }
