@@ -542,6 +542,39 @@ PeachDrawing.Core.PathContour : sealed class
   method virtual String ToString()
   property Boolean Closed { get; init; }
   property IReadOnlyList<PaintPoint> Points { get; init; }
+PeachDrawing.Core.PathGlyph : struct
+  ctor(Int32 GlyphIndex, Double Advance, Matrix3x2 Transform)
+  method Void Deconstruct(out Int32 GlyphIndex, out Double Advance, out Matrix3x2 Transform)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PathGlyph other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double Advance { get; init; }
+  property Int32 GlyphIndex { get; init; }
+  property Matrix3x2 Transform { get; init; }
+PeachDrawing.Core.PathText : static class
+  method static IReadOnlyList<PathGlyph> Layout(Typeface typeface, Double size, String text, PathMeasure path, PathTextOptions options = null)
+  method static Matrix3x2? GetGlyphFrame(PathMeasure path, Double distance, PathTextSide side = Left, Double normalOffset = 0, Double rotationDegrees = 0)
+  method static Void DrawStringAlongPath(Canvas canvas, String text, Typeface typeface, Double size, PaintColor color, GraphicsPath path, PathTextOptions options = null)
+PeachDrawing.Core.PathTextAnchor : enum Int32
+  End = 2
+  Middle = 1
+  Start = 0
+PeachDrawing.Core.PathTextOptions : struct
+  ctor(Double StartOffset = 0, PathTextAnchor Anchor = Start, PathTextSide Side = Left, Double LetterSpacing = 0, ShapeSettings? Shaping = null)
+  method Void Deconstruct(out Double StartOffset, out PathTextAnchor Anchor, out PathTextSide Side, out Double LetterSpacing, out ShapeSettings? Shaping)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PathTextOptions other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double LetterSpacing { get; init; }
+  property Double StartOffset { get; init; }
+  property PathTextAnchor Anchor { get; init; }
+  property PathTextSide Side { get; init; }
+  property ShapeSettings? Shaping { get; init; }
+PeachDrawing.Core.PathTextSide : enum Int32
+  Left = 0
+  Right = 1
 PeachDrawing.Core.Pen : sealed class
   ctor()
   method Void SetDashPattern(Double[] pattern, Double offset)

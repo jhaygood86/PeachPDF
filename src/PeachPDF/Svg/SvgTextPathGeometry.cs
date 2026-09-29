@@ -34,6 +34,9 @@ namespace PeachPDF.Svg
             _measure = new PathMeasure(path);
         }
 
+        /// <summary>The measured path, for placing glyphs on it with <see cref="PathText"/>.</summary>
+        public PathMeasure Measure => _measure;
+
         public double TotalLength => _measure.Length;
 
         public bool IsEmpty => _measure.IsEmpty;

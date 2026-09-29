@@ -1645,30 +1645,12 @@ namespace PeachPDF.Svg
                 var mid = startOffset + pen + extraDx + advance / 2;
                 pen += advance + extraDx;   // dx shifts the current position along the path
 
-                // side="right" reads the path in reverse (measured from the far end, glyphs flipped 180°).
-                var distance = run.Side == SvgTextPathSide.Right ? totalLength - mid : mid;
-
-                // A glyph centered off the ends of the path is not rendered.
-                if (distance < 0 || distance > totalLength)
+                // side="right" reads the path in reverse (measured from the far end, glyphs flipped 180°); dy offsets the glyph
+                // perpendicular to the path; the glyph turns to the tangent plus any per-character rotate. A glyph centred off
+                // either end of the path is not rendered.
+                if (PathText.GetGlyphFrame(geometry.Measure, mid, run.Side == SvgTextPathSide.Right ? PathTextSide.Right : PathTextSide.Left,
+                        extraDy, gi.Rotate ?? 0) is not { } frame)
                     continue;
-
-                var (px, py, tangentDegrees) = geometry.PointAtLength(distance);
-                if (run.Side == SvgTextPathSide.Right)
-                    tangentDegrees += 180;
-
-                var tangentRad = tangentDegrees * (Math.PI / 180.0);
-                var tangentCos = Math.Cos(tangentRad);
-                var tangentSin = Math.Sin(tangentRad);
-
-                // dy offsets the glyph perpendicular to the path (along the normal).
-                var offsetX = px - tangentSin * extraDy;
-                var offsetY = py + tangentCos * extraDy;
-
-                // The glyph frame rotates to the tangent plus any per-character rotate, then translates.
-                var glyphRad = (tangentDegrees + (gi.Rotate ?? 0)) * (Math.PI / 180.0);
-                var frame = MultiplyMatrix(
-                    new Matrix3x2((float)Math.Cos(glyphRad), (float)Math.Sin(glyphRad), (float)-Math.Sin(glyphRad), (float)Math.Cos(glyphRad), 0, 0),
-                    new Matrix3x2(1, 0, 0, 1, (float)offsetX, (float)offsetY));
 
                 g.PushTransform(frame);
                 PaintGlyphAlongPath(g, document, gi.Run, gi.Font, gi.Glyph, advance, opacity * gi.Opacity, gi.LogicalGlyph);
