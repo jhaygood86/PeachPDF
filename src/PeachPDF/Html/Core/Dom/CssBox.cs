@@ -1174,6 +1174,12 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public double ActualMarginLeft => CssLayoutEngine.GetActualMarginLeft(this);
 
+        /// <summary>The used left margin for this box landing at document Y <paramref name="blockTop"/>.</summary>
+        internal double ActualMarginLeftAt(double blockTop) => CssLayoutEngine.GetActualMarginLeft(this, null, blockTop);
+
+        /// <summary>The used right margin for this box landing at document Y <paramref name="blockTop"/>.</summary>
+        internal double ActualMarginRightAt(double blockTop) => CssLayoutEngine.GetActualMarginRight(this, null, blockTop);
+
         /// <summary>
         /// Gets the actual Margin of the bottom
         /// </summary>
@@ -5968,10 +5974,10 @@ namespace PeachPDF.Html.Core.Dom
                 && ContainingBlock.WritingMode.Value is CSS.WritingMode.HorizontalTb
                 && CssLayoutEngine.IsInFlowBlockLevel(this))
             {
-                return CssLayoutEngine.ContentRightOf(ContainingBlock, blockTop) - ActualMarginRight - ActualBoxSizingWidth;
+                return CssLayoutEngine.ContentRightOf(ContainingBlock, blockTop) - ActualMarginRightAt(blockTop) - ActualBoxSizingWidth;
             }
 
-            return contentLeft + ActualMarginLeft;
+            return contentLeft + ActualMarginLeftAt(blockTop);
         }
 
         /// <summary>

@@ -2011,7 +2011,7 @@ namespace PeachPDF.Html.Core.Dom
             box.ActualBottom = top;
         }
 
-        public static double GetActualMarginLeft(CssBox box, double? boxWidth = null)
+        public static double GetActualMarginLeft(CssBox box, double? boxWidth = null, double? blockTop = null)
         {
             var marginLeft = box.MarginLeft.Value;
             if (marginLeft.IsValue)
@@ -2024,7 +2024,7 @@ namespace PeachPDF.Html.Core.Dom
             // this pinned `margin-left: auto` boxes - and so `<hr align=right>`'s mapping - to the start edge.
             if (box.MarginRight.Value.IsValue)
             {
-                return IsInFlowBlockLevel(box) ? ResolveSingleAutoHorizontalMargin(box, box.ActualMarginRight) : 0;
+                return IsInFlowBlockLevel(box) ? ResolveSingleAutoHorizontalMargin(box, GetActualMarginRight(box, null, blockTop), blockTop) : 0;
             }
 
             if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != Keywords.TableCaption)
@@ -2042,13 +2042,13 @@ namespace PeachPDF.Html.Core.Dom
             // here with a non-null boxWidth) so a `margin: … auto` table centers against that width.
             if (boxWidth is not null)
             {
-                return (box.ContainingBlock.AvailableWidth - boxWidth.Value) / 2;
+                return (ContainingContentWidth(box, blockTop) - boxWidth.Value) / 2;
             }
 
-            return ResolveAutoHorizontalMargin(box);
+            return ResolveAutoHorizontalMargin(box, blockTop);
         }
 
-        public static double GetActualMarginRight(CssBox box, double? boxWidth = null)
+        public static double GetActualMarginRight(CssBox box, double? boxWidth = null, double? blockTop = null)
         {
             var marginRight = box.MarginRight.Value;
             if (marginRight.IsValue)
@@ -2058,7 +2058,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box.MarginLeft.Value.IsValue)
             {
-                return IsInFlowBlockLevel(box) ? ResolveSingleAutoHorizontalMargin(box, box.ActualMarginLeft) : 0;
+                return IsInFlowBlockLevel(box) ? ResolveSingleAutoHorizontalMargin(box, GetActualMarginLeft(box, null, blockTop), blockTop) : 0;
             }
 
             if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != Keywords.TableCaption)
@@ -2076,10 +2076,10 @@ namespace PeachPDF.Html.Core.Dom
             // here with a non-null boxWidth) so a `margin: … auto` table centers against that width.
             if (boxWidth is not null)
             {
-                return (box.ContainingBlock.AvailableWidth - boxWidth.Value) / 2;
+                return (ContainingContentWidth(box, blockTop) - boxWidth.Value) / 2;
             }
 
-            return ResolveAutoHorizontalMargin(box);
+            return ResolveAutoHorizontalMargin(box, blockTop);
         }
 
         /// <summary>
@@ -2092,8 +2092,8 @@ namespace PeachPDF.Html.Core.Dom
         /// only starts centering once the page grows past the <c>max-width</c> (which clamps the used
         /// width, making it definite again).
         /// </summary>
-        private static double ResolveAutoHorizontalMargin(CssBox box) =>
-            Math.Max(0, FreeInlineSpace(box)) / 2;
+        private static double ResolveAutoHorizontalMargin(CssBox box, double? blockTop) =>
+            Math.Max(0, FreeInlineSpace(box, blockTop)) / 2;
 
         /// <summary>
         /// The used value of a horizontal <c>margin: auto</c> when <b>exactly one</b> of the two margins is
@@ -2102,14 +2102,15 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="box">the box whose <c>auto</c> margin is being resolved</param>
         /// <param name="otherMargin">the used value of its other, non-<c>auto</c> margin</param>
+        /// <param name="blockTop">the document Y the box lands at, or null for its own location</param>
         /// <remarks>
         /// Clamped at 0: an over-constrained box has no negative slack for an <c>auto</c> margin to take, and
         /// browsers resolve it to 0 rather than shifting the box. An <c>auto</c> width fills the containing
         /// block, so its slack is 0 unless a <c>max-width</c> narrows it - the same "definite" test the
         /// both-<c>auto</c> case makes.
         /// </remarks>
-        private static double ResolveSingleAutoHorizontalMargin(CssBox box, double otherMargin) =>
-            Math.Max(0, FreeInlineSpace(box) - otherMargin);
+        private static double ResolveSingleAutoHorizontalMargin(CssBox box, double otherMargin, double? blockTop) =>
+            Math.Max(0, FreeInlineSpace(box, blockTop) - otherMargin);
 
         /// <summary>
         /// Whether <paramref name="box"/> is an ordinary in-flow, block-level box - the only kind CSS 2.1
@@ -2121,18 +2122,28 @@ namespace PeachPDF.Html.Core.Dom
             && box.DerivedStyle.ActualDisplay is Keywords.Block or Keywords.ListItem;
 
         /// <summary>
+        /// The containing block's content width that <paramref name="box"/>'s <c>auto</c> margins are resolved
+        /// against when it lands at document Y <paramref name="blockTop"/> (its own <see cref="CssBox.Location"/>
+        /// when omitted): the page-aware measure, so a box on a page whose content width differs from the one the
+        /// containing block started on re-centres against its own page (css-break-3 §5.1). Equals
+        /// <see cref="CssBox.AvailableWidth"/> wherever per-page measure does not apply.
+        /// </summary>
+        private static double ContainingContentWidth(CssBox box, double? blockTop) =>
+            PageAwareWidthBasis(box.ContainingBlock, blockTop ?? box.Location.Y);
+
+        /// <summary>
         /// The room left in <paramref name="box"/>'s containing block once its own border box is placed in
         /// it, ignoring its margins: the quantity <c>auto</c> margins are resolved from. Negative when the
         /// box is wider than the block, which callers clamp.
         /// </summary>
-        private static double FreeInlineSpace(CssBox box)
+        private static double FreeInlineSpace(CssBox box, double? blockTop)
         {
             // The containing block's CONTENT width, which is what §10.3.3's constraint is stated over
             // (§10.1 puts the containing block at the content edge of the nearest block container
             // ancestor). Size.Width is that only under `content-box`; under `border-box` it is the border
             // box, so splitting it pushed the box toward the end edge by half the container's own padding
             // and border. AvailableWidth means "content width" under either.
-            var containingWidth = box.ContainingBlock.AvailableWidth;
+            var containingWidth = ContainingContentWidth(box, blockTop);
 
             // A display:block image/SVG's synthetic wrapper (IsReplacedBlockWrapper) forces this box's
             // own Display back to inline purely so it can be sized as an atomic inline word (see the
