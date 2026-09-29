@@ -401,5 +401,18 @@ namespace PeachPDF.Tests.Raster
 
             Assert.True(Pixel(g, 30, 30 - 10)[0] > Pixel(g, 30 + 10, 30)[0]);
         }
+
+        [Fact]
+        public void RadialGradient_WithASingularTransform_PaintsNothing()
+        {
+            var g = NewGraphics(20, 20);
+            var brush = g.GetRadialGradientBrush(new PaintPoint(10, 10), 8, 8,
+                [(PaintColor.FromArgb(255, 255, 255, 255), 0.0), (PaintColor.FromArgb(255, 0, 0, 0), 1.0)],
+                transform: new Matrix3x2(0, 0, 0, 0, 0, 0));
+
+            g.DrawRectangle(brush, 0, 0, 20, 20);
+
+            Assert.Equal(0, Pixel(g, 10, 10)[3]);
+        }
     }
 }
