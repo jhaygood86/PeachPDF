@@ -116,8 +116,8 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         [Fact]
         public void VendorPrefixedProperty_StillParsesAsUnknownSingleHyphenIdent()
         {
-            var property = ParseDeclaration("-webkit-transform: none", includeUnknownDeclarations: true);
-            Assert.Equal("-webkit-transform", property.Name);
+            var property = ParseDeclaration("-webkit-user-select: none", includeUnknownDeclarations: true);
+            Assert.Equal("-webkit-user-select", property.Name);
         }
 
         [Fact]
