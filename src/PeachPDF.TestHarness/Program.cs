@@ -12980,6 +12980,35 @@ await SaveShowcaseAsync("backdrop_filter", "Graphics & Effects", "Backdrop Filte
     "backdrop-filter on frosted-glass panels over a gradient and text: blur, grayscale + contrast, blur + saturate, and invert + hue-rotate, each applied to what was painted behind the panel and clipped to its rounded corners.",
     backdropFilterHtml, pdfConfig);
 
+// --- legacy vendor-prefixed CSS showcase ---
+
+const string vendorPrefixedHtml = """
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 0; font-family: sans-serif; font-size: 12px; }
+.row { display: -webkit-flex; display: flex; margin: 10px; }
+.cell { -webkit-box-sizing: border-box; -moz-box-sizing: border-box; width: 110px; height: 90px; margin-right: 10px; padding: 8px; color: #fff; font-weight: bold;
+        -webkit-border-radius: 14px; -webkit-box-shadow: 4px 4px 0 rgba(0,0,0,.35); }
+.lin1 { background: -webkit-linear-gradient(left, #e33, #36f); }
+.lin2 { background: -webkit-linear-gradient(top, #fc3, #3c6); }
+.lin3 { background: -moz-linear-gradient(45deg, #e33, #fc3, #3c6); }
+.lin4 { background: -webkit-linear-gradient(bottom right, #36f, #e33); }
+.rad1 { background: -webkit-radial-gradient(center, circle cover, #fc3, #e33 70%, #36f); }
+.rad2 { background: -moz-radial-gradient(30% 40%, circle, #fff, #36f); }
+.rep  { background: -webkit-repeating-linear-gradient(45deg, #e33 0, #e33 10px, #fc3 10px, #fc3 20px); }
+.rot  { -webkit-transform: rotate(-8deg); background: #3c6; }
+.sticky { position: -webkit-sticky; position: sticky; top: 0; background: #e33; }
+</style></head><body>
+<div class="row"><div class="cell lin1">webkit linear left</div><div class="cell lin2">webkit linear top</div><div class="cell lin3">moz linear 45deg</div><div class="cell lin4">bottom right</div></div>
+<div class="row"><div class="cell rad1">webkit radial</div><div class="cell rad2">moz radial at 30% 40%</div><div class="cell rep">repeating</div><div class="cell rot">-webkit-transform</div></div>
+<div class="row"><div class="cell sticky">-webkit-sticky</div></div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("vendor_prefixed_css", "Graphics & Effects", "Legacy Vendor-Prefixed CSS",
+    "A stylesheet written only with the legacy -webkit-/-moz- spellings (autoprefixer-era output): prefixed linear, radial and repeating gradients in their pre-standard syntax, box-shadow, border-radius, box-sizing, transform, flex and sticky - each renders exactly as its standard spelling.",
+    vendorPrefixedHtml, pdfConfig);
+
 // --- PDF/A-1 with flattened transparency showcase ---
 
 const string flattenedTransparencyHtml = """

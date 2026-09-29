@@ -2098,7 +2098,7 @@ namespace PeachPDF.Html.Core.Parse
                         => revertLayerTarget is not null && revertLayerTarget.TryGetValue(prop.Name, out var rvl)
                             ? rvl
                             : CssDefaults.GetInitialValue(prop.Name),
-                    _ => prop.Value
+                    _ => VendorValueAliases.Normalize(prop.Name, prop.Value)
                 };
 
                 if (value is null) continue;

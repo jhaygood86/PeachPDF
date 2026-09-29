@@ -818,6 +818,7 @@ namespace PeachPDF.CSS
                 {Keywords.Relative, PositionMode.Relative},
                 {Keywords.Absolute, PositionMode.Absolute},
                 {Keywords.Sticky, PositionMode.Sticky},
+                {Keywords.WebkitSticky, PositionMode.Sticky},
                 {Keywords.Fixed, PositionMode.Fixed}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, Overflow> OverflowModes =
@@ -889,6 +890,8 @@ namespace PeachPDF.CSS
                 {Keywords.TableRowGroup, DisplayMode.TableRowGroup},
                 {Keywords.Flex, DisplayMode.Flex},
                 {Keywords.InlineFlex, DisplayMode.InlineFlex},
+                {Keywords.WebkitFlex, DisplayMode.Flex},
+                {Keywords.WebkitInlineFlex, DisplayMode.InlineFlex},
                 {Keywords.Grid, DisplayMode.Grid},
                 {Keywords.InlineGrid, DisplayMode.InlineGrid}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
