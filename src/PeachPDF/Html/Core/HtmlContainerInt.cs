@@ -3187,6 +3187,22 @@ namespace PeachPDF.Html.Core
             _emitter?.ClearFragmentDisplacements(box, fromSlot);
 
         /// <summary>
+        /// States that <paramref name="box"/>'s border box is <paramref name="dx"/> further along the
+        /// inline axis and <paramref name="dw"/> wider in fragmentainer <paramref name="slot"/> than its
+        /// live geometry says - see <see cref="FragmentEmitter.RecordInlineFrame"/>. Null on a
+        /// measurement or detached-fragmentainer run, which has no emitter to state anything to.
+        /// </summary>
+        internal void RecordInlineFrame(CssBox box, int slot, double dx, double dw) =>
+            _emitter?.RecordInlineFrame(box, slot, dx, dw);
+
+        /// <summary>
+        /// Discards the frames <paramref name="box"/> stated from <paramref name="fromSlot"/> on - or, with
+        /// no slot, in every slot - see <see cref="FragmentEmitter.ClearInlineFrames"/>.
+        /// </summary>
+        internal void ClearInlineFrames(CssBox box, int? fromSlot = null) =>
+            _emitter?.ClearInlineFrames(box, fromSlot);
+
+        /// <summary>
         /// The box whose background fills the whole page canvas, per
         /// <see href="https://www.w3.org/TR/css-backgrounds-3/#root-background">CSS Backgrounds 3 §2.11.2</see>:
         /// the root <c>html</c> element's own background if it declares one, else the background

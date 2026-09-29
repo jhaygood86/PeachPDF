@@ -103,7 +103,82 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        /// <summary>
+        /// States the container's own border box for the fragmentainer this pass fills, when that
+        /// fragmentainer's measure differs from the one the container started in.
+        /// </summary>
+        /// <remarks>
+        /// <see href="https://www.w3.org/TR/css-break-3/#varying-size-boxes">css-break-3 §5.1</see>: each
+        /// fragment of a stretch-fit (auto, percentage, or clamped by min/max) box sizes to its own
+        /// fragmentainer. The container's one <see cref="CssBox.ActualRight"/> describes the fragmentainer it
+        /// started in, so every other fragmentainer's frame is a per-slot delta from it
+        /// (<see cref="HtmlContainerInt.RecordInlineFrame"/>) - the emitter derives the same delta for an
+        /// ordinary block (<c>FragmentEmitter.ComputeInlineExtentDelta</c>) but cannot for a flex container,
+        /// whose engine sizes it (this file's <c>Layout</c>, from <c>GetBoxWidth</c> exactly as the delta
+        /// here is). An explicit width resolves to the same value on every page, so it states nothing, and
+        /// an <c>inline-flex</c> container is atomic and shrink-wraps, so it is left alone.
+        /// </remarks>
+        private async ValueTask StateContainerFrame(Canvas g, bool resumed)
+        {
+            if (_flexBox.HtmlContainer is not { UseVariableInlineMeasure: true } container) return;
+            if (_flexBox.DerivedStyle.ActualDisplay != Keywords.Flex) return;
+
+            if (!resumed)
+            {
+                // A fresh layout decides every fragmentainer's frame again.
+                container.ClearInlineFrames(_flexBox);
+                return;
+            }
+
+            if (container.CurrentFragmentainer is not { } filling) return;
+
+            var top = filling.ResumeContentTop;
+            var slot = container.SlotStartingAt(top);
+            container.ClearInlineFrames(_flexBox, slot);
+
+            var startWidth = await CssLayoutEngine.GetBoxWidth(g, _flexBox);
+            var slotWidth = await CssLayoutEngine.GetBoxWidth(g, _flexBox, top);
+            var delta = slotWidth - startWidth;
+
+            if (Math.Abs(delta) > 0.01)
+                container.RecordInlineFrame(_flexBox, slot, 0, delta);
+        }
+
+        /// <summary>
+        /// A fresh pass lays out every line, including the ones
+        /// <see cref="RelocateLinesAcrossFragmentainers"/> pushed onto later fragmentainers - which never
+        /// resume through a token, because no item straddled - so the fragmentainers the container spans
+        /// beyond its first are stated here, once its extent is known.
+        /// </summary>
+        private async ValueTask StateSpannedFrames(Canvas g)
+        {
+            if (_flexBox.HtmlContainer is not { UseVariableInlineMeasure: true } container) return;
+            if (_flexBox.DerivedStyle.ActualDisplay != Keywords.Flex) return;
+
+            var startSlot = container.SlotStartingAt(_flexBox.Location.Y);
+            var endSlot = container.SlotEndingAt(_flexBox.ActualBottom);
+            if (endSlot <= startSlot) return;
+
+            var startWidth = await CssLayoutEngine.GetBoxWidth(g, _flexBox);
+            for (var slot = startSlot + 1; slot <= endSlot; slot++)
+            {
+                var top = container.PageTopOf(slot) + HtmlContainerInt.PageBoundaryEpsilon;
+                var delta = await CssLayoutEngine.GetBoxWidth(g, _flexBox, top) - startWidth;
+
+                if (Math.Abs(delta) > 0.01)
+                    container.RecordInlineFrame(_flexBox, slot, 0, delta);
+            }
+        }
+
         private async ValueTask Layout(Canvas g, BreakToken? resume)
+        {
+            await StateContainerFrame(g, resume is not null);
+            await LayoutCore(g, resume);
+
+            if (resume is null) await StateSpannedFrames(g);
+        }
+
+        private async ValueTask LayoutCore(Canvas g, BreakToken? resume)
         {
             // A resumed pass re-enters only the items that did not finish their own content last time -
             // every earlier phase (measurement, sizing, line/main/cross positioning) already ran and its

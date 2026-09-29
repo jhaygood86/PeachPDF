@@ -400,6 +400,14 @@ namespace PeachPDF.Html.Core.Fragmentation
             internal double InlineExtentDeltaWidth { get; set; }
 
             /// <summary>
+            /// How far this fragment's left edge sits from the box's live one - nonzero only where layout
+            /// stated the box's frame for this fragmentainer (<see cref="RecordInlineFrame"/>): a flex item
+            /// re-fitted to a page whose measure differs from the one it started on. Zero for every box
+            /// whose frame is derived rather than stated.
+            /// </summary>
+            internal double InlineExtentDeltaX { get; set; }
+
+            /// <summary>
             /// The box's own per-line decoration rectangles that landed in this slot, in document space.
             /// Kept raw because <see cref="SliceGeometry"/> is defined over <i>every</i> rectangle the box
             /// produces across every fragmentainer, and a later pass can still add one.
@@ -532,6 +540,15 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// same in every band.
         /// </remarks>
         private readonly Dictionary<CssBox, Dictionary<int, (CssBox Root, double Shift, Rect Band)>> _displacements =
+            new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// How far a box's border box is displaced and resized, along the inline axis, in a given
+        /// fragmentainer - <see cref="RecordInlineFrame"/>. The slot key is membership, exactly as for
+        /// <see cref="_displacements"/>: it says which fragmentainer the frame applies to, and the box's own
+        /// live geometry (which describes the fragmentainer that placed it) is the same in every slot.
+        /// </summary>
+        private readonly Dictionary<CssBox, Dictionary<int, (double Dx, double Dw)>> _inlineFrames =
             new(ReferenceEqualityComparer.Instance);
 
         private int _lastEmittedSlot = -1;
@@ -1425,6 +1442,69 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             if (removedAny) box.DiscardEmittedNothingIncludingDescendants();
         }
+
+        /// <summary>
+        /// States that <paramref name="box"/>'s border box sits <paramref name="dx"/> further along the
+        /// inline axis and is <paramref name="dw"/> wider in fragmentainer <paramref name="slot"/> than its
+        /// live geometry says -
+        /// <see href="https://www.w3.org/TR/css-break-3/#varying-size-boxes">css-break-3 §5.1</see>'s "each
+        /// fragment recalculates sizes and positions using its own fragmentainer's size", for a box whose
+        /// engine sized it once and whose single <see cref="CssBox.Location"/>/<see cref="CssBox.Size"/>
+        /// therefore describe only the fragmentainer that placed it.
+        /// </summary>
+        /// <remarks>
+        /// Layout <i>states</i> this rather than the emitter deriving it (contrast
+        /// <c>ComputeInlineExtentDelta</c>, which reproduces <c>GetBoxWidth</c>'s formula for an ordinary
+        /// block) because a flex container's or item's frame is the product of its engine's whole sizing
+        /// algorithm, which nothing outside that engine can re-run. Only ever consulted for a box that is
+        /// already frozen in the slot - it resizes a fragment, it never creates one.
+        /// </remarks>
+        internal void RecordInlineFrame(CssBox box, int slot, double dx, double dw)
+        {
+            if (!_inlineFrames.TryGetValue(box, out var bySlot))
+            {
+                _inlineFrames[box] = bySlot = [];
+            }
+
+            bySlot[slot] = (dx, dw);
+
+            // The frame changes where the box draws in a fragmentainer whose observation may already have
+            // been made against the old one.
+            box.DiscardEmittedNothing();
+        }
+
+        /// <summary>
+        /// Discards the frames <paramref name="box"/> stated from <paramref name="fromSlot"/> on - or, with
+        /// no slot, in every slot - because the pass about to run decides them again. Same two forms, for
+        /// the same two reasons, as <see cref="ClearContinuationShells"/>.
+        /// </summary>
+        internal void ClearInlineFrames(CssBox box, int? fromSlot = null)
+        {
+            if (fromSlot is not { } from)
+            {
+                if (_inlineFrames.Remove(box)) box.DiscardEmittedNothing();
+                return;
+            }
+
+            if (!_inlineFrames.TryGetValue(box, out var bySlot)) return;
+
+            var removedAny = false;
+
+            foreach (var slot in new List<int>(bySlot.Keys))
+            {
+                if (slot >= from && bySlot.Remove(slot)) removedAny = true;
+            }
+
+            if (bySlot.Count == 0) _inlineFrames.Remove(box);
+
+            if (removedAny) box.DiscardEmittedNothing();
+        }
+
+        /// <summary>What <paramref name="box"/>'s frame was stated to be in <paramref name="slot"/>, if anything.</summary>
+        internal (double Dx, double Dw)? InlineFrameIn(CssBox box, int slot) =>
+            _inlineFrames.TryGetValue(box, out var bySlot) && bySlot.TryGetValue(slot, out var stated)
+                ? stated
+                : null;
 
         /// <summary>
         /// What <paramref name="box"/> is displaced by in <paramref name="slot"/>, or null where it states
@@ -2394,6 +2474,15 @@ namespace PeachPDF.Html.Core.Fragmentation
             // gets 0 here on its own, without needing to inherit anything from an ancestor that IS
             // eligible - see ComputeInlineExtentDelta's own remarks.
             var inlineExtentDeltaWidth = ComputeInlineExtentDelta(box, slot);
+            var inlineExtentDeltaX = 0.0;
+
+            // A frame layout stated for this fragmentainer wins over the derived one: a box whose engine
+            // states its frame is one ComputeInlineExtentDelta declines to derive.
+            if (InlineFrameIn(box, slot.Index) is { } statedFrame)
+            {
+                inlineExtentDeltaX = statedFrame.Dx;
+                inlineExtentDeltaWidth = statedFrame.Dw;
+            }
 
             // A run being sliced across bands displaces its whole subtree, so an inherited displacement
             // stands until a box states one of its own - which only the root of such a run does.
@@ -2661,6 +2750,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             draft.FixedSizeDeltaWidth = fixedSizeDelta.DeltaWidth;
             draft.FixedSizeDeltaHeight = fixedSizeDelta.DeltaHeight;
             draft.InlineExtentDeltaWidth = inlineExtentDeltaWidth;
+            draft.InlineExtentDeltaX = inlineExtentDeltaX;
             var continuingCapture = capture is { } instanceCaptured && instanceCaptured.Continuing.Contains(box);
             draft.BoundsEndAtItsContent = boundsEndAtContentOnThePageGrid || continuingCapture;
             draft.BoundsStatedByACapturedContinuation = continuingCapture;
@@ -3635,9 +3725,11 @@ namespace PeachPDF.Html.Core.Fragmentation
             // FixedSizeDeltaWidth (ComputeInlineExtentDelta explicitly excludes out-of-flow boxes, which
             // includes every fixed one). Left edge (bounds.X) is unaffected - only the box's own
             // content-right edge moves per page, never its content-left one.
-            if (draft.ShellRect is null && draft.InlineExtentDeltaWidth != 0)
+            if (draft.ShellRect is null && (draft.InlineExtentDeltaWidth != 0 || draft.InlineExtentDeltaX != 0))
             {
-                bounds = new Rect(bounds.X, bounds.Y, Math.Max(0, bounds.Width + draft.InlineExtentDeltaWidth), bounds.Height);
+                bounds = new Rect(
+                    bounds.X + draft.InlineExtentDeltaX, bounds.Y,
+                    Math.Max(0, bounds.Width + draft.InlineExtentDeltaWidth), bounds.Height);
             }
 
             // A nonzero FixedSizeDeltaHeight means this box's height came from an explicit per-page
