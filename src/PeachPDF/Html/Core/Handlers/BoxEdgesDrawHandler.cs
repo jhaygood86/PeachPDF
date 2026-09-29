@@ -323,9 +323,8 @@ namespace PeachPDF.Html.Core.Handlers
                 active.Bottom ? edges.Bottom.Width : 0,
                 active.Left ? edges.Left.Width : 0);
 
-            Object? previousMode = null;
             if (!avoidGeometryAntialias)
-                previousMode = g.SetAntiAliasSmoothingMode();
+                g.PushAntiAlias(true);
 
             try
             {
@@ -342,7 +341,8 @@ namespace PeachPDF.Html.Core.Handlers
             }
             finally
             {
-                g.ReturnPreviousSmoothingMode(previousMode);
+                if (!avoidGeometryAntialias)
+                    g.PopAntiAlias();
             }
         }
 

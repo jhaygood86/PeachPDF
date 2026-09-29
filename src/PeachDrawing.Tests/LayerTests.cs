@@ -205,3 +205,84 @@ public class LayerEffectTests
         Assert.Throws<ArgumentNullException>(() => RasterLayerEffects.Apply(null!, []));
     }
 }
+
+public class AntiAliasTests
+{
+    private static int EdgeAlpha(RasterCanvas canvas)
+    {
+        // A diagonal edge: the pixel it cuts through is partly covered when smoothed and all-or-nothing when not.
+        var buffer = canvas.ToPixelBuffer();
+        var span = buffer.PremultipliedRgba.Span;
+        var partial = 0;
+        for (var i = 3; i < span.Length; i += 4)
+        {
+            if (span[i] is > 0 and < 255)
+                partial++;
+        }
+
+        return partial;
+    }
+
+    private static int DrawTriangle(Action<RasterCanvas>? around)
+    {
+        var context = new RasterRenderContext();
+        using var canvas = context.CreateCanvas(20, 20);
+        around?.Invoke(canvas);
+        canvas.DrawPolygon(context.GetSolidBrush(PaintColor.Black), [new PaintPoint(0, 0), new PaintPoint(19, 7), new PaintPoint(3, 19)]);
+        return EdgeAlpha(canvas);
+    }
+
+    [Fact]
+    public void PushAntiAlias_False_DrawsHardEdges()
+    {
+        var context = new RasterRenderContext();
+        using var canvas = context.CreateCanvas(20, 20);
+
+        canvas.PushAntiAlias(false);
+        canvas.DrawPolygon(context.GetSolidBrush(PaintColor.Black), [new PaintPoint(0, 0), new PaintPoint(19, 7), new PaintPoint(3, 19)]);
+        canvas.PopAntiAlias();
+
+        Assert.Equal(0, EdgeAlpha(canvas));
+        Assert.True(DrawTriangle(null) > 0);
+    }
+
+    [Fact]
+    public void PopAntiAlias_RestoresTheRenderWideSetting()
+    {
+        var context = new RasterRenderContext();
+        using var canvas = context.CreateCanvas(20, 20);
+
+        canvas.PushAntiAlias(false);
+        canvas.PopAntiAlias();
+        canvas.DrawPolygon(context.GetSolidBrush(PaintColor.Black), [new PaintPoint(0, 0), new PaintPoint(19, 7), new PaintPoint(3, 19)]);
+
+        Assert.True(EdgeAlpha(canvas) > 0);
+    }
+
+    [Fact]
+    public void PushAntiAlias_Calls_Nest()
+    {
+        var context = new RasterRenderContext();
+        using var canvas = context.CreateCanvas(20, 20);
+
+        canvas.PushAntiAlias(false);
+        canvas.PushAntiAlias(true);
+        canvas.PopAntiAlias();
+        canvas.DrawPolygon(context.GetSolidBrush(PaintColor.Black), [new PaintPoint(0, 0), new PaintPoint(19, 7), new PaintPoint(3, 19)]);
+        canvas.PopAntiAlias();
+
+        Assert.Equal(0, EdgeAlpha(canvas));
+    }
+
+    [Fact]
+    public void PopAntiAlias_WithNothingPushed_DoesNothing()
+    {
+        var context = new RasterRenderContext();
+        using var canvas = context.CreateCanvas(20, 20);
+
+        canvas.PopAntiAlias();
+        canvas.DrawPolygon(context.GetSolidBrush(PaintColor.Black), [new PaintPoint(0, 0), new PaintPoint(19, 7), new PaintPoint(3, 19)]);
+
+        Assert.True(EdgeAlpha(canvas) > 0);
+    }
+}

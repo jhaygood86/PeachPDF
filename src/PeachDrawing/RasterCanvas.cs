@@ -141,7 +141,7 @@ public sealed partial class RasterCanvas : Canvas
 
         var polygon = new PolygonSet();
         AddDeviceRect(polygon, user, toDevice);
-        _clips.Push(current.Intersect(polygon, evenOdd: false, _adapter.RasterAntiAliasing));
+        _clips.Push(current.Intersect(polygon, evenOdd: false, AntiAlias));
     }
 
     private static bool IsWhole(double v) => Math.Abs(v - Math.Round(v)) < 1e-3;
@@ -155,7 +155,7 @@ public sealed partial class RasterCanvas : Canvas
         var polygon = new PolygonSet();
         polygon.AddTransformed(flat.Contours, toDevice);
         var evenOdd = path.FillMode == FillMode.EvenOdd;
-        _clips.Push(_clips.Peek().Intersect(polygon, evenOdd, _adapter.RasterAntiAliasing));
+        _clips.Push(_clips.Peek().Intersect(polygon, evenOdd, AntiAlias));
     }
 
     /// <inheritdoc/>
@@ -202,9 +202,26 @@ public sealed partial class RasterCanvas : Canvas
             _blend = _blendModes.Pop();
     }
 
-    // This backend has one anti-aliasing setting for the whole render (PdfGenerateConfig.RasterAntiAliasing,
-    // read here as _adapter.RasterAntiAliasing), applied uniformly by ScanlineRasterizer to every fill, stroke,
-    // image and glyph. There is no separate per-call smoothing mode to switch here, so this stays a no-op.
+    // The render-wide setting (PdfGenerateConfig.RasterAntiAliasing, read as _adapter.RasterAntiAliasing) is the default; a
+    // PushAntiAlias overrides it for the shapes drawn until the matching PopAntiAlias, and ScanlineRasterizer honours whichever applies.
+    private readonly Stack<bool> _antiAlias = new();
+
+    private bool AntiAlias => _antiAlias.Count > 0 ? _antiAlias.Peek() : _adapter.RasterAntiAliasing;
+
+    /// <summary>
+    /// Smoothing can be turned off for a stretch of drawing, but never on when the render as a whole turned it off
+    /// (<c>RasterAntiAliasing</c> is false, for output that must be identical from run to run): that setting is the ceiling.
+    /// </summary>
+    /// <inheritdoc/>
+    public override void PushAntiAlias(bool enabled) => _antiAlias.Push(enabled && _adapter.RasterAntiAliasing);
+
+    /// <inheritdoc/>
+    public override void PopAntiAlias()
+    {
+        if (_antiAlias.Count > 0)
+            _antiAlias.Pop();
+    }
+
     /// <inheritdoc/>
     public override object SetAntiAliasSmoothingMode() => true;
 
@@ -468,7 +485,7 @@ public sealed partial class RasterCanvas : Canvas
             return;
 
         var sink = new PaintSink(this, paint, clip, mode ?? _blend, opacity);
-        ScanlineRasterizer.Fill(polygons, evenOdd, clip.Bounds, ref sink, _adapter.RasterAntiAliasing);
+        ScanlineRasterizer.Fill(polygons, evenOdd, clip.Bounds, ref sink, AntiAlias);
     }
 
     private readonly struct PaintSink(RasterCanvas owner, PaintSource paint, ClipState clip, PaintBlendMode mode, int opacity) : ICoverageSink
