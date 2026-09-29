@@ -2445,5 +2445,73 @@ namespace PeachPDF.Tests.Integration
         }
 
         #endregion
+
+        [Fact]
+        public async Task InlineSvg_UseOpacity_UseOfUseOfContainer_RendersIsolatedTransparencyGroup()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <g id="pair">
+                      <rect x="0" y="0" width="50" height="50" fill="#ff0000"/>
+                      <rect x="20" y="20" width="50" height="50" fill="#0000ff"/>
+                    </g>
+                    <use id="alias" xlink:href="#pair"/>
+                  </defs>
+                  <use xlink:href="#alias" x="10" y="10" opacity="0.5"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/S /Transparency", pdfText);
+            Assert.Single(Regex.Matches(pdfText, @"/ca 0\.5\b"));
+        }
+
+        private sealed class ClosureSpyGraphics : PeachPDF.Tests.TestSupport.TestRecordingGraphics
+        {
+            private sealed class BarePath : PeachDrawing.Core.GraphicsPath
+            {
+                public override PeachDrawing.Core.FillMode FillMode { get; set; }
+                public override PeachDrawing.Core.GraphicsPath ClipToRect(PeachDrawing.Core.Rect rect) => throw new System.NotSupportedException();
+                public override void Dispose() { }
+            }
+
+            public override PeachDrawing.Core.GraphicsPath GetGraphicsPath() => new BarePath();
+
+            public List<bool> FillClosed { get; } = [];
+            public List<bool> StrokeClosed { get; } = [];
+
+            public override void DrawPath(PeachDrawing.Core.Brush brush, PeachDrawing.Core.GraphicsPath path)
+            {
+                FillClosed.Add(path.Flatten(0.1)[0].Closed);
+            }
+
+            public override void DrawPath(PeachDrawing.Core.Pen pen, PeachDrawing.Core.GraphicsPath path)
+            {
+                StrokeClosed.Add(path.Flatten(0.1)[0].Closed);
+            }
+        }
+
+        [Fact]
+        public void InlineSvg_FilledPolyline_FillsAClosedShapeButStrokesTheOpenOne()
+        {
+            var adapter = new PeachPDF.Adapters.PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var markup = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                  <polyline points="10,10 90,10 50,90" fill="#ff0000" stroke="#0000ff" stroke-width="4"/>
+                </svg>
+                """;
+            var document = PeachPDF.Svg.SvgTreeBuilder.Build(
+                new PeachPDF.Svg.XElementSvgSourceNode(System.Xml.Linq.XDocument.Parse(markup).Root!), adapter);
+            var g = new ClosureSpyGraphics();
+
+            PeachPDF.Svg.SvgRenderer.RenderInto(g, document, new PeachDrawing.Core.Rect(0, 0, 100, 100));
+
+            Assert.Equal([true], g.FillClosed);
+            Assert.Equal([false], g.StrokeClosed);
+        }
     }
 }

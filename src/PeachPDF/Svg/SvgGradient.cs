@@ -52,7 +52,7 @@ namespace PeachPDF.Svg
         public bool GradientUnitsUserSpaceOnUse { get; init; } = true;
 
         /// <summary>
-        /// Parsed <c>gradientTransform</c> (only translate/scale/matrix are supported - see
+        /// Parsed <c>gradientTransform</c> (translate, scale, rotate, skew and matrix - see
         /// <see cref="SvgTransformParser"/>).
         /// </summary>
         public Matrix3x2? GradientTransform { get; init; }

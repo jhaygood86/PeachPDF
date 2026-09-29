@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Threading.Tasks;
 
 namespace PeachDrawing.Core
@@ -430,10 +431,11 @@ namespace PeachDrawing.Core
         /// <param name="stops">the gradient's colour/position stops, in ascending position order</param>
         /// <param name="isRepeating">whether the gradient repeats past its own outer ellipse (CSS <c>repeating-radial-gradient()</c>) instead of padding (the default)</param>
         /// <param name="focalCenter">the point the gradient's first stop starts at, or <paramref name="center"/> (a concentric radial gradient) if omitted</param>
-        public Brush GetRadialGradientBrush(PaintPoint center, double radiusX, double radiusY, (PaintColor PaintColor, double Position)[] stops, bool isRepeating = false, PaintPoint? focalCenter = null)
+        /// <param name="transform">an optional matrix carrying the geometry above into paint coordinates, for a gradient whose ellipse is rotated or skewed</param>
+        public Brush GetRadialGradientBrush(PaintPoint center, double radiusX, double radiusY, (PaintColor PaintColor, double Position)[] stops, bool isRepeating = false, PaintPoint? focalCenter = null, Matrix3x2? transform = null)
         {
             RejectMixedColorSpaceGradientStops(stops);
-            return new RadialGradientBrush(center, focalCenter ?? center, radiusX, radiusY, ToStops(stops), isRepeating ? GradientSpread.Repeat : GradientSpread.Pad);
+            return new RadialGradientBrush(center, focalCenter ?? center, radiusX, radiusY, ToStops(stops), isRepeating ? GradientSpread.Repeat : GradientSpread.Pad, transform);
         }
 
         /// <summary>Gets a brush that paints a conic gradient sweeping around <paramref name="center"/>.</summary>

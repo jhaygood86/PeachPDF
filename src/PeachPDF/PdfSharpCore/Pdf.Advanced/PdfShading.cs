@@ -167,7 +167,35 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             bool isEllipse = Math.Abs(rx_v - ry_v) > 0.01;
             const string fmt = Config.SignificantFigures3;
 
-            if (!isEllipse)
+            // Set for a shading whose /Coords are the unit circle (focal point included) and whose real
+            // position, size and orientation ride in this matrix; shared with the alpha soft mask below.
+            XMatrix? unitMatrix = null;
+            double unitFocalX = 0, unitFocalY = 0;
+
+            if (brush._transform is { } gradientTransform && brush._radiusX > 0 && brush._radiusY > 0)
+            {
+                // A rotated/skewed gradientTransform: the ellipse is the unit circle carried through
+                // (radii, center) and then the transform, i.e. a general 2x2 that no pair of axis-aligned
+                // radii can state.
+                XPoint Map(double u, double v) => renderer.WorldToView(gradientTransform.Transform(
+                    new XPoint(brush._center1.X + u * brush._radiusX, brush._center1.Y + v * brush._radiusY)));
+
+                XPoint o = Map(0, 0), ux = Map(1, 0), uy = Map(0, 1);
+                unitMatrix = new XMatrix(ux.X - o.X, ux.Y - o.Y, uy.X - o.X, uy.Y - o.Y, o.X, o.Y);
+                unitFocalX = (brush._focalCenter.X - brush._center1.X) / brush._radiusX;
+                unitFocalY = (brush._focalCenter.Y - brush._center1.Y) / brush._radiusY;
+                var focalLen = Math.Sqrt(unitFocalX * unitFocalX + unitFocalY * unitFocalY);
+                if (focalLen > 0.9999)
+                {
+                    unitFocalX *= 0.9999 / focalLen;
+                    unitFocalY *= 0.9999 / focalLen;
+                }
+
+                Elements[Keys.Coords] = new PdfLiteral(
+                    "[{0:" + fmt + "} {1:" + fmt + "} 0 0 0 1]", unitFocalX, unitFocalY);
+                EllipsePatternMatrix = unitMatrix;
+            }
+            else if (!isEllipse)
             {
                 // Circle: define shading in page space. The r0 (zero-radius) circle sits at the focal
                 // point (defaults to center_v, i.e. identical to every pre-existing caller's output,
@@ -204,11 +232,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             }
 
             BuildRadialAlphaExtGStateIfNeeded(colors, positions,
-                center_v.X, center_v.Y, rx_v, ry_v, isEllipse, brush.IsRepeating);
+                center_v.X, center_v.Y, rx_v, ry_v, isEllipse, brush.IsRepeating, unitMatrix, unitFocalX, unitFocalY);
         }
 
         private void BuildRadialAlphaExtGStateIfNeeded(XColor[] colors, double[]? positions,
-            double cx, double cy, double rx, double ry, bool isEllipse, bool isRepeating = false)
+            double cx, double cy, double rx, double ry, bool isEllipse, bool isRepeating = false,
+            XMatrix? unitMatrix = null, double unitFocalX = 0, double unitFocalY = 0)
         {
             bool hasVaryingAlpha = false;
             for (int i = 0; i < colors.Length; i++)
@@ -237,7 +266,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             grayShading.Elements["/Extend"] = new PdfLiteral(isRepeating ? "[false false]" : "[true true]");
             grayShading.Elements["/Function"] = alphaFn;
 
-            if (!isEllipse)
+            if (unitMatrix is not null)
+            {
+                grayShading.Elements["/Coords"] = new PdfLiteral(string.Format(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    "[{0:" + fmt + "} {1:" + fmt + "} 0 0 0 1]", unitFocalX, unitFocalY));
+            }
+            else if (!isEllipse)
             {
                 grayShading.Elements["/Coords"] = new PdfLiteral(string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
@@ -256,7 +291,14 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             formXObj.Elements["/Subtype"] = new PdfName("/Form");
             formXObj.Elements["/BBox"] = new PdfLiteral("[-100000 -100000 100000 100000]");
 
-            if (isEllipse)
+            if (unitMatrix is { } um)
+            {
+                formXObj.Elements["/Matrix"] = new PdfLiteral(string.Format(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    "[{0:" + fmt + "} {1:" + fmt + "} {2:" + fmt + "} {3:" + fmt + "} {4:" + fmt + "} {5:" + fmt + "}]",
+                    um.M11, um.M12, um.M21, um.M22, um.OffsetX, um.OffsetY));
+            }
+            else if (isEllipse)
             {
                 // Matrix maps normalized (unit-circle) space to page space: scale then translate
                 formXObj.Elements["/Matrix"] = new PdfLiteral(string.Format(

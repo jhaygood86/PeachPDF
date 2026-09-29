@@ -16,7 +16,7 @@ PeachDrawing.Core.Canvas : abstract class
   method Brush GetConicGradientBrush(PaintPoint center, Double outerRadius, PaintColor[] colors, Double[] anglesRad)
   method Brush GetLinearGradientBrush(PaintPoint p1, PaintPoint p2, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False)
   method Brush GetLinearGradientBrush(Rect rect, PaintColor color1, PaintColor color2, Double angle)
-  method Brush GetRadialGradientBrush(PaintPoint center, Double radiusX, Double radiusY, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False, PaintPoint? focalCenter = null)
+  method Brush GetRadialGradientBrush(PaintPoint center, Double radiusX, Double radiusY, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False, PaintPoint? focalCenter = null, Matrix3x2? transform = null)
   method Brush GetSolidBrush(PaintColor color)
   method Pen GetPen(Brush brush)
   method Pen GetPen(PaintColor color)
@@ -640,11 +640,12 @@ PeachDrawing.Core.RUri : class
   property String Scheme { get; }
   property Uri Uri { get; }
 PeachDrawing.Core.RadialGradientBrush : sealed class
-  ctor(PaintPoint center, PaintPoint focus, Double radiusX, Double radiusY, IReadOnlyList<GradientStop> stops, GradientSpread spread)
+  ctor(PaintPoint center, PaintPoint focus, Double radiusX, Double radiusY, IReadOnlyList<GradientStop> stops, GradientSpread spread, Matrix3x2? transform = null)
   property Double RadiusX { get; }
   property Double RadiusY { get; }
   property GradientSpread Spread { get; }
   property IReadOnlyList<GradientStop> Stops { get; }
+  property Matrix3x2? Transform { get; }
   property PaintPoint Center { get; }
   property PaintPoint Focus { get; }
 PeachDrawing.Core.RasterRegion : sealed class
@@ -705,7 +706,7 @@ PeachDrawing.Core.RenderContext : abstract class
   method Brush GetConicGradientBrush(PaintPoint center, Double outerRadius, PaintColor[] colors, Double[] anglesRad)
   method Brush GetLinearGradientBrush(PaintPoint p1, PaintPoint p2, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False)
   method Brush GetLinearGradientBrush(Rect rect, PaintColor color1, PaintColor color2, Double angle)
-  method Brush GetRadialGradientBrush(PaintPoint center, Double radiusX, Double radiusY, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False, PaintPoint? focalCenter = null)
+  method Brush GetRadialGradientBrush(PaintPoint center, Double radiusX, Double radiusY, ValueTuple<PaintColor, Double>[] stops, Boolean isRepeating = False, PaintPoint? focalCenter = null, Matrix3x2? transform = null)
   method Brush GetSolidBrush(PaintColor color)
   method Font GetFont(String family, Double size, PaintFontStyle style, Double? weight = null, Double? stretch = null, Double? obliqueSkewSinus = null, String variations = null)
   method Font GetFontForCodepoint(String family, Double size, PaintFontStyle style, Rune codepoint, Double? weight = null, Double? stretch = null, Double? obliqueSkewSinus = null, String variations = null)

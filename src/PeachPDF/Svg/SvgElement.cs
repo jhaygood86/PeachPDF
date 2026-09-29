@@ -266,10 +266,9 @@ namespace PeachPDF.Svg
 
     /// <summary>
     /// <c>&lt;polyline&gt;</c> - geometrically identical to <see cref="SvgPolygonElement"/> except its
-    /// stroke never draws a closing segment back to the first point. Per spec, fill still behaves as
-    /// if the shape were closed; this implementation deliberately simplifies that by using the same
-    /// (unclosed) geometry for both fill and stroke - a documented v1 gap that only affects the rare
-    /// case of a filled (rather than the far more common <c>fill="none"</c>) polyline.
+    /// stroke never draws a closing segment back to the first point. Per spec the shape is still
+    /// closed implicitly for fill purposes, so the renderer fills a closed copy of the geometry and
+    /// strokes the open one.
     /// </summary>
     internal sealed class SvgPolylineElement : SvgElement
     {

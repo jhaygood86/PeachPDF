@@ -707,7 +707,8 @@ namespace PeachPDF.Adapters
                 Utils.Convert(radial.Center, PixelsPerPoint), radial.RadiusX / PixelsPerPoint, radial.RadiusY / PixelsPerPoint,
                 radial.Stops.Select(s => Utils.Convert(s.PaintColor)).ToArray(),
                 radial.Stops.Select(s => s.Position).ToArray(),
-                Utils.Convert(radial.Focus, PixelsPerPoint))
+                Utils.Convert(radial.Focus, PixelsPerPoint),
+                radial.Transform is { } rt ? new XMatrix(rt.M11, rt.M12, rt.M21, rt.M22, rt.M31 / PixelsPerPoint, rt.M32 / PixelsPerPoint) : null)
             { IsRepeating = radial.Spread == GradientSpread.Repeat },
             ConicGradientBrush conic => new XConicGradientBrush(
                 Utils.Convert(conic.Center, PixelsPerPoint), conic.OuterRadius / PixelsPerPoint,

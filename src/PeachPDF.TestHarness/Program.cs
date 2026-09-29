@@ -4380,6 +4380,9 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
         SvgSwatch("radialGradient, centered",
             """<svg viewBox="0 0 100 100" width="80" height="80"><defs><radialGradient id="rg1" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="40"><stop offset="0" stop-color="#fff9c4"/><stop offset="1" stop-color="#f57f17"/></radialGradient></defs><circle cx="50" cy="50" r="40" fill="url(#rg1)"/></svg>""",
             "radialGradient cx/cy/r"),
+        SvgSwatch("radialGradient + rotated gradientTransform",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><radialGradient id="rg3" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="20" gradientTransform="translate(50 50) rotate(45) scale(2 1) translate(-50 -50)"><stop offset="0" stop-color="#fff9c4"/><stop offset="1" stop-color="#d84315"/></radialGradient></defs><rect x="5" y="5" width="90" height="90" fill="url(#rg3)"/></svg>""",
+            "radialGradient rotated gradientTransform"),
         SvgSwatch("radialGradient + gradientTransform",
             """<svg viewBox="0 0 100 100" width="80" height="80"><defs><radialGradient id="rg2" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="40" gradientTransform="matrix(1 0 0 0.5 0 25)"><stop offset="0" stop-color="#e0f7fa"/><stop offset="1" stop-color="#006064"/></radialGradient></defs><circle cx="50" cy="50" r="40" fill="url(#rg2)"/></svg>""",
             "gradientTransform squishes the radial into an ellipse")
