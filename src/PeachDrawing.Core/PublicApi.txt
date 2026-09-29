@@ -388,6 +388,8 @@ PeachDrawing.Core.ImageSampling : enum Int32
   Bilinear = 2
   Nearest = 1
   Pixelated = 4
+PeachDrawing.Core.InkCrossings : static class
+  method static IReadOnlyList<InkSpan> Measure(Typeface typeface, String text, Double scale, Double bandTop, Double bandBottom, Double letterSpacing, ShapeSettings features)
 PeachDrawing.Core.InkSpan : struct
   ctor(Double Start, Double End)
   method Void Deconstruct(out Double Start, out Double End)

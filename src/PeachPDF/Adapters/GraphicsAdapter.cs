@@ -324,100 +324,18 @@ namespace PeachPDF.Adapters
         }
 
         /// <summary>
-        /// <see cref="GetInkCrossings"/>'s actual measurement, in coordinates relative to the run's own
-        /// origin and baseline - the form <see cref="_inkCrossings"/> caches. Null means no glyph in the
-        /// run had a decodable outline at all.
+        /// <see cref="GetInkCrossings"/>'s actual measurement, in coordinates relative to the run's own origin and baseline - the form
+        /// <see cref="_inkCrossings"/> caches. Null means no glyph in the run had a decodable outline at all.
         /// </summary>
         private static List<InkSpan>? MeasureInkCrossings(
             Typeface typeface, XFont realFont, string str, in InkCrossingKey key,
             double pixelsPerPoint)
         {
-            // Same design-units-to-user-space scale GetTextOutline resolves; see its own remarks. The
-            // em-square is y-up and user space is y-down, so the band's top edge is the HIGH design y.
+            // Same design-units-to-user-space scale GetTextOutline resolves; see its own remarks.
             var scale = realFont.Size * pixelsPerPoint / typeface.Metrics.UnitsPerEm;
-            if (scale <= 0) return null;
-
-            List<InkSpan> spans = [];
-            var sawOutline = false;
-            double penX = 0;
-
-            foreach (var glyph in Shaper.Shape(typeface, str, key.Features).Glyphs)
-            {
-                var glyphId = glyph.GlyphIndex;
-
-                if (typeface.TryGetOutline((ushort)glyphId, out var outline))
-                {
-                    sawOutline = true;
-
-                    // GPOS positioning shifts where this glyph paints without changing its outline -
-                    // exactly as GetTextOutline applies it, so ink is measured where it is drawn. A mark
-                    // attached with a negative XOffset therefore lands left of the base it follows, which
-                    // is why the whole list is sorted and merged below rather than assumed ordered.
-                    var glyphX = penX + glyph.XOffset * scale;
-                    var glyphY = -glyph.YOffset * scale;
-
-                    var crossings = outline.Crossings(
-                        (glyphY - key.BandBottom) / scale, (glyphY - key.BandTop) / scale);
-
-                    // One span per glyph, hulling everything the glyph puts in the band, rather than one
-                    // span per ink run. CSS Text Decoration 4 §2.10.5 leaves the skip shape to the UA and
-                    // names this exact choice - "whether to show the line within enclosed areas of a
-                    // glyph" - noting that hiding it "gives a cleaner look to the type" and that following
-                    // each contour can leave "typographically-awkward wisps of underline". Per-run spans
-                    // produced precisely those wisps: a stub of underline stranded inside the bowl of a
-                    // 'g' or the counter of an 'o'. Both Chrome and Firefox hull per glyph - measured on
-                    // 'o', 'g', 'n', 'v', 'H' and U+2026, whose three separate dots become a single gap in
-                    // both - so this is also what a document author will have proofed against.
-                    //
-                    // Crossings is sorted and disjoint, so its first start and last end are the extremes.
-                    if (crossings.Count > 0)
-                    {
-                        spans.Add(new InkSpan(
-                            glyphX + crossings[0].Start * scale,
-                            glyphX + crossings[^1].End * scale));
-                    }
-                }
-
-                penX += (typeface.GetAdvance((ushort)glyphId) + glyph.XAdvanceDelta) * scale + key.LetterSpacing;
-            }
-
-            // No glyph in the run had a decodable outline at all - a CFF/bitmap font, or a run of
-            // nothing but spaces. Null rather than an empty list, so the caller can tell "no ink
-            // information" from "this run genuinely crosses nothing"; see Canvas.GetInkCrossings.
-            if (!sawOutline) return null;
-
-            return MergeSpans(spans);
-        }
-
-        /// <summary>
-        /// <paramref name="spans"/> sorted left to right and unioned, so the result honours
-        /// <see cref="Canvas.GetInkCrossings"/>'s documented contract regardless of the order the
-        /// glyph walk produced them in.
-        /// </summary>
-        private static List<InkSpan> MergeSpans(List<InkSpan> spans)
-        {
-            if (spans.Count <= 1) return spans;
-
-            spans.Sort(static (a, b) => a.Start.CompareTo(b.Start));
-
-            List<InkSpan> merged = [spans[0]];
-
-            for (var i = 1; i < spans.Count; i++)
-            {
-                var last = merged[^1];
-                var next = spans[i];
-
-                if (next.Start <= last.End)
-                {
-                    merged[^1] = new InkSpan(last.Start, Math.Max(last.End, next.End));
-                }
-                else
-                {
-                    merged.Add(next);
-                }
-            }
-
-            return merged;
+            return InkCrossings.Measure(typeface, str, scale, key.BandTop, key.BandBottom, key.LetterSpacing, key.Features) is { } spans
+                ? [.. spans]
+                : null;
         }
 
         /// <summary>

@@ -35,6 +35,30 @@ public sealed partial class RasterCanvas
             features ?? ShapeSettings.Default);
 
     /// <inheritdoc/>
+    public override IReadOnlyList<InkSpan>? GetInkCrossings(string str, Font font, PaintPoint origin, double bandTop, double bandBottom,
+        double letterSpacing = 0, ShapeSettings? features = null)
+    {
+        var typeface = font.Typeface!;
+        var unitsPerEm = typeface.Metrics.UnitsPerEm;
+        if (unitsPerEm == 0 || bandBottom <= bandTop)
+            return null;
+
+        // The baseline DrawString paints this run on, and the size of a design unit, both in the canvas's own units.
+        var baselineY = origin.Y + font.Size * typeface.Metrics.CellAscent / unitsPerEm * _pixelsPerPoint;
+        var scale = font.Size * _pixelsPerPoint / unitsPerEm;
+
+        if (InkCrossings.Measure(typeface, str, scale, bandTop - baselineY, bandBottom - baselineY, letterSpacing,
+                features ?? ShapeSettings.Default) is not { } relative)
+            return null;
+
+        var spans = new InkSpan[relative.Count];
+        for (var i = 0; i < spans.Length; i++)
+            spans[i] = new InkSpan(relative[i].Start + origin.X, relative[i].End + origin.X);
+
+        return spans;
+    }
+
+    /// <inheritdoc/>
     public override void DrawString(string str, Font font, PaintColor color, PaintPoint point, Size size, double letterSpacing = 0,
         FontPalette? fontPalette = null, ShapeSettings? features = null)
     {

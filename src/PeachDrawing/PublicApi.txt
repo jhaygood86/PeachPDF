@@ -73,6 +73,7 @@ PeachDrawing.RasterCanvas : sealed class
   method Void Save(Stream stream, String formatName, EncoderOptions options)
   method virtual GraphicsPath GetGraphicsPath()
   method virtual GraphicsPath GetTextOutline(String str, Font font, PaintPoint baselineOrigin, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
   method virtual Int32 CountShapedGlyphs(String str, Font font, ShapeSettings? features = null)
   method virtual Object SetAntiAliasSmoothingMode()
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
