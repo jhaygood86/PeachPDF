@@ -3416,7 +3416,39 @@ namespace PeachPDF.Html.Core.Dom
 
             try
             {
-                await child.PerformLayoutImp(g, this, framePlacesChild);
+                if (child.IsFloated && child.HtmlContainer is { CurrentFragmentainer: { IsFragmenting: true, HasOwnBand: false } } floatContainer)
+                {
+                    var previous = floatContainer.CurrentFragmentainer;
+                    var slot = previous.SlotIndex;
+                    HashSet<BreakToken> entered = [];
+                    child.FragmentedAcrossFloatPasses = false;
+                    try
+                    {
+                        while (true)
+                        {
+                            floatContainer.EnterNestedFragmentainer(floatContainer.CreateIndependentPageFragmentainer(child, slot, previous));
+                            await child.PerformLayoutImp(g, this, framePlacesChild);
+                            if (child.PendingBreakToken is not { } next) break;
+                            child.ResumeAt(next, null);
+                            child.FragmentedAcrossFloatPasses = true;
+                            if (!entered.Add(next) || entered.Count >= 10000)
+                            {
+                                floatContainer.DetachFragmentainer();
+                                await child.PerformLayoutImp(g, this, framePlacesChild);
+                                break;
+                            }
+                            slot = next.ResumeSlotIndex;
+                        }
+                    }
+                    finally
+                    {
+                        floatContainer.RestoreFragmentainer(previous);
+                    }
+                }
+                else
+                {
+                    await child.PerformLayoutImp(g, this, framePlacesChild);
+                }
             }
             catch (Exception ex)
             {
@@ -3903,6 +3935,30 @@ namespace PeachPDF.Html.Core.Dom
             RequestedBreakBeforeTop = top;
             RequestedBreakBeforeSlot = HtmlContainer!.SlotStartingAt(top);
             RequestedBreakEscapesNestedFragmentainer = escapesNestedFragmentainer;
+        }
+
+        /// <summary>
+        /// Whether this float ran as more than one nested fragmentainer pass, so its content already fills
+        /// fragmentainers before the one its container resumes in. A break before the container's first in-flow
+        /// child then cannot be the container's own break point (css-break-3 §3.1): the container has content in
+        /// the fragmentainer it is leaving, and moving it whole would re-lay the float from the later one.
+        /// </summary>
+        internal bool FragmentedAcrossFloatPasses { get; set; }
+
+        /// <summary>
+        /// Whether this box, or anything in its subtree, is a float that ran as several fragmentainer passes.
+        /// Such a float's content in each fragmentainer is recorded by its own break tokens, not by where it sits,
+        /// so relocating the box that holds it (a <c>break-inside: avoid</c> move) would re-lay it from a later
+        /// fragmentainer and lose what the earlier passes placed. The avoid is relaxed instead (css-break-3 §4.3).
+        /// </summary>
+        private bool HoldsAFloatThatRanAcrossFragmentainers()
+        {
+            foreach (var child in Boxes)
+            {
+                if (child.FragmentedAcrossFloatPasses || child.HoldsAFloatThatRanAcrossFragmentainers()) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -6077,6 +6133,20 @@ namespace PeachPDF.Html.Core.Dom
                 CommitBlockChildOffset(child, offset);
             }
 
+            // Clearance can carry a box past a float that ran as its own fragmentainer passes, into a later
+            // fragmentainer than the one this pass is filling. Laying it out here would break its first line
+            // with an inline token, and resuming that puts the line at the top of the band instead of at the
+            // clearance, so the break falls before the box instead, at the clearance (css-break-3 §4.4).
+            if (child.Clear.Value is not ClearMode.None
+                && HtmlContainer is { IsFragmenting: true, CurrentFragmentainer: { HasOwnBand: false } context } container
+                && container.SlotStartingAt(child.Location.Y) > context.SlotIndex
+                && Fragmentation.EarlyBreak.HoldsAFragmentedFloatBefore(this, Boxes.IndexOf(child)))
+            {
+                child.RequestBreakBefore(child.Location.Y);
+                return false;
+            }
+
+            HtmlContainer?.InvalidateEmittedFragmentsForPlacement(child);
             return true;
         }
 
@@ -7039,7 +7109,7 @@ namespace PeachPDF.Html.Core.Dom
             // it is the engine's own final answer, and this page-context mover (built for an ordinary
             // block sibling with siblings and a page grid of its own to relocate against) would ask the
             // same question again with none of that context and can disagree.
-            if ((avoidsBreak || monolithic) && !_earlyBreakTaken && !PositionAssignedByEngine)
+            if ((avoidsBreak || monolithic) && !_earlyBreakTaken && !PositionAssignedByEngine && !HoldsAFloatThatRanAcrossFragmentainers())
             {
                 // The space this box's own top already sits in - BlockConstraint.For reproduces the same
                 // shifted-grid convention (see HtmlContainer.PageIndexOf) the pre-BlockConstraint version
