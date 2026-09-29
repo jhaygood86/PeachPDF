@@ -64,9 +64,9 @@ namespace PeachPDF.Html.Core.Dom
         /// Priority (last wins): base → named page → :right/:left → :first.
         /// </summary>
         internal static PageRule? SelectPageRule(
-            IReadOnlyList<PageRule> rules, int pageNumber, string? activeNamedPage)
+            IReadOnlyList<PageRule> rules, int pageNumber, string? activeNamedPage, bool isBlank = false)
         {
-            var ordered = GetOrderedApplicableRules(rules, pageNumber, activeNamedPage);
+            var ordered = GetOrderedApplicableRules(rules, pageNumber, activeNamedPage, isBlank);
             return ordered.Count > 0 ? ordered[^1] : null;
         }
 
@@ -83,9 +83,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>margin</c>/<c>size</c>.
         /// </summary>
         internal static IReadOnlyList<MarginStyleRule> SelectApplicableMarginRules(
-            IReadOnlyList<PageRule> rules, int pageNumber, string? activeNamedPage)
+            IReadOnlyList<PageRule> rules, int pageNumber, string? activeNamedPage, bool isBlank = false)
         {
-            var ordered = GetOrderedApplicableRules(rules, pageNumber, activeNamedPage);
+            var ordered = GetOrderedApplicableRules(rules, pageNumber, activeNamedPage, isBlank);
             var merged = new Dictionary<string, MarginStyleRule>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var rule in ordered)
@@ -122,9 +122,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>margin</c>/<c>size</c> via <see cref="ResolvePageMargins"/>).
         /// </summary>
         internal static StyleDeclaration? SelectApplicablePageStyle(
-            IReadOnlyList<PageRule> rules, int pageNumber, string? activeNamedPage)
+            IReadOnlyList<PageRule> rules, int pageNumber, string? activeNamedPage, bool isBlank = false)
         {
-            var ordered = GetOrderedApplicableRules(rules, pageNumber, activeNamedPage);
+            var ordered = GetOrderedApplicableRules(rules, pageNumber, activeNamedPage, isBlank);
             StyleDeclaration? merged = null;
 
             foreach (var rule in ordered)
@@ -256,14 +256,14 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="SelectApplicableMarginRules"/> (per-margin-box-name cascade merge).
         /// </summary>
         private static List<PageRule> GetOrderedApplicableRules(
-            IReadOnlyList<PageRule> rules, int pageNumber, string? activeNamedPage)
+            IReadOnlyList<PageRule> rules, int pageNumber, string? activeNamedPage, bool isBlank)
         {
             var result = new List<PageRule>();
             if (rules.Count == 0)
                 return result;
 
             PageRule? baseRule = null;
-            PageRule? firstRule = null;
+            var pageSpecific = new List<PageRule>();
             var matches = new List<(PageRule Rule, int Score)>();
 
             foreach (var rule in rules)
@@ -283,6 +283,7 @@ namespace PeachPDF.Html.Core.Dom
                     var nameMatches = entry.Name is null || entry.Name == activeNamedPage;
                     var pseudo = entry.Pseudo?.ToLowerInvariant();
                     var isFirst = pseudo == "first";
+                    var isBlankPseudo = pseudo == "blank";
 
                     // ":first" (optionally combined with a matching name) always outranks every other
                     // selector shape, regardless of declaration order — per the CSS Paged Media spec,
@@ -292,7 +293,17 @@ namespace PeachPDF.Html.Core.Dom
                     if (isFirst)
                     {
                         if (nameMatches && pageNumber == 1)
-                            firstRule = rule;
+                            pageSpecific.Add(rule);
+                        continue;
+                    }
+
+                    // ":blank" (css-page-3 §5.1) ranks with ":first" at the page-specific tier, above
+                    // :left/:right; among the two, declaration order decides. It matches only a page a
+                    // directional break inserted (isBlank), never one that merely has nothing on it.
+                    if (isBlankPseudo)
+                    {
+                        if (nameMatches && isBlank)
+                            pageSpecific.Add(rule);
                         continue;
                     }
 
@@ -317,7 +328,7 @@ namespace PeachPDF.Html.Core.Dom
             // the later-declared one still ends up last (highest precedence), matching the prior single-
             // winner behavior's ">=" tie-break.
             result.AddRange(matches.OrderBy(m => m.Score).Select(m => m.Rule));
-            if (firstRule != null) result.Add(firstRule);
+            result.AddRange(pageSpecific);
 
             return result;
         }

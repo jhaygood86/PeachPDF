@@ -1006,7 +1006,7 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 <a id="directional-page-breaks"></a>
 **Directional page breaks (`left`, `right`, `recto`, `verso`).** Per [CSS Fragmentation Level 3 §3.1](https://www.w3.org/TR/css-break-3/#break-between) these force one *or two* page breaks, so that the content following the break begins on a page of the requested side. Pages alternate right, left, right, … from the first page — the same left-to-right progression `@page :left` / `@page :right` select on — so a `break-before: right` whose content would otherwise land on a left page inserts one blank page ahead of it. `recto` and `verso` are `right` and `left` in this progression.
 
-A page inserted this way is an ordinary page: it takes its `@page` context's canvas background and margin boxes, and it counts toward `counter(page)` and `counter(pages)`. There is no `@page :blank` to style or suppress it separately.
+A page inserted this way is an ordinary page: it takes its `@page` context's canvas background and margin boxes, and it counts toward `counter(page)` and `counter(pages)`. `@page :blank` ([MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/:blank)) selects exactly these inserted pages, so `@page :blank { @top-center { content: none } }` suppresses the running header on them while the surrounding pages keep theirs. It matches only a page a directional break inserted, never one that is merely empty or one a plain `break-before: page` opened.
 
 Two limitations. Where a document also uses per-page `@page` left/right *margin* overrides, which re-wrap each page's content to its own width, the page a break lands on (and therefore whether a blank page is needed) depends on that re-wrapping, which is resolved iteratively rather than exactly.
 
@@ -1490,6 +1490,7 @@ The `@page` at-rule targets PDF pages. A rule without a selector applies to all 
 | `@page { }` — base rule | Full | Applies to all pages |
 | `@page :first { }` | Full | Applies only to page 1 |
 | `@page :left { }` | Full | Applies to even-numbered pages |
+| `@page :blank { }` | Full | Applies to a page inserted by a directional break (`left`/`right`/`recto`/`verso`); ranks with `:first`, above `:left`/`:right` |
 | `@page :right { }` | Full | Applies to odd-numbered pages |
 | `@page name { }` — named page | Full | Activated by `page: name` on elements; see [Named pages](#named-pages) |
 
