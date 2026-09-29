@@ -290,7 +290,18 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             return BreakPropagation.FirstInFlowChild(container) is { } first
                    && BreakPropagation.PropagatesBreakBeforeOutward(first)
-                   && container.Boxes.IndexOf(first) == block.ResumeChildIndex;
+                   && container.Boxes.IndexOf(first) == block.ResumeChildIndex
+                   && !HoldsAFragmentedFloatBefore(container, block.ResumeChildIndex);
+        }
+
+        internal static bool HoldsAFragmentedFloatBefore(CssBox container, int childIndex)
+        {
+            for (var i = 0; i < childIndex && i < container.Boxes.Count; i++)
+            {
+                if (container.Boxes[i].FragmentedAcrossFloatPasses) return true;
+            }
+
+            return false;
         }
     }
 }

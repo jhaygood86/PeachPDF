@@ -1937,6 +1937,42 @@ await SaveShowcaseAsync("paged_media", "Paged Media", "Paged Media",
     "url() logo image in a margin box (@top-left-corner).",
     pagedMediaHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── Floats taller than a page ─────────────────────────────────────────────
+
+// A float that is taller than the space left on its page continues onto the following pages, and the text
+// that flows beside it carries on beside the continuation. Before this, the float's own lines were split
+// across pages but the text beside it was dropped after the first page. Three shapes are shown: text beside
+// a tall left float, a block that clears the float (it starts below the float's last line, at the left
+// edge), and a tall float inside a break-inside: avoid box.
+static string TallFloatLines(string prefix, int count) =>
+    string.Concat(Enumerable.Range(1, count).Select(i => $"<div class='line'>{prefix} line {i}</div>"));
+
+static string BesideText(int count) =>
+    string.Join(" ", Enumerable.Range(1, count).Select(i => $"The text beside the float, sentence {i}, keeps flowing."));
+
+var tallFloatHtml =
+    "<html><head><style>" +
+    "@page { size: 300pt 220pt; margin: 20pt }" +
+    "body { margin: 0; font: 10pt/14pt sans-serif }" +
+    ".line { height: 14pt; padding: 0 4pt; background: #ffe9d6; border-bottom: 1pt solid #fff }" +
+    ".float { float: left; width: 110pt; margin: 0 8pt 0 0 }" +
+    "h2 { font-size: 11pt; margin: 0 0 4pt; clear: both }" +
+    "</style></head><body>" +
+    "<h2>Text beside a float taller than the page</h2>" +
+    "<div class='float'>" + TallFloatLines("Float", 30) + "</div>" +
+    "<p>" + BesideText(40) + "</p>" +
+    "<h2>A block that clears it starts below the float's last line</h2>" +
+    "<p style='background:#d6ecff'>This paragraph clears the float, so it starts at the left edge below the float's last line.</p>" +
+    "<div style='break-inside: avoid; border: 1pt solid #999; padding: 4pt'>" +
+    "<div class='float' style='width:90pt'>" + TallFloatLines("Boxed", 20) + "</div>" +
+    "<p>" + BesideText(20) + "</p></div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("tall_floats_across_pages", "Layout", "Floats Taller Than A Page",
+    "A float taller than a page continues onto the following pages with the text beside it, a block that clears " +
+    "the float starts below its last line, and a tall float inside a break-inside: avoid box keeps its content.",
+    tallFloatHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Paged Media showcase — margin-box image alignment ─────────────────
 
 // A margin box's image content follows the box's alignment exactly as text does (CSS Paged
