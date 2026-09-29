@@ -298,7 +298,7 @@ namespace PeachPDF.Html.Core.Dom
             // settle within it keeps the last attempt.
             var perPage = container is { UseVariableInlineMeasure: true, HasRealPageGrid: true, IsFragmenting: true }
                 && _flexBox.DerivedStyle.ActualDisplay == Keywords.Flex
-                && _mainAxisIsPhysicalX && _isWrap && !_isWrapReverse && !hasDefiniteHeight
+                && _mainAxisIsPhysicalX && _isWrap && !hasDefiniteHeight
                 && rawItems.Count > 1;
             List<double>? hints = null;
             var initialBottom = _flexBox.ActualBottom;
@@ -526,7 +526,7 @@ namespace PeachPDF.Html.Core.Dom
             return item;
         }
 
-        private const int MaxPerPageAttempts = 2;
+        private const int MaxPerPageAttempts = 3;
 
         /// <summary>
         /// The measure - the content width a container starting at <paramref name="top"/> would have -
@@ -559,9 +559,12 @@ namespace PeachPDF.Html.Core.Dom
 
             while (next < items.Count)
             {
+                // A wrap-reverse container puts its first line last, so where a line lands cannot be
+                // estimated from the lines before it in flow order - only from where the previous attempt
+                // left it (LandingMeasures); until there is one, every line has the container's own measure.
                 var measure = hints is not null && lines.Count < hints.Count
                     ? hints[lines.Count]
-                    : await MeasureAt(g, top);
+                    : _isWrapReverse ? mainSize : await MeasureAt(g, top);
 
                 // Everything not yet placed was measured against the measure of the line before it.
                 for (var index = next; index < items.Count; index++)
