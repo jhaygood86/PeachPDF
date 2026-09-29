@@ -123,6 +123,31 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Probe_NestedBlocks()
+        {
+            string Blocks(string k) => string.Concat(Enumerable.Range(0, 40).Select(n => $"<div class=\"b\" id=\"{k}{n}\"></div>"));
+            var c = await BuildAsync(Head + $$"""
+                #f { background: #cde; } .i { flex: 1 1 0; background: #fdc; }
+                .b { height: 20pt; background: #9c9; margin: 1pt 2pt; }
+                </style></head><body><div id="f"><div class="i" id="i0">{{Blocks("x")}}</div><div class="i" id="i1">{{Blocks("y")}}</div><div class="i" id="i2">{{Blocks("z")}}</div></div><p id="after">after</p></body></html>
+                """);
+            output.WriteLine(Dump(c, "f", "i0", "x0", "x12", "x13", "x14", "x27", "x28", "x39", "after"));
+        }
+
+        [Fact]
+        public async Task Probe_NestedParagraphs()
+        {
+            string Text(int n, string k) => string.Join(' ', Enumerable.Range(0, n).Select(i => $"{k}{i}"));
+            string Item(int n) => $"<div class=\"i\" id=\"i{n}\"><p id=\"p{n}a\">{Text(200, "a")}</p><p id=\"p{n}b\">{Text(200, "b")}</p></div>";
+            var c = await BuildAsync(Head + $$"""
+                #f { background: #cde; } .i { flex: 1 1 0; background: #fdc; }
+                p { background: #9c9; margin: 2pt; }
+                </style></head><body><div id="f">{{Item(0)}}{{Item(1)}}{{Item(2)}}</div><p id="after">after</p></body></html>
+                """);
+            output.WriteLine(Dump(c, "f", "i0", "p0a", "p0b", "i2", "p2a", "p2b", "after"));
+        }
+
+        [Fact]
         public async Task Probe_WrapRowUnstartedLines()
         {
             var items = string.Concat(Enumerable.Range(0, 9).Select(n => $"<div class=\"i\" id=\"g{n}\" style=\"height:150pt;flex:1 0 170pt\">g{n}</div>"));

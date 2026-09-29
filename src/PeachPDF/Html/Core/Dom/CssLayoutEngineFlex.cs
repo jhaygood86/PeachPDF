@@ -125,8 +125,9 @@ namespace PeachPDF.Html.Core.Dom
 
             if (!resumed)
             {
-                // A fresh layout decides every fragmentainer's frame again.
-                container.ClearInlineFrames(_flexBox);
+                // A fresh layout decides every fragmentainer's frame again - the container's, its items',
+                // and those of the blocks inside them.
+                container.ClearInlineFramesUnder(_flexBox);
                 return;
             }
 
@@ -1861,7 +1862,7 @@ namespace PeachPDF.Html.Core.Dom
             DistributeFlex(line, measure);
             ComputeMainOffsets(line, measure, indefiniteMainSize: false);
 
-            var unfinished = new HashSet<CssBox>(resume.UnfinishedItems.Select(u => u.Item), ReferenceEqualityComparer.Instance);
+            var unfinished = resume.UnfinishedItems.ToDictionary(u => u.Item, u => u.Token, ReferenceEqualityComparer.Instance);
 
             foreach (var item in items)
             {
@@ -1870,30 +1871,79 @@ namespace PeachPDF.Html.Core.Dom
                     ? _flexBox.ClientLeft + measure - item.MainOffset - item.FinalMainSize
                     : _flexBox.ClientLeft + item.MainOffset;
                 var width = item.FinalMainSize;
-                var old = box.Bounds;
 
-                // Every earlier fragmentainer keeps the frame this item had in it: fixed before the live
-                // geometry that described it moves, and re-decided from this slot on.
-                var firstSlot = container.SlotStartingAt(box.Location.Y);
-                for (var earlier = firstSlot; earlier < slot; earlier++)
-                {
-                    if (container.InlineFrameIn(box, earlier) is null)
-                        container.RecordInlineFrame(box, earlier, old.X, old.Width);
-                }
+                MoveFrame(container, box, slot, x, box.Location.Y, x + width);
 
-                container.ClearInlineFrames(box, slot);
-
-                box.Location = new PaintPoint(x, box.Location.Y);
-                box.ActualRight = x + width;
-
-                if (unfinished.Contains(box))
+                if (unfinished.TryGetValue(box, out var token))
                 {
                     box.Width = FormatLayoutUnits(Math.Max(0, width - box.ActualBoxSizeIncludedWidth), box);
                     box.Height = box.HeightBeforeItemPin ?? Keywords.Auto;
+
+                    RefitContinuingDescendants(container, token, slot);
                 }
             }
 
             return measure;
+        }
+
+        /// <summary>
+        /// Moves <paramref name="box"/>'s live frame to <paramref name="x"/>..<paramref name="right"/> for
+        /// the fragmentainer <paramref name="slot"/> and the ones after it, keeping the frame it had in every
+        /// earlier fragmentainer it was laid out in.
+        /// </summary>
+        /// <remarks>
+        /// The fragment tree reads a box's live geometry wherever nothing was stated, so the frame the box
+        /// had is stated for each earlier slot (<see cref="HtmlContainerInt.RecordInlineFrame"/>) before the
+        /// live geometry that described it moves, and whatever an earlier pass had already stated from
+        /// <paramref name="slot"/> on is discarded, because this pass decides it again.
+        /// </remarks>
+        private static void MoveFrame(HtmlContainerInt container, CssBox box, int slot, double x, double y, double right)
+        {
+            var old = box.Bounds;
+
+            for (var earlier = container.SlotStartingAt(box.Location.Y); earlier < slot; earlier++)
+            {
+                if (container.InlineFrameIn(box, earlier) is null)
+                    container.RecordInlineFrame(box, earlier, old.X, old.Width);
+            }
+
+            container.ClearInlineFrames(box, slot);
+
+            box.Location = new PaintPoint(x, y);
+            box.ActualRight = right;
+        }
+
+        /// <summary>
+        /// Re-fits the boxes an item's unfinished content resumes into - the chain of blocks between the
+        /// item and the line being continued - to the frame their containing block now has.
+        /// </summary>
+        /// <remarks>
+        /// A continuing block is not sized again on the pass that resumes it (its line boxes re-wrap
+        /// against its containing block's live edge, which is why moving the item is enough for the text),
+        /// so its own <see cref="CssBox.ActualRight"/> would keep describing the earlier page's width and
+        /// its background and border would be drawn there. Only an in-flow block with an auto width follows
+        /// its containing block; anything else states its own width and keeps it.
+        /// </remarks>
+        private static void RefitContinuingDescendants(HtmlContainerInt container, BreakToken itemToken, int slot)
+        {
+            var link = itemToken is BlockBreakToken block ? block.ChildToken : null;
+
+            for (; link is not null; link = (link as BlockBreakToken)?.ChildToken)
+            {
+                var box = link.Box;
+                var containing = box.ContainingBlock;
+
+                if (box.IsOutOfFlow || box.IsInline || CssValueParser.IsValidLength(box.Width)
+                    || !ReferenceEquals(box.ParentBox, containing))
+                {
+                    continue;
+                }
+
+                var x = containing.ClientLeft + box.ActualMarginLeft;
+                var right = containing.ClientRight - box.ActualMarginRight;
+
+                MoveFrame(container, box, slot, x, box.Location.Y, right);
+            }
         }
 
         /// <summary>
