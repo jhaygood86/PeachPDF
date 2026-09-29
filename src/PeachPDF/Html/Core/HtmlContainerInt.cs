@@ -629,6 +629,22 @@ namespace PeachPDF.Html.Core
         internal void LeaveNestedFragmentainer(FragmentainerContext? previous) =>
             CurrentFragmentainer = previous;
 
+        internal FragmentainerContext CreateIndependentPageFragmentainer(CssBox root, int slot,
+            FragmentainerContext enclosing)
+        {
+            var context = new FragmentainerContext(this, root, slot);
+            var endInset = TotalBandEndReservationFor(slot);
+            var startInset = TopFloatAreaHeightsBySlot.GetValueOrDefault(slot);
+            if (enclosing.SlotIndex == slot)
+            {
+                endInset = Math.Max(endInset, enclosing.BandEndInsetOf(slot));
+                startInset = Math.Max(startInset, enclosing.BandStartInsetOf(slot));
+            }
+            if (endInset > 0) context.ReserveBandEnd(slot, endInset);
+            if (startInset > 0) context.ReserveBandStart(slot, startInset);
+            return context;
+        }
+
         /// <summary>
         /// Whether a break may be taken for the content being laid out right now. False during a
         /// measurement pass at a provisional position, inside monolithic content, and outside a
@@ -3061,6 +3077,19 @@ namespace PeachPDF.Html.Core
             if (box.IsInDetachedRepeatingGroup) return;
 
             _emitter.InvalidateFrom(PageIndexOf(documentY), box);
+        }
+
+        /// <summary>
+        /// A sibling following a fragmented float can first be placed beside its top on an
+        /// already-emitted page. It has no fragments to invalidate yet, but that page is stale.
+        /// </summary>
+        internal void InvalidateEmittedFragmentsForPlacement(CssBox box)
+        {
+            if (_emitter is null || !HasRealPageGrid || box.IsInDetachedRepeatingGroup
+                || CurrentFragmentainer is not { HasOwnBand: false } context
+                || box.Location.Y >= PageTopOf(context.SlotIndex)) return;
+
+            _emitter.InvalidateFrom(PageIndexOf(box.Location.Y), box);
         }
 
         /// <summary>
