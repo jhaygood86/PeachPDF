@@ -2192,8 +2192,9 @@ namespace PeachPDF.Html.Core
                 {
                     var pageY = geom.Top;
                     var activeName = PageRuleResolver.ActiveNameAtPageEnd(_namedPageElements, pageY, geom.BandHeight);
-                    var applicableMargins = PageRuleResolver.SelectApplicableMarginRules(PageRules, pageNumber, activeName);
-                    var applicablePageStyle = PageRuleResolver.SelectApplicablePageStyle(PageRules, pageNumber, activeName);
+                    var isBlankPage = IsReservedBlankSlot(fragmentainer.SlotIndex);
+                    var applicableMargins = PageRuleResolver.SelectApplicableMarginRules(PageRules, pageNumber, activeName, isBlankPage);
+                    var applicablePageStyle = PageRuleResolver.SelectApplicablePageStyle(PageRules, pageNumber, activeName, isBlankPage);
 
                     foreach (var marginRule in applicableMargins)
                     {

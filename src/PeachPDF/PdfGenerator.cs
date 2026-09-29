@@ -963,18 +963,21 @@ namespace PeachPDF
                 // point-space MarginTop for named-page attribution.
                 var geom = fragmentainer.Geometry;
                 var pageY = geom.Top;
+                var isBlankPage = container.HtmlContainerInt.IsReservedBlankSlot(fragmentainer.SlotIndex);
                 var applicableMargins = SelectApplicableMarginRules(
                     container.PageRules,
                     pageNumber,
                     container.NamedPageElements,
                     pageY,
-                    geom.BandHeight);
+                    geom.BandHeight,
+                    isBlankPage);
                 var applicablePageStyle = SelectApplicablePageStyle(
                     container.PageRules,
                     pageNumber,
                     container.NamedPageElements,
                     pageY,
-                    geom.BandHeight);
+                    geom.BandHeight,
+                    isBlankPage);
 
                 var (mL, mT, mR, mB) = (geom.MarginLeftPt, geom.MarginTopPt, geom.MarginRightPt, geom.MarginBottomPt);
                 // The page box's own resolved border/padding (issue #1147) - all zero for a page with no
@@ -1754,27 +1757,30 @@ namespace PeachPDF
             int pageNumber,
             IReadOnlyList<NamedPageElement> namedPageElements,
             double pageY,
-            double pageHeight)
+            double pageHeight,
+            bool isBlank = false)
             => PageRuleResolver.SelectPageRule(rules, pageNumber,
-                PageRuleResolver.ActiveNameAtPageEnd(namedPageElements, pageY, pageHeight));
+                PageRuleResolver.ActiveNameAtPageEnd(namedPageElements, pageY, pageHeight), isBlank);
 
         internal static IReadOnlyList<MarginStyleRule> SelectApplicableMarginRules(
             IReadOnlyList<PageRule> rules,
             int pageNumber,
             IReadOnlyList<NamedPageElement> namedPageElements,
             double pageY,
-            double pageHeight)
+            double pageHeight,
+            bool isBlank = false)
             => PageRuleResolver.SelectApplicableMarginRules(rules, pageNumber,
-                PageRuleResolver.ActiveNameAtPageEnd(namedPageElements, pageY, pageHeight));
+                PageRuleResolver.ActiveNameAtPageEnd(namedPageElements, pageY, pageHeight), isBlank);
 
         internal static StyleDeclaration? SelectApplicablePageStyle(
             IReadOnlyList<PageRule> rules,
             int pageNumber,
             IReadOnlyList<NamedPageElement> namedPageElements,
             double pageY,
-            double pageHeight)
+            double pageHeight,
+            bool isBlank = false)
             => PageRuleResolver.SelectApplicablePageStyle(rules, pageNumber,
-                PageRuleResolver.ActiveNameAtPageEnd(namedPageElements, pageY, pageHeight));
+                PageRuleResolver.ActiveNameAtPageEnd(namedPageElements, pageY, pageHeight), isBlank);
 
         internal static (double L, double T, double R, double B) ResolvePageMargins(
             PageRule? rule, double baseL, double baseT, double baseR, double baseB)

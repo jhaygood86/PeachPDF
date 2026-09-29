@@ -440,7 +440,8 @@ namespace PeachPDF.Html.Core
             var baseSheetPxHeight = container.PageSize.Height + container.MarginTop + container.MarginBottom;
 
             var activeName = PageRuleResolver.ActiveNameAtSlotStart(container.NamedPageElements, top);
-            var rule = PageRuleResolver.SelectPageRule(container.PageRules, ruleSelectionPageNumber, activeName);
+            var isBlank = container.IsReservedBlankSlot(pageIndex);
+            var rule = PageRuleResolver.SelectPageRule(container.PageRules, ruleSelectionPageNumber, activeName, isBlank);
             var (mL, mT, mR, mB) = PageRuleResolver.ResolvePageMargins(
                 rule, baseLPt, baseTPt, baseRPt, baseBPt, container.PageLengthContext);
 
@@ -475,7 +476,7 @@ namespace PeachPDF.Html.Core
             // a border/padding-free document never pays for SelectApplicablePageStyle's own rule scan.
             var borderPadding = HasVerticalBorderPaddingOverrides || HasHorizontalBorderPaddingOverrides
                 ? PageRuleResolver.ResolvePageBorderAndPadding(
-                    PageRuleResolver.SelectApplicablePageStyle(container.PageRules, ruleSelectionPageNumber, activeName),
+                    PageRuleResolver.SelectApplicablePageStyle(container.PageRules, ruleSelectionPageNumber, activeName, isBlank),
                     sheetWidthPt, sheetHeightPt,
                     container.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize)
                 : default;
