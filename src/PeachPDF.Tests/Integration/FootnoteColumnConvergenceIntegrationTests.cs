@@ -27,7 +27,7 @@ namespace PeachPDF.Tests.Integration
                 lines.Append($"<div>Line {i}{call}</div>");
             }
 
-            return "<style>div,sup{font:10pt/10pt sans-serif}</style>" +
+            return "<style>body{margin:0}div,sup{font:10pt/10pt sans-serif}</style>" +
                    $"<div style='columns:2; column-gap:10pt; column-fill:auto; height:{columnHeightPt}pt; width:300pt'>{lines}</div>";
         }
 
