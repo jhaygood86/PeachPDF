@@ -63,6 +63,8 @@ PeachDrawing.Core.Canvas : abstract class
   method virtual CanvasLayer BeginLayer(LayerOptions options)
   method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
+  method virtual Void DrawImage(Image image, Rect destRect, ImageSampling sampling)
+  method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect, ImageSampling sampling)
   method virtual Void DrawRaster(RasterSurface surface)
   method virtual Void DrawString(String str, Font font, PaintColor color, PaintPoint point, Size size, Double letterSpacing, FontPalette fontPalette, ShapeSettings? features, String logicalText)
   method virtual Void PopAntiAlias()
@@ -380,6 +382,12 @@ PeachDrawing.Core.Image : abstract class
   property Boolean Interpolate { get; set; }
   property Double Height { get; }
   property Double Width { get; }
+PeachDrawing.Core.ImageSampling : enum Int32
+  Automatic = 0
+  Bicubic = 3
+  Bilinear = 2
+  Nearest = 1
+  Pixelated = 4
 PeachDrawing.Core.InkSpan : struct
   ctor(Double Start, Double End)
   method Void Deconstruct(out Double Start, out Double End)

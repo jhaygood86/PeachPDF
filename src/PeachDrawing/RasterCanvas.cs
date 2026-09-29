@@ -571,6 +571,14 @@ public sealed partial class RasterCanvas : Canvas
     public override void DrawImage(Image image, Rect destRect, Rect srcRect) => DrawImageCore(image, destRect, srcRect, 255, _blend);
 
     /// <inheritdoc/>
+    public override void DrawImage(Image image, Rect destRect, ImageSampling sampling) =>
+        DrawImageCore(image, destRect, null, 255, _blend, sampling);
+
+    /// <inheritdoc/>
+    public override void DrawImage(Image image, Rect destRect, Rect srcRect, ImageSampling sampling) =>
+        DrawImageCore(image, destRect, srcRect, 255, _blend, sampling);
+
+    /// <inheritdoc/>
     public override void DrawImageWithOpacity(Image image, Rect destRect, double opacity, PaintBlendMode blendMode = PaintBlendMode.Normal) =>
         DrawImageCore(image, destRect, null, (int)Math.Round(Math.Clamp(opacity, 0, 1) * 255), blendMode);
 
@@ -621,12 +629,13 @@ public sealed partial class RasterCanvas : Canvas
         DrawBitmap(ColorMatrixFilter.Apply(bitmap, matrix), image.Width, image.Height, destRect, null, image.Interpolate, 255, _blend);
     }
 
-    private void DrawImageCore(Image image, Rect destRect, Rect? srcRect, int opacity, PaintBlendMode mode)
+    private void DrawImageCore(Image image, Rect destRect, Rect? srcRect, int opacity, PaintBlendMode mode,
+        ImageSampling sampling = ImageSampling.Automatic)
     {
         if (!TryGetBitmap(image, out var bitmap, out var naturalWidth, out var naturalHeight))
             return;
 
-        DrawBitmap(bitmap, naturalWidth, naturalHeight, destRect, srcRect, image.Interpolate, opacity, mode);
+        DrawBitmap(bitmap, naturalWidth, naturalHeight, destRect, srcRect, image.Interpolate, opacity, mode, sampling);
     }
 
     private static bool TryGetBitmap(Image image, out Bitmap bitmap, out double naturalWidth, out double naturalHeight)
@@ -667,7 +676,7 @@ public sealed partial class RasterCanvas : Canvas
     /// null for all of it.
     /// </summary>
     private void DrawBitmap(Bitmap bitmap, double naturalWidth, double naturalHeight, Rect destRect, Rect? srcRect,
-        bool interpolate, int opacity, PaintBlendMode mode)
+        bool interpolate, int opacity, PaintBlendMode mode, ImageSampling sampling = ImageSampling.Automatic)
     {
         if (naturalWidth <= 0 || naturalHeight <= 0 || destRect.Width <= 0 || destRect.Height <= 0)
             return;
@@ -690,11 +699,17 @@ public sealed partial class RasterCanvas : Canvas
 
         // Smooth unless the image asked for crisp pixels and is being magnified.
         var scale = Math.Sqrt(Math.Abs(deviceToBitmap.Determinant));
-        var smooth = interpolate || scale > 1 + 1e-6;
+        var smooth = sampling switch
+        {
+            ImageSampling.Nearest => false,
+            ImageSampling.Bilinear or ImageSampling.Bicubic => true,
+            ImageSampling.Pixelated => scale > 1 + 1e-6,
+            _ => interpolate || scale > 1 + 1e-6,
+        };
 
         var polygon = new PolygonSet();
         AddDeviceRect(polygon, dest, toDevice);
-        FillPolygons(polygon, evenOdd: false, new BitmapPaint(bitmap, deviceToBitmap, smooth), opacity, mode);
+        FillPolygons(polygon, evenOdd: false, new BitmapPaint(bitmap, deviceToBitmap, smooth, bicubic: sampling == ImageSampling.Bicubic), opacity, mode);
     }
 
     /// <summary>Builds a new bitmap the size of <paramref name="a"/>, combining each pixel with the (nearest) pixel of <paramref name="b"/>.</summary>

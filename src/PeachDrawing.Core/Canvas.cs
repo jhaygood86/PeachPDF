@@ -784,6 +784,48 @@ namespace PeachDrawing.Core
         /// <param name="srcRect">Rectangle structure that specifies the portion of the <paramref name="image"/> object to draw. </param>
         public abstract void DrawImage(Image image, Rect destRect, Rect srcRect);
 
+        /// <summary>Draws <paramref name="image"/> into <paramref name="destRect"/>, reading its pixels as <paramref name="sampling"/> says.</summary>
+        /// <param name="image">the image to draw</param>
+        /// <param name="destRect">where to draw it; the image is scaled to fit</param>
+        /// <param name="sampling">how to read the image's pixels</param>
+        /// <remarks>
+        /// The default has only the image's own smooth-or-crisp switch to work with: <see cref="ImageSampling.Nearest"/> turns
+        /// <see cref="Image.Interpolate"/> off for the draw (as does <see cref="ImageSampling.Pixelated"/>) and every other value except
+        /// <see cref="ImageSampling.Automatic"/> turns it on,
+        /// then the image's setting is put back. A canvas with real per-draw sampling overrides this.
+        /// </remarks>
+        public virtual void DrawImage(Image image, Rect destRect, ImageSampling sampling) =>
+            WithSampling(image, sampling, () => DrawImage(image, destRect));
+
+        /// <summary>Draws part of <paramref name="image"/> into <paramref name="destRect"/>, reading its pixels as <paramref name="sampling"/> says.</summary>
+        /// <param name="image">the image to draw</param>
+        /// <param name="destRect">where to draw it; the image is scaled to fit</param>
+        /// <param name="srcRect">the part of the image to draw</param>
+        /// <param name="sampling">how to read the image's pixels; see <see cref="DrawImage(Image, Rect, ImageSampling)"/> for the default's limits</param>
+        public virtual void DrawImage(Image image, Rect destRect, Rect srcRect, ImageSampling sampling) =>
+            WithSampling(image, sampling, () => DrawImage(image, destRect, srcRect));
+
+        private static void WithSampling(Image image, ImageSampling sampling, Action draw)
+        {
+            ArgumentNullException.ThrowIfNull(image);
+            if (sampling == ImageSampling.Automatic)
+            {
+                draw();
+                return;
+            }
+
+            var was = image.Interpolate;
+            image.Interpolate = sampling is not (ImageSampling.Nearest or ImageSampling.Pixelated);
+            try
+            {
+                draw();
+            }
+            finally
+            {
+                image.Interpolate = was;
+            }
+        }
+
         /// <summary>
         /// Draws the specified Image at the specified location and with the specified size.
         /// </summary>

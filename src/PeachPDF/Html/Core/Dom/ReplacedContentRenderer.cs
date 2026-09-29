@@ -49,7 +49,7 @@ namespace PeachPDF.Html.Core.Dom
             if (svg is not null)
                 SvgRenderer.RenderCachedInto(g, svg, destination);
             else if (image is not null)
-                g.DrawImage(image, destination);
+                g.DrawImage(image, destination, ImageRenderingResolver.Resolve(box.ImageRendering.Value));
 
             if (needsClip)
                 g.PopClip();
