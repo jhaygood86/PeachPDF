@@ -123,10 +123,10 @@ namespace PeachPDF.Tests.Integration
             var m = PatternMatrix(pdf);
 
             // 30 degrees clockwise on a y-down canvas, seen through the y flip and the 0.75 scale: cos = 0.866, sin = 0.5.
-            Assert.Equal(0.75 * Math.Cos(Math.PI / 6), m[0], 3);
-            Assert.Equal(-0.75 * Math.Sin(Math.PI / 6), m[1], 3);
-            Assert.Equal(-0.75 * Math.Sin(Math.PI / 6), m[2], 3);
-            Assert.Equal(-0.75 * Math.Cos(Math.PI / 6), m[3], 3);
+            Assert.Equal(0.75 * Math.Cos(Math.PI / 6), m[0], 0.001);
+            Assert.Equal(-0.75 * Math.Sin(Math.PI / 6), m[1], 0.001);
+            Assert.Equal(-0.75 * Math.Sin(Math.PI / 6), m[2], 0.001);
+            Assert.Equal(-0.75 * Math.Cos(Math.PI / 6), m[3], 0.001);
         }
 
         [Fact]
