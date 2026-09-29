@@ -68,6 +68,17 @@ namespace PeachPDF.Tests.Integration
             return null;
         }
 
+        internal static string WordExtent(BoxFragment f)
+        {
+            var all = new List<TextFragment>();
+            void Walk(BoxFragment b) { all.AddRange(b.Words); foreach (var c in b.Children) Walk(c); }
+            Walk(f);
+            if (all.Count == 0) return "-";
+            return $"{all.Min(w => w.Rect.Left):F1}..{all.Max(w => w.Rect.Right):F1} y {all.Min(w => w.Rect.Top):F1}..{all.Max(w => w.Rect.Bottom):F1}";
+        }
+
+        internal static int CountWords(BoxFragment f) => f.Words.Count + f.Children.Sum(CountWords);
+
         internal static string Dump(HtmlContainerInt c, params string[] ids)
         {
             var sb = new StringBuilder();
@@ -81,7 +92,8 @@ namespace PeachPDF.Tests.Integration
                     var f = box is null ? null : FragmentOf(tree.Fragmentainers[p].Root, box);
                     if (f is null) continue;
                     var r = f.WholeBoxRect;
-                    sb.AppendLine($"  {id}: x={r.X:F1} y={r.Y:F1} w={r.Width:F1} h={r.Height:F1} right={r.X + r.Width:F1}");
+                    var own = f.Rect;
+                    sb.AppendLine($"  {id}: whole x={r.X:F1} y={r.Y:F1} w={r.Width:F1} h={r.Height:F1} | rect x={own.X:F1} y={own.Y:F1} w={own.Width:F1} h={own.Height:F1} | lines={f.Lines.Count} words={CountWords(f)} wordsX=[{WordExtent(f)}]");
                 }
             }
             return sb.ToString();
@@ -97,6 +109,17 @@ namespace PeachPDF.Tests.Integration
                 </style></head><body><div id="f"><div class="i" id="a">{{a}}</div><div class="i" id="b">{{b}}</div></div><p>after</p></body></html>
                 """);
             output.WriteLine(Dump(c, "f", "a", "b"));
+        }
+
+        [Fact]
+        public async Task Probe_StraddlingGrowRow()
+        {
+            string Text(int n, string k) => string.Join(' ', Enumerable.Range(0, n).Select(i => $"{k}{i}"));
+            var c = await BuildAsync(Head + $$"""
+                #f { background: #cde; } .i { flex: 1 1 0; background: #fdc; }
+                </style></head><body><div id="f"><div class="i" id="i0">{{Text(300, "a")}}</div><div class="i" id="i1">{{Text(300, "b")}}</div><div class="i" id="i2">{{Text(150, "c")}}</div></div><p id="after">after</p></body></html>
+                """);
+            output.WriteLine(Dump(c, "f", "i0", "i1", "i2", "after"));
         }
 
         [Fact]

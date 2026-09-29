@@ -3187,13 +3187,17 @@ namespace PeachPDF.Html.Core
             _emitter?.ClearFragmentDisplacements(box, fromSlot);
 
         /// <summary>
-        /// States that <paramref name="box"/>'s border box is <paramref name="dx"/> further along the
-        /// inline axis and <paramref name="dw"/> wider in fragmentainer <paramref name="slot"/> than its
-        /// live geometry says - see <see cref="FragmentEmitter.RecordInlineFrame"/>. Null on a
+        /// States that <paramref name="box"/>'s border box spans <paramref name="x"/> to
+        /// <paramref name="x"/> + <paramref name="width"/> along the inline axis in fragmentainer
+        /// <paramref name="slot"/> - see <see cref="FragmentEmitter.RecordInlineFrame"/>. Null on a
         /// measurement or detached-fragmentainer run, which has no emitter to state anything to.
         /// </summary>
-        internal void RecordInlineFrame(CssBox box, int slot, double dx, double dw) =>
-            _emitter?.RecordInlineFrame(box, slot, dx, dw);
+        internal void RecordInlineFrame(CssBox box, int slot, double x, double width) =>
+            _emitter?.RecordInlineFrame(box, slot, x, width);
+
+        /// <summary>The frame <paramref name="box"/> was stated to have in <paramref name="slot"/>, if any.</summary>
+        internal (double X, double Width)? InlineFrameIn(CssBox box, int slot) =>
+            _emitter?.InlineFrameIn(box, slot);
 
         /// <summary>
         /// Discards the frames <paramref name="box"/> stated from <paramref name="fromSlot"/> on - or, with

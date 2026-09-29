@@ -141,7 +141,7 @@ namespace PeachPDF.Html.Core.Dom
             var delta = slotWidth - startWidth;
 
             if (Math.Abs(delta) > 0.01)
-                container.RecordInlineFrame(_flexBox, slot, 0, delta);
+                container.RecordInlineFrame(_flexBox, slot, _flexBox.Bounds.X, _flexBox.Bounds.Width + delta);
         }
 
         /// <summary>
@@ -166,12 +166,21 @@ namespace PeachPDF.Html.Core.Dom
                 var delta = await CssLayoutEngine.GetBoxWidth(g, _flexBox, top) - startWidth;
 
                 if (Math.Abs(delta) > 0.01)
-                    container.RecordInlineFrame(_flexBox, slot, 0, delta);
+                    container.RecordInlineFrame(_flexBox, slot, _flexBox.Bounds.X, _flexBox.Bounds.Width + delta);
             }
         }
 
         private async ValueTask Layout(Canvas g, BreakToken? resume)
         {
+            // A resumed pass never runs LayoutCore's own parsing, and this instance is new: what the
+            // container's direction and wrap say is needed to re-fit lines to the page being resumed on.
+            if (resume is not null)
+            {
+                ParseFlexDirection();
+                ParseFlexWrap();
+                ComputeAxisMapping();
+            }
+
             await StateContainerFrame(g, resume is not null);
             await LayoutCore(g, resume);
 
@@ -452,7 +461,15 @@ namespace PeachPDF.Html.Core.Dom
                 if (lineOrder.Count > 0)
                 {
                     await CommitLineContent(g, lineOrder, startLineIndex: 0, seedUnfinished: null,
-                        seedFinished: null, placementOrigin: _flexBox.Location);
+                        seedFinished: null, placementOrigin: _flexBox.Location,
+                        lineMeasures: container is { UseVariableInlineMeasure: true }
+                            && _flexBox.DerivedStyle.ActualDisplay == Keywords.Flex
+                            ? BuildLineMeasures(lines, mainSize)
+                            : null,
+                        lineBottoms: container is { UseVariableInlineMeasure: true }
+                            && _flexBox.DerivedStyle.ActualDisplay == Keywords.Flex
+                            ? lineOrder.Select(boxes => boxes.Max(box => box.ActualBottom)).ToList()
+                            : null);
                 }
             }
             else
@@ -813,6 +830,24 @@ namespace PeachPDF.Html.Core.Dom
 
         private async ValueTask ResolveFlexibleLengths(Canvas g, FlexLine line, double mainSize)
         {
+            DistributeFlex(line, mainSize);
+
+            foreach (var item in line.Items)
+            {
+                // Re-layout only when the final size differs from what was used during measurement
+                if (Math.Abs(item.FinalMainSize - item.NaturalMainSize) > 0.5)
+                    await ResizeItem(g, item, item.FinalMainSize);
+            }
+        }
+
+        /// <summary>
+        /// Resolves each of <paramref name="line"/>'s items' final main size from its hypothetical one -
+        /// the arithmetic of CSS Flexbox 1 §9.7, with nothing laid out - so a line that is only being
+        /// re-fitted, because its content is already partly on an earlier page, can answer without touching
+        /// a box.
+        /// </summary>
+        private void DistributeFlex(FlexLine line, double mainSize)
+        {
             double mainGap = ParseMainGap(mainSize);
             double totalGapSpace = line.Items.Count > 1 ? mainGap * (line.Items.Count - 1) : 0;
             double usedSpace = line.Items.Sum(i =>
@@ -854,10 +889,6 @@ namespace PeachPDF.Html.Core.Dom
                 // issue #1167) - Height's own CSS string only ever reflects this transiently, inside
                 // ResizeItem's own temporary set/relayout/revert below.
                 if (!_mainAxisIsPhysicalX) item.Box.AlgorithmicDefiniteHeight = final;
-
-                // Re-layout only when the final size differs from what was used during measurement
-                if (Math.Abs(final - item.NaturalMainSize) > 0.5)
-                    await ResizeItem(g, item, final);
             }
         }
 
@@ -1541,8 +1572,13 @@ namespace PeachPDF.Html.Core.Dom
             int startLineIndex,
             IReadOnlyList<UnfinishedFlexItem>? seedUnfinished,
             IReadOnlyList<CssBox>? seedFinished,
-            PaintPoint placementOrigin)
+            PaintPoint placementOrigin,
+            IReadOnlyList<double>? lineMeasures = null,
+            IReadOnlyList<double>? lineBottoms = null,
+            bool refitLine = false)
         {
+            var bottoms = lineBottoms?.ToList();
+
             var container = _flexBox.HtmlContainer;
 
             // The same liveness gate RelocateLinesAcrossFragmentainers uses, for the same reason: outside
@@ -1576,14 +1612,130 @@ namespace PeachPDF.Html.Core.Dom
                         finished.Add(box);
                 }
 
+                var lineRefit = isResumedLine && refitLine;
+
                 if (unfinished.Count > 0)
                 {
                     var resumeSlot = unfinished.Max(u => u.Token.ResumeSlotIndex);
                     _flexBox.SetPendingBreakToken(new FlexBreakToken(
-                        _flexBox, resumeSlot, lineIndex, lines, unfinished, finished, placementOrigin));
+                        _flexBox, resumeSlot, lineIndex, lines, unfinished, finished, placementOrigin,
+                        lineMeasures, bottoms, lineRefit));
                     return;
                 }
+
+                // A line whose items were re-fitted to another page's measure has finished, and how tall it
+                // turned out to be depends on the measures its content flowed through - which the height
+                // every earlier phase gave it could not know.
+                if (lineRefit && bottoms is not null)
+                    GrowRefitLine(lines, lineIndex, bottoms);
             }
+        }
+
+        /// <summary>
+        /// Re-derives a finished, re-fitted line's bottom edge from what its items actually came to, and
+        /// moves everything below it - the lines still to come, and the container's own bottom - by
+        /// however far that differs from the height the line was given before its items were re-fitted.
+        /// </summary>
+        /// <remarks>
+        /// Every item that stretches to its line's cross size follows the line, since the line's cross size
+        /// is the tallest of its items' (CSS Flexbox 1 §9.4 step 7); an item that does not stretch keeps
+        /// the height its own content or <c>height</c> gave it, and still counts towards the line's.
+        /// </remarks>
+        private void GrowRefitLine(IReadOnlyList<IReadOnlyList<CssBox>> lines, int lineIndex, List<double> bottoms)
+        {
+            var boxes = lines[lineIndex];
+            var oldBottom = bottoms[lineIndex];
+            var newBottom = boxes.Max(NaturalBottomOf);
+            var delta = newBottom - oldBottom;
+
+            if (Math.Abs(delta) <= 0.01) return;
+
+            foreach (var box in boxes)
+            {
+                if (StretchesToItsLine(box)) box.ActualBottom = newBottom;
+            }
+
+            bottoms[lineIndex] = newBottom;
+
+            for (var below = lineIndex + 1; below < lines.Count; below++)
+            {
+                ItemContentCommit.RepositionForResume(lines[below], new PaintPoint(0, delta));
+                bottoms[below] += delta;
+            }
+
+            _flexBox.ActualBottom += delta;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is stretched to its flex line's cross size: <c>stretch</c>
+        /// alignment, an auto cross size, and no auto cross margin (CSS Flexbox 1 §9.4 step 11).
+        /// </summary>
+        private bool StretchesToItsLine(CssBox box)
+        {
+            var align = box.AlignSelf.Value == AlignItem.Auto ? _flexBox.AlignItems.Value : box.AlignSelf.Value;
+
+            return align is AlignItem.Stretch or AlignItem.Normal
+                && !HasAutoCrossMargin(box)
+                && !CssValueParser.IsValidLength((_mainAxisIsPhysicalX ? box.HeightBeforeItemPin ?? box.Height : box.Width) ?? string.Empty);
+        }
+
+        /// <summary>
+        /// Where <paramref name="box"/>'s bottom edge would sit if nothing stretched it: an explicit
+        /// <c>height</c> where the author gave one, otherwise the bottom of its own content.
+        /// </summary>
+        private static double NaturalBottomOf(CssBox box)
+        {
+            var authoredHeight = box.ItemContentSizeEverPinned ? box.HeightBeforeItemPin : box.Height;
+            if (authoredHeight is not null && CssValueParser.IsValidLength(authoredHeight))
+                return box.Location.Y + box.ActualBoxSizingHeight;
+
+            var bottom = box.Location.Y + box.ActualBorderTopWidth + box.ActualPaddingTop;
+            bottom = Math.Max(bottom, ContentBottomOf(box));
+
+            return bottom + box.ActualPaddingBottom + box.ActualBorderBottomWidth;
+        }
+
+        private static double ContentBottomOf(CssBox box)
+        {
+            var bottom = double.MinValue;
+
+            foreach (var word in box.Words)
+                bottom = Math.Max(bottom, word.Rectangle.Bottom);
+
+            foreach (var child in box.Boxes)
+            {
+                if (child.IsOutOfFlow) continue;
+
+                var childContent = ContentBottomOf(child);
+                if (childContent == double.MinValue)
+                {
+                    // A childless box (an image, an empty block) is all frame.
+                    if (child.Boxes.Count == 0 && child.Words.Count == 0)
+                        childContent = child.ActualBottom;
+                    else
+                        continue;
+                }
+                else
+                {
+                    childContent += child.ActualPaddingBottom + child.ActualBorderBottomWidth;
+                }
+
+                bottom = Math.Max(bottom, childContent + child.ActualMarginBottom);
+            }
+
+            return bottom;
+        }
+
+        private List<double> BuildLineMeasures(List<FlexLine> lines, double mainSize)
+        {
+            var measures = lines
+                .Where(line => line.Items.Count > 0)
+                .Select(line => line.MainSize ?? mainSize)
+                .ToList();
+
+            if (_isWrapReverse) measures.Reverse();
+
+            return measures;
         }
 
         /// <summary>
@@ -1642,9 +1794,165 @@ namespace PeachPDF.Html.Core.Dom
             for (var lineIndex = resume.ResumeLineIndex + 1; lineIndex < resume.Lines.Count; lineIndex++)
                 ItemContentCommit.RepositionForResume(resume.Lines[lineIndex], delta);
 
+            var lineMeasures = resume.LineMeasures;
+            var refitLine = resume.RefitLine;
+
+            if (lineMeasures is not null && await RefitStartedLine(g, resume, lineMeasures) is { } measure)
+            {
+                var updated = lineMeasures.ToList();
+                updated[resume.ResumeLineIndex] = measure;
+                lineMeasures = updated;
+                refitLine = true;
+            }
+
             await CommitLineContent(
                 g, resume.Lines, resume.ResumeLineIndex, resume.UnfinishedItems, resume.FinishedItems,
-                _flexBox.Location);
+                _flexBox.Location, lineMeasures, resume.LineBottoms, refitLine);
+        }
+
+        /// <summary>
+        /// Re-fits the line a resumed pass is about to continue to the measure of the fragmentainer it
+        /// continues in, when that differs from the measure the line was last sized against.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see href="https://www.w3.org/TR/css-break-3/#varying-size-boxes">css-break-3 §5.1</see>: each
+        /// fragment "recalculates sizes and positions using its own fragmentainer's size", and
+        /// <see href="https://www.w3.org/TR/css-flexbox-1/#pagination-algo">css-flexbox-1 §10.1</see>'s
+        /// sample algorithm reruns flex layout "with the next page's size and all the contents (including
+        /// those already laid out)". What is already laid out here is frozen in earlier fragmentainers, and
+        /// no item may be measured again - <see cref="MeasureItem"/> would discard the rectangles those
+        /// fragments were cut from - so the line's sizes are re-derived from CSS alone
+        /// (<see cref="RederiveItem"/>, <see cref="DistributeFlex"/>, <see cref="ComputeMainOffsets"/>) and
+        /// stated per fragmentainer instead: the frame each item had in every earlier slot is fixed before
+        /// its live geometry moves (<see cref="HtmlContainerInt.RecordInlineFrame"/>), and the live
+        /// geometry then becomes the frame it has here, which is what its remaining content wraps against.
+        /// </para>
+        /// <para>
+        /// Items that have not finished have their height released again (the pin from
+        /// <see cref="ItemContentCommit.CommitLayout"/> was the height the line had at its earlier measure);
+        /// <see cref="GrowRefitLine"/> settles the line's height once it is finished.
+        /// </para>
+        /// </remarks>
+        private async ValueTask<double?> RefitStartedLine(Canvas g, FlexBreakToken resume, IReadOnlyList<double> lineMeasures)
+        {
+            if (_flexBox.HtmlContainer is not { UseVariableInlineMeasure: true, HasRealPageGrid: true, IsFragmenting: true } container
+                || _flexBox.DerivedStyle.ActualDisplay != Keywords.Flex
+                || !_mainAxisIsPhysicalX
+                || container.CurrentFragmentainer is not { } filling
+                || resume.ResumeLineIndex >= lineMeasures.Count)
+            {
+                return null;
+            }
+
+            var top = filling.ResumeContentTop;
+            var slot = container.SlotStartingAt(top);
+            var measure = await MeasureAt(g, top);
+
+            if (Math.Abs(measure - lineMeasures[resume.ResumeLineIndex]) <= 0.01) return null;
+
+            var boxes = resume.Lines[resume.ResumeLineIndex];
+
+            var items = new List<FlexItem>(boxes.Count);
+            foreach (var box in boxes)
+                items.Add(await RederiveItem(g, box, measure));
+
+            var line = new FlexLine(items) { MainSize = measure };
+            DistributeFlex(line, measure);
+            ComputeMainOffsets(line, measure, indefiniteMainSize: false);
+
+            var unfinished = new HashSet<CssBox>(resume.UnfinishedItems.Select(u => u.Item), ReferenceEqualityComparer.Instance);
+
+            foreach (var item in items)
+            {
+                var box = item.Box;
+                var x = _effectiveMainStartIsAtMax
+                    ? _flexBox.ClientLeft + measure - item.MainOffset - item.FinalMainSize
+                    : _flexBox.ClientLeft + item.MainOffset;
+                var width = item.FinalMainSize;
+                var old = box.Bounds;
+
+                // Every earlier fragmentainer keeps the frame this item had in it: fixed before the live
+                // geometry that described it moves, and re-decided from this slot on.
+                var firstSlot = container.SlotStartingAt(box.Location.Y);
+                for (var earlier = firstSlot; earlier < slot; earlier++)
+                {
+                    if (container.InlineFrameIn(box, earlier) is null)
+                        container.RecordInlineFrame(box, earlier, old.X, old.Width);
+                }
+
+                container.ClearInlineFrames(box, slot);
+
+                box.Location = new PaintPoint(x, box.Location.Y);
+                box.ActualRight = x + width;
+
+                if (unfinished.Contains(box))
+                {
+                    box.Width = FormatLayoutUnits(Math.Max(0, width - box.ActualBoxSizeIncludedWidth), box);
+                    box.Height = box.HeightBeforeItemPin ?? Keywords.Auto;
+                }
+            }
+
+            return measure;
+        }
+
+        /// <summary>
+        /// A started item's sizes for a new measure, derived from CSS alone: its flex basis, and the
+        /// margins its main axis resolves.
+        /// </summary>
+        /// <remarks>
+        /// The counterpart of <see cref="MeasureItem"/>'s hypothetical main size that reads no layout
+        /// result, because the item has already been laid out and must not be again. Its intrinsic
+        /// widths come from <see cref="CssLayoutEngine.GetMinContentWidth"/>/<c>GetMaxContentWidth</c>, the
+        /// same measurements <see cref="MeasureItem"/> takes for a block with block children, so an item
+        /// sizes the same way on the page it started on and on a later one.
+        /// </remarks>
+        private async ValueTask<FlexItem> RederiveItem(Canvas g, CssBox box, double mainSize)
+        {
+            var authoredWidth = box.ItemContentSizeEverPinned ? box.WidthBeforeItemPin : box.Width;
+            var flexBasis = box.FlexBasis.Value;
+            double hypothetical;
+
+            if (flexBasis.IsValue)
+            {
+                hypothetical = CssValueParser.ParseLength(flexBasis.Value!.Value, mainSize, box) + MainBoxSizeIncluded(box);
+            }
+            else if (flexBasis.Keyword is not FlexBasisKeyword.Content && authoredWidth is not null && CssValueParser.IsValidLength(authoredWidth))
+            {
+                hypothetical = CssValueParser.ParseLength(authoredWidth!, mainSize, box) + MainBoxSizeIncluded(box);
+            }
+            else if (ParseFloat(box.FlexGrow) > 0)
+            {
+                hypothetical = 0;
+            }
+            else
+            {
+                var marginBefore = IsMainMarginBeforeAuto(box) ? 0 : MainMarginBefore(box);
+                var marginAfter = IsMainMarginAfterAuto(box) ? 0 : MainMarginAfter(box);
+                var minContent = await CssLayoutEngine.GetMinContentWidth(g, box);
+                var maxIntrinsicWidth = await CssLayoutEngine.GetMaxContentWidth(g, box) + 0.01;
+
+                hypothetical = Math.Max(minContent, Math.Min(maxIntrinsicWidth, mainSize - marginBefore - marginAfter));
+
+                if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
+                {
+                    var minOuter = CssValueParser.ParseLength(box.MinWidth, mainSize, box)
+                        + box.ActualPaddingLeft + box.ActualPaddingRight
+                        + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
+                    hypothetical = Math.Max(hypothetical, minOuter);
+                }
+            }
+
+            var item = new FlexItem(box, hypothetical, hypothetical)
+            {
+                MarginBeforeAuto = IsMainMarginBeforeAuto(box),
+                MarginAfterAuto = IsMainMarginAfterAuto(box),
+                MeasuredMainSize = mainSize
+            };
+            item.MarginBefore = item.MarginBeforeAuto ? 0 : MainMarginBefore(box);
+            item.MarginAfter = item.MarginAfterAuto ? 0 : MainMarginAfter(box);
+
+            return item;
         }
 
         // ─── Phase 9c (column-direction): sequential item commit ──────────────────

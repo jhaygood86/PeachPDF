@@ -56,6 +56,20 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// the stopping line's items that <b>finished</b> here, which a resumed pass must not re-enter —
     /// lines before <see cref="ResumeLineIndex"/> are implicitly fully finished and are never revisited.
     /// </param>
+    /// <param name="LineMeasures">
+    /// the main size each of <see cref="Lines"/> was sized against - lines can differ when the container
+    /// spans pages of different widths - so a resumed pass can tell whether the page it lands on asks a
+    /// line to be sized again. Null when every line has the container's own.
+    /// </param>
+    /// <param name="LineBottoms">
+    /// where each of <see cref="Lines"/> was expected to end when it was sized - the reference a line
+    /// re-fitted to another page's measure measures its growth from once it finishes, and what every
+    /// line below it moves with. Null when no line can be re-fitted.
+    /// </param>
+    /// <param name="RefitLine">
+    /// whether the resuming line's items have been re-fitted to another page's measure, so its height is
+    /// settled when it finishes rather than trusted.
+    /// </param>
     /// <param name="PlacementOrigin">
     /// <see cref="Dom.CssBox.Location"/> of the flex container itself at the moment every not-yet-committed
     /// item's own <c>Location</c> was last known correct — see <c>GridBreakToken.PlacementOrigin</c>'s own
@@ -68,7 +82,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         IReadOnlyList<IReadOnlyList<CssBox>> Lines,
         IReadOnlyList<UnfinishedFlexItem> UnfinishedItems,
         IReadOnlyList<CssBox> FinishedItems,
-        PaintPoint PlacementOrigin) : BreakToken(Box, ResumeSlotIndex)
+        PaintPoint PlacementOrigin,
+        IReadOnlyList<double>? LineMeasures = null,
+        IReadOnlyList<double>? LineBottoms = null,
+        bool RefitLine = false) : BreakToken(Box, ResumeSlotIndex)
     {
         /// <inheritdoc />
         internal override IReadOnlyList<BreakToken> FanOutContinuations =>
