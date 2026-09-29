@@ -12,7 +12,7 @@ claiming all of it, and a float or an absolutely/fixed-positioned box is sized a
 — each keeps its one already-correct, page-independent measure unchanged rather than being fed its
 containing block's edge as if it filled the whole of it. Each remaining case is a genuine CSS Paged Media
 3 §5 ("the edges of the page area act as a containing block for the layout that occurs between page
-breaks") deviation, tracked as its own issue: grid (the same shape flex had before #196 closed it - see "No longer
+breaks") deviation, tracked as its own issue: grid ([#1516](https://github.com/jhaygood86/PeachPDF/issues/1516), the same shape flex had before #196 closed it - see "No longer
 a gap" below; tables, multicol and flex all closed the same family of gap); and named-page (`page: <name>`) L/R and size overrides,
 whose width→height→page-name feedback the bounded reflow loop does not *formally* drive to convergence
 across a run that spans several physical pages under one active name
@@ -142,5 +142,11 @@ Left as it is, each a genuine css-break-3 §5.1 deviation - a fragment sizes to 
 each tracked: a flex line that is *unstarted* on a page reached only because a re-fitted line above it grew
 is sized for the page it was expected to land on, not the one it did; an item that does not stretch
 (`align-self` other than `stretch`) keeps the offset its earlier line height gave it when a re-fitted line
-grows; a flex container inside a multi-column container is not re-fitted per column; and the grid analogue
-of all of this.
+grows, and lines below a grown one are moved without re-running line relocation; a block on a straddling
+item's break chain with an explicit, percentage or `max-width`-clamped width keeps its earlier frame when the
+item's own X moves (`justify-content`/`rtl`); a re-fitted item's sizes come from `RederiveItem`, which does not
+share `MeasureItem`'s inline-only/replaced/aspect-ratio branches; a centred container (`margin: auto`) keeps
+its X while its width follows the page; per-line measures apply to wrapping rows only, so `column`,
+`inline-flex` and definite-height rows keep the measure they started with (a definite-height row's *started*
+lines are still re-fitted); a flex container inside a multi-column container is not re-fitted per column; and
+the grid analogue of all of this. Tracked as [#1515](https://github.com/jhaygood86/PeachPDF/issues/1515) (flex) and [#1516](https://github.com/jhaygood86/PeachPDF/issues/1516) (grid).

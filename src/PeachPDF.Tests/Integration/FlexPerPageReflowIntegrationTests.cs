@@ -295,6 +295,26 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task StraddlingRow_WithATallLineHeight_DoesNotShrinkTheLineWhenNothingChangedHeight()
+        {
+            // Both measures give the same wrapping (one unbreakable word per line), so the re-fitted line
+            // finishes exactly as tall as it started: nothing below it may move.
+            var words = string.Join(' ', Enumerable.Range(0, 60).Select(i => "wwwwwwwwwwwwwwwwwwwwwwwwwwwwww"));
+            var container = await BuildAsync(Head + $$"""
+                #f { display: flex; line-height: 2.2; } .i { flex: 0 0 auto; width: 200pt; }
+                </style></head><body><div id="f"><div class="i" id="a">{{words}}</div></div><p id="after">after</p></body></html>
+                """);
+
+            var a = ById(container, "a");
+            var after = ById(container, "after");
+
+            Assert.True(after.Location.Y >= a.ActualBottom - 0.5, $"{after.Location.Y} < {a.ActualBottom}");
+
+            var lastWord = a.Boxes.SelectMany(b => b.Words).Max(w => w.Rectangle.Bottom);
+            Assert.True(a.ActualBottom >= lastWord - 0.5, $"{a.ActualBottom} < last word bottom {lastWord}");
+        }
+
+        [Fact]
         public async Task StraddlingRow_BlocksInsideAnItemFollowItsFrameOnEachPage()
         {
             string Item(string id) =>

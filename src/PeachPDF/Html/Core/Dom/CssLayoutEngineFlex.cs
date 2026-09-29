@@ -135,7 +135,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var top = filling.ResumeContentTop;
             var slot = container.SlotStartingAt(top);
-            container.ClearInlineFrames(_flexBox, slot);
+            container.ClearInlineFrame(_flexBox, slot);
 
             var startWidth = await CssLayoutEngine.GetBoxWidth(g, _flexBox);
             var slotWidth = await CssLayoutEngine.GetBoxWidth(g, _flexBox, top);
@@ -306,6 +306,13 @@ namespace PeachPDF.Html.Core.Dom
 
             for (var attempt = 0; ; attempt++)
             {
+                // A line that opened with a box asking for a blank page in one attempt may not in the next.
+                if (attempt > 0 && container is not null)
+                {
+                    foreach (var rawItem in rawItems)
+                        container.SetBlankSlotReservation(rawItem, null);
+                }
+
                 // Phase 2: measure each item; derive hypothetical main size from CSS (not from layout result)
                 var items = new List<FlexItem>(rawItems.Count);
                 foreach (var box in rawItems)
@@ -1682,7 +1689,9 @@ namespace PeachPDF.Html.Core.Dom
 
             return align is AlignItem.Stretch or AlignItem.Normal
                 && !HasAutoCrossMargin(box)
-                && !CssValueParser.IsValidLength((_mainAxisIsPhysicalX ? box.HeightBeforeItemPin ?? box.Height : box.Width) ?? string.Empty);
+                && !CssValueParser.IsValidLength((_mainAxisIsPhysicalX
+                    ? (box.ItemContentSizeEverPinned ? box.HeightBeforeItemPin : box.Height)
+                    : box.Width) ?? string.Empty);
         }
 
         /// <summary>
