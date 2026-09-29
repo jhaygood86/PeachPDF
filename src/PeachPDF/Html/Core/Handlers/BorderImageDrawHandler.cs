@@ -80,7 +80,7 @@ namespace PeachPDF.Html.Core.Handlers
             // region to its own pixels; restore afterwards, since the same Image is shared with any <img>
             // or background layer using the same url().
             // An explicit `image-rendering` wins over that default.
-            var sampling = ImageRenderingResolver.Resolve(box.ImageRendering.Value, ImageSampling.Nearest);
+            var sampling = ImageRenderingResolver.Resolve(box.ImageRendering.Value, ImageSampling.Pixelated);
 
             try
             {

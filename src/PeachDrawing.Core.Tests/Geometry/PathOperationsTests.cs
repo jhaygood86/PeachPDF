@@ -401,6 +401,57 @@ namespace PeachDrawing.Core.Tests.Geometry
         }
 
         [Fact]
+        public void Combine_RejectsNonFiniteCoordinates_InsteadOfSearchingForever()
+        {
+            using var good = Circle(0, 0, 10);
+            using var nan = new TestGraphicsPath();
+            nan.Start(0, 0);
+            nan.AddBezierTo(double.NaN, 5, 10, 5, 10, 0);
+            using var infinite = new TestGraphicsPath();
+            infinite.Start(0, 0);
+            infinite.LineTo(double.PositiveInfinity, 3);
+            infinite.LineTo(4, 4);
+
+            Assert.Throws<ArgumentException>(() => Combine(good, nan, PathOperation.Union));
+            Assert.Throws<ArgumentException>(() => Combine(infinite, good, PathOperation.Intersect));
+        }
+
+        [Fact]
+        public void Union_OfACircleAndItsRotatedCopy_ThatIsTheSameShapeSplitDifferently_StaysSmallAndFast()
+        {
+            // The same circle, but its four quarter arcs start 45 degrees round: each arc lies along two of the other's for its whole length.
+            using var a = Circle(0, 0, 10);
+            using var b = Circle(0, 0, 10);
+            b.Transform(System.Numerics.Matrix3x2.CreateRotation(MathF.PI / 4));
+
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            using var union = Combine(a, b, PathOperation.Union);
+            using var difference = Combine(a, b, PathOperation.Difference);
+            clock.Stop();
+
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(10), $"took {clock.Elapsed}");
+            Assert.Equal(Math.PI * 100, Area(union), 1.5);
+            Assert.True(Area(difference) < 1.5);
+            Assert.True(union.GetCurveContours().Sum(c => c.Commands.Count) < 400, "the outline should not be shattered into thousands of pieces");
+        }
+
+        [Fact]
+        public void Union_OfAShapeThatIsAClosedSingleCurveLoop_ClosesItself()
+        {
+            // One cubic that starts and ends at the same point is a complete outline on its own.
+            using var leaf = new TestGraphicsPath();
+            leaf.Start(0, 0);
+            leaf.AddBezierTo(40, -30, 40, 30, 0, 0);
+            leaf.CloseFigure();
+            using var far = Circle(100, 0, 5);
+
+            using var result = Combine(leaf, far, PathOperation.Union);
+
+            Assert.Equal(2, result.GetCurveContours().Count);
+            Assert.All(result.GetCurveContours(), c => Assert.True(c.Closed));
+        }
+
+        [Fact]
         public void Combine_ValidatesItsArguments()
         {
             using var a = Rect(0, 0, 1, 1);

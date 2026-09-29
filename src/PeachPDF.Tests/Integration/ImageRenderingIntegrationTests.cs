@@ -107,8 +107,9 @@ namespace PeachPDF.Tests.Integration
         {
             var g = await PaintAsync(Bg("background-repeat:repeat;background-size:20pt 20pt"));
 
+            // Crisp when enlarged, but still smooth when a tile is shrunk (as it was before the sampling was a parameter).
             Assert.NotEmpty(g.Samplings);
-            Assert.All(g.Samplings, s => Assert.Equal(ImageSampling.Nearest, s));
+            Assert.All(g.Samplings, s => Assert.Equal(ImageSampling.Pixelated, s));
         }
 
         [Fact]
@@ -127,7 +128,7 @@ namespace PeachPDF.Tests.Integration
             var smooth = await PaintAsync($"<div style='{style};image-rendering:smooth'></div>");
 
             Assert.NotEmpty(plain.Samplings);
-            Assert.All(plain.Samplings, s => Assert.Equal(ImageSampling.Nearest, s));
+            Assert.All(plain.Samplings, s => Assert.Equal(ImageSampling.Pixelated, s));
             Assert.All(smooth.Samplings, s => Assert.Equal(ImageSampling.Bilinear, s));
         }
 

@@ -59,7 +59,11 @@ namespace PeachDrawing.Core
         /// <summary>Maps brush space onto the canvas's user space.</summary>
         public Matrix3x2 Transform { get; }
 
-        /// <summary>How the tile's pixels are read when a cell is drawn at a size other than the tile's own.</summary>
+        /// <summary>
+        /// How the tile's pixels are read when a cell is drawn at a size other than the tile's own. The raster canvas honours
+        /// <see cref="ImageSampling.Nearest"/>/<see cref="ImageSampling.Pixelated"/> (hard-edged) and treats everything else as bilinear
+        /// without pre-filtering a strong reduction; a PDF passes it on as the image's smoothing flag, which a viewer may ignore.
+        /// </summary>
         public ImageSampling Sampling { get; }
     }
 

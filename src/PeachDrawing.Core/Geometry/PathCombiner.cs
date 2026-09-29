@@ -13,6 +13,7 @@ namespace PeachDrawing.Core.Geometry
     internal static class PathCombiner
     {
         private const int MaxDepth = 26;
+        private const int MaxIntersectionsPerPair = 64;
 
         /// <summary>A line or cubic Bézier. A line's control points sit on it, and it stays a line however it is cut.</summary>
         private readonly record struct Bez(double X0, double Y0, double X1, double Y1, double X2, double Y2, double X3, double Y3, bool IsLine)
@@ -123,11 +124,19 @@ namespace PeachDrawing.Core.Geometry
             for (var i = 0; i < all.Count; i++)
                 cuts[i] = [];
 
+            // The first and last curve of the subpath each curve belongs to, so neighbours are found without scanning.
+            var firstOf = new int[all.Count];
+            var lastOf = new int[all.Count];
+            for (var i = 0; i < all.Count; i++)
+                firstOf[i] = i > 0 && all[i - 1].Shape == all[i].Shape && all[i - 1].Contour == all[i].Contour ? firstOf[i - 1] : i;
+            for (var i = all.Count - 1; i >= 0; i--)
+                lastOf[i] = i < all.Count - 1 && all[i + 1].Shape == all[i].Shape && all[i + 1].Contour == all[i].Contour ? lastOf[i + 1] : i;
+
             for (var i = 0; i < all.Count; i++)
             {
                 for (var j = i + 1; j < all.Count; j++)
                 {
-                    if (AreNeighbours(all, i, j))
+                    if (AreNeighbours(all, firstOf, lastOf, i, j))
                         continue;
 
                     var ci = all[i].Curve;
@@ -250,11 +259,17 @@ namespace PeachDrawing.Core.Geometry
                 contourIndex++;
             }
 
+            foreach (var c in curves)
+            {
+                if (!double.IsFinite(c.X0 + c.Y0 + c.X1 + c.Y1 + c.X2 + c.Y2 + c.X3 + c.Y3))
+                    throw new ArgumentException("A path with a coordinate that is NaN or infinite cannot be combined.", nameof(path));
+            }
+
             return new Shape(curves, contourOf, path.FillMode);
         }
 
         /// <summary>Curves that are next to each other along one subpath share an end point by design and are not cut against each other.</summary>
-        private static bool AreNeighbours(List<(Bez Curve, int Shape, int Contour)> all, int i, int j)
+        private static bool AreNeighbours(List<(Bez Curve, int Shape, int Contour)> all, int[] firstOf, int[] lastOf, int i, int j)
         {
             if (all[i].Shape != all[j].Shape || all[i].Contour != all[j].Contour)
                 return false;
@@ -263,15 +278,7 @@ namespace PeachDrawing.Core.Geometry
                 return true;
 
             // The first and last curve of a subpath are neighbours too (the subpath is closed).
-            var last = j;
-            while (last + 1 < all.Count && all[last + 1].Shape == all[j].Shape && all[last + 1].Contour == all[j].Contour)
-                last++;
-
-            var first = i;
-            while (first > 0 && all[first - 1].Shape == all[i].Shape && all[first - 1].Contour == all[i].Contour)
-                first--;
-
-            return i == first && j == last;
+            return i == firstOf[i] && j == lastOf[j];
         }
 
         private static bool IsSameCurve(Bez p, Bez q, double tolerance)
@@ -317,6 +324,11 @@ namespace PeachDrawing.Core.Geometry
         private static void Intersect(Bez a, double a0, double a1, Bez b, double b0, double b1, int depth, double flatTolerance,
             List<(double, double)> found)
         {
+            // Two curves that run along each other for a stretch make every level of the search report hits; past this many the pair is
+            // treated as overlapping and no more are looked for.
+            if (found.Count >= MaxIntersectionsPerPair)
+                return;
+
             if (a.MaxX + flatTolerance < b.MinX || b.MaxX + flatTolerance < a.MinX
                 || a.MaxY + flatTolerance < b.MinY || b.MaxY + flatTolerance < a.MinY)
                 return;
@@ -459,7 +471,7 @@ namespace PeachDrawing.Core.Geometry
                 while (true)
                 {
                     var tail = chain[^1];
-                    if (chain.Count > 1 && Near(tail.X3, tail.Y3, startX, startY, tolerance))
+                    if (Near(tail.X3, tail.Y3, startX, startY, tolerance))
                         break;
 
                     var best = -1;

@@ -732,7 +732,12 @@ namespace PeachPDF.Adapters
         private bool TryPaintTurnedTiles(Brush brush, Rect shapeBounds, Action pushShapeClip)
         {
             if (brush is HatchBrush hatch)
-                brush = hatch.ToTileBrush(this)!;
+            {
+                if (hatch.ToTileBrush(this) is not { } hatchTile)
+                    return false;
+
+                brush = hatchTile;
+            }
 
             if (brush is not TileBrush tile || shapeBounds.Width <= 0 || shapeBounds.Height <= 0)
                 return false;

@@ -100,7 +100,7 @@ namespace PeachPDF.Html.Core.Handlers
             // own doc comment.
             // An explicit `image-rendering` wins over that default.
             var sampling = ImageRenderingResolver.Resolve(
-                box.ImageRendering.Value, backgroundRepeat != "no-repeat" ? ImageSampling.Nearest : ImageSampling.Automatic);
+                box.ImageRendering.Value, backgroundRepeat != "no-repeat" ? ImageSampling.Pixelated : ImageSampling.Automatic);
 
             // Bound the repeat loops to the tiles that can actually land in the visible area, not
             // positioningRect's full extent - see visibleRect's own doc comment above.

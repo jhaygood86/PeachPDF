@@ -36,7 +36,10 @@ namespace PeachDrawing.Core.Geometry
         /// <param name="operation">how to combine them</param>
         /// <param name="destination">the path the result is added to; create it with <see cref="Canvas.GetGraphicsPath"/> to draw it with that canvas</param>
         /// <exception cref="ArgumentNullException">an argument is <see langword="null"/></exception>
+        /// <exception cref="ArgumentException">a path has a coordinate that is NaN or infinite</exception>
         /// <remarks>
+        /// A shape may cross itself where <em>different</em> curves of it meet; a single cubic that loops back across itself is not cut at
+        /// that crossing. Two curves that run along each other for a stretch are handled, but a very long overlap is approximated.
         /// Two pieces of an outline are told apart from each other, and from a neighbouring shape's, at a precision of about a
         /// millionth of the inputs' overall size. Boundaries that come closer than that are treated as touching, and a sliver
         /// thinner than that may be lost.

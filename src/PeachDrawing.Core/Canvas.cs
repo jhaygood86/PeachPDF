@@ -238,7 +238,7 @@ namespace PeachDrawing.Core
         /// <param name="prevMode">the previous mode to set</param>
         public abstract void ReturnPreviousSmoothingMode(object? prevMode);
 
-        private readonly Stack<object?> _antiAliasStates = new();
+        private Stack<object?>? _antiAliasStates;
 
         /// <summary>
         /// Turns anti-aliasing of the shapes drawn from now on on or off, until the matching <see cref="PopAntiAlias"/>. Calls nest:
@@ -252,12 +252,12 @@ namespace PeachDrawing.Core
         /// <see langword="false"/> leaves the canvas as it was. A canvas that can really turn it off, such as a raster one,
         /// overrides this and <see cref="PopAntiAlias"/>.
         /// </remarks>
-        public virtual void PushAntiAlias(bool enabled) => _antiAliasStates.Push(enabled ? SetAntiAliasSmoothingMode() : null);
+        public virtual void PushAntiAlias(bool enabled) => (_antiAliasStates ??= new()).Push(enabled ? SetAntiAliasSmoothingMode() : null);
 
         /// <summary>Undoes the latest <see cref="PushAntiAlias"/>. Does nothing when there is none to undo.</summary>
         public virtual void PopAntiAlias()
         {
-            if (_antiAliasStates.Count > 0 && _antiAliasStates.Pop() is { } previous)
+            if (_antiAliasStates is { Count: > 0 } && _antiAliasStates.Pop() is { } previous)
                 ReturnPreviousSmoothingMode(previous);
         }
 
@@ -366,22 +366,27 @@ namespace PeachDrawing.Core
             return new CanvasLayer(raster.Graphics, () =>
             {
                 raster.Graphics.Dispose();
-                ApplyLayerEffects(raster.Surface, ordered);
-                if (options.Opacity < 1.0)
-                    ScaleSurfaceAlpha(raster.Surface, Math.Clamp(options.Opacity, 0.0, 1.0));
-
-                if (options.BlendMode == PaintBlendMode.Normal)
+                try
                 {
-                    DrawRaster(raster.Surface);
-                }
-                else
-                {
-                    PushBlendMode(options.BlendMode);
-                    DrawRaster(raster.Surface);
-                    PopBlendMode();
-                }
+                    ApplyLayerEffects(raster.Surface, ordered);
+                    if (options.Opacity < 1.0)
+                        ScaleSurfaceAlpha(raster.Surface, Math.Clamp(options.Opacity, 0.0, 1.0));
 
-                raster.Surface.Dispose();
+                    if (options.BlendMode == PaintBlendMode.Normal)
+                    {
+                        DrawRaster(raster.Surface);
+                    }
+                    else
+                    {
+                        PushBlendMode(options.BlendMode);
+                        DrawRaster(raster.Surface);
+                        PopBlendMode();
+                    }
+                }
+                finally
+                {
+                    raster.Surface.Dispose();
+                }
             });
         }
 
