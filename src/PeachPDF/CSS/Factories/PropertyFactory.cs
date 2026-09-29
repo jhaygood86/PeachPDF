@@ -498,6 +498,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.WritingMode, () => new WritingModeProperty());
             AddLonghand(PropertyNames.ZIndex, () => new ZIndexProperty(), true);
             AddLonghand(PropertyNames.ObjectFit, () => new ObjectFitProperty());
+            AddLonghand(PropertyNames.ImageRendering, () => new ImageRenderingProperty());
             AddLonghand(PropertyNames.ObjectPosition, () => new ObjectPositionProperty(), true);
             AddLonghand(PropertyNames.Size, () => new PageSizeProperty());
 

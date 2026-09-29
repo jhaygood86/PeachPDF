@@ -14,6 +14,7 @@ using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
@@ -1644,30 +1645,12 @@ namespace PeachPDF.Svg
                 var mid = startOffset + pen + extraDx + advance / 2;
                 pen += advance + extraDx;   // dx shifts the current position along the path
 
-                // side="right" reads the path in reverse (measured from the far end, glyphs flipped 180°).
-                var distance = run.Side == SvgTextPathSide.Right ? totalLength - mid : mid;
-
-                // A glyph centered off the ends of the path is not rendered.
-                if (distance < 0 || distance > totalLength)
+                // side="right" reads the path in reverse (measured from the far end, glyphs flipped 180°); dy offsets the glyph
+                // perpendicular to the path; the glyph turns to the tangent plus any per-character rotate. A glyph centred off
+                // either end of the path is not rendered.
+                if (PathText.GetGlyphFrame(geometry.Measure, mid, run.Side == SvgTextPathSide.Right ? PathTextSide.Right : PathTextSide.Left,
+                        extraDy, gi.Rotate ?? 0) is not { } frame)
                     continue;
-
-                var (px, py, tangentDegrees) = geometry.PointAtLength(distance);
-                if (run.Side == SvgTextPathSide.Right)
-                    tangentDegrees += 180;
-
-                var tangentRad = tangentDegrees * (Math.PI / 180.0);
-                var tangentCos = Math.Cos(tangentRad);
-                var tangentSin = Math.Sin(tangentRad);
-
-                // dy offsets the glyph perpendicular to the path (along the normal).
-                var offsetX = px - tangentSin * extraDy;
-                var offsetY = py + tangentCos * extraDy;
-
-                // The glyph frame rotates to the tangent plus any per-character rotate, then translates.
-                var glyphRad = (tangentDegrees + (gi.Rotate ?? 0)) * (Math.PI / 180.0);
-                var frame = MultiplyMatrix(
-                    new Matrix3x2((float)Math.Cos(glyphRad), (float)Math.Sin(glyphRad), (float)-Math.Sin(glyphRad), (float)Math.Cos(glyphRad), 0, 0),
-                    new Matrix3x2(1, 0, 0, 1, (float)offsetX, (float)offsetY));
 
                 g.PushTransform(frame);
                 PaintGlyphAlongPath(g, document, gi.Run, gi.Font, gi.Glyph, advance, opacity * gi.Opacity, gi.LogicalGlyph);
@@ -1866,28 +1849,17 @@ namespace PeachPDF.Svg
             var width = bbox.Width * 1.2;
             var height = bbox.Height * 1.2;
 
-            var tile = g.CreateTile(width, height);
-            if (tile is not { } t)
+            using var layer = g.BeginLayer(new LayerOptions(element.Opacity, Bounds: new Rect(x, y, width, height)));
+            if (layer is null)
             {
-                // No page/document context (a measure-only pass - CreateTile returns null there) - keep
+                // No page/document context (a measure-only pass - BeginLayer returns null there) - keep
                 // the graceful direct fallback rather than throwing. Tested by
                 // Opacity_SvgGroupOpacity_NoPageContext_FallsBackToDirectRender.
                 RenderElementSwitch(g, document, element, inheritedOpacity * element.Opacity, viewport);
                 return;
             }
 
-            var pushedOffset = x != 0 || y != 0;
-            if (pushedOffset)
-                t.Graphics.PushTransform(new Matrix3x2(1, 0, 0, 1, (float)-x, (float)-y));
-
-            RenderElementSwitch(t.Graphics, document, element, inheritedOpacity, viewport);
-
-            if (pushedOffset)
-                t.Graphics.PopTransform();
-
-            t.Graphics.Dispose();
-
-            g.DrawImageWithOpacity(t.Image, new Rect(x, y, width, height), element.Opacity);
+            RenderElementSwitch(layer.Canvas, document, element, inheritedOpacity, viewport);
         }
 
         /// <summary>
@@ -2739,38 +2711,14 @@ namespace PeachPDF.Svg
 
             t.Graphics.Dispose();
 
-            var bounds = OwnerBounds(element, boundsOverride) ?? new Rect(x, y, width, height);
+            // The tile repeats from (x, y), with the pattern's own transform applied on top: a brush whose space starts at the cell's top-left
+            // and whose transform carries both. Painting the shape with it fills exactly the part of the grid under the shape.
+            var brushToUser = Matrix3x2.CreateTranslation((float)x, (float)y);
+            if (pattern.PatternTransform is { } patternTransform)
+                brushToUser = brushToUser.Then(patternTransform);
 
-            // One tile of margin on every side absorbs any shift introduced by patternTransform below,
-            // which the col/row computation itself (deliberately kept simple) doesn't account for -
-            // any surplus tiles are clipped away, so this only costs a few harmless extra draw calls.
-            var startCol = Math.Floor((bounds.X - x) / width) - 1;
-            var endCol = Math.Ceiling((bounds.X + bounds.Width - x) / width) + 1;
-            var startRow = Math.Floor((bounds.Y - y) / height) - 1;
-            var endRow = Math.Ceiling((bounds.Y + bounds.Height - y) / height) + 1;
-
-            const int maxTiles = 10_000;
-            if ((endCol - startCol) * (endRow - startRow) is <= 0 or > maxTiles)
-                return;
-
-            g.PushClip(path);
-
-            var pushedPatternTransform = pattern.PatternTransform is not null;
-            if (pushedPatternTransform)
-                g.PushTransform(pattern.PatternTransform!.Value);
-
-            for (var row = startRow; row < endRow; row++)
-            {
-                for (var col = startCol; col < endCol; col++)
-                {
-                    g.DrawImage(t.Image, new Rect(x + col * width, y + row * height, width, height));
-                }
-            }
-
-            if (pushedPatternTransform)
-                g.PopTransform();
-
-            g.PopClip();
+            using var brush = new TileBrush(t.Image, width, height, brushToUser);
+            g.DrawPath(brush, path);
         }
 
         /// <summary>Resolves a pattern's tile rect, same objectBoundingBox/userSpaceOnUse handling as <see cref="ResolveGradientPoint"/>.</summary>
@@ -3235,7 +3183,7 @@ namespace PeachPDF.Svg
         /// appending more than one subpath/shape into the same <see cref="GraphicsPath"/> (e.g. a
         /// multi-subpath <c>d</c> attribute, or a clip region built from several shapes).
         /// </summary>
-        private static void AppendPathSegments(GraphicsPath path, IReadOnlyList<PathSegment> segments)
+        internal static void AppendPathSegments(GraphicsPath path, IReadOnlyList<PathSegment> segments)
         {
             foreach (var segment in segments)
             {
@@ -3270,12 +3218,7 @@ namespace PeachPDF.Svg
             if (r <= 0)
                 return;
 
-            path.AddMove(cx + r, cy);
-            path.AddArc(cx, cy + r, r, r, 0, false, true);
-            path.AddArc(cx - r, cy, r, r, 0, false, true);
-            path.AddArc(cx, cy - r, r, r, 0, false, true);
-            path.AddArc(cx + r, cy, r, r, 0, false, true);
-            path.CloseFigure();
+            path.AddCircle(cx, cy, r);
         }
 
         private static void AppendPolygonGeometry(GraphicsPath path, SvgPolygonElement polygon)
@@ -3323,24 +3266,11 @@ namespace PeachPDF.Svg
 
             if (rx <= 0 || ry <= 0)
             {
-                path.AddMove(x, y);
-                path.LineTo(x + width, y);
-                path.LineTo(x + width, y + height);
-                path.LineTo(x, y + height);
-                path.CloseFigure();
+                path.AddRoundedRectangle(new Rect(x, y, width, height), 0);
                 return;
             }
 
-            path.AddMove(x + rx, y);
-            path.LineTo(x + width - rx, y);
-            path.AddArc(x + width, y + ry, rx, ry, 0, false, true);
-            path.LineTo(x + width, y + height - ry);
-            path.AddArc(x + width - rx, y + height, rx, ry, 0, false, true);
-            path.LineTo(x + rx, y + height);
-            path.AddArc(x, y + height - ry, rx, ry, 0, false, true);
-            path.LineTo(x, y + ry);
-            path.AddArc(x + rx, y, rx, ry, 0, false, true);
-            path.CloseFigure();
+            path.AddRoundedRectangle(new Rect(x, y, width, height), rx, ry, rx, ry, rx, ry, rx, ry);
         }
 
         /// <summary>Same four-quarter-arc technique as <see cref="AppendCircleGeometry"/>, with independent x/y radii.</summary>
@@ -3354,12 +3284,7 @@ namespace PeachPDF.Svg
             if (rx <= 0 || ry <= 0)
                 return;
 
-            path.AddMove(cx + rx, cy);
-            path.AddArc(cx, cy + ry, rx, ry, 0, false, true);
-            path.AddArc(cx - rx, cy, rx, ry, 0, false, true);
-            path.AddArc(cx, cy - ry, rx, ry, 0, false, true);
-            path.AddArc(cx + rx, cy, rx, ry, 0, false, true);
-            path.CloseFigure();
+            path.AddEllipse(cx, cy, rx, ry);
         }
 
         /// <summary>An open (unclosed) two-point line - fill has no visible effect since it has zero area.</summary>

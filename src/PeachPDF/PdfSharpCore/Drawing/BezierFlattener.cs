@@ -5,7 +5,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Subdivides a cubic Bézier curve into line segments - the step <see cref="CoreGraphicsPath.ClipToRect"/>
     /// needs before a curve-bearing contour (a glyph outline's own curved segments, in particular) can be
-    /// clipped against an axis-aligned rectangle via <see cref="SutherlandHodgman"/>, since an arbitrary
+    /// clipped against an axis-aligned rectangle via <see cref="PeachDrawing.Core.Geometry.PolygonClipper"/>, since an arbitrary
     /// rectangle clip of a cubic Bézier is not itself expressible as a cubic Bézier in general.
     /// </summary>
     internal static class BezierFlattener

@@ -1,4 +1,5 @@
 using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using System.Collections.Generic;
 
 namespace PeachDrawing;
@@ -26,9 +27,9 @@ internal sealed class RasterGraphicsPath : GraphicsPath
         var clippedContours = new List<(IReadOnlyList<(double X, double Y)> Points, bool Closed)>();
         foreach (var contour in Flatten(0.1))
         {
-            var clipped = SutherlandHodgman.ClipToRect(contour.Points, rect);
+            var clipped = PolygonClipper.ClipToRect(contour.Points, rect);
             if (clipped.Count > 0)
-                clippedContours.Add((clipped, contour.Closed));
+                clippedContours.Add((clipped.ConvertAll(p => (p.X, p.Y)), contour.Closed));
         }
 
         var result = new RasterGraphicsPath { FillMode = FillMode };

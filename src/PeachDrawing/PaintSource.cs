@@ -37,6 +37,8 @@ internal abstract class PaintSource
                 return RadialPaint.Create(radial, deviceToUser);
             case ConicGradientBrush conic:
                 return ConicPaint.Create(conic, deviceToUser);
+            case TileBrush tile:
+                return TilePaint.Create(tile, deviceToUser);
             default:
                 return null;
         }
@@ -183,6 +185,99 @@ internal abstract class PaintSource
         destination[p + 1] = (byte)(color >> 8);
         destination[p + 2] = (byte)(color >> 16);
         destination[p + 3] = (byte)(color >> 24);
+    }
+
+    /// <summary>
+    /// A <see cref="TileBrush"/>: each device pixel is mapped back into brush space, wrapped into one cell, and read from the tile's
+    /// bitmap with bilinear filtering that wraps at the cell's edges (so neighbouring cells join without a seam).
+    /// </summary>
+    private sealed class TilePaint : PaintSource
+    {
+        private readonly Bitmap _bitmap;
+        private readonly Affine _deviceToBrush;
+        private readonly double _cellWidth, _cellHeight;
+        private readonly bool _smooth;
+
+        private TilePaint(Bitmap bitmap, in Affine deviceToBrush, double cellWidth, double cellHeight, bool smooth)
+        {
+            _smooth = smooth;
+            _bitmap = bitmap;
+            _deviceToBrush = deviceToBrush;
+            _cellWidth = cellWidth;
+            _cellHeight = cellHeight;
+        }
+
+        public static PaintSource? Create(TileBrush brush, in Affine deviceToUser)
+        {
+            if (!RasterCanvas.TryGetBitmap(brush.Tile, out var bitmap, out _, out _) || bitmap.Width == 0 || bitmap.Height == 0)
+                return null;
+
+            var m = brush.Transform;
+            var brushToUser = new Affine(m.M11, m.M12, m.M21, m.M22, m.M31, m.M32);
+            if (brushToUser.Invert() is not { } userToBrush)
+                return null;
+
+            var smooth = brush.Sampling is not (ImageSampling.Nearest or ImageSampling.Pixelated);
+            return new TilePaint(bitmap, Affine.Then(deviceToUser, userToBrush), brush.CellWidth, brush.CellHeight, smooth);
+        }
+
+        public override void FillSpan(int x0, int y, int count, Span<byte> destination)
+        {
+            var pixels = _bitmap.Pixels;
+            int w = _bitmap.Width, h = _bitmap.Height;
+
+            for (var i = 0; i < count; i++)
+            {
+                var (u, v) = _deviceToBrush.Apply(x0 + i + 0.5, y + 0.5);
+
+                // Position within one cell, as a texel coordinate (texel centres are at half integers).
+                var cu = Fraction(u / _cellWidth) * w;
+                var cv = Fraction(v / _cellHeight) * h;
+
+                if (!_smooth)
+                {
+                    var p = (Math.Min((int)cv, h - 1) * w + Math.Min((int)cu, w - 1)) * 4;
+                    var e = i * 4;
+                    destination[e] = pixels[p];
+                    destination[e + 1] = pixels[p + 1];
+                    destination[e + 2] = pixels[p + 2];
+                    destination[e + 3] = pixels[p + 3];
+                    continue;
+                }
+
+                var fu = cu - 0.5;
+                var fv = cv - 0.5;
+                var xi = (int)Math.Floor(fu);
+                var yi = (int)Math.Floor(fv);
+                var wx = (int)((fu - xi) * 256);
+                var wy = (int)((fv - yi) * 256);
+
+                var xa = Wrap(xi, w);
+                var xb = Wrap(xi + 1, w);
+                var ya = Wrap(yi, h);
+                var yb = Wrap(yi + 1, h);
+
+                var p00 = (ya * w + xa) * 4;
+                var p10 = (ya * w + xb) * 4;
+                var p01 = (yb * w + xa) * 4;
+                var p11 = (yb * w + xb) * 4;
+                var w00 = (256 - wx) * (256 - wy);
+                var w10 = wx * (256 - wy);
+                var w01 = (256 - wx) * wy;
+                var w11 = wx * wy;
+
+                var d = i * 4;
+                for (var c = 0; c < 4; c++)
+                {
+                    var sum = pixels[p00 + c] * w00 + pixels[p10 + c] * w10 + pixels[p01 + c] * w01 + pixels[p11 + c] * w11;
+                    destination[d + c] = (byte)((sum + 32768) >> 16);
+                }
+            }
+        }
+
+        private static double Fraction(double value) => value - Math.Floor(value);
+
+        private static int Wrap(int index, int size) => ((index % size) + size) % size;
     }
 
     private sealed class LinearPaint : PaintSource

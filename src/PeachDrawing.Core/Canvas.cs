@@ -238,6 +238,29 @@ namespace PeachDrawing.Core
         /// <param name="prevMode">the previous mode to set</param>
         public abstract void ReturnPreviousSmoothingMode(object? prevMode);
 
+        private Stack<object?>? _antiAliasStates;
+
+        /// <summary>
+        /// Turns anti-aliasing of the shapes drawn from now on on or off, until the matching <see cref="PopAntiAlias"/>. Calls nest:
+        /// each <c>PushAntiAlias</c> is undone by one <c>PopAntiAlias</c>, like <see cref="PushClip(Rect)"/> and <see cref="PushTransform"/>.
+        /// This replaces the untyped <see cref="SetAntiAliasSmoothingMode"/>/<see cref="ReturnPreviousSmoothingMode"/> pair, which it
+        /// is built on by default.
+        /// </summary>
+        /// <param name="enabled">whether edges are smoothed</param>
+        /// <remarks>
+        /// The default can only switch smoothing <em>on</em> (that is all <see cref="SetAntiAliasSmoothingMode"/> offers): asking for
+        /// <see langword="false"/> leaves the canvas as it was. A canvas that can really turn it off, such as a raster one,
+        /// overrides this and <see cref="PopAntiAlias"/>.
+        /// </remarks>
+        public virtual void PushAntiAlias(bool enabled) => (_antiAliasStates ??= new()).Push(enabled ? SetAntiAliasSmoothingMode() : null);
+
+        /// <summary>Undoes the latest <see cref="PushAntiAlias"/>. Does nothing when there is none to undo.</summary>
+        public virtual void PopAntiAlias()
+        {
+            if (_antiAliasStates is { Count: > 0 } && _antiAliasStates.Pop() is { } previous)
+                ReturnPreviousSmoothingMode(previous);
+        }
+
         /// <summary>
         /// Get GraphicsPath object.
         /// </summary>
@@ -260,6 +283,120 @@ namespace PeachDrawing.Core
         /// the tile gets a coordinate space it can't relate back to anything outside the tile.
         /// </remarks>
         public abstract (Canvas Graphics, Image Image)? CreateTile(double width, double height);
+
+        /// <summary>
+        /// Begins an isolated group of drawing that is composited onto this canvas as one piece when the returned layer is disposed:
+        /// with the given opacity, blend mode and colour transform applied to the group as a whole rather than to each shape in it.
+        /// This is what CSS <c>opacity</c> or SVG group opacity means - content that overlaps inside the group does not blend with
+        /// itself. Draw onto <see cref="CanvasLayer.Canvas"/> in this canvas's own coordinates.
+        /// </summary>
+        /// <param name="options">how the finished layer is composited, and the region it covers</param>
+        /// <returns>the layer, or <see langword="null"/> when this canvas cannot make one (as with <see cref="CreateTile"/>, e.g. a
+        /// measure-only pass); the caller then draws straight onto this canvas, where opacity and blending have no visible effect anyway</returns>
+        /// <remarks>
+        /// The default builds the layer from <see cref="CreateTile"/> and the <c>DrawImage…</c> methods, so it works on any canvas. A
+        /// canvas that can composite a group more directly overrides it.
+        /// </remarks>
+        public virtual CanvasLayer? BeginLayer(LayerOptions options)
+        {
+            var clip = GetClip();
+            var region = options.Bounds ?? new Rect(0, 0, clip.Right, clip.Bottom);
+
+            if (options.Effects is { Count: > 0 } effects)
+                return BeginEffectLayer(options, region, effects);
+
+            if (CreateTile(region.Width, region.Height) is not { } tile)
+                return null;
+
+            // A tile starts at its own origin; a region that does not is painted shifted so callers keep using this canvas's coordinates.
+            var shifted = region.X != 0 || region.Y != 0;
+            if (shifted)
+                tile.Graphics.PushTransform(new Matrix3x2(1, 0, 0, 1, (float)-region.X, (float)-region.Y));
+
+            // With no explicit region the layer is as large as the clip needs, so painting outside the clip is pointless.
+            if (options.Bounds is null)
+                tile.Graphics.PushClip(clip);
+
+            return new CanvasLayer(tile.Graphics, () =>
+            {
+                if (shifted)
+                    tile.Graphics.PopTransform();
+
+                tile.Graphics.Dispose();
+                var image = tile.Image;
+
+                // The colour matrix and the opacity/blend mode are separate graphics states in PDF, so a layer needing both goes through
+                // a second tile.
+                if (options.ColorMatrix is { } matrix && CreateTile(region.Width, region.Height) is { } recolored)
+                {
+                    recolored.Graphics.DrawImageWithColorMatrix(image, new Rect(0, 0, region.Width, region.Height), matrix);
+                    recolored.Graphics.Dispose();
+                    image = recolored.Image;
+                }
+
+                DrawImageWithOpacity(image, region, options.Opacity, options.BlendMode);
+            });
+        }
+
+        /// <summary>Whether this canvas can apply <see cref="LayerEffect"/>s in <see cref="BeginLayer"/>. False unless a subclass overrides it along with <see cref="ApplyLayerEffects"/>.</summary>
+        protected virtual bool SupportsLayerEffects => false;
+
+        /// <summary>
+        /// Applies <paramref name="effects"/>, in order, to the pixels of a finished layer. Called by <see cref="BeginLayer"/> only when
+        /// <see cref="SupportsLayerEffects"/> is true. The surface holds premultiplied pixels; its pixel pitch relative to this canvas's
+        /// units is <see cref="RasterSurface.PixelsPerUnitX"/> and <see cref="RasterSurface.PixelsPerUnitY"/>.
+        /// </summary>
+        /// <param name="surface">the layer's pixels, changed in place</param>
+        /// <param name="effects">the effects to apply</param>
+        protected virtual void ApplyLayerEffects(RasterSurface surface, IReadOnlyList<LayerEffect> effects)
+        {
+        }
+
+        private CanvasLayer? BeginEffectLayer(LayerOptions options, Rect region, IReadOnlyList<LayerEffect> effects)
+        {
+            if (!SupportsLayerEffects || BeginRasterSurface(region) is not { } raster)
+                return null;
+
+            // A colour matrix on the layer applies before its effects, as it does when there are none.
+            var ordered = options.ColorMatrix is { } matrix
+                ? new List<LayerEffect>(effects.Count + 1) { new ColorMatrixEffect(matrix) }
+                : new List<LayerEffect>(effects.Count);
+            ordered.AddRange(effects);
+
+            return new CanvasLayer(raster.Graphics, () =>
+            {
+                raster.Graphics.Dispose();
+                try
+                {
+                    ApplyLayerEffects(raster.Surface, ordered);
+                    if (options.Opacity < 1.0)
+                        ScaleSurfaceAlpha(raster.Surface, Math.Clamp(options.Opacity, 0.0, 1.0));
+
+                    if (options.BlendMode == PaintBlendMode.Normal)
+                    {
+                        DrawRaster(raster.Surface);
+                    }
+                    else
+                    {
+                        PushBlendMode(options.BlendMode);
+                        DrawRaster(raster.Surface);
+                        PopBlendMode();
+                    }
+                }
+                finally
+                {
+                    raster.Surface.Dispose();
+                }
+            });
+        }
+
+        /// <summary>Multiplies every premultiplied channel by <paramref name="factor"/>, which fades the whole surface.</summary>
+        private static void ScaleSurfaceAlpha(RasterSurface surface, double factor)
+        {
+            var pixels = surface.Pixels;
+            for (var i = 0; i < pixels.Length; i++)
+                pixels[i] = (byte)Math.Round(pixels[i] * factor);
+        }
 
         /// <summary>
         /// Asks this graphics for a pixel surface to paint an effect PDF cannot express as vector content
@@ -651,6 +788,48 @@ namespace PeachDrawing.Core
         /// <param name="destRect">Rectangle structure that specifies the location and size of the drawn image. The image is scaled to fit the rectangle. </param>
         /// <param name="srcRect">Rectangle structure that specifies the portion of the <paramref name="image"/> object to draw. </param>
         public abstract void DrawImage(Image image, Rect destRect, Rect srcRect);
+
+        /// <summary>Draws <paramref name="image"/> into <paramref name="destRect"/>, reading its pixels as <paramref name="sampling"/> says.</summary>
+        /// <param name="image">the image to draw</param>
+        /// <param name="destRect">where to draw it; the image is scaled to fit</param>
+        /// <param name="sampling">how to read the image's pixels</param>
+        /// <remarks>
+        /// The default has only the image's own smooth-or-crisp switch to work with: <see cref="ImageSampling.Nearest"/> turns
+        /// <see cref="Image.Interpolate"/> off for the draw (as does <see cref="ImageSampling.Pixelated"/>) and every other value except
+        /// <see cref="ImageSampling.Automatic"/> turns it on,
+        /// then the image's setting is put back. A canvas with real per-draw sampling overrides this.
+        /// </remarks>
+        public virtual void DrawImage(Image image, Rect destRect, ImageSampling sampling) =>
+            WithSampling(image, sampling, () => DrawImage(image, destRect));
+
+        /// <summary>Draws part of <paramref name="image"/> into <paramref name="destRect"/>, reading its pixels as <paramref name="sampling"/> says.</summary>
+        /// <param name="image">the image to draw</param>
+        /// <param name="destRect">where to draw it; the image is scaled to fit</param>
+        /// <param name="srcRect">the part of the image to draw</param>
+        /// <param name="sampling">how to read the image's pixels; see <see cref="DrawImage(Image, Rect, ImageSampling)"/> for the default's limits</param>
+        public virtual void DrawImage(Image image, Rect destRect, Rect srcRect, ImageSampling sampling) =>
+            WithSampling(image, sampling, () => DrawImage(image, destRect, srcRect));
+
+        private static void WithSampling(Image image, ImageSampling sampling, Action draw)
+        {
+            ArgumentNullException.ThrowIfNull(image);
+            if (sampling == ImageSampling.Automatic)
+            {
+                draw();
+                return;
+            }
+
+            var was = image.Interpolate;
+            image.Interpolate = sampling is not (ImageSampling.Nearest or ImageSampling.Pixelated);
+            try
+            {
+                draw();
+            }
+            finally
+            {
+                image.Interpolate = was;
+            }
+        }
 
         /// <summary>
         /// Draws the specified Image at the specified location and with the specified size.

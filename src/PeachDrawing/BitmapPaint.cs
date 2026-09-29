@@ -11,15 +11,18 @@ internal sealed class BitmapPaint : PaintSource
     private readonly Bitmap _bitmap;
     private readonly Affine _deviceToBitmap;
     private readonly bool _smooth;
+    private readonly bool _bicubic;
 
     /// <param name="bitmap">The source pixels (premultiplied).</param>
     /// <param name="deviceToBitmap">Maps a device position to a position in bitmap pixel units (pixel (i, j) covers [i, i+1) x [j, j+1)).</param>
     /// <param name="smooth">Bilinear filtering; false is nearest-neighbour (used to keep pixel art crisp).</param>
-    public BitmapPaint(Bitmap bitmap, in Affine deviceToBitmap, bool smooth)
+    /// <param name="bicubic">With <paramref name="smooth"/>, a Catmull-Rom filter over sixteen source pixels instead of bilinear.</param>
+    public BitmapPaint(Bitmap bitmap, in Affine deviceToBitmap, bool smooth, bool bicubic = false)
     {
         _bitmap = bitmap;
         _deviceToBitmap = deviceToBitmap;
         _smooth = smooth;
+        _bicubic = smooth && bicubic;
 
         // A strong minification aliases under bilinear sampling, so pre-average by an integer factor first.
         var scale = Math.Sqrt(Math.Abs(deviceToBitmap.Determinant));
@@ -59,6 +62,13 @@ internal sealed class BitmapPaint : PaintSource
             var fv = v - 0.5;
             var x0i = (int)Math.Floor(fu);
             var y0i = (int)Math.Floor(fv);
+
+            if (_bicubic)
+            {
+                SampleBicubic(pixels, w, h, x0i, y0i, fu - x0i, fv - y0i, destination.Slice(d, 4));
+                continue;
+            }
+
             var wx = (int)((fu - x0i) * 256);
             var wy = (int)((fv - y0i) * 256);
             var xa = Math.Clamp(x0i, 0, w - 1);
@@ -81,6 +91,48 @@ internal sealed class BitmapPaint : PaintSource
                 destination[d + c] = (byte)((sum + 32768) >> 16);
             }
         }
+    }
+
+    /// <summary>Catmull-Rom weights of the four taps around a position <paramref name="t"/> (0..1) past the second one.</summary>
+    private static void CatmullRom(double t, Span<double> weights)
+    {
+        var t2 = t * t;
+        var t3 = t2 * t;
+        weights[0] = -0.5 * t3 + t2 - 0.5 * t;
+        weights[1] = 1.5 * t3 - 2.5 * t2 + 1;
+        weights[2] = -1.5 * t3 + 2 * t2 + 0.5 * t;
+        weights[3] = 0.5 * t3 - 0.5 * t2;
+    }
+
+    private static void SampleBicubic(byte[] pixels, int w, int h, int x0, int y0, double fx, double fy, Span<byte> result)
+    {
+        Span<double> wx = stackalloc double[4];
+        Span<double> wy = stackalloc double[4];
+        CatmullRom(fx, wx);
+        CatmullRom(fy, wy);
+
+        double r = 0, g = 0, b = 0, a = 0;
+        for (var j = 0; j < 4; j++)
+        {
+            var yy = Math.Clamp(y0 - 1 + j, 0, h - 1);
+            for (var i = 0; i < 4; i++)
+            {
+                var xx = Math.Clamp(x0 - 1 + i, 0, w - 1);
+                var p = (yy * w + xx) * 4;
+                var weight = wx[i] * wy[j];
+                r += pixels[p] * weight;
+                g += pixels[p + 1] * weight;
+                b += pixels[p + 2] * weight;
+                a += pixels[p + 3] * weight;
+            }
+        }
+
+        // The curve overshoots at sharp edges; premultiplied pixels must stay within 0..alpha.
+        var alpha = (byte)Math.Clamp(Math.Round(a), 0, 255);
+        result[3] = alpha;
+        result[0] = (byte)Math.Clamp(Math.Round(r), 0, alpha);
+        result[1] = (byte)Math.Clamp(Math.Round(g), 0, alpha);
+        result[2] = (byte)Math.Clamp(Math.Round(b), 0, alpha);
     }
 
     /// <summary>Averages <paramref name="factor"/> x <paramref name="factor"/> blocks (premultiplied, so the average is correct).</summary>

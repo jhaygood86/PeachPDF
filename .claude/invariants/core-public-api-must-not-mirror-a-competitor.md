@@ -37,6 +37,8 @@ naming came from, which mostly predates this register.
 | `Image` (`Width`, `Height`, `Interpolate`, `GetPixels`) | A drawable raster or vector image | `System.Drawing.Image`'s shape; `GetPixels` (→ `PixelBuffer`) is ours, added in this extraction's step 3 so a `Canvas` implementation never has to downcast to reach raw pixels |
 | `GraphicsPath` (`Start`, `LineTo`, `ArcTo`, `AddMove`, `AddBezierTo`, `AddArc`, `CloseFigure`, `Transform`, `AddPath`, `FillMode`, `ClipToRect`, `Flatten`) | A recorded, backend-agnostic vector path | GDI+ `System.Drawing.Drawing2D.GraphicsPath`'s recorder shape (`StartFigure`/`AddLine`/`AddArc`/`AddBezier`/`CloseFigure`); `Flatten` (curve-to-line-segment tessellation) is GDI+'s own term for the same operation on its own `GraphicsPath` type, and `PathContour`/`GraphicsPath.Flatten`'s return shape is ours, added in this extraction's step 3 |
 | `PathContour` (`Points`, `Closed`) | One flattened, closed-or-open polyline of a path | Ours |
+| `CurveContour` (`Start`, `Commands`, `Closed`), `PathCommand` (`Kind`, `Control1`, `Control2`, `End`), `PathCommandKind` (`Line`, `Cubic`), `GraphicsPath.GetCurveContours` | One subpath of a path with its curves intact: a start point and the lines/cubic Béziers that follow | Ours; the sibling of `PathContour` for geometry that must stay curved. `PathCommand` (not `PathSegment`) so it cannot collide with `PeachPDF.Svg.PathSegment`, the same collision-avoidance reason as `PaintColor`; the line/cubic split is PDF 32000-1 §8.5.2's own `l`/`c` path-construction operators, and arcs never appear because the recorder already turns them into cubics |
+| `Geometry.PolygonClipper.ClipToRect` | Clips a closed polygon to an axis-aligned rectangle | The Sutherland-Hodgman polygon-clipping technique (1974), long-published and unowned; the name is ours. Replaces two private copies (PeachDrawing and PeachPDF's PdfSharpCore) |
 
 ### Paint objects
 
@@ -75,6 +77,30 @@ naming came from, which mostly predates this register.
 | `PaintPoint` (`X`, `Y`) | A 2D point | `System.Drawing.PointF`'s shape, `double`-precision for the same reason as `Rect`; named `PaintPoint` (not `Point`) to avoid colliding with `PeachPDF.CSS.Point` (a distinct, cascade-level CSS value type) in the same file - the same collision-avoidance reason as `PaintColor`/`PaintBlendMode`/`PaintFontStyle` |
 | `Size` (`Width`, `Height`) | A 2D extent | `System.Drawing.SizeF`'s shape, `double`-precision; no colliding `PeachPDF.CSS.Size` exists, so no disambiguating prefix was needed |
 | `Matrix3x2Extensions` (`Then`, `TryInvert`, `RebaseOrigin`) | Composition helpers for `System.Numerics.Matrix3x2`, the package's 2D affine transform type | `System.Numerics.Matrix3x2` itself is the BCL type (adopted per the plan's "drop a type with a real BCL equivalent" rule); `Then` and `RebaseOrigin` are ours (a named alias for row-vector `a * b` composition, and a fixed-point re-anchoring helper CSS `transform-origin` needs at paint time); `TryInvert` re-derives `RMatrix`'s original explicit not-finite/near-singular check rather than trusting `Matrix3x2.Invert`'s own laxer one - see this extraction's own migration notes for why |
+
+### Paths, layers, brushes and sampling
+
+The vocabulary below is standard 2D-graphics, PDF or CSS terminology; the origin column says which. None of it was taken from
+`SixLabors.ImageSharp.Drawing`'s API, which was read only to find capability gaps: its names for the same ideas (`PathBuilder`,
+`Clip`, `ImageBrush`, `DrawingOptions`, `RichTextOptions`, `TextBlock`, `Save`/`Restore` layers) are deliberately **not** used.
+
+| Public name | Role | Origin of the name and shape |
+|---|---|---|
+| `Geometry.PathShapes` (`AddRoundedRectangle`, `AddEllipse`, `AddCircle`, `AddPie`, `AddPolygon`, `AddRegularPolygon`, `AddStar`, `AddWave`) | Adds a shape to a `GraphicsPath` as a new subpath | Extension methods named `Add<Shape>` after `GraphicsPath`'s own `Add…` recorders (`AddBezierTo`, `AddArc`); "pie" is the GDI+/Cairo term for an arc-plus-two-radii slice; `AddRoundedRectangle`'s eight radii are CSS `border-radius`'s |
+| `Geometry.PathMeasure` (`Length`, `Area`, `Bounds`, `IsEmpty`, `PointAtLength`), `PathSample` | Measures a path; a point and direction along it | SVG's `getTotalLength`/`getPointAtLength` concepts, under a name of our own ("measure" is the generic verb; `PathSample` is what a sample of a path is) |
+| `Geometry.PathOperations.Combine`, `PathOperation` (`Union`, `Intersect`, `Difference`, `Xor`) | Boolean combination of two filled paths, curves preserved | The four boolean operations are set theory's; the `Combine` verb and the enum are ours |
+| `Geometry.PolygonClipper.ClipToRect` | Clips a closed polygon to a rectangle | The Sutherland-Hodgman technique (1974); the name is ours |
+| `PathText` (`GetGlyphFrame`, `Layout`, `DrawStringAlongPath`), `PathTextOptions`, `PathTextSide`, `PathTextAnchor`, `PathGlyph` | Shaped text set along a path | SVG's `<textPath>` vocabulary (`startOffset`, `side`, `text-anchor`), applied to a `Canvas` extension in the shape of `CanvasParagraphExtensions.DrawParagraph` |
+| `InkCrossings.Measure` | Where text puts ink inside a horizontal band | CSS Text Decoration's `text-decoration-skip-ink`; the result type is the existing `InkSpan` |
+| `Canvas.BeginLayer`, `LayerOptions`, `CanvasLayer` | An isolated group composited as one piece | PDF 32000-1 §11.4's transparency *group* and CSS's `opacity`/`isolation` semantics; "layer" is the plain word for it. Scope-style (`using`) like `RasterRegion` |
+| `LayerEffect`, `BlurEffect`, `DropShadowEffect`, `ColorMatrixEffect` | Effects applied to a finished layer | CSS Filter Effects' `blur()`/`drop-shadow()` and SVG's `feColorMatrix` |
+| `Canvas.PushAntiAlias`/`PopAntiAlias` | Per-stretch edge smoothing | Stack-shaped like `PushClip`/`PushTransform`/`PushBlendMode`; "anti-alias" is the industry term |
+| `ImageSampling` (`Automatic`, `Nearest`, `Bilinear`, `Bicubic`, `Pixelated`) | How an image's pixels are read when scaled | Texture-sampling vocabulary (nearest/bilinear/bicubic); `Pixelated` is CSS `image-rendering: pixelated` |
+| `TileBrush` (`Tile`, `CellWidth`, `CellHeight`, `Transform`, `Sampling`) | Repeats a picture across the plane | PDF 32000-1 §8.7.3's *tiling pattern* (cell, `XStep`/`YStep`, `Matrix`), SVG `<pattern>` |
+| `HatchBrush`, `HatchStyle` | Lines over a background | GDI+'s hatch idea, with a smaller, CSS-agnostic style set of our own |
+| `PeachDrawing.PathStroker.Stroke` | The area a stroke covers, as an outline | PDF 32000-1 §8.5's *stroking* (caps, joins, miter, dash) |
+| `PeachDrawing.RasterLayerEffects` (`Apply`, `GetInkMargin`) | Applies layer effects to a raster surface | "Ink margin" is CSS `ink overflow`'s idea |
+| `GraphicsPath.GetCurveContours`, `CurveContour`, `PathCommand`, `PathCommandKind` | The path with its curves intact | See the `PathContour` row; `PathCommand` (not `PathSegment`) avoids `PeachPDF.Svg.PathSegment` |
 
 ### Fonts and network (types that travel with `RenderContext`)
 

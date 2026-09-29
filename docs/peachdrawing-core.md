@@ -196,6 +196,114 @@ build its own native representation still calls `base.MethodName(...)` to keep t
 `FillMode` (`Nonzero`/`EvenOdd`, PDF 32000-1 §8.5.3's two fill rules) and `ClipToRect`/`Dispose` are the
 only genuinely abstract members.
 
+`Flatten` gives you polylines; when the geometry has to stay curved, `GetCurveContours()` gives you the same subpaths as
+`CurveContour` values instead - a `Start` point, the `PathCommand` lines and cubic Béziers that follow it (an arc is
+already recorded as cubics, so there is no third kind), and whether the subpath was closed. It is a snapshot: editing the
+path afterwards does not change a list you already hold.
+
+`PeachDrawing.Core.Geometry.PolygonClipper.ClipToRect` clips a closed polygon (convex, concave or self-intersecting) to an
+axis-aligned rectangle. Fewer than three points back means nothing with area is left inside.
+
+## Shapes, measuring and combining paths
+
+The `PeachDrawing.Core.Geometry` namespace works on a `GraphicsPath` without drawing it.
+
+```csharp
+using PeachDrawing.Core.Geometry;
+
+using GraphicsPath badge = canvas.GetGraphicsPath();
+badge.AddRoundedRectangle(new Rect(10, 10, 200, 80), radius: 12);   // per-corner elliptical radii also work
+badge.AddStar(cx: 110, cy: 50, outerRadius: 30, innerRadius: 12, points: 5);
+
+var measure = new PathMeasure(badge);
+double length = measure.Length;               // along every subpath, not counting the jump between them
+double area = measure.Area;                   // holes (subpaths wound the other way) subtract
+Rect box = measure.Bounds;                    // tight: includes where a curve bulges past its end points
+PathSample halfway = measure.PointAtLength(length / 2);   // X, Y and the direction of travel there
+```
+
+- **`PathShapes`** adds a rounded rectangle, ellipse, circle, pie slice, polygon, regular polygon, star or open
+  wavy line (`AddWave`) as a new closed subpath, so shapes combine in one path.
+- **`PathMeasure`** reads the path once, so later edits to it are not seen.
+- **`PathOperations.Combine(first, second, PathOperation.Union | Intersect | Difference | Xor, destination)`** adds
+  the outline of the combined area to `destination`. Each input is read as a filled area under its own
+  `FillMode` (so it may have holes and cross itself), and the result **keeps the true curves**: lines stay lines and
+  cubic Béziers stay cubic Béziers, cut where the shapes cross. The result is filled with the nonzero rule. Two
+  boundaries closer than about a millionth of the inputs' size are treated as touching.
+- **`PolygonClipper.ClipToRect`** clips a closed polygon to a rectangle.
+- **`PeachDrawing.PathStroker.Stroke(path, pen, destination)`** (in the `PeachDrawing` package) adds the *area* a
+  stroke of the path would cover - width, caps, joins, miter limit and dashes - as an ordinary outline you can fill,
+  measure or combine. Round caps and joins come out as short straight segments.
+- **`GraphicsPath.GetCurveContours()`** is the curve-preserving counterpart of `Flatten`: each subpath as a
+  `CurveContour` of `PathCommand` lines and cubics. It is what measuring and combining read.
+
+## Layers and effects
+
+`canvas.BeginLayer(new LayerOptions(...))` starts an isolated group. Draw onto `layer.Canvas` in the same coordinates
+as `canvas`; disposing the layer composites everything drawn as one piece.
+
+```csharp
+// CSS "opacity" semantics: overlapping shapes inside do not show through each other.
+using (var layer = canvas.BeginLayer(new LayerOptions(Opacity: 0.5)))
+{
+    layer.Canvas.DrawRectangle(red, 10, 10, 100, 100);
+    layer.Canvas.DrawRectangle(red, 60, 60, 100, 100);
+}
+
+// A soft shadow: the layer is drawn into a bitmap covering Bounds, blurred, then composited.
+var effects = new LayerEffect[] { new BlurEffect(sigma: 4) };
+var (mx, my) = RasterLayerEffects.GetInkMargin(effects);          // how far the blur spreads
+var bounds = new Rect(x - mx, y - my, w + 2 * mx, h + 2 * my);
+using (var shadow = canvas.BeginLayer(new LayerOptions(Bounds: bounds, Effects: effects)))
+    shadow?.Canvas.DrawRectangle(grey, x, y, w, h);
+```
+
+`LayerOptions` carries the layer's opacity, blend mode, an optional `ColorMatrix` and a `Bounds` region; `Effects` adds
+`BlurEffect`, `DropShadowEffect` and `ColorMatrixEffect`. `BeginLayer` returns `null` when the canvas cannot make a
+layer (a measure-only pass) or, for a layer with effects, cannot apply them - draw straight onto the canvas then. The
+default implementation builds a layer from `CreateTile` and the `DrawImage…` methods, so every `Canvas` gets one; a
+canvas that can apply effects overrides `SupportsLayerEffects` and `ApplyLayerEffects` (the `PeachDrawing`
+package's `RasterLayerEffects.Apply` does the work on a `RasterSurface`).
+
+## Tile and hatch brushes
+
+A `TileBrush` repeats a picture across the plane, so a shape filled with it shows the part of the grid under it and
+neighbouring shapes continue the same pattern.
+
+```csharp
+var (tile, image) = canvas.CreateTile(20, 20)!.Value;
+tile.DrawRectangle(dark, 0, 0, 10, 20);
+tile.Dispose();
+
+// 20 x 20 cells, the whole grid turned 30 degrees.
+var brush = new TileBrush(image, 20, 20, Matrix3x2.CreateRotation(MathF.PI / 6));
+canvas.DrawPath(brush, shape);
+
+canvas.DrawRectangle(new HatchBrush(HatchStyle.DiagonalCross, PaintColor.Black, PaintColor.White, spacing: 8), 0, 0, 200, 100);
+```
+
+On a PDF canvas a tile made by `CreateTile` stays vector content and becomes a real PDF tiling pattern: written once,
+however many cells the shape covers. A tile of pixels is embedded once inside the pattern, and `TileBrush.Sampling`
+says whether a viewer may smooth it. Two things to know about PDF output. A viewer draws a rotated or skewed tiling
+pattern cell by cell with anti-aliased edges, which shows as hairline seams, so a grid that the brush transform or the
+canvas transform turns is instead painted as separate cells under a clip (unless that would be over ten thousand cells, when
+the pattern is used). And a viewer may round the size of a pattern cell to whole device pixels, so a pattern whose cells are
+not a whole number of pixels at the viewer's zoom can drift slightly from its true period. The raster canvas reads the tile's
+bitmap with wrap-around filtering, so cells join without a seam. `HatchBrush` draws one cell of lines through `CreateTile`; `ToTileBrush` gives that cell for a canvas
+that has no hatch of its own. A pen can stroke with either brush.
+
+## Anti-aliasing and image sampling
+
+`canvas.PushAntiAlias(false)` / `PopAntiAlias()` turn edge smoothing off or on for the shapes drawn in between, and
+nest like the other state stacks. On a raster canvas this is exact; the render-wide setting
+(`RasterAntiAliasing`) is a ceiling, so a request for smoothing never overrides a render that turned it off. The default
+implementation can only honour `true`, through the older `SetAntiAliasSmoothingMode` pair it is built on.
+
+`canvas.DrawImage(image, destRect, ImageSampling.…)` picks how the image's pixels are read: `Automatic` (what the image's
+own `Interpolate` asks for), `Nearest`, `Bilinear`, `Bicubic` (Catmull-Rom over sixteen pixels; the raster canvas has a
+real one, others treat it as `Bilinear`) or `Pixelated` (hard-edged when enlarging, filtered when shrinking). Without
+per-draw sampling of its own a canvas falls back to switching `Interpolate` for the duration of the draw.
+
 ## `Font`, `FontFamily` and `Image`
 
 `Font` is a resolved, sized typeface, built from a `PeachDrawing.Text.Typeface` (`Font.Typeface`) plus
@@ -249,6 +357,14 @@ shaped, so an implementation gets it by implementing `DrawGlyphs` and the path/c
   (`CanvasParagraphExtensions`) paint a `ParagraphLayout` or a `GlyphRun` at the positions the shaper and the
   layout chose; `ParagraphPaint`/`TextDecorations` give a per-run colour and underline/overline/line-through
   (see [Drawing a layout](peachdrawing-text.md#drawing-a-layout)).
+- `PathText.DrawStringAlongPath(text, typeface, size, colour, path, options)` sets text along a path: it shapes the
+  text, then places every glyph at its own distance along the path and turns it to follow the curve, so kerning and
+  ligatures survive. `PathText.Layout` returns the placed glyphs (`PathGlyph`: glyph index, advance, transform) for a caller
+  that draws them itself, and `PathText.GetGlyphFrame` is the one placement step (a distance along the path, the side, a
+  perpendicular offset and an extra rotation in, a transform out). `PathTextOptions` has the start offset, anchor
+  (start, middle, end), side and letter spacing.
+- `InkCrossings.Measure` finds where a run of text puts ink inside a horizontal band, one stretch per glyph: what a
+  `text-decoration-skip-ink` underline needs to break around descenders. It is what `Canvas.GetInkCrossings` answers.
 - `ColorGlyphs.ColorGlyphPainter` walks one glyph's COLR v0 layers or v1 paint graph - palette and
   `font-palette` overrides, the foreground-colour sentinel, gradient stops and extend modes, transforms,
   clips and blend modes - and describes it to an `IColorGlyphTarget` as clipped fills.

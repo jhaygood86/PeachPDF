@@ -105,6 +105,14 @@ engine through an internal hook (`RenderContext.CreateSvgGlyphPainter`), so `SVG
 correctly there; a standalone caller sees the same plain-outline fallback a font with no `SVG` table at all
 would get.
 
+## Layers, effects, stroke outlines and sampling
+
+`RasterCanvas` draws layers natively (`BeginLayer`, see [Layers and effects](peachdrawing-core.md#layers-and-effects))
+and applies `BlurEffect`, `DropShadowEffect` and `ColorMatrixEffect` to them; `RasterLayerEffects.Apply` and
+`GetInkMargin` do the same on a `RasterSurface` for a canvas of your own. `PathStroker.Stroke` turns the line a `Pen`
+would draw into a fillable outline. Per-call anti-aliasing (`PushAntiAlias`), the `Bicubic` and `Pixelated` image
+samplings, tile and hatch brushes, and `GetInkCrossings` for text all work on a `RasterCanvas`.
+
 ## Implementing your own `Canvas` instead
 
 If you need a different rendering target entirely - a hardware-accelerated backend, an SVG writer, a

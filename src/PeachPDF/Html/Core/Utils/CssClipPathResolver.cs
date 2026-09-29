@@ -1,5 +1,6 @@
 using PeachPDF.CSS;
 using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Svg;
@@ -167,11 +168,7 @@ namespace PeachPDF.Html.Core.Utils
         /// clause).</summary>
         private static void DrawRect(GraphicsPath path, Rect rect, double ppp)
         {
-            path.Start(rect.Left / ppp, rect.Top / ppp);
-            path.LineTo(rect.Right / ppp, rect.Top / ppp);
-            path.LineTo(rect.Right / ppp, rect.Bottom / ppp);
-            path.LineTo(rect.Left / ppp, rect.Bottom / ppp);
-            path.CloseFigure();
+            path.AddRoundedRectangle(new Rect(rect.Left / ppp, rect.Top / ppp, rect.Width / ppp, rect.Height / ppp), 0);
         }
 
         private static void BuildPolygon(GraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, Rect referenceBox, CssBox box, double ppp)
@@ -384,8 +381,7 @@ namespace PeachPDF.Html.Core.Utils
             };
         }
 
-        /// <summary>Builds a full ellipse (or circle when rx == ry) as four quarter-arc segments, the same
-        /// technique <c>SvgRenderer.AppendEllipseGeometry</c> uses.</summary>
+        /// <summary>Builds a full ellipse (or circle when rx == ry), skipping a degenerate one.</summary>
         private static void AppendEllipse(GraphicsPath path, double cx, double cy, double rx, double ry)
         {
             rx = Math.Abs(rx);
@@ -394,12 +390,7 @@ namespace PeachPDF.Html.Core.Utils
             if (rx <= 0 || ry <= 0)
                 return;
 
-            path.AddMove(cx + rx, cy);
-            path.AddArc(cx, cy + ry, rx, ry, 0, false, true);
-            path.AddArc(cx - rx, cy, rx, ry, 0, false, true);
-            path.AddArc(cx, cy - ry, rx, ry, 0, false, true);
-            path.AddArc(cx + rx, cy, rx, ry, 0, false, true);
-            path.CloseFigure();
+            path.AddEllipse(cx, cy, rx, ry);
         }
 
         private static double Min4(double a, double b, double c, double d) => Math.Min(Math.Min(a, b), Math.Min(c, d));

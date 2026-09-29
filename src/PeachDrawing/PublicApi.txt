@@ -62,6 +62,8 @@ PeachDrawing.Homography : struct
   property Double M32 { get; }
   property Double M33 { get; }
   property static Homography Identity { get; }
+PeachDrawing.PathStroker : static class
+  method static Void Stroke(GraphicsPath path, Pen pen, GraphicsPath destination, Double tolerance = 0.1)
 PeachDrawing.RasterCanvas : sealed class
   ctor(RenderContext adapter, RasterSurface surface, Double pixelsPerPoint)
   method PixelBuffer ToPixelBuffer()
@@ -71,6 +73,7 @@ PeachDrawing.RasterCanvas : sealed class
   method Void Save(Stream stream, String formatName, EncoderOptions options)
   method virtual GraphicsPath GetGraphicsPath()
   method virtual GraphicsPath GetTextOutline(String str, Font font, PaintPoint baselineOrigin, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
   method virtual Int32 CountShapedGlyphs(String str, Font font, ShapeSettings? features = null)
   method virtual Object SetAntiAliasSmoothingMode()
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
@@ -82,7 +85,9 @@ PeachDrawing.RasterCanvas : sealed class
   method virtual Void Dispose()
   method virtual Void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color)
   method virtual Void DrawImage(Image image, Rect destRect)
+  method virtual Void DrawImage(Image image, Rect destRect, ImageSampling sampling)
   method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect)
+  method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect, ImageSampling sampling)
   method virtual Void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, Boolean invert = False)
   method virtual Void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode)
   method virtual Void DrawImageMasked(Image image, Image maskImage, Rect destRect)
@@ -99,9 +104,11 @@ PeachDrawing.RasterCanvas : sealed class
   method virtual Void EndMarkedContent()
   method virtual Void EndVariableText()
   method virtual Void MeasureString(String str, Font font, Double maxWidth, out Int32 charFit, out Double charFitWidth)
+  method virtual Void PopAntiAlias()
   method virtual Void PopBlendMode()
   method virtual Void PopClip()
   method virtual Void PopTransform()
+  method virtual Void PushAntiAlias(Boolean enabled)
   method virtual Void PushBlendMode(PaintBlendMode mode)
   method virtual Void PushClip(GraphicsPath path)
   method virtual Void PushClip(Rect rect)
@@ -113,6 +120,9 @@ PeachDrawing.RasterCanvas : sealed class
   property Double PixelsPerPoint { get; }
   property Matrix3x2 CurrentTransform { get; }
   property RasterSurface Surface { get; }
+PeachDrawing.RasterLayerEffects : static class
+  method static ValueTuple<Double, Double> GetInkMargin(IReadOnlyList<LayerEffect> effects)
+  method static Void Apply(RasterSurface surface, IReadOnlyList<LayerEffect> effects)
 PeachDrawing.RasterRenderContext : sealed class
   ctor()
   method RasterCanvas CreateCanvas(Int32 widthPx, Int32 heightPx, Double dpi = 96)

@@ -330,15 +330,15 @@ namespace PeachPDF.Tests.TestSupport
         /// <summary>
         /// Genuinely clips this recorded (single-contour, per this double's own <c>FakeOutline</c>-style
         /// test callers) point list to <paramref name="rect"/>, reusing the real
-        /// <see cref="PeachPDF.PdfSharpCore.Drawing.SutherlandHodgman"/> primitive
+        /// <see cref="PeachDrawing.Core.Geometry.PolygonClipper"/> primitive
         /// <c>GraphicsPathAdapter.ClipToRect</c> itself is built on - so a test asserting on the result
         /// (e.g. that an upright glyph's clip-path union never exceeds its own reserved cell) is
         /// exercising the actual clip algorithm, not a test-only stand-in for it.
         /// </summary>
         public override GraphicsPath ClipToRect(Rect rect)
         {
-            var polygon = Points.Select(p => new PeachPDF.PdfSharpCore.Drawing.XPoint(p.X, p.Y)).ToList();
-            var clipped = PeachPDF.PdfSharpCore.Drawing.SutherlandHodgman.ClipToRect(polygon, rect.Left, rect.Top, rect.Right, rect.Bottom);
+            var polygon = Points.Select(p => new PaintPoint(p.X, p.Y)).ToList();
+            var clipped = PeachDrawing.Core.Geometry.PolygonClipper.ClipToRect(polygon, rect);
 
             var result = new RecordingGraphicsPath { FillMode = FillMode };
             foreach (var p in clipped) result.Points.Add((p.X, p.Y));
