@@ -3968,6 +3968,17 @@ namespace PeachPDF.Html.Core.Dom
         internal bool ItemContentSizeEverPinned { get; set; }
 
         /// <summary>
+        /// What <see cref="Width"/>/<see cref="Height"/> held before
+        /// <see cref="Fragmentation.ItemContentCommit.CommitLayout"/> first pinned them, saved so a later
+        /// layout generation can measure this item against what the author wrote rather than against the
+        /// previous generation's result - see <see cref="Fragmentation.ItemContentCommit.UnpinIfPinned"/>.
+        /// </summary>
+        internal string? WidthBeforeItemPin { get; set; }
+
+        /// <inheritdoc cref="WidthBeforeItemPin"/>
+        internal string? HeightBeforeItemPin { get; set; }
+
+        /// <summary>
         /// Everything that must happen exactly once for this box, before any of its content is placed:
         /// measuring its words, applying <c>string-set</c>, resolving its used page name, and taking any
         /// forced break that falls before it.
@@ -6127,6 +6138,28 @@ namespace PeachPDF.Html.Core.Dom
                 ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
             }
 
+        }
+
+        /// <summary>
+        /// Resolves this in-flow block's own inline frame again against its containing block as that block
+        /// now stands - the frame <see cref="PlaceAndSizeBlockChild"/> gave it, asked again for a box that
+        /// continues on a page whose measure is not the one it was placed against.
+        /// </summary>
+        /// <remarks>
+        /// The same two questions placement asks, so an explicit, percentage or <c>min</c>/<c>max</c>-clamped
+        /// width, and an <c>rtl</c> containing block, come out exactly as they would have had the box been
+        /// placed there. Only its inline frame changes: <see cref="Location"/>'s block-axis coordinate is
+        /// where the box already is. A box whose width its own engine decides (a table, a grid) is left alone
+        /// by the caller.
+        /// </remarks>
+        internal async ValueTask RefitInlineFrame(Canvas g)
+        {
+            var top = Location.Y;
+            var width = await CssLayoutEngine.GetBoxWidth(g, this, top);
+
+            ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
+            Location = new PaintPoint(ResolveBlockInlineStart(ContainingBlock.ClientLeft, top), top);
+            ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
         }
 
         /// <summary>

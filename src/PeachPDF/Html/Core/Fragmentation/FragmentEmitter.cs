@@ -534,6 +534,15 @@ namespace PeachPDF.Html.Core.Fragmentation
         private readonly Dictionary<CssBox, Dictionary<int, (CssBox Root, double Shift, Rect Band)>> _displacements =
             new(ReferenceEqualityComparer.Instance);
 
+        /// <summary>
+        /// How far a box's border box is displaced and resized, along the inline axis, in a given
+        /// fragmentainer - <see cref="RecordInlineFrame"/>. The slot key is membership, exactly as for
+        /// <see cref="_displacements"/>: it says which fragmentainer the frame applies to, and the box's own
+        /// live geometry (which describes the fragmentainer that placed it) is the same in every slot.
+        /// </summary>
+        private readonly Dictionary<CssBox, Dictionary<int, (double X, double Width)>> _inlineFrames =
+            new(ReferenceEqualityComparer.Instance);
+
         private int _lastEmittedSlot = -1;
 
 #if DEBUG
@@ -1425,6 +1434,93 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             if (removedAny) box.DiscardEmittedNothingIncludingDescendants();
         }
+
+        /// <summary>
+        /// States that <paramref name="box"/>'s border box spans <paramref name="x"/> to
+        /// <paramref name="x"/> + <paramref name="width"/> along the inline axis in fragmentainer
+        /// <paramref name="slot"/>, whatever its live geometry says -
+        /// <see href="https://www.w3.org/TR/css-break-3/#varying-size-boxes">css-break-3 §5.1</see>'s "each
+        /// fragment recalculates sizes and positions using its own fragmentainer's size", for a box whose
+        /// engine sized it once and whose single <see cref="CssBox.Location"/>/<see cref="CssBox.Size"/>
+        /// therefore describe only the fragmentainer that placed it.
+        /// </summary>
+        /// <remarks>
+        /// Layout <i>states</i> this rather than the emitter deriving it (contrast
+        /// <c>ComputeInlineExtentDelta</c>, which reproduces <c>GetBoxWidth</c>'s formula for an ordinary
+        /// block) because a flex container's or item's frame is the product of its engine's whole sizing
+        /// algorithm, which nothing outside that engine can re-run. Only ever consulted for a box that is
+        /// already frozen in the slot - it resizes a fragment, it never creates one.
+        /// </remarks>
+        internal void RecordInlineFrame(CssBox box, int slot, double x, double width)
+        {
+            if (!_inlineFrames.TryGetValue(box, out var bySlot))
+            {
+                _inlineFrames[box] = bySlot = [];
+            }
+
+            bySlot[slot] = (x, width);
+
+            // The frame changes where the box draws in a fragmentainer whose observation may already have
+            // been made against the old one.
+            box.DiscardEmittedNothing();
+        }
+
+        /// <summary>
+        /// Discards the frames <paramref name="box"/> stated from <paramref name="fromSlot"/> on - or, with
+        /// no slot, in every slot - because the pass about to run decides them again. Same two forms, for
+        /// the same two reasons, as <see cref="ClearContinuationShells"/>.
+        /// </summary>
+        internal void ClearInlineFrames(CssBox box, int? fromSlot = null)
+        {
+            if (fromSlot is not { } from)
+            {
+                if (_inlineFrames.Remove(box)) box.DiscardEmittedNothing();
+                return;
+            }
+
+            if (!_inlineFrames.TryGetValue(box, out var bySlot)) return;
+
+            var removedAny = false;
+
+            foreach (var slot in new List<int>(bySlot.Keys))
+            {
+                if (slot >= from && bySlot.Remove(slot)) removedAny = true;
+            }
+
+            if (bySlot.Count == 0) _inlineFrames.Remove(box);
+
+            if (removedAny) box.DiscardEmittedNothing();
+        }
+
+        /// <summary>Discards the frame stated for <paramref name="box"/> in exactly <paramref name="slot"/>.</summary>
+        internal void ClearInlineFrame(CssBox box, int slot)
+        {
+            if (!_inlineFrames.TryGetValue(box, out var bySlot) || !bySlot.Remove(slot)) return;
+
+            if (bySlot.Count == 0) _inlineFrames.Remove(box);
+
+            box.DiscardEmittedNothing();
+        }
+
+        /// <summary>
+        /// Discards every frame stated for <paramref name="box"/> or anything under it - what a container
+        /// being laid out afresh decides again for its whole subtree.
+        /// </summary>
+        internal void ClearInlineFramesUnder(CssBox box)
+        {
+            if (_inlineFrames.Count == 0) return;
+
+            ClearInlineFrames(box);
+
+            foreach (var child in box.Boxes)
+                ClearInlineFramesUnder(child);
+        }
+
+        /// <summary>What <paramref name="box"/>'s frame was stated to be in <paramref name="slot"/>, if anything.</summary>
+        internal (double X, double Width)? InlineFrameIn(CssBox box, int slot) =>
+            _inlineFrames.TryGetValue(box, out var bySlot) && bySlot.TryGetValue(slot, out var stated)
+                ? stated
+                : null;
 
         /// <summary>
         /// What <paramref name="box"/> is displaced by in <paramref name="slot"/>, or null where it states
@@ -3635,7 +3731,14 @@ namespace PeachPDF.Html.Core.Fragmentation
             // FixedSizeDeltaWidth (ComputeInlineExtentDelta explicitly excludes out-of-flow boxes, which
             // includes every fixed one). Left edge (bounds.X) is unaffected - only the box's own
             // content-right edge moves per page, never its content-left one.
-            if (draft.ShellRect is null && draft.InlineExtentDeltaWidth != 0)
+            // Asked here rather than recorded on the draft when it is built, because layout states a frame
+            // in a fragmentainer from the pass that resumes into a LATER one - after this fragmentainer's
+            // draft was frozen. Everything defined over the whole box is resolved at materialization.
+            if (draft.ShellRect is null && InlineFrameIn(draft.Box, draft.Slot.Index) is { } stated)
+            {
+                bounds = new Rect(stated.X, bounds.Y, Math.Max(0, stated.Width), bounds.Height);
+            }
+            else if (draft.ShellRect is null && draft.InlineExtentDeltaWidth != 0)
             {
                 bounds = new Rect(bounds.X, bounds.Y, Math.Max(0, bounds.Width + draft.InlineExtentDeltaWidth), bounds.Height);
             }

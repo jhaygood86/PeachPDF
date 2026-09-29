@@ -2606,6 +2606,53 @@ await SaveShowcaseAsync("paged_media_horizontal_reflow", "Paged Media", "Per-pag
     "Left/right per-page margins reflow content to each page's own width: mirrored :left/:right binding gutters re-wrap the justified body text to each page's own measure (CSS Paged Media page-area containing block), not just shift it.",
     perPageReflowHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ── Flex containers across pages of different widths (#196) ─────────────────
+// A flex container that continues onto a page whose content area is a different width sizes each
+// fragment to the page it is on (css-break-3 5.1: each fragment recalculates sizes and positions using
+// its own fragmentainer's size). The wide first page here has no left margin, so its three columns
+// share a wider measure than the narrower pages that follow - the column boundaries visibly move at
+// each page break, and the container's own tinted frame follows. A wrapping row's later lines are
+// collected against the measure of the page they land on, so two cards fit a narrower page's line
+// where three fit the wide one.
+var flexPerPageHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page { margin: 14mm 30mm 14mm 12mm; }
+    @page :first { margin-left: 0; margin-right: 0; }
+    body { font: 9pt Arial, sans-serif; margin: 0; color: #1f2937 }
+    h2 { font-size: 11pt; margin: 6pt 0 3pt; }
+    .cards { display: flex; flex-wrap: wrap; background: #fef3c7; }
+    .cards > div { flex: 1 0 60mm; height: 60mm; break-inside: avoid; background: #fde68a;
+                   border: 1px solid #b45309; box-sizing: border-box; padding: 3pt; }
+    .cols { display: flex; background: #eef2ff; }
+    .cols > div { flex: 1 1 0; background: #dbeafe; border: 1px solid #1d4ed8; padding: 3pt; }
+    </style>
+    </head>
+    <body>
+      <h2>Wrapping cards: two to a line on the wide first page, one to a line after it</h2>
+      <div class="cards">
+    """ +
+    string.Concat(Enumerable.Range(1, 12).Select(i => $"<div>Card {i}</div>")) +
+    """
+      </div>
+      <h2>Columns re-fitted as they cross onto a narrower page</h2>
+      <div class="cols">
+    """ +
+    string.Concat(Enumerable.Range(1, 3).Select(c =>
+        "<div>" + string.Concat(Enumerable.Range(1, 26).Select(i =>
+            $"Column {c}, sentence {i}: the columns share the page's own measure. ")) + "</div>")) +
+    """
+      </div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("paged_media_flex_per_page_reflow", "Paged Media", "Flex Across Pages of Different Widths",
+    "A flex container that continues onto a page of a different width sizes each fragment to its own page (CSS Fragmentation 5.1): the columns of a row re-fit as they cross a page boundary, a wrapping row collects its later lines against the measure of the page each lands on, and the container's own frame follows.",
+    flexPerPageHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
+
 // ── Full-bleed page showcase ───────────────────────────────────────────────
 // The headline capability behind layout-affecting per-page margins: a `margin: 0` first
 // page whose content band is the entire physical sheet. The cover plate is sized to the

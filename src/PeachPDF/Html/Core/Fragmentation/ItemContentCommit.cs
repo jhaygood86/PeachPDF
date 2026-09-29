@@ -76,6 +76,14 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // box-sizing contract expects: content-space for content-box (subtract its own
                 // padding/border back out of the outer size), or the outer size directly for
                 // border-box (ActualBoxSizeIncludedWidth/Height is already 0 there, so this is a no-op).
+                // Only the first pin sees what the author wrote; every later one would be saving a
+                // previous pin.
+                if (!box.ItemContentSizeEverPinned)
+                {
+                    box.WidthBeforeItemPin = box.Width;
+                    box.HeightBeforeItemPin = box.Height;
+                }
+
                 box.Width = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingWidth - box.ActualBoxSizeIncludedWidth), box);
                 box.Height = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingHeight - box.ActualBoxSizeIncludedHeight), box);
                 box.ItemContentSizeEverPinned = true;
@@ -112,6 +120,26 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 box.PositionAssignedByEngine = false;
             }
+        }
+
+        /// <summary>
+        /// Puts back the <c>Width</c>/<c>Height</c> the author wrote on an item an earlier layout
+        /// generation (or an earlier measurement of an enclosing engine) pinned through
+        /// <see cref="CommitLayout"/>, so this generation measures it from CSS rather than from its own
+        /// previous answer.
+        /// </summary>
+        /// <remarks>
+        /// The pin is deliberately never reverted within a generation (see <see cref="CommitLayout"/>), and
+        /// nothing reverted it between generations either - so a generation that measures the same item
+        /// against a different measure (an item on a page of a different width) read the earlier size back
+        /// as if it were authored, and could never resize. A box that was never pinned is left untouched.
+        /// </remarks>
+        internal static void UnpinIfPinned(CssBox box)
+        {
+            if (!box.ItemContentSizeEverPinned) return;
+
+            box.Width = box.WidthBeforeItemPin ?? Keywords.Auto;
+            box.Height = box.HeightBeforeItemPin ?? Keywords.Auto;
         }
 
         /// <summary>
