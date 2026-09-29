@@ -1,4 +1,4 @@
-# Per-page horizontal reflow is scoped to ordinary block content, not flex containers
+# Per-page horizontal reflow is scoped to block content, multicol, tables and flex — not grid
 
 **Per-page horizontal reflow (issue #143) is scoped to ordinary in-flow block-level content.** The
 width seam (`CssLayoutEngine.GetBoxWidth`/`LineContentRightOf` → `HtmlContainerInt.PageContentRightOf`,
@@ -12,10 +12,8 @@ claiming all of it, and a float or an absolutely/fixed-positioned box is sized a
 — each keeps its one already-correct, page-independent measure unchanged rather than being fed its
 containing block's edge as if it filled the whole of it. Each remaining case is a genuine CSS Paged Media
 3 §5 ("the edges of the page area act as a containing block for the layout that occurs between page
-breaks") deviation, tracked as its own issue: flex ([#196](https://github.com/jhaygood86/PeachPDF/issues/196))
-— the horizontal analogue of the #166 engine-independence family, its own resume path skipping width
-computation entirely on every continuation (tables and multicol closed the same family of gap - see
-"No longer a gap" below); and named-page (`page: <name>`) L/R and size overrides,
+breaks") deviation, tracked as its own issue: grid (the same shape flex had before #196 closed it - see "No longer
+a gap" below; tables, multicol and flex all closed the same family of gap); and named-page (`page: <name>`) L/R and size overrides,
 whose width→height→page-name feedback the bounded reflow loop does not *formally* drive to convergence
 across a run that spans several physical pages under one active name
 ([#202](https://github.com/jhaygood86/PeachPDF/issues/202), narrowed — see below).
@@ -36,8 +34,8 @@ delta-from-the-single-global-value shape (Layer K), using the exact same eligibi
 substituting this slot's own content-right edge) the box's single global width was originally resolved
 with — so a box's own frame and its already-reflowing content always agree on whether they are eligible
 at all. This is the shared fragment-tree contract every later layer that needs a differently-sized
-fragment (tables/flex+grid/multicol) depends on existing first; flex remains open under its own tracked
-issue (#196) — tables' and multicol's own container-width gaps closed via #197/#198, see below.
+fragment (tables/flex+grid/multicol) depends on existing first; tables', multicol's and flex's
+own container-width gaps closed via #197/#198/#196, see below.
 
 **Also no longer a gap**: `HtmlContainerInt.UseVariableInlineMeasure` (renamed from
 `UseVariablePageWidth`) now fires on a per-page `size` override with no margin override at all, not just
@@ -95,9 +93,7 @@ leaving it default to `columnsBox.Location.Y`, the box's fixed start-page positi
 across the several fresh `Layout` invocations one continuing container makes. Since a resumed continuation
 already re-enters this method fully (there is no early-return the way flex's resume path takes — see
 #196), each page's own invocation now derives its own `columnCount`/`columnWidth`/`pitch` from that page's
-own width, rather than every continuation reusing the start page's. Flex (#196) remains open — its resume
-path skips its own width-computing code path entirely on every continuation, so it has no comparable
-single seam to correct.
+own width, rather than every continuation reusing the start page's.
 
 **Also no longer a gap** (#197): a table's own width now resolves against whichever page the table
 itself starts on, rather than its containing block's single, page-0-cached `Size.Width`.
@@ -112,3 +108,39 @@ sibling row's on a different page of the same table. The fix is narrower and str
 #198's: resolve once, correctly, against wherever the table begins, and never re-resolve for the rest of
 its lifetime — exactly how an ordinary (non-text) block's own width already worked before and after
 #199-#201.
+
+**Also no longer a gap** (#196): a block-level flex container that continues across pages of different
+measures sizes each fragment to the page it is on (css-break-3 §5.1), and so do its items. Flex is unlike
+multicol in that it has no single seam to correct: its resume path returns before any sizing, and an item's
+size is *pinned* by the commit pass, so the fix is several pieces that have to agree.
+
+- **The container's frame** is *stated* by the engine per fragmentainer (`CssLayoutEngineFlex.StateContainerFrame`
+  / `StateSpannedFrames`, `HtmlContainerInt.RecordInlineFrame`, consumed in `FragmentEmitter.ExtentOf`) rather
+  than derived by the emitter the way `ComputeInlineExtentDelta` derives an ordinary block's, because the
+  frame is the product of the flex algorithm. `ComputeInlineExtentDelta` still declines a flex container.
+  Statements are keyed by slot and absolute (X, width), and are looked up at materialization, not when a
+  slot's draft is frozen: a later pass states the frame of an earlier slot.
+- **A wrapping row's lines** are collected, sized and placed one at a time against the measure of the page
+  each is expected to land on (`BuildLinesPerPage`), seeded by where relocation actually put them
+  (`LandingMeasures`), bounded at `MaxPerPageAttempts` attempts.
+- **A line that continues onto a page of another measure** is re-fitted on the resumed pass
+  (`RefitStartedLine`): sizes re-derived from CSS alone (`RederiveItem`/`DistributeFlex`), the frame each item
+  had in every earlier slot stated *before* its live geometry moves (`MoveFrame`), the blocks the unfinished
+  content resumes into re-fitted top-down (`RefitContinuingDescendants`), and the line's height re-derived
+  when it finishes (`GrowRefitLine`), moving the lines below and the container's bottom with it. Items no
+  pass resumes (a fixed-height box, an image) get their per-page frames stated at the end of the fresh pass
+  (`StateSpannedLineFrames`).
+- **The stale pin** (`ItemContentCommit.UnpinIfPinned`): `CommitLayout` pins an item's `Width`/`Height`
+  permanently and nothing put the authored values back, so a later measurement of the same item read its own
+  earlier answer as authored. Only observable once something measures an item against a second measure.
+
+Verified against Prince, which lays these documents out the same way, and against Chromium, which does *not*:
+it re-sizes only the container and lets every item overflow it at its first page's width. A **column**
+container's items keep the cross size they started with, in both of them, and so here.
+
+Left as it is, each a genuine css-break-3 §5.1 deviation - a fragment sizes to its own fragmentainer - and
+each tracked: a flex line that is *unstarted* on a page reached only because a re-fitted line above it grew
+is sized for the page it was expected to land on, not the one it did; an item that does not stretch
+(`align-self` other than `stretch`) keeps the offset its earlier line height gave it when a re-fitted line
+grows; a flex container inside a multi-column container is not re-fitted per column; and the grid analogue
+of all of this.
