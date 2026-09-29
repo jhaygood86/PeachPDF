@@ -155,9 +155,9 @@ namespace PeachPDF.Html.Core.Fragments
     /// </param>
     /// <param name="IsLastFragment">whether this is the box's last fragment; see <paramref name="IsFirstFragment"/></param>
     /// <param name="IsMonolithic">
-    /// whether the originating box is monolithic content —
-    /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>'s own set, a replaced element or
-    /// a scroll container, as decided by
+    /// whether the originating box is monolithic content — a replaced element
+    /// (<see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>) or a scroll container the UA
+    /// keeps whole (<see href="https://www.w3.org/TR/css-break-3/#possible-breaks">§4.1</see>), as decided by
     /// <see cref="Fragmentation.MonolithicContent.IsMonolithic"/>. A property of the box rather than of
     /// this fragment, so every fragment of one box agrees. Recorded here because a consumer reading the
     /// tree — paint, or a later phase deciding where a break may fall — should not have to re-derive from
